@@ -2,9 +2,10 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { EmbeddingChunk, SectionType } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
+import { ModelSelector } from '../utils/model-selector.js';
 import { v4 as uuidv4 } from 'uuid';
 
-const EMBEDDING_DIMENSION = 1536; // OpenAI ada-002
+const EMBEDDING_DIMENSION = 1536; // OpenAI ada-002 and text-embedding-3-small
 const MAX_CHUNK_TOKENS = 512;
 const CHUNK_OVERLAP = 50;
 
@@ -50,9 +51,10 @@ export class EmbeddingService {
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
+      const model = ModelSelector.getEmbeddingModel();
       const response = await this.openaiManager.executeWithRetry(async (client) => {
         return await client.embeddings.create({
-          model: 'text-embedding-ada-002',
+          model,
           input: text,
         });
       });
@@ -66,9 +68,10 @@ export class EmbeddingService {
 
   async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
     try {
+      const model = ModelSelector.getEmbeddingModel();
       const response = await this.openaiManager.executeWithRetry(async (client) => {
         return await client.embeddings.create({
-          model: 'text-embedding-ada-002',
+          model,
           input: texts,
         });
       });

@@ -1,6 +1,7 @@
 import { load, CheerioAPI } from 'cheerio';
 import { logger } from './logger.js';
 import { getOpenAIManager } from './openai-client.js';
+import { ModelSelector } from './model-selector.js';
 
 export interface CourtDecisionSections {
   header: string[];      // Шапка (номер дела, суд, дата)
@@ -212,8 +213,10 @@ export async function extractSearchTermsWithAI(text: string): Promise<{
     const analysisText = text.substring(0, 3000);
 
     const response = await openaiManager.executeWithRetry(async (client) => {
+      // Use quick model for simple term extraction
+      const model = ModelSelector.getChatModel('quick');
       return await client.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model,
         messages: [
           {
             role: 'system',

@@ -1,6 +1,7 @@
 import { DocumentSection, SectionType } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
+import { ModelSelector } from '../utils/model-selector.js';
 
 interface SectionMarker {
   type: SectionType;
@@ -188,8 +189,10 @@ export class SemanticSectionizer {
   private async llmAssistedExtraction(text: string): Promise<DocumentSection[]> {
     try {
       const response = await this.openaiManager.executeWithRetry(async (client) => {
+        // Use deep model for complex section extraction
+        const model = ModelSelector.getChatModel('deep');
         return await client.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4o',
+        model,
         messages: [
           {
             role: 'system',

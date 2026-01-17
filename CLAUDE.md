@@ -147,10 +147,21 @@ REDIS_PORT=6379
 # Qdrant Vector Database
 QDRANT_URL=http://localhost:6333
 
-# OpenAI (supports key rotation)
+# OpenAI - Dynamic Model Selection (RECOMMENDED)
+# Use different models based on task complexity for cost optimization
+OPENAI_MODEL_QUICK=gpt-4o-mini       # Simple tasks (keyword extraction)
+OPENAI_MODEL_STANDARD=gpt-4o-mini    # Moderate tasks (intent classification)
+OPENAI_MODEL_DEEP=gpt-4o             # Complex tasks (deep analysis)
+
+# OR use single model for all tasks (simpler config)
+# OPENAI_MODEL=gpt-4o
+
+# Embedding model (MUST stay consistent once you have vectors in DB!)
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+
+# API Keys (supports rotation)
 OPENAI_API_KEY=sk-...
 OPENAI_API_KEY2=sk-...      # Optional fallback key
-OPENAI_MODEL=gpt-4o-mini    # Model for analysis tasks
 
 # Zakononline API (supports token rotation)
 ZAKONONLINE_API_TOKEN=your-token
@@ -221,6 +232,26 @@ When running in MCP mode, these tools are available:
 - **Target**: ES2020
 - **Module**: ESNext with NodeNext resolution
 - Configured in `mcp_backend/tsconfig.json`
+
+### Dynamic Model Selection
+
+The system automatically selects OpenAI models based on task complexity using `ModelSelector` in `utils/model-selector.ts`:
+
+| Budget Level | Use Case | Default Model | Cost/1M tokens |
+|--------------|----------|---------------|----------------|
+| **quick** | Keyword extraction, simple classification | gpt-4o-mini | $0.15 input |
+| **standard** | Intent classification, moderate analysis | gpt-4o-mini | $0.15 input |
+| **deep** | Complex section extraction, deep reasoning | gpt-4o | $2.50 input |
+
+**Configuration Options:**
+1. **Per-budget models** (recommended): Set `OPENAI_MODEL_QUICK`, `OPENAI_MODEL_STANDARD`, `OPENAI_MODEL_DEEP`
+2. **Single model**: Set `OPENAI_MODEL` to use same model for all budgets
+
+**Automatic Budget Selection:**
+- Query length < 20 chars → `quick`
+- Query length < 200 chars → `standard`
+- Query length > 200 chars or large context → `deep`
+- User can override via `reasoning_budget` parameter
 
 ### API Key Rotation
 

@@ -1,6 +1,7 @@
 import { QueryIntent, SectionType } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
+import { ModelSelector } from '../utils/model-selector.js';
 
 export class QueryPlanner {
   private openaiManager = getOpenAIManager();
@@ -25,9 +26,9 @@ export class QueryPlanner {
     // For standard/deep, use LLM
     try {
       const response = await this.openaiManager.executeWithRetry(async (client) => {
-        // Try to use a model that supports JSON mode, fallback to regular completion
-        const model = process.env.OPENAI_MODEL || 'gpt-4o';
-        const supportsJsonMode = ['gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4-1106-preview', 'gpt-4o', 'gpt-4o-mini'].includes(model);
+        // Select model based on budget
+        const model = ModelSelector.getChatModel(budget);
+        const supportsJsonMode = ModelSelector.supportsJsonMode(model);
         
         const requestConfig: any = {
           model: model,
