@@ -1,0 +1,334 @@
+import { Router, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.js';
+import { Database } from '../database/database.js';
+import { logger } from '../utils/logger.js';
+
+export function createRestAPIRouter(db: Database): Router {
+  const router = Router();
+
+  // ==================== DOCUMENTS ====================
+
+  // List documents with pagination
+  router.get('/documents', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const start = parseInt(req.query._start as string) || 0;
+      const end = parseInt(req.query._end as string) || 10;
+      const limit = end - start;
+      const offset = start;
+
+      const countResult = await db.query('SELECT COUNT(*) FROM documents');
+      const total = parseInt(countResult.rows[0].count);
+
+      const result = await db.query(
+        `SELECT id, zakononline_id, type, title, date,
+                CASE WHEN full_text IS NOT NULL THEN true ELSE false END as has_full_text,
+                CASE WHEN full_text_html IS NOT NULL THEN true ELSE false END as has_html,
+                metadata, created_at, updated_at
+         FROM documents
+         ORDER BY date DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+
+      res.setHeader('X-Total-Count', total.toString());
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count');
+      res.json(result.rows);
+    } catch (error: any) {
+      logger.error('Error listing documents:', error);
+      res.status(500).json({ error: 'Failed to list documents', message: error.message });
+    }
+  });
+
+  // Get single document
+  router.get('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await db.query(
+        'SELECT * FROM documents WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error getting document:', error);
+      res.status(500).json({ error: 'Failed to get document', message: error.message });
+    }
+  });
+
+  // Create document
+  router.post('/documents', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { zakononline_id, type, title, date, full_text, full_text_html, metadata } = req.body;
+
+      const result = await db.query(
+        `INSERT INTO documents (zakononline_id, type, title, date, full_text, full_text_html, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [zakononline_id, type, title, date, full_text, full_text_html, metadata || {}]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error creating document:', error);
+      res.status(500).json({ error: 'Failed to create document', message: error.message });
+    }
+  });
+
+  // Update document
+  router.patch('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const fields = Object.keys(updates).filter(k => k !== 'id');
+      const setClause = fields.map((field, idx) => `${field} = $${idx + 2}`).join(', ');
+      const values = [id, ...fields.map(f => updates[f])];
+
+      if (fields.length === 0) {
+        res.status(400).json({ error: 'No fields to update' });
+        return;
+      }
+
+      const result = await db.query(
+        `UPDATE documents SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error updating document:', error);
+      res.status(500).json({ error: 'Failed to update document', message: error.message });
+    }
+  });
+
+  // Delete document
+  router.delete('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await db.query(
+        'DELETE FROM documents WHERE id = $1 RETURNING id',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Document not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error deleting document:', error);
+      res.status(500).json({ error: 'Failed to delete document', message: error.message });
+    }
+  });
+
+  // ==================== LEGAL PATTERNS ====================
+
+  // List patterns
+  router.get('/patterns', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const start = parseInt(req.query._start as string) || 0;
+      const end = parseInt(req.query._end as string) || 10;
+      const limit = end - start;
+      const offset = start;
+
+      const countResult = await db.query('SELECT COUNT(*) FROM legal_patterns');
+      const total = parseInt(countResult.rows[0].count);
+
+      const result = await db.query(
+        `SELECT * FROM legal_patterns
+         ORDER BY created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+
+      res.setHeader('X-Total-Count', total.toString());
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count');
+      res.json(result.rows);
+    } catch (error: any) {
+      logger.error('Error listing patterns:', error);
+      res.status(500).json({ error: 'Failed to list patterns', message: error.message });
+    }
+  });
+
+  // Get single pattern
+  router.get('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await db.query(
+        'SELECT * FROM legal_patterns WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Pattern not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error getting pattern:', error);
+      res.status(500).json({ error: 'Failed to get pattern', message: error.message });
+    }
+  });
+
+  // Create pattern
+  router.post('/patterns', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const {
+        intent,
+        law_articles,
+        decision_outcome,
+        frequency,
+        confidence,
+        example_cases,
+        risk_factors,
+        success_arguments,
+        anti_patterns
+      } = req.body;
+
+      const result = await db.query(
+        `INSERT INTO legal_patterns
+         (intent, law_articles, decision_outcome, frequency, confidence,
+          example_cases, risk_factors, success_arguments, anti_patterns)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          intent,
+          law_articles || [],
+          decision_outcome,
+          frequency || 0,
+          confidence || 0.0,
+          example_cases || [],
+          risk_factors || [],
+          success_arguments || [],
+          anti_patterns || []
+        ]
+      );
+
+      res.status(201).json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error creating pattern:', error);
+      res.status(500).json({ error: 'Failed to create pattern', message: error.message });
+    }
+  });
+
+  // Update pattern
+  router.patch('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      const fields = Object.keys(updates).filter(k => k !== 'id');
+      const setClause = fields.map((field, idx) => `${field} = $${idx + 2}`).join(', ');
+      const values = [id, ...fields.map(f => updates[f])];
+
+      if (fields.length === 0) {
+        res.status(400).json({ error: 'No fields to update' });
+        return;
+      }
+
+      const result = await db.query(
+        `UPDATE legal_patterns SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        values
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Pattern not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error updating pattern:', error);
+      res.status(500).json({ error: 'Failed to update pattern', message: error.message });
+    }
+  });
+
+  // Delete pattern
+  router.delete('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await db.query(
+        'DELETE FROM legal_patterns WHERE id = $1 RETURNING id',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Pattern not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error deleting pattern:', error);
+      res.status(500).json({ error: 'Failed to delete pattern', message: error.message });
+    }
+  });
+
+  // ==================== QUERIES (Read-only for now) ====================
+
+  // List queries from events table
+  router.get('/queries', async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const start = parseInt(req.query._start as string) || 0;
+      const end = parseInt(req.query._end as string) || 10;
+      const limit = end - start;
+      const offset = start;
+
+      const countResult = await db.query(
+        "SELECT COUNT(*) FROM events WHERE event_type LIKE 'query%'"
+      );
+      const total = parseInt(countResult.rows[0].count);
+
+      const result = await db.query(
+        `SELECT id, event_type, payload, created_at
+         FROM events
+         WHERE event_type LIKE 'query%'
+         ORDER BY created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+
+      res.setHeader('X-Total-Count', total.toString());
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count');
+      res.json(result.rows);
+    } catch (error: any) {
+      logger.error('Error listing queries:', error);
+      res.status(500).json({ error: 'Failed to list queries', message: error.message });
+    }
+  });
+
+  // Get single query
+  router.get('/queries/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await db.query(
+        'SELECT * FROM events WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Query not found' });
+        return;
+      }
+
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      logger.error('Error getting query:', error);
+      res.status(500).json({ error: 'Failed to get query', message: error.message });
+    }
+  });
+
+  return router;
+}

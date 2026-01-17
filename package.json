@@ -1,0 +1,25 @@
+{
+  "name": "secondlayer",
+  "version": "1.0.0",
+  "description": "Legal documents analysis platform with MCP server and admin panel",
+  "private": true,
+  "workspaces": [
+    "mcp_backend",
+    "frontend"
+  ],
+  "scripts": {
+    "backend": "cd mcp_backend && npm run dev:http",
+    "frontend": "cd frontend && npm run dev",
+    "backend:build": "cd mcp_backend && npm run build",
+    "frontend:build": "cd frontend && npm run build",
+    "install:all": "npm install && cd mcp_backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": [
+    "mcp",
+    "legal",
+    "admin-panel",
+    "zakononline"
+  ],
+  "author": "",
+  "license": "MIT"
+}
