@@ -189,7 +189,7 @@ export class SemanticSectionizer {
     try {
       const response = await this.openaiManager.executeWithRetry(async (client) => {
         return await client.chat.completions.create({
-        model: 'gpt-4',
+        model: process.env.OPENAI_MODEL || 'gpt-4o',
         messages: [
           {
             role: 'system',
