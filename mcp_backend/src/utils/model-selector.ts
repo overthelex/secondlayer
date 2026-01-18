@@ -69,6 +69,35 @@ export class ModelSelector {
   }
 
   /**
+   * Accurate cost estimation based on real token counts from OpenAI response.usage
+   * Instead of 70/30 estimation, uses actual prompt_tokens and completion_tokens
+   */
+  static estimateCostAccurate(
+    model: string,
+    promptTokens: number,
+    completionTokens: number
+  ): number {
+    const costPer1M: Record<string, { input: number; output: number }> = {
+      'gpt-4o': { input: 2.50, output: 10.00 },
+      'gpt-4o-mini': { input: 0.15, output: 0.60 },
+      'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
+      'gpt-4-turbo': { input: 10.00, output: 30.00 },
+      'gpt-4': { input: 30.00, output: 60.00 },
+      'text-embedding-ada-002': { input: 0.10, output: 0 },
+      'text-embedding-3-small': { input: 0.02, output: 0 },
+      'text-embedding-3-large': { input: 0.13, output: 0 },
+    };
+
+    const pricing = costPer1M[model] || { input: 5.00, output: 15.00 };
+
+    // Accurate calculation based on real tokens
+    const inputCost = (promptTokens * pricing.input) / 1_000_000;
+    const outputCost = (completionTokens * pricing.output) / 1_000_000;
+
+    return inputCost + outputCost;
+  }
+
+  /**
    * Get recommended budget based on query characteristics
    */
   static recommendBudget(params: {

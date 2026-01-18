@@ -15,5 +15,5 @@ RUN npm run build
 # Expose port
 EXPOSE 3000
 
-# Start application
-CMD ["node", "dist/http-server.js"]
+# Start application with increased heap size (8GB for large pagination)
+CMD ["node", "--max-old-space-size=8192", "dist/http-server.js"]

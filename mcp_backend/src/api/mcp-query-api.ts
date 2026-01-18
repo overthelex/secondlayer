@@ -32,7 +32,10 @@ export class MCPQueryAPI {
     return [
       {
         name: 'search_legal_precedents',
-        description: 'Поиск юридических прецедентов с семантическим анализом',
+        description: `Поиск юридических прецедентов с семантическим анализом
+
+💰 Примерная стоимость: $0.03-$0.10 USD
+Стоимость зависит от сложности запроса и количества результатов. Включает OpenAI API (embeddings), ZakonOnline API (поиск), SecondLayer MCP (обработка документов).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -49,7 +52,13 @@ export class MCPQueryAPI {
                 to: { type: 'string' },
               },
             },
-            limit: { type: 'number', default: 10 },
+            limit: { type: 'number', default: 10, description: 'Количество результатов для возврата' },
+            offset: { type: 'number', default: 0, description: 'Смещение для пагинации (пропустить первые N результатов)' },
+            count_all: {
+              type: 'boolean',
+              default: false,
+              description: 'Подсчитать ВСЕ результаты через пагинацию (может быть дорого и долго). Если true - вернет только общий счетчик без загрузки документов.',
+            },
             sections: {
               type: 'array',
               items: { type: 'string', enum: Object.values(SectionType) },
@@ -60,7 +69,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'analyze_case_pattern',
-        description: 'Анализирует паттерны судебной практики: аргументы, риски, статистика исходов',
+        description: `Анализирует паттерны судебной практики: аргументы, риски, статистика исходов
+
+💰 Примерная стоимость: $0.02-$0.08 USD
+Анализ существующих дел в базе данных. Включает OpenAI API (анализ паттернов) и доступ к PostgreSQL.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -72,7 +84,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'get_similar_reasoning',
-        description: 'Находит похожие судебные обоснования по векторному сходству',
+        description: `Находит похожие судебные обоснования по векторному сходству
+
+💰 Примерная стоимость: $0.01-$0.03 USD
+Векторный поиск по эмбеддингам. Включает OpenAI API (embeddings) и Qdrant (векторная БД).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -88,7 +103,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'extract_document_sections',
-        description: 'Извлекает структурированные секции из полного текста документа',
+        description: `Извлекает структурированные секции из полного текста документа (ФАКТЫ, ОБОСНУВАННЯ, РІШЕННЯ)
+
+💰 Примерная стоимость: $0.005-$0.05 USD
+При use_llm=false: минимальная стоимость (только парсинг HTML). При use_llm=true: включает OpenAI API для точной экстракции секций.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -101,7 +119,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'find_relevant_law_articles',
-        description: 'Находит статьи законов, которые часто применяются в делах по теме',
+        description: `Находит статьи законов, которые часто применяются в делах по теме
+
+💰 Примерная стоимость: $0.01-$0.02 USD
+Запрос к базе данных legal patterns. Минимальная стоимость (только PostgreSQL запросы).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -113,7 +134,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'check_precedent_status',
-        description: 'Проверяет актуальность и статус прецедента (с soft status)',
+        description: `Проверяет актуальность и статус прецедента: действующий, отменённый, сомнительный
+
+💰 Примерная стоимость: $0.005-$0.015 USD
+Проверка статуса в базе данных. Минимальная стоимость (только PostgreSQL запросы).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -124,7 +148,10 @@ export class MCPQueryAPI {
       },
       {
         name: 'get_citation_graph',
-        description: 'Строит граф цитирований между делами',
+        description: `Строит граф цитирований между делами: прямые и обратные связи
+
+💰 Примерная стоимость: $0.005-$0.02 USD
+Построение графа из базы данных. Минимальная стоимость (только PostgreSQL запросы).`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -136,7 +163,14 @@ export class MCPQueryAPI {
       },
       {
         name: 'get_legal_advice',
-        description: 'Главный инструмент: комплексный анализ ситуации с проверкой источников',
+        description: `Главный инструмент: комплексный юридический анализ ситуации с проверкой источников и детекцией галлюцинаций
+
+💰 Примерная стоимость: $0.10-$0.30 USD (зависит от reasoning_budget)
+• quick: ~$0.10 (базовый анализ)
+• standard: ~$0.15-$0.20 (рекомендуется)
+• deep: ~$0.25-$0.30 (глубокий анализ с проверкой всех источников)
+
+Самый дорогой инструмент. Включает множественные вызовы OpenAI API, ZakonOnline API, SecondLayer MCP и проверку галлюцинаций.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -192,6 +226,46 @@ export class MCPQueryAPI {
   }
 
   private async searchLegalPrecedents(args: any) {
+    // If count_all is requested, use pagination to count ALL results
+    if (args.count_all === true) {
+      logger.info('count_all requested, starting pagination', { query: args.query });
+
+      try {
+        const countResult = await this.countAllResults(args.query);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                query: args.query,
+                count_all_mode: true,
+                total_count: countResult.total_count,
+                pages_fetched: countResult.pages_fetched,
+                time_taken_ms: countResult.time_taken_ms,
+                cost_estimate_usd: countResult.cost_estimate_usd,
+                note: 'Подсчитано через пагинацию с limit=1000. Документы НЕ загружались для экономии стоимости.',
+                warning: countResult.total_count >= 10000000
+                  ? 'Достигнут лимит безопасности в 10,000,000 результатов. Реальное количество может быть больше.'
+                  : null,
+              }, null, 2),
+            },
+          ],
+        };
+      } catch (error: any) {
+        logger.error('count_all failed:', error);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error counting all results: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
     // Detect if query contains a case number (e.g., 756/655/23)
     const caseNumberPattern = /\b(\d{1,4}\/\d{1,6}\/\d{2}(-\w)?)\b/;
     const caseNumberMatch = args.query?.match(caseNumberPattern);
@@ -300,51 +374,123 @@ export class MCPQueryAPI {
           caseEssence: searchTerms.caseEssence,
         });
         
-        // Step 5: Search for similar cases using API with smart query
-        // When user asks for "all", search with maximum limit to get total count
-        // Use simple query without complex filters to avoid timeouts
-        const requestedDisplay = args.query?.toLowerCase().includes('все') || args.query?.toLowerCase().includes('all') ? 5 : (args.limit || 10);
+        // Step 5: Search for similar cases using pagination
+        // Use explicit limit parameter if provided, otherwise default to 10
+        // Support offset parameter to skip first N results
+        const requestedDisplay = args.limit || 10;
+        const userOffset = args.offset || 0; // User's requested offset
         const maxApiLimit = 1000; // Zakononline API maximum limit
 
-        const similarSearchParams = {
-          meta: {
-            search: smartQuery,
-          },
-          // Request maximum available results to get accurate count
-          limit: maxApiLimit,
-        };
+        logger.info('Searching for similar cases via pagination', {
+          limit: requestedDisplay,
+          offset: userOffset,
+        });
 
-        logger.info('Searching for all similar cases via API', { maxLimit: maxApiLimit });
-        const similarResponse = await this.zoAdapter.searchCourtDecisions(similarSearchParams);
-        const normalized = await this.zoAdapter.normalizeResponse(similarResponse);
+        let similarCasesForDisplay: any[] = [];
+        let totalFound = 0;
+        let offset = userOffset; // Start from user's offset
+        let pagesFetched = 0;
+        let hasMore = true;
+        const maxPages = 10000; // Safety limit (10 million results max)
 
-        // Exclude the source case itself from results
-        const allSimilarCases = normalized.data
-          .filter((doc: any) => doc.doc_id !== sourceCase.doc_id)
-          .map((doc: any) => ({
-            cause_num: doc.cause_num,
-            doc_id: doc.doc_id,
-            title: doc.title,
-            resolution: doc.resolution,
-            judge: doc.judge,
-            court_code: doc.court_code,
-            adjudication_date: doc.adjudication_date,
-            url: doc.url,
-            similarity_reason: 'metadata_and_keywords',
-          }));
+        while (hasMore && pagesFetched < maxPages) {
+          const similarSearchParams = {
+            meta: {
+              search: smartQuery,
+            },
+            limit: maxApiLimit,
+            offset: offset,
+          };
 
-        // Calculate total found
-        const totalFound = allSimilarCases.length;
-        const hasMore = totalFound >= (maxApiLimit - 1); // If we got max results, there might be more
+          logger.info('Fetching page of similar cases', {
+            page: pagesFetched + 1,
+            offset,
+            limit: maxApiLimit,
+          });
 
-        // Return only requested number for display
-        const similarCases = allSimilarCases.slice(0, requestedDisplay);
+          const similarResponse = await this.zoAdapter.searchCourtDecisions(similarSearchParams);
+          const normalized = await this.zoAdapter.normalizeResponse(similarResponse);
+
+          // Filter out source case
+          const pageResults = normalized.data.filter((doc: any) => doc.doc_id !== sourceCase.doc_id);
+
+          // Store results up to requestedDisplay limit
+          if (similarCasesForDisplay.length < requestedDisplay) {
+            const remainingSlots = requestedDisplay - similarCasesForDisplay.length;
+            const resultsToKeep = pageResults.slice(0, remainingSlots).map((doc: any) => ({
+              cause_num: doc.cause_num,
+              doc_id: doc.doc_id,
+              title: doc.title,
+              resolution: doc.resolution,
+              judge: doc.judge,
+              court_code: doc.court_code,
+              adjudication_date: doc.adjudication_date,
+              url: doc.url,
+              similarity_reason: 'metadata_and_keywords',
+            }));
+            similarCasesForDisplay.push(...resultsToKeep);
+          }
+
+          totalFound += pageResults.length;
+          pagesFetched++;
+
+          logger.info('Page fetched', {
+            page: pagesFetched,
+            resultsInPage: normalized.data.length,
+            totalSoFar: totalFound,
+            keptForDisplay: similarCasesForDisplay.length,
+          });
+
+          // Stop conditions:
+          // 1. Got less than maxApiLimit - this is the last page
+          // 2. Already have enough results for user's request
+          if (normalized.data.length < maxApiLimit) {
+            hasMore = false;
+            logger.info('Last page reached', {
+              totalFound,
+              pagesFetched,
+            });
+          } else if (similarCasesForDisplay.length >= requestedDisplay) {
+            hasMore = false;
+            logger.info('Collected enough results for request', {
+              collected: similarCasesForDisplay.length,
+              requested: requestedDisplay,
+              totalSeen: totalFound,
+              pagesFetched,
+            });
+          } else {
+            // Continue to next page
+            offset += maxApiLimit;
+          }
+        }
+
+        if (pagesFetched >= maxPages) {
+          logger.warn('Reached safety limit of pages', {
+            maxPages,
+            totalFound,
+          });
+        }
+
+        const reachedLimit = pagesFetched >= maxPages;
+        const similarCases = similarCasesForDisplay;
 
         logger.info('Search completed', {
           totalFound,
-          hasMore,
+          reachedLimit,
+          pagesFetched,
           displaying: similarCases.length,
         });
+
+        // Save found documents to database (limited to 1000 max)
+        if (similarCases.length > 0) {
+          logger.info('Saving found documents to database', {
+            count: similarCases.length,
+          });
+          // Run in background, don't wait
+          this.zoAdapter.saveDocumentsToDatabase(similarCases, 1000).catch(err => {
+            logger.error('Failed to save documents to database:', err);
+          });
+        }
 
         return {
           content: [
@@ -363,7 +509,7 @@ export class MCPQueryAPI {
                   category_code: sourceCase.category_code,
                   justice_kind: sourceCase.justice_kind,
                 },
-                search_method: 'smart_text_search',
+                search_method: 'smart_text_search_with_pagination',
                 text_source: textSource,
                 text_length: textForAnalysis.length,
                 extracted_terms: {
@@ -375,11 +521,12 @@ export class MCPQueryAPI {
                 search_query: smartQuery,
                 similar_cases: similarCases,
                 total_found: totalFound,
-                has_more: hasMore,
+                pages_fetched: pagesFetched,
+                reached_safety_limit: reachedLimit,
                 displaying: similarCases.length,
-                total_available_info: hasMore
-                  ? `Найдено минимум ${totalFound} прецедентов (показано первых ${similarCases.length}). Возможно, существует больше результатов.`
-                  : `Найдено ${totalFound} прецедентов (показано первых ${similarCases.length}).`,
+                total_available_info: reachedLimit
+                  ? `Найдено минимум ${totalFound} прецедентов (показано первых ${similarCases.length}). Достигнут лимит безопасности в ${maxPages} страниц.`
+                  : `Найдено ${totalFound} прецедентов через ${pagesFetched} страниц (показано первых ${similarCases.length}).`,
               }, null, 2),
             },
           ],
@@ -392,6 +539,102 @@ export class MCPQueryAPI {
 
     // Regular search for non-case-number queries
     return await this.performRegularSearch(args);
+  }
+
+  /**
+   * Count ALL results through pagination (offset-based)
+   * Uses limit=1000 and keeps fetching until results < 1000
+   */
+  private async countAllResults(query: string, queryParams?: any): Promise<{
+    total_count: number;
+    pages_fetched: number;
+    time_taken_ms: number;
+    cost_estimate_usd: number;
+  }> {
+    const startTime = Date.now();
+    const maxApiLimit = 1000;
+    let offset = 0;
+    let totalCount = 0;
+    let pagesFetched = 0;
+    let hasMore = true;
+
+    logger.info('Starting pagination to count all results', { query });
+
+    while (hasMore) {
+      const searchParams = {
+        meta: { search: query },
+        limit: maxApiLimit,
+        offset: offset,
+        ...queryParams,
+      };
+
+      logger.info('Fetching page', {
+        page: pagesFetched + 1,
+        offset,
+        limit: maxApiLimit
+      });
+
+      try {
+        const response = await this.zoAdapter.searchCourtDecisions(searchParams);
+        const normalized = await this.zoAdapter.normalizeResponse(response);
+
+        const resultsInPage = normalized.data.length;
+        totalCount += resultsInPage;
+        pagesFetched++;
+
+        logger.info('Page fetched', {
+          page: pagesFetched,
+          resultsInPage,
+          totalSoFar: totalCount,
+          offset
+        });
+
+        // If we got less than maxApiLimit, this is the last page
+        if (resultsInPage < maxApiLimit) {
+          hasMore = false;
+          logger.info('Last page reached', {
+            totalCount,
+            pagesFetched
+          });
+        } else {
+          // Continue to next page
+          offset += maxApiLimit;
+
+          // Safety limit: max 10,000 pages (10,000,000 results)
+          if (pagesFetched >= 10000) {
+            logger.warn('Reached safety limit of 10,000 pages', { totalCount });
+            hasMore = false;
+          }
+        }
+      } catch (error: any) {
+        logger.error('Error during pagination', {
+          page: pagesFetched + 1,
+          offset,
+          error: error.message
+        });
+        throw new Error(`Pagination failed at page ${pagesFetched + 1}: ${error.message}`);
+      }
+    }
+
+    const timeTaken = Date.now() - startTime;
+
+    // Estimate cost: ZakonOnline API calls only (no document processing)
+    // Each page = 1 API call at ~$0.00714
+    const costEstimate = pagesFetched * 0.00714;
+
+    logger.info('Pagination completed', {
+      totalCount,
+      pagesFetched,
+      timeTakenMs: timeTaken,
+      costEstimateUsd: costEstimate.toFixed(6),
+    });
+
+    return {
+      total_count: totalCount,
+      pages_fetched: pagesFetched,
+      time_taken_ms: timeTaken,
+      cost_estimate_usd: parseFloat(costEstimate.toFixed(6)),
+    };
   }
 
   /**

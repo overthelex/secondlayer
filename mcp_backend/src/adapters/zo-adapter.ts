@@ -3,6 +3,8 @@ import { createClient } from 'redis';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
 import { DocumentService } from '../services/document-service.js';
+import { requestContext } from '../utils/openai-client.js';
+import type { CostTracker } from '../services/cost-tracker.js';
 
 interface ZOSearchParams {
   where?: any[];
@@ -28,6 +30,7 @@ export class ZOAdapter {
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 200; // Minimum 200ms between requests (5 req/sec max)
   private rateLimitDelay: number = 1000; // Delay when rate limited
+  private costTracker: CostTracker | null = null;
 
   constructor(documentService?: DocumentService) {
     this.documentService = documentService || null;
@@ -75,6 +78,11 @@ export class ZOAdapter {
       this.client.defaults.headers['X-App-Token'] = this.getCurrentToken();
       logger.info('Rotated to secondary Zakononline token');
     }
+  }
+
+  setCostTracker(tracker: CostTracker) {
+    this.costTracker = tracker;
+    logger.debug('Cost tracker attached to ZOAdapter');
   }
 
   private async initializeRedis() {
@@ -177,8 +185,11 @@ export class ZOAdapter {
   ): Promise<any> {
     const cacheKey = this.generateCacheKey(endpoint, params);
     const cached = await this.getCached(cacheKey);
+
     if (cached) {
       logger.debug('Cache hit', { endpoint });
+      // Track cached request (won't count in API calls)
+      await this.trackZOUsage(endpoint, true);
       return cached;
     }
 
@@ -196,6 +207,10 @@ export class ZOAdapter {
           const response = await this.client.get(endpoint, { params: queryParams });
           const data = response.data;
           await this.setCache(cacheKey, data);
+
+          // Track successful API call (not cached)
+          await this.trackZOUsage(endpoint, false);
+
           return data;
         } catch (error: any) {
           lastError = error;
@@ -283,14 +298,17 @@ export class ZOAdapter {
     logger.debug('API request params', { endpoint: '/v1/search', params: apiParams });
 
     const response = await this.requestWithRetry('/v1/search', apiParams);
-    
-    // Save documents to database in background (non-blocking)
-    if (this.documentService && Array.isArray(response)) {
-      this.saveDocumentsToDatabase(response).catch(err => {
-        logger.error('Background document save failed:', err);
-      });
-    }
-    
+
+    // DISABLED: Automatic document loading causes PostgreSQL connection pool exhaustion
+    // during large pagination (10,000+ pages). Documents should be loaded explicitly
+    // only when needed (e.g., for top N results to display).
+    //
+    // if (this.documentService && Array.isArray(response)) {
+    //   this.saveDocumentsToDatabase(response).catch(err => {
+    //     logger.error('Background document save failed:', err);
+    //   });
+    // }
+
     return response;
   }
 
@@ -322,11 +340,13 @@ export class ZOAdapter {
    */
   async getDocumentFullText(docId: string | number): Promise<{ html: string; text: string } | null> {
     const cacheKey = `zo:fulltext:${docId}`;
-    
+
     // Check cache first
     const cached = await this.getCached(cacheKey);
     if (cached) {
       logger.debug('Full text cache hit', { docId });
+      // Track cached SecondLayer call (won't count in cost)
+      await this.trackSecondLayerUsage('web_scraping', docId, true);
       return cached;
     }
 
@@ -365,8 +385,8 @@ export class ZOAdapter {
           text: fullText
         };
 
-        logger.info(`Successfully extracted full text using HTML parser`, { 
-          docId, 
+        logger.info(`Successfully extracted full text using HTML parser`, {
+          docId,
           textLength: fullText.length,
           htmlLength: articleHTML.length,
           originalHtmlLength: htmlContent.length
@@ -374,7 +394,10 @@ export class ZOAdapter {
 
         // Cache for 7 days
         await this.setCache(cacheKey, result, 7 * 24 * 3600);
-        
+
+        // Track SecondLayer API call (web scraping)
+        await this.trackSecondLayerUsage('web_scraping', docId, false);
+
         return result;
       }
 
@@ -476,33 +499,49 @@ export class ZOAdapter {
 
   /**
    * Save multiple documents to database with full text loading
+   * Limited to prevent connection pool exhaustion
+   * Saves in batches during loading for better performance
    */
-  private async saveDocumentsToDatabase(docs: any[]): Promise<void> {
+  async saveDocumentsToDatabase(docs: any[], maxDocs: number = 1000): Promise<void> {
     if (!this.documentService || !docs.length) {
       return;
     }
 
-    logger.info(`Processing ${docs.length} documents for database save`);
+    // Limit number of documents to process
+    const docsToProcess = docs.slice(0, maxDocs);
+    logger.info(`Processing ${docsToProcess.length} documents for database save (limited to ${maxDocs})`);
 
     // Filter valid documents
-    const validDocs = docs.filter(doc => doc.doc_id);
-    
+    const validDocs = docsToProcess.filter(doc => doc.doc_id);
+
     if (validDocs.length === 0) {
       return;
     }
 
-    // Load full texts in parallel (with concurrency limit)
-    const documentsWithFullText = await this.loadFullTextsForDocuments(validDocs);
+    // Process and save in batches of 100 documents
+    const SAVE_BATCH_SIZE = 100;
+    let totalSaved = 0;
 
-    // Save to database
-    try {
-      await this.documentService.saveDocumentsBatch(documentsWithFullText);
-      const withText = documentsWithFullText.filter(d => d.full_text).length;
-      logger.info(`Saved ${documentsWithFullText.length} documents to database (${withText} with full text)`);
-    } catch (error) {
-      logger.error('Error saving documents batch to database:', error);
-      // Don't throw - this is a background operation
+    for (let i = 0; i < validDocs.length; i += SAVE_BATCH_SIZE) {
+      const batch = validDocs.slice(i, i + SAVE_BATCH_SIZE);
+      logger.info(`Loading batch ${Math.floor(i / SAVE_BATCH_SIZE) + 1}/${Math.ceil(validDocs.length / SAVE_BATCH_SIZE)} (${batch.length} documents)`);
+
+      // Load full texts for this batch
+      const documentsWithFullText = await this.loadFullTextsForDocuments(batch);
+
+      // Save this batch to database immediately
+      try {
+        await this.documentService.saveDocumentsBatch(documentsWithFullText);
+        const withText = documentsWithFullText.filter(d => d.full_text).length;
+        totalSaved += documentsWithFullText.length;
+        logger.info(`Saved batch to database: ${documentsWithFullText.length} documents (${withText} with full text). Total saved: ${totalSaved}/${validDocs.length}`);
+      } catch (error) {
+        logger.error('Error saving documents batch to database:', error);
+        // Don't throw - continue with next batch
+      }
     }
+
+    logger.info(`Completed saving ${totalSaved} documents to database`);
   }
 
   /**
@@ -515,7 +554,7 @@ export class ZOAdapter {
     // Process documents in batches
     for (let i = 0; i < docs.length; i += CONCURRENCY_LIMIT) {
       const batch = docs.slice(i, i + CONCURRENCY_LIMIT);
-      
+
       const batchResults = await Promise.all(
         batch.map(async (doc) => {
           // Check if document already exists in DB with full text
@@ -584,7 +623,7 @@ export class ZOAdapter {
       );
 
       results.push(...batchResults);
-      
+
       // Small delay between batches to respect rate limits
       if (i + CONCURRENCY_LIMIT < docs.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -615,5 +654,61 @@ export class ZOAdapter {
       data: [response],
       total: 1,
     };
+  }
+
+  private async trackZOUsage(endpoint: string, cached: boolean): Promise<void> {
+    const context = requestContext.getStore();
+    if (!context || !this.costTracker) {
+      return;
+    }
+
+    try {
+      await this.costTracker.recordZOCall({
+        requestId: context.requestId,
+        endpoint: endpoint,
+        cached: cached,
+      });
+
+      if (!cached) {
+        logger.debug('ZO API call tracked', {
+          requestId: context.requestId,
+          endpoint,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to track ZO usage:', error);
+      // Don't throw - we don't want to interrupt the main request
+    }
+  }
+
+  private async trackSecondLayerUsage(
+    operation: string,
+    docId: string | number,
+    cached: boolean
+  ): Promise<void> {
+    const context = requestContext.getStore();
+    if (!context || !this.costTracker) {
+      return;
+    }
+
+    try {
+      await this.costTracker.recordSecondLayerCall({
+        requestId: context.requestId,
+        operation: operation,
+        docId: docId,
+        cached: cached,
+      });
+
+      if (!cached) {
+        logger.debug('SecondLayer API call tracked', {
+          requestId: context.requestId,
+          operation,
+          docId,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to track SecondLayer usage:', error);
+      // Don't throw - we don't want to interrupt the main request
+    }
   }
 }

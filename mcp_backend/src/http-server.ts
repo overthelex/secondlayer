@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger.js';
 import { authenticateClient, AuthenticatedRequest } from './middleware/auth.js';
 import { Database } from './database/database.js';
@@ -14,6 +15,9 @@ import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
+import { CostTracker } from './services/cost-tracker.js';
+import { requestContext } from './utils/openai-client.js';
+import { getOpenAIManager } from './utils/openai-client.js';
 
 dotenv.config();
 
@@ -29,6 +33,7 @@ class HTTPMCPServer {
   private citationValidator: CitationValidator;
   private hallucinationGuard: HallucinationGuard;
   private mcpAPI: MCPQueryAPI;
+  private costTracker: CostTracker;
 
   constructor() {
     this.app = express();
@@ -52,6 +57,13 @@ class HTTPMCPServer {
       this.citationValidator,
       this.hallucinationGuard
     );
+
+    // Initialize cost tracker and inject into adapters
+    this.costTracker = new CostTracker(this.db);
+    const openaiManager = getOpenAIManager();
+    openaiManager.setCostTracker(this.costTracker);
+    this.zoAdapter.setCostTracker(this.costTracker);
+    logger.info('Cost tracking initialized');
 
     // Setup middleware and routes AFTER services are initialized
     this.setupMiddleware();
@@ -112,39 +124,107 @@ class HTTPMCPServer {
       }
     });
 
-    // Call MCP tool (with SSE support)
+    // Call MCP tool (with SSE support and cost tracking)
     this.app.post('/api/tools/:toolName', async (req: AuthenticatedRequest, res: Response) => {
+      const requestId = uuidv4();
+      const startTime = Date.now();
+
       try {
         const { toolName } = req.params;
         const args = req.body.arguments || req.body;
         const acceptHeader = req.headers.accept || '';
 
         logger.info('Tool call request', {
+          requestId,
           tool: toolName,
           clientKey: req.clientKey?.substring(0, 8) + '...',
           streaming: acceptHeader.includes('text/event-stream'),
         });
 
+        // 1. Create tracking record (pending)
+        await this.costTracker.createTrackingRecord({
+          requestId,
+          toolName,
+          clientKey: req.clientKey || 'unknown',
+          userQuery: args.query || JSON.stringify(args),
+          queryParams: args,
+        });
+
+        // 2. Estimate cost BEFORE execution
+        const estimate = await this.costTracker.estimateCost({
+          toolName,
+          queryLength: (args.query || '').length,
+          reasoningBudget: args.reasoning_budget || 'standard',
+        });
+
+        logger.info('Cost estimate before execution', {
+          requestId,
+          toolName,
+          estimate,
+        });
+
         // Check if client wants SSE streaming
         if (acceptHeader.includes('text/event-stream')) {
-          // SSE streaming response
+          // SSE streaming response (TODO: add cost tracking to streaming)
           return this.handleStreamingToolCall(req, res, toolName, args);
         }
 
-        // Regular JSON response
-        const result = await this.mcpAPI.handleToolCall(toolName, args);
+        // 3. Execute in request context
+        const result = await requestContext.run(
+          { requestId, task: toolName },
+          async () => {
+            return await this.mcpAPI.handleToolCall(toolName, args);
+          }
+        );
 
+        // 4. Complete tracking and get breakdown
+        const executionTime = Date.now() - startTime;
+        const breakdown = await this.costTracker.completeTrackingRecord({
+          requestId,
+          executionTimeMs: executionTime,
+          status: 'completed',
+        });
+
+        logger.info('Request completed with cost tracking', {
+          requestId,
+          toolName,
+          totalCostUsd: breakdown.totals.cost_usd.toFixed(6),
+        });
+
+        // 5. Return result with cost tracking info
         res.json({
           success: true,
           tool: toolName,
           result,
+          cost_tracking: {
+            request_id: requestId,
+            estimate_before: estimate,
+            actual_cost: breakdown,
+          },
         });
       } catch (error: any) {
         logger.error('Tool call error:', error);
+
+        // Record failure
+        const executionTime = Date.now() - startTime;
+        try {
+          await this.costTracker.completeTrackingRecord({
+            requestId,
+            executionTimeMs: executionTime,
+            status: 'failed',
+            errorMessage: error.message,
+          });
+        } catch (trackingError) {
+          logger.error('Failed to record error in cost tracking:', trackingError);
+        }
+
         res.status(500).json({
           error: 'Tool execution failed',
           message: error.message,
           tool: req.params.toolName,
+          cost_tracking: {
+            request_id: requestId,
+          },
         });
       }
     });

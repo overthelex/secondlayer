@@ -1,9 +1,26 @@
 import OpenAI from 'openai';
+import { AsyncLocalStorage } from 'async_hooks';
 import { logger } from './logger.js';
+import type { CostTracker } from '../services/cost-tracker.js';
+import { ModelSelector } from './model-selector.js';
+
+/**
+ * Request context for tracking API costs across async call chains
+ */
+export interface RequestContext {
+  requestId: string;
+  task: string;
+}
+
+/**
+ * AsyncLocalStorage instance for automatic context propagation
+ */
+export const requestContext = new AsyncLocalStorage<RequestContext>();
 
 export class OpenAIClientManager {
   private clients: OpenAI[] = [];
   private currentClientIndex: number = 0;
+  private costTracker: CostTracker | null = null;
 
   constructor() {
     const primaryKey = process.env.OPENAI_API_KEY;
@@ -34,6 +51,11 @@ export class OpenAIClientManager {
     }
   }
 
+  setCostTracker(tracker: CostTracker) {
+    this.costTracker = tracker;
+    logger.debug('Cost tracker attached to OpenAI client manager');
+  }
+
   async executeWithRetry<T>(
     operation: (client: OpenAI) => Promise<T>,
     maxRetries: number = 3
@@ -45,7 +67,14 @@ export class OpenAIClientManager {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           const client = this.getClient();
-          return await operation(client);
+          const result = await operation(client);
+
+          // ПЕРЕХВАТ: Записываем usage из response
+          if (this.costTracker && result && typeof result === 'object') {
+            await this.trackOpenAIUsage(result);
+          }
+
+          return result;
         } catch (error: any) {
           lastError = error;
 
@@ -74,6 +103,39 @@ export class OpenAIClientManager {
     throw new Error(
       `OpenAI operation failed after ${maxRetries * maxRotations} attempts: ${lastError?.message}`
     );
+  }
+
+  private async trackOpenAIUsage(response: any): Promise<void> {
+    const context = requestContext.getStore();
+    if (!context || !this.costTracker || !response.usage) {
+      return;
+    }
+
+    try {
+      // Handle both chat completions and embeddings
+      const promptTokens = response.usage.prompt_tokens || 0;
+      const completionTokens = response.usage.completion_tokens || 0;
+      const totalTokens = response.usage.total_tokens || 0;
+
+      const costUsd = ModelSelector.estimateCostAccurate(
+        response.model || 'unknown',
+        promptTokens,
+        completionTokens
+      );
+
+      await this.costTracker.recordOpenAICall({
+        requestId: context.requestId,
+        model: response.model || 'unknown',
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
+        costUsd: costUsd,
+        task: context.task,
+      });
+    } catch (error) {
+      logger.error('Failed to track OpenAI usage:', error);
+      // Don't throw - we don't want to interrupt the main request
+    }
   }
 }
 
