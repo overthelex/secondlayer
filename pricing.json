@@ -1,0 +1,165 @@
+{
+  "currency": "USD",
+  "pricing": {
+    "zakononline_api": {
+      "name": "ZakonOnline API",
+      "description": "External court decisions API",
+      "tiers": [
+        {
+          "tier": 1,
+          "range": "0 - 10,000 calls/month",
+          "price_usd": 0.00714,
+          "note": "Fixed monthly fee $71.43 amortized over 10k calls"
+        },
+        {
+          "tier": 2,
+          "range": "10,001 - 20,000 calls/month",
+          "price_usd": 0.00690
+        },
+        {
+          "tier": 3,
+          "range": "20,001 - 30,000 calls/month",
+          "price_usd": 0.00667
+        },
+        {
+          "tier": 4,
+          "range": "30,001 - 50,000 calls/month",
+          "price_usd": 0.00643
+        },
+        {
+          "tier": 5,
+          "range": "50,001+ calls/month",
+          "price_usd": 0.00238
+        }
+      ]
+    },
+    "secondlayer_mcp_api": {
+      "name": "SecondLayer MCP API",
+      "description": "Internal MCP server API (web scraping + processing)",
+      "tiers": [
+        {
+          "tier": 1,
+          "range": "0 - 10,000 calls/month",
+          "price_usd": 0.00714,
+          "note": "Same pricing as ZakonOnline API"
+        },
+        {
+          "tier": 2,
+          "range": "10,001 - 20,000 calls/month",
+          "price_usd": 0.00690
+        },
+        {
+          "tier": 3,
+          "range": "20,001 - 30,000 calls/month",
+          "price_usd": 0.00667
+        },
+        {
+          "tier": 4,
+          "range": "30,001 - 50,000 calls/month",
+          "price_usd": 0.00643
+        },
+        {
+          "tier": 5,
+          "range": "50,001+ calls/month",
+          "price_usd": 0.00238
+        }
+      ],
+      "operations": {
+        "web_scraping": {
+          "description": "HTML parsing of court decisions (getDocumentFullText)",
+          "counted_as": "SecondLayer MCP API call",
+          "pricing": "Same as tiers above"
+        },
+        "cached_requests": {
+          "description": "Requests served from cache (Redis/DB)",
+          "counted_as": "free",
+          "pricing": 0
+        }
+      }
+    },
+    "openai_api": {
+      "name": "OpenAI API",
+      "description": "LLM and embeddings",
+      "chat_models": {
+        "gpt-4o": {
+          "name": "GPT-4o",
+          "description": "Most capable model, multimodal (vision, audio)",
+          "input_per_1m_tokens_usd": 2.50,
+          "output_per_1m_tokens_usd": 10.00,
+          "context_window": 128000,
+          "max_output_tokens": 16384
+        },
+        "gpt-4o-2024-08-06": {
+          "name": "GPT-4o (2024-08-06)",
+          "description": "Specific snapshot of GPT-4o",
+          "input_per_1m_tokens_usd": 2.50,
+          "output_per_1m_tokens_usd": 10.00,
+          "context_window": 128000,
+          "max_output_tokens": 16384
+        },
+        "gpt-4o-mini": {
+          "name": "GPT-4o Mini",
+          "description": "Affordable, fast model for everyday tasks",
+          "input_per_1m_tokens_usd": 0.15,
+          "output_per_1m_tokens_usd": 0.60,
+          "context_window": 128000,
+          "max_output_tokens": 16384,
+          "note": "Recommended for most tasks (cost-effective)"
+        },
+        "gpt-4-turbo": {
+          "name": "GPT-4 Turbo",
+          "description": "Previous generation fast GPT-4",
+          "input_per_1m_tokens_usd": 10.00,
+          "output_per_1m_tokens_usd": 30.00,
+          "context_window": 128000,
+          "max_output_tokens": 4096
+        },
+        "gpt-4": {
+          "name": "GPT-4",
+          "description": "Original GPT-4 model",
+          "input_per_1m_tokens_usd": 30.00,
+          "output_per_1m_tokens_usd": 60.00,
+          "context_window": 8192,
+          "max_output_tokens": 8192,
+          "note": "Legacy model, not recommended for new projects"
+        }
+      },
+      "embedding_models": {
+        "text-embedding-ada-002": {
+          "name": "Ada v2",
+          "description": "Legacy embedding model (1536 dimensions)",
+          "input_per_1m_tokens_usd": 0.10,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 1536,
+          "max_input_tokens": 8191,
+          "note": "Currently used in SecondLayer"
+        },
+        "text-embedding-3-small": {
+          "name": "Embedding v3 Small",
+          "description": "Improved small embedding model",
+          "input_per_1m_tokens_usd": 0.02,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 1536,
+          "max_input_tokens": 8191,
+          "note": "5x cheaper than ada-002, better performance"
+        },
+        "text-embedding-3-large": {
+          "name": "Embedding v3 Large",
+          "description": "Most capable embedding model",
+          "input_per_1m_tokens_usd": 0.13,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 3072,
+          "max_input_tokens": 8191,
+          "note": "Highest quality embeddings"
+        }
+      },
+      "usage_notes": {
+        "quick_budget": "Uses gpt-4o-mini (default)",
+        "standard_budget": "Uses gpt-4o-mini (default)",
+        "deep_budget": "Uses gpt-4o (default)",
+        "embedding_model": "Uses text-embedding-ada-002 (configurable via OPENAI_EMBEDDING_MODEL)",
+        "cost_optimization": "Consider switching to text-embedding-3-small for 5x cost reduction"
+      }
+    }
+  }
+}

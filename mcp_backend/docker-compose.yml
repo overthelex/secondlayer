@@ -12,7 +12,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U secondlayer"]
+      test: ["CMD-SHELL", "pg_isready -U secondlayer -d secondlayer_db"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -52,18 +52,35 @@ services:
     container_name: secondlayer-app
     environment:
       NODE_ENV: production
+      # Database connection
+      DATABASE_URL: postgresql://secondlayer:secondlayer_password@postgres:5432/secondlayer_db
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: secondlayer
       POSTGRES_PASSWORD: secondlayer_password
       POSTGRES_DB: secondlayer_db
+      # Vector DB and Cache
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # OpenAI Configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_API_KEY2: ${OPENAI_API_KEY2}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      # Dynamic model selection (recommended)
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      # OR single model for all tasks
+      # OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # ZakonOnline API
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
-      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2}
-      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+      # HTTP Server
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-test-key-123}
+      HTTP_PORT: 3000
+      HTTP_HOST: 0.0.0.0
       PORT: 3000
     ports:
       - "3000:3000"
@@ -75,7 +92,6 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./src:/app/src
       - ./logs:/app/logs
     restart: unless-stopped
 
