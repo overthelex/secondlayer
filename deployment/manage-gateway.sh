@@ -53,10 +53,10 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  prod              Production (gate server, port 3001)
-  stage             Staging (gate server, port 3002)
-  dev               Development (gate server, port 3003)
-  local             Local development (your machine, port 3000)
+  prod              Production (legal.org.ua)
+  stage             Staging (legal.org.ua/staging)
+  dev               Development (dev.legal.org.ua)
+  local             Local development (localhost:3000)
   all               All gateway environments (prod+stage+dev, excludes local)
 
 Examples:
@@ -318,18 +318,23 @@ check_health() {
 
     # Production
     print_msg "$YELLOW" "=== Production ==="
-    curl -sf http://localhost:3001/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf http://localhost:8090 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    curl -sf https://legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
+    curl -sf https://legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
     # Staging
     print_msg "$YELLOW" "\n=== Staging ==="
-    curl -sf http://localhost:3002/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf http://localhost:8092 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    curl -sf https://legal.org.ua/staging/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
+    curl -sf https://legal.org.ua/staging > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
     # Development
     print_msg "$YELLOW" "\n=== Development ==="
-    curl -sf http://localhost:3003/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf http://localhost:8091 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    curl -sf https://dev.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
+    curl -sf https://dev.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+
+    # Local
+    print_msg "$YELLOW" "\n=== Local ==="
+    curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
+    curl -sf http://localhost:3000 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
     # Gateway
     print_msg "$YELLOW" "\n=== Gateway ==="
