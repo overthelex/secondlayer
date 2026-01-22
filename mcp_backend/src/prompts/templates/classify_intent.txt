@@ -1,0 +1,26 @@
+---
+id: classify_intent_v1
+intent: classify_intent
+variables: ['user_query']
+version: 1.0.0
+---
+
+Проаналізуй наступний запит користувача та визнач:
+
+1. Intent (наприклад: consumer_penalty_delay, tax_dispute, labor_dispute)
+2. Домени (court, npa, echr)
+3. Необхідні сутності (law_article, seller, consumer, etc.)
+4. Типи секцій (FACTS, CLAIMS, COURT_REASONING, DECISION, LAW_REFERENCES, AMOUNTS)
+5. Часовий діапазон (якщо вказано)
+
+Запит користувача:
+{{user_query}}
+
+Поверни ТІЛЬКИ валідний JSON без додаткового тексту з наступними полями:
+- intent: string
+- confidence: number (0.0-1.0)
+- domains: string[]
+- required_entities: string[]
+- sections: string[]
+- time_range: {from: string, to: string} (опціонально)
+- reasoning_budget: "quick" | "standard" | "deep"
