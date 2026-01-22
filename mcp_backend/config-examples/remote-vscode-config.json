@@ -1,0 +1,17 @@
+{
+  "_comment": "Remote MCP Server Configuration for VSCode",
+  "_note": "Place this as .vscode/mcp.json in your workspace",
+  "_docs": "https://code.visualstudio.com/docs/copilot/chat/mcp-servers",
+
+  "mcpServers": {
+    "secondlayer-remote": {
+      "url": "https://mcp.legal.org.ua/mcp/sse",
+      "transport": {
+        "type": "sse"
+      },
+      "headers": {
+        "Authorization": "Bearer YOUR-TOKEN-HERE"
+      }
+    }
+  }
+}

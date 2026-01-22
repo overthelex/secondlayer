@@ -3,7 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger.js';
-import { authenticateClient, AuthenticatedRequest } from './middleware/auth.js';
+import { dualAuth, requireJWT, initializeDualAuth, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
+import { configurePassport } from './config/passport.js';
+import authRouter from './routes/auth.js';
 import { Database } from './database/database.js';
 import { DocumentService } from './services/document-service.js';
 import { ZOAdapter } from './adapters/zo-adapter.js';
@@ -15,9 +17,11 @@ import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
+// import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
+import passport from 'passport';
 
 dotenv.config();
 
@@ -65,6 +69,11 @@ class HTTPMCPServer {
     this.zoAdapter.setCostTracker(this.costTracker);
     logger.info('Cost tracking initialized');
 
+    // Initialize authentication
+    configurePassport(this.db);
+    initializeDualAuth(this.db);
+    logger.info('Authentication configured (Google OAuth2 + dual auth)');
+
     // Setup middleware and routes AFTER services are initialized
     this.setupMiddleware();
     this.setupRoutes();
@@ -80,6 +89,9 @@ class HTTPMCPServer {
     // JSON parsing
     this.app.use(express.json({ limit: '10mb' }));
 
+    // Initialize Passport middleware
+    this.app.use(passport.initialize());
+
     // Request logging
     this.app.use((req, _res, next) => {
       logger.info('HTTP request', {
@@ -92,7 +104,7 @@ class HTTPMCPServer {
   }
 
   private setupRoutes() {
-    // Health check (без аутентификации)
+    // Health check (public - no auth)
     this.app.get('/health', (_req, res) => {
       res.json({
         status: 'ok',
@@ -101,14 +113,75 @@ class HTTPMCPServer {
       });
     });
 
-    // Все остальные endpoints требуют аутентификации
-    this.app.use(authenticateClient);
+    // Authentication routes (public - OAuth endpoints)
+    this.app.use('/auth', authRouter);
 
-    // REST API for admin panel (CRUD operations)
-    this.app.use('/api', createRestAPIRouter(this.db));
+    // REST API for admin panel (CRUD operations) - require JWT (user login)
+    this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.db));
+    this.app.use('/api/patterns', requireJWT as any, createRestAPIRouter(this.db));
+    this.app.use('/api/queries', requireJWT as any, createRestAPIRouter(this.db));
 
+    // User profile endpoint - require JWT
+    this.app.use('/api/auth', requireJWT as any, authRouter);
+
+    // EULA endpoints - REMOVED: not needed
+    // this.app.use('/api/eula', createEULARouter(this.db.getPool()));
+
+    // Query history endpoint - require JWT (user login)
+    this.app.get('/api/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+
+        // Get user's query history from cost_tracking
+        const result = await this.db.query(
+          `SELECT
+            id,
+            request_id,
+            tool_name,
+            user_query,
+            query_params,
+            status,
+            created_at,
+            completed_at,
+            execution_time_ms,
+            total_cost_usd
+          FROM cost_tracking
+          WHERE status IN ('completed', 'failed')
+            AND user_query IS NOT NULL
+            AND user_query != ''
+          ORDER BY created_at DESC
+          LIMIT $1 OFFSET $2`,
+          [limit, offset]
+        );
+
+        // Get total count
+        const countResult = await this.db.query(
+          `SELECT COUNT(*)
+          FROM cost_tracking
+          WHERE status IN ('completed', 'failed')
+            AND user_query IS NOT NULL
+            AND user_query != ''`
+        );
+
+        res.json({
+          history: result.rows,
+          total: parseInt(countResult.rows[0].count),
+          limit,
+          offset,
+        });
+      } catch (error: any) {
+        logger.error('Error getting query history:', error);
+        res.status(500).json({
+          error: 'Failed to get query history',
+          message: error.message,
+        });
+      }
+    }) as any);
+
+    // MCP tool endpoints - allow both JWT and API keys
     // List available tools
-    this.app.get('/api/tools', (_req: AuthenticatedRequest, res: Response) => {
+    this.app.get('/api/tools', dualAuth as any, ((_req: DualAuthRequest, res: Response) => {
       try {
         const tools = this.mcpAPI.getTools();
         res.json({
@@ -122,10 +195,10 @@ class HTTPMCPServer {
           message: error.message,
         });
       }
-    });
+    }) as any);
 
     // Call MCP tool (with SSE support and cost tracking)
-    this.app.post('/api/tools/:toolName', async (req: AuthenticatedRequest, res: Response) => {
+    this.app.post('/api/tools/:toolName', dualAuth as any, (async (req: DualAuthRequest, res: Response) => {
       const requestId = uuidv4();
       const startTime = Date.now();
 
@@ -227,10 +300,10 @@ class HTTPMCPServer {
           },
         });
       }
-    });
+    }) as any);
 
     // Dedicated SSE streaming endpoint
-    this.app.post('/api/tools/:toolName/stream', async (req: AuthenticatedRequest, res: Response) => {
+    this.app.post('/api/tools/:toolName/stream', dualAuth as any, (async (req: DualAuthRequest, res: Response) => {
       try {
         const { toolName } = req.params;
         const args = req.body.arguments || req.body;
@@ -251,10 +324,10 @@ class HTTPMCPServer {
           });
         }
       }
-    });
+    }) as any);
 
     // Batch tool calls
-    this.app.post('/api/tools/batch', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    this.app.post('/api/tools/batch', dualAuth as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
       try {
         const { calls } = req.body;
 
@@ -299,7 +372,7 @@ class HTTPMCPServer {
           message: error.message,
         });
       }
-    });
+    }) as any);
 
     // 404 handler
     this.app.use((req, res) => {
@@ -331,7 +404,7 @@ class HTTPMCPServer {
   }
 
   private async handleStreamingToolCall(
-    _req: AuthenticatedRequest,
+    _req: DualAuthRequest,
     res: Response,
     toolName: string,
     args: any

@@ -110,11 +110,62 @@ export class MCPQueryAPI {
         inputSchema: {
           type: 'object',
           properties: {
-            document_id: { type: 'string' },
-            text: { type: 'string' },
+            doc_id: {
+              type: ['string', 'number'],
+              description: 'ID документа из Zakononline для загрузки полного текста'
+            },
+            document_id: {
+              type: 'string',
+              description: 'Альтернативное название для doc_id'
+            },
+            text: {
+              type: 'string',
+              description: 'Полный текст документа (если уже есть)'
+            },
             use_llm: { type: 'boolean', default: false },
           },
-          required: ['text'],
+          required: [],
+        },
+      },
+      {
+        name: 'count_cases_by_party',
+        description: `Подсчитывает точное количество судебных дел по названию стороны (истец/ответчик)
+
+💰 Примерная стоимость: зависит от количества результатов
+Использует пагинацию через API Zakononline для точного подсчёта всех дел. Стоимость ~$0.007 за каждую страницу (1000 дел).`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            party_name: {
+              type: 'string',
+              description: 'Название компании или ФИО (например, "Фінансова компанія Фангарант груп")'
+            },
+            party_type: {
+              type: 'string',
+              enum: ['plaintiff', 'defendant', 'any'],
+              default: 'any',
+              description: 'Тип стороны: истец (plaintiff), ответчик (defendant), или любая (any)'
+            },
+            date_from: {
+              type: 'string',
+              description: 'Дата начала периода поиска (формат: YYYY-MM-DD)'
+            },
+            date_to: {
+              type: 'string',
+              description: 'Дата окончания периода поиска (формат: YYYY-MM-DD)'
+            },
+            return_cases: {
+              type: 'boolean',
+              default: false,
+              description: 'Вернуть список дел вместе с подсчётом'
+            },
+            max_cases_to_return: {
+              type: 'number',
+              default: 100,
+              description: 'Максимальное количество дел для возврата в списке (по умолчанию 100)'
+            }
+          },
+          required: ['party_name'],
         },
       },
       {
@@ -144,6 +195,34 @@ export class MCPQueryAPI {
             case_id: { type: 'string' },
           },
           required: ['case_id'],
+        },
+      },
+      {
+        name: 'load_full_texts',
+        description: `Загружает полные тексты судебных решений и сохраняет в базу данных
+
+💰 Примерная стоимость: зависит от количества документов
+~$0.007 за каждый документ (Zakononline web scraping). Проверяет наличие в PostgreSQL и Redis кэше перед загрузкой.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            doc_ids: {
+              type: 'array',
+              items: { type: 'number' },
+              description: 'Массив ID документов для загрузки (например, [110679112, 110441965])'
+            },
+            max_docs: {
+              type: 'number',
+              default: 1000,
+              description: 'Максимальное количество документов для загрузки (защита от перегрузки)'
+            },
+            batch_size: {
+              type: 'number',
+              default: 100,
+              description: 'Размер батча для обработки (по умолчанию 100)'
+            }
+          },
+          required: ['doc_ids'],
         },
       },
       {
@@ -200,10 +279,14 @@ export class MCPQueryAPI {
           return await this.getSimilarReasoning(args);
         case 'extract_document_sections':
           return await this.extractDocumentSections(args);
+        case 'count_cases_by_party':
+          return await this.countCasesByParty(args);
         case 'find_relevant_law_articles':
           return await this.findRelevantLawArticles(args);
         case 'check_precedent_status':
           return await this.checkPrecedentStatus(args);
+        case 'load_full_texts':
+          return await this.loadFullTexts(args);
         case 'get_citation_graph':
           return await this.getCitationGraph(args);
         case 'get_legal_advice':
@@ -739,8 +822,40 @@ export class MCPQueryAPI {
   }
 
   private async extractDocumentSections(args: any) {
+    let text = args.text;
+    const docId = args.doc_id || args.document_id;
+
+    // If no text provided but doc_id is available, fetch the document
+    if (!text && docId) {
+      logger.info('Fetching document by doc_id', { docId });
+
+      try {
+        // Try to get from ZOAdapter which checks database first, then fetches from API
+        const fullTextData = await this.zoAdapter.getDocumentFullText(docId);
+
+        if (fullTextData && fullTextData.text) {
+          text = fullTextData.text;
+          logger.info('Document loaded successfully', {
+            docId,
+            textLength: text.length,
+          });
+        } else {
+          throw new Error(`Failed to load document ${docId}: no text returned`);
+        }
+      } catch (error: any) {
+        logger.error('Failed to fetch document', { docId, error: error.message });
+        throw new Error(`Failed to fetch document ${docId}: ${error.message}`);
+      }
+    }
+
+    // Validate that we have text to work with
+    if (!text) {
+      throw new Error('Either "text" or "doc_id"/"document_id" must be provided');
+    }
+
+    // Extract sections from the text
     const sections = await this.sectionizer.extractSections(
-      args.text,
+      text,
       args.use_llm || false
     );
 
@@ -752,6 +867,292 @@ export class MCPQueryAPI {
         },
       ],
     };
+  }
+
+  private async countCasesByParty(args: any) {
+    const partyName = args.party_name;
+    const partyType = args.party_type || 'any';
+    const returnCases = args.return_cases || false;
+    const maxCasesToReturn = args.max_cases_to_return || 100;
+
+    logger.info('Counting cases by party', { partyName, partyType, returnCases, maxCasesToReturn });
+
+    // Build search query based on party type
+    let searchQuery = partyName;
+    if (partyType === 'plaintiff') {
+      searchQuery = `позивач ${partyName}`;
+    } else if (partyType === 'defendant') {
+      searchQuery = `відповідач ${partyName}`;
+    }
+
+    try {
+      // Use pagination to count ALL results
+      const startTime = Date.now();
+      const maxApiLimit = 1000;
+      let offset = 0;
+      let totalCount = 0;
+      let pagesFetched = 0;
+      let hasMore = true;
+      const allCases: any[] = [];
+      const seenDocIds = new Set<number>(); // Track unique doc_ids to avoid duplicates
+      const SAFETY_LIMIT = 100000; // Stop at 100k results
+      // When using date filters, limit pages to avoid scanning millions of records
+      const MAX_PAGES_WITH_DATE_FILTER = 100; // Max 100k docs to scan when filtering by date
+      const hasDateFilter = !!(args.date_from || args.date_to);
+      let reachedPageLimit = false;
+
+      while (hasMore && totalCount < SAFETY_LIMIT) {
+        // Stop early if using date filter and scanned enough pages
+        if (hasDateFilter && pagesFetched >= MAX_PAGES_WITH_DATE_FILTER) {
+          logger.warn('Reached max pages limit for date-filtered query', {
+            pagesFetched,
+            maxPages: MAX_PAGES_WITH_DATE_FILTER,
+            totalCount
+          });
+          reachedPageLimit = true;
+          break;
+        }
+
+        const searchParams: any = {
+          meta: { search: searchQuery },
+          limit: maxApiLimit,
+          offset: offset,
+        };
+
+        // NOTE: Date filtering via API where clause is VERY slow (120+ seconds per request)
+        // Instead, we fetch all results and filter locally
+        // This is much faster for date-range queries
+
+        logger.info('Fetching page', {
+          page: pagesFetched + 1,
+          offset,
+          limit: maxApiLimit,
+          totalSoFar: totalCount,
+          hasDateFilter: !!(args.date_from || args.date_to)
+        });
+
+        const response = await this.zoAdapter.searchCourtDecisions(searchParams);
+        pagesFetched++;
+
+        if (Array.isArray(response) && response.length > 0) {
+          // Filter results by date locally if date filters are provided
+          let filteredResponse: any[] = response;
+          if (args.date_from || args.date_to) {
+            filteredResponse = response.filter(doc => {
+              const docDate = doc.adjudication_date ? new Date(doc.adjudication_date) : null;
+              if (!docDate) return false;
+
+              if (args.date_from) {
+                const fromDate = new Date(args.date_from);
+                if (docDate < fromDate) return false;
+              }
+
+              if (args.date_to) {
+                const toDate = new Date(args.date_to);
+                if (docDate > toDate) return false;
+              }
+
+              return true;
+            });
+
+            logger.info('Local date filtering', {
+              beforeFilter: response.length,
+              afterFilter: filteredResponse.length,
+              dateFrom: args.date_from,
+              dateTo: args.date_to
+            });
+          }
+
+          // Deduplicate results - only count and collect unique doc_ids
+          const uniqueResults = filteredResponse.filter(doc => {
+            if (!doc.doc_id) return false;
+            if (seenDocIds.has(doc.doc_id)) return false;
+            seenDocIds.add(doc.doc_id);
+            return true;
+          });
+
+          // Check if API is returning duplicates (sign of pagination issue)
+          if (uniqueResults.length === 0 && filteredResponse.length > 0) {
+            logger.warn('API returned only duplicate results, stopping pagination', {
+              totalResults: filteredResponse.length,
+              uniqueCount: 0,
+              totalUniqueSoFar: seenDocIds.size
+            });
+            hasMore = false;
+            break;
+          }
+
+          totalCount += uniqueResults.length;
+
+          // Collect cases if requested
+          if (returnCases && allCases.length < maxCasesToReturn) {
+            const casesToAdd = uniqueResults.slice(0, maxCasesToReturn - allCases.length);
+            allCases.push(...casesToAdd.map(doc => ({
+              cause_num: doc.cause_num,
+              doc_id: doc.doc_id,
+              title: doc.title,
+              resolution: doc.resolution,
+              judge: doc.judge,
+              court_code: doc.court_code,
+              adjudication_date: doc.adjudication_date,
+              url: `https://zakononline.ua/court-decisions/show/${doc.doc_id}`,
+            })));
+          }
+
+          // If got less than maxApiLimit, we've reached the end
+          if (response.length < maxApiLimit) {
+            hasMore = false;
+            logger.info('Reached end of results', {
+              lastPageSize: response.length
+            });
+          } else {
+            offset += maxApiLimit;
+          }
+        } else {
+          hasMore = false;
+          logger.info('No more results', { totalCount });
+        }
+
+        // Safety delay to avoid rate limits
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      const timeTaken = Date.now() - startTime;
+      const costEstimate = pagesFetched * 0.00714;
+
+      const result: any = {
+        party_name: partyName,
+        party_type: partyType,
+        search_query: searchQuery,
+        total_unique_cases: totalCount,
+        unique_doc_ids_found: seenDocIds.size,
+        pages_fetched: pagesFetched,
+        time_taken_ms: timeTaken,
+        cost_estimate_usd: parseFloat(costEstimate.toFixed(6)),
+      };
+
+      if (args.date_from) result.date_from = args.date_from;
+      if (args.date_to) result.date_to = args.date_to;
+
+      if (args.date_from || args.date_to) {
+        result.filtering_method = 'local';
+        result.note = 'Фильтрация по датам выполнена локально (API-фильтр слишком медленный)';
+      }
+
+      if (reachedPageLimit) {
+        result.warning = `Достигнут лимит в ${MAX_PAGES_WITH_DATE_FILTER} страниц для date-фильтрованного запроса. Просканировано ${pagesFetched * maxApiLimit} дел, найдено ${totalCount}. Для более точного подсчёта используйте запрос без date-фильтра.`;
+        result.scanned_documents = pagesFetched * maxApiLimit;
+      } else if (totalCount >= SAFETY_LIMIT) {
+        result.warning = `Достигнут лимит безопасности в ${SAFETY_LIMIT} дел. Реальное количество может быть больше.`;
+      }
+
+      if (returnCases) {
+        result.cases = allCases;
+        result.cases_returned = allCases.length;
+      }
+
+      logger.info('Case counting completed', {
+        totalCases: totalCount,
+        pagesFetched,
+        timeTakenMs: timeTaken,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed to count cases by party', { error: error.message });
+      throw new Error(`Failed to count cases: ${error.message}`);
+    }
+  }
+
+  private async loadFullTexts(args: any) {
+    const docIds: number[] = args.doc_ids || [];
+    const maxDocs = args.max_docs || 1000;
+
+    if (!docIds || docIds.length === 0) {
+      throw new Error('doc_ids parameter is required and must be a non-empty array');
+    }
+
+    // Deduplicate doc_ids first
+    const uniqueDocIds = Array.from(new Set(docIds));
+    const duplicatesRemoved = docIds.length - uniqueDocIds.length;
+
+    if (duplicatesRemoved > 0) {
+      logger.warn('Removed duplicate doc_ids', {
+        totalProvided: docIds.length,
+        uniqueCount: uniqueDocIds.length,
+        duplicatesRemoved
+      });
+    }
+
+    logger.info('Loading full texts for documents', {
+      totalDocs: uniqueDocIds.length,
+      maxDocs,
+      limitedTo: Math.min(uniqueDocIds.length, maxDocs),
+      duplicatesRemoved
+    });
+
+    try {
+      const startTime = Date.now();
+
+      // Create document objects with doc_id
+      const docs = uniqueDocIds.slice(0, maxDocs).map(docId => ({
+        doc_id: docId
+      }));
+
+      // Use ZOAdapter's batch loading with cache checking
+      await this.zoAdapter.saveDocumentsToDatabase(docs, maxDocs);
+
+      const timeTaken = Date.now() - startTime;
+
+      // Estimate cost: web scraping cost only (documents in cache/DB are free)
+      // We don't know exact count without checking, so estimate maximum
+      const estimatedCost = docs.length * 0.00714; // SecondLayer web scraping cost
+
+      const result: any = {
+        requested_docs: docIds.length,
+        unique_docs: uniqueDocIds.length,
+        duplicates_removed: duplicatesRemoved,
+        processed_docs: docs.length,
+        limited_to: maxDocs,
+        time_taken_ms: timeTaken,
+        estimated_cost_usd: parseFloat(estimatedCost.toFixed(6)),
+        note: 'Документы проверены на наличие в PostgreSQL и Redis кэше перед загрузкой. Загружены только отсутствующие документы.',
+      };
+
+      if (duplicatesRemoved > 0) {
+        result.deduplication_note = `Обнаружено и удалено ${duplicatesRemoved} дубликатов doc_id из входного списка`;
+      }
+
+      if (uniqueDocIds.length > maxDocs) {
+        result.warning = `Запрошено ${uniqueDocIds.length} уникальных документов, но обработано только ${maxDocs} из-за лимита безопасности`;
+      }
+
+      logger.info('Full texts loading completed', {
+        processedDocs: docs.length,
+        timeTakenMs: timeTaken,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error: any) {
+      logger.error('Failed to load full texts', { error: error.message });
+      throw new Error(`Failed to load full texts: ${error.message}`);
+    }
   }
 
   private async findRelevantLawArticles(args: any) {
@@ -934,8 +1335,10 @@ export class MCPQueryAPI {
     onEvent: StreamEventCallback
   ): Promise<any> {
     const budget = args.reasoning_budget || 'standard';
-    
+
     try {
+      logger.info('getLegalAdviceStream started', { query: args.query, budget });
+
       // Step 1: Classify intent
       onEvent({
         type: 'progress',
@@ -947,8 +1350,10 @@ export class MCPQueryAPI {
         },
         id: 'step-1',
       });
-      
+
+      logger.info('Calling classifyIntent...');
       const intent = await this.queryPlanner.classifyIntent(args.query, budget);
+      logger.info('classifyIntent completed', { intent: intent.intent });
       
       onEvent({
         type: 'progress',
@@ -973,10 +1378,14 @@ export class MCPQueryAPI {
         },
         id: 'step-2',
       });
-      
+
+      logger.info('Building query params...');
       const queryParams = this.queryPlanner.buildQueryParams(intent, args.query);
+      logger.info('Searching court decisions...', { queryParams });
       const searchResponse = await this.zoAdapter.searchCourtDecisions(queryParams);
+      logger.info('Normalizing response...');
       const normalized = await this.zoAdapter.normalizeResponse(searchResponse);
+      logger.info('Search completed', { resultsCount: normalized.data.length });
       
       onEvent({
         type: 'progress',
@@ -1152,19 +1561,23 @@ export class MCPQueryAPI {
         id: 'step-5',
       });
       
+      logger.info('Validating response...');
       const validation = await this.hallucinationGuard.validateResponse(
         response,
         sources
       );
       response.validation = validation;
-      
+      logger.info('Validation completed', { isValid: validation.is_valid });
+
       // Final result
+      logger.info('Sending complete event...');
       onEvent({
         type: 'complete',
         data: response,
         id: 'final',
       });
-      
+      logger.info('Complete event sent, returning result');
+
       return {
         content: [
           {
@@ -1174,6 +1587,7 @@ export class MCPQueryAPI {
         ],
       };
     } catch (error: any) {
+      logger.error('getLegalAdviceStream error', { error: error.message, stack: error.stack });
       onEvent({
         type: 'error',
         data: {

@@ -87,11 +87,26 @@ export class SemanticSectionizer {
     // First pass: regex-based extraction
     for (const marker of this.markers.sort((a, b) => a.priority - b.priority)) {
       for (const pattern of marker.patterns) {
+        // Reset regex state to prevent infinite loops
+        pattern.lastIndex = 0;
+
         let match;
+        let iterationCount = 0;
+        const MAX_ITERATIONS = 1000; // Safety limit
+
         while ((match = pattern.exec(text)) !== null) {
+          // Safety check to prevent infinite loops
+          if (++iterationCount > MAX_ITERATIONS) {
+            logger.warn('Max iterations reached for pattern', {
+              pattern: pattern.source,
+              type: marker.type
+            });
+            break;
+          }
+
           const startIndex = match.index;
           const endIndex = this.findSectionEnd(text, startIndex, marker.type);
-          
+
           // Check for overlap with existing sections
           const overlaps = sections.some(
             (s) =>
@@ -108,7 +123,15 @@ export class SemanticSectionizer {
               confidence: 0.8,
             });
           }
+
+          // If pattern has no global flag or didn't advance, break to prevent infinite loop
+          if (!pattern.global || pattern.lastIndex === 0 || pattern.lastIndex <= startIndex) {
+            break;
+          }
         }
+
+        // Reset regex state after use
+        pattern.lastIndex = 0;
       }
     }
 

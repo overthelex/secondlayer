@@ -3,6 +3,7 @@ import { createClient } from 'redis';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
 import { DocumentService } from '../services/document-service.js';
+import { SemanticSectionizer } from '../services/semantic-sectionizer.js';
 import { requestContext } from '../utils/openai-client.js';
 import type { CostTracker } from '../services/cost-tracker.js';
 
@@ -24,6 +25,7 @@ export class ZOAdapter {
   private client: AxiosInstance;
   private redis: ReturnType<typeof createClient> | null = null;
   private documentService: DocumentService | null = null;
+  private sectionizer: SemanticSectionizer;
   private apiTokens: string[];
   private currentTokenIndex: number = 0;
   private baseURL = 'https://court.searcher.api.zakononline.com.ua';
@@ -34,6 +36,7 @@ export class ZOAdapter {
 
   constructor(documentService?: DocumentService) {
     this.documentService = documentService || null;
+    this.sectionizer = new SemanticSectionizer();
     
     // Support primary and secondary tokens
     const primaryToken = process.env.ZAKONONLINE_API_TOKEN || '';
@@ -57,7 +60,7 @@ export class ZOAdapter {
     
     this.client = axios.create({
       baseURL: this.baseURL,
-      timeout: 30000,
+      timeout: 120000, // Increased to 120s for date-filtered queries
       headers: {
         'X-App-Token': this.getCurrentToken(),
         'Accept': 'application/json',
@@ -531,10 +534,36 @@ export class ZOAdapter {
 
       // Save this batch to database immediately
       try {
-        await this.documentService.saveDocumentsBatch(documentsWithFullText);
+        const savedIds = await this.documentService.saveDocumentsBatch(documentsWithFullText);
         const withText = documentsWithFullText.filter(d => d.full_text).length;
         totalSaved += documentsWithFullText.length;
         logger.info(`Saved batch to database: ${documentsWithFullText.length} documents (${withText} with full text). Total saved: ${totalSaved}/${validDocs.length}`);
+
+        // Extract and save sections for documents with full text
+        logger.info(`Starting section extraction for ${withText} documents with full text`);
+        for (let j = 0; j < documentsWithFullText.length; j++) {
+          const doc = documentsWithFullText[j];
+          const docId = savedIds[j];
+
+          if (doc.full_text && doc.full_text.length > 100) {
+            try {
+              // Extract sections using SemanticSectionizer
+              const sections = await this.sectionizer.extractSections(doc.full_text, true);
+
+              if (sections && sections.length > 0) {
+                // Save sections to database
+                await this.documentService.saveSections(docId, sections);
+                logger.info(`Extracted and saved ${sections.length} sections for document ${doc.zakononline_id}`);
+              } else {
+                logger.warn(`No sections extracted for document ${doc.zakononline_id}`);
+              }
+            } catch (sectionError: any) {
+              logger.error(`Failed to extract/save sections for document ${doc.zakononline_id}:`, sectionError.message);
+              // Don't throw - continue with next document
+            }
+          }
+        }
+        logger.info(`Completed section extraction for batch`);
       } catch (error) {
         logger.error('Error saving documents batch to database:', error);
         // Don't throw - continue with next batch

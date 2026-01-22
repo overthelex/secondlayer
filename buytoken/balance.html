@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance - SecondLayer</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="page-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="index.html" class="sidebar-logo">SecondLayer</a>
+
+      <nav>
+        <ul class="sidebar-nav">
+          <li class="sidebar-nav-item">
+            <a href="profile.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+              Profile
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="balance.html" class="sidebar-nav-link active">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+              </svg>
+              Balance
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="billing.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              Billing
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="invoices.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              Invoices
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="usage.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+              </svg>
+              Usage
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
+        <h1 class="mb-xl">Balance & Top-Up</h1>
+
+        <!-- Current Balance Card -->
+        <div class="card mb-lg" style="background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%); border: none;">
+          <div style="text-align: center; color: white;">
+            <div style="font-size: 14px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; opacity: 0.9;">
+              Current Balance
+            </div>
+            <div style="font-size: 56px; font-weight: 700; margin-bottom: 8px;">
+              75,240
+            </div>
+            <div style="font-size: 18px; opacity: 0.9;">
+              tokens available
+            </div>
+            <div style="font-size: 16px; margin-top: 16px; opacity: 0.8;">
+              ≈ $75.24 USD
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Top-Up -->
+        <div class="card mb-lg">
+          <div class="card-header">
+            <h3 class="card-title">Quick Top-Up</h3>
+            <p class="card-description">Add tokens to your account instantly</p>
+          </div>
+          <div class="card-body">
+            <div class="grid grid-cols-4 mb-lg">
+              <button class="btn btn-outline btn-lg">
+                <span style="font-size: 24px; font-weight: 600;">$10</span>
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <span style="font-size: 24px; font-weight: 600;">$20</span>
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <span style="font-size: 24px; font-weight: 600;">$50</span>
+              </button>
+              <button class="btn btn-outline btn-lg">
+                <span style="font-size: 24px; font-weight: 600;">$100</span>
+              </button>
+            </div>
+
+            <div class="divider-text mb-lg">or enter custom amount</div>
+
+            <div class="grid grid-cols-2 gap-md">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Custom Amount (USD)</label>
+                <input type="number" class="form-input" placeholder="Enter amount" min="5" step="1">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Payment Method</label>
+                <select class="form-select">
+                  <option>VISA •••• 1234 (Default)</option>
+                  <option>Monobank QR</option>
+                  <option>MetaMask Wallet</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary btn-lg">Add Funds</button>
+          </div>
+        </div>
+
+        <!-- Balance History Chart (Mockup) -->
+        <div class="card mb-lg">
+          <div class="card-header">
+            <h3 class="card-title">Balance History</h3>
+            <p class="card-description">Your balance over the last 30 days</p>
+          </div>
+          <div class="card-body">
+            <!-- Chart Placeholder -->
+            <div style="height: 300px; background: linear-gradient(to top, var(--color-bg-secondary) 0%, transparent 100%); border-radius: 8px; display: flex; align-items: flex-end; justify-content: space-around; padding: 24px; gap: 8px;">
+              <div style="width: 100%; height: 45%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.3;"></div>
+              <div style="width: 100%; height: 60%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.4;"></div>
+              <div style="width: 100%; height: 55%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.5;"></div>
+              <div style="width: 100%; height: 70%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.6;"></div>
+              <div style="width: 100%; height: 85%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.7;"></div>
+              <div style="width: 100%; height: 75%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.8;"></div>
+              <div style="width: 100%; height: 90%; background-color: var(--color-primary); border-radius: 4px 4px 0 0; opacity: 0.9;"></div>
+              <div style="width: 100%; height: 100%; background-color: var(--color-primary); border-radius: 4px 4px 0 0;"></div>
+            </div>
+            <div class="text-center mt-md">
+              <small class="text-tertiary">Chart shows daily balance snapshots</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Recent Transactions</h3>
+            <p class="card-description">Last 10 transactions</p>
+          </div>
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Jan 18, 2024</td>
+                  <td>Top-up</td>
+                  <td style="color: var(--color-success); font-weight: 500;">+50,000 tokens</td>
+                  <td>VISA •••• 1234</td>
+                  <td><span class="badge badge-success">Completed</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 17, 2024</td>
+                  <td>API Usage</td>
+                  <td style="color: var(--color-text-secondary); font-weight: 500;">-2,340 tokens</td>
+                  <td>—</td>
+                  <td><span class="badge badge-info">Usage</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 16, 2024</td>
+                  <td>Top-up</td>
+                  <td style="color: var(--color-success); font-weight: 500;">+25,000 tokens</td>
+                  <td>Monobank QR</td>
+                  <td><span class="badge badge-success">Completed</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 15, 2024</td>
+                  <td>API Usage</td>
+                  <td style="color: var(--color-text-secondary); font-weight: 500;">-1,820 tokens</td>
+                  <td>—</td>
+                  <td><span class="badge badge-info">Usage</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 14, 2024</td>
+                  <td>Subscription Renewal</td>
+                  <td style="color: var(--color-success); font-weight: 500;">+100,000 tokens</td>
+                  <td>VISA •••• 1234</td>
+                  <td><span class="badge badge-success">Completed</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 13, 2024</td>
+                  <td>API Usage</td>
+                  <td style="color: var(--color-text-secondary); font-weight: 500;">-3,560 tokens</td>
+                  <td>—</td>
+                  <td><span class="badge badge-info">Usage</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 12, 2024</td>
+                  <td>Top-up</td>
+                  <td style="color: var(--color-success); font-weight: 500;">+10,000 tokens</td>
+                  <td>MetaMask</td>
+                  <td><span class="badge badge-success">Completed</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 11, 2024</td>
+                  <td>API Usage</td>
+                  <td style="color: var(--color-text-secondary); font-weight: 500;">-980 tokens</td>
+                  <td>—</td>
+                  <td><span class="badge badge-info">Usage</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 10, 2024</td>
+                  <td>Top-up</td>
+                  <td style="color: var(--color-success); font-weight: 500;">+50,000 tokens</td>
+                  <td>VISA •••• 1234</td>
+                  <td><span class="badge badge-warning">Pending</span></td>
+                </tr>
+                <tr>
+                  <td>Jan 9, 2024</td>
+                  <td>API Usage</td>
+                  <td style="color: var(--color-text-secondary); font-weight: 500;">-2,120 tokens</td>
+                  <td>—</td>
+                  <td><span class="badge badge-info">Usage</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-ghost">View All Transactions</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

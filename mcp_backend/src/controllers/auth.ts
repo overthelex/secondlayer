@@ -1,0 +1,305 @@
+/**
+ * Authentication Controller
+ * Handles OAuth callbacks, JWT generation, and user sessions
+ */
+
+import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import passport from 'passport';
+import { User } from '../services/user-service.js';
+import { logger } from '../utils/logger.js';
+import { getUserService } from '../middleware/dual-auth.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
+const JWT_EXPIRES_IN = '7d'; // 7 days
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+export interface AuthenticatedRequest extends Request {
+  user?: User;
+}
+
+/**
+ * Generate JWT token for user
+ */
+export function generateToken(user: User): string {
+  return jwt.sign(
+    {
+      userId: user.id,
+      email: user.email,
+      googleId: user.google_id,
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
+/**
+ * Initiate Google OAuth2 flow
+ * Redirects user to Google login page
+ */
+export const googleOAuthInit = passport.authenticate('google', {
+  scope: ['profile', 'email'],
+  session: false,
+});
+
+/**
+ * Google OAuth2 callback handler
+ * Creates/links user account and returns JWT token
+ */
+export async function googleOAuthCallback(req: AuthenticatedRequest, res: Response) {
+  try {
+    // Passport will have attached user to req.user
+    const user = req.user;
+
+    if (!user) {
+      // OAuth failed
+      logger.error('OAuth callback failed - no user in request');
+      return res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
+    }
+
+    // Generate JWT token for the user
+    const token = generateToken(user);
+
+    logger.info('Google OAuth successful', {
+      userId: user.id,
+      email: user.email,
+    });
+
+    // Redirect to frontend with token in URL
+    // In production, consider using httpOnly cookies for better security
+    const redirectUrl = `${FRONTEND_URL}/login?token=${token}`;
+    return res.redirect(redirectUrl);
+  } catch (error: any) {
+    logger.error('Error in OAuth callback:', error);
+    return res.redirect(`${FRONTEND_URL}/login?error=server_error`);
+  }
+}
+
+/**
+ * Get current user profile
+ * Protected route - requires JWT authentication
+ */
+export async function getCurrentUser(req: AuthenticatedRequest, res: Response): Promise<Response> {
+  try {
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No user found in request',
+      });
+    }
+
+    // Return user profile without sensitive data
+    return res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        emailVerified: user.email_verified,
+        lastLogin: user.last_login,
+        createdAt: user.created_at,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error getting current user:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * Logout user
+ * With JWT, logout is handled client-side by deleting the token
+ * This endpoint can be used for logging or session cleanup
+ */
+export async function logout(req: AuthenticatedRequest, res: Response): Promise<Response> {
+  try {
+    const user = req.user;
+
+    if (user) {
+      logger.info('User logged out', { userId: user.id, email: user.email });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (error: any) {
+    logger.error('Error during logout:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * Refresh JWT token
+ * Takes an existing valid token and issues a new one
+ */
+export async function refreshToken(req: Request, res: Response): Promise<Response> {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No token provided',
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+
+    // Verify existing token
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    // Create new token with same payload but fresh expiry
+    const newToken = jwt.sign(
+      {
+        userId: decoded.userId,
+        email: decoded.email,
+        googleId: decoded.googleId,
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    logger.info('Token refreshed', { userId: decoded.userId });
+
+    return res.json({
+      token: newToken,
+      expiresIn: JWT_EXPIRES_IN,
+    });
+  } catch (error: any) {
+    logger.error('Error refreshing token:', error);
+
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Token has expired. Please login again.',
+      });
+    }
+
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token',
+      });
+    }
+
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * Update user profile
+ * Protected route - requires JWT authentication
+ * Allows users to update their name and picture
+ */
+export async function updateProfile(req: AuthenticatedRequest, res: Response): Promise<Response> {
+  try {
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No user found in request',
+      });
+    }
+
+    // Extract allowed update fields
+    const { name, picture } = req.body;
+
+    // Validate at least one field is provided
+    if (name === undefined && picture === undefined) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'At least one field (name or picture) must be provided',
+      });
+    }
+
+    // Validate name if provided
+    if (name !== undefined) {
+      if (typeof name !== 'string') {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Name must be a string',
+        });
+      }
+      if (name.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Name cannot be empty',
+        });
+      }
+      if (name.length > 255) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Name cannot exceed 255 characters',
+        });
+      }
+    }
+
+    // Validate picture if provided
+    if (picture !== undefined) {
+      if (typeof picture !== 'string' && picture !== null) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Picture must be a string URL or null',
+        });
+      }
+      if (picture && picture.length > 500) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Picture URL cannot exceed 500 characters',
+        });
+      }
+    }
+
+    // Update user profile
+    const userService = getUserService();
+    const updates: { name?: string; picture?: string } = {};
+
+    if (name !== undefined) {
+      updates.name = name.trim();
+    }
+    if (picture !== undefined) {
+      updates.picture = picture;
+    }
+
+    const updatedUser = await userService.updateProfile(user.id, updates);
+
+    logger.info('User profile updated', {
+      userId: user.id,
+      email: user.email,
+      updates,
+    });
+
+    // Return updated user profile
+    return res.json({
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        picture: updatedUser.picture,
+        emailVerified: updatedUser.email_verified,
+        lastLogin: updatedUser.last_login,
+        createdAt: updatedUser.created_at,
+        updatedAt: updatedUser.updated_at,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error updating profile:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error.message,
+    });
+  }
+}

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing - SecondLayer</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="page-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <a href="index.html" class="sidebar-logo">SecondLayer</a>
+
+      <nav>
+        <ul class="sidebar-nav">
+          <li class="sidebar-nav-item">
+            <a href="profile.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+              </svg>
+              Profile
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="balance.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+              </svg>
+              Balance
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="billing.html" class="sidebar-nav-link active">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              Billing
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="invoices.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              Invoices
+            </a>
+          </li>
+          <li class="sidebar-nav-item">
+            <a href="usage.html" class="sidebar-nav-link">
+              <svg class="sidebar-nav-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+              </svg>
+              Usage
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="container">
+        <h1 class="mb-xl">Billing & Subscriptions</h1>
+
+        <!-- Current Subscription -->
+        <div class="card card-highlight mb-lg">
+          <div class="card-header">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="card-title">Current Subscription</h3>
+                <p class="card-description">Your active plan</p>
+              </div>
+              <span class="badge badge-success">Active</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="grid grid-cols-3 gap-lg">
+              <div>
+                <div class="stat-label">Plan</div>
+                <div class="stat-value" style="font-size: 28px;">Pro</div>
+                <div style="font-size: 14px; color: var(--color-text-secondary);">Monthly billing</div>
+              </div>
+              <div>
+                <div class="stat-label">Next Billing Date</div>
+                <div class="stat-value" style="font-size: 28px;">Feb 14</div>
+                <div style="font-size: 14px; color: var(--color-text-secondary);">2024</div>
+              </div>
+              <div>
+                <div class="stat-label">Monthly Cost</div>
+                <div class="stat-value" style="font-size: 28px;">$50</div>
+                <div style="font-size: 14px; color: var(--color-text-secondary);">Auto-renew enabled</div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-outline">Change Plan</button>
+            <button class="btn btn-ghost">Cancel Subscription</button>
+          </div>
+        </div>
+
+        <!-- Available Plans -->
+        <div class="mb-lg">
+          <h2 class="mb-md">Available Plans</h2>
+          <p class="text-secondary mb-lg">Choose the plan that best fits your needs</p>
+
+          <div class="grid grid-cols-3">
+            <!-- Starter Plan -->
+            <div class="pricing-card">
+              <div class="pricing-header">
+                <div class="pricing-plan-name">Starter</div>
+                <div class="pricing-price">
+                  <span class="pricing-price-currency">$</span>10
+                  <span class="pricing-price-period">/month</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>100K tokens/month</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Basic support</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Community access</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Email support</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>48-hour response time</span>
+                </li>
+              </ul>
+              <button class="btn btn-outline btn-full">Downgrade to Starter</button>
+            </div>
+
+            <!-- Pro Plan (Current) -->
+            <div class="pricing-card featured">
+              <div class="pricing-badge">Current Plan</div>
+              <div class="pricing-header">
+                <div class="pricing-plan-name">Pro</div>
+                <div class="pricing-price">
+                  <span class="pricing-price-currency">$</span>50
+                  <span class="pricing-price-period">/month</span>
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>500K tokens/month</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Priority support</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Advanced features</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>API access</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>12-hour response time</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Usage analytics</span>
+                </li>
+              </ul>
+              <button class="btn btn-primary btn-full" disabled>Current Plan</button>
+            </div>
+
+            <!-- Enterprise Plan -->
+            <div class="pricing-card">
+              <div class="pricing-header">
+                <div class="pricing-plan-name">Enterprise</div>
+                <div class="pricing-price" style="font-size: 36px;">
+                  Custom
+                </div>
+              </div>
+              <ul class="pricing-features">
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Unlimited tokens</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Dedicated support</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Custom integration</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>SLA guarantee</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>On-premise deployment</span>
+                </li>
+                <li class="pricing-feature">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  <span>Dedicated account manager</span>
+                </li>
+              </ul>
+              <button class="btn btn-outline btn-full">Contact Sales</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Billing Settings -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Billing Settings</h3>
+            <p class="card-description">Manage your billing preferences</p>
+          </div>
+          <div class="card-body">
+            <!-- Auto-Reload -->
+            <div class="flex items-center justify-between" style="padding: 16px 0; border-bottom: 1px solid var(--color-border);">
+              <div>
+                <div style="font-weight: 500; font-size: 14px; color: var(--color-text-primary); margin-bottom: 4px;">
+                  Auto-Reload
+                </div>
+                <div style="font-size: 13px; color: var(--color-text-tertiary);">
+                  Automatically add $50 when balance falls below 10,000 tokens
+                </div>
+              </div>
+              <label class="form-checkbox">
+                <input type="checkbox" checked>
+                <span style="font-size: 13px; color: var(--color-text-secondary);">Enable</span>
+              </label>
+            </div>
+
+            <!-- Default Payment Method -->
+            <div style="padding: 16px 0;">
+              <div style="font-weight: 500; font-size: 14px; color: var(--color-text-primary); margin-bottom: 12px;">
+                Default Payment Method
+              </div>
+              <select class="form-select" style="max-width: 400px;">
+                <option>VISA •••• 1234</option>
+                <option>Monobank QR</option>
+                <option>MetaMask Wallet</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

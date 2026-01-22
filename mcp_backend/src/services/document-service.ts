@@ -1,6 +1,7 @@
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+import { DocumentSection } from '../types/index.js';
 
 export interface Document {
   id?: string;
@@ -224,7 +225,7 @@ export class DocumentService {
   async getStats(): Promise<any> {
     try {
       const result = await this.db.query(`
-        SELECT 
+        SELECT
           COUNT(*) as total_documents,
           COUNT(full_text) as documents_with_full_text,
           COUNT(DISTINCT type) as unique_types,
@@ -237,6 +238,82 @@ export class DocumentService {
     } catch (error) {
       logger.error('Failed to get document stats:', error);
       return null;
+    }
+  }
+
+  /**
+   * Save document sections to database
+   * Deletes existing sections for the document first, then inserts new ones
+   */
+  async saveSections(documentId: string, sections: DocumentSection[]): Promise<void> {
+    if (!sections || sections.length === 0) {
+      logger.warn('No sections to save', { documentId });
+      return;
+    }
+
+    try {
+      await this.db.transaction(async (client) => {
+        // Delete existing sections for this document
+        await client.query(
+          'DELETE FROM document_sections WHERE document_id = $1',
+          [documentId]
+        );
+
+        // Insert new sections
+        for (const section of sections) {
+          await client.query(
+            `INSERT INTO document_sections (
+              id, document_id, section_type, text, start_index, end_index, confidence
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              uuidv4(),
+              documentId,
+              section.type,
+              section.text,
+              section.start_index || null,
+              section.end_index || null,
+              section.confidence || 0.0,
+            ]
+          );
+        }
+
+        logger.info('Document sections saved', {
+          documentId,
+          sectionsCount: sections.length,
+        });
+      });
+    } catch (error: any) {
+      logger.error('Failed to save document sections:', {
+        documentId,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get sections for a document
+   */
+  async getSections(documentId: string): Promise<DocumentSection[]> {
+    try {
+      const result = await this.db.query(
+        'SELECT * FROM document_sections WHERE document_id = $1 ORDER BY start_index ASC',
+        [documentId]
+      );
+
+      return result.rows.map(row => ({
+        type: row.section_type,
+        text: row.text,
+        start_index: row.start_index,
+        end_index: row.end_index,
+        confidence: row.confidence,
+      }));
+    } catch (error: any) {
+      logger.error('Failed to get document sections:', {
+        documentId,
+        error: error.message,
+      });
+      return [];
     }
   }
 }
