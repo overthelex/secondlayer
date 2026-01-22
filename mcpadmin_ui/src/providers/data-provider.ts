@@ -1,0 +1,166 @@
+import { DataProvider } from "@refinedev/core";
+import { AxiosInstance } from "axios";
+import qs from "query-string";
+import axios from "axios";
+import { TokenStorage } from "../utils/token-storage";
+
+const axiosInstance = axios.create();
+
+// Add Authorization header to all requests (using JWT token)
+axiosInstance.interceptors.request.use((config) => {
+  const token = TokenStorage.getToken();
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+// Handle 401 errors (token expired or invalid)
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token is invalid or expired
+      TokenStorage.removeToken();
+      // Redirect to login page
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Custom data provider with auth support
+export const dataProvider = (
+  apiUrl: string,
+  httpClient: AxiosInstance = axiosInstance
+): DataProvider => ({
+  getList: async ({ resource, pagination, sorters }) => {
+    const url = `${apiUrl}/${resource}`;
+
+    const { current = 1, pageSize = 10, mode = "server" } = pagination ?? {};
+
+    const query: {
+      _start?: number;
+      _end?: number;
+      _sort?: string;
+      _order?: string;
+    } = {};
+
+    if (mode === "server") {
+      query._start = (current - 1) * pageSize;
+      query._end = current * pageSize;
+    }
+
+    const generatedSort = sorters?.map((item) => ({
+      field: item.field,
+      order: item.order,
+    }));
+
+    if (generatedSort && generatedSort.length > 0) {
+      query._sort = generatedSort[0].field;
+      query._order = generatedSort[0].order;
+    }
+
+    const { data, headers } = await httpClient.get(
+      `${url}?${qs.stringify(query)}`
+    );
+
+    const total = +headers["x-total-count"];
+
+    return {
+      data,
+      total: total || data.length,
+    };
+  },
+
+  getOne: async ({ resource, id }) => {
+    const url = `${apiUrl}/${resource}/${id}`;
+
+    const { data } = await httpClient.get(url);
+
+    return {
+      data,
+    };
+  },
+
+  create: async ({ resource, variables }) => {
+    const url = `${apiUrl}/${resource}`;
+
+    const { data } = await httpClient.post(url, variables);
+
+    return {
+      data,
+    };
+  },
+
+  update: async ({ resource, id, variables }) => {
+    const url = `${apiUrl}/${resource}/${id}`;
+
+    const { data } = await httpClient.patch(url, variables);
+
+    return {
+      data,
+    };
+  },
+
+  deleteOne: async ({ resource, id }) => {
+    const url = `${apiUrl}/${resource}/${id}`;
+
+    const { data } = await httpClient.delete(url);
+
+    return {
+      data,
+    };
+  },
+
+  getApiUrl: () => apiUrl,
+
+  custom: async ({ url, method, sorters, payload, query, headers }) => {
+    let requestUrl = `${url}?`;
+
+    if (sorters && sorters.length > 0) {
+      const generatedSort = sorters.map((item) => ({
+        field: item.field,
+        order: item.order,
+      }));
+      const sortQuery = {
+        _sort: generatedSort[0].field,
+        _order: generatedSort[0].order,
+      };
+      requestUrl = `${requestUrl}&${qs.stringify(sortQuery)}`;
+    }
+
+    if (query) {
+      requestUrl = `${requestUrl}&${qs.stringify(query)}`;
+    }
+
+    if (headers) {
+      Object.entries(headers).forEach(([key, value]) => {
+        httpClient.defaults.headers.common[key] = value as string;
+      });
+    }
+
+    let axiosResponse;
+    switch (method) {
+      case "put":
+      case "post":
+      case "patch":
+        axiosResponse = await httpClient[method](url, payload);
+        break;
+      case "delete":
+        axiosResponse = await httpClient.delete(url, {
+          data: payload,
+        });
+        break;
+      default:
+        axiosResponse = await httpClient.get(requestUrl);
+        break;
+    }
+
+    const { data } = axiosResponse;
+
+    return Promise.resolve({ data });
+  },
+});

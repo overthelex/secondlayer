@@ -1,0 +1,189 @@
+# Development environment for SecondLayer
+# Runs alongside production with different ports
+version: '3.8'
+
+services:
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: secondlayer-postgres-dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
+
+  qdrant-dev:
+    image: qdrant/qdrant:latest
+    container_name: secondlayer-qdrant-dev
+    ports:
+      - "6335:6333"
+      - "6336:6334"
+    volumes:
+      - qdrant_dev_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
+
+  redis-dev:
+    image: redis:7-alpine
+    container_name: secondlayer-redis-dev
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
+
+  app-dev:
+    image: secondlayer-app:latest
+    container_name: secondlayer-app-dev
+    command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
+    environment:
+      # Application
+      NODE_ENV: development
+      PORT: ${HTTP_PORT:-3003}
+      HTTP_PORT: ${HTTP_PORT:-3003}
+      HTTP_HOST: 0.0.0.0
+
+      # JWT for SSE authentication
+      JWT_SECRET: ${JWT_SECRET}
+
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-dev:5432/${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+
+      # Vector DB
+      QDRANT_URL: http://qdrant-dev:6333
+
+      # Cache
+      REDIS_URL: redis://redis-dev:6379
+      REDIS_HOST: redis-dev
+      REDIS_PORT: 6379
+
+      # OpenAI Configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+
+      # Dynamic model selection
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+
+      # ZakonOnline API
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
+      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+
+      # Security
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+
+      # Google OAuth2 (with development URLs)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: https://legal.org.ua/development/auth/callback
+      FRONTEND_URL: https://legal.org.ua/development
+      ALLOWED_ORIGINS: https://legal.org.ua
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+    ports:
+      - "3003:3003"
+
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      qdrant-dev:
+        condition: service_started
+      redis-dev:
+        condition: service_healthy
+
+    volumes:
+      - ../mcp_backend/logs:/app/logs
+      - app_dev_data:/app/data
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    restart: unless-stopped
+
+    networks:
+      - secondlayer-dev-network
+
+    # Lower resource limits for dev
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  lexwebapp-dev:
+    image: lexwebapp-lexwebapp:latest
+    container_name: lexwebapp-dev
+    ports:
+      - "8091:80"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=https://legal.org.ua/development/api
+    networks:
+      - secondlayer-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "com.docker.compose.project=lexwebapp-dev"
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  qdrant_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  app_dev_data:
+    driver: local
+
+networks:
+  secondlayer-dev-network:
+    driver: bridge

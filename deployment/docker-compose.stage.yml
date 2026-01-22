@@ -1,0 +1,166 @@
+# Staging environment for SecondLayer
+# Runs alongside production and development with different ports
+version: '3.8'
+
+services:
+  postgres-stage:
+    image: postgres:15-alpine
+    container_name: secondlayer-postgres-stage
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_stage_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_stage}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+
+  qdrant-stage:
+    image: qdrant/qdrant:latest
+    container_name: secondlayer-qdrant-stage
+    ports:
+      - "6337:6333"
+      - "6338:6334"
+    volumes:
+      - qdrant_stage_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+
+  redis-stage:
+    image: redis:7-alpine
+    container_name: secondlayer-redis-stage
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_stage_data:/data
+    command: redis-server --appendonly yes --maxmemory 1.5gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+
+  app-stage:
+    image: secondlayer-app:latest
+    container_name: secondlayer-app-stage
+    command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
+    environment:
+      NODE_ENV: staging
+      PORT: ${HTTP_PORT:-3002}
+      HTTP_PORT: ${HTTP_PORT:-3002}
+      HTTP_HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      QDRANT_URL: http://qdrant-stage:6333
+      REDIS_URL: redis://redis-stage:6379
+      REDIS_HOST: redis-stage
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
+      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
+      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
+      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
+      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: https://legal.org.ua/staging/auth/google/callback
+      FRONTEND_URL: https://legal.org.ua/staging
+      ALLOWED_ORIGINS: https://legal.org.ua
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres-stage:
+        condition: service_healthy
+      qdrant-stage:
+        condition: service_started
+      redis-stage:
+        condition: service_healthy
+    volumes:
+      - ../mcp_backend/logs:/app/logs
+      - app_stage_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 3G
+        reservations:
+          cpus: '0.75'
+          memory: 1.5G
+
+  lexwebapp-stage:
+    image: lexwebapp-lexwebapp:latest
+    container_name: lexwebapp-stage
+    ports:
+      - "8092:80"
+    environment:
+      - NODE_ENV=staging
+      - VITE_API_URL=https://legal.org.ua/staging/api
+    networks:
+      - secondlayer-stage-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "com.docker.compose.project=lexwebapp-stage"
+
+volumes:
+  postgres_stage_data:
+    driver: local
+  qdrant_stage_data:
+    driver: local
+  redis_stage_data:
+    driver: local
+  app_stage_data:
+    driver: local
+
+networks:
+  secondlayer-stage-network:
+    driver: bridge

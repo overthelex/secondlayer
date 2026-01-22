@@ -4,6 +4,11 @@ import { logger } from '../utils/logger.js';
 export class Database {
   private pool: Pool;
 
+  // Public getter for pool (needed for services that require direct pool access)
+  getPool(): Pool {
+    return this.pool;
+  }
+
   constructor() {
     this.pool = new Pool({
       host: process.env.POSTGRES_HOST || 'localhost',
@@ -59,10 +64,6 @@ export class Database {
     } finally {
       client.release();
     }
-  }
-
-  getPool() {
-    return this.pool;
   }
 
   async close() {

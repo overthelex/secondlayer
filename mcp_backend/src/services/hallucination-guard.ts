@@ -114,7 +114,12 @@ export class HallucinationGuard {
 
   private extractCitations(text: string): string[] {
     const citations: string[] = [];
-    
+
+    // Ensure text is a string
+    if (!text || typeof text !== 'string') {
+      return citations;
+    }
+
     // Case number patterns
     const casePattern = /\d+\/\d+\/\d{4}/g;
     const matches = text.matchAll(casePattern);
@@ -139,6 +144,12 @@ export class HallucinationGuard {
 
   private extractLawArticles(text: string): string[] {
     const articles: string[] = [];
+
+    // Ensure text is a string
+    if (!text || typeof text !== 'string') {
+      return articles;
+    }
+
     const articlePattern = /ст\.\s*\d+/gi;
     const matches = text.matchAll(articlePattern);
     for (const match of matches) {

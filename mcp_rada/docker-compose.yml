@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: rada-postgres
+    environment:
+      POSTGRES_USER: rada_mcp
+      POSTGRES_PASSWORD: rada_password
+      POSTGRES_DB: rada_db
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rada_mcp -d rada_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rada-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: rada-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rada-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rada-mcp-app
+    environment:
+      # Database
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: rada_mcp
+      POSTGRES_PASSWORD: rada_password
+      POSTGRES_DB: rada_db
+      DATABASE_URL: postgresql://rada_mcp:rada_password@postgres:5432/rada_db
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+
+      # Anthropic (optional)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
+      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
+      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+
+      # LLM Provider
+      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
+
+      # SecondLayer Integration
+      SECONDLAYER_URL: ${SECONDLAYER_URL:-http://host.docker.internal:3000}
+      SECONDLAYER_API_KEY: ${SECONDLAYER_API_KEY:-}
+
+      # HTTP Server
+      RADA_API_KEYS: ${RADA_API_KEYS:-test-key-123}
+      HTTP_PORT: 3001
+      HTTP_HOST: 0.0.0.0
+
+      # Cache TTL
+      CACHE_TTL_DEPUTIES: ${CACHE_TTL_DEPUTIES:-604800}
+      CACHE_TTL_BILLS: ${CACHE_TTL_BILLS:-86400}
+      CACHE_TTL_LAWS: ${CACHE_TTL_LAWS:-2592000}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - rada-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  rada-network:
+    driver: bridge

@@ -15,5 +15,6 @@ RUN npm run build
 # Expose port
 EXPOSE 3000
 
-# Start application with increased heap size (8GB for large pagination)
-CMD ["node", "--max-old-space-size=8192", "dist/http-server.js"]
+# Start SSE-based MCP server for remote access (production)
+# Use SSE server for remote MCP clients, HTTP server for REST API
+CMD ["node", "--max-old-space-size=8192", "dist/sse-server.js"]

@@ -1,0 +1,545 @@
+{
+  "currency": "USD",
+  "last_updated": "2026-01-18",
+  "sources": {
+    "claude_api": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "openai_api": "https://openai.com/pricing",
+    "zakononline_api": "Internal pricing structure"
+  },
+  "pricing": {
+    "zakononline_api": {
+      "name": "ZakonOnline API",
+      "description": "External court decisions API",
+      "tiers": [
+        {
+          "tier": 1,
+          "range": "0 - 10,000 calls/month",
+          "price_usd": 0.00714,
+          "note": "Fixed monthly fee $71.43 amortized over 10k calls"
+        },
+        {
+          "tier": 2,
+          "range": "10,001 - 20,000 calls/month",
+          "price_usd": 0.00690
+        },
+        {
+          "tier": 3,
+          "range": "20,001 - 30,000 calls/month",
+          "price_usd": 0.00667
+        },
+        {
+          "tier": 4,
+          "range": "30,001 - 50,000 calls/month",
+          "price_usd": 0.00643
+        },
+        {
+          "tier": 5,
+          "range": "50,001+ calls/month",
+          "price_usd": 0.00238
+        }
+      ]
+    },
+    "secondlayer_mcp_api": {
+      "name": "SecondLayer MCP API",
+      "description": "Internal MCP server API (web scraping + processing)",
+      "tiers": [
+        {
+          "tier": 1,
+          "range": "0 - 10,000 calls/month",
+          "price_usd": 0.00714,
+          "note": "Same pricing as ZakonOnline API"
+        },
+        {
+          "tier": 2,
+          "range": "10,001 - 20,000 calls/month",
+          "price_usd": 0.00690
+        },
+        {
+          "tier": 3,
+          "range": "20,001 - 30,000 calls/month",
+          "price_usd": 0.00667
+        },
+        {
+          "tier": 4,
+          "range": "30,001 - 50,000 calls/month",
+          "price_usd": 0.00643
+        },
+        {
+          "tier": 5,
+          "range": "50,001+ calls/month",
+          "price_usd": 0.00238
+        }
+      ],
+      "operations": {
+        "web_scraping": {
+          "description": "HTML parsing of court decisions (getDocumentFullText)",
+          "counted_as": "SecondLayer MCP API call",
+          "pricing": "Same as tiers above"
+        },
+        "cached_requests": {
+          "description": "Requests served from cache (Redis/DB)",
+          "counted_as": "free",
+          "pricing": 0
+        }
+      }
+    },
+    "openai_api": {
+      "name": "OpenAI API",
+      "description": "LLM and embeddings",
+      "chat_models": {
+        "gpt-4o": {
+          "name": "GPT-4o",
+          "description": "Most capable model, multimodal (vision, audio)",
+          "input_per_1m_tokens_usd": 2.50,
+          "output_per_1m_tokens_usd": 10.00,
+          "context_window": 128000,
+          "max_output_tokens": 16384
+        },
+        "gpt-4o-2024-08-06": {
+          "name": "GPT-4o (2024-08-06)",
+          "description": "Specific snapshot of GPT-4o",
+          "input_per_1m_tokens_usd": 2.50,
+          "output_per_1m_tokens_usd": 10.00,
+          "context_window": 128000,
+          "max_output_tokens": 16384
+        },
+        "gpt-4o-mini": {
+          "name": "GPT-4o Mini",
+          "description": "Affordable, fast model for everyday tasks",
+          "input_per_1m_tokens_usd": 0.15,
+          "output_per_1m_tokens_usd": 0.60,
+          "context_window": 128000,
+          "max_output_tokens": 16384,
+          "note": "Recommended for most tasks (cost-effective)"
+        },
+        "gpt-4-turbo": {
+          "name": "GPT-4 Turbo",
+          "description": "Previous generation fast GPT-4",
+          "input_per_1m_tokens_usd": 10.00,
+          "output_per_1m_tokens_usd": 30.00,
+          "context_window": 128000,
+          "max_output_tokens": 4096
+        },
+        "gpt-4": {
+          "name": "GPT-4",
+          "description": "Original GPT-4 model",
+          "input_per_1m_tokens_usd": 30.00,
+          "output_per_1m_tokens_usd": 60.00,
+          "context_window": 8192,
+          "max_output_tokens": 8192,
+          "note": "Legacy model, not recommended for new projects"
+        }
+      },
+      "embedding_models": {
+        "text-embedding-ada-002": {
+          "name": "Ada v2",
+          "description": "Legacy embedding model (1536 dimensions)",
+          "input_per_1m_tokens_usd": 0.10,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 1536,
+          "max_input_tokens": 8191,
+          "note": "Currently used in SecondLayer"
+        },
+        "text-embedding-3-small": {
+          "name": "Embedding v3 Small",
+          "description": "Improved small embedding model",
+          "input_per_1m_tokens_usd": 0.02,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 1536,
+          "max_input_tokens": 8191,
+          "note": "5x cheaper than ada-002, better performance"
+        },
+        "text-embedding-3-large": {
+          "name": "Embedding v3 Large",
+          "description": "Most capable embedding model",
+          "input_per_1m_tokens_usd": 0.13,
+          "output_per_1m_tokens_usd": 0.00,
+          "dimensions": 3072,
+          "max_input_tokens": 8191,
+          "note": "Highest quality embeddings"
+        }
+      },
+      "usage_notes": {
+        "quick_budget": "Uses gpt-4o-mini (default)",
+        "standard_budget": "Uses gpt-4o-mini (default)",
+        "deep_budget": "Uses gpt-4o (default)",
+        "embedding_model": "Uses text-embedding-ada-002 (configurable via OPENAI_EMBEDDING_MODEL)",
+        "cost_optimization": "Consider switching to text-embedding-3-small for 5x cost reduction"
+      }
+    },
+    "claude_api": {
+      "name": "Claude API (Anthropic)",
+      "description": "Claude AI models for advanced reasoning and analysis",
+      "models": {
+        "claude-opus-4.5": {
+          "name": "Claude Opus 4.5",
+          "description": "Most capable model, 67% cheaper than Opus 4/4.1",
+          "base_input_per_mtok_usd": 5.00,
+          "output_per_mtok_usd": 25.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 6.25,
+            "cache_write_1hour_per_mtok_usd": 10.00,
+            "cache_hit_per_mtok_usd": 0.50,
+            "note": "90% discount on cache reads"
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 2.50,
+            "output_per_mtok_usd": 12.50,
+            "discount": "50% off standard pricing"
+          },
+          "context_window": 200000,
+          "max_output_tokens": 8000,
+          "note": "Best for complex analysis, deep reasoning, legal document processing"
+        },
+        "claude-opus-4.1": {
+          "name": "Claude Opus 4.1",
+          "description": "Previous Opus generation",
+          "base_input_per_mtok_usd": 15.00,
+          "output_per_mtok_usd": 75.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 18.75,
+            "cache_write_1hour_per_mtok_usd": 30.00,
+            "cache_hit_per_mtok_usd": 1.50
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 7.50,
+            "output_per_mtok_usd": 37.50,
+            "discount": "50% off standard pricing"
+          }
+        },
+        "claude-opus-4": {
+          "name": "Claude Opus 4",
+          "description": "Previous Opus generation",
+          "base_input_per_mtok_usd": 15.00,
+          "output_per_mtok_usd": 75.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 18.75,
+            "cache_write_1hour_per_mtok_usd": 30.00,
+            "cache_hit_per_mtok_usd": 1.50
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 7.50,
+            "output_per_mtok_usd": 37.50,
+            "discount": "50% off standard pricing"
+          }
+        },
+        "claude-sonnet-4.5": {
+          "name": "Claude Sonnet 4.5",
+          "description": "Balanced performance and cost, recommended for most tasks",
+          "base_input_per_mtok_usd": 3.00,
+          "output_per_mtok_usd": 15.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 3.75,
+            "cache_write_1hour_per_mtok_usd": 6.00,
+            "cache_hit_per_mtok_usd": 0.30,
+            "note": "90% discount on cache reads"
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 1.50,
+            "output_per_mtok_usd": 7.50,
+            "discount": "50% off standard pricing"
+          },
+          "long_context_1m": {
+            "note": "1M token context window (beta, tier 4+ only)",
+            "under_200k_input_per_mtok_usd": 3.00,
+            "under_200k_output_per_mtok_usd": 15.00,
+            "over_200k_input_per_mtok_usd": 6.00,
+            "over_200k_output_per_mtok_usd": 22.50,
+            "pricing_note": "Premium pricing applies to ALL tokens when input > 200K"
+          },
+          "context_window": 200000,
+          "context_window_beta": 1000000,
+          "max_output_tokens": 8000,
+          "note": "Best for standard tasks, document analysis"
+        },
+        "claude-sonnet-4": {
+          "name": "Claude Sonnet 4",
+          "description": "Previous Sonnet generation",
+          "base_input_per_mtok_usd": 3.00,
+          "output_per_mtok_usd": 15.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 3.75,
+            "cache_write_1hour_per_mtok_usd": 6.00,
+            "cache_hit_per_mtok_usd": 0.30
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 1.50,
+            "output_per_mtok_usd": 7.50,
+            "discount": "50% off standard pricing"
+          },
+          "long_context_1m": {
+            "note": "1M token context window (beta, tier 4+ only)",
+            "under_200k_input_per_mtok_usd": 3.00,
+            "under_200k_output_per_mtok_usd": 15.00,
+            "over_200k_input_per_mtok_usd": 6.00,
+            "over_200k_output_per_mtok_usd": 22.50
+          }
+        },
+        "claude-sonnet-3.7": {
+          "name": "Claude Sonnet 3.7",
+          "description": "Deprecated model",
+          "base_input_per_mtok_usd": 3.00,
+          "output_per_mtok_usd": 15.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 3.75,
+            "cache_write_1hour_per_mtok_usd": 6.00,
+            "cache_hit_per_mtok_usd": 0.30
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 1.50,
+            "output_per_mtok_usd": 7.50,
+            "discount": "50% off standard pricing"
+          },
+          "deprecated": true
+        },
+        "claude-haiku-4.5": {
+          "name": "Claude Haiku 4.5",
+          "description": "Fast and efficient, best for high-volume processing",
+          "base_input_per_mtok_usd": 1.00,
+          "output_per_mtok_usd": 5.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 1.25,
+            "cache_write_1hour_per_mtok_usd": 2.00,
+            "cache_hit_per_mtok_usd": 0.10,
+            "note": "90% discount on cache reads"
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 0.50,
+            "output_per_mtok_usd": 2.50,
+            "discount": "50% off standard pricing"
+          },
+          "context_window": 200000,
+          "max_output_tokens": 10000,
+          "note": "Best for quick tasks, high-volume processing, cost optimization"
+        },
+        "claude-haiku-3.5": {
+          "name": "Claude Haiku 3.5",
+          "description": "Previous Haiku generation",
+          "base_input_per_mtok_usd": 0.80,
+          "output_per_mtok_usd": 4.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 1.00,
+            "cache_write_1hour_per_mtok_usd": 1.60,
+            "cache_hit_per_mtok_usd": 0.08
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 0.40,
+            "output_per_mtok_usd": 2.00,
+            "discount": "50% off standard pricing"
+          }
+        },
+        "claude-opus-3": {
+          "name": "Claude Opus 3",
+          "description": "Deprecated model",
+          "base_input_per_mtok_usd": 15.00,
+          "output_per_mtok_usd": 75.00,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 18.75,
+            "cache_write_1hour_per_mtok_usd": 30.00,
+            "cache_hit_per_mtok_usd": 1.50
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 7.50,
+            "output_per_mtok_usd": 37.50,
+            "discount": "50% off standard pricing"
+          },
+          "deprecated": true
+        },
+        "claude-haiku-3": {
+          "name": "Claude Haiku 3",
+          "description": "Legacy fast model",
+          "base_input_per_mtok_usd": 0.25,
+          "output_per_mtok_usd": 1.25,
+          "prompt_caching": {
+            "cache_write_5min_per_mtok_usd": 0.30,
+            "cache_write_1hour_per_mtok_usd": 0.50,
+            "cache_hit_per_mtok_usd": 0.03
+          },
+          "batch_api": {
+            "input_per_mtok_usd": 0.125,
+            "output_per_mtok_usd": 0.625,
+            "discount": "50% off standard pricing"
+          }
+        }
+      },
+      "tools": {
+        "web_search": {
+          "name": "Web Search Tool",
+          "price_per_1000_searches_usd": 10.00,
+          "note": "Plus standard token costs for search-generated content"
+        },
+        "web_fetch": {
+          "name": "Web Fetch Tool",
+          "price_usd": 0.00,
+          "note": "No additional charges beyond standard token costs"
+        },
+        "code_execution": {
+          "name": "Code Execution Tool",
+          "free_hours_per_month": 1550,
+          "price_per_hour_usd": 0.05,
+          "minimum_billing": "5 minutes",
+          "note": "Billed per container, includes file preloading time"
+        },
+        "bash_tool": {
+          "name": "Bash Tool",
+          "additional_input_tokens": 245,
+          "note": "Plus tokens for command outputs"
+        },
+        "text_editor_tool": {
+          "name": "Text Editor Tool",
+          "additional_input_tokens": {
+            "claude_4x": 700,
+            "claude_sonnet_3.7": 700
+          }
+        },
+        "computer_use_tool": {
+          "name": "Computer Use Tool",
+          "system_prompt_overhead_tokens": "466-499",
+          "tool_definition_tokens": {
+            "claude_4x": 735,
+            "claude_sonnet_3.7": 735
+          },
+          "note": "Plus vision tokens for screenshots"
+        }
+      }
+    }
+  },
+  "api_rate_limits": {
+    "claude_api": {
+      "provider": "Anthropic",
+      "tier": "Tier 1 (default)",
+      "note": "Limits vary by usage tier (1-4) and enterprise custom limits available",
+      "models": [
+        {
+          "model": "Claude Opus 4.5",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 30000,
+            "context_limit": "< 200k context, excluding cache reads"
+          },
+          "output_tokens_per_minute": {
+            "limit": 8000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Haiku 4.x",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 50000,
+            "context_limit": "< 200k context, excluding cache reads"
+          },
+          "output_tokens_per_minute": {
+            "limit": 10000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Sonnet 4 and 4.5",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 30000,
+            "context_limit": "< 200k context, excluding cache reads"
+          },
+          "output_tokens_per_minute": {
+            "limit": 8000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Opus 4 and 4.1",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 30000,
+            "context_limit": "< 200k context, excluding cache reads"
+          },
+          "output_tokens_per_minute": {
+            "limit": 8000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Sonnet 3.7",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 20000,
+            "context_limit": "< 200k context, excluding cache reads"
+          },
+          "output_tokens_per_minute": {
+            "limit": 8000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Haiku 3.5",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 50000,
+            "context_limit": "≤ 200k context"
+          },
+          "output_tokens_per_minute": {
+            "limit": 10000,
+            "context_limit": "< 200k context"
+          }
+        },
+        {
+          "model": "Claude Haiku 3",
+          "requests_per_minute": 50,
+          "input_tokens_per_minute": {
+            "limit": 50000,
+            "context_limit": "≤ 200k context"
+          },
+          "output_tokens_per_minute": {
+            "limit": 10000,
+            "context_limit": "< 200k context"
+          }
+        }
+      ],
+      "batch_requests": {
+        "limit_per_minute": 50,
+        "scope": "across all models"
+      },
+      "web_search_tool": {
+        "limit_per_second": 30,
+        "scope": "across all models"
+      },
+      "files_api_storage": {
+        "total_storage_limit": "100 GB",
+        "scope": "across your organization"
+      }
+    }
+  },
+  "usage_recommendations": {
+    "openai": {
+      "quick_tasks": "Use gpt-4o-mini ($0.15 input / $0.60 output)",
+      "standard_tasks": "Use gpt-4o-mini ($0.15 input / $0.60 output)",
+      "complex_reasoning": "Use gpt-4o ($2.50 input / $10 output)",
+      "embeddings": "Use text-embedding-3-small ($0.02/MTok) for 5x cost reduction vs ada-002"
+    },
+    "claude": {
+      "quick_tasks": "Use Claude Haiku 4.5 ($1 input / $5 output)",
+      "standard_tasks": "Use Claude Sonnet 4.5 ($3 input / $15 output)",
+      "complex_reasoning": "Use Claude Opus 4.5 ($5 input / $25 output)",
+      "batch_processing": "Use Batch API for 50% discount",
+      "repeated_context": "Use Prompt Caching for up to 90% savings on repeated content",
+      "high_volume": "Consider Haiku 3 ($0.25 input / $1.25 output) for maximum cost efficiency"
+    },
+    "cost_comparison": {
+      "cheapest_fast_model": "GPT-4o Mini ($0.15/$0.60) vs Claude Haiku 4.5 ($1/$5)",
+      "best_value_standard": "GPT-4o ($2.50/$10) vs Claude Sonnet 4.5 ($3/$15)",
+      "most_capable": "GPT-4o ($2.50/$10) vs Claude Opus 4.5 ($5/$25)",
+      "ultra_budget": "Claude Haiku 3 ($0.25/$1.25) - cheapest LLM option"
+    },
+    "pricing_notes": {
+      "mtok": "MTok = Million tokens",
+      "claude_prompt_caching": {
+        "5min_cache_write": "1.25x base input price",
+        "1hour_cache_write": "2x base input price",
+        "cache_read": "0.1x base input price (90% discount)"
+      },
+      "claude_batch_api": "50% off both input and output tokens",
+      "claude_long_context": "Applies to entire request when input > 200K tokens (Sonnet 4/4.5 only)",
+      "openai_embeddings": "text-embedding-3-small is 5x cheaper than ada-002 with better performance"
+    }
+  }
+}
