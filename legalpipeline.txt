@@ -1,0 +1,274 @@
+# ADR-002: Target Prompt Architecture (To-Be)
+
+**Status:** Proposed
+
+**Date:** 2026-01-22
+
+**Owner:** SecondLayer Core
+
+**Supersedes / Builds on:** ADR-001 (Prompt Architecture As-Is)
+
+---
+
+## 1. Context
+
+ADR-001 зафиксировал существующую (as-is) архитектуру prompt’ов в SecondLayer как распределённую, неявную и сервис-локальную.
+
+Данный ADR описывает **целевую (to-be) архитектуру prompt’ов**, направленную на:
+
+* управляемость
+* наблюдаемость
+* эволюционность
+
+при сохранении текущих функциональных возможностей системы.
+
+---
+
+## 2. Problem Statement
+
+Текущая архитектура prompt’ов (ADR-001) имеет следующие ограничения:
+
+* prompt’ы формируются в разных местах без единого контракта
+* system instructions фрагментированы
+* отсутствует понятие prompt lifecycle
+* невозможно централизованно:
+
+  * логировать prompt
+  * версионировать инструкции
+  * проводить дифф prompt’ов
+
+Это ограничивает:
+
+* масштабирование команды
+* безопасную эволюцию reasoning-логики
+* внедрение новых моделей / агентов
+
+---
+
+## 3. Decision
+
+Ввести **формализованную Prompt Architecture**, основанную на следующих принципах:
+
+1. Явная модель prompt’а
+2. Централизованная сборка
+3. Декларативные system instructions
+4. Контролируемая инъекция sources
+5. Наблюдаемый lifecycle
+
+---
+
+## 4. Target Architecture Overview
+
+### 4.1 Key Abstractions
+
+| Абстракция       | Назначение             |
+| ---------------- | ---------------------- |
+| `PromptIntent`   | Что и зачем делаем     |
+| `PromptContext`  | С какими данными       |
+| `PromptPolicy`   | С какими ограничениями |
+| `PromptTemplate` | Как формируем          |
+| `PromptInstance` | Финальный prompt       |
+
+---
+
+## 5. Logical Layers (To-Be)
+
+### 5.1 Conversation Layer (unchanged)
+
+Ответственность остаётся прежней:
+
+* приём запроса
+* auth
+* transport
+
+**Новое:**
+
+* передаёт `ConversationContext` (request_id, user_id, tool)
+
+---
+
+### 5.2 Intent Layer (formalized)
+
+**Вводится:** `PromptIntent`
+
+```ts
+interface PromptIntent {
+  name: 'classify_intent' | 'extract_keywords' | 'sectionize' | 'legal_reasoning';
+  reasoning_budget: 'quick' | 'standard' | 'deep';
+  output_schema?: JSONSchema;
+}
+```
+
+Intent больше **не формирует prompt**, а только описывает цель.
+
+---
+
+### 5.3 Prompt Assembly Layer (new)
+
+**Новый слой**, единственный ответственный за сборку prompt’ов.
+
+**Компоненты:**
+
+* `PromptBuilder`
+* `PromptTemplateRegistry`
+* `SystemInstructionRegistry`
+
+```mermaid
+flowchart TD
+    Intent --> Builder
+    Context --> Builder
+    Policy --> Builder
+    Templates --> Builder
+    Builder --> PromptInstance
+```
+
+---
+
+### 5.4 Validation Layer (extended)
+
+Validation становится **участником lifecycle**, а не пост-фильтром.
+
+Возможности:
+
+* request re-prompt с тем же Intent
+* request re-prompt с усиленным Policy
+
+---
+
+## 6. Prompt Lifecycle (To-Be)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Conversation
+    participant I as Intent
+    participant B as PromptBuilder
+    participant LLM
+    participant V as Validation
+
+    U->>C: Query
+    C->>I: classify
+    I->>B: PromptIntent
+    B->>LLM: PromptInstance v1
+    LLM-->>V: Output
+    alt Validation failed
+        V->>B: reassemble (Policy+)
+        B->>LLM: PromptInstance v2
+    end
+    V-->>C: Validated Result
+```
+
+---
+
+## 7. Prompt Model
+
+### 7.1 PromptInstance
+
+```ts
+interface PromptInstance {
+  intent: PromptIntent;
+  system: SystemInstruction[];
+  user: string;
+  sources: SourceBlock[];
+  constraints: Constraint[];
+  metadata: {
+    version: string;
+    template_id: string;
+  };
+}
+```
+
+---
+
+## 8. System Instructions (To-Be)
+
+### 8.1 Registry-Based Model
+
+System instructions хранятся централизованно:
+
+```ts
+SystemInstruction {
+  id: 'no_hallucination';
+  scope: ['legal_reasoning'];
+  text: string;
+  version: string;
+}
+```
+
+**Преимущества:**
+
+* версионирование
+* reuse
+* audit
+
+---
+
+## 9. Source Injection Rules (To-Be)
+
+Sources становятся **типизированными объектами**:
+
+```ts
+interface SourceBlock {
+  type: 'raw_text' | 'section' | 'pattern' | 'citation';
+  payload: unknown;
+  trust_level: 'primary' | 'derived';
+}
+```
+
+Инъекция rules:
+
+* system: ❌ никогда
+* user: ✅ через SourceBlock
+
+---
+
+## 10. Migration Strategy
+
+### Phase 1 — Shadow Mode
+
+* новый PromptBuilder собирает prompt параллельно
+* используется старый execution
+
+### Phase 2 — Selective Adoption
+
+* legal_reasoning
+* pattern_analysis
+
+### Phase 3 — Full Adoption
+
+* extraction
+* sectionizer
+
+---
+
+## 11. Consequences
+
+### Positive
+
+* управляемость
+* трассируемость
+* воспроизводимость
+* снижение галлюцинаций
+
+### Trade-offs
+
+* дополнительная абстракция
+* рост initial complexity
+
+---
+
+## 12. Open Questions
+
+* хранение prompt snapshots
+* UI для diff prompt’ов
+* cross-model normalization
+
+---
+
+## 13. Status
+
+ADR-002 считается **предложенным** и требует:
+
+* review
+* proof-of-concept
+* согласования по migration timeline
