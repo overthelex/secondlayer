@@ -164,6 +164,29 @@ ALTER TABLE documents
 \echo ''
 
 -- ============================================
+-- MIGRATION 009: Add Structured Document Metadata
+-- ============================================
+\echo 'Applying Migration 009: Add Structured Document Metadata...'
+
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS case_number TEXT,
+  ADD COLUMN IF NOT EXISTS court TEXT,
+  ADD COLUMN IF NOT EXISTS chamber TEXT,
+  ADD COLUMN IF NOT EXISTS dispute_category TEXT,
+  ADD COLUMN IF NOT EXISTS outcome TEXT,
+  ADD COLUMN IF NOT EXISTS deviation_flag BOOLEAN;
+
+CREATE INDEX IF NOT EXISTS idx_documents_case_number ON documents(case_number);
+CREATE INDEX IF NOT EXISTS idx_documents_court ON documents(court);
+CREATE INDEX IF NOT EXISTS idx_documents_chamber ON documents(chamber);
+CREATE INDEX IF NOT EXISTS idx_documents_dispute_category ON documents(dispute_category);
+CREATE INDEX IF NOT EXISTS idx_documents_outcome ON documents(outcome);
+CREATE INDEX IF NOT EXISTS idx_documents_deviation_flag ON documents(deviation_flag);
+
+\echo '✓ Migration 009 completed'
+\echo ''
+
+-- ============================================
 -- MIGRATION 003: Add Cost Tracking
 -- ============================================
 \echo 'Applying Migration 003: Add Cost Tracking...'
@@ -285,6 +308,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 INSERT INTO migrations (migration_name) VALUES
   ('001_initial_schema'),
   ('002_add_html_field'),
+  ('009_add_document_structured_metadata'),
   ('003_add_cost_tracking'),
   ('004_add_secondlayer_tracking'),
   ('005_convert_uah_to_usd'),

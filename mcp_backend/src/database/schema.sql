@@ -5,6 +5,12 @@ CREATE TABLE IF NOT EXISTS documents (
   type VARCHAR(50) NOT NULL,
   title TEXT,
   date DATE,
+  case_number TEXT,
+  court TEXT,
+  chamber TEXT,
+  dispute_category TEXT,
+  outcome TEXT,
+  deviation_flag BOOLEAN,
   full_text TEXT,
   full_text_html TEXT,
   metadata JSONB DEFAULT '{}',
@@ -15,6 +21,12 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_zo_id ON documents(zakononline_id);
 CREATE INDEX IF NOT EXISTS idx_date ON documents(date);
 CREATE INDEX IF NOT EXISTS idx_type ON documents(type);
+CREATE INDEX IF NOT EXISTS idx_documents_case_number ON documents(case_number);
+CREATE INDEX IF NOT EXISTS idx_documents_court ON documents(court);
+CREATE INDEX IF NOT EXISTS idx_documents_chamber ON documents(chamber);
+CREATE INDEX IF NOT EXISTS idx_documents_dispute_category ON documents(dispute_category);
+CREATE INDEX IF NOT EXISTS idx_documents_outcome ON documents(outcome);
+CREATE INDEX IF NOT EXISTS idx_documents_deviation_flag ON documents(deviation_flag);
 CREATE INDEX IF NOT EXISTS idx_documents_has_html ON documents(zakononline_id) WHERE full_text_html IS NOT NULL;
 
 -- Document sections table
