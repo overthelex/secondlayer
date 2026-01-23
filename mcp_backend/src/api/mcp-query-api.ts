@@ -7,9 +7,11 @@ import { EmbeddingService } from '../services/embedding-service.js';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
 import { CitationValidator } from '../services/citation-validator.js';
 import { HallucinationGuard } from '../services/hallucination-guard.js';
-import { SectionType, EnhancedMCPResponse } from '../types/index.js';
+import { SectionType, EnhancedMCPResponse, PackagedLawyerAnswer, LegalPattern } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../utils/html-parser.js';
+import { getOpenAIManager } from '../utils/openai-client.js';
+import { ModelSelector } from '../utils/model-selector.js';
 
 export type StreamEventCallback = (event: {
   type: string;
@@ -27,6 +29,33 @@ export class MCPQueryAPI {
     private citationValidator: CitationValidator,
     private hallucinationGuard: HallucinationGuard
   ) {}
+
+  private buildSupremeCourtHints(intent?: any): string {
+    const base = ' Верховн КЦС КГС КАС ККС "Велика палата" "ВП ВС"';
+    const slots = intent?.slots || {};
+    if (slots?.court_level === 'GrandChamber') {
+      return ' "Велика палата" "ВП ВС"';
+    }
+    if (slots?.court_level === 'SC' || intent?.intent === 'supreme_court_position') {
+      return base;
+    }
+    return '';
+  }
+
+  private pickSectionTypesForAnswer(intent: any): SectionType[] {
+    const focus = intent?.slots?.section_focus;
+    if (Array.isArray(focus) && focus.length > 0) {
+      return focus as SectionType[];
+    }
+
+    // Fallback to intent.sections (already mapped in QueryPlanner)
+    if (Array.isArray(intent?.sections) && intent.sections.length > 0) {
+      return intent.sections as SectionType[];
+    }
+
+    // Safe default
+    return [SectionType.COURT_REASONING, SectionType.DECISION, SectionType.LAW_REFERENCES];
+  }
 
   getTools() {
     return [
@@ -96,6 +125,15 @@ export class MCPQueryAPI {
               type: 'string',
               enum: Object.values(SectionType),
             },
+            date_from: { type: 'string', description: 'YYYY-MM-DD' },
+            date_to: { type: 'string', description: 'YYYY-MM-DD' },
+            court: { type: 'string' },
+            chamber: { type: 'string' },
+            dispute_category: { type: 'string' },
+            outcome: { type: 'string' },
+            deviation_flag: { type: ['boolean', 'null'] },
+            precedent_status: { type: 'string' },
+            case_number: { type: 'string' },
             limit: { type: 'number', default: 10 },
           },
           required: ['query'],
@@ -226,6 +264,49 @@ export class MCPQueryAPI {
         },
       },
       {
+        name: 'bulk_ingest_court_decisions',
+        description: `Массово находит и загружает судебные решения (пагинация) и индексирует ключевые секции (DECISION + COURT_REASONING)
+
+💰 Примерная стоимость: зависит от количества документов
+1) Поиск через Zakononline API (страницы по 1000)
+2) Web scraping полного текста для документов, которых нет в кэше/БД
+3) Извлечение секций + эмбеддинги + Qdrant
+
+По умолчанию применяет фильтр date_from=today-3y (локально), чтобы не тянуть старые решения.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Поисковый запрос (например: "поновлення строку апеляції несвоєчасне отримання повного тексту")'
+            },
+            date_from: { type: 'string', description: 'YYYY-MM-DD (по умолчанию today-3y)' },
+            date_to: { type: 'string', description: 'YYYY-MM-DD (опционально)' },
+            max_docs: {
+              type: 'number',
+              default: 1000,
+              description: 'Максимальное количество уникальных doc_id для загрузки (лимит безопасности)'
+            },
+            max_pages: {
+              type: 'number',
+              default: 50,
+              description: 'Максимальное число страниц поиска (limit=1000)'
+            },
+            page_size: {
+              type: 'number',
+              default: 1000,
+              description: 'Размер страницы поиска (max 1000)'
+            },
+            supreme_court_hint: {
+              type: 'boolean',
+              default: true,
+              description: 'Если true - добавляет в поисковую строку подсказку для ВС (Верховн/КЦС/КГС/КАС/ККС/Велика палата)'
+            }
+          },
+          required: ['query'],
+        },
+      },
+      {
         name: 'get_citation_graph',
         description: `Строит граф цитирований между делами: прямые и обратные связи
 
@@ -287,6 +368,8 @@ export class MCPQueryAPI {
           return await this.checkPrecedentStatus(args);
         case 'load_full_texts':
           return await this.loadFullTexts(args);
+        case 'bulk_ingest_court_decisions':
+          return await this.bulkIngestCourtDecisions(args);
         case 'get_citation_graph':
           return await this.getCitationGraph(args);
         case 'get_legal_advice':
@@ -306,6 +389,130 @@ export class MCPQueryAPI {
         isError: true,
       };
     }
+  }
+
+  private async bulkIngestCourtDecisions(args: any) {
+    const query = String(args.query || '').trim();
+    if (!query) {
+      throw new Error('query parameter is required');
+    }
+
+    const defaultDateFrom = (() => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 3);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const dateFrom = args.date_from || defaultDateFrom;
+    const dateTo = args.date_to;
+    const maxDocs = Number(args.max_docs || 1000);
+    const maxPages = Number(args.max_pages || 50);
+    const pageSizeRaw = Number(args.page_size || 1000);
+    const pageSize = Math.min(1000, Math.max(1, pageSizeRaw));
+    const supremeCourtHint = args.supreme_court_hint !== false;
+
+    const scHints = supremeCourtHint
+      ? ' Верховн КЦС КГС КАС ККС "Велика палата" "ВП ВС"'
+      : '';
+    const searchQuery = `${query}${scHints}`.trim();
+
+    const startTime = Date.now();
+    const seenDocIds = new Set<number>();
+    let pagesFetched = 0;
+    let offset = 0;
+
+    while (pagesFetched < maxPages && seenDocIds.size < maxDocs) {
+      const searchParams: any = {
+        meta: { search: searchQuery },
+        limit: pageSize,
+        offset,
+      };
+
+      logger.info('bulk_ingest_court_decisions: fetching page', {
+        page: pagesFetched + 1,
+        offset,
+        limit: pageSize,
+        collected: seenDocIds.size,
+        dateFrom,
+        dateTo,
+      });
+
+      const response = await this.zoAdapter.searchCourtDecisions(searchParams);
+      pagesFetched++;
+
+      if (!Array.isArray(response) || response.length === 0) {
+        break;
+      }
+
+      const filtered = response.filter((doc: any) => {
+        if (!doc?.doc_id) return false;
+        const docDate = doc.adjudication_date ? new Date(doc.adjudication_date) : null;
+        if (!docDate) return false;
+
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom);
+          if (docDate < fromDate) return false;
+        }
+        if (dateTo) {
+          const toDateObj = new Date(dateTo);
+          if (docDate > toDateObj) return false;
+        }
+        return true;
+      });
+
+      for (const doc of filtered) {
+        if (typeof doc.doc_id !== 'number') continue;
+        if (seenDocIds.size >= maxDocs) break;
+        seenDocIds.add(doc.doc_id);
+      }
+
+      if (response.length < pageSize) {
+        break;
+      }
+      offset += pageSize;
+    }
+
+    const docIds = Array.from(seenDocIds);
+    const docs = docIds.map((docId) => ({ doc_id: docId }));
+
+    logger.info('bulk_ingest_court_decisions: starting ingestion', {
+      docIds: docIds.length,
+      pagesFetched,
+    });
+
+    await this.zoAdapter.saveDocumentsToDatabase(docs, maxDocs);
+
+    const timeTaken = Date.now() - startTime;
+    const costEstimateSearchUsd = pagesFetched * 0.00714;
+    const costEstimateScrapeMaxUsd = docIds.length * 0.00714;
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              query: query,
+              search_query_used: searchQuery,
+              date_from: dateFrom,
+              ...(dateTo ? { date_to: dateTo } : {}),
+              pages_fetched: pagesFetched,
+              unique_doc_ids_collected: docIds.length,
+              max_docs: maxDocs,
+              max_pages: maxPages,
+              time_taken_ms: timeTaken,
+              cost_estimate_usd: {
+                search_api: parseFloat(costEstimateSearchUsd.toFixed(6)),
+                scrape_max: parseFloat(costEstimateScrapeMaxUsd.toFixed(6)),
+              },
+              note: 'Далее: документы будут сохранены в PostgreSQL, секции извлечены, DECISION+COURT_REASONING проиндексированы в Qdrant. Реальная стоимость ниже за счет кэша/уже загруженных документов.',
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
   }
 
   private async searchLegalPrecedents(args: any) {
@@ -802,11 +1009,28 @@ export class MCPQueryAPI {
   }
 
   private async getSimilarReasoning(args: any) {
+    const defaultDateFrom = (() => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() - 3);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const defaultSupremeCourtChambers = ['ВП ВС', 'КЦС', 'КГС', 'КАС', 'ККС'];
+
     const queryEmbedding = await this.embeddingService.generateEmbedding(args.query);
     const similar = await this.embeddingService.searchSimilar(
       queryEmbedding,
       {
         section_type: args.section_type as SectionType,
+        date_from: args.date_from || defaultDateFrom,
+        date_to: args.date_to,
+        court: args.court,
+        chamber: args.chamber || defaultSupremeCourtChambers,
+        dispute_category: args.dispute_category,
+        outcome: args.outcome,
+        deviation_flag: args.deviation_flag,
+        precedent_status: args.precedent_status,
+        case_number: args.case_number,
       },
       args.limit || 10
     );
@@ -1010,16 +1234,13 @@ export class MCPQueryAPI {
           }
         } else {
           hasMore = false;
-          logger.info('No more results', { totalCount });
-        }
-
-        // Safety delay to avoid rate limits
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
       const timeTaken = Date.now() - startTime;
+
+      // Estimate cost: ZakonOnline API calls only
+      // Each page = 1 API call at ~$0.00714
       const costEstimate = pagesFetched * 0.00714;
 
       const result: any = {
@@ -1216,61 +1437,191 @@ export class MCPQueryAPI {
     const intent = await this.queryPlanner.classifyIntent(args.query, budget);
     
     // Step 2: Search precedents (pass original query for full-text search)
+    // Add Supreme Court hints for SC-position / procedural queries to improve retrieval
     const queryParams = this.queryPlanner.buildQueryParams(intent, args.query);
+    const scHints = this.buildSupremeCourtHints(intent);
+    if (scHints && queryParams?.meta?.search) {
+      queryParams.meta.search = `${queryParams.meta.search}${scHints}`.trim();
+    }
+
     const searchResponse = await this.zoAdapter.searchCourtDecisions(queryParams);
     const normalized = await this.zoAdapter.normalizeResponse(searchResponse);
     
-    // Step 3: Extract sections from top results
+    // Step 3: Extract sections from top results (up to 10 sources)
     const precedentChunks: any[] = [];
     const sources: string[] = [];
-    
-    for (const doc of normalized.data.slice(0, 5)) {
-      sources.push(doc.id || doc.zakononline_id);
-      
-      if (doc.full_text) {
-        const sections = await this.sectionizer.extractSections(
-          doc.full_text,
-          budget === 'deep'
-        );
-        
-        // Generate embeddings for reasoning sections
-        const reasoningSections = sections.filter(
-          (s) => s.type === SectionType.COURT_REASONING
-        );
-        
-        for (const section of reasoningSections.slice(0, 2)) {
-          const embedding = await this.embeddingService.generateEmbedding(section.text);
-          const similar = await this.embeddingService.searchSimilar(embedding, {
-            section_type: SectionType.COURT_REASONING,
-          }, 3);
-          
-          precedentChunks.push({
-            text: section.text,
-            source_doc_id: doc.id || doc.zakononline_id,
-            section_type: section.type,
-            similarity_score: 0.8,
-            similar_cases: similar,
-          });
+    const sourceDocs: any[] = [];
+
+    const maxSources = 10;
+    const sectionTypesForAnswer = this.pickSectionTypesForAnswer(intent);
+
+    for (const doc of normalized.data.slice(0, maxSources)) {
+      const sourceDocId = String(doc.doc_id || doc.id || doc.zakononline_id || '');
+      if (!sourceDocId) continue;
+
+      sources.push(sourceDocId);
+
+      // Ensure full_text exists: if not present in search response, fetch via web scraping
+      if (!doc.full_text && doc.doc_id) {
+        const fullTextData = await this.zoAdapter.getDocumentFullText(doc.doc_id);
+        if (fullTextData?.text) {
+          doc.full_text = fullTextData.text;
+          doc.full_text_html = fullTextData.html;
         }
+      }
+
+      sourceDocs.push(doc);
+
+      if (!doc.full_text || typeof doc.full_text !== 'string' || doc.full_text.length < 100) {
+        continue;
+      }
+
+      const sections = await this.sectionizer.extractSections(
+        doc.full_text,
+        budget === 'deep'
+      );
+
+      const selected = sections.filter((s) => sectionTypesForAnswer.includes(s.type));
+
+      // Keep compact citations: at most 1 chunk per section type per doc
+      for (const sectionType of sectionTypesForAnswer) {
+        const first = selected.find((s) => s.type === sectionType);
+        if (!first) continue;
+
+        precedentChunks.push({
+          text: first.text,
+          source_doc_id: sourceDocId,
+          section_type: first.type,
+          similarity_score: 0.8,
+          similar_cases: [],
+        });
+      }
+    }
+
+    // Persist the documents we actually touched (top-10) into PostgreSQL.
+    // This is run in background and MUST NOT trigger additional network calls.
+    try {
+      this.zoAdapter.saveDocumentsMetadataToDatabase(sourceDocs, maxSources).catch((err: any) => {
+        logger.error('Failed to save get_legal_advice documents to database:', err?.message);
+      });
+    } catch (e: any) {
+      logger.warn('Document persistence skipped (non-fatal)', { message: e?.message });
+    }
+    
+    // Step 4: Find patterns (optional; requires embeddings)
+    const patterns: LegalPattern[] = [];
+    if (budget !== 'quick') {
+      try {
+        const queryEmbedding = await this.embeddingService.generateEmbedding(args.query);
+        const matched = await this.patternStore.matchPatterns(queryEmbedding, intent.intent);
+        patterns.push(...matched);
+      } catch (e: any) {
+        logger.warn('Pattern matching failed, continuing without patterns', { message: e?.message });
       }
     }
     
-    // Step 4: Find patterns
-    const queryEmbedding = await this.embeddingService.generateEmbedding(args.query);
-    const patterns = await this.patternStore.matchPatterns(queryEmbedding, intent.intent);
-    
     // Step 5: Extract law articles
     const lawArticles = new Set<string>();
-    patterns.forEach((p) => p.law_articles.forEach((a) => lawArticles.add(a)));
+    patterns.forEach((p) => p.law_articles.forEach((a: string) => lawArticles.add(a)));
     
-    // Step 6: Build response
+    // Step 6: Final synthesis (LLM) into PackagedLawyerAnswer (citations, checklist, evidence, risks)
+    let packagedAnswer: PackagedLawyerAnswer | undefined;
+    try {
+      const model = ModelSelector.getChatModel(budget);
+      const supportsJsonMode = ModelSelector.supportsJsonMode(model);
+      const openaiManager = getOpenAIManager();
+
+      const synthesisSources = sourceDocs.slice(0, maxSources).map((d: any) => ({
+        document_id: String(d.doc_id || d.id || d.zakononline_id || ''),
+        case_number: d.cause_num || d.case_number || d.metadata?.cause_num || null,
+        court: d.court || d.court_name || d.court_code || null,
+        date: d.adjudication_date || d.date || null,
+        judge: d.judge || null,
+        url: d.url || (d.doc_id ? `https://zakononline.ua/court-decisions/show/${d.doc_id}` : null),
+      }));
+
+      const chunkPayload = precedentChunks.slice(0, 50).map((c: any) => ({
+        source_doc_id: c.source_doc_id,
+        section_type: c.section_type,
+        quote: String(c.text || '').substring(0, 900),
+      }));
+
+      const requestConfig: any = {
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: `Ти юрист-аналітик (Україна). Зроби відповідь, придатну для вставки в процесуальний документ.
+
+Дай відповідь в СТРУКТУРІ PackagedLawyerAnswer (JSON) з полями:
+- short_conclusion: { conclusion, conditions?, risk_or_exception? }
+- legal_framework: { norms: [{ act?, article_ref, quote?, comment? }] }
+- supreme_court_positions: [{ thesis, quotes: [{ quote, source_doc_id, section_type }], context? }]
+- practice: [{ source_doc_id, section_type, quote, relevance_reason?, case_number?, court?, date? }]
+- criteria_test: string[]
+- counterarguments_and_risks: string[]
+- checklist: { steps: string[], evidence: string[] }
+- sources: [{ document_id, section_type?, quote }]
+
+Правила:
+- Не вигадуй реквізити; використовуй тільки подані source_doc_id/case_number/court/date.
+- Цитати бери ТІЛЬКИ з наданих фрагментів.
+- Для процесуальних питань обов'язково: правова рамка + чеклист дій/доказів + ризики/контраргументи.
+- Для “позиції ВС” зроби 2–4 тези і під кожну 1–2 короткі цитати з COURT_REASONING.
+
+Поверни ТІЛЬКИ валідний JSON без додаткового тексту.`,
+          },
+          {
+            role: 'user',
+            content: JSON.stringify(
+              {
+                query: args.query,
+                intent: intent,
+                sources: synthesisSources,
+                extracted_chunks: chunkPayload,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: budget === 'deep' ? 3500 : 2000,
+      };
+
+      if (supportsJsonMode) {
+        requestConfig.response_format = { type: 'json_object' };
+      }
+
+      const llmResp = await openaiManager.executeWithRetry(async (client) => {
+        return await client.chat.completions.create(requestConfig);
+      });
+
+      let content = llmResp.choices[0].message.content || '{}';
+      const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+      if (jsonMatch) {
+        content = jsonMatch[1];
+      }
+      const jsonObjectMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
+        content = jsonObjectMatch[0];
+      }
+
+      packagedAnswer = JSON.parse(content) as PackagedLawyerAnswer;
+    } catch (e: any) {
+      logger.warn('Final synthesis failed, returning structured response without packaged_answer', { message: e?.message });
+    }
+
+    // Step 7: Build response
     const response: EnhancedMCPResponse = {
       summary: `Знайдено ${normalized.data.length} релевантних справ за запитом "${args.query}"`,
       confidence_score: intent.confidence,
+      intent,
       relevant_patterns: patterns,
       precedent_chunks: precedentChunks,
       law_articles: Array.from(lawArticles),
       risk_notes: patterns.flatMap((p) => p.risk_factors),
+      packaged_answer: packagedAnswer,
       reasoning_chain: [
         {
           step: 1,
@@ -1286,6 +1637,22 @@ export class MCPQueryAPI {
           input: queryParams,
           output: { count: normalized.data.length },
           confidence: 0.8,
+          sources: sources,
+        },
+        {
+          step: 3,
+          action: 'fulltext_and_section_extraction',
+          input: { top_sources: maxSources, section_types: sectionTypesForAnswer },
+          output: { precedent_chunks: precedentChunks.length },
+          confidence: 0.75,
+          sources: sources,
+        },
+        {
+          step: 4,
+          action: 'final_answer_packaging',
+          input: { budget },
+          output: { packaged_answer: !!packagedAnswer },
+          confidence: packagedAnswer ? 0.8 : 0.5,
           sources: sources,
         },
       ],
@@ -1310,7 +1677,7 @@ export class MCPQueryAPI {
       },
     };
     
-    // Step 7: Validate with Hallucination Guard
+    // Step 8: Validate with Hallucination Guard
     const validation = await this.hallucinationGuard.validateResponse(
       response,
       sources
@@ -1506,10 +1873,63 @@ export class MCPQueryAPI {
       const response: EnhancedMCPResponse = {
         summary: `Знайдено ${normalized.data.length} релевантних справ за запитом "${args.query}"`,
         confidence_score: intent.confidence,
+        intent,
         relevant_patterns: patterns,
         precedent_chunks: precedentChunks,
         law_articles: Array.from(lawArticles),
         risk_notes: patterns.flatMap((p) => p.risk_factors),
+        packaged_answer: {
+          short_conclusion: {
+            conclusion: `За запитом "${args.query}" знайдено релевантну практику (топ: ${Math.min(5, normalized.data.length)} справ).`,
+            conditions: intent.intent === 'procedural_deadlines' ? 'Залежить від конкретного процесуального кодексу та моменту початку перебігу строку.' : undefined,
+            risk_or_exception: (patterns.flatMap((p) => p.risk_factors)[0]) || undefined,
+          },
+          legal_framework: {
+            norms: (Array.from(lawArticles).slice(0, 5)).map((a) => ({
+              article_ref: a,
+            })),
+          },
+          supreme_court_positions: intent.intent === 'supreme_court_position'
+            ? precedentChunks
+                .filter((c) => c.section_type === SectionType.COURT_REASONING)
+                .slice(0, 3)
+                .map((c) => ({
+                  thesis: c.text.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ').trim() || c.text.substring(0, 200),
+                  quotes: [
+                    {
+                      quote: c.text.substring(0, 300),
+                      source_doc_id: c.source_doc_id,
+                      section_type: c.section_type,
+                    },
+                  ],
+                }))
+            : [],
+          practice: precedentChunks
+            .slice(0, 10)
+            .map((c) => ({
+              source_doc_id: c.source_doc_id,
+              section_type: c.section_type,
+              quote: c.text.substring(0, 300),
+              relevance_reason: c.section_type === SectionType.COURT_REASONING ? 'Мотивування суду (корисно для аргументації)' : 'Фрагмент з рішення/резолютивки',
+            })),
+          criteria_test: patterns.flatMap((p) => p.success_arguments).slice(0, 7),
+          counterarguments_and_risks: patterns.flatMap((p) => p.risk_factors).slice(0, 7),
+          checklist: {
+            steps: intent.intent === 'procedural_deadlines'
+              ? ['Перевірити норму про строк та момент його початку', 'Зафіксувати дату події/вручення', 'Підготувати клопотання про поновлення (за потреби)']
+              : ['Зібрати релевантні рішення та виписати тези', 'Сформувати аргументацію: теза → норма → цитата з мотивування', 'Перевірити наявність контраргументів/альтернативної практики'],
+            evidence: intent.intent === 'procedural_deadlines'
+              ? ['Документи про дату вручення/отримання', 'Підтвердження поважних причин пропуску строку (за потреби)']
+              : ['Докази фактичних обставин справи', 'Документи, що підтверджують правову кваліфікацію/статті'],
+          },
+          sources: precedentChunks
+            .slice(0, 10)
+            .map((c) => ({
+              document_id: c.source_doc_id,
+              section_type: c.section_type,
+              quote: c.text.substring(0, 200),
+            })),
+        },
         reasoning_chain: [
           {
             step: 1,
