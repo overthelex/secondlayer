@@ -1,5 +1,5 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { EmbeddingChunk, SectionType } from '../types/index.js';
+import { EmbeddingChunk, SectionType, PrecedentStatusType } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
 import { ModelSelector } from '../utils/model-selector.js';
@@ -133,6 +133,12 @@ export class EmbeddingService {
               text: chunk.text,
               date: chunk.metadata.date,
               court: chunk.metadata.court || null,
+              case_number: chunk.metadata.case_number || null,
+              chamber: chunk.metadata.chamber || null,
+              dispute_category: chunk.metadata.dispute_category || null,
+              outcome: chunk.metadata.outcome || null,
+              deviation_flag: chunk.metadata.deviation_flag ?? null,
+              precedent_status: chunk.metadata.precedent_status || null,
               law_articles: chunk.metadata.law_articles || [],
             },
           },
@@ -153,6 +159,12 @@ export class EmbeddingService {
       date_from?: string;
       date_to?: string;
       court?: string;
+      chamber?: string | string[];
+      dispute_category?: string;
+      outcome?: string;
+      deviation_flag?: boolean | null;
+      precedent_status?: PrecedentStatusType;
+      case_number?: string;
     },
     limit: number = 10
   ): Promise<any[]> {
@@ -163,6 +175,7 @@ export class EmbeddingService {
 
       if (filters) {
         const must: any[] = [];
+        const should: any[] = [];
         
         if (filters.section_type) {
           must.push({
@@ -188,8 +201,63 @@ export class EmbeddingService {
           });
         }
 
+        if (filters.chamber) {
+          if (Array.isArray(filters.chamber)) {
+            for (const chamber of filters.chamber) {
+              should.push({
+                key: 'chamber',
+                match: { value: chamber },
+              });
+            }
+          } else {
+            must.push({
+              key: 'chamber',
+              match: { value: filters.chamber },
+            });
+          }
+        }
+
+        if (filters.dispute_category) {
+          must.push({
+            key: 'dispute_category',
+            match: { value: filters.dispute_category },
+          });
+        }
+
+        if (filters.outcome) {
+          must.push({
+            key: 'outcome',
+            match: { value: filters.outcome },
+          });
+        }
+
+        if (filters.deviation_flag !== undefined) {
+          must.push({
+            key: 'deviation_flag',
+            match: { value: filters.deviation_flag },
+          });
+        }
+
+        if (filters.precedent_status) {
+          must.push({
+            key: 'precedent_status',
+            match: { value: filters.precedent_status },
+          });
+        }
+
+        if (filters.case_number) {
+          must.push({
+            key: 'case_number',
+            match: { value: filters.case_number },
+          });
+        }
+
         if (must.length > 0) {
           queryFilter.must = must;
+        }
+
+        if (should.length > 0) {
+          queryFilter.should = should;
         }
       }
 
@@ -209,6 +277,12 @@ export class EmbeddingService {
         metadata: {
           date: result.payload?.date,
           court: result.payload?.court,
+          case_number: result.payload?.case_number,
+          chamber: result.payload?.chamber,
+          dispute_category: result.payload?.dispute_category,
+          outcome: result.payload?.outcome,
+          deviation_flag: result.payload?.deviation_flag,
+          precedent_status: result.payload?.precedent_status,
           law_articles: result.payload?.law_articles || [],
         },
       }));
