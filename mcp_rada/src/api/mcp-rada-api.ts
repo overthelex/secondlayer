@@ -31,7 +31,9 @@ export class MCPRadaAPI {
     private votingService: VotingService,
     private crossRefService: CrossReferenceService,
     private _costTracker: CostTracker
-  ) {}
+  ) {
+    logger.debug('MCPRadaAPI initialized', { costTracking: Boolean(this._costTracker) });
+  }
 
   getTools() {
     return [
