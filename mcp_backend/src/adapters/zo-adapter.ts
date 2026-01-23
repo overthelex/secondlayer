@@ -6,6 +6,18 @@ import { DocumentService } from '../services/document-service.js';
 import { SemanticSectionizer } from '../services/semantic-sectionizer.js';
 import { requestContext } from '../utils/openai-client.js';
 import type { CostTracker } from '../services/cost-tracker.js';
+import {
+  type ZakonOnlineDomainName,
+  type DomainConfig,
+  type SearchTarget,
+  type SearchMode,
+  getDomainConfig,
+  isValidTarget,
+} from '../types/zakononline-domains.js';
+import {
+  ZakonOnlineValidationError,
+  createZakonOnlineError,
+} from './zakononline-errors.js';
 
 interface ZOSearchParams {
   where?: any[];
@@ -13,6 +25,12 @@ interface ZOSearchParams {
   fulldata?: number;
   limit?: number;
   offset?: number;
+  target?: SearchTarget;
+  mode?: SearchMode;
+  orderBy?: {
+    field: string;
+    direction: 'asc' | 'desc';
+  };
 }
 
 interface ZOSearchResponse {
@@ -28,38 +46,58 @@ export class ZOAdapter {
   private sectionizer: SemanticSectionizer;
   private apiTokens: string[];
   private currentTokenIndex: number = 0;
-  private baseURL = 'https://court.searcher.api.zakononline.com.ua';
+  private domainConfig: DomainConfig;
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 200; // Minimum 200ms between requests (5 req/sec max)
   private rateLimitDelay: number = 1000; // Delay when rate limited
   private costTracker: CostTracker | null = null;
 
-  constructor(documentService?: DocumentService) {
-    this.documentService = documentService || null;
+  constructor(
+    domainOrDocService?: ZakonOnlineDomainName | DocumentService,
+    documentService?: DocumentService
+  ) {
+    // Backward compatibility: if first arg is DocumentService, use default domain
+    let domain: ZakonOnlineDomainName = 'court_decisions';
+    let docService: DocumentService | null = null;
+
+    if (domainOrDocService instanceof DocumentService) {
+      // Old signature: new ZOAdapter(documentService)
+      docService = domainOrDocService;
+    } else if (typeof domainOrDocService === 'string') {
+      // New signature: new ZOAdapter('domain_name', documentService)
+      domain = domainOrDocService;
+      docService = documentService || null;
+    } else {
+      // No arguments
+      docService = documentService || null;
+    }
+
+    this.domainConfig = getDomainConfig(domain);
+    this.documentService = docService;
     this.sectionizer = new SemanticSectionizer();
-    
+
     // Support primary and secondary tokens
     const primaryToken = process.env.ZAKONONLINE_API_TOKEN || '';
     const secondaryToken = process.env.ZAKONONLINE_API_TOKEN2 || '';
     this.apiTokens = [primaryToken, secondaryToken].filter(t => t.length > 0);
-    
+
     if (this.apiTokens.length === 0) {
       throw new Error('No Zakononline API tokens configured');
     }
-    
+
     // If we have multiple tokens, prefer starting with the second one (TOKEN2)
     // This allows using a different token when the first one has issues
     if (this.apiTokens.length > 1 && secondaryToken) {
       // Start with second token if available
       this.currentTokenIndex = 1;
-      logger.info('Using secondary Zakononline token (ZAKONONLINE_API_TOKEN2)');
+      logger.info(`Using secondary Zakononline token for ${this.domainConfig.displayName}`);
     } else {
       this.currentTokenIndex = 0;
-      logger.info('Using primary Zakononline token (ZAKONONLINE_API_TOKEN)');
+      logger.info(`Using primary Zakononline token for ${this.domainConfig.displayName}`);
     }
-    
+
     this.client = axios.create({
-      baseURL: this.baseURL,
+      baseURL: this.domainConfig.baseURL,
       timeout: 120000, // Increased to 120s for date-filtered queries
       headers: {
         'X-App-Token': this.getCurrentToken(),
@@ -69,6 +107,25 @@ export class ZOAdapter {
     });
 
     this.initializeRedis();
+
+    logger.info(`ZOAdapter initialized for domain: ${this.domainConfig.displayName}`, {
+      baseURL: this.domainConfig.baseURL,
+      availableTargets: this.domainConfig.availableTargets,
+    });
+  }
+
+  /**
+   * Get the current domain configuration
+   */
+  getDomain(): DomainConfig {
+    return this.domainConfig;
+  }
+
+  /**
+   * Get available search targets for current domain
+   */
+  getAvailableTargets(): SearchTarget[] {
+    return this.domainConfig.availableTargets;
   }
 
   private getCurrentToken(): string {
@@ -147,11 +204,20 @@ export class ZOAdapter {
       '$between': '$between',
       '$gte': '$gte',
       '$lte': '$lte',
+      '$gt': '$gt',
+      '$lt': '$lt',
       'eq': '$eq',
       'in': '$in',
       'between': '$between',
       'gte': '$gte',
       'lte': '$lte',
+      'gt': '$gt',
+      'lt': '$lt',
+      '>=': '>=',
+      '<=': '<=',
+      '>': '>',
+      '<': '<',
+      '=': '=',
     };
     return operatorMap[op] || op;
   }
@@ -159,13 +225,16 @@ export class ZOAdapter {
   private buildQueryParams(params: any): any {
     // Build query params in API format
     const queryParams: any = { ...params };
-    
+
     // Convert where object to nested query format
     if (queryParams.where && typeof queryParams.where === 'object') {
       Object.keys(queryParams.where).forEach((field) => {
         const condition = queryParams.where[field];
         if (condition && typeof condition === 'object') {
-          queryParams[`where[${field}][op]`] = condition.op;
+          // Only add op if it exists (date ranges don't need op)
+          if (condition.op) {
+            queryParams[`where[${field}][op]`] = condition.op;
+          }
           if (Array.isArray(condition.value)) {
             condition.value.forEach((val: any, idx: number) => {
               queryParams[`where[${field}][value][${idx}]`] = val;
@@ -177,7 +246,7 @@ export class ZOAdapter {
       });
       delete queryParams.where;
     }
-    
+
     return queryParams;
   }
 
@@ -207,6 +276,13 @@ export class ZOAdapter {
         try {
           // Build query params in API format
           const queryParams = this.buildQueryParams(params);
+
+          // DEBUG: Log the exact params being sent
+          logger.info('Zakononline API request', {
+            endpoint,
+            queryParams: JSON.stringify(queryParams, null, 2)
+          });
+
           const response = await this.client.get(endpoint, { params: queryParams });
           const data = response.data;
           await this.setCache(cacheKey, data);
@@ -220,22 +296,22 @@ export class ZOAdapter {
           const status = error.response?.status;
           const isRateLimit = status === 429;
           const isAuthError = status === 401 || status === 403;
-          
+
           logger.warn(`Request attempt ${attempt} failed:`, {
             message: error.message,
             status: status,
             endpoint: endpoint,
           });
-          
+
           // Handle rate limiting (429 Too Many Requests)
           if (isRateLimit) {
-            const retryAfter = error.response?.headers?.['retry-after'] 
-              ? parseInt(error.response.headers['retry-after']) * 1000 
+            const retryAfter = error.response?.headers?.['retry-after']
+              ? parseInt(error.response.headers['retry-after']) * 1000
               : this.rateLimitDelay * Math.pow(2, attempt - 1); // Exponential backoff
-            
+
             logger.warn(`Rate limited, waiting ${retryAfter}ms before retry`);
             await new Promise((resolve) => setTimeout(resolve, retryAfter));
-            
+
             // If still rate limited after retries, try next token if available
             if (attempt >= maxRetries && this.apiTokens.length > 1 && tokenAttempt < maxTokenRotations - 1) {
               this.rotateToken();
@@ -243,14 +319,23 @@ export class ZOAdapter {
             }
             continue;
           }
-          
+
           // If it's an auth error and we have multiple tokens, try next token
-          if (isAuthError && 
+          if (isAuthError &&
               this.apiTokens.length > 1 && tokenAttempt < maxTokenRotations - 1) {
             this.rotateToken();
             break; // Break inner loop to try with new token
           }
-          
+
+          // For 500 errors, log more details
+          if (status >= 500) {
+            logger.error(`Server error ${status}`, {
+              endpoint,
+              params: params,
+              response: error.response?.data,
+            });
+          }
+
           // For other errors, wait with exponential backoff
           if (attempt < maxRetries) {
             const backoffDelay = 1000 * Math.pow(2, attempt - 1);
@@ -260,14 +345,25 @@ export class ZOAdapter {
       }
     }
 
-    throw new Error(`Request failed after ${maxRetries * maxTokenRotations} attempts: ${lastError?.message}`);
+    // All retries exhausted, throw appropriate error
+    const zakonError = createZakonOnlineError(lastError, endpoint, params);
+    throw zakonError;
   }
 
   async searchCourtDecisions(params: ZOSearchParams): Promise<ZOSearchResponse> {
+    // Validate target if provided
+    const target = params.target || this.domainConfig.defaultTarget;
+    if (!isValidTarget(this.domainConfig.name, target)) {
+      throw new ZakonOnlineValidationError(
+        `Invalid target "${target}" for domain "${this.domainConfig.displayName}". ` +
+        `Available targets: ${this.domainConfig.availableTargets.join(', ')}`
+      );
+    }
+
     // Convert params to API format according to documentation
     const apiParams: any = {
-      target: 'text',
-      mode: 'sph04',
+      target: target,
+      mode: params.mode || 'sph04',
       limit: params.limit || 40,
     };
 
@@ -281,26 +377,76 @@ export class ZOAdapter {
     // Convert where array to API format (only if non-empty)
     if (params.where && Array.isArray(params.where) && params.where.length > 0) {
       apiParams.where = {};
+
+      // Group conditions by field to handle date ranges
+      const conditionsByField: Record<string, any[]> = {};
       params.where.forEach((condition: any) => {
         const field = condition.field;
-        const op = condition.operator || condition.op || '$eq';
-        const value = condition.value;
-        
-        // Map operators to API format
-        const apiOp = this.mapOperator(op);
-        apiParams.where[field] = {
-          op: apiOp,
-          value: value,
-        };
+        if (!conditionsByField[field]) {
+          conditionsByField[field] = [];
+        }
+        conditionsByField[field].push(condition);
+      });
+
+      // Process each field's conditions
+      Object.entries(conditionsByField).forEach(([field, conditions]) => {
+        if (conditions.length === 1) {
+          // Single condition
+          const condition = conditions[0];
+          const op = condition.operator || condition.op || '$eq';
+          const value = condition.value;
+
+          apiParams.where[field] = {
+            op: this.mapOperator(op),
+            value: value,
+          };
+        } else if (conditions.length === 2) {
+          // Date range: check if we have >= and <= operators
+          const fromCondition = conditions.find(c => (c.operator || c.op) === '>=');
+          const toCondition = conditions.find(c => (c.operator || c.op) === '<=');
+
+          if (fromCondition && toCondition) {
+            // Use array format for date range as per Zakononline API docs
+            apiParams.where[field] = {
+              value: [fromCondition.value, toCondition.value]
+            };
+
+            logger.info('Applied date range filter', {
+              field,
+              from: fromCondition.value,
+              to: toCondition.value
+            });
+          } else {
+            // Fallback: use first condition
+            const condition = conditions[0];
+            apiParams.where[field] = {
+              op: this.mapOperator(condition.operator || condition.op || '$eq'),
+              value: condition.value,
+            };
+          }
+        }
       });
     }
 
-    // Add order if provided (skip for now to avoid issues)
-    // The API returns results in relevance order by default
+    // Add sorting if provided
+    if (params.orderBy) {
+      const { field, direction } = params.orderBy;
+      apiParams[`order[${field}]`] = direction;
+      logger.debug('Applied sorting', { field, direction });
+    } else {
+      // Default sorting by relevance weight
+      apiParams['order[weight]'] = 'desc';
+    }
 
-    logger.debug('API request params', { endpoint: '/v1/search', params: apiParams });
+    logger.debug('API request params', {
+      endpoint: this.domainConfig.endpoints.search,
+      params: apiParams
+    });
 
-    const response = await this.requestWithRetry('/v1/search', apiParams);
+    const response = await this.requestWithRetry(
+      this.domainConfig.endpoints.search,
+      apiParams
+    );
 
     // DISABLED: Automatic document loading causes PostgreSQL connection pool exhaustion
     // during large pagination (10,000+ pages). Documents should be loaded explicitly
@@ -739,5 +885,190 @@ export class ZOAdapter {
       logger.error('Failed to track SecondLayer usage:', error);
       // Don't throw - we don't want to interrupt the main request
     }
+  }
+
+  // ==================== METADATA QUERIES ====================
+
+  /**
+   * Get search metadata (total count, facets) without fetching all results
+   * This is much faster than fetching all documents when you only need counts
+   *
+   * @param params Search parameters (same as searchCourtDecisions)
+   * @returns Metadata including total count and facets
+   */
+  async getSearchMetadata(params: ZOSearchParams): Promise<any> {
+    // Validate target if provided
+    const target = params.target || this.domainConfig.defaultTarget;
+    if (!isValidTarget(this.domainConfig.name, target)) {
+      throw new ZakonOnlineValidationError(
+        `Invalid target "${target}" for domain "${this.domainConfig.displayName}". ` +
+        `Available targets: ${this.domainConfig.availableTargets.join(', ')}`
+      );
+    }
+
+    const apiParams: any = {
+      target: target,
+      mode: params.mode || 'sph04',
+    };
+
+    // Add search query
+    if (params.meta?.search) {
+      apiParams.search = params.meta.search;
+    } else if (params.meta?.query) {
+      apiParams.search = params.meta.query;
+    }
+
+    // Add where conditions
+    if (params.where && Array.isArray(params.where) && params.where.length > 0) {
+      // Use same logic as searchCourtDecisions
+      apiParams.where = {};
+
+      const conditionsByField: Record<string, any[]> = {};
+      params.where.forEach((condition: any) => {
+        const field = condition.field;
+        if (!conditionsByField[field]) {
+          conditionsByField[field] = [];
+        }
+        conditionsByField[field].push(condition);
+      });
+
+      Object.entries(conditionsByField).forEach(([field, conditions]) => {
+        if (conditions.length === 1) {
+          const condition = conditions[0];
+          const op = condition.operator || condition.op || '$eq';
+          apiParams.where[field] = {
+            op: this.mapOperator(op),
+            value: condition.value,
+          };
+        } else if (conditions.length === 2) {
+          const fromCondition = conditions.find(c => (c.operator || c.op) === '>=');
+          const toCondition = conditions.find(c => (c.operator || c.op) === '<=');
+
+          if (fromCondition && toCondition) {
+            apiParams.where[field] = {
+              value: [fromCondition.value, toCondition.value]
+            };
+          }
+        }
+      });
+    }
+
+    logger.debug('Fetching metadata', {
+      endpoint: this.domainConfig.endpoints.meta,
+      params: apiParams
+    });
+
+    return this.requestWithRetry(this.domainConfig.endpoints.meta, apiParams);
+  }
+
+  // ==================== REFERENCE DICTIONARIES ====================
+
+  /**
+   * Get reference dictionary data
+   * Generic method for fetching any dictionary available in current domain
+   *
+   * @param dictionaryName Name of dictionary (e.g., 'courts', 'judges')
+   * @param params Optional pagination parameters
+   */
+  async getDictionary(
+    dictionaryName: string,
+    params?: { limit?: number; page?: number; nolimits?: number }
+  ): Promise<any> {
+    const endpoint = this.domainConfig.endpoints.dictionaries[dictionaryName];
+
+    if (!endpoint) {
+      const available = Object.keys(this.domainConfig.endpoints.dictionaries).join(', ');
+      throw new ZakonOnlineValidationError(
+        `Dictionary "${dictionaryName}" not available for domain "${this.domainConfig.displayName}". ` +
+        `Available dictionaries: ${available || 'none'}`
+      );
+    }
+
+    logger.debug(`Fetching ${dictionaryName} dictionary`, { endpoint, params });
+
+    return this.requestWithRetry(endpoint, params || {});
+  }
+
+  // Court Decisions domain dictionaries
+
+  /**
+   * Get courts dictionary (Court Decisions domain only)
+   */
+  async getCourtsDictionary(params?: { limit?: number; page?: number }): Promise<any> {
+    return this.getDictionary('courts', params);
+  }
+
+  /**
+   * Get instances dictionary (Court Decisions domain only)
+   */
+  async getInstancesDictionary(): Promise<any> {
+    return this.getDictionary('instances');
+  }
+
+  /**
+   * Get judgment forms dictionary (Court Decisions domain only)
+   */
+  async getJudgmentFormsDictionary(): Promise<any> {
+    return this.getDictionary('judgmentForms');
+  }
+
+  /**
+   * Get justice kinds dictionary (available in Court Decisions and Court Sessions)
+   */
+  async getJusticeKindsDictionary(): Promise<any> {
+    return this.getDictionary('justiceKinds');
+  }
+
+  /**
+   * Get regions dictionary (Court Decisions domain only)
+   */
+  async getRegionsDictionary(): Promise<any> {
+    return this.getDictionary('regions');
+  }
+
+  /**
+   * Get judges dictionary (Court Decisions domain only)
+   */
+  async getJudgesDictionary(params?: { limit?: number; page?: number }): Promise<any> {
+    return this.getDictionary('judges', params);
+  }
+
+  // Legal Acts domain dictionaries
+
+  /**
+   * Get document types dictionary (Legal Acts domain only)
+   */
+  async getDocumentTypesDictionary(): Promise<any> {
+    return this.getDictionary('documentTypes');
+  }
+
+  /**
+   * Get authors dictionary (Legal Acts domain only)
+   */
+  async getAuthorsDictionary(): Promise<any> {
+    return this.getDictionary('authors');
+  }
+
+  // Court Practice domain dictionaries
+
+  /**
+   * Get categories dictionary (Court Practice domain only)
+   */
+  async getCategoriesDictionary(): Promise<any> {
+    return this.getDictionary('categories');
+  }
+
+  /**
+   * Get types dictionary (Court Practice domain only)
+   */
+  async getTypesDictionary(): Promise<any> {
+    return this.getDictionary('types', { nolimits: 1 });
+  }
+
+  /**
+   * List all available dictionaries for current domain
+   */
+  getAvailableDictionaries(): string[] {
+    return Object.keys(this.domainConfig.endpoints.dictionaries);
   }
 }
