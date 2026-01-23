@@ -7,6 +7,34 @@ export enum SectionType {
   AMOUNTS = 'AMOUNTS',
 }
 
+export type ProcedureCode = 'ЦПК' | 'ГПК' | 'КАС' | 'КПК';
+
+export type CourtLevel =
+  | 'first_instance'
+  | 'appeal'
+  | 'cassation'
+  | 'SC'
+  | 'GrandChamber';
+
+export type DesiredOutput = 'теза' | 'чеклист' | 'таблиця' | 'підбірка' | 'порівняння';
+
+export interface MoneyTerms {
+  penalty?: boolean;
+  inflation?: boolean;
+  three_percent?: boolean;
+  legal_fees?: boolean;
+}
+
+export interface IntentSlots {
+  procedure_code?: ProcedureCode;
+  court_level?: CourtLevel;
+  case_category?: string;
+  law_article?: string;
+  section_focus?: SectionType[];
+  money_terms?: MoneyTerms;
+  desired_output?: DesiredOutput;
+}
+
 export interface DocumentSection {
   type: SectionType;
   text: string;
@@ -51,6 +79,7 @@ export interface QueryIntent {
   sections: SectionType[];
   time_range?: { from: string; to: string };
   reasoning_budget: 'quick' | 'standard' | 'deep';
+  slots?: IntentSlots;
 }
 
 export interface LegalPattern {
@@ -83,6 +112,12 @@ export interface EmbeddingChunk {
   metadata: {
     date: string;
     court?: string;
+    case_number?: string;
+    chamber?: string;
+    dispute_category?: string;
+    outcome?: string;
+    deviation_flag?: boolean | null;
+    precedent_status?: PrecedentStatusType;
     law_articles?: string[];
   };
   created_at: string;
@@ -100,6 +135,61 @@ export interface ReasoningBudget {
   max_llm_calls: number;
   max_tokens: number;
   strategy: 'cheap-first' | 'deep-only-if-needed';
+}
+
+export interface PackagedAnswerConclusion {
+  conclusion: string;
+  conditions?: string;
+  risk_or_exception?: string;
+}
+
+export interface PackagedAnswerNorm {
+  act?: string;
+  article_ref: string;
+  quote?: string;
+  comment?: string;
+}
+
+export interface PackagedAnswerSupremeCourtThesis {
+  thesis: string;
+  quotes: Array<{
+    quote: string;
+    source_doc_id: string;
+    section_type: SectionType;
+  }>;
+  context?: string;
+}
+
+export interface PackagedAnswerCase {
+  source_doc_id: string;
+  section_type: SectionType;
+  quote: string;
+  relevance_reason?: string;
+  case_number?: string;
+  court?: string;
+  date?: string;
+}
+
+export interface PackagedAnswerChecklist {
+  steps: string[];
+  evidence: string[];
+}
+
+export interface PackagedLawyerAnswer {
+  short_conclusion: PackagedAnswerConclusion;
+  legal_framework: {
+    norms: PackagedAnswerNorm[];
+  };
+  supreme_court_positions: PackagedAnswerSupremeCourtThesis[];
+  practice: PackagedAnswerCase[];
+  criteria_test: string[];
+  counterarguments_and_risks: string[];
+  checklist: PackagedAnswerChecklist;
+  sources: Array<{
+    document_id: string;
+    section_type?: SectionType;
+    quote: string;
+  }>;
 }
 
 export const BUDGETS: Record<string, ReasoningBudget> = {
@@ -123,6 +213,7 @@ export const BUDGETS: Record<string, ReasoningBudget> = {
 export interface EnhancedMCPResponse {
   summary: string;
   confidence_score: number;
+  intent?: QueryIntent;
   relevant_patterns: LegalPattern[];
   precedent_chunks: {
     text: string;
@@ -134,6 +225,7 @@ export interface EnhancedMCPResponse {
   }[];
   law_articles: string[];
   risk_notes: string[];
+  packaged_answer?: PackagedLawyerAnswer;
   reasoning_chain: {
     step: number;
     action: string;
