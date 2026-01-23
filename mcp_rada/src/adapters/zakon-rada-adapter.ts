@@ -7,12 +7,14 @@ import axios, { AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 import { logger } from '../utils/logger';
 import { KNOWN_LAWS, ZakonRadaLawResponse, ZakonRadaSearchResult, ZakonRadaAPIError } from '../types/rada';
+import { CostTracker } from '../services/cost-tracker';
 
 export class ZakonRadaAdapter {
   private client: AxiosInstance;
   private baseURL = 'https://zakon.rada.gov.ua';
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 500; // 500ms between requests
+  private costTracker?: CostTracker;
 
   constructor() {
     this.client = axios.create({
@@ -26,6 +28,11 @@ export class ZakonRadaAdapter {
     });
 
     logger.info('ZakonRadaAdapter initialized');
+  }
+
+  setCostTracker(costTracker: CostTracker): void {
+    this.costTracker = costTracker;
+    logger.debug('Cost tracker set for ZakonRadaAdapter');
   }
 
   /**
@@ -67,6 +74,15 @@ export class ZakonRadaAdapter {
       const response = await this.client.get(endpoint);
       const html = response.data;
 
+      if (this.costTracker) {
+        await this.costTracker.recordRadaAPICall({
+          requestId: 'zakon-rada-adapter',
+          endpoint,
+          cached: false,
+          bytes: typeof html === 'string' ? Buffer.byteLength(html, 'utf8') : undefined,
+        });
+      }
+
       // Parse HTML with Cheerio
       const $ = cheerio.load(html);
 
@@ -94,7 +110,7 @@ export class ZakonRadaAdapter {
       const plainText = mainText.replace(/\s+/g, ' ').trim();
 
       // Try to extract articles if structured
-      const articles = this.extractArticles($, html);
+      const articles = this.extractArticles($);
 
       const result: ZakonRadaLawResponse = {
         number: lawNumber,
@@ -124,7 +140,7 @@ export class ZakonRadaAdapter {
   /**
    * Extract articles from law HTML
    */
-  private extractArticles($: cheerio.CheerioAPI, html: string): { number: string; title?: string; text: string }[] {
+  private extractArticles($: cheerio.CheerioAPI): { number: string; title?: string; text: string }[] {
     const articles: { number: string; title?: string; text: string }[] = [];
 
     // Try different article patterns
@@ -179,7 +195,7 @@ export class ZakonRadaAdapter {
       const results: ZakonRadaSearchResult[] = [];
 
       // Parse search results
-      $('.search-result, .result-item, .law-item').each((i, elem) => {
+      $('.search-result, .result-item, .law-item').each((_i, elem) => {
         const resultElem = $(elem);
         const titleElem = resultElem.find('a, .title, h3');
         const title = titleElem.text().trim();

@@ -371,14 +371,15 @@ export class BillService {
     }
 
     return {
+      id: raw.id || uuidv4(),
       bill_number: raw.number || raw.bill_number,
       title: raw.name || raw.title,
       registration_date: raw.reg_date || raw.registration_date || null,
       status: raw.status || null,
       stage: raw.stage || null,
       initiator_type: raw.initiator_type || null,
-      initiator_names,
-      initiator_ids,
+      initiator_names: initiatorNames,
+      initiator_ids: initiatorIds,
       main_committee_id: raw.committee_id || raw.main_committee_id || null,
       main_committee_name: raw.committee || raw.main_committee_name || null,
       subject_area: raw.subject_area || null,

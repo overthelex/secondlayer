@@ -51,13 +51,13 @@ CREATE TABLE IF NOT EXISTS deputies (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_deputies_rada_id ON deputies(rada_id);
-CREATE INDEX idx_deputies_active ON deputies(active);
-CREATE INDEX idx_deputies_faction ON deputies(faction_id);
-CREATE INDEX idx_deputies_committee ON deputies(committee_id);
-CREATE INDEX idx_deputies_cache_expires ON deputies(cache_expires_at);
-CREATE INDEX idx_deputies_convocation ON deputies(convocation);
-CREATE INDEX idx_deputies_full_name ON deputies(full_name);
+CREATE INDEX IF NOT EXISTS idx_deputies_rada_id ON deputies(rada_id);
+CREATE INDEX IF NOT EXISTS idx_deputies_active ON deputies(active);
+CREATE INDEX IF NOT EXISTS idx_deputies_faction ON deputies(faction_id);
+CREATE INDEX IF NOT EXISTS idx_deputies_committee ON deputies(committee_id);
+CREATE INDEX IF NOT EXISTS idx_deputies_cache_expires ON deputies(cache_expires_at);
+CREATE INDEX IF NOT EXISTS idx_deputies_convocation ON deputies(convocation);
+CREATE INDEX IF NOT EXISTS idx_deputies_full_name ON deputies(full_name);
 
 -- Deputy assistants (cached from mps_assistants)
 CREATE TABLE IF NOT EXISTS deputy_assistants (
