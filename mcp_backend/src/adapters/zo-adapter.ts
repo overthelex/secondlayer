@@ -2,10 +2,12 @@ import axios, { AxiosInstance } from 'axios';
 import { createClient } from 'redis';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
-import { DocumentService } from '../services/document-service.js';
+import { DocumentService, type Document } from '../services/document-service.js';
 import { SemanticSectionizer } from '../services/semantic-sectionizer.js';
+import { EmbeddingService } from '../services/embedding-service.js';
 import { requestContext } from '../utils/openai-client.js';
 import type { CostTracker } from '../services/cost-tracker.js';
+import { SectionType } from '../types/index.js';
 import {
   type ZakonOnlineDomainName,
   type DomainConfig,
@@ -44,17 +46,29 @@ export class ZOAdapter {
   private redis: ReturnType<typeof createClient> | null = null;
   private documentService: DocumentService | null = null;
   private sectionizer: SemanticSectionizer;
+  private embeddingService: EmbeddingService | null = null;
   private apiTokens: string[];
   private currentTokenIndex: number = 0;
+  private nextTokenIndex: number = 0;
   private domainConfig: DomainConfig;
-  private lastRequestTime: number = 0;
+  private lastRequestTimeByTokenIndex: number[] = [];
   private minRequestInterval: number = 200; // Minimum 200ms between requests (5 req/sec max)
   private rateLimitDelay: number = 1000; // Delay when rate limited
+  private apiConcurrencyLimit: number | null = null;
+  private apiInFlight: number = 0;
+  private apiWaitQueue: Array<() => void> = [];
   private costTracker: CostTracker | null = null;
+
+  // Background persistence queue (to avoid DB pool exhaustion on large responses)
+  private persistQueue: any[] = [];
+  private persistSeenIds: Set<string> = new Set();
+  private persistTimer: NodeJS.Timeout | null = null;
+  private persistInFlight: boolean = false;
 
   constructor(
     domainOrDocService?: ZakonOnlineDomainName | DocumentService,
-    documentService?: DocumentService
+    documentService?: DocumentService,
+    embeddingService?: EmbeddingService
   ) {
     // Backward compatibility: if first arg is DocumentService, use default domain
     let domain: ZakonOnlineDomainName = 'court_decisions';
@@ -75,6 +89,7 @@ export class ZOAdapter {
     this.domainConfig = getDomainConfig(domain);
     this.documentService = docService;
     this.sectionizer = new SemanticSectionizer();
+    this.embeddingService = embeddingService || null;
 
     // Support primary and secondary tokens
     const primaryToken = process.env.ZAKONONLINE_API_TOKEN || '';
@@ -96,6 +111,28 @@ export class ZOAdapter {
       logger.info(`Using primary Zakononline token for ${this.domainConfig.displayName}`);
     }
 
+    // Initialize token round-robin starting point
+    this.nextTokenIndex = this.currentTokenIndex;
+
+    // Per-token rate limit state
+    this.lastRequestTimeByTokenIndex = new Array(this.apiTokens.length).fill(0);
+
+    // Allow overriding rate limit timings via env vars (keep current defaults)
+    const minIntervalEnv = process.env.ZAKONONLINE_MIN_REQUEST_INTERVAL_MS;
+    if (minIntervalEnv && !Number.isNaN(Number(minIntervalEnv))) {
+      this.minRequestInterval = Math.max(0, Number(minIntervalEnv));
+    }
+    const rateLimitDelayEnv = process.env.ZAKONONLINE_RATE_LIMIT_DELAY_MS;
+    if (rateLimitDelayEnv && !Number.isNaN(Number(rateLimitDelayEnv))) {
+      this.rateLimitDelay = Math.max(0, Number(rateLimitDelayEnv));
+    }
+
+    const apiConcurrencyEnv = process.env.API_CONCURRENCY_LIMIT;
+    if (apiConcurrencyEnv && !Number.isNaN(Number(apiConcurrencyEnv))) {
+      const parsed = Math.floor(Number(apiConcurrencyEnv));
+      this.apiConcurrencyLimit = parsed > 0 ? parsed : null;
+    }
+
     this.client = axios.create({
       baseURL: this.domainConfig.baseURL,
       timeout: 120000, // Increased to 120s for date-filtered queries
@@ -112,6 +149,269 @@ export class ZOAdapter {
       baseURL: this.domainConfig.baseURL,
       availableTargets: this.domainConfig.availableTargets,
     });
+  }
+
+  private extractOutcome(text?: string | null): string | null {
+    if (!text) return null;
+    const t = text.toLowerCase();
+    if (t.includes('частков')) return 'partial';
+    if (t.includes('задовольн')) return 'allowed';
+    if (t.includes('відмов')) return 'denied';
+    if (t.includes('скасув') && (t.includes('направ') || t.includes('нов')))
+      return 'remand';
+    if (t.includes('скасув')) return 'cancelled';
+    return null;
+  }
+
+  private extractDeviationFlag(text?: string | null): boolean | null {
+    if (!text) return null;
+    const t = text.toLowerCase();
+    if (t.includes('відступ') && (t.includes('практик') || t.includes('висновк')))
+      return true;
+    return null;
+  }
+
+  private extractLawArticlesSimple(text?: string | null): string[] {
+    if (!text) return [];
+    const matches = text.match(/ст\.\s*\d+/gi) || [];
+    return Array.from(new Set(matches.map((m) => m.replace(/\s+/g, ' ').trim()))).slice(0, 50);
+  }
+
+  private normalizeDateToYMD(value: any): string | null {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      // Handle ISO or YYYY-MM-DD
+      return value.length >= 10 ? value.slice(0, 10) : value;
+    }
+    try {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toISOString().slice(0, 10);
+    } catch {
+      return null;
+    }
+  }
+
+  private normalizeDocumentIdentity(doc: any): { zakononline_id: string; type: string } | null {
+    // Court decisions have numeric doc_id. For other domains, prefix with domain to avoid collisions.
+    const rawId = doc?.doc_id ?? doc?.id ?? doc?.zakononline_id;
+    if (rawId == null || String(rawId).length === 0) return null;
+    const domainName = this.domainConfig?.name || 'unknown';
+    if (domainName === 'court_decisions') {
+      return { zakononline_id: String(rawId), type: 'court_decision' };
+    }
+    return { zakononline_id: `${domainName}:${String(rawId)}`, type: domainName };
+  }
+
+  private schedulePersistFlush(): void {
+    if (this.persistTimer) return;
+    // Small debounce to coalesce multiple fetches into fewer DB writes
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      this.flushPersistQueue().catch((e: any) => {
+        logger.error('Persist queue flush failed:', e?.message);
+      });
+    }, 250);
+  }
+
+  private enqueueDocumentsForPersistence(docs: any[]): void {
+    if (!this.documentService || !Array.isArray(docs) || docs.length === 0) return;
+
+    const MAX_QUEUE = 5000;
+
+    for (const doc of docs) {
+      const identity = this.normalizeDocumentIdentity(doc);
+      if (!identity) continue;
+      const idKey = identity.zakononline_id;
+      if (this.persistSeenIds.has(idKey)) continue;
+      this.persistSeenIds.add(idKey);
+      this.persistQueue.push(doc);
+
+      if (this.persistQueue.length > MAX_QUEUE) {
+        // Drop oldest to protect memory; dedup set will be cleared on flush
+        this.persistQueue.shift();
+      }
+    }
+
+    this.schedulePersistFlush();
+  }
+
+  private async flushPersistQueue(): Promise<void> {
+    if (!this.documentService) return;
+    if (this.persistInFlight) return;
+    if (this.persistQueue.length === 0) return;
+
+    this.persistInFlight = true;
+    try {
+      const envBatch = process.env.PERSIST_BATCH_SIZE;
+      const BATCH_SIZE = envBatch && !Number.isNaN(Number(envBatch))
+        ? Math.max(1, Math.floor(Number(envBatch)))
+        : 50;
+
+      // Drain in batches
+      while (this.persistQueue.length > 0) {
+        const batch = this.persistQueue.splice(0, BATCH_SIZE);
+        // Clear seen ids for drained docs to keep memory bounded
+        for (const doc of batch) {
+          const identity = this.normalizeDocumentIdentity(doc);
+          if (identity) this.persistSeenIds.delete(identity.zakononline_id);
+        }
+
+        await this.saveDocumentsMetadataToDatabase(batch, batch.length);
+      }
+    } finally {
+      this.persistInFlight = false;
+    }
+  }
+
+  /**
+   * Save multiple documents to database WITHOUT loading full text.
+   *
+   * Use this when the caller already has the document payload (possibly including full_text)
+   * and wants to persist it without triggering additional network calls.
+   */
+  async saveDocumentsMetadataToDatabase(docs: any[], maxDocs: number = 1000): Promise<void> {
+    if (!this.documentService || !docs.length) {
+      return;
+    }
+
+    const docsToProcess = docs.slice(0, maxDocs);
+    const validDocs = docsToProcess.filter(doc => doc && (doc.doc_id != null || doc.id != null || doc.zakononline_id != null));
+    if (validDocs.length === 0) {
+      return;
+    }
+
+    try {
+      const mapped = validDocs
+        .map((doc) => {
+          const identity = this.normalizeDocumentIdentity(doc);
+          if (!identity) return null;
+
+          // Court decision-specific enrichments (safe fallbacks for other domains)
+          const outcome = this.extractOutcome(doc.resolution || doc.full_text || null);
+          const deviationFlag = this.extractDeviationFlag(doc.full_text || doc.resolution || null);
+          const chamber = doc.chamber || this.extractChamberFromText(doc.full_text || doc.resolution || null);
+
+          const title = doc.title || doc.name || doc.cause_num || doc.caption || undefined;
+          const date = doc.adjudication_date || doc.date || doc.published_at || undefined;
+          const caseNumber = doc.cause_num || doc.case_number || doc.metadata?.cause_num || undefined;
+
+          return {
+            zakononline_id: identity.zakononline_id,
+            type: identity.type,
+            title: title,
+            date: date,
+            case_number: caseNumber,
+            court: (doc.court || doc.court_name)
+              ? String(doc.court || doc.court_name)
+              : (doc.court_code != null ? String(doc.court_code) : undefined),
+            chamber: chamber,
+            dispute_category: doc.category_code != null ? String(doc.category_code) : undefined,
+            outcome: outcome ?? undefined,
+            deviation_flag: deviationFlag,
+            full_text: doc.full_text || null,
+            full_text_html: doc.full_text_html || null,
+            metadata: {
+              ...((doc.metadata && typeof doc.metadata === 'object') ? doc.metadata : {}),
+              // Keep raw fields for future re-processing/indexing
+              _raw: {
+                doc_id: doc.doc_id,
+                id: doc.id,
+                url: doc.url,
+                snippet: doc.snippet,
+              },
+              cause_num: doc.cause_num,
+              resolution: doc.resolution,
+              judge: doc.judge,
+              court_code: doc.court_code,
+              category_code: doc.category_code,
+              justice_kind: doc.justice_kind,
+            },
+          } as Document;
+        })
+        .filter((d): d is Document => d != null);
+
+      if (mapped.length === 0) {
+        return;
+      }
+
+      await this.documentService.saveDocumentsBatch(mapped);
+      logger.info('Saved documents metadata to database (no fulltext loading)', {
+        count: mapped.length,
+      });
+    } catch (error: any) {
+      logger.error('Failed to save documents metadata to database:', error?.message);
+    }
+  }
+
+  private extractChamberFromText(text?: string | null): string | undefined {
+    if (!text) return undefined;
+    const t = text.toLowerCase();
+
+    // Priority: explicit Grand Chamber
+    if (t.includes('велика палата') || t.includes('вп вс') || t.includes('великої палати верховного суду')) {
+      return 'ВП ВС';
+    }
+
+    // Cassation courts (common Ukrainian abbreviations)
+    if (t.includes('кцс') || t.includes('касаційний цивільний суд')) return 'КЦС';
+    if (t.includes('кгс') || t.includes('касаційний господарський суд')) return 'КГС';
+    if (t.includes('кас') || t.includes('касаційний адміністративний суд')) return 'КАС';
+    if (t.includes('ккс') || t.includes('касаційний кримінальний суд')) return 'ККС';
+
+    return undefined;
+  }
+
+  private async indexSectionsToVectorStore(args: {
+    docId: string;
+    sections: Array<{ type: SectionType; text: string }>;
+    metadata: {
+      date: string;
+      court?: string;
+      chamber?: string;
+      case_number?: string;
+      dispute_category?: string;
+      outcome?: string;
+      deviation_flag?: boolean | null;
+      law_articles?: string[];
+    };
+  }): Promise<void> {
+    if (!this.embeddingService) return;
+
+    const indexable = args.sections.filter(
+      (s) => s.type === SectionType.DECISION || s.type === SectionType.COURT_REASONING
+    );
+    if (indexable.length === 0) return;
+
+    for (const section of indexable) {
+      const chunks = this.embeddingService.splitIntoChunks(section.text);
+      if (chunks.length === 0) continue;
+
+      const embeddings = await this.embeddingService.generateEmbeddingsBatch(chunks);
+      const nowIso = new Date().toISOString();
+
+      for (let i = 0; i < chunks.length; i++) {
+        await this.embeddingService.storeChunk({
+          id: '',
+          source: 'zakononline',
+          doc_id: args.docId,
+          section_type: section.type,
+          text: chunks[i],
+          embedding: embeddings[i],
+          metadata: {
+            date: args.metadata.date,
+            court: args.metadata.court,
+            chamber: args.metadata.chamber,
+            case_number: args.metadata.case_number,
+            dispute_category: args.metadata.dispute_category,
+            outcome: args.metadata.outcome,
+            deviation_flag: args.metadata.deviation_flag,
+            law_articles: args.metadata.law_articles || [],
+          },
+          created_at: nowIso,
+        });
+      }
+    }
   }
 
   /**
@@ -132,12 +432,17 @@ export class ZOAdapter {
     return this.apiTokens[this.currentTokenIndex];
   }
 
-  private rotateToken() {
-    if (this.apiTokens.length > 1) {
-      this.currentTokenIndex = (this.currentTokenIndex + 1) % this.apiTokens.length;
-      this.client.defaults.headers['X-App-Token'] = this.getCurrentToken();
-      logger.info('Rotated to secondary Zakononline token');
+  private getNextTokenIndex(): number {
+    if (this.apiTokens.length <= 1) {
+      return 0;
     }
+    const idx = this.nextTokenIndex;
+    this.nextTokenIndex = (this.nextTokenIndex + 1) % this.apiTokens.length;
+    return idx;
+  }
+
+  private getTokenByIndex(index: number): string {
+    return this.apiTokens[index] || this.apiTokens[0];
   }
 
   setCostTracker(tracker: CostTracker) {
@@ -184,16 +489,47 @@ export class ZOAdapter {
   /**
    * Rate limiting: ensure minimum interval between requests to respect API limits
    */
-  private async waitForRateLimit(): Promise<void> {
+  private async waitForRateLimit(tokenIndex: number): Promise<void> {
     const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    
+    const last = this.lastRequestTimeByTokenIndex[tokenIndex] || 0;
+    const timeSinceLastRequest = now - last;
+
     if (timeSinceLastRequest < this.minRequestInterval) {
       const waitTime = this.minRequestInterval - timeSinceLastRequest;
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
-    
-    this.lastRequestTime = Date.now();
+
+    this.lastRequestTimeByTokenIndex[tokenIndex] = Date.now();
+  }
+
+  private async acquireApiSlot(): Promise<() => void> {
+    if (!this.apiConcurrencyLimit) {
+      return () => {};
+    }
+
+    if (this.apiInFlight < this.apiConcurrencyLimit) {
+      this.apiInFlight++;
+      return () => this.releaseApiSlot();
+    }
+
+    await new Promise<void>((resolve) => {
+      this.apiWaitQueue.push(resolve);
+    });
+
+    this.apiInFlight++;
+    return () => this.releaseApiSlot();
+  }
+
+  private releaseApiSlot(): void {
+    if (!this.apiConcurrencyLimit) {
+      return;
+    }
+
+    this.apiInFlight = Math.max(0, this.apiInFlight - 1);
+    const next = this.apiWaitQueue.shift();
+    if (next) {
+      next();
+    }
   }
 
   private mapOperator(op: string): string {
@@ -265,15 +601,22 @@ export class ZOAdapter {
       return cached;
     }
 
-    // Rate limiting: wait before making request
-    await this.waitForRateLimit();
-
     let lastError: any;
     const maxTokenRotations = this.apiTokens.length;
+    const useRoundRobin = (process.env.ZAKONONLINE_TOKEN_STRATEGY || '').toLowerCase() === 'round_robin';
+    const firstTokenIndex = useRoundRobin ? this.getNextTokenIndex() : this.currentTokenIndex;
     
     for (let tokenAttempt = 0; tokenAttempt < maxTokenRotations; tokenAttempt++) {
+      const tokenIndex = (firstTokenIndex + tokenAttempt) % this.apiTokens.length;
+      const token = this.getTokenByIndex(tokenIndex);
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+          const releaseSlot = await this.acquireApiSlot();
+
+          // Rate limiting: wait before making request (per token)
+          await this.waitForRateLimit(tokenIndex);
+
           // Build query params in API format
           const queryParams = this.buildQueryParams(params);
 
@@ -283,14 +626,24 @@ export class ZOAdapter {
             queryParams: JSON.stringify(queryParams, null, 2)
           });
 
-          const response = await this.client.get(endpoint, { params: queryParams });
-          const data = response.data;
-          await this.setCache(cacheKey, data);
+          try {
+            const response = await this.client.get(endpoint, {
+              params: queryParams,
+              // IMPORTANT: set token per request to avoid races under concurrency
+              headers: {
+                'X-App-Token': token,
+              },
+            });
+            const data = response.data;
+            await this.setCache(cacheKey, data);
 
-          // Track successful API call (not cached)
-          await this.trackZOUsage(endpoint, false);
+            // Track successful API call (not cached)
+            await this.trackZOUsage(endpoint, false);
 
-          return data;
+            return data;
+          } finally {
+            releaseSlot();
+          }
         } catch (error: any) {
           lastError = error;
           const status = error.response?.status;
@@ -314,7 +667,6 @@ export class ZOAdapter {
 
             // If still rate limited after retries, try next token if available
             if (attempt >= maxRetries && this.apiTokens.length > 1 && tokenAttempt < maxTokenRotations - 1) {
-              this.rotateToken();
               break;
             }
             continue;
@@ -323,7 +675,6 @@ export class ZOAdapter {
           // If it's an auth error and we have multiple tokens, try next token
           if (isAuthError &&
               this.apiTokens.length > 1 && tokenAttempt < maxTokenRotations - 1) {
-            this.rotateToken();
             break; // Break inner loop to try with new token
           }
 
@@ -448,6 +799,13 @@ export class ZOAdapter {
       apiParams
     );
 
+    // Always persist fetched documents (async, deduped, batched)
+    if (Array.isArray(response)) {
+      this.enqueueDocumentsForPersistence(response);
+    } else if (response?.data && Array.isArray(response.data)) {
+      this.enqueueDocumentsForPersistence(response.data);
+    }
+
     // DISABLED: Automatic document loading causes PostgreSQL connection pool exhaustion
     // during large pagination (10,000+ pages). Documents should be loaded explicitly
     // only when needed (e.g., for top N results to display).
@@ -462,24 +820,42 @@ export class ZOAdapter {
   }
 
   async searchCourtPractice(params: ZOSearchParams): Promise<ZOSearchResponse> {
-    return this.requestWithRetry('/api/court/practice', {
+    const response = await this.requestWithRetry('/api/court/practice', {
       ...params,
       fulldata: params.fulldata || 1,
     });
+    if (Array.isArray(response)) {
+      this.enqueueDocumentsForPersistence(response);
+    } else if (response?.data && Array.isArray(response.data)) {
+      this.enqueueDocumentsForPersistence(response.data);
+    }
+    return response;
   }
 
   async searchECHRPractice(params: ZOSearchParams): Promise<ZOSearchResponse> {
-    return this.requestWithRetry('/api/echr/practice', {
+    const response = await this.requestWithRetry('/api/echr/practice', {
       ...params,
       fulldata: params.fulldata || 1,
     });
+    if (Array.isArray(response)) {
+      this.enqueueDocumentsForPersistence(response);
+    } else if (response?.data && Array.isArray(response.data)) {
+      this.enqueueDocumentsForPersistence(response.data);
+    }
+    return response;
   }
 
   async searchNPA(params: ZOSearchParams): Promise<ZOSearchResponse> {
-    return this.requestWithRetry('/api/npa/search', {
+    const response = await this.requestWithRetry('/api/npa/search', {
       ...params,
       fulldata: params.fulldata || 1,
     });
+    if (Array.isArray(response)) {
+      this.enqueueDocumentsForPersistence(response);
+    } else if (response?.data && Array.isArray(response.data)) {
+      this.enqueueDocumentsForPersistence(response.data);
+    }
+    return response;
   }
 
   /**
@@ -546,6 +922,16 @@ export class ZOAdapter {
 
         // Track SecondLayer API call (web scraping)
         await this.trackSecondLayerUsage('web_scraping', docId, false);
+
+        // Persist minimal record with full text (async)
+        this.enqueueDocumentsForPersistence([
+          {
+            doc_id: docId,
+            full_text: result.text,
+            full_text_html: result.html,
+            url: `https://zakononline.ua/court-decisions/show/${docId}`,
+          },
+        ]);
 
         return result;
       }
@@ -622,11 +1008,20 @@ export class ZOAdapter {
     }
 
     try {
+      const outcome = this.extractOutcome(doc.resolution || doc.full_text || null);
+      const deviationFlag = this.extractDeviationFlag(doc.full_text || doc.resolution || null);
+      const chamber = doc.chamber || this.extractChamberFromText(doc.full_text || doc.resolution || null);
       await this.documentService.saveDocument({
         zakononline_id: String(doc.doc_id),
         type: 'court_decision',
-        title: doc.title || doc.cause_num || null,
-        date: doc.adjudication_date || doc.date || null,
+        title: doc.title || doc.cause_num || undefined,
+        date: doc.adjudication_date || doc.date || undefined,
+        case_number: doc.cause_num || undefined,
+        court: (doc.court || doc.court_name) ? String(doc.court || doc.court_name) : (doc.court_code != null ? String(doc.court_code) : undefined),
+        chamber: chamber,
+        dispute_category: doc.category_code != null ? String(doc.category_code) : undefined,
+        outcome: outcome ?? undefined,
+        deviation_flag: deviationFlag,
         full_text: doc.full_text || null,
         full_text_html: doc.full_text_html || null,
         metadata: {
@@ -700,6 +1095,26 @@ export class ZOAdapter {
                 // Save sections to database
                 await this.documentService.saveSections(docId, sections);
                 logger.info(`Extracted and saved ${sections.length} sections for document ${doc.zakononline_id}`);
+
+                // Index DECISION + COURT_REASONING to vector store
+                const dateYMD = this.normalizeDateToYMD(doc.date);
+                if (dateYMD) {
+                  const lawArticles = this.extractLawArticlesSimple(doc.full_text);
+                  await this.indexSectionsToVectorStore({
+                    docId,
+                    sections: sections as any,
+                    metadata: {
+                      date: dateYMD,
+                      court: doc.court,
+                      chamber: doc.chamber,
+                      case_number: doc.case_number,
+                      dispute_category: doc.dispute_category,
+                      outcome: doc.outcome,
+                      deviation_flag: doc.deviation_flag,
+                      law_articles: lawArticles,
+                    },
+                  });
+                }
               } else {
                 logger.warn(`No sections extracted for document ${doc.zakononline_id}`);
               }
@@ -723,7 +1138,10 @@ export class ZOAdapter {
    * Load full texts for multiple documents with concurrency control
    */
   private async loadFullTextsForDocuments(docs: any[]): Promise<any[]> {
-    const CONCURRENCY_LIMIT = 3; // Max 3 parallel requests to avoid overwhelming the server
+    const envLimit = process.env.FULLTEXT_CONCURRENCY_LIMIT;
+    const CONCURRENCY_LIMIT = envLimit && !Number.isNaN(Number(envLimit))
+      ? Math.max(1, Number(envLimit))
+      : 3; // Max 3 parallel requests to avoid overwhelming the server
     const results: any[] = [];
 
     // Process documents in batches
@@ -737,11 +1155,20 @@ export class ZOAdapter {
             const existing = await this.documentService.getDocumentByZoId(String(doc.doc_id));
             if (existing && existing.full_text && existing.full_text.length > 100) {
               logger.debug(`Using cached full text from database for ${doc.doc_id}`);
+              const outcome = this.extractOutcome(doc.resolution || existing.full_text || null);
+              const deviationFlag = this.extractDeviationFlag(existing.full_text || doc.resolution || null);
+              const chamber = existing.chamber || this.extractChamberFromText(existing.full_text || doc.resolution || null);
               return {
                 zakononline_id: String(doc.doc_id),
                 type: 'court_decision',
-                title: doc.title || doc.cause_num || null,
-                date: doc.adjudication_date || doc.date || null,
+                title: doc.title || doc.cause_num || undefined,
+                date: doc.adjudication_date || doc.date || undefined,
+                case_number: doc.cause_num || undefined,
+                court: (doc.court || doc.court_name) ? String(doc.court || doc.court_name) : (doc.court_code != null ? String(doc.court_code) : undefined),
+                chamber: chamber,
+                dispute_category: doc.category_code != null ? String(doc.category_code) : undefined,
+                outcome: outcome ?? undefined,
+                deviation_flag: deviationFlag,
                 full_text: existing.full_text,
                 full_text_html: existing.full_text_html,
                 metadata: {
@@ -776,11 +1203,20 @@ export class ZOAdapter {
             }
           }
 
+          const outcome = this.extractOutcome(doc.resolution || fullText || null);
+          const deviationFlag = this.extractDeviationFlag(fullText || doc.resolution || null);
+          const chamber = this.extractChamberFromText(fullText || doc.resolution || null);
           return {
             zakononline_id: String(doc.doc_id),
             type: 'court_decision',
-            title: doc.title || doc.cause_num || null,
-            date: doc.adjudication_date || doc.date || null,
+            title: doc.title || doc.cause_num || undefined,
+            date: doc.adjudication_date || doc.date || undefined,
+            case_number: doc.cause_num || undefined,
+            court: (doc.court || doc.court_name) ? String(doc.court || doc.court_name) : (doc.court_code != null ? String(doc.court_code) : undefined),
+            chamber: chamber,
+            dispute_category: doc.category_code != null ? String(doc.category_code) : undefined,
+            outcome: outcome ?? undefined,
+            deviation_flag: deviationFlag,
             full_text: fullText,
             full_text_html: fullTextHtml,
             metadata: {
@@ -801,7 +1237,13 @@ export class ZOAdapter {
 
       // Small delay between batches to respect rate limits
       if (i + CONCURRENCY_LIMIT < docs.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const batchDelayEnv = process.env.FULLTEXT_BATCH_DELAY_MS;
+        const delayMs = batchDelayEnv && !Number.isNaN(Number(batchDelayEnv))
+          ? Math.max(0, Number(batchDelayEnv))
+          : 500;
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
       }
     }
 
