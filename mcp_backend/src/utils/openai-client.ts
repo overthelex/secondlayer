@@ -34,13 +34,21 @@ export class OpenAIClientManager {
     }
 
     if (this.clients.length === 0) {
-      throw new Error('No OpenAI API keys configured');
+      logger.warn('No OpenAI API keys configured - OpenAI provider will be unavailable');
+      return;
     }
 
     logger.info(`OpenAI client manager initialized with ${this.clients.length} key(s)`);
   }
 
+  isAvailable(): boolean {
+    return this.clients.length > 0;
+  }
+
   getClient(): OpenAI {
+    if (this.clients.length === 0) {
+      throw new Error('No OpenAI API keys configured');
+    }
     return this.clients[this.currentClientIndex];
   }
 
@@ -60,6 +68,9 @@ export class OpenAIClientManager {
     operation: (client: OpenAI) => Promise<T>,
     maxRetries: number = 3
   ): Promise<T> {
+    if (this.clients.length === 0) {
+      throw new Error('OpenAI provider unavailable: no API keys configured');
+    }
     let lastError: any;
     const maxRotations = this.clients.length;
 
