@@ -45,10 +45,10 @@ class HTTPMCPServer {
     // Initialize services FIRST
     this.db = new Database();
     this.documentService = new DocumentService(this.db);
-    this.zoAdapter = new ZOAdapter(this.documentService);
     this.queryPlanner = new QueryPlanner();
     this.sectionizer = new SemanticSectionizer();
     this.embeddingService = new EmbeddingService();
+    this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
