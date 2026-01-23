@@ -27,3 +27,23 @@ console.warn = (...args) => {
 console.info = (...args) => {
   process.stdout.write(args.map(String).join(' ') + '\n');
 };
+
+// Mock File and Blob for cheerio/undici compatibility
+if (typeof global.File === 'undefined') {
+  global.File = class File extends Blob {
+    constructor(bits, name, options) {
+      super(bits, options);
+      this.name = name;
+      this.lastModified = options?.lastModified || Date.now();
+    }
+  };
+}
+
+if (typeof global.Blob === 'undefined') {
+  global.Blob = class Blob {
+    constructor(bits, options) {
+      this.size = 0;
+      this.type = options?.type || '';
+    }
+  };
+}
