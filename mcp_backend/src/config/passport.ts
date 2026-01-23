@@ -19,6 +19,11 @@ const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost
 export function configurePassport(db: Database): typeof passport {
   const userService = new UserService(db);
 
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    logger.warn('Google OAuth2 not configured (missing GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)');
+    return passport;
+  }
+
   // Configure Google OAuth2 Strategy
   passport.use(
     new GoogleStrategy(
