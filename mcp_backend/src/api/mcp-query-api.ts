@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../utils/html-parser.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
 import { ModelSelector } from '../utils/model-selector.js';
+import axios from 'axios';
 
 export type StreamEventCallback = (event: {
   type: string;
@@ -55,6 +56,88 @@ export class MCPQueryAPI {
 
     // Safe default
     return [SectionType.COURT_REASONING, SectionType.DECISION, SectionType.LAW_REFERENCES];
+  }
+
+  private async callRadaTool(toolName: string, args: any) {
+    const baseUrl = String(process.env.RADA_MCP_URL || '').trim();
+    const apiKey = String(process.env.RADA_API_KEY || '').trim();
+
+    if (!baseUrl) {
+      throw new Error('RADA_MCP_URL is not configured');
+    }
+    if (!apiKey) {
+      throw new Error('RADA_API_KEY is not configured');
+    }
+
+    const url = `${baseUrl.replace(/\/$/, '')}/api/tools/${encodeURIComponent(toolName)}`;
+
+    const resp = await axios.post(
+      url,
+      { arguments: args },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 20000,
+      }
+    );
+
+    return resp.data;
+  }
+
+  private async searchProceduralNorms(args: any) {
+    const code = String(args.code || '').trim().toLowerCase();
+    const query = typeof args.query === 'string' ? args.query.trim() : '';
+    const article = args.article !== undefined && args.article !== null ? String(args.article).trim() : '';
+
+    if (code !== 'cpc' && code !== 'gpc') {
+      throw new Error('code must be one of: cpc, gpc');
+    }
+    if (!query && !article) {
+      throw new Error('Either query or article must be provided');
+    }
+
+    const lawIdentifier = code === 'cpc' ? 'цпк' : 'гпк';
+    const radaArgs: any = {
+      law_identifier: lawIdentifier,
+      ...(article ? { article } : {}),
+      ...(query ? { search_text: query } : {}),
+      include_court_citations: false,
+    };
+
+    logger.info('search_procedural_norms: calling rada', {
+      code,
+      law_identifier: lawIdentifier,
+      has_article: Boolean(article),
+      has_query: Boolean(query),
+    });
+
+    const radaResponse = await this.callRadaTool('search_legislation_text', radaArgs);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              code,
+              request: {
+                query: query || undefined,
+                article: article || undefined,
+              },
+              provider: {
+                tool: 'mcp_rada.search_legislation_text',
+                law_identifier: lawIdentifier,
+              },
+              rada_raw: radaResponse,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
   }
 
   getTools() {
@@ -322,6 +405,39 @@ export class MCPQueryAPI {
         },
       },
       {
+        name: 'search_procedural_norms',
+        description: `Умный поиск процессуальных норм (ЦПК/ГПК) через RADA MCP
+
+Возвращает релевантные статьи/фрагменты и структурированную выжимку (сроки/условия/требования).
+
+💰 Примерная стоимость: $0.005-$0.03 USD
+Обычно дешево: вызывает RADA MCP (локальная БД/кэш) + опционально LLM (зависит от настроек RADA).`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: {
+              type: 'string',
+              enum: ['cpc', 'gpc'],
+              description: 'Процессуальный кодекс: cpc (ЦПК) или gpc (ГПК)'
+            },
+            query: {
+              type: 'string',
+              description: 'Что найти (например: "строк апеляційного оскарження")'
+            },
+            article: {
+              type: ['string', 'number'],
+              description: 'Номер статьи (если известен)'
+            },
+            limit: {
+              type: 'number',
+              default: 5,
+              description: 'Максимум результатов (если поддерживается провайдером)'
+            }
+          },
+          required: ['code']
+        }
+      },
+      {
         name: 'get_legal_advice',
         description: `Главный инструмент: комплексный юридический анализ ситуации с проверкой источников и детекцией галлюцинаций
 
@@ -372,6 +488,8 @@ export class MCPQueryAPI {
           return await this.bulkIngestCourtDecisions(args);
         case 'get_citation_graph':
           return await this.getCitationGraph(args);
+        case 'search_procedural_norms':
+          return await this.searchProceduralNorms(args);
         case 'get_legal_advice':
           return await this.getLegalAdvice(args);
         default:
