@@ -9,6 +9,12 @@ export interface Document {
   type: string;
   title?: string;
   date?: Date | string;
+  case_number?: string;
+  court?: string;
+  chamber?: string;
+  dispute_category?: string;
+  outcome?: string;
+  deviation_flag?: boolean | null;
   full_text?: string;
   full_text_html?: string;
   metadata?: any;
@@ -29,12 +35,20 @@ export class DocumentService {
       
       const query = `
         INSERT INTO documents (
-          id, zakononline_id, type, title, date, full_text, full_text_html, metadata, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          id, zakononline_id, type, title, date,
+          case_number, court, chamber, dispute_category, outcome, deviation_flag,
+          full_text, full_text_html, metadata, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
         ON CONFLICT (zakononline_id) 
         DO UPDATE SET
           title = EXCLUDED.title,
           date = EXCLUDED.date,
+          case_number = COALESCE(EXCLUDED.case_number, documents.case_number),
+          court = COALESCE(EXCLUDED.court, documents.court),
+          chamber = COALESCE(EXCLUDED.chamber, documents.chamber),
+          dispute_category = COALESCE(EXCLUDED.dispute_category, documents.dispute_category),
+          outcome = COALESCE(EXCLUDED.outcome, documents.outcome),
+          deviation_flag = COALESCE(EXCLUDED.deviation_flag, documents.deviation_flag),
           full_text = COALESCE(EXCLUDED.full_text, documents.full_text),
           full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
           metadata = documents.metadata || EXCLUDED.metadata,
@@ -48,6 +62,12 @@ export class DocumentService {
         doc.type,
         doc.title || null,
         doc.date || null,
+        doc.case_number || null,
+        doc.court || null,
+        doc.chamber || null,
+        doc.dispute_category || null,
+        doc.outcome || null,
+        doc.deviation_flag ?? null,
         doc.full_text || null,
         doc.full_text_html || null,
         JSON.stringify(doc.metadata || {}),
@@ -84,12 +104,20 @@ export class DocumentService {
         
         const query = `
           INSERT INTO documents (
-            id, zakononline_id, type, title, date, full_text, full_text_html, metadata, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+            id, zakononline_id, type, title, date,
+            case_number, court, chamber, dispute_category, outcome, deviation_flag,
+            full_text, full_text_html, metadata, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
           ON CONFLICT (zakononline_id) 
           DO UPDATE SET
             title = EXCLUDED.title,
             date = EXCLUDED.date,
+            case_number = COALESCE(EXCLUDED.case_number, documents.case_number),
+            court = COALESCE(EXCLUDED.court, documents.court),
+            chamber = COALESCE(EXCLUDED.chamber, documents.chamber),
+            dispute_category = COALESCE(EXCLUDED.dispute_category, documents.dispute_category),
+            outcome = COALESCE(EXCLUDED.outcome, documents.outcome),
+            deviation_flag = COALESCE(EXCLUDED.deviation_flag, documents.deviation_flag),
             full_text = COALESCE(EXCLUDED.full_text, documents.full_text),
             full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
             metadata = documents.metadata || EXCLUDED.metadata,
@@ -103,6 +131,12 @@ export class DocumentService {
           doc.type,
           doc.title || null,
           doc.date || null,
+          doc.case_number || null,
+          doc.court || null,
+          doc.chamber || null,
+          doc.dispute_category || null,
+          doc.outcome || null,
+          doc.deviation_flag ?? null,
           doc.full_text || null,
           doc.full_text_html || null,
           JSON.stringify(doc.metadata || {}),
