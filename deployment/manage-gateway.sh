@@ -130,9 +130,15 @@ start_env() {
             if [ ! -f ".env.local" ]; then
                 print_msg "$YELLOW" "⚠️  .env.local not found. Using defaults from docker-compose.local.yml"
                 print_msg "$YELLOW" "    Copy .env.local.example to .env.local for custom configuration"
-                $compose_cmd -f docker-compose.local.yml up -d
+                $compose_cmd -f docker-compose.local.yml up -d --build \
+                    postgres-local redis-local qdrant-local \
+                    app-local \
+                    rada-db-init-local rada-migrate-local rada-mcp-app-local
             else
-                $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d
+                $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d --build \
+                    postgres-local redis-local qdrant-local \
+                    app-local \
+                    rada-db-init-local rada-migrate-local rada-mcp-app-local
             fi
             ;;
         all)

@@ -39,6 +39,7 @@ describe('search_legal_precedents tool', () => {
     mcpAPI = new MCPQueryAPI(
       queryPlanner,
       zoAdapter,
+      zoAdapter,
       sectionizer,
       embeddingService,
       patternStore,

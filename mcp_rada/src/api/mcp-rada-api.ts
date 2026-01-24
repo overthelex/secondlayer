@@ -31,7 +31,9 @@ export class MCPRadaAPI {
     private votingService: VotingService,
     private crossRefService: CrossReferenceService,
     private _costTracker: CostTracker
-  ) {}
+  ) {
+    void this._costTracker;
+  }
 
   getTools() {
     return [

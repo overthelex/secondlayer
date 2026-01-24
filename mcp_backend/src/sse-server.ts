@@ -29,14 +29,15 @@ dotenv.config();
  * - Accepts MCP JSON-RPC requests
  * - Returns responses via SSE stream
  */
-class SSEMCPServer {
+class SSEServer {
   private app: express.Application;
   private db: Database;
   private documentService: DocumentService;
-  private zoAdapter: ZOAdapter;
   private queryPlanner: QueryPlanner;
   private sectionizer: SemanticSectionizer;
   private embeddingService: EmbeddingService;
+  private zoAdapter: ZOAdapter;
+  private zoPracticeAdapter: ZOAdapter;
   private patternStore: LegalPatternStore;
   private citationValidator: CitationValidator;
   private hallucinationGuard: HallucinationGuard;
@@ -52,12 +53,14 @@ class SSEMCPServer {
     this.sectionizer = new SemanticSectionizer();
     this.embeddingService = new EmbeddingService();
     this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
+    this.zoPracticeAdapter = new ZOAdapter('court_practice', this.documentService, this.embeddingService);
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
+      this.zoPracticeAdapter,
       this.sectionizer,
       this.embeddingService,
       this.patternStore,
@@ -214,7 +217,7 @@ class SSEMCPServer {
     const port = parseInt(process.env.HTTP_PORT || '3000', 10);
     const host = process.env.HTTP_HOST || '0.0.0.0';
 
-    this.app.listen(port, host, () => {
+    const server = this.app.listen(port, host, () => {
       logger.info(`SSE MCP Server started on http://${host}:${port}`);
       logger.info('Remote MCP endpoint: POST /v1/sse');
       logger.info('Health check: GET /health');
@@ -227,12 +230,14 @@ class SSEMCPServer {
       logger.info('    }');
       logger.info('  }');
     });
+
+    void server;
   }
 }
 
 // Start server
-const server = new SSEMCPServer();
-server.start().catch((error) => {
+const server = new SSEServer();
+server.start().catch((error: any) => {
   logger.error('Failed to start SSE MCP server:', error);
   process.exit(1);
 });
