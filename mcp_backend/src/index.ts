@@ -59,6 +59,7 @@ class SecondLayerMCPServer {
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
+    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
@@ -67,9 +68,9 @@ class SecondLayerMCPServer {
       this.embeddingService,
       this.patternStore,
       this.citationValidator,
-      this.hallucinationGuard
+      this.hallucinationGuard,
+      this.legislationTools
     );
-    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
 
     this.setupHandlers();
   }
