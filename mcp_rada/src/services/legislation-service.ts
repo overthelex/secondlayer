@@ -235,7 +235,7 @@ export class LegislationService {
 
       const result = await this.db.query(query, params);
 
-      return result.rows.map((row) => ({
+      return result.rows.map((row: any) => ({
         case_number: row.court_case_number,
         case_id: row.court_case_id,
         citation_count: row.citation_count,
