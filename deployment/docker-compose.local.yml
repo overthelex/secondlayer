@@ -46,11 +46,11 @@ services:
       - -lc
       - |
         echo "Initializing RADA schema/user...";
-        cat <<'SQL' | psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
-          -v rada_user="$RADA_POSTGRES_USER" \
-          -v rada_pass="$RADA_POSTGRES_PASSWORD" \
-          -v rada_schema="$RADA_POSTGRES_SCHEMA" \
-          -v db_name="$POSTGRES_DB"
+        cat <<'SQL' | psql -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+          -v rada_user="$$RADA_POSTGRES_USER" \
+          -v rada_pass="$$RADA_POSTGRES_PASSWORD" \
+          -v rada_schema="$$RADA_POSTGRES_SCHEMA" \
+          -v db_name="$$POSTGRES_DB"
 
         CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -107,8 +107,8 @@ services:
 
   app-local:
     build:
-      context: ../mcp_backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Dockerfile.mono-backend
     image: secondlayer-app:latest
     container_name: secondlayer-app-local
     command: ["node", "--max-old-space-size=2048", "dist/http-server.js"]
@@ -225,9 +225,6 @@ services:
           memory: 512M
 
   rada-migrate-local:
-    build:
-      context: ../mcp_rada
-      dockerfile: Dockerfile
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-local
     profiles: ["rada"]
@@ -254,8 +251,8 @@ services:
 
   rada-mcp-app-local:
     build:
-      context: ../mcp_rada
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-app-local
     profiles: ["rada"]

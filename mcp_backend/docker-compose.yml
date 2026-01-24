@@ -65,8 +65,8 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Dockerfile.mono-backend
     container_name: secondlayer-app
     environment:
       NODE_ENV: production
