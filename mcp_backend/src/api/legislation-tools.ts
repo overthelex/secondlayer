@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { LegislationService } from '../services/legislation-service';
+import { LegislationService, parseLegislationReference } from '../services/legislation-service';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { EmbeddingService } from '../services/embedding-service';
 import { logger } from '../utils/logger';
@@ -46,6 +46,54 @@ export class LegislationTools {
       full_text: article.full_text,
       url: article.url,
       metadata: article.metadata,
+    };
+
+    if (args.include_html) {
+      response.html = this.renderer.renderArticleHTML(article, {
+        theme: args.theme || 'light',
+        format: 'full',
+      });
+    }
+
+    return response;
+  }
+
+  async getLegislationSection(args: LegislationToolArgs): Promise<any> {
+    const query = typeof args.query === 'string' ? args.query.trim() : '';
+    const radaId = args.rada_id ? String(args.rada_id).trim() : '';
+    const articleNumber = args.article_number ? String(args.article_number).trim() : '';
+
+    let resolved = radaId && articleNumber ? { radaId, articleNumber } : null;
+    if (!resolved && query) {
+      resolved = parseLegislationReference(query);
+    }
+
+    if (!resolved) {
+      throw new Error('Provide either (rada_id + article_number) or query like "ст. 625 ЦК"');
+    }
+
+    logger.info('Getting legislation section', {
+      rada_id: resolved.radaId,
+      article_number: resolved.articleNumber,
+      from_query: Boolean(query) && !(radaId && articleNumber),
+    });
+
+    const article = await this.service.getArticle(resolved.radaId, resolved.articleNumber);
+    if (!article) {
+      return {
+        error: `Article ${resolved.articleNumber} not found in legislation ${resolved.radaId}`,
+        suggestion: 'Check if the article number is correct or if the legislation is available',
+      };
+    }
+
+    const response: any = {
+      rada_id: article.rada_id,
+      article_number: article.article_number,
+      title: article.title,
+      full_text: article.full_text,
+      url: article.url,
+      metadata: article.metadata,
+      resolved_from: query && !(radaId && articleNumber) ? { query } : undefined,
     };
 
     if (args.include_html) {
@@ -108,6 +156,46 @@ export class LegislationTools {
 
     const limit = args.limit || 10;
     logger.info(`Searching legislation: "${args.query}" (limit: ${limit})`);
+
+    const directRef = parseLegislationReference(args.query);
+    if (directRef) {
+      const article = await this.service.getArticle(directRef.radaId, directRef.articleNumber);
+      if (!article) {
+        return {
+          query: args.query,
+          total_found: 0,
+          articles: [],
+          suggestion: `Article ${directRef.articleNumber} not found in ${directRef.radaId}`,
+        };
+      }
+
+      const response: any = {
+        query: args.query,
+        resolved_reference: {
+          rada_id: directRef.radaId,
+          article_number: directRef.articleNumber,
+        },
+        total_found: 1,
+        articles: [
+          {
+            rada_id: article.rada_id,
+            article_number: article.article_number,
+            title: article.title,
+            full_text: article.full_text,
+            url: article.url,
+          },
+        ],
+      };
+
+      if (args.include_html) {
+        response.html = this.renderer.renderArticleHTML(article, {
+          theme: args.theme || 'light',
+          format: 'full',
+        });
+      }
+
+      return response;
+    }
 
     const articles = await this.service.findRelevantArticles(
       args.query,
@@ -246,6 +334,37 @@ export class LegislationTools {
             },
           },
           required: ['rada_id', 'article_number'],
+        },
+      },
+      {
+        name: 'get_legislation_section',
+        description: 'Отримати точний фрагмент/статтю за посиланням (наприклад, "ст. 625 ЦК") або за (rada_id + article_number). Повертає повний текст статті та посилання на джерело.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Посилання або короткий запит виду "ст. 625 ЦК" / "ст. 44 ПКУ" / "ст. 354 ЦПК"',
+            },
+            rada_id: {
+              type: 'string',
+              description: 'ID законодавчого акту (наприклад, "435-15" для ЦК, "436-15" для ГК, "2755-17" для ПКУ)',
+            },
+            article_number: {
+              type: 'string',
+              description: 'Номер статті (наприклад, "625", "44", "354-1")',
+            },
+            include_html: {
+              type: 'boolean',
+              description: 'Чи включати форматований HTML (за замовчуванням false)',
+            },
+            theme: {
+              type: 'string',
+              enum: ['light', 'dark'],
+              description: 'Тема для HTML (за замовчуванням light)',
+            },
+          },
+          required: [],
         },
       },
       {

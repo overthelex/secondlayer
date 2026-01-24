@@ -99,6 +99,9 @@ class SecondLayerMCPServer {
             case 'get_legislation_article':
               result = await this.legislationTools.getLegislationArticle(args as any);
               break;
+            case 'get_legislation_section':
+              result = await this.legislationTools.getLegislationSection(args as any);
+              break;
             case 'get_legislation_articles':
               result = await this.legislationTools.getLegislationArticles(args as any);
               break;
