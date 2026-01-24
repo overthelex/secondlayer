@@ -162,6 +162,9 @@ describe('get_legal_advice: CPC examples (first two questions)', () => {
 
     const citationValidator: any = {};
     const hallucinationGuard: any = {};
+    const legislationTools: any = {
+      searchLegislation: jest.fn(async () => ({ articles: [] })),
+    };
 
     const mcpAPI = new MCPQueryAPI(
       queryPlanner,
@@ -171,7 +174,8 @@ describe('get_legal_advice: CPC examples (first two questions)', () => {
       embeddingService,
       patternStore,
       citationValidator,
-      hallucinationGuard
+      hallucinationGuard,
+      legislationTools
     );
 
     const result = await mcpAPI.handleToolCall('get_legal_advice', {

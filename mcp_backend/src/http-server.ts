@@ -16,6 +16,7 @@ import { LegalPatternStore } from './services/legal-pattern-store.js';
 import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
+import { LegislationTools } from './api/legislation-tools.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
@@ -38,6 +39,7 @@ class HTTPMCPServer {
   private citationValidator: CitationValidator;
   private hallucinationGuard: HallucinationGuard;
   private mcpAPI: MCPQueryAPI;
+  private legislationTools: LegislationTools;
   private costTracker: CostTracker;
 
   constructor() {
@@ -54,6 +56,7 @@ class HTTPMCPServer {
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
+    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
@@ -62,7 +65,8 @@ class HTTPMCPServer {
       this.embeddingService,
       this.patternStore,
       this.citationValidator,
-      this.hallucinationGuard
+      this.hallucinationGuard,
+      this.legislationTools
     );
 
     // Initialize cost tracker and inject into adapters

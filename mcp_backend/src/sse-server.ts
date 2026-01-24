@@ -15,6 +15,7 @@ import { LegalPatternStore } from './services/legal-pattern-store.js';
 import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
+import { LegislationTools } from './api/legislation-tools.js';
 import { authenticateJWT } from './middleware/jwt-auth.js';
 
 dotenv.config();
@@ -42,6 +43,7 @@ class SSEServer {
   private citationValidator: CitationValidator;
   private hallucinationGuard: HallucinationGuard;
   private mcpAPI: MCPQueryAPI;
+  private legislationTools: LegislationTools;
 
   constructor() {
     this.app = express();
@@ -57,6 +59,7 @@ class SSEServer {
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
+    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
@@ -65,7 +68,8 @@ class SSEServer {
       this.embeddingService,
       this.patternStore,
       this.citationValidator,
-      this.hallucinationGuard
+      this.hallucinationGuard,
+      this.legislationTools
     );
 
     this.setupMiddleware();
