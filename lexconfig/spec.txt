@@ -1,0 +1,118 @@
+Ниже план, который прямо можно превращать в задачи в трекере. Он опирается на:
+
+lexconfig/pipeline_contracts.txt (контракты шагов pipeline)
+lexconfig/services_tooling_map.txt (мапа услуг → инструменты/источники/артефакты)
+lexconfig/classificationq.txt (intent schema)
+0) Базовые решения (зафиксировать до кода)
+[Версионирование контрактов]
+Везде использовать v1 (как в pipeline_contracts.txt), и держать backward-compat в MCP tools.
+[Единый trace]
+Ввести trace_id как обязательное поле во всех MCP вызовах (или как transport metadata, но тогда строго документировать).
+[Единый формат ошибок]
+Как в pipeline_contracts.txt: error.code/message/retryable/details.
+Acceptance: есть короткий ADR/заметка в репо (можно в docs/), что это утверждено.
+
+1) Этап MVP-1: “Pipeline kernel” (enterprise primitives) + минимальный legal_research
+Цель: end-to-end ответ на вопрос с источниками и валидацией (процесуалка + матеріальне), без Vault/DD/workflows.
+
+1.1. Реализовать MCP tools (primitives) по контрактам
+[MCP: classify_intent]
+Вход/выход строго по classificationq.txt + pipeline_contracts.txt.
+[MCP: retrieve_legal_sources]
+Минимально: получение источников из RADA (нормативка) + судпрактика (хотя бы ВС).
+Возвращать cases[], laws[], confidence.
+[MCP: extract_document_sections]
+Для cases.text и laws.text выделять секции (хотя бы: facts, reasoning, decision, norm).
+[MCP: analyze_legal_patterns]
+Из reasoning+facts извлекать success_arguments[], risk_factors[], confidence.
+[MCP: validate_response]
+Проверка, что каждое ключевое утверждение опирается на sources/citations.
+Acceptance:
+
+Прогон по “золотым примерам” (5–10 вопросов) даёт структурированный ответ + список источников.
+validate_response ловит случаи без источников (возвращает issues[]).
+1.2. Internal шаги (внутри оркестратора, не MCP)
+[internal: buildQueryContext(intent, query)]
+[internal: synthesizeAnswer(inputs)]
+На этом этапе можно сделать “черновой” синтез + ссылки, без финального форматирования A–G.
+Acceptance: один orchestrator-флоу (например get_legal_advice) делает chain 1→7.
+
+2) Этап MVP-2: Product tools для research (чтобы это стало “продаваемо”)
+Цель: качественный legal research по services_tooling_map.txt раздел 4.3.
+
+2.1. Нормативка (универсальная, не только процесуалка)
+[search_legislation] (новый или апгрейд search_procedural_norms)
+[get_legislation_section]
+Acceptance:
+
+По запросу “ст. 625 ЦК” возвращает точный фрагмент и ссылку на источник.
+Поддерживает минимум: ЦК/ГК/ПКУ/про ТОВ/АТ (как agreed coverage).
+2.2. Судпрактика (поиск + получение текста)
+[search_supreme_court_practice]
+[get_case_text / get_court_decision]
+Acceptance:
+
+По тезе находит 5–15 дел с метаданными и выдержками без выдуманных реквизитов.
+get_case_text возвращает текст пригодный для секционизации.
+2.3. Финальная упаковка результата
+[format_answer_pack]
+Приводит результат к вашему шаблону (A–G / norm-position-risks etc).
+Acceptance: ответы стабильно одного формата для разных типов вопросов.
+
+3) Этап 3: Document analysis (контракты/сравнение/риски по документам)
+Цель: закрыть услугу #1 из services.txt.
+
+3.1. Ингест документов
+[parse_document] (PDF/DOCX → text + metadata)
+3.2. Прикладные инструменты
+[extract_key_clauses]
+[summarize_document]
+[compare_documents] (semantic diff)
+Acceptance:
+
+Для контракта выдаёт таблицу ключевых клауз + risk report с цитатами.
+Для двух версий — список смысловых изменений с ссылками на места.
+4) Этап 4: Vault (хранилище, индекс, семантический поиск)
+Цель: закрыть услугу #4.
+
+4.1. Базовые операции
+[store_document], [get_document], [list_documents]
+[semantic_search] (по vault + фильтры)
+4.2. Привязка primitives
+При сохранении документа: parse_document → extract_document_sections → embeddings/index → analyze_legal_patterns (как метаданные).
+Acceptance:
+
+Документ сохраняется, ищется семантически, результаты ранжируются, есть метаданные по рискам/темам.
+5) Этап 5: Due Diligence (bulk + отчёты + scoring)
+Цель: закрыть услугу #2.
+
+[bulk_review_runner] (batch orchestration)
+[risk_scoring]
+[generate_dd_report] (таблица + summary)
+Переиспользование: extract_document_sections, analyze_legal_patterns, validate_response.
+Acceptance:
+
+На пачке документов формирует DD findings table.
+Каждый finding имеет ссылку на документ+anchor.
+6) Этап 6: Workflow automation + интеграции (enterprise)
+Цель: закрыть услугу #5.
+
+[build_workflow], [run_workflow]
+[workflow_router] (route по classify_intent)
+[log_event] (audit)
+Интеграции по необходимости: Outlook/Word/SharePoint/webhooks.
+Acceptance:
+
+Workflow можно воспроизвести по trace_id.
+Логи/audit позволяют восстановить входы/выходы шагов.
+Нефункциональные требования (обязательный checklist)
+Observability
+[Логирование] trace_id, tool_name, latency, cost estimate, cache hit/miss
+[Метрики] p95 latency по tool, error rate, avg cost, retrieval confidence distribution
+Cache/Retry
+[Cache] минимум на retrieve_legal_sources и (опционально) extract_document_sections
+[Retry policy] только для retryable=true, с backoff и лимитом бюджета
+Тест-план
+[Golden tests] 20–50 запросов (процесуалка/цивілка/корпоративне/податки)
+[Contract tests] валидация JSON Schema для каждого tool output
+[Hallucination tests] кейсы без источников → validate_response.issues MUST
