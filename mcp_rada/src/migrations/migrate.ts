@@ -11,7 +11,8 @@ async function runMigrations() {
     logger.info('Connected to database, running migrations...');
 
     // Get all migration files (*.sql) in sorted order
-    const migrationsDir = join(process.cwd(), 'src/migrations');
+    // Use __dirname to find migrations relative to compiled JS file location
+    const migrationsDir = join(__dirname, '../../src/migrations');
     const files = readdirSync(migrationsDir)
       .filter(f => f.endsWith('.sql'))
       .sort();

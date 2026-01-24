@@ -335,7 +335,7 @@ export class DocumentService {
         [documentId]
       );
 
-      return result.rows.map(row => ({
+      return result.rows.map((row: any) => ({
         type: row.section_type,
         text: row.text,
         start_index: row.start_index,
