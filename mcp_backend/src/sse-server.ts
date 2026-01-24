@@ -134,17 +134,50 @@ class SSEServer {
         // Setup handlers
         mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
           return {
-            tools: this.mcpAPI.getTools(),
+            tools: [
+              ...this.mcpAPI.getTools(),
+              ...this.legislationTools.getToolDefinitions(),
+            ],
           };
         });
 
         mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           try {
-            const result = await this.mcpAPI.handleToolCall(
-              request.params.name,
-              request.params.arguments || {}
-            );
-            return result;
+            const toolName = request.params.name;
+            const args = request.params.arguments || {};
+
+            if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
+              let result;
+              switch (toolName) {
+                case 'get_legislation_article':
+                  result = await this.legislationTools.getLegislationArticle(args as any);
+                  break;
+                case 'get_legislation_section':
+                  result = await this.legislationTools.getLegislationSection(args as any);
+                  break;
+                case 'get_legislation_articles':
+                  result = await this.legislationTools.getLegislationArticles(args as any);
+                  break;
+                case 'search_legislation':
+                  result = await this.legislationTools.searchLegislation(args as any);
+                  break;
+                case 'get_legislation_structure':
+                  result = await this.legislationTools.getLegislationStructure(args as any);
+                  break;
+                default:
+                  throw new Error(`Unknown legislation tool: ${toolName}`);
+              }
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(result, null, 2),
+                  },
+                ],
+              };
+            }
+
+            return await this.mcpAPI.handleToolCall(toolName, args);
           } catch (error: any) {
             logger.error('Tool call error:', error);
             return {
