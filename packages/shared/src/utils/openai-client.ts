@@ -1,0 +1,160 @@
+import OpenAI from 'openai';
+import { AsyncLocalStorage } from 'async_hooks';
+import { logger } from './logger';
+import { ModelSelector } from './model-selector';
+
+export interface RequestContext {
+  requestId: string;
+  task: string;
+}
+
+export const requestContext = new AsyncLocalStorage<RequestContext>();
+
+export interface CostTrackerInterface {
+  recordOpenAICall(params: {
+    requestId: string;
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    costUsd: number;
+    task: string;
+  }): Promise<void>;
+}
+
+export class OpenAIClientManager {
+  private clients: OpenAI[] = [];
+  private currentClientIndex: number = 0;
+  private costTracker: CostTrackerInterface | null = null;
+
+  constructor() {
+    const primaryKey = process.env.OPENAI_API_KEY;
+    const secondaryKey = process.env.OPENAI_API_KEY2;
+
+    if (primaryKey) {
+      this.clients.push(new OpenAI({ apiKey: primaryKey }));
+    }
+    if (secondaryKey) {
+      this.clients.push(new OpenAI({ apiKey: secondaryKey }));
+    }
+
+    if (this.clients.length === 0) {
+      logger.warn('No OpenAI API keys configured - OpenAI provider will be unavailable');
+      return;
+    }
+
+    logger.info(`OpenAI client manager initialized with ${this.clients.length} key(s)`);
+  }
+
+  isAvailable(): boolean {
+    return this.clients.length > 0;
+  }
+
+  getClient(): OpenAI {
+    if (this.clients.length === 0) {
+      throw new Error('No OpenAI API keys configured');
+    }
+    return this.clients[this.currentClientIndex];
+  }
+
+  rotateClient() {
+    if (this.clients.length > 1) {
+      this.currentClientIndex = (this.currentClientIndex + 1) % this.clients.length;
+      logger.info('Rotated to secondary OpenAI API key');
+    }
+  }
+
+  setCostTracker(tracker: CostTrackerInterface) {
+    this.costTracker = tracker;
+    logger.debug('Cost tracker attached to OpenAI client manager');
+  }
+
+  async executeWithRetry<T>(
+    operation: (client: OpenAI) => Promise<T>,
+    maxRetries: number = 3
+  ): Promise<T> {
+    if (this.clients.length === 0) {
+      throw new Error('OpenAI provider unavailable: no API keys configured');
+    }
+    let lastError: any;
+    const maxRotations = this.clients.length;
+
+    for (let rotation = 0; rotation < maxRotations; rotation++) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const client = this.getClient();
+          const result = await operation(client);
+
+          if (this.costTracker && result && typeof result === 'object') {
+            await this.trackOpenAIUsage(result);
+          }
+
+          return result;
+        } catch (error: any) {
+          lastError = error;
+
+          if (
+            (error.status === 429 || error.status === 401 || error.status === 403) &&
+            this.clients.length > 1 &&
+            rotation < maxRotations - 1
+          ) {
+            this.rotateClient();
+            break;
+          }
+
+          if (error.status === 429 && attempt < maxRetries) {
+            const retryAfter = error.headers?.['retry-after'] || Math.pow(2, attempt);
+            logger.warn(`Rate limited, waiting ${retryAfter}s before retry`);
+            await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+          } else if (attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+    }
+
+    throw new Error(
+      `OpenAI operation failed after ${maxRetries * maxRotations} attempts: ${lastError?.message}`
+    );
+  }
+
+  private async trackOpenAIUsage(response: any): Promise<void> {
+    const context = requestContext.getStore();
+    if (!context || !this.costTracker || !response.usage) {
+      return;
+    }
+
+    try {
+      const promptTokens = response.usage.prompt_tokens || 0;
+      const completionTokens = response.usage.completion_tokens || 0;
+      const totalTokens = response.usage.total_tokens || 0;
+
+      const costUsd = ModelSelector.estimateCostAccurate(
+        response.model || 'unknown',
+        promptTokens,
+        completionTokens
+      );
+
+      await this.costTracker.recordOpenAICall({
+        requestId: context.requestId,
+        model: response.model || 'unknown',
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
+        costUsd: costUsd,
+        task: context.task,
+      });
+    } catch (error) {
+      logger.error('Failed to track OpenAI usage:', error);
+    }
+  }
+}
+
+let openAIManager: OpenAIClientManager | null = null;
+
+export function getOpenAIManager(): OpenAIClientManager {
+  if (!openAIManager) {
+    openAIManager = new OpenAIClientManager();
+  }
+  return openAIManager;
+}

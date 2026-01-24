@@ -2,7 +2,7 @@
 
 This deployment setup creates two parallel environments on the gate server:
 - **Production**: https://legal.org.ua/
-- **Development**: https://legal.org.ua/development/
+- **Development**: https://dev.legal.org.ua/
 
 ## Architecture
 
@@ -101,7 +101,7 @@ After deployment:
   - Frontend: Routes to lexwebapp (port 8090)
   - API: Routes to /api → secondlayer-app-prod (port 3001)
 
-- **Development**: https://legal.org.ua/development/
+- **Development**: https://dev.legal.org.ua/
   - Frontend: Routes to lexwebapp-dev (port 8091)
   - API: Routes to /development/api → secondlayer-app-dev (port 3002)
 
@@ -112,8 +112,8 @@ Development environment uses the same `.env` file as production, with these diff
 - `NODE_ENV=development`
 - `LOG_LEVEL=debug`
 - `POSTGRES_DB=secondlayer_dev` (separate database)
-- `GOOGLE_CALLBACK_URL=https://legal.org.ua/development/auth/callback`
-- `FRONTEND_URL=https://legal.org.ua/development`
+- `GOOGLE_CALLBACK_URL=https://dev.legal.org.ua/auth/callback`
+- `FRONTEND_URL=https://dev.legal.org.ua`
 
 ## Troubleshooting
 

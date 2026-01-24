@@ -1,16 +1,14 @@
+
 # Deployment Files Index
 
 Complete index of all deployment files for the multi-environment setup.
-
 ## Quick Navigation
 
 - **Local Development**: [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md) - Start here for local development
 - **Getting Started**: [`QUICK_START.md`](./QUICK_START.md) - Deploy to gateway server
 - **Full Documentation**: [`GATEWAY_SETUP.md`](./GATEWAY_SETUP.md) - Complete setup guide
 - **Architecture**: [`ARCHITECTURE.md`](./ARCHITECTURE.md) - System architecture
-
 ## Docker Compose Files
-
 ### Environment Configurations
 | File | Purpose | Location | Containers |
 |------|---------|----------|-----------|
@@ -19,12 +17,9 @@ Complete index of all deployment files for the multi-environment setup.
 | [`docker-compose.stage.yml`](./docker-compose.stage.yml) | Staging environment | Gate server | app-stage, postgres-stage, redis-stage, qdrant-stage, lexwebapp-stage |
 | [`docker-compose.prod.yml`](./docker-compose.prod.yml) | Production environment | Gate server | app-prod, postgres-prod, redis-prod, qdrant-prod, lexwebapp-prod |
 | [`docker-compose.gateway.yml`](./docker-compose.gateway.yml) | Nginx gateway proxy | Gate server | legal-nginx-gateway |
-
 ## Configuration Files
-
 ### Nginx Configuration
 - [`nginx-gateway-3env.conf`](./nginx-gateway-3env.conf) - Routes traffic to all 3 environments
-
 ### Environment Variables (Templates)
 - [`.env.local.example`](./.env.local.example) - Local development variables template (your machine)
 - [`.env.dev.example`](./.env.dev.example) - Development environment variables template (gate server)
@@ -32,9 +27,7 @@ Complete index of all deployment files for the multi-environment setup.
 - [`.env.prod.example`](./.env.prod.example) - Production environment variables template (gate server)
 
 **⚠️ Important**: Copy `.env.*.example` to `.env.*` and fill in real values before starting.
-
 ## Scripts
-
 ### Management Script
 - [`manage-gateway.sh`](./manage-gateway.sh) - Main deployment management script
 
@@ -49,10 +42,9 @@ Complete index of all deployment files for the multi-environment setup.
 **Usage**:
 ```bash
 ./manage-gateway.sh <command> [environment]
-```
+```bash
 
 See `./manage-gateway.sh` (no arguments) for full help.
-
 ## Documentation
 
 | Document | Description | Audience |
@@ -63,7 +55,6 @@ See `./manage-gateway.sh` (no arguments) for full help.
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Architecture details | Technical team |
 | [`INDEX.md`](./INDEX.md) | This file - index of all files | Everyone |
 | [`README.md`](./README.md) | Legacy docs (2-env) | Reference only |
-
 ## Deployment Workflow
 
 ```mermaid
@@ -73,8 +64,7 @@ graph LR
     C --> D[Start gateway]
     D --> E[Configure SSL]
     E --> F[Deploy to gate]
-```
-
+```bash
 ### Step-by-Step
 
 1. **Setup**: Copy and configure `.env.*.example` → `.env.*`
@@ -83,7 +73,6 @@ graph LR
 4. **Gateway**: Run `./manage-gateway.sh gateway start`
 5. **SSL**: Configure system nginx for SSL termination
 6. **Deploy**: Run `./manage-gateway.sh deploy all`
-
 ## Port Reference
 
 | Environment | Backend | Frontend | PostgreSQL | Redis | Qdrant |
@@ -93,19 +82,17 @@ graph LR
 | Staging | 3002 | 8092 | 5434 | 6381 | 6337-6338 |
 | Production | 3001 | 8090 | 5432 | 6379 | 6333-6334 |
 | **Gateway** | **8080** | - | - | - | - |
-
 ## URL Structure
 
-```
+```bash
 http://localhost:3000                    → Local (your machine)
-https://legal.org.ua/development/        → Development (gate server)
-https://legal.org.ua/staging/            → Staging (gate server)
+https://dev.legal.org.ua/        → Development (gate server)
+https://stage.legal.org.ua/            → Staging (gate server)
 https://legal.org.ua/                    → Production (gate server)
-```
-
+```bash
 ## File Structure
 
-```
+```bash
 deployment/
 ├── docker-compose.local.yml         # Local development (your machine)
 ├── docker-compose.dev.yml           # Development (gate server)
@@ -128,8 +115,7 @@ deployment/
 ├── ARCHITECTURE.md                  # Architecture details
 ├── INDEX.md                         # This file
 └── README.md                        # Legacy docs
-```
-
+```bash
 ## Environment Variables Required
 
 Each `.env.*` file needs:
@@ -152,53 +138,45 @@ Each `.env.*` file needs:
 - `ZAKONONLINE_API_TOKEN2` - Fallback token
 - `ANTHROPIC_API_KEY` - For Claude models
 - `LLM_PROVIDER_STRATEGY` - Model selection strategy
-
 ## Common Commands
 
 ```bash
+
 # Local development (your machine)
 ./manage-gateway.sh start local      # Start local environment
 ./manage-gateway.sh stop local       # Stop local environment
 ./manage-gateway.sh logs local       # View local logs
-
 # Gateway environments (gate server)
 ./manage-gateway.sh start all        # Start all gateway envs (dev+stage+prod)
 ./manage-gateway.sh stop dev         # Stop specific environment
 ./manage-gateway.sh logs prod        # View production logs
-
 # Management
 ./manage-gateway.sh status           # View status of all containers
 ./manage-gateway.sh health           # Check health of all services
-
 # Deploy to gate server
 ./manage-gateway.sh deploy all       # Deploy all environments to gate
-
 # Gateway operations (gate server)
 ./manage-gateway.sh gateway start    # Start nginx gateway
 ./manage-gateway.sh gateway restart  # Restart nginx gateway
 ./manage-gateway.sh gateway test     # Test nginx configuration
-```
-
+```bash
 ## Troubleshooting Quick Links
 
 - **Health checks fail**: [`GATEWAY_SETUP.md#troubleshooting`](./GATEWAY_SETUP.md#troubleshooting)
 - **Port conflicts**: [`GATEWAY_SETUP.md#port-conflicts`](./GATEWAY_SETUP.md#port-conflicts)
 - **Database issues**: [`GATEWAY_SETUP.md#database-connection-issues`](./GATEWAY_SETUP.md#database-connection-issues)
 - **Nginx errors**: [`GATEWAY_SETUP.md#nginx-configuration-issues`](./GATEWAY_SETUP.md#nginx-configuration-issues)
-
 ## Support
 
 - **Documentation**: Start with `QUICK_START.md`, then `GATEWAY_SETUP.md`
 - **Issues**: Check `GATEWAY_SETUP.md#troubleshooting`
 - **Architecture**: See `ARCHITECTURE.md` for technical details
-
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.1.0 | 2026-01-21 | Added local development environment |
 | 1.0.0 | 2026-01-21 | Initial 3-environment gateway setup |
-
 ## Getting Started Checklist
 
 **For Local Development** (developers):

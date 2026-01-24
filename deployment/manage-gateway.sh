@@ -329,8 +329,8 @@ check_health() {
 
     # Staging
     print_msg "$YELLOW" "\n=== Staging ==="
-    curl -sf https://legal.org.ua/staging/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf https://legal.org.ua/staging > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
+    curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
     # Development
     print_msg "$YELLOW" "\n=== Development ==="

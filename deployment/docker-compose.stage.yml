@@ -97,8 +97,8 @@ services:
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: https://legal.org.ua/staging/auth/google/callback
-      FRONTEND_URL: https://legal.org.ua/staging
+      GOOGLE_CALLBACK_URL: https://stage.legal.org.ua/auth/google/callback
+      FRONTEND_URL: https://stage.legal.org.ua
       ALLOWED_ORIGINS: https://legal.org.ua
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -138,7 +138,7 @@ services:
       - "8092:80"
     environment:
       - NODE_ENV=staging
-      - VITE_API_URL=https://legal.org.ua/staging/api
+      - VITE_API_URL=https://stage.legal.org.ua/api
     networks:
       - secondlayer-stage-network
     restart: unless-stopped

@@ -1,16 +1,16 @@
 #!/bin/bash
 
 ##############################################################################
-# SecondLayer OAuth2 Deployment Script for gate.lexapp.co.ua (legal.org.ua)
+# SecondLayer OAuth2 Deployment Script for gate-server (legal.org.ua)
 ##############################################################################
 
 set -e  # Exit on error
 
-echo "🚀 SecondLayer OAuth2 Deployment to gate.lexapp.co.ua"
+echo "🚀 SecondLayer OAuth2 Deployment to gate-server"
 echo "============================================"
 
 # Configuration
-GATE_SERVER="gate.lexapp.co.ua"
+GATE_SERVER="gate-server"
 GATE_USER="root"  # Update this if needed
 REMOTE_PATH="/root/SecondLayer"  # Update this based on server location
 LOCAL_PATH="/Users/vovkes/ZOMCP/SecondLayer"

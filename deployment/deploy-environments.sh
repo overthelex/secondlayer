@@ -208,7 +208,7 @@ Environment Variables:
 
 URLs after deployment:
   Production:  https://legal.org.ua/
-  Development: https://legal.org.ua/development/
+  Development: https://dev.legal.org.ua/
 
 Example:
   ./deploy-environments.sh deploy
@@ -230,7 +230,7 @@ main() {
             update_system_nginx
             log_success "🚀 Complete deployment finished!"
             log_info "Production:  https://legal.org.ua/"
-            log_info "Development: https://legal.org.ua/development/"
+            log_info "Development: https://dev.legal.org.ua/"
             show_status
             ;;
         start-dev)
