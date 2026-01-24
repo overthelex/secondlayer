@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../utils/html-parser.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
 import { ModelSelector } from '../utils/model-selector.js';
+import { LegislationTools } from './legislation-tools.js';
 import axios from 'axios';
 
 export type StreamEventCallback = (event: {
@@ -29,8 +30,241 @@ export class MCPQueryAPI {
     private embeddingService: EmbeddingService,
     private patternStore: LegalPatternStore,
     private citationValidator: CitationValidator,
-    private hallucinationGuard: HallucinationGuard
+    private hallucinationGuard: HallucinationGuard,
+    private legislationTools: LegislationTools
   ) {}
+
+  private extractSourceStrings(sources: any): string[] {
+    if (!Array.isArray(sources)) return [];
+    const out: string[] = [];
+    for (const s of sources) {
+      if (!s) continue;
+      if (typeof s === 'string') {
+        out.push(s);
+        continue;
+      }
+      if (typeof s === 'object') {
+        if (typeof s.id === 'string') out.push(s.id);
+        if (typeof s.source_id === 'string') out.push(s.source_id);
+        if (typeof s.url === 'string') out.push(s.url);
+        if (typeof s.title === 'string') out.push(s.title);
+      }
+    }
+    return Array.from(new Set(out.filter((x) => String(x).trim().length > 0)));
+  }
+
+  private async classifyIntentTool(args: any) {
+    const query = String(args?.query || '').trim();
+    if (!query) {
+      throw new Error('query parameter is required');
+    }
+    const budget = (args?.budget || args?.reasoning_budget || 'standard') as 'quick' | 'standard' | 'deep';
+
+    const intent = await this.queryPlanner.classifyIntent(query, budget);
+    const domains = Array.isArray(intent?.domains) ? intent.domains : [];
+
+    const looksLikeWorkflow = domains.includes('workflow') || /workflow|інтеграц|integration/i.test(query);
+    const looksLikeVault = /vault|сховищ|хранилищ/i.test(query);
+    const looksLikeDD = /due\s*diligence|dd\b|перевірк|провер|m\&a/i.test(query);
+
+    const service = looksLikeWorkflow
+      ? 'workflow_automation'
+      : looksLikeVault
+        ? 'document_vault'
+        : looksLikeDD
+          ? 'due_diligence'
+          : 'legal_research';
+
+    const task = service === 'document_vault'
+      ? 'semantic_search'
+      : service === 'workflow_automation'
+        ? 'run_workflow'
+        : service === 'due_diligence'
+          ? 'bulk_review'
+          : 'answer_question';
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              service,
+              task,
+              inputs: {
+                question: query,
+                jurisdiction: 'UA',
+                language: 'uk',
+              },
+              depth: budget,
+              confidence: typeof intent?.confidence === 'number' ? intent.confidence : 0.7,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private async retrieveLegalSourcesTool(args: any) {
+    const ctx = args?.context && typeof args.context === 'object' ? args.context : {};
+    const query = String(ctx?.query || ctx?.search_query || args?.query || '').trim();
+    if (!query) {
+      throw new Error('context.query is required');
+    }
+
+    const casesLimitRaw = args?.limits?.cases ?? args?.limit ?? 10;
+    const lawsLimitRaw = args?.limits?.laws ?? 10;
+    const guidanceLimitRaw = args?.limits?.guidance ?? 5;
+    const casesLimit = Math.min(50, Math.max(0, Number(casesLimitRaw)));
+    const lawsLimit = Math.min(50, Math.max(0, Number(lawsLimitRaw)));
+    const guidanceLimit = Math.min(50, Math.max(0, Number(guidanceLimitRaw)));
+
+    const searchParams: any = {
+      meta: { search: query },
+      limit: Math.min(50, Math.max(0, casesLimit)),
+      offset: 0,
+    };
+
+    const resp = await this.zoAdapter.searchCourtDecisions(searchParams);
+    const norm = await this.zoAdapter.normalizeResponse(resp);
+    const rawCases = Array.isArray(norm?.data) ? norm.data : [];
+
+    const cases = rawCases.slice(0, casesLimit).map((d: any) => {
+      const docId = d?._raw?.doc_id ?? d?.doc_id ?? d?.zakononline_id;
+      const title = d?.title || d?.case_title || d?.doc_title || `case_${docId}`;
+      const url = d?.url || d?.link || d?._raw?.url;
+      const date = d?.adjudication_date || d?.date_publ || d?.date;
+      const court = d?.court || d?.court_name || d?.chamber;
+      const text = typeof d?.full_text === 'string'
+        ? d.full_text
+        : typeof d?.snippet === 'string'
+          ? d.snippet
+          : '';
+
+      return {
+        id: String(docId ?? ''),
+        source: 'zakononline',
+        title: String(title || ''),
+        url: url ? String(url) : undefined,
+        date: date ? String(date).slice(0, 10) : undefined,
+        court: court ? String(court) : undefined,
+        text: text ? String(text) : undefined,
+      };
+    });
+
+    const lawsResp = lawsLimit > 0
+      ? await this.legislationTools.searchLegislation({ query, limit: lawsLimit } as any)
+      : { articles: [] };
+    const lawArticles = Array.isArray(lawsResp?.articles) ? lawsResp.articles : [];
+    const laws = lawArticles.slice(0, lawsLimit).map((a: any) => ({
+      id: `${a?.rada_id || ''}:${a?.article_number || ''}`.replace(/:$/, ''),
+      source: 'rada',
+      title: a?.title || 'law_article',
+      url: a?.url,
+      article: a?.article_number,
+      text: a?.full_text,
+      rada_id: a?.rada_id,
+    }));
+
+    const guidance = guidanceLimit > 0 ? [] : [];
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              cases,
+              laws,
+              guidance,
+              confidence: cases.length > 0 || laws.length > 0 ? 0.75 : 0.3,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private async analyzeLegalPatternsTool(args: any) {
+    const query = typeof args?.query === 'string' ? args.query.trim() : '';
+    const docs = Array.isArray(args?.documents) ? args.documents : [];
+
+    const queryText = query || (docs.length > 0 ? JSON.stringify(docs[0]).slice(0, 500) : '');
+    if (!queryText) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ success_arguments: [], risk_factors: [], confidence: 0.2 }, null, 2),
+          },
+        ],
+      };
+    }
+
+    const emb = await this.embeddingService.generateEmbedding(queryText);
+    const matched = await this.patternStore.matchPatterns(emb, 'general_search');
+    const success_arguments = matched.flatMap((p: any) => Array.isArray(p?.success_arguments) ? p.success_arguments : []).slice(0, 15);
+    const risk_factors = matched.flatMap((p: any) => Array.isArray(p?.risk_factors) ? p.risk_factors : []).slice(0, 15);
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              success_arguments,
+              risk_factors,
+              confidence: matched.length > 0 ? 0.7 : 0.35,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
+
+  private async validateResponseTool(args: any) {
+    const answer = String(args?.answer || '').trim();
+    if (!answer) {
+      throw new Error('answer parameter is required');
+    }
+
+    const sources = this.extractSourceStrings(args?.sources);
+    const validation = await this.hallucinationGuard.validateResponse(answer, sources);
+
+    const issues: Array<{ type: string; message: string }> = [];
+    for (const c of validation.claims_without_sources || []) {
+      issues.push({ type: 'missing_source', message: c });
+    }
+    for (const c of validation.invalid_citations || []) {
+      issues.push({ type: 'invalid_citation', message: c });
+    }
+    for (const w of validation.warnings || []) {
+      issues.push({ type: 'warning', message: w });
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              is_valid: Boolean(validation.is_valid),
+              confidence: typeof validation.confidence === 'number' ? validation.confidence : 0.5,
+              issues,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  }
 
   private async resolveCourtDecisionDocIdByCaseNumber(caseNumber: string): Promise<number | null> {
     const cn = String(caseNumber || '').trim();
@@ -1186,6 +1420,62 @@ export class MCPQueryAPI {
   getTools() {
     return [
       {
+        name: 'classify_intent',
+        description: 'Класифікація запиту: service/task/depth (entry-point для роутингу pipeline)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            context: { type: 'object' },
+            reasoning_budget: { type: 'string', enum: ['quick', 'standard', 'deep'] },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'retrieve_legal_sources',
+        description: 'RAG retrieval: вернет сырые источники (cases/laws/guidance) без анализа',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            context: { type: 'object' },
+            limits: {
+              type: 'object',
+              properties: {
+                cases: { type: 'number' },
+                laws: { type: 'number' },
+                guidance: { type: 'number' },
+              },
+            },
+          },
+          required: ['context'],
+        },
+      },
+      {
+        name: 'analyze_legal_patterns',
+        description: 'Выделяет success_arguments/risk_factors по источникам/контексту',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            documents: { type: 'array', items: { type: 'object' } },
+            query: { type: 'string' },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'validate_response',
+        description: 'Trust layer: проверка, что ответ опирается на источники (anti-hallucination)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            answer: { type: 'string' },
+            sources: { type: 'array', items: { type: 'object' } },
+          },
+          required: ['answer', 'sources'],
+        },
+      },
+      {
         name: 'search_legal_precedents',
         description: `Поиск юридических прецедентов с семантическим анализом
 
@@ -1694,6 +1984,14 @@ export class MCPQueryAPI {
 
     try {
       switch (name) {
+        case 'classify_intent':
+          return await this.classifyIntentTool(args);
+        case 'retrieve_legal_sources':
+          return await this.retrieveLegalSourcesTool(args);
+        case 'analyze_legal_patterns':
+          return await this.analyzeLegalPatternsTool(args);
+        case 'validate_response':
+          return await this.validateResponseTool(args);
         case 'search_legal_precedents':
           return await this.searchLegalPrecedents(args);
         case 'analyze_case_pattern':

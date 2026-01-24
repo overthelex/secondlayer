@@ -7,6 +7,7 @@ import { LegalPatternStore } from '../../services/legal-pattern-store.js';
 import { CitationValidator } from '../../services/citation-validator.js';
 import { HallucinationGuard } from '../../services/hallucination-guard.js';
 import { Database } from '../../database/database.js';
+import { LegislationTools } from '../legislation-tools.js';
 
 describe('search_legal_precedents tool', () => {
   let mcpAPI: MCPQueryAPI;
@@ -18,6 +19,7 @@ describe('search_legal_precedents tool', () => {
   let patternStore: LegalPatternStore;
   let citationValidator: CitationValidator;
   let hallucinationGuard: HallucinationGuard;
+  let legislationTools: LegislationTools;
 
   beforeAll(async () => {
     // Initialize database
@@ -34,6 +36,7 @@ describe('search_legal_precedents tool', () => {
     patternStore = new LegalPatternStore(db, embeddingService);
     citationValidator = new CitationValidator(db);
     hallucinationGuard = new HallucinationGuard(db);
+    legislationTools = new LegislationTools(db.getPool(), embeddingService);
 
     // Initialize MCP API
     mcpAPI = new MCPQueryAPI(
@@ -44,7 +47,8 @@ describe('search_legal_precedents tool', () => {
       embeddingService,
       patternStore,
       citationValidator,
-      hallucinationGuard
+      hallucinationGuard,
+      legislationTools
     );
   }, 60000);
 
