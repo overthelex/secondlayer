@@ -371,7 +371,7 @@ export class BillService {
     }
 
     return {
-      id: raw.id || raw.bill_id || raw.number || raw.bill_number || uuidv4(),
+      id: raw.id || uuidv4(),
       bill_number: raw.number || raw.bill_number,
       title: raw.name || raw.title,
       registration_date: raw.reg_date || raw.registration_date || null,

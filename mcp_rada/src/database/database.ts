@@ -5,12 +5,15 @@ export class Database {
   private pool: Pool;
 
   constructor() {
+    const schema = (process.env.POSTGRES_SCHEMA || '').trim();
+    const schemaSearchPath = schema ? `${schema},public` : undefined;
     this.pool = new Pool({
       host: process.env.POSTGRES_HOST || 'localhost',
       port: parseInt(process.env.POSTGRES_PORT || '5433'),
       user: process.env.POSTGRES_USER || 'rada_mcp',
       password: process.env.POSTGRES_PASSWORD || 'rada_password',
       database: process.env.POSTGRES_DB || 'rada_db',
+      ...(schemaSearchPath ? { options: `-c search_path=${schemaSearchPath}` } : {}),
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,

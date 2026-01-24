@@ -14,7 +14,7 @@ export class ZakonRadaAdapter {
   private baseURL = 'https://zakon.rada.gov.ua';
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 500; // 500ms between requests
-  private _costTracker?: CostTracker;
+  private costTracker?: CostTracker;
 
   constructor() {
     this.client = axios.create({
@@ -27,12 +27,11 @@ export class ZakonRadaAdapter {
       },
     });
 
-    void this._costTracker;
     logger.info('ZakonRadaAdapter initialized');
   }
 
   setCostTracker(costTracker: CostTracker): void {
-    this._costTracker = costTracker;
+    this.costTracker = costTracker;
     logger.debug('Cost tracker set for ZakonRadaAdapter');
   }
 
@@ -75,6 +74,15 @@ export class ZakonRadaAdapter {
       const response = await this.client.get(endpoint);
       const html = response.data;
 
+      if (this.costTracker) {
+        await this.costTracker.recordRadaAPICall({
+          requestId: 'zakon-rada-adapter',
+          endpoint,
+          cached: false,
+          bytes: typeof html === 'string' ? Buffer.byteLength(html, 'utf8') : undefined,
+        });
+      }
+
       // Parse HTML with Cheerio
       const $ = cheerio.load(html);
 
@@ -102,7 +110,7 @@ export class ZakonRadaAdapter {
       const plainText = mainText.replace(/\s+/g, ' ').trim();
 
       // Try to extract articles if structured
-      const articles = this.extractArticles($, html);
+      const articles = this.extractArticles($);
 
       const result: ZakonRadaLawResponse = {
         number: lawNumber,
@@ -132,7 +140,7 @@ export class ZakonRadaAdapter {
   /**
    * Extract articles from law HTML
    */
-  private extractArticles($: cheerio.CheerioAPI, _html: string): { number: string; title?: string; text: string }[] {
+  private extractArticles($: cheerio.CheerioAPI): { number: string; title?: string; text: string }[] {
     const articles: { number: string; title?: string; text: string }[] = [];
 
     // Try different article patterns
