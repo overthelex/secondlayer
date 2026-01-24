@@ -1,204 +1,209 @@
-# SecondLayer - Legal Documents Analysis Platform
+# SecondLayer MCP Backend
 
-Платформа для работы с юридическими документами из Zakononline с использованием MCP (Model Context Protocol) и веб-админкой.
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)
+![MCP](https://img.shields.io/badge/MCP-SDK-6E56CF)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-DB-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?logo=redis&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-FF4D4D)
+![OpenAI](https://img.shields.io/badge/OpenAI-API-000000?logo=openai&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-## Структура проекта
+`SecondLayer` — MCP (Model Context Protocol) серверный слой для семантической работы с юридическими данными (в т.ч. интеграция с Zakononline), с поддержкой нескольких транспортов запуска:
 
-```
-SecondLayer/
-├── mcp_backend/        # MCP сервер для работы с документами
-├── frontend/           # Веб-админка (React + Refine + Ant Design)
-├── .env                # Конфигурация (не в git)
-└── package.json        # Root package.json
-```
+- **MCP stdio** (для локальной интеграции с MCP-клиентами)
+- **HTTP API** (для приложений/админок и прямых вызовов)
+- **Remote MCP over SSE** (для удалённых клиентов по HTTPS)
 
-## Компоненты
+Репозиторий — моно-репо, но этот `README` сфокусирован на **@/mcp_backend** как на основном исполняемом сервисе.
 
-### 1. MCP Backend (`mcp_backend/`)
+## Что умеет `mcp_backend`
 
-Model Context Protocol сервер предоставляющий инструменты для:
-- Поиска судебных решений
-- Семантического анализа
-- Работы с юридическими паттернами
-- Валидации цитат
+- **MCP tools**: выполнение инструментов через MCP SDK.
+- **Поиск и извлечение** юридических документов/материалов (через адаптеры).
+- **Семантическая обработка** (эмбеддинги, секционирование, семантический поиск).
+- **Юридические паттерны** (хранилище/поиск паттернов).
+- **Валидация цитат** и защитные механизмы против галлюцинаций.
+- **Cost tracking**: трекинг стоимости запросов/операций на стороне сервера.
 
-**Запуск:**
+## Быстрый старт (локально)
+
+### 1) Установка
+
 ```bash
 cd mcp_backend
 npm install
-npm run dev:http    # HTTP режим на порту 3000
 ```
 
-Подробнее: [mcp_backend/README.md](mcp_backend/README.md)
+### 2) Конфигурация
 
-### 2. Frontend Admin Panel (`frontend/`)
-
-Современная админ-панель для управления документами.
-
-**Технологии:**
-- React 18
-- Refine - фреймворк для админок
-- Ant Design - UI компоненты
-- Lucide React - иконки
-- Vite - сборка
-
-**Запуск:**
-```bash
-cd frontend
-npm install
-npm run dev         # Запуск на порту 5173
-```
-
-Подробнее: [frontend/README.md](frontend/README.md)
-
-## 💰 Прозрачность стоимости
-
-SecondLayer предоставляет **полную прозрачность затрат** на все операции:
-
-- ✅ **Информация о стоимости в описании каждого инструмента** - пользователи видят примерную стоимость ДО использования
-- ✅ **Фактическая стоимость в ответе** - точная breakdown после выполнения
-- ✅ **Отслеживание в базе данных** - все затраты сохраняются для статистики
-- ✅ **Прогрессивные тарифы** - стоимость снижается с ростом объема использования
-
-**Примеры стоимости:**
-- `search_legal_precedents`: $0.03-$0.10 USD
-- `get_legal_advice`: $0.10-$0.30 USD (зависит от reasoning_budget)
-- `extract_document_sections`: $0.005-$0.05 USD
-
-Подробнее: **[docs/COST_TRANSPARENCY.md](docs/COST_TRANSPARENCY.md)**
-
-## Быстрый старт
-
-### 1. Установка зависимостей
+Создай файл `mcp_backend/.env` (пример есть в `mcp_backend/.env.example`). Минимально важные переменные:
 
 ```bash
-# MCP Backend
-cd mcp_backend
-npm install
-
-# Frontend
-cd ../frontend
-npm install
-```
-
-### 2. Конфигурация
-
-Создайте `.env` файл в корне и в `mcp_backend/`:
-
-```bash
-# Root .env
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456
-
-# mcp_backend/.env
+# Database
 DATABASE_URL=postgresql://user:password@localhost:5432/secondlayer
+
+# Redis
 REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Qdrant
 QDRANT_URL=http://localhost:6333
+
+# LLM
 OPENAI_API_KEY=your-key
+
+# External data source
 ZAKONONLINE_API_TOKEN=your-token
+
+# Security (для HTTP mode)
 SECONDARY_LAYER_KEYS=test-key-123,dev-key-456
 ```
 
-Frontend (уже настроен в `frontend/.env`):
+### 3) Запуск
+
+- **MCP mode (stdio)**
+
 ```bash
-VITE_API_URL=http://localhost:3000/api
-VITE_SECONDARY_LAYER_KEY=test-key-123
+cd mcp_backend
+npm run dev
 ```
 
-### 3. Запуск
+- **HTTP API mode** (по умолчанию `http://0.0.0.0:3000`)
 
-**Терминал 1 - Backend:**
 ```bash
 cd mcp_backend
 npm run dev:http
 ```
 
-**Терминал 2 - Frontend:**
+- **Remote MCP over SSE**
+
 ```bash
-cd frontend  
-npm run dev
+cd mcp_backend
+npm run dev:sse
 ```
 
-Откройте http://localhost:5173
+## HTTP API (когда запущено `npm run dev:http`)
+
+- `GET /health`
+- `GET /api/tools` (список доступных tools)
+- `POST /api/tools/:toolName` (вызов tool)
+- `POST /api/tools/:toolName/stream` (SSE стриминг выполнения)
+- `POST /api/tools/batch` (batch вызовы)
+
+**Аутентификация:**
+
+- Для клиентского доступа используется `Authorization: Bearer <SECONDARY_LAYER_KEY>`.
+- Для админских/пользовательских сценариев в коде присутствует JWT/Passport (зависит от роутов).
+
+## Remote MCP over SSE (когда запущено `npm run dev:sse`)
+
+- `POST /v1/sse` — MCP JSON-RPC поверх SSE
+- `GET /health`
+
+Этот режим удобен для удалённого подключения MCP-клиентов по HTTPS (не через stdio).
+
+## Архитектура (упрощённо)
+
+```mermaid
+flowchart LR
+  subgraph Clients[Клиенты]
+    MCPClient[MCP client]
+    WebApp[Web app / Admin UI]
+    RemoteClient[Remote MCP client]
+  end
+
+  subgraph Transports[Транспорты]
+    STDIO[stdio (MCP)]
+    HTTP[HTTP API]
+    SSE[MCP over SSE]
+  end
+
+  subgraph Backend[mcp_backend]
+    API[MCPQueryAPI]
+    Services[Services]
+    Adapters[Adapters]
+    Cost[CostTracker]
+  end
+
+  subgraph Infra[Инфраструктура]
+    PG[(PostgreSQL)]
+    Redis[(Redis)]
+    Qdrant[(Qdrant)]
+  end
+
+  subgraph External[Внешние сервисы]
+    OpenAI[(OpenAI API)]
+    ZO[(Zakononline API)]
+  end
+
+  MCPClient --> STDIO --> API
+  WebApp --> HTTP --> API
+  RemoteClient --> SSE --> API
+
+  API --> Services
+  API --> Cost
+  Services --> Adapters
+  Services --> Infra
+  Cost --> PG
+
+  Adapters --> ZO
+  Services --> OpenAI
+  Services --> Qdrant
+  Services --> Redis
+  Services --> PG
+```
+
+## Структура (ключевое)
+
+```text
+mcp_backend/
+├── src/
+│   ├── adapters/         # интеграции с внешними источниками
+│   ├── api/              # MCP API (tool definitions + router)
+│   ├── database/         # подключение к БД
+│   ├── middleware/       # auth, JWT, dual auth
+│   ├── services/         # бизнес-логика (embeddings, patterns, validation, etc.)
+│   ├── utils/            # логирование и утилиты
+│   ├── index.ts          # MCP stdio entrypoint
+│   ├── http-server.ts    # HTTP server entrypoint
+│   └── sse-server.ts     # MCP over SSE entrypoint
+├── docs/
+├── scripts/
+└── migrations/
+```
+
+## Команды
+
+```bash
+cd mcp_backend
+npm run build
+npm run dev
+npm run dev:http
+npm run dev:sse
+npm run migrate
+npm test
+npm run lint
+```
 
 ## Docker
 
-Запуск через docker-compose:
+В `mcp_backend/` есть `Dockerfile` и `docker-compose` сценарии.
 
 ```bash
 cd mcp_backend
 docker-compose up -d
 ```
 
-## API
-
-### MCP Mode
-Используйте MCP SDK для подключения к серверу.
-
-### HTTP Mode
-- `GET /health` - Health check
-- `POST /api/search` - Поиск документов
-- `POST /api/analyze` - Анализ документа
-- Авторизация: `Authorization: Bearer <SECONDARY_LAYER_KEY>`
-
-## Разработка
-
-### Структура
-
-```
-mcp_backend/
-├── src/
-│   ├── adapters/       # API адаптеры
-│   ├── api/            # MCP endpoints
-│   ├── database/       # БД
-│   ├── services/       # Бизнес-логика
-│   ├── index.ts        # MCP entry point
-│   └── http-server.ts  # HTTP entry point
-
-frontend/
-├── src/
-│   ├── pages/          # Страницы админки
-│   ├── providers/      # Data providers
-│   ├── styles/         # Темы и стили
-│   └── App.tsx
-```
-
-### Технологии
-
-**Backend:**
-- TypeScript
-- Model Context Protocol SDK
-- PostgreSQL + Redis + Qdrant
-- OpenAI API
-- Express (HTTP mode)
-
-**Frontend:**
-- React + TypeScript
-- Refine framework
-- Ant Design 5
-- Lucide icons
-- Vite
-
 ## Документация
 
-### Основное
-- [MCP Backend README](mcp_backend/README.md)
-- [Frontend README](frontend/README.md)
-- [Frontend Setup Guide](frontend/SETUP.md)
-- [API Keys](KEYS.md)
-- [Quick Start](START.md)
-
-### MCP Protocol
-- [MCP Documentation](docs/mcp/00-README.md) - Полная документация по Model Context Protocol
-- [MCP Introduction](docs/mcp/01-introduction.md) - Введение в MCP
-
-### Стоимость и биллинг
-- [Cost Transparency](docs/COST_TRANSPARENCY.md) - Прозрачность стоимости операций
-- [Pricing](pricing.json) - Детальные тарифы на API
+- [mcp_backend/README.md](mcp_backend/README.md)
+- [mcp_backend/docs/CLIENT_INTEGRATION.md](mcp_backend/docs/CLIENT_INTEGRATION.md)
+- [mcp_backend/docs/SSE_STREAMING.md](mcp_backend/docs/SSE_STREAMING.md)
+- [mcp_backend/docs/DATABASE_SETUP.md](mcp_backend/docs/DATABASE_SETUP.md)
+- [docs/COST_TRANSPARENCY.md](docs/COST_TRANSPARENCY.md)
 
 ## Лицензия
 
 MIT
-
-## Авторы
-
-SecondLayer Team
