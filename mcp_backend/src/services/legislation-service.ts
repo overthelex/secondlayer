@@ -20,6 +20,67 @@ export interface LegislationSearchResult {
   rada_id: string;
 }
 
+export function parseLegislationReference(text: string): { radaId: string; articleNumber: string } | null {
+  const input = String(text || '').trim();
+  if (!input) return null;
+
+  const codeMap: Record<string, string> = {
+    'ЦПК': '1618-15',
+    'ГПК': '1798-12',
+    'КАС': '2747-15',
+    'КПК': '4651-17',
+    'ЦК': '435-15',
+    'ГК': '436-15',
+    'ПКУ': '2755-17',
+    'ПОДАТКОВИЙ КОДЕКС': '2755-17',
+  };
+
+  const normalized = input
+    .replace(/\s+/g, ' ')
+    .replace(/\u00A0/g, ' ')
+    .trim();
+
+  const patterns: Array<{ regex: RegExp; codeGroupIndex: number; articleGroupIndex: number } | { regex: RegExp; radaIdIndex: number; articleIndex: number }> = [
+    // Note: don't use \b for Cyrillic words (JS \b is ASCII-centric)
+    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
+    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)(\d{3,4}-\d{2}).*?ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, radaIdIndex: 1, articleIndex: 2 },
+  ];
+
+  for (const p of patterns) {
+    const match = normalized.match(p.regex);
+    if (!match) continue;
+
+    if ('radaIdIndex' in p) {
+      const radaId = match[p.radaIdIndex];
+      const articleNumber = match[p.articleIndex];
+      if (radaId && articleNumber) {
+        return { radaId, articleNumber };
+      }
+      continue;
+    }
+
+    const code = String(match[p.codeGroupIndex] || '').toUpperCase();
+    const articleNumber = String(match[p.articleGroupIndex] || '').trim();
+    const radaId = codeMap[code];
+    if (radaId && articleNumber) {
+      return { radaId, articleNumber };
+    }
+  }
+
+  const longForm = normalized.toUpperCase();
+  const longFormMatch = longForm.match(/(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu);
+  if (longFormMatch) {
+    const articleNumber = longFormMatch[1];
+    if (longForm.includes('ПОДАТКОВ') && codeMap['ПОДАТКОВИЙ КОДЕКС']) {
+      return { radaId: codeMap['ПОДАТКОВИЙ КОДЕКС'], articleNumber };
+    }
+  }
+
+  return null;
+}
+
 export class LegislationService {
   private adapter: RadaLegislationAdapter;
   private embeddingService: EmbeddingService;
@@ -333,41 +394,6 @@ export class LegislationService {
   }
 
   parseArticleReference(text: string): { radaId: string; articleNumber: string } | null {
-    const patterns = [
-      /стаття\s+(\d+(?:-\d+)?)\s+(?:ЦПК|ГПК|КАС|КПК)/i,
-      /(?:ЦПК|ГПК|КАС|КПК)\s+стаття\s+(\d+(?:-\d+)?)/i,
-      /(\d{3,4}-\d{2}).*?стаття\s+(\d+(?:-\d+)?)/i,
-    ];
-
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const codeMap: Record<string, string> = {
-          'ЦПК': '1618-15',
-          'ГПК': '435-15',
-          'КАС': '2747-15',
-          'КПК': '4651-17',
-        };
-
-        if (match[0].includes('ЦПК') || match[0].includes('ГПК') || match[0].includes('КАС') || match[0].includes('КПК')) {
-          const code = match[0].match(/(ЦПК|ГПК|КАС|КПК)/)?.[0];
-          if (code && codeMap[code]) {
-            return {
-              radaId: codeMap[code],
-              articleNumber: match[1],
-            };
-          }
-        }
-
-        if (match.length > 2) {
-          return {
-            radaId: match[1],
-            articleNumber: match[2],
-          };
-        }
-      }
-    }
-
-    return null;
+    return parseLegislationReference(text);
   }
 }

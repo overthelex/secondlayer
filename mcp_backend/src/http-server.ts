@@ -196,7 +196,10 @@ class HTTPMCPServer {
     // List available tools
     this.app.get('/api/tools', dualAuth as any, ((_req: DualAuthRequest, res: Response) => {
       try {
-        const tools = this.mcpAPI.getTools();
+        const tools = [
+          ...this.mcpAPI.getTools(),
+          ...this.legislationTools.getToolDefinitions(),
+        ];
         res.json({
           tools,
           count: tools.length,
@@ -259,6 +262,37 @@ class HTTPMCPServer {
         const result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
+            if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
+              let routed;
+              switch (toolName) {
+                case 'get_legislation_article':
+                  routed = await this.legislationTools.getLegislationArticle(args as any);
+                  break;
+                case 'get_legislation_section':
+                  routed = await this.legislationTools.getLegislationSection(args as any);
+                  break;
+                case 'get_legislation_articles':
+                  routed = await this.legislationTools.getLegislationArticles(args as any);
+                  break;
+                case 'search_legislation':
+                  routed = await this.legislationTools.searchLegislation(args as any);
+                  break;
+                case 'get_legislation_structure':
+                  routed = await this.legislationTools.getLegislationStructure(args as any);
+                  break;
+                default:
+                  throw new Error(`Unknown legislation tool: ${toolName}`);
+              }
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify(routed, null, 2),
+                  },
+                ],
+              };
+            }
+
             return await this.mcpAPI.handleToolCall(toolName, args);
           }
         );
