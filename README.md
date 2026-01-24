@@ -108,34 +108,34 @@ npm run dev:sse
 
 ```mermaid
 flowchart LR
-  subgraph Clients[Клиенты]
-    MCPClient[MCP client]
-    WebApp[Web app / Admin UI]
-    RemoteClient[Remote MCP client]
+  subgraph Clients["Клиенты"]
+    MCPClient["MCP client"]
+    WebApp["Web app / Admin UI"]
+    RemoteClient["Remote MCP client"]
   end
 
-  subgraph Transports[Транспорты]
-    STDIO[stdio (MCP)]
-    HTTP[HTTP API]
-    SSE[MCP over SSE]
+  subgraph Transports["Транспорты"]
+    STDIO["stdio (MCP)"]
+    HTTP["HTTP API"]
+    SSE["MCP over SSE"]
   end
 
-  subgraph Backend[mcp_backend]
-    API[MCPQueryAPI]
-    Services[Services]
-    Adapters[Adapters]
-    Cost[CostTracker]
+  subgraph Backend["mcp_backend"]
+    API["MCPQueryAPI"]
+    Services["Services"]
+    Adapters["Adapters"]
+    Cost["CostTracker"]
   end
 
-  subgraph Infra[Инфраструктура]
-    PG[(PostgreSQL)]
-    Redis[(Redis)]
-    Qdrant[(Qdrant)]
+  subgraph Infra["Инфраструктура"]
+    PG[("PostgreSQL")]
+    Redis[("Redis")]
+    Qdrant[("Qdrant")]
   end
 
-  subgraph External[Внешние сервисы]
-    OpenAI[(OpenAI API)]
-    ZO[(Zakononline API)]
+  subgraph External["Внешние сервисы"]
+    OpenAI[("OpenAI API")]
+    ZO[("Zakononline API")]
   end
 
   MCPClient --> STDIO --> API
