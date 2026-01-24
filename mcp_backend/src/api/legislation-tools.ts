@@ -93,7 +93,7 @@ export class LegislationTools {
       full_text: article.full_text,
       url: article.url,
       metadata: article.metadata,
-      resolved_from: query ? { query } : undefined,
+      resolved_from: query && !(radaId && articleNumber) ? { query } : undefined,
     };
 
     if (args.include_html) {
