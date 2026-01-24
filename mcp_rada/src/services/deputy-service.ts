@@ -381,7 +381,7 @@ export class DeputyService {
    */
   private transformRawDeputy(raw: any, convocation: number): Deputy {
     return {
-      id: raw.db_id || raw.id || raw.rada_id || uuidv4(),
+      id: raw.uuid || uuidv4(),
       rada_id: raw.id || raw.rada_id,
       full_name: raw.full_name || raw.name,
       short_name: raw.short_name || null,
@@ -411,9 +411,8 @@ export class DeputyService {
    * Get voting statistics for a deputy
    * This is a placeholder - actual implementation in voting-service.ts
    */
-  private async getVotingStatistics(radaId: string): Promise<any> {
+  private async getVotingStatistics(_radaId: string): Promise<any> {
     // TODO: Implement in voting-service.ts
-    void radaId;
     return {
       total_votes: 0,
       voted_for: 0,

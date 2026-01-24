@@ -63,6 +63,7 @@ export class RadaAPIAdapter {
    * Default: convocation 9 (current)
    */
   async fetchDeputies(convocation: number = 9): Promise<RadaDeputyRawData[]> {
+    void this._costTracker;
     await this.waitForRateLimit();
 
     const endpoint = `/ogd/mps/skl${convocation}/mps-data.json`;
@@ -104,6 +105,7 @@ export class RadaAPIAdapter {
    * Note: RADA API may have multiple endpoints for bills data
    */
   async fetchBills(filters?: { dateFrom?: string; dateTo?: string; convocation?: number }): Promise<RadaBillRawData[]> {
+    void this._costTracker;
     await this.waitForRateLimit();
 
     const convocation = filters?.convocation || 9;

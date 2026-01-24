@@ -65,10 +65,19 @@ CREATE INDEX IF NOT EXISTS idx_bill_impact_law ON bill_court_impact(related_law_
 CREATE INDEX IF NOT EXISTS idx_bill_impact_score ON bill_court_impact(impact_score);
 
 -- Add foreign key to bills table
-ALTER TABLE bill_court_impact
-  ADD CONSTRAINT fk_bill_impact_bill
-  FOREIGN KEY (bill_number) REFERENCES bills(bill_number)
-  ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_bill_impact_bill'
+  ) THEN
+    ALTER TABLE bill_court_impact
+      ADD CONSTRAINT fk_bill_impact_bill
+      FOREIGN KEY (bill_number) REFERENCES bills(bill_number)
+      ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Deputy activity in court cases (track when deputies are mentioned in cases)
 CREATE TABLE IF NOT EXISTS deputy_court_mentions (
@@ -94,10 +103,19 @@ CREATE INDEX IF NOT EXISTS idx_deputy_mentions_case ON deputy_court_mentions(cou
 CREATE INDEX IF NOT EXISTS idx_deputy_mentions_type ON deputy_court_mentions(mention_type);
 
 -- Add foreign key to deputies table
-ALTER TABLE deputy_court_mentions
-  ADD CONSTRAINT fk_deputy_mentions_deputy
-  FOREIGN KEY (deputy_id) REFERENCES deputies(id)
-  ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_deputy_mentions_deputy'
+  ) THEN
+    ALTER TABLE deputy_court_mentions
+      ADD CONSTRAINT fk_deputy_mentions_deputy
+      FOREIGN KEY (deputy_id) REFERENCES deputies(id)
+      ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- Auto-update trigger for updated_at
 CREATE TRIGGER update_law_citations_updated_at BEFORE UPDATE ON law_court_citations

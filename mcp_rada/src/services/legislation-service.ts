@@ -385,7 +385,7 @@ export class LegislationService {
     }
 
     return {
-      id: raw.id || raw.law_id || raw.number || uuidv4(),
+      id: raw.id || uuidv4(),
       law_number: raw.number,
       law_alias: undefined,
       title: raw.title,

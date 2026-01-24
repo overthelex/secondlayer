@@ -32,7 +32,7 @@ export class MCPRadaAPI {
     private crossRefService: CrossReferenceService,
     private _costTracker: CostTracker
   ) {
-    void this._costTracker;
+    logger.debug('MCPRadaAPI initialized', { costTracking: Boolean(this._costTracker) });
   }
 
   getTools() {
