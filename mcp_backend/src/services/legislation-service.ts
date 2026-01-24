@@ -26,7 +26,7 @@ export function parseLegislationReference(text: string): { radaId: string; artic
 
   const codeMap: Record<string, string> = {
     'ЦПК': '1618-15',
-    'ГПК': '435-15',
+    'ГПК': '1798-12',
     'КАС': '2747-15',
     'КПК': '4651-17',
     'ЦК': '435-15',
