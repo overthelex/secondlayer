@@ -76,7 +76,7 @@ DELETE FROM user_sessions WHERE expires_at < NOW();
 ### SSH Access
 
 ```bash
-ssh root@gate.lexapp.co.ua
+ssh root@gate-server
 ```
 
 ### PM2 Management
@@ -275,7 +275,7 @@ If deployment fails:
 
 ```bash
 # On gate server
-ssh root@gate.lexapp.co.ua
+ssh root@gate-server
 
 # Find latest backup
 BACKUP=$(ls -td /root/SecondLayer_backup_* | head -1)
@@ -293,7 +293,7 @@ systemctl reload nginx
 
 ```bash
 # Check everything at once
-ssh root@gate.lexapp.co.ua << 'EOF'
+ssh root@gate-server << 'EOF'
   echo "=== PM2 Status ==="
   pm2 status
   echo ""

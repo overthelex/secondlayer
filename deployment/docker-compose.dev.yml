@@ -110,8 +110,8 @@ services:
       # Google OAuth2 (with development URLs)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: https://legal.org.ua/development/auth/callback
-      FRONTEND_URL: https://legal.org.ua/development
+      GOOGLE_CALLBACK_URL: https://dev.legal.org.ua/auth/callback
+      FRONTEND_URL: https://dev.legal.org.ua
       ALLOWED_ORIGINS: https://legal.org.ua
 
       # Logging
@@ -161,7 +161,7 @@ services:
       - "8091:80"
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=https://legal.org.ua/development/api
+      - VITE_API_URL=https://dev.legal.org.ua/api
     networks:
       - secondlayer-dev-network
     restart: unless-stopped

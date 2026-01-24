@@ -84,8 +84,8 @@ cp .env.prod.example .env.prod
 ./manage-gateway.sh gateway start
 
 # Access
-open https://legal.org.ua/development
-open https://legal.org.ua/staging
+open https://dev.legal.org.ua
+open https://stage.legal.org.ua
 open https://legal.org.ua
 ```
 
@@ -198,7 +198,7 @@ git pull origin staging
 ./manage-gateway.sh restart stage
 
 # Verify
-curl https://legal.org.ua/staging/health
+curl https://stage.legal.org.ua/health
 ```
 
 ### Scenario 4: Production Deployment
@@ -244,8 +244,8 @@ SECONDARY_LAYER_KEYS=local-dev-key   # Simple key OK
 NODE_ENV=development
 LOG_LEVEL=debug
 HTTP_PORT=3003
-GOOGLE_CALLBACK_URL=https://legal.org.ua/development/auth/google/callback
-FRONTEND_URL=https://legal.org.ua/development
+GOOGLE_CALLBACK_URL=https://dev.legal.org.ua/auth/google/callback
+FRONTEND_URL=https://dev.legal.org.ua
 ```
 
 ### Staging (.env.stage)
@@ -256,8 +256,8 @@ FRONTEND_URL=https://legal.org.ua/development
 NODE_ENV=staging
 LOG_LEVEL=info
 HTTP_PORT=3002
-GOOGLE_CALLBACK_URL=https://legal.org.ua/staging/auth/google/callback
-FRONTEND_URL=https://legal.org.ua/staging
+GOOGLE_CALLBACK_URL=https://stage.legal.org.ua/auth/google/callback
+FRONTEND_URL=https://stage.legal.org.ua
 ```
 
 ### Production (.env.prod)
