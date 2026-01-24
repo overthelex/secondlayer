@@ -1,0 +1,270 @@
+0. Что сейчас есть (суть)
+
+get_legal_advice = monolithic expert tool, внутри которого уже:
+
+intent detection
+
+RAG
+
+pattern matching
+
+synthesis
+
+validation
+
+Мы не ломаем это, а выделяем стабильные шаги.
+
+1. Канонический decomposition: 7 шагов
+[1] classify_intent
+[2] build_query_context
+[3] retrieve_sources
+[4] extract_structures
+[5] analyze_patterns
+[6] synthesize_answer
+[7] validate_answer
+
+
+Каждый шаг:
+
+детерминирован по входу
+
+возвращает структурированный output
+
+может быть MCP tool ИЛИ internal function
+
+2. Step-by-step (что именно выносить)
+🔹 STEP 1 — classify_intent
+
+Назначение
+Понять что за вопрос и какие источники нужны.
+
+Input
+
+{ "query": "text" }
+
+
+Output
+
+{
+  "service": "legal_research",
+  "task": "answer_question",
+  "procedural_code": "cpc",
+  "jurisdiction": "UA",
+  "complexity": "deep"
+}
+
+
+👉 Уже есть у тебя как QueryPlanner.
+
+Reuse: entry-point для ВСЕХ tools.
+
+🔹 STEP 2 — build_query_context
+
+Назначение
+Подготовить structured context (без retrieval).
+
+Input
+
+{
+  "intent": {...},
+  "query": "text"
+}
+
+
+Output
+
+{
+  "search_hints": ["апеляція", "поновлення строку"],
+  "court_filters": ["КЦС", "ВП ВС"],
+  "law_filters": ["ЦПК"]
+}
+
+
+👉 Сейчас размазано между planner и search.
+
+Reuse: research, DD, workflow rules.
+
+🔹 STEP 3 — retrieve_sources (RAG)
+
+Назначение
+Достать сырые источники, без анализа.
+
+Input
+
+{
+  "context": {...}
+}
+
+
+Output
+
+{
+  "cases": [ ... ],
+  "laws": [ ... ],
+  "confidence": 0.82
+}
+
+
+👉 Здесь:
+
+ZakonOnline
+
+RADA
+
+Qdrant
+
+Reuse: ВСЁ (Vault, DD, research).
+
+🔹 STEP 4 — extract_structures
+
+Назначение
+Сделать источники машиночитаемыми.
+
+Input
+
+{ "cases": [...] }
+
+
+Output
+
+{
+  "facts": [...],
+  "reasoning": [...],
+  "decisions": [...]
+}
+
+
+👉 Это твой SemanticSectionizer.
+
+Reuse: pattern store, DD, analytics.
+
+🔹 STEP 5 — analyze_patterns
+
+Назначение
+Найти:
+
+типовые аргументы
+
+ризики
+
+success / failure signals
+
+Input
+
+{ "reasoning": [...] }
+
+
+Output
+
+{
+  "success_arguments": [...],
+  "risk_factors": [...],
+  "confidence": 0.74
+}
+
+
+👉 Уже есть как LegalPatternStore.
+
+Reuse: DD, risk scoring, prediction.
+
+🔹 STEP 6 — synthesize_answer
+
+Назначение
+Собрать человеческий ответ.
+
+Input
+
+{
+  "laws": [...],
+  "positions": [...],
+  "patterns": {...}
+}
+
+
+Output
+
+{
+  "answer_text": "...",
+  "citations": [...]
+}
+
+
+👉 Это единственный truly-LLM-heavy шаг.
+
+Reuse: reports, memos, emails.
+
+🔹 STEP 7 — validate_answer
+
+Назначение
+Убить галлюцинации.
+
+Input
+
+{
+  "answer": "...",
+  "sources": [...]
+}
+
+
+Output
+
+{
+  "is_valid": true,
+  "confidence": 0.91,
+  "issues": []
+}
+
+
+👉 Твой HallucinationGuard.
+
+Reuse: MUST everywhere.
+
+3. Как это выглядит как chain (явно)
+{
+  "chain": [
+    "classify_intent",
+    "build_query_context",
+    "retrieve_sources",
+    "extract_structures",
+    "analyze_patterns",
+    "synthesize_answer",
+    "validate_answer"
+  ],
+  "chain_type": "internal_or_explicit"
+}
+
+4. Как жить дальше (рекомендация)
+Оставить:
+
+get_legal_advice → orchestrator
+
+использовать steps внутри
+
+Добавить:
+
+возможность дергать steps по отдельности
+
+step-level:
+
+cost
+
+retry
+
+cache
+
+5. Главный выигрыш
+
+После этого ты можешь:
+
+собирать Due Diligence из тех же шагов
+
+делать Vault analytics без synthesis
+
+строить workflow rules на patterns
+
+дебажить не “LLM ответ”, а шаг №4 сломался
+
+6. Коротко
+
+get_legal_advice — это не tool,
+это pipeline, который пора формализовать.

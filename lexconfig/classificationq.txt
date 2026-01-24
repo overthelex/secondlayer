@@ -1,0 +1,133 @@
+1. Логика классификации (коротко)
+
+service — какой класс услуги запрошен
+
+task — что именно нужно сделать внутри услуги
+
+inputs — какие данные есть / ожидаются
+
+depth — глубина анализа (влияет на budget + pipeline)
+
+confidence — насколько уверена классификация (для fallback)
+
+2. JSON Schema (Draft 2020-12)
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Legal AI Service Intent Classification",
+  "type": "object",
+  "required": ["service", "task", "inputs", "depth"],
+  "properties": {
+    "service": {
+      "type": "string",
+      "enum": [
+        "document_analysis",
+        "due_diligence",
+        "legal_research",
+        "document_vault",
+        "workflow_automation"
+      ],
+      "description": "High-level service category"
+    },
+    "task": {
+      "type": "string",
+      "enum": [
+        "summarize",
+        "compare",
+        "extract_key_clauses",
+        "risk_detection",
+        "compliance_check",
+        "answer_question",
+        "find_sources",
+        "store_document",
+        "semantic_search",
+        "bulk_review",
+        "build_workflow",
+        "run_workflow"
+      ],
+      "description": "Specific task within the service"
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Document ID, filename, or URI"
+          }
+        },
+        "question": {
+          "type": "string",
+          "description": "User legal question (if applicable)"
+        },
+        "jurisdiction": {
+          "type": "string",
+          "description": "Jurisdiction, e.g. UA, EU, US"
+        },
+        "language": {
+          "type": "string",
+          "description": "Document or output language"
+        }
+      },
+      "additionalProperties": false
+    },
+    "depth": {
+      "type": "string",
+      "enum": ["quick", "standard", "deep"],
+      "description": "Reasoning depth / cost level"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Classifier confidence score"
+    }
+  },
+  "additionalProperties": false
+}
+
+3. Маппинг на твой список услуг
+1️⃣ Анализ и обработка юридических документов
+{
+  "service": "document_analysis",
+  "task": "extract_key_clauses",
+  "depth": "standard"
+}
+
+2️⃣ Due Diligence
+{
+  "service": "due_diligence",
+  "task": "risk_detection",
+  "depth": "deep"
+}
+
+3️⃣ Юридические исследования / ответы
+{
+  "service": "legal_research",
+  "task": "answer_question",
+  "depth": "deep"
+}
+
+4️⃣ Vault (хранилище)
+{
+  "service": "document_vault",
+  "task": "semantic_search",
+  "depth": "standard"
+}
+
+5️⃣ Workflow и интеграции
+{
+  "service": "workflow_automation",
+  "task": "build_workflow",
+  "depth": "standard"
+}
+
+4. Почему схема удачная для LLM + MCP
+
+🔹 service → выбор MCP tool
+
+🔹 task → конкретный handler / pipeline
+
+🔹 depth → model selector (quick / standard / deep)
+
+🔹 confidence < 0.6 → fallback / clarification

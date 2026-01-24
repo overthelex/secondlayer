@@ -1,0 +1,420 @@
+1. Цель
+
+Зафиксировать контракты (I/O) и границы MCP surface area для канонического legal pipeline.
+
+Ключевой принцип:
+- get_legal_advice = orchestrator pipeline
+- MCP tools = “что система умеет” (reusable primitives)
+- internal steps = “как конкретный эксперт думает” (glue/UX/tone)
+
+2. Канонический pipeline (v1)
+
+chain:
+1) classify_intent (MCP)
+2) build_query_context (internal)
+3) retrieve_legal_sources (MCP)
+4) extract_document_sections (MCP)
+5) analyze_legal_patterns (MCP)
+6) synthesize_answer (internal)
+7) validate_response (MCP)
+
+3. Общие поля и инварианты
+
+3.1. Trace envelope (рекомендуется)
+Каждый шаг может принимать/возвращать эти поля как метаданные:
+- trace_id: string
+- step_id: string
+- timestamp: string (ISO 8601)
+- cache_key: string (optional)
+- budget: { max_tokens?: number, max_cost_usd?: number } (optional)
+
+3.2. Детерминизм
+Для шагов classify_intent / build_query_context / retrieve_legal_sources при одинаковом входе допускается:
+- одинаковый структурированный output
+- либо эквивалентный по смыслу output при недетерминированном поиске источников (при этом MUST сохранять ссылки/идентификаторы источников без выдуманных реквизитов)
+
+3.3. Ошибки (унифицированный формат)
+{
+  "error": {
+    "code": "...",
+    "message": "...",
+    "retryable": true,
+    "details": {}
+  }
+}
+
+4. Step 1 — classify_intent (MCP tool)
+
+Tool name: classify_intent
+Назначение: определить сервис/задачу/глубину и базовые параметры юрисдикции.
+
+Input schema (Draft 2020-12):
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "classify_intent.input",
+  "type": "object",
+  "required": ["query"],
+  "properties": {
+    "query": { "type": "string" },
+    "context": { "type": "object" }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "classify_intent.output",
+  "type": "object",
+  "required": ["service", "task", "inputs", "depth"],
+  "properties": {
+    "service": {
+      "type": "string",
+      "enum": [
+        "document_analysis",
+        "due_diligence",
+        "legal_research",
+        "document_vault",
+        "workflow_automation"
+      ]
+    },
+    "task": {
+      "type": "string",
+      "enum": [
+        "summarize",
+        "compare",
+        "extract_key_clauses",
+        "risk_detection",
+        "compliance_check",
+        "answer_question",
+        "find_sources",
+        "store_document",
+        "semantic_search",
+        "bulk_review",
+        "build_workflow",
+        "run_workflow"
+      ]
+    },
+    "inputs": {
+      "type": "object",
+      "properties": {
+        "documents": { "type": "array", "items": { "type": "string" } },
+        "question": { "type": "string" },
+        "jurisdiction": { "type": "string" },
+        "language": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "depth": { "type": "string", "enum": ["quick", "standard", "deep"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "additionalProperties": false
+}
+
+5. Step 2 — build_query_context (internal)
+
+Internal name: buildQueryContext(intent, query)
+Назначение: подготовить structured context для retrieval без обращения к внешним источникам.
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "build_query_context.input",
+  "type": "object",
+  "required": ["intent", "query"],
+  "properties": {
+    "intent": { "type": "object" },
+    "query": { "type": "string" }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "build_query_context.output",
+  "type": "object",
+  "required": ["search_hints"],
+  "properties": {
+    "search_hints": { "type": "array", "items": { "type": "string" } },
+    "court_filters": { "type": "array", "items": { "type": "string" } },
+    "law_filters": { "type": "array", "items": { "type": "string" } },
+    "procedure_code": { "type": "string", "enum": ["cpc", "epc", "cac", "crpc"] },
+    "jurisdiction": { "type": "string" }
+  },
+  "additionalProperties": false
+}
+
+6. Step 3 — retrieve_legal_sources (MCP tool)
+
+Tool name: retrieve_legal_sources
+Назначение: достать сырые источники (cases/laws/other) без анализа.
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "retrieve_legal_sources.input",
+  "type": "object",
+  "required": ["context"],
+  "properties": {
+    "context": { "type": "object" },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "cases": { "type": "integer", "minimum": 0, "maximum": 50 },
+        "laws": { "type": "integer", "minimum": 0, "maximum": 50 },
+        "guidance": { "type": "integer", "minimum": 0, "maximum": 50 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "retrieve_legal_sources.output",
+  "type": "object",
+  "required": ["cases", "laws"],
+  "properties": {
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "source": { "type": "string" },
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "date": { "type": "string" },
+          "court": { "type": "string" },
+          "text": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "laws": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "source": { "type": "string" },
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "article": { "type": "string" },
+          "text": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "guidance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "source": { "type": "string" },
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "date": { "type": "string" },
+          "text": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "additionalProperties": false
+}
+
+7. Step 4 — extract_document_sections (MCP tool)
+
+Tool name: extract_document_sections
+Назначение: превратить тексты источников в машиночитаемые секции.
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "extract_document_sections.input",
+  "type": "object",
+  "required": ["documents"],
+  "properties": {
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "source": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "extract_document_sections.output",
+  "type": "object",
+  "required": ["documents"],
+  "properties": {
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sections"],
+        "properties": {
+          "id": { "type": "string" },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "text"],
+              "properties": {
+                "type": { "type": "string" },
+                "text": { "type": "string" },
+                "start": { "type": "integer" },
+                "end": { "type": "integer" }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
+8. Step 5 — analyze_legal_patterns (MCP tool)
+
+Tool name: analyze_legal_patterns
+Назначение: выделить типовые аргументы, риски и сигналы успеха/провала.
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "analyze_legal_patterns.input",
+  "type": "object",
+  "required": ["documents"],
+  "properties": {
+    "documents": { "type": "array", "items": { "type": "object" } },
+    "query": { "type": "string" }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "analyze_legal_patterns.output",
+  "type": "object",
+  "required": ["success_arguments", "risk_factors"],
+  "properties": {
+    "success_arguments": { "type": "array", "items": { "type": "string" } },
+    "risk_factors": { "type": "array", "items": { "type": "string" } },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "additionalProperties": false
+}
+
+9. Step 6 — synthesize_answer (internal)
+
+Internal name: synthesizeAnswer(inputs)
+Назначение: собрать человеческий ответ (tone/UX/format-specific).
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "synthesize_answer.input",
+  "type": "object",
+  "required": ["query", "laws", "cases"],
+  "properties": {
+    "query": { "type": "string" },
+    "laws": { "type": "array" },
+    "cases": { "type": "array" },
+    "patterns": { "type": "object" },
+    "output_format": { "type": "string" }
+  },
+  "additionalProperties": true
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "synthesize_answer.output",
+  "type": "object",
+  "required": ["answer_text", "citations"],
+  "properties": {
+    "answer_text": { "type": "string" },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id"],
+        "properties": {
+          "source_id": { "type": "string" },
+          "quote": { "type": "string" },
+          "url": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
+10. Step 7 — validate_response (MCP tool)
+
+Tool name: validate_response
+Назначение: проверка фактов/цитат/ссылок; минимизация галлюцинаций.
+
+Input schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "validate_response.input",
+  "type": "object",
+  "required": ["answer", "sources"],
+  "properties": {
+    "answer": { "type": "string" },
+    "sources": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": false
+}
+
+Output schema:
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "validate_response.output",
+  "type": "object",
+  "required": ["is_valid", "confidence", "issues"],
+  "properties": {
+    "is_valid": { "type": "boolean" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "message"],
+        "properties": {
+          "type": { "type": "string" },
+          "message": { "type": "string" },
+          "citation": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
