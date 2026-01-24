@@ -1,0 +1,51 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy manifests first for better caching
+COPY mcp_backend/package.json mcp_backend/package.json
+COPY mcp_backend/package-lock.json* mcp_backend/
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/shared/package-lock.json* packages/shared/
+COPY packages/shared/tsconfig.json packages/shared/tsconfig.json
+
+# Install shared deps and build shared first (it is a file: dependency of mcp_backend)
+COPY packages/shared/src packages/shared/src
+RUN cd packages/shared \
+  && if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+  && npm run build \
+  && npm prune --omit=dev
+
+# Install backend deps (will resolve @secondlayer/shared from ../packages/shared)
+RUN cd mcp_backend \
+  && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# Copy backend source and build
+COPY mcp_backend/tsconfig.json mcp_backend/tsconfig.json
+COPY mcp_backend/src mcp_backend/src
+COPY mcp_backend/scripts mcp_backend/scripts
+RUN cd mcp_backend \
+  && npm run build \
+  && npm prune --omit=dev
+
+# Replace file: symlink for @secondlayer/shared with a real directory so runtime doesn't need ../packages/shared
+# Must be done AFTER npm prune to prevent symlink recreation
+RUN cd mcp_backend \
+  && rm -rf node_modules/@secondlayer/shared \
+  && mkdir -p node_modules/@secondlayer \
+  && cp -R ../packages/shared node_modules/@secondlayer/shared
+
+# Runtime image
+FROM node:20-alpine
+
+WORKDIR /app/mcp_backend
+
+COPY --from=builder /app/mcp_backend/package.json ./package.json
+COPY --from=builder /app/mcp_backend/package-lock.json* ./
+COPY --from=builder /app/mcp_backend/node_modules ./node_modules
+COPY --from=builder /app/mcp_backend/dist ./dist
+COPY --from=builder /app/mcp_backend/scripts ./scripts
+
+EXPOSE 3000
+
+CMD ["node", "--max-old-space-size=2048", "dist/http-server.js"]
