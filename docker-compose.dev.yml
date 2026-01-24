@@ -62,6 +62,9 @@ services:
 
   app-dev:
     image: secondlayer-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.mono-backend
     container_name: secondlayer-app-dev
     command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
     environment:
