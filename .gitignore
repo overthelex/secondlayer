@@ -15,6 +15,9 @@ build/
 .env.*
 !.env.example
 
+# Secrets
+google_OAUTH2.json
+
 # Logs
 logs/
 packages/**/logs/
