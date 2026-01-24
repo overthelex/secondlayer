@@ -106,6 +106,9 @@ services:
       - secondlayer-local
 
   app-local:
+    build:
+      context: ../mcp_backend
+      dockerfile: Dockerfile
     image: secondlayer-app:latest
     container_name: secondlayer-app-local
     command: ["node", "--max-old-space-size=2048", "dist/http-server.js"]
@@ -136,7 +139,7 @@ services:
       REDIS_PORT: 6379
 
       # OpenAI Configuration
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
 
@@ -156,11 +159,14 @@ services:
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
 
       # ZakonOnline API
-      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-local-dev-zo-token}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
 
       # Security (relaxed for local dev)
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
+
+      RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
+      RADA_API_KEY: ${RADA_API_KEY:-test-rada-key}
 
       # OAuth (optional for local - can use API keys instead)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -171,10 +177,6 @@ services:
 
       # Logging (verbose for development)
       LOG_LEVEL: ${LOG_LEVEL:-debug}
-
-      # RADA MCP (procedural norms provider)
-      RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
-      RADA_API_KEY: ${RADA_API_KEY:-test-key-123}
 
     ports:
       - "3000:3000"  # Standard backend port
@@ -263,6 +265,10 @@ services:
       redis-local:
         condition: service_healthy
     environment:
+      NODE_ENV: production
+      PORT: 3001
+      HTTP_PORT: 3001
+      HTTP_HOST: 0.0.0.0
       POSTGRES_HOST: postgres-local
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
@@ -272,7 +278,7 @@ services:
       DATABASE_URL: postgresql://${RADA_POSTGRES_USER:-rada_mcp}:${RADA_POSTGRES_PASSWORD:-rada_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
       REDIS_HOST: redis-local
       REDIS_PORT: 6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
@@ -285,10 +291,7 @@ services:
       SECONDLAYER_URL: http://app-local:3000
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS:-test-key-123}
       RADA_API_KEYS: ${RADA_API_KEYS:-test-key-123}
-      HTTP_PORT: 3001
-      HTTP_HOST: 0.0.0.0
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      NODE_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
       - "3001:3001"

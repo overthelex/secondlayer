@@ -30,6 +30,7 @@ class HTTPMCPServer {
   private db: Database;
   private documentService: DocumentService;
   private zoAdapter: ZOAdapter;
+  private zoPracticeAdapter: ZOAdapter;
   private queryPlanner: QueryPlanner;
   private sectionizer: SemanticSectionizer;
   private embeddingService: EmbeddingService;
@@ -49,12 +50,14 @@ class HTTPMCPServer {
     this.sectionizer = new SemanticSectionizer();
     this.embeddingService = new EmbeddingService();
     this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
+    this.zoPracticeAdapter = new ZOAdapter('court_practice', this.documentService, this.embeddingService);
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
+      this.zoPracticeAdapter,
       this.sectionizer,
       this.embeddingService,
       this.patternStore,
@@ -67,6 +70,7 @@ class HTTPMCPServer {
     const openaiManager = getOpenAIManager();
     openaiManager.setCostTracker(this.costTracker);
     this.zoAdapter.setCostTracker(this.costTracker);
+    this.zoPracticeAdapter.setCostTracker(this.costTracker);
     logger.info('Cost tracking initialized');
 
     // Initialize authentication
@@ -86,8 +90,13 @@ class HTTPMCPServer {
       credentials: true,
     }));
 
-    // JSON parsing
-    this.app.use(express.json({ limit: '10mb' }));
+    // JSON parsing with UTF-8 support
+    this.app.use(express.json({ 
+      limit: '10mb',
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf.toString('utf8');
+      }
+    }));
 
     // Initialize Passport middleware
     this.app.use(passport.initialize());

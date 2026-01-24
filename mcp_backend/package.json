@@ -16,6 +16,7 @@
     "db:setup": "npm run db:create && npm run migrate",
     "process:docs": "npm run build && node dist/scripts/process-existing-documents.js",
     "process:docs:dev": "ts-node-dev --transpile-only scripts/process-existing-documents.ts",
+    "migrate:legislation": "bash scripts/migrate-legislation-schema.sh",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
     "lint": "eslint src --ext .ts"
