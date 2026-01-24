@@ -109,50 +109,50 @@ npm run dev:sse
 ```mermaid
 flowchart LR
   subgraph Clients["Клиенты"]
-    MCPClient["MCP client"];
-    WebApp["Web app / Admin UI"];
-    RemoteClient["Remote MCP client"];
+    MCPClient["MCP client"]
+    WebApp["Web app / Admin UI"]
+    RemoteClient["Remote MCP client"]
   end
 
   subgraph Transports["Транспорты"]
-    STDIO["stdio (MCP)"];
-    HTTP["HTTP API"];
-    SSE["MCP over SSE"];
+    STDIO["stdio (MCP)"]
+    HTTP["HTTP API"]
+    SSE["MCP over SSE"]
   end
 
   subgraph Backend["mcp_backend"]
-    API["MCPQueryAPI"];
-    Services["Services"];
-    Adapters["Adapters"];
-    Cost["CostTracker"];
+    API["MCPQueryAPI"]
+    Services["Services"]
+    Adapters["Adapters"]
+    Cost["CostTracker"]
   end
 
   subgraph Infra["Инфраструктура"]
-    PG[("PostgreSQL")];
-    Redis[("Redis")];
-    Qdrant[("Qdrant")];
+    PG[("PostgreSQL")]
+    Redis[("Redis")]
+    Qdrant[("Qdrant")]
   end
 
   subgraph External["Внешние сервисы"]
-    OpenAI[("OpenAI API")];
-    ZO[("Zakononline API")];
+    OpenAI[("OpenAI API")]
+    ZO[("Zakononline API")]
   end
 
-  MCPClient --> STDIO --> API;
-  WebApp --> HTTP --> API;
-  RemoteClient --> SSE --> API;
+  MCPClient --> STDIO --> API
+  WebApp --> HTTP --> API
+  RemoteClient --> SSE --> API
 
-  API --> Services;
-  API --> Cost;
-  Services --> Adapters;
-  Services --> Infra;
-  Cost --> PG;
+  API --> Services
+  API --> Cost
+  Services --> Adapters
+  Services --> Infra
+  Cost --> PG
 
-  Adapters --> ZO;
-  Services --> OpenAI;
-  Services --> Qdrant;
-  Services --> Redis;
-  Services --> PG;
+  Adapters --> ZO
+  Services --> OpenAI
+  Services --> Qdrant
+  Services --> Redis
+  Services --> PG
 ```
 
 ## Структура (ключевое)
