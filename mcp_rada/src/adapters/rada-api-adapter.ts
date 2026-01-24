@@ -31,6 +31,7 @@ export class RadaAPIAdapter {
       },
     });
 
+    void this._costTracker;
     logger.info('RadaAPIAdapter initialized');
   }
 

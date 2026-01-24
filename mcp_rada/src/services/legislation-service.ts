@@ -385,19 +385,20 @@ export class LegislationService {
     }
 
     return {
+      id: raw.id || raw.law_id || raw.number || uuidv4(),
       law_number: raw.number,
-      law_alias: null,
+      law_alias: undefined,
       title: raw.title,
-      law_type: raw.type || null,
-      adoption_date: raw.date_adoption || null,
-      effective_date: raw.date_effective || null,
-      status: raw.status || null,
-      full_text_html: raw.html || null,
-      full_text_plain: raw.text || null,
-      article_count: articles.length || null,
+      law_type: raw.type || undefined,
+      adoption_date: raw.date_adoption || undefined,
+      effective_date: raw.date_effective || undefined,
+      status: raw.status || undefined,
+      full_text_html: raw.html || undefined,
+      full_text_plain: raw.text || undefined,
+      article_count: articles.length || undefined,
       articles,
       chapters,
-      url: raw.url || null,
+      url: raw.url || undefined,
       metadata: raw,
     };
   }

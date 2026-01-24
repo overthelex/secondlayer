@@ -1,16 +1,26 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Install dependencies first (better layer caching)
 COPY package*.json ./
-RUN npm ci --only=production
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copy source code
 COPY . .
 
 # Build TypeScript
 RUN npm run build
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src/migrations ./src/migrations
 
 # Create logs directory
 RUN mkdir -p logs

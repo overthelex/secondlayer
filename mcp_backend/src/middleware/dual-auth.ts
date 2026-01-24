@@ -10,7 +10,15 @@ import { UserService, User } from '../services/user-service.js';
 import { logger } from '../utils/logger.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
-const SECONDARY_LAYER_KEYS = process.env.SECONDARY_LAYER_KEYS?.split(',') || [];
+
+// Read API keys dynamically to support runtime updates
+function getSecondaryLayerKeys(): string[] {
+  const keys = process.env.SECONDARY_LAYER_KEYS?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
+  if (keys.length === 0) {
+    logger.warn('No SECONDARY_LAYER_KEYS configured');
+  }
+  return keys;
+}
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
@@ -81,8 +89,15 @@ async function authenticateWithJWT(req: AuthenticatedRequest, token: string): Pr
  * Authenticate with API key
  */
 function authenticateWithAPIKey(req: AuthenticatedRequest, apiKey: string): void {
+  // Get current API keys from environment
+  const validKeys = getSecondaryLayerKeys();
+  
   // Check if API key is valid
-  if (!SECONDARY_LAYER_KEYS.includes(apiKey)) {
+  if (!validKeys.includes(apiKey)) {
+    logger.warn('Invalid API key attempt', {
+      keyPrefix: apiKey.substring(0, 8) + '...',
+      validKeysCount: validKeys.length,
+    });
     throw new Error('Invalid API key');
   }
 

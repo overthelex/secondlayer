@@ -7,12 +7,14 @@ import axios, { AxiosInstance } from 'axios';
 import * as cheerio from 'cheerio';
 import { logger } from '../utils/logger';
 import { KNOWN_LAWS, ZakonRadaLawResponse, ZakonRadaSearchResult, ZakonRadaAPIError } from '../types/rada';
+import { CostTracker } from '../services/cost-tracker';
 
 export class ZakonRadaAdapter {
   private client: AxiosInstance;
   private baseURL = 'https://zakon.rada.gov.ua';
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 500; // 500ms between requests
+  private _costTracker?: CostTracker;
 
   constructor() {
     this.client = axios.create({
@@ -25,7 +27,13 @@ export class ZakonRadaAdapter {
       },
     });
 
+    void this._costTracker;
     logger.info('ZakonRadaAdapter initialized');
+  }
+
+  setCostTracker(costTracker: CostTracker): void {
+    this._costTracker = costTracker;
+    logger.debug('Cost tracker set for ZakonRadaAdapter');
   }
 
   /**
@@ -124,7 +132,7 @@ export class ZakonRadaAdapter {
   /**
    * Extract articles from law HTML
    */
-  private extractArticles($: cheerio.CheerioAPI, html: string): { number: string; title?: string; text: string }[] {
+  private extractArticles($: cheerio.CheerioAPI, _html: string): { number: string; title?: string; text: string }[] {
     const articles: { number: string; title?: string; text: string }[] = [];
 
     // Try different article patterns
@@ -179,7 +187,7 @@ export class ZakonRadaAdapter {
       const results: ZakonRadaSearchResult[] = [];
 
       // Parse search results
-      $('.search-result, .result-item, .law-item').each((i, elem) => {
+      $('.search-result, .result-item, .law-item').each((_i, elem) => {
         const resultElem = $(elem);
         const titleElem = resultElem.find('a, .title, h3');
         const title = titleElem.text().trim();

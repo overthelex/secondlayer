@@ -204,7 +204,7 @@ export class CrossReferenceService {
       const impact: BillCourtImpact = {
         id: uuidv4(),
         bill_number: billNumber,
-        related_law_number: relatedLawNumber || null,
+        related_law_number: relatedLawNumber || undefined,
         affected_cases_count: relatedCases.length,
         affected_cases: relatedCases.map((c) => ({
           case_number: c.case_number,
