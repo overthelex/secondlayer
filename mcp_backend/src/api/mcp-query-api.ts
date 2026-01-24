@@ -65,7 +65,7 @@ export class MCPQueryAPI {
 
     const looksLikeWorkflow = domains.includes('workflow') || /workflow|інтеграц|integration/i.test(query);
     const looksLikeVault = /vault|сховищ|хранилищ/i.test(query);
-    const looksLikeDD = /due\s*diligence|dd\b|перевірк|провер|m\&a/i.test(query);
+    const looksLikeDD = /due\s*diligence|dd\b|перевірк|провер|m&a/i.test(query);
 
     const service = looksLikeWorkflow
       ? 'workflow_automation'
