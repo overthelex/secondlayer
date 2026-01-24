@@ -1,0 +1,254 @@
+1. Цель
+
+Этот документ фиксирует детальную мапу: услуги (services.txt) → инструменты (MCP/product/internal) → источники данных → артефакты (output) → контроль качества.
+
+Ссылки на канонические контракты pipeline:
+- lexconfig/pipeline_contracts.txt
+
+Ссылки на intent schema (service/task/depth):
+- lexconfig/classificationq.txt
+
+Ссылки на текущий список “прикладных” tools (вопросы/покрытие по процесуалке):
+- lexconfig/tools.txt
+
+2. Термины
+
+2.1. Enterprise primitives (pipeline steps)
+Это reusable primitives, которые используются в разных услугах:
+- classify_intent (MCP)
+- retrieve_legal_sources (MCP)
+- extract_document_sections (MCP)
+- analyze_legal_patterns (MCP)
+- validate_response (MCP)
+- build_query_context (internal)
+- synthesize_answer (internal)
+
+2.2. Product tools
+Это прикладные инструменты, которые решают конкретные задачи (поиск норм, поиск практики, калькуляторы, упаковка ответа и т.п.).
+
+2.3. Артефакт
+Структурированный результат, который может быть сохранен/переиспользован: sections, citations, pattern report, checklist, memo/report.
+
+3. Coverage (что обязаны уметь источники)
+
+3.1. Процесуалка
+- коды: ЦПК/ГПК/КАС/КПК
+- типовые задачи: строки/допустимость/вимоги/практика ВС/две линии/схожие факты/чеклисты
+
+3.2. Матеріальне право
+- цивільне: ЦК/ГК + практика применения
+- корпоративне: ТОВ/АТ + пов’язані норми/практика
+- податки: ПКУ + судпрактика + роз’яснення ДПС/листи
+
+3.3. Что это означает для retrieval
+retrieve_legal_sources MUST поддерживать retrieval из:
+- legislation: RADA (законы/кодексы/статьи)
+- case_law: реестр/ВС (решения, метаданные, ссылки)
+- vector_index: similarity по фабуле (корпус судебных решений)
+- admin_guidance: податкові роз’яснення ДПС/листи (и при необходимости: огляди, узагальнення)
+
+Примечание по терминологии:
+- admin_guidance (в этом документе) соответствует массиву guidance[] в retrieve_legal_sources.output (см. pipeline_contracts.txt).
+
+4. Услуги → инструменты → артефакты
+
+4.1. Услуга 1: Анализ и обработка юридических документов
+
+Цель:
+- анализ контрактов/соглашений/политик
+- сравнение версий
+- суммирование
+- извлечение ключевых положений
+- выявление рисков/аномалий
+
+Обязательные инструменты (MUST):
+- classify_intent (MCP) — routing (summarize/compare/extract/risk)
+- extract_document_sections (MCP) — превращение документа в секции
+- analyze_legal_patterns (MCP) — risk factors/findings/patterns по документу
+- validate_response (MCP) — контроль выводов и привязка к цитатам из документа
+
+Рекомендуемые инструменты (SHOULD):
+- parse_document (product tool) — PDF/DOCX → text + метаданные
+- extract_key_clauses (product tool) — clause extraction под тип документа
+- summarize_document (product tool) — summary (executive + detailed)
+- compare_documents (product tool) — semantic diff (изменения по смыслам)
+- extract_citations (product tool) — цитаты с координатами/якорями
+- format_answer_pack (product tool) — финальная упаковка под единый формат ответа
+
+Источники данных:
+- пользовательские документы
+- (опционально) внутренний Vault (если документ уже сохранен)
+
+Ключевые артефакты output:
+- document_sections (структура)
+- clause_table (ключевые положения)
+- risk_report (риски + цитаты)
+- comparison_report (что изменилось + где)
+
+Критерии качества:
+- все ключевые утверждения должны иметь цитату/якорь в документе
+- validate_response MUST возвращать issues, если цитат нет или они не подтверждают вывод
+
+4.2. Услуга 2: Due Diligence (комплексная проверка)
+
+Цель:
+- массовая проверка документов
+- нахождение рисков/несоответствий
+- формирование отчета (таблица/чеклист/мемо)
+
+Обязательные инструменты (MUST):
+- classify_intent (MCP)
+- extract_document_sections (MCP)
+- analyze_legal_patterns (MCP)
+- validate_response (MCP)
+
+Рекомендуемые инструменты (SHOULD):
+- parse_document (product tool)
+- bulk_review_runner (product tool) — orchestrator для пачки документов
+- risk_scoring (product tool) — scoring по типам рисков
+- generate_dd_report (product tool) — отчет (таблица + текст)
+- format_answer_pack (product tool) — унифицированный формат вывода
+
+Источники данных:
+- пакет документов
+- (опционально) Vault
+
+Ключевые артефакты output:
+- dd_findings_table (по документам)
+- risk_heatmap (по типам рисков)
+- executive_summary
+
+Критерии качества:
+- каждый finding должен ссылаться на источник (document id + anchor)
+- validate_response должен флагать “unsupported finding”
+
+4.3. Услуга 3: Юридические исследования и ответы на сложные вопросы
+
+Цель:
+- ответы на вопросы с нормативкой и практикой
+- охват процесуалки и матеріального права
+- “две линии практики”, similarity по фабуле, чеклисты и калькуляторы
+
+Обязательные инструменты (MUST):
+- classify_intent (MCP)
+- build_query_context (internal)
+- retrieve_legal_sources (MCP)
+- extract_document_sections (MCP)
+- analyze_legal_patterns (MCP)
+- validate_response (MCP)
+- synthesize_answer (internal)
+
+Product tools (MUST для качественного legal research):
+- search_legislation (product tool) — универсальный поиск по нормам (процесуалка + матеріальне)
+- get_legislation_section (product tool) — точное получение статьи/части
+- search_supreme_court_practice (product tool)
+- get_case_text / get_court_decision (product tool)
+- format_answer_pack (product tool)
+
+Product tools (SHOULD, чтобы закрыть “enterprise research”):
+- compare_practice_pro_contra (product tool)
+- find_similar_fact_pattern_cases (product tool)
+- extract_citations_from_case (product tool)
+- calculate_procedural_deadlines (product tool)
+- build_procedural_checklist (product tool)
+- calculate_monetary_claims (product tool)
+
+Product tools (OPTIONAL, если хотите “податки с вычислениями”):
+- calculate_tax_liability (product tool)
+
+Источники данных:
+- legislation: RADA
+- case_law: реестр/ВС
+- vector_index: Qdrant similarity
+- admin_guidance: податкові роз’яснення ДПС/листи
+
+Ключевые артефакты output:
+- source_bundle (cases/laws) + confidence
+- extracted_sections (reasoning/decision + нормы)
+- pattern_report (success/risk)
+- packaged_answer (A–G)
+
+Критерии качества:
+- citations MUST ссылаться на реальные источники (id/url) без выдуманных реквизитов
+- validate_response MUST выявлять неподтвержденные утверждения
+
+4.4. Услуга 4: Vault (хранилище и управление документами)
+
+Цель:
+- хранение документов
+- семантический поиск
+- групповой анализ и аналитика
+
+Обязательные инструменты (MUST):
+- classify_intent (MCP)
+- extract_document_sections (MCP)
+- analyze_legal_patterns (MCP)
+- validate_response (MCP) — при генерации ответов/отчетов из Vault
+
+Product tools (MUST):
+- store_document (product tool)
+- get_document (product tool)
+- list_documents (product tool)
+- semantic_search (product tool)
+
+Product tools (SHOULD):
+- get_document_sections (product tool)
+- collection_analytics (product tool) — кластеры/темы/heatmap
+
+Источники данных:
+- документы пользователя
+
+Ключевые артефакты output:
+- vault_item (document + metadata)
+- embeddings/index entries
+- analytics_report
+
+Критерии качества:
+- доступ/права должны быть проверяемыми (audit-friendly)
+
+4.5. Услуга 5: Workflow-автоматизация и интеграции
+
+Цель:
+- запуск готовых workflow
+- построение кастомных workflow
+- интеграции (M365 и др.)
+
+Обязательные инструменты (MUST):
+- classify_intent (MCP)
+
+Product tools (MUST):
+- build_workflow (product tool)
+- run_workflow (product tool)
+
+Product tools (SHOULD):
+- workflow_router (product tool) — роутинг на primitives/product tools по intent
+- log_event (product tool) — аудит
+- webhook_trigger / webhook_receive (product tool)
+- connectors: outlook_send_email / sharepoint_upload / word_generate_doc (по необходимости)
+
+Как workflow использует primitives:
+- workflow может вызывать retrieve_legal_sources / extract_document_sections / analyze_legal_patterns / validate_response в зависимости от сценария.
+
+Ключевые артефакты output:
+- workflow_definition
+- workflow_run_log
+- generated_documents (reports/memos)
+
+Критерии качества:
+- воспроизводимость (trace id)
+- audit log для входов/выходов шагов
+
+5. Минимальный набор для реализации “end-to-end”
+
+5.1. MVP (чтобы уже продавать legal research + doc analysis)
+- pipeline primitives (5 MCP + 2 internal) согласно pipeline_contracts.txt
+- search_legislation + get_legislation_section
+- search_supreme_court_practice + get_case_text
+- format_answer_pack
+- parse_document
+
+5.2. Next (чтобы DD/Vault/workflows стали “enterprise”)
+- store_document + semantic_search
+- bulk_review_runner + generate_dd_report + risk_scoring
+- compare_practice_pro_contra + find_similar_fact_pattern_cases
+- audit/log + workflow_router

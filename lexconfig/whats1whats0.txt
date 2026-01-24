@@ -1,0 +1,210 @@
+🟢 ВЫНОСИТЬ В MCP TOOLS
+1️⃣ classify_intent
+
+→ MCP tool
+
+Почему
+
+entry-point для ВСЕЙ системы
+
+нужен для Vault, DD, Workflow
+
+cheap, детерминированный
+
+идеален для логирования и обучения
+
+Tool
+
+classify_intent
+
+
+Используют
+
+get_legal_advice
+
+document_analysis
+
+workflow router
+
+future agents
+
+2️⃣ retrieve_sources (RAG)
+
+→ MCP tool
+
+Почему
+
+самый дорогой и важный шаг
+
+жёстко связан с инфраструктурой (Zakon, Qdrant)
+
+нужен ВСЕЗДЕ
+
+отличная точка для cache / retry
+
+Tool
+
+retrieve_legal_sources
+
+
+Используют
+
+legal research
+
+DD
+
+Vault analytics
+
+pattern mining
+
+3️⃣ extract_structures (sectioning)
+
+→ MCP tool
+
+Почему
+
+самостоятельная ценность
+
+heavy LLM
+
+нужен вне legal advice
+
+хорошо тестируется
+
+Tool
+
+extract_document_sections
+
+
+Используют
+
+DD
+
+pattern store
+
+analytics
+
+explainability
+
+4️⃣ analyze_patterns
+
+→ MCP tool
+
+Почему
+
+core IP
+
+reusable
+
+важен для prediction / risk
+
+не должен быть “магией” внутри одного tool
+
+Tool
+
+analyze_legal_patterns
+
+
+Используют
+
+get_legal_advice
+
+DD
+
+workflow rules
+
+scoring
+
+5️⃣ validate_answer (Hallucination Guard)
+
+→ MCP tool (обязательно)
+
+Почему
+
+cross-cutting concern
+
+должен применяться ВЕЗДЕ
+
+аудит / trust layer
+
+regulatory-friendly
+
+Tool
+
+validate_response
+
+🔵 ОСТАВЛЯТЬ INTERNAL
+6️⃣ build_query_context
+
+→ internal
+
+Почему
+
+glue-logic
+
+сильно зависит от intent + tool
+
+нет ценности как API
+
+часто меняется
+
+Оставить как:
+
+buildQueryContext(intent, query)
+
+7️⃣ synthesize_answer
+
+→ internal (for now)
+
+Почему
+
+tightly coupled с get_legal_advice
+
+зависит от tone, format, UX
+
+опасно выносить как generic tool
+
+⚠️ Но:
+
+проектировать как isolated module
+
+позже можно вынести как generate_legal_memo
+
+Итоговая таблица (коротко)
+Step	MCP tool	Причина
+classify_intent	✅	entry-point
+retrieve_sources	✅	infra / RAG
+extract_structures	✅	reusable
+analyze_patterns	✅	core IP
+validate_answer	✅	trust layer
+build_query_context	❌	glue
+synthesize_answer	❌ (пока)	expert logic
+Как это выглядит в проде
+get_legal_advice (orchestrator)
+ ├─ MCP: classify_intent
+ ├─ internal: build_query_context
+ ├─ MCP: retrieve_sources
+ ├─ MCP: extract_document_sections
+ ├─ MCP: analyze_legal_patterns
+ ├─ internal: synthesize_answer
+ └─ MCP: validate_response
+
+Почему это оптимально именно для тебя
+
+не ломаешь текущий монолит
+
+получаешь reusable primitives
+
+минимизируешь MCP surface area
+
+готов к enterprise workflows
+
+легко вводить step-level billing
+
+Короткий вывод
+
+MCP tools = “что система умеет”
+internal = “как конкретный эксперт думает”
+
+Каноническая спецификация контрактов (I/O JSON Schema) для pipeline v1:
+lexconfig/pipeline_contracts.txt
