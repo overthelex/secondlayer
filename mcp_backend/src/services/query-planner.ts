@@ -30,7 +30,7 @@ export class QueryPlanner {
   async classifyIntent(query: string, budget: 'quick' | 'standard' | 'deep' = 'standard'): Promise<QueryIntent> {
     // For quick budget, use simple keyword matching
     if (budget === 'quick') {
-      return this.quickIntentClassification(query);
+      return this.sanitizeIntent(this.quickIntentClassification(query));
     }
 
     // For standard/deep, use LLM
@@ -97,7 +97,7 @@ export class QueryPlanner {
       
       const result = JSON.parse(content);
       
-      return {
+      return this.sanitizeIntent({
         intent: result.intent || 'general_search',
         confidence: result.confidence || 0.7,
         domains: result.domains || ['court'],
@@ -106,11 +106,119 @@ export class QueryPlanner {
         time_range: result.time_range,
         reasoning_budget: budget,
         slots: result.slots,
-      };
+      });
     } catch (error) {
       logger.error('Intent classification error:', error);
-      return this.quickIntentClassification(query);
+      return this.sanitizeIntent(this.quickIntentClassification(query));
     }
+  }
+
+  private sanitizeIntent(intent: QueryIntent): QueryIntent {
+    const allowedSectionTypes = new Set(Object.values(SectionType));
+
+    const normalizeSectionType = (value: unknown): SectionType | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const raw = value.trim();
+      if (!raw) return undefined;
+      if (allowedSectionTypes.has(raw as SectionType)) return raw as SectionType;
+      const upper = raw.toUpperCase();
+      if (allowedSectionTypes.has(upper as SectionType)) return upper as SectionType;
+      return undefined;
+    };
+
+    const normalizeCourtLevel = (value: unknown): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const v = value.trim();
+      if (!v) return undefined;
+      const lower = v.toLowerCase();
+
+      if (
+        lower === 'grandchamber' ||
+        lower === 'grand_chamber' ||
+        lower === 'grand chamber' ||
+        lower.includes('велика палата') ||
+        lower.includes('вп вс') ||
+        lower === 'вп'
+      ) {
+        return 'GrandChamber';
+      }
+
+      if (
+        lower === 'sc' ||
+        lower.includes('supreme') ||
+        lower.includes('верхов') ||
+        lower === 'вс' ||
+        lower.includes('кцс') ||
+        lower.includes('кгс') ||
+        lower.includes('кас') ||
+        lower.includes('ккс')
+      ) {
+        return 'SC';
+      }
+
+      if (lower === 'cassation' || lower.includes('касац')) return 'cassation';
+      if (lower === 'appeal' || lower.includes('апеляц')) return 'appeal';
+      if (lower === 'first_instance' || lower.includes('перша інстанц') || lower.includes('первая инстанц')) {
+        return 'first_instance';
+      }
+
+      if (
+        lower === 'first_instance' ||
+        lower === 'appeal' ||
+        lower === 'cassation' ||
+        lower === 'sc' ||
+        lower === 'grandchamber'
+      ) {
+        return value;
+      }
+
+      return undefined;
+    };
+
+    const sanitizedSections = Array.isArray(intent.sections)
+      ? intent.sections.map((s) => normalizeSectionType(s)).filter(Boolean)
+      : [];
+
+    const sections = (sanitizedSections.length > 0
+      ? (sanitizedSections as SectionType[])
+      : [SectionType.COURT_REASONING, SectionType.DECISION]) as SectionType[];
+
+    const slotsRaw: any = intent.slots && typeof intent.slots === 'object' ? { ...(intent.slots as any) } : undefined;
+    if (slotsRaw) {
+      if (Array.isArray(slotsRaw.section_focus)) {
+        const focus = slotsRaw.section_focus
+          .map((s: any) => normalizeSectionType(s))
+          .filter(Boolean) as SectionType[];
+        if (focus.length > 0) {
+          slotsRaw.section_focus = focus;
+        } else {
+          delete slotsRaw.section_focus;
+        }
+      }
+
+      if (slotsRaw.court_level !== undefined) {
+        const normalized = normalizeCourtLevel(slotsRaw.court_level);
+        if (normalized) {
+          slotsRaw.court_level = normalized;
+        } else {
+          delete slotsRaw.court_level;
+        }
+      }
+
+      if (Object.keys(slotsRaw).length === 0) {
+        return {
+          ...intent,
+          sections,
+          slots: undefined,
+        };
+      }
+    }
+
+    return {
+      ...intent,
+      sections,
+      slots: slotsRaw,
+    };
   }
 
   private quickIntentClassification(query: string): QueryIntent {
@@ -126,6 +234,29 @@ export class QueryPlanner {
     if (lowerQuery.includes('гпк')) slots.procedure_code = 'ГПК';
     if (lowerQuery.includes('кас')) slots.procedure_code = 'КАС';
     if (lowerQuery.includes('кпк')) slots.procedure_code = 'КПК';
+
+    if (
+      lowerQuery.includes('велика палата') ||
+      lowerQuery.includes('вп вс') ||
+      lowerQuery.includes('вп')
+    ) {
+      slots.court_level = 'GrandChamber';
+    } else if (
+      lowerQuery.includes('верховн') ||
+      lowerQuery.includes('вс ') ||
+      lowerQuery.includes(' кцс') ||
+      lowerQuery.includes(' кгс') ||
+      lowerQuery.includes(' ккc') ||
+      lowerQuery.includes(' ккс')
+    ) {
+      slots.court_level = 'SC';
+    } else if (lowerQuery.includes('касац')) {
+      slots.court_level = 'cassation';
+    } else if (lowerQuery.includes('апеляц')) {
+      slots.court_level = 'appeal';
+    } else if (lowerQuery.includes('перша інстанц') || lowerQuery.includes('первая инстанц')) {
+      slots.court_level = 'first_instance';
+    }
 
     // Slots: desired_output
     if (lowerQuery.includes('чеклист')) slots.desired_output = 'чеклист';
@@ -241,6 +372,93 @@ export class QueryPlanner {
       reasoning_budget: 'quick',
       slots: Object.keys(slots).length > 0 ? slots : undefined,
     };
+  }
+
+  async generateOptimizedSearchQuery(userQuery: string, _intent: QueryIntent, budget: 'quick' | 'standard' | 'deep' = 'standard'): Promise<string> {
+    // For quick budget, use simple keyword extraction
+    if (budget === 'quick') {
+      return userQuery;
+    }
+
+    try {
+      const response = await this.openaiManager.executeWithRetry(async (client) => {
+        const model = ModelSelector.getChatModel(budget);
+        const supportsJsonMode = ModelSelector.supportsJsonMode(model);
+        
+        const requestConfig: any = {
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: `Ти експерт з оптимізації пошукових запитів для API ZakonOnline (повнотекстовий пошук Sphinx).
+
+ЗАВДАННЯ: Перетвори питання користувача в короткий пошуковий запит з ключовими словами.
+
+ПРАВИЛА:
+1. Витягни ТІЛЬКИ ключові юридичні терміни та фрази
+2. Видали питальні слова (яка, який, чи, що, як тощо)
+3. Видали загальні слова (щодо, у разі, при, для тощо)
+4. Залиш тільки суть: предмет спору + юридичні терміни + статті законів
+5. Максимум 10-15 слів
+6. НЕ додавай назви судів (Верховний Суд) - це буде додано окремо
+7. Використовуй форми слів, які найкраще знайдуться в текстах рішень
+
+ПРИКЛАДИ:
+Вхід: "Яка позиція Верховного Суду щодо поновлення строку на апеляційне оскарження у разі несвоєчасного отримання повного тексту рішення?"
+Вихід: "поновлення строку апеляційне оскарження несвоєчасне отримання повного тексту рішення"
+
+Вхід: "Чи можна стягнути 3% річних та інфляційні втрати одночасно?"
+Вихід: "3% річних інфляційні втрати одночасно стягнення"
+
+Вхід: "Які підстави для залишення позову без руху згідно ЦПК?"
+Вихід: "залишення позову без руху підстави ЦПК"
+
+Поверни ТІЛЬКИ оптимізований пошуковий запит без додаткового тексту.`,
+            },
+            {
+              role: 'user',
+              content: userQuery,
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 100,
+        };
+
+        if (supportsJsonMode) {
+          requestConfig.response_format = { type: 'json_object' };
+          requestConfig.messages[0].content += '\n\nПоверни JSON: {"search_query": "оптимізований запит"}';
+        }
+
+        return await client.chat.completions.create(requestConfig);
+      });
+
+      let content = response.choices[0].message.content || userQuery;
+      
+      // If JSON mode, extract search_query field
+      if (content.includes('{')) {
+        try {
+          const parsed = JSON.parse(content);
+          if (parsed.search_query) {
+            content = parsed.search_query;
+          }
+        } catch {
+          // Not JSON, use as is
+        }
+      }
+      
+      // Clean up the response
+      content = content.trim().replace(/^["']|["']$/g, '');
+      
+      logger.info('Generated optimized search query', {
+        original: userQuery,
+        optimized: content,
+      });
+      
+      return content;
+    } catch (error) {
+      logger.error('Failed to generate optimized search query:', error);
+      return userQuery; // Fallback to original
+    }
   }
 
   buildQueryParams(intent: QueryIntent, searchQuery?: string): any {
