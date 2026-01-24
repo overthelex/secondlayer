@@ -16,6 +16,7 @@ import { LegalPatternStore } from './services/legal-pattern-store.js';
 import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
+import { LegislationTools } from './api/legislation-tools.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ class SecondLayerMCPServer {
   private db: Database;
   private documentService: DocumentService;
   private zoAdapter: ZOAdapter;
+  private zoPracticeAdapter: ZOAdapter;
   private queryPlanner: QueryPlanner;
   private sectionizer: SemanticSectionizer;
   private embeddingService: EmbeddingService;
@@ -31,6 +33,7 @@ class SecondLayerMCPServer {
   private citationValidator: CitationValidator;
   private hallucinationGuard: HallucinationGuard;
   private mcpAPI: MCPQueryAPI;
+  private legislationTools: LegislationTools;
 
   constructor() {
     this.server = new Server(
@@ -52,18 +55,21 @@ class SecondLayerMCPServer {
     this.sectionizer = new SemanticSectionizer();
     this.embeddingService = new EmbeddingService();
     this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
+    this.zoPracticeAdapter = new ZOAdapter('court_practice', this.documentService, this.embeddingService);
     this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
+      this.zoPracticeAdapter,
       this.sectionizer,
       this.embeddingService,
       this.patternStore,
       this.citationValidator,
       this.hallucinationGuard
     );
+    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
 
     this.setupHandlers();
   }
@@ -72,17 +78,50 @@ class SecondLayerMCPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
-        tools: this.mcpAPI.getTools(),
+        tools: [
+          ...this.mcpAPI.getTools(),
+          ...this.legislationTools.getToolDefinitions(),
+        ],
       };
     });
 
     // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
-        const result = await this.mcpAPI.handleToolCall(
-          request.params.name,
-          request.params.arguments || {}
-        );
+        const toolName = request.params.name;
+        const args = request.params.arguments || {};
+
+        // Route legislation tools
+        if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
+          let result;
+          switch (toolName) {
+            case 'get_legislation_article':
+              result = await this.legislationTools.getLegislationArticle(args as any);
+              break;
+            case 'get_legislation_articles':
+              result = await this.legislationTools.getLegislationArticles(args as any);
+              break;
+            case 'search_legislation':
+              result = await this.legislationTools.searchLegislation(args as any);
+              break;
+            case 'get_legislation_structure':
+              result = await this.legislationTools.getLegislationStructure(args as any);
+              break;
+            default:
+              throw new Error(`Unknown legislation tool: ${toolName}`);
+          }
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        // Route to main MCP API
+        const result = await this.mcpAPI.handleToolCall(toolName, args);
         return result;
       } catch (error: any) {
         logger.error('Tool call error:', error);

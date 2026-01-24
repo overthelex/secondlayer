@@ -291,4 +291,73 @@ export class EmbeddingService {
       throw error;
     }
   }
+
+  async upsertVector(
+    vectorId: string,
+    embedding: number[],
+    payload: Record<string, any>
+  ): Promise<void> {
+    await this.initialize();
+
+    try {
+      await this.qdrant.upsert(this.collectionName, {
+        wait: true,
+        points: [
+          {
+            id: vectorId,
+            vector: embedding,
+            payload,
+          },
+        ],
+      });
+    } catch (error) {
+      logger.error('Failed to upsert vector:', error);
+      throw error;
+    }
+  }
+
+  async searchVectors(
+    queryEmbedding: number[],
+    limit: number = 10,
+    filter?: Record<string, any>
+  ): Promise<any[]> {
+    await this.initialize();
+
+    try {
+      const queryFilter: any = {};
+
+      if (filter) {
+        const must: any[] = [];
+
+        for (const [key, value] of Object.entries(filter)) {
+          if (value !== undefined && value !== null) {
+            must.push({
+              key,
+              match: { value },
+            });
+          }
+        }
+
+        if (must.length > 0) {
+          queryFilter.must = must;
+        }
+      }
+
+      const searchResult = await this.qdrant.search(this.collectionName, {
+        vector: queryEmbedding,
+        limit,
+        filter: Object.keys(queryFilter).length > 0 ? queryFilter : undefined,
+        with_payload: true,
+      });
+
+      return searchResult.map((result) => ({
+        id: result.id,
+        score: result.score,
+        payload: result.payload,
+      }));
+    } catch (error) {
+      logger.error('Vector search error:', error);
+      throw error;
+    }
+  }
 }

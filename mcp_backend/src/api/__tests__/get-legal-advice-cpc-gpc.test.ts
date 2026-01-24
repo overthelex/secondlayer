@@ -166,6 +166,7 @@ describe('get_legal_advice: CPC examples (first two questions)', () => {
     const mcpAPI = new MCPQueryAPI(
       queryPlanner,
       zoAdapter,
+      zoAdapter,
       sectionizer,
       embeddingService,
       patternStore,

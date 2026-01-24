@@ -1,0 +1,1 @@
+{"error":"Unauthorized","message":"Missing Authorization header. Use: Authorization: Bearer <token>"}
