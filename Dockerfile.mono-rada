@@ -1,0 +1,53 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy manifests first for better caching
+COPY mcp_rada/package.json mcp_rada/package.json
+COPY mcp_rada/package-lock.json* mcp_rada/
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/shared/package-lock.json* packages/shared/
+COPY packages/shared/tsconfig.json packages/shared/tsconfig.json
+
+# Install shared deps and build shared first (it is a file: dependency of mcp_rada)
+COPY packages/shared/src packages/shared/src
+RUN cd packages/shared \
+  && if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+  && npm run build \
+  && npm prune --omit=dev
+
+# Install rada deps (will resolve @secondlayer/shared from ../packages/shared)
+RUN cd mcp_rada \
+  && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# Copy rada source and build
+COPY mcp_rada/tsconfig.json mcp_rada/tsconfig.json
+COPY mcp_rada/src mcp_rada/src
+COPY mcp_rada/scripts mcp_rada/scripts
+
+RUN cd mcp_rada \
+  && npm run build \
+  && npm prune --omit=dev
+
+# Replace file: symlink for @secondlayer/shared with a real directory so runtime doesn't need ../packages/shared
+# Must be done AFTER npm prune to prevent symlink recreation
+RUN cd mcp_rada \
+  && rm -rf node_modules/@secondlayer/shared \
+  && mkdir -p node_modules/@secondlayer \
+  && cp -R ../packages/shared node_modules/@secondlayer/shared
+
+# Runtime image
+FROM node:20-alpine
+
+WORKDIR /app/mcp_rada
+
+COPY --from=builder /app/mcp_rada/package.json ./package.json
+COPY --from=builder /app/mcp_rada/package-lock.json* ./
+COPY --from=builder /app/mcp_rada/node_modules ./node_modules
+COPY --from=builder /app/mcp_rada/dist ./dist
+COPY --from=builder /app/mcp_rada/scripts ./scripts
+COPY --from=builder /app/mcp_rada/src/migrations/*.sql ./src/migrations/
+
+EXPOSE 3001
+
+CMD ["node", "dist/http-server.js"]
