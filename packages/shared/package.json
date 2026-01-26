@@ -18,6 +18,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "cors": "^2.8.5",
