@@ -32,12 +32,8 @@ services:
       - "6336:6334"
     volumes:
       - qdrant_dev_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
+    # Health check disabled - Qdrant base image lacks common network tools
+    # Service availability verified through app connectivity
     restart: unless-stopped
     networks:
       - secondlayer-dev-network
@@ -133,7 +129,7 @@ services:
       - app_dev_data:/app/data
 
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/health"]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3003/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
       interval: 30s
       timeout: 10s
       retries: 3
