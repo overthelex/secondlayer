@@ -20,7 +20,7 @@ The local environment is optimized for developer productivity with:
 docker --version
 docker compose version
 
-# Check Node.js version (18+ required)
+# Check Node.js version (20+ required)
 node --version
 npm --version
 ```
