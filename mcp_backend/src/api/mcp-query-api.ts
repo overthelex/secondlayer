@@ -60,6 +60,7 @@ export class MCPQueryAPI {
     }
     const budget = (args?.budget || args?.reasoning_budget || 'standard') as 'quick' | 'standard' | 'deep';
 
+    logger.info('[MCP Tool] classify_intent started', { query: query.substring(0, 100), budget });
     const intent = await this.queryPlanner.classifyIntent(query, budget);
     const domains = Array.isArray(intent?.domains) ? intent.domains : [];
 
@@ -357,6 +358,14 @@ export class MCPQueryAPI {
       throw new Error('query parameter is required');
     }
 
+    logger.info('[MCP Tool] search_supreme_court_practice started', {
+      procedureCode,
+      query: query.substring(0, 100),
+      limit,
+      courtLevel,
+      sectionFocus
+    });
+
     const timeRangeParsed = this.parseTimeRangeToDates(args.time_range);
     const scHints = this.buildSupremeCourtHints({ intent: 'supreme_court_position', slots: { court_level: courtLevel } });
     const searchQuery = `${query}${scHints}`.trim();
@@ -426,6 +435,13 @@ export class MCPQueryAPI {
     const caseNumber = typeof args.case_number === 'string' ? args.case_number.trim() : '';
     const depth = Math.min(5, Math.max(1, Number(args.depth || 2)));
     const budget = args.reasoning_budget || 'standard';
+
+    logger.info('[MCP Tool] get_court_decision started', {
+      docId: docIdRaw,
+      caseNumber,
+      depth,
+      budget
+    });
 
     let docId: number | null = null;
     if (docIdRaw !== undefined && docIdRaw !== null && String(docIdRaw).trim().length > 0) {
@@ -1980,65 +1996,98 @@ export class MCPQueryAPI {
   }
 
   async handleToolCall(name: string, args: any): Promise<any> {
-    logger.info('Tool call', { name, args });
+    const startTime = Date.now();
+    logger.info('[MCP] Tool call initiated', { toolName: name });
 
     try {
+      let result;
       switch (name) {
         case 'classify_intent':
-          return await this.classifyIntentTool(args);
+          result = await this.classifyIntentTool(args);
+          break;
         case 'retrieve_legal_sources':
-          return await this.retrieveLegalSourcesTool(args);
+          result = await this.retrieveLegalSourcesTool(args);
+          break;
         case 'analyze_legal_patterns':
-          return await this.analyzeLegalPatternsTool(args);
+          result = await this.analyzeLegalPatternsTool(args);
+          break;
         case 'validate_response':
-          return await this.validateResponseTool(args);
+          result = await this.validateResponseTool(args);
+          break;
         case 'search_legal_precedents':
-          return await this.searchLegalPrecedents(args);
+          result = await this.searchLegalPrecedents(args);
+          break;
         case 'analyze_case_pattern':
-          return await this.analyzeCasePattern(args);
+          result = await this.analyzeCasePattern(args);
+          break;
         case 'get_similar_reasoning':
-          return await this.getSimilarReasoning(args);
+          result = await this.getSimilarReasoning(args);
+          break;
         case 'extract_document_sections':
-          return await this.extractDocumentSections(args);
+          result = await this.extractDocumentSections(args);
+          break;
         case 'count_cases_by_party':
-          return await this.countCasesByParty(args);
+          result = await this.countCasesByParty(args);
+          break;
         case 'find_relevant_law_articles':
-          return await this.findRelevantLawArticles(args);
+          result = await this.findRelevantLawArticles(args);
+          break;
         case 'check_precedent_status':
-          return await this.checkPrecedentStatus(args);
+          result = await this.checkPrecedentStatus(args);
+          break;
         case 'load_full_texts':
-          return await this.loadFullTexts(args);
+          result = await this.loadFullTexts(args);
+          break;
         case 'bulk_ingest_court_decisions':
-          return await this.bulkIngestCourtDecisions(args);
+          result = await this.bulkIngestCourtDecisions(args);
+          break;
         case 'get_citation_graph':
-          return await this.getCitationGraph(args);
+          result = await this.getCitationGraph(args);
+          break;
         case 'search_procedural_norms':
-          return await this.searchProceduralNorms(args);
+          result = await this.searchProceduralNorms(args);
+          break;
         case 'search_supreme_court_practice':
-          return await this.searchSupremeCourtPractice(args);
+          result = await this.searchSupremeCourtPractice(args);
+          break;
         case 'get_court_decision':
-          return await this.getCourtDecision(args);
+          result = await this.getCourtDecision(args);
+          break;
         case 'get_case_text':
-          return await this.getCourtDecision(args);
+          result = await this.getCourtDecision(args);
+          break;
         case 'compare_practice_pro_contra':
-          return await this.comparePracticeProContra(args);
+          result = await this.comparePracticeProContra(args);
+          break;
         case 'find_similar_fact_pattern_cases':
-          return await this.findSimilarFactPatternCases(args);
+          result = await this.findSimilarFactPatternCases(args);
+          break;
         case 'calculate_procedural_deadlines':
-          return await this.calculateProceduralDeadlines(args);
+          result = await this.calculateProceduralDeadlines(args);
+          break;
         case 'build_procedural_checklist':
-          return await this.buildProceduralChecklist(args);
+          result = await this.buildProceduralChecklist(args);
+          break;
         case 'calculate_monetary_claims':
-          return await this.calculateMonetaryClaims(args);
+          result = await this.calculateMonetaryClaims(args);
+          break;
         case 'format_answer_pack':
-          return await this.formatAnswerPack(args);
+          result = await this.formatAnswerPack(args);
+          break;
         case 'get_legal_advice':
-          return await this.getLegalAdvice(args);
+          result = await this.getLegalAdvice(args);
+          break;
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
+
+      const duration = Date.now() - startTime;
+      logger.info('[MCP] Tool call completed', { toolName: name, durationMs: duration });
+      return result;
+
     } catch (error: any) {
-      logger.error('Tool call error:', error);
+      const duration = Date.now() - startTime;
+      logger.error('[MCP] Tool call failed', { toolName: name, durationMs: duration, error: error.message });
       return {
         content: [
           {
@@ -3092,7 +3141,13 @@ export class MCPQueryAPI {
 
   private async getLegalAdvice(args: any): Promise<any> {
     const budget = args.reasoning_budget || 'standard';
-    
+
+    logger.info('[MCP Tool] get_legal_advice started', {
+      query: String(args.query || '').substring(0, 100),
+      budget,
+      hasAdditionalContext: !!args.context
+    });
+
     // Step 1: Classify intent
     const intent = await this.queryPlanner.classifyIntent(args.query, budget);
     

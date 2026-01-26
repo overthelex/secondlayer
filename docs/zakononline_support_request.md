@@ -3,8 +3,8 @@
 ## Тема: Відсутність доступу до endpoints ЄСПЛ та НПА
 
 ### Інформація про токени:
-- Token 1: `E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B`
-- Token 2: `DEC348-DDF5B0-45389B-7A4EB5-4A2BF2-C6AD0C-8DECCD-7A4886`
+- Token 1: `YOUR_ZAKONONLINE_TOKEN_1`
+- Token 2: `YOUR_ZAKONONLINE_TOKEN_2`
 
 ---
 
@@ -14,7 +14,7 @@
 
 **1.1. Endpoint /api/echr/practice (404):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/api/echr/practice?limit=1"
 ```
@@ -22,7 +22,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **1.2. Домен echr.searcher.api (timeout):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://echr.searcher.api.zakononline.com.ua/v1/search?limit=1"
 ```
@@ -30,7 +30,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **1.3. Параметр mode=echr (ігнорується):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/v1/search?mode=echr&limit=1"
 ```
@@ -44,7 +44,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **2.1. Endpoint /api/npa/search (404):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/api/npa/search?limit=1"
 ```
@@ -52,7 +52,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **2.2. Пошук з target=title (повертає судові рішення замість НПА):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/v1/search?target=title&limit=1"
 ```
@@ -60,7 +60,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **2.3. Пошук НПА з параметрами (400):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/v1/search?target=title&mode=sph04&search=Конституція&limit=1"
 ```
@@ -68,7 +68,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **2.4. Метадані НПА (працює, але без даних):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/v1/search/meta?target=title"
 ```
@@ -81,7 +81,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **3.1. Endpoint /api/court/practice (404):**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/api/court/practice?limit=1"
 ```
@@ -93,7 +93,7 @@ curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
 
 **Базовий пошук судових рішень:**
 ```bash
-curl -H "X-App-Token: E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B" \
+curl -H "X-App-Token: YOUR_ZAKONONLINE_TOKEN_1" \
      -H "Accept: application/json" \
      "https://court.searcher.api.zakononline.com.ua/v1/search?target=text&mode=sph04&limit=1"
 ```

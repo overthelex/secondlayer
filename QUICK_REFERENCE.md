@@ -18,8 +18,8 @@ npm run build:all && ./deploy-to-gate.sh
 ## 🔑 OAuth2 Credentials (from google_OAUTH2.json)
 
 ```bash
-Client ID: 323273425312-4chgdc38o82r611f9r1403sfcrvcs5jp.apps.googleusercontent.com
-Client Secret: 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
+Client ID: YOUR_GOOGLE_CLIENT_ID
+Client Secret: YOUR_GOOGLE_CLIENT_SECRET
 ```
 
 **Authorized Redirect URI**: `https://legal.org.ua/auth/google/callback`
@@ -39,7 +39,7 @@ Client Secret: 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
 ### Connect to PostgreSQL
 
 ```bash
-PGPASSWORD=jyGJHGFJHgjgjhGVJHGJHg765 \
+PGPASSWORD=YOUR_POSTGRES_PASSWORD \
 psql -h localhost -U secondlayer -d secondlayer_db
 ```
 
@@ -221,12 +221,12 @@ Located in `/root/SecondLayer/mcp_backend/.env`:
 
 ```bash
 # OAuth2 (REQUIRED)
-GOOGLE_CLIENT_ID=323273425312-4chgdc38o82r611f9r1403sfcrvcs5jp.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=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
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
 GOOGLE_CALLBACK_URL=https://legal.org.ua/auth/google/callback
 
 # JWT (REQUIRED)
-JWT_SECRET=357812b0f609a923e6bf7794647fef274dd0efe1604e45267fd4492ee8e2a5fc
+JWT_SECRET=YOUR_JWT_SECRET_64_CHARS
 
 # App Config
 FRONTEND_URL=https://legal.org.ua
@@ -235,10 +235,10 @@ HTTP_PORT=3000
 HTTP_HOST=0.0.0.0
 
 # API Keys (for MCP clients)
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456,c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4
+SECONDARY_LAYER_KEYS=YOUR_API_KEY_1,YOUR_API_KEY_2,YOUR_API_KEY_3
 
 # Database
-DATABASE_URL=postgresql://secondlayer:jyGJHGFJHgjgjhGVJHGJHg765@localhost:5432/secondlayer_db
+DATABASE_URL=postgresql://secondlayer:YOUR_POSTGRES_PASSWORD@localhost:5432/secondlayer_db
 ```
 
 ## 📊 Monitoring Queries

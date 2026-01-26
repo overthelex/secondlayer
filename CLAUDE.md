@@ -2,324 +2,311 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Repository Overview
 
-**SecondLayer** is a semantic legal analysis platform for Ukrainian court cases from Zakononline. It implements a Model Context Protocol (MCP) server that provides AI-powered analysis of legal documents, including semantic search, pattern recognition, citation validation, and hallucination detection.
+SecondLayer is a monorepo containing multiple MCP (Model Context Protocol) servers for legal document analysis in Ukraine. The system provides semantic search, AI-powered analysis, and integration with ZakonOnline court database and Verkhovna Rada (Parliament) data.
+
+### Main Components
+
+- **mcp_backend/** - Primary MCP server for court cases and legal documents (ZakonOnline integration)
+- **mcp_rada/** - Secondary MCP server for Ukrainian Parliament data (deputies, bills, legislation)
+- **lexwebapp/** - Web frontend/admin panel
+- **packages/shared/** - Shared TypeScript types and utilities
+- **deployment/** - Multi-environment Docker deployment configurations
 
 ## Architecture
 
-### Monorepo Structure
+### Dual Transport System
 
-```
-SecondLayer/
-├── mcp_backend/     # TypeScript MCP server
-├── frontend/        # React admin panel
-└── package.json     # npm workspaces root
-```
+Both MCP servers support three operational modes:
 
-### Backend Architecture (mcp_backend/)
+1. **MCP stdio** - Standard MCP protocol for Claude Desktop integration
+2. **HTTP API** - REST endpoints for web apps and direct access
+3. **SSE (Server-Sent Events)** - Remote MCP over HTTPS for distributed clients
 
-The backend operates in two modes:
-- **MCP Mode**: stdio-based MCP server for AI assistant integration
-- **HTTP Mode**: REST API server with SSE streaming support
+### Technology Stack
 
-**Core Services** (`src/services/`):
+- **Runtime**: Node.js 20+ with TypeScript 5.x
+- **Databases**: PostgreSQL 15, Redis 7, Qdrant (vector DB)
+- **AI**: OpenAI API (GPT-4o, text-embedding-ada-002), optional Anthropic
+- **External APIs**: ZakonOnline, Verkhovna Rada Open Data
+- **Framework**: Express.js, MCP SDK (@modelcontextprotocol/sdk)
 
-| Service | Responsibility |
-|---------|---------------|
-| `query-planner.ts` | Classifies user intent and builds query parameters using OpenAI |
-| `semantic-sectionizer.ts` | Extracts structured sections (facts, reasoning, decision) from court documents |
-| `embedding-service.ts` | Generates OpenAI embeddings and manages Qdrant vector storage |
-| `legal-pattern-store.ts` | Stores and matches legal reasoning patterns across cases |
-| `citation-validator.ts` | Validates precedent citations and builds citation graphs |
-| `hallucination-guard.ts` | Validates AI responses against source documents |
-| `document-service.ts` | PostgreSQL document CRUD operations |
+## Development Commands
 
-**Key Adapters** (`src/adapters/`):
-- `zo-adapter.ts` - Zakononline API client with token rotation and response normalization
-
-**Infrastructure Dependencies:**
-- PostgreSQL - document metadata and structured data
-- Qdrant - vector embeddings for semantic search
-- Redis - caching layer
-- OpenAI API - embeddings (text-embedding-ada-002) and GPT analysis
-
-**Dual Entry Points:**
-- `src/index.ts` - MCP stdio server
-- `src/http-server.ts` - Express HTTP server with SSE streaming
-
-### Frontend Architecture (frontend/)
-
-React admin panel built with Refine framework:
-- **Framework**: Refine v4 (React-based admin framework)
-- **UI**: Ant Design 5 with custom cyan theme
-- **Data Provider**: Custom REST API provider in `src/providers/data-provider.ts`
-- **Pages**: Dashboard, Documents, Patterns, Queries (all with CRUD operations)
-
-## Common Commands
-
-### Development
-
-```bash
-# Install all dependencies (monorepo)
-npm run install:all
-
-# Start backend HTTP server (port 3000)
-npm run backend
-# or: cd mcp_backend && npm run dev:http
-
-# Start backend in MCP mode (stdio)
-cd mcp_backend && npm run dev
-
-# Start frontend (port 5173)
-npm run frontend
-# or: cd frontend && npm run dev
-
-# Build for production
-npm run backend:build    # Creates dist/ folder
-npm run frontend:build   # Creates dist/ folder
-```
-
-### Database
+### Backend (mcp_backend)
 
 ```bash
 cd mcp_backend
 
-# Create database and run migrations
-npm run db:setup
+# Development
+npm run dev          # MCP stdio mode
+npm run dev:http     # HTTP server (port 3000)
+npm run dev:sse      # SSE mode for remote MCP
 
-# Run migrations only (requires build first)
-npm run migrate
+# Build and run
+npm run build
+npm start           # Production MCP
+npm start:http      # Production HTTP
 
-# Create database only
-npm run db:create
-```
+# Database
+npm run db:setup    # Create DB and run migrations
+npm run migrate     # Run migrations only
 
-### Testing
-
-```bash
-cd mcp_backend
-
-# Run all tests
+# Testing
 npm test
-
-# Watch mode
-npm test:watch
-
-# Lint TypeScript
+npm run test:watch
 npm run lint
 ```
 
-### Docker
+### RADA Server (mcp_rada)
 
 ```bash
-cd mcp_backend
+cd mcp_rada
 
-# Start all services (PostgreSQL, Redis, Qdrant, app)
-docker-compose up -d
+# Development (uses different ports to avoid conflicts)
+npm run dev:http     # HTTP server (port 3001)
+npm run dev          # MCP stdio mode
 
-# Rebuild and start
-docker-compose up -d --build
+# Database (separate from mcp_backend)
+npm run db:setup
 
-# View logs
-docker-compose logs -f app
+# Data synchronization
+npm run sync:deputies   # Fetch deputy data from RADA API
+npm run sync:laws       # Fetch legislation texts
+npm run cleanup:cache   # Clean expired cache entries
 
-# Stop all services
-docker-compose down
+# Build and test
+npm run build
+npm test
 ```
 
-## Environment Configuration
+### Monorepo Root
 
-### Root `.env`
 ```bash
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456
+# Install all dependencies (root + workspaces)
+npm run install:all
+
+# Run both backends simultaneously
+npm run backend      # Start mcp_backend HTTP
+npm run frontend     # Start lexwebapp dev server
 ```
 
-### `mcp_backend/.env`
+## Port Allocation
+
+**mcp_backend** (main court/legal server):
+- HTTP: 3000
+- PostgreSQL: 5432
+- Redis: 6379
+- Qdrant: 6333-6334
+
+**mcp_rada** (parliament server):
+- HTTP: 3001
+- PostgreSQL: 5433
+- Redis: 6380
+- Qdrant: 6335-6336
+
+**Development environments** (on gateway server):
+- Local: 3000 (PostgreSQL 5432, Redis 6379)
+- Dev: 3003 (PostgreSQL 5433, Redis 6380)
+- Stage: 3002 (PostgreSQL 5434, Redis 6381)
+- Prod: 3001 (PostgreSQL 5432, Redis 6379)
+
+## Key Architectural Patterns
+
+### Service Layer Organization (mcp_backend/src/services/)
+
+- **QueryPlanner** - Analyzes user queries, classifies intent, selects appropriate search strategy
+- **DocumentService** - Manages document retrieval and caching
+- **EmbeddingService** - Generates vector embeddings for semantic search
+- **SemanticSectionizer** - Breaks documents into logical sections
+- **LegalPatternStore** - Stores and retrieves legal reasoning patterns
+- **CitationValidator** - Validates legal citations against source documents
+- **HallucinationGuard** - Prevents AI from generating unsupported claims
+- **CostTracker** - Tracks OpenAI/Anthropic API costs per request
+- **LegislationService** - Handles legislation text retrieval with sectioning
+
+### Adapter Pattern (mcp_backend/src/adapters/)
+
+- **ZOAdapter** - Two instances for different ZakonOnline endpoints (court cases vs practice)
+- **RadaLegislationAdapter** - Fetches legislation from Verkhovna Rada API
+
+### MCP Tools API (mcp_backend/src/api/)
+
+**MCPQueryAPI** (mcp-query-api.ts) - Main tools:
+- `classify_intent` - Query classification
+- `search_court_cases` - Search ZakonOnline database
+- `get_document_text` - Retrieve full court decision
+- `semantic_search` - Vector similarity search
+- `find_legal_patterns` - Pattern matching
+- `validate_citations` - Citation verification
+- `packaged_lawyer_answer` - Complete legal analysis workflow
+
+**LegislationTools** (legislation-tools.ts):
+- `search_legislation` - Search laws/codes by keyword
+- `get_legislation_section` - Retrieve specific article/section with intelligent sectioning
+
+### HTTP Server Structure (mcp_backend/src/http-server.ts)
+
+Express app with:
+- **Auth middleware**: Bearer token (`SECONDARY_LAYER_KEYS`) + optional JWT/OAuth
+- **Tool execution**: `/api/tools/:toolName` (POST)
+- **SSE streaming**: `/api/tools/:toolName/stream` (POST)
+- **Batch operations**: `/api/tools/batch` (POST)
+- **Cost tracking**: Automatic per-request cost calculation
+
+## Environment Variables
+
+### Required for mcp_backend
+
 ```bash
 # Database
-DATABASE_URL=postgresql://secondlayer:secondlayer_password@localhost:5432/secondlayer_db
+DATABASE_URL=postgresql://user:pass@localhost:5432/secondlayer
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=secondlayer
+POSTGRES_PASSWORD=<secret>
+POSTGRES_DB=secondlayer
 
-# Redis
+# Cache & Vectors
 REDIS_HOST=localhost
 REDIS_PORT=6379
-
-# Qdrant Vector Database
 QDRANT_URL=http://localhost:6333
 
-# OpenAI - Dynamic Model Selection (RECOMMENDED)
-# Use different models based on task complexity for cost optimization
-OPENAI_MODEL_QUICK=gpt-4o-mini       # Simple tasks (keyword extraction)
-OPENAI_MODEL_STANDARD=gpt-4o-mini    # Moderate tasks (intent classification)
-OPENAI_MODEL_DEEP=gpt-4o             # Complex tasks (deep analysis)
-
-# OR use single model for all tasks (simpler config)
-# OPENAI_MODEL=gpt-4o
-
-# Embedding model (MUST stay consistent once you have vectors in DB!)
+# AI Models
+OPENAI_API_KEY=sk-...
 OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
 
-# API Keys (supports rotation)
-OPENAI_API_KEY=sk-...
-OPENAI_API_KEY2=sk-...      # Optional fallback key
+# Dynamic model selection (budget-aware)
+OPENAI_MODEL_QUICK=gpt-4o-mini        # Simple tasks
+OPENAI_MODEL_STANDARD=gpt-4o-mini     # Moderate complexity
+OPENAI_MODEL_DEEP=gpt-4o              # Complex analysis
 
-# Zakononline API (supports token rotation)
-ZAKONONLINE_API_TOKEN=your-token
-ZAKONONLINE_API_TOKEN2=your-token-2  # Optional fallback
+# External APIs
+ZAKONONLINE_API_TOKEN=<token>
 
-# HTTP Server Security
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456
-HTTP_PORT=3000
-HTTP_HOST=0.0.0.0
+# Security
+SECONDARY_LAYER_KEYS=test-key-123,prod-key-456
+JWT_SECRET=<64-char-secret>
+
+# OAuth (optional)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_CALLBACK_URL=https://domain/auth/google/callback
 ```
 
-### `frontend/.env`
+### Required for mcp_rada
+
+Similar to mcp_backend but with different ports (5433, 6380, 3001) and optional SecondLayer integration:
+
 ```bash
-VITE_API_URL=http://localhost:3000/api
-VITE_SECONDARY_LAYER_KEY=test-key-123
+SECONDLAYER_URL=http://localhost:3000
+SECONDLAYER_API_KEY=<key>  # For cross-referencing court cases
 ```
 
-## API Integration
+## Database Migrations
 
-### HTTP Mode Endpoints
+Migrations are in `mcp_backend/src/migrations/` and `mcp_rada/src/migrations/`. Each has a `migrate.ts` runner.
 
-All endpoints except `/health` require `Authorization: Bearer <SECONDARY_LAYER_KEY>` header.
+**Running migrations:**
+```bash
+cd mcp_backend
+npm run migrate  # Builds then runs dist/migrations/migrate.js
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check (no auth) |
-| GET | `/api/tools` | List available MCP tools |
-| POST | `/api/tools/:toolName` | Execute MCP tool (JSON or SSE) |
-| POST | `/api/tools/:toolName/stream` | Execute tool with SSE streaming |
-| POST | `/api/tools/batch` | Batch tool execution |
+## Docker Deployment
 
-**SSE Streaming**: Set `Accept: text/event-stream` header or use `/stream` endpoint for real-time progress events.
+### Local Development (docker-compose.local.yml)
 
-### MCP Tools
+```bash
+cd deployment
+./manage-gateway.sh start local
+./manage-gateway.sh logs local
+./manage-gateway.sh stop local
+```
 
-When running in MCP mode, these tools are available:
+### Multi-Environment Gateway (dev/stage/prod)
 
-1. **search_legal_precedents** - Search court decisions with semantic analysis
-   - Supports case number detection (e.g., "756/655/23")
-   - Uses AI to extract search terms from source cases
-   - Returns similar cases with metadata
+Located in `deployment/` directory with separate compose files for each environment.
 
-2. **analyze_case_pattern** - Analyze patterns in judicial practice
-   - Identifies success/failure arguments
-   - Calculates risk factors
-   - Provides outcome statistics
+```bash
+cd deployment
 
-3. **get_similar_reasoning** - Find similar judicial reasoning by vector similarity
+# Build images
+./manage-gateway.sh build
 
-4. **extract_document_sections** - Extract structured sections (FACTS, REASONING, DECISION, etc.)
+# Start specific environment
+./manage-gateway.sh start dev
+./manage-gateway.sh start stage
+./manage-gateway.sh start prod
 
-5. **find_relevant_law_articles** - Find frequently cited law articles for a topic
+# Start all environments
+./manage-gateway.sh start all
 
-6. **check_precedent_status** - Validate precedent status (valid, overruled, questioned, etc.)
+# View status
+./manage-gateway.sh status
+./manage-gateway.sh health
 
-7. **get_citation_graph** - Build citation relationships between cases
+# Deploy to gate server
+./manage-gateway.sh deploy all
+```
 
-8. **get_legal_advice** - Comprehensive analysis with source validation
-   - Supports streaming mode with progress events
-   - Includes hallucination detection
-   - Provides reasoning chain with confidence scores
+**Gateway routing**: Nginx at port 8080 routes to environments based on subdomain (dev.legal.org.ua, stage.legal.org.ua, legal.org.ua).
 
-## Key Implementation Details
+## Testing
 
-### TypeScript Configuration
+Both servers use Jest with TypeScript:
 
-- **ES Modules**: Uses `.js` extensions in import statements despite TypeScript sources
-- **Target**: ES2020
-- **Module**: ESNext with NodeNext resolution
-- Configured in `mcp_backend/tsconfig.json`
+```bash
+npm test              # Run all tests
+npm run test:watch    # Watch mode
+```
 
-### Dynamic Model Selection
+Test files are in `__tests__/` directories alongside source files.
 
-The system automatically selects OpenAI models based on task complexity using `ModelSelector` in `utils/model-selector.ts`:
+## Common Workflows
 
-| Budget Level | Use Case | Default Model | Cost/1M tokens |
-|--------------|----------|---------------|----------------|
-| **quick** | Keyword extraction, simple classification | gpt-4o-mini | $0.15 input |
-| **standard** | Intent classification, moderate analysis | gpt-4o-mini | $0.15 input |
-| **deep** | Complex section extraction, deep reasoning | gpt-4o | $2.50 input |
+### Adding a new MCP tool
 
-**Configuration Options:**
-1. **Per-budget models** (recommended): Set `OPENAI_MODEL_QUICK`, `OPENAI_MODEL_STANDARD`, `OPENAI_MODEL_DEEP`
-2. **Single model**: Set `OPENAI_MODEL` to use same model for all budgets
+1. Define tool schema in `mcp_backend/src/api/mcp-query-api.ts` or create new file in `src/api/`
+2. Implement handler method in MCPQueryAPI class
+3. Register tool in `getTools()` method
+4. Add to HTTP router in `http-server.ts` if needed
+5. Write tests in `src/api/__tests__/`
 
-**Automatic Budget Selection:**
-- Query length < 20 chars → `quick`
-- Query length < 200 chars → `standard`
-- Query length > 200 chars or large context → `deep`
-- User can override via `reasoning_budget` parameter
+### Working with legislation
 
-### API Key Rotation
+The LegislationService uses intelligent sectioning:
+- Fetches full legislation text from RADA API
+- Splits into logical sections (articles, parts, chapters)
+- Stores sections in PostgreSQL with metadata
+- Enables precise article/section retrieval
 
-Both OpenAI and Zakononline adapters support automatic key rotation:
-- `OpenAIClientManager` in `utils/openai-client.ts`
-- `ZOAdapter` in `adapters/zo-adapter.ts`
-- Rotates on 429 (rate limit) and 401/403 (auth errors)
+**Example**: Requesting "Constitution Article 124" returns just that article with context, not the entire Constitution.
 
-### HTML Parsing
+### Cost tracking
 
-Court decisions from Zakononline come as HTML. The system:
-1. Parses HTML using Cheerio (`utils/html-parser.ts`)
-2. Extracts text from `#article-container`
-3. Identifies sections by Ukrainian keywords (УСТАНОВИВ, ВИРІШИВ)
-4. Uses OpenAI to extract search terms for semantic analysis
+Every tool execution automatically tracks:
+- OpenAI token usage (prompt + completion)
+- Model used and tier
+- Execution time
+- External API calls (ZakonOnline, RADA)
 
-### Vector Embeddings
+Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
-- Model: `text-embedding-ada-002` (1536 dimensions)
-- Stored in Qdrant with metadata (doc_id, section_type, law_articles)
-- Used for semantic similarity search in court reasoning
+## Important Notes
 
-### Reasoning Budgets
-
-Three levels of analysis depth defined in `src/types/index.ts`:
-- `quick`: 1 LLM call, 1000 tokens
-- `standard`: 3 LLM calls, 3000 tokens
-- `deep`: 5 LLM calls, 5000 tokens
-
-## Development Workflow
-
-### Adding a New MCP Tool
-
-1. Define tool schema in `src/api/mcp-query-api.ts` → `getTools()`
-2. Add handler method to `MCPQueryAPI` class
-3. Add case to `handleToolCall()` switch statement
-4. For streaming: implement `*Stream()` method with `StreamEventCallback`
-
-### Database Migrations
-
-1. Create SQL file in `src/migrations/` with naming: `NNN_description.sql`
-2. Run `npm run migrate` from mcp_backend directory
-3. Migration tracking stored in `migrations` table
-
-### Testing Strategy
-
-- Tests in `src/api/__tests__/`
-- Jest configuration: `jest.config.js`
-- Run single test: `npm test -- search-legal-precedents.test.ts`
-
-## Troubleshooting
-
-### Port 3000 Already in Use
-Check if backend is already running: `lsof -i :3000`
-
-### Qdrant Unhealthy
-Qdrant takes ~30s to start. Check: `curl http://localhost:6333/`
-
-### Frontend 401 Errors
-1. Verify backend is running on port 3000
-2. Check `VITE_SECONDARY_LAYER_KEY` matches a key in backend's `SECONDARY_LAYER_KEYS`
-
-### TypeScript Build Errors with .js Extensions
-This is intentional for ES modules. Don't remove `.js` from imports.
+- **Two ZOAdapter instances**: One for court cases search, one for legal practice database (different endpoints)
+- **Cache TTLs**: Deputies 7d, Bills 1d, Laws 30d (configured in RADA server)
+- **Model selection**: Use `ModelSelector` utility for budget-aware model choice (quick/standard/deep)
+- **Legislation aliases**: System recognizes "constitution", "цивільний кодекс", "кримінальний кодекс", etc.
+- **SSE streaming**: For long-running operations, use SSE endpoints to stream progress events
+- **Dual-auth**: HTTP mode supports both bearer token (for API clients) and JWT/OAuth (for web users)
 
 ## Related Documentation
 
-- `mcp_backend/docs/SSE_STREAMING.md` - Server-Sent Events implementation
-- `mcp_backend/docs/DATABASE_SETUP.md` - Database setup guide
-- `frontend/SETUP.md` - Frontend configuration details
-- `MIGRATION_SUMMARY.md` - Project migration history
+- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration guide
+- `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol
+- `deployment/LOCAL_DEVELOPMENT.md` - Local development setup
+- `deployment/GATEWAY_SETUP.md` - Multi-environment deployment
+- `START_HERE.md` - Quick start guide for the monorepo
