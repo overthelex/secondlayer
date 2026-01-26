@@ -115,7 +115,7 @@ ssh gate "docker exec lexwebapp-dev sh -c 'cat /usr/share/nginx/html/assets/*.js
 
 ```env
 VITE_API_URL=https://dev.legal.org.ua
-VITE_API_KEY=REDACTED_SL_KEY_LOCAL
+VITE_API_KEY=YOUR_API_KEY
 ```
 
 ---

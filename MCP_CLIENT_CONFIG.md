@@ -10,7 +10,7 @@
     "SecondLayerMCP": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer REDACTED_SL_KEY_LOCAL"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -25,7 +25,7 @@
     "SecondLayerMCP": {
       "url": "https://legal.org.ua/api/tools/get_legal_advice/stream",
       "headers": {
-        "Authorization": "Bearer REDACTED_SL_KEY_LOCAL"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -37,20 +37,20 @@
 From `mcp_backend/.env`:
 
 ```bash
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456,REDACTED_SL_KEY_LOCAL
+SECONDARY_LAYER_KEYS=test-key-123,dev-key-456,YOUR_API_KEY_PROD
 ```
 
 **Valid API Keys**:
 - `test-key-123` (development)
 - `dev-key-456` (development)
-- `REDACTED_SL_KEY_LOCAL` (production)
+- `YOUR_API_KEY_PROD` (production)
 
 ## Authentication Types
 
 ### API Keys (for MCP Clients) ✅
 - **Use case**: Claude Desktop, MCP clients, automated tools
 - **Format**: Plain string (no dots)
-- **Example**: `Bearer REDACTED_SL_KEY_LOCAL`
+- **Example**: `Bearer YOUR_API_KEY_PROD`
 - **Expiry**: Never expires
 - **Access**: MCP tools only (`/api/tools/*`)
 
@@ -91,7 +91,7 @@ curl -I https://legal.org.ua/api/tools/get_legal_advice/stream
 ```bash
 # Test with valid API key
 curl -X POST https://legal.org.ua/api/tools/get_legal_advice \
-  -H "Authorization: Bearer REDACTED_SL_KEY_LOCAL" \
+  -H "Authorization: Bearer YOUR_API_KEY_PROD" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Test query",
@@ -132,7 +132,7 @@ For **Claude Desktop** (claude_desktop_config.json):
         "QDRANT_URL": "http://localhost:6333",
         "REDIS_URL": "redis://localhost:6379",
         "OPENAI_API_KEY": "sk-proj-...",
-        "ZAKONONLINE_API_TOKEN": "REDACTED_ZO_TOKEN_1"
+        "ZAKONONLINE_API_TOKEN": "YOUR_ZAKONONLINE_TOKEN"
       }
     }
   }
@@ -147,7 +147,7 @@ For **Claude Desktop** (claude_desktop_config.json):
     "secondlayer-remote": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer REDACTED_SL_KEY_LOCAL"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -200,7 +200,7 @@ pm2 restart secondlayer
     "SecondLayerMCP": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer REDACTED_SL_KEY_LOCAL"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }

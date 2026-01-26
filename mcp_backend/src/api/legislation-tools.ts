@@ -28,7 +28,11 @@ export class LegislationTools {
       throw new Error('rada_id and article_number are required');
     }
 
-    logger.info(`Getting article ${args.article_number} from ${args.rada_id}`);
+    logger.info('[MCP Tool] get_legislation_article started', {
+      rada_id: args.rada_id,
+      article_number: args.article_number,
+      include_html: args.include_html
+    });
 
     const article = await this.service.getArticle(args.rada_id, args.article_number);
     
@@ -72,10 +76,11 @@ export class LegislationTools {
       throw new Error('Provide either (rada_id + article_number) or query like "ст. 625 ЦК"');
     }
 
-    logger.info('Getting legislation section', {
+    logger.info('[MCP Tool] get_legislation_section started', {
       rada_id: resolved.radaId,
       article_number: resolved.articleNumber,
       from_query: Boolean(query) && !(radaId && articleNumber),
+      query: query.substring(0, 50)
     });
 
     const article = await this.service.getArticle(resolved.radaId, resolved.articleNumber);
@@ -111,7 +116,11 @@ export class LegislationTools {
       throw new Error('rada_id and article_numbers array are required');
     }
 
-    logger.info(`Getting ${args.article_numbers.length} articles from ${args.rada_id}`);
+    logger.info('[MCP Tool] get_legislation_articles started', {
+      rada_id: args.rada_id,
+      article_count: args.article_numbers.length,
+      articles: args.article_numbers.join(', ')
+    });
 
     const articles = await this.service.getMultipleArticles(args.rada_id, args.article_numbers);
 
@@ -155,7 +164,10 @@ export class LegislationTools {
     }
 
     const limit = args.limit || 10;
-    logger.info(`Searching legislation: "${args.query}" (limit: ${limit})`);
+    logger.info('[MCP Tool] search_legislation started', {
+      query: args.query.substring(0, 100),
+      limit
+    });
 
     const directRef = parseLegislationReference(args.query);
     if (directRef) {

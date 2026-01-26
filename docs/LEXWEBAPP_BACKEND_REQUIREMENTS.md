@@ -213,12 +213,12 @@ res.redirect(`${process.env.FRONTEND_URL}/?token=${token}`);
 # In mcp_backend/.env for development
 
 ***REMOVED*** (should already exist)
-GOOGLE_CLIENT_ID=REDACTED_GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET=REDACTED_GOOGLE_CLIENT_SECRET
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
 GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
 
 # JWT (should already exist)
-JWT_SECRET=357812b0f609a923e6bf7794647fef274dd0efe1604e45267fd4492ee8e2a5fc
+JWT_SECRET=YOUR_JWT_SECRET_64_CHARS
 
 # Frontend URL for OAuth redirect
 FRONTEND_URL=https://dev.legal.org.ua
