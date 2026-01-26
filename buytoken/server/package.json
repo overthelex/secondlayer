@@ -46,7 +46,7 @@
     "passport-jwt": "^4.0.1",
     "pg": "^8.11.3",
     "stripe": "^14.10.0",
-    "uuid": "^9.0.1"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
