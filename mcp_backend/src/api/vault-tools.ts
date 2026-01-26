@@ -662,7 +662,7 @@ Pipeline:
           filteredResults = filteredResults.filter((r: any) => {
             const payload = r.payload || {};
             const docId = payload.doc_id || r.id?.toString().split(':')[0];
-            const doc = docsMap.get(docId);
+            const doc = docsMap.get(docId) as any;
             if (!doc) return false;
 
             if (args.type && doc.type !== args.type) return false;
