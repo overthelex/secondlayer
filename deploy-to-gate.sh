@@ -95,7 +95,7 @@ ssh ${GATE_USER}@${GATE_SERVER} << 'ENDSSH'
 
     # Run user table migration
     echo "Running users table migration..."
-    PGPASSWORD=${POSTGRES_PASSWORD:-jyGJHGFJHgjgjhGVJHGJHg765} \
+    PGPASSWORD=${POSTGRES_PASSWORD} \
     psql -h localhost -U secondlayer -d secondlayer_db < src/migrations/006_add_users_table.sql \
     && echo "✓ Migration completed" || echo "⚠ Migration may have already been applied"
 ENDSSH

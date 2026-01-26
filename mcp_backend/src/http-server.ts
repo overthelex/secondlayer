@@ -17,7 +17,10 @@ import { CitationValidator } from './services/citation-validator.js';
 import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
 import { LegislationTools } from './api/legislation-tools.js';
+import { DocumentAnalysisTools } from './api/document-analysis-tools.js';
+import { DocumentParser } from './services/document-parser.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
+import path from 'path';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
 import { requestContext } from './utils/openai-client.js';
@@ -40,6 +43,8 @@ class HTTPMCPServer {
   private hallucinationGuard: HallucinationGuard;
   private mcpAPI: MCPQueryAPI;
   private legislationTools: LegislationTools;
+  private documentParser: DocumentParser;
+  private documentAnalysisTools: DocumentAnalysisTools;
   private costTracker: CostTracker;
 
   constructor() {
@@ -57,6 +62,19 @@ class HTTPMCPServer {
     this.citationValidator = new CitationValidator(this.db);
     this.hallucinationGuard = new HallucinationGuard(this.db);
     this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
+
+    // Initialize document parser with Vision API credentials
+    const visionKeyPath = path.resolve(process.cwd(), '../vision-ocr-credentials.json');
+    this.documentParser = new DocumentParser(visionKeyPath);
+    this.documentAnalysisTools = new DocumentAnalysisTools(
+      this.documentParser,
+      this.sectionizer,
+      this.patternStore,
+      this.citationValidator,
+      this.embeddingService,
+      this.documentService
+    );
+
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
       this.zoAdapter,
@@ -199,6 +217,7 @@ class HTTPMCPServer {
         const tools = [
           ...this.mcpAPI.getTools(),
           ...this.legislationTools.getToolDefinitions(),
+          ...this.documentAnalysisTools.getToolDefinitions(),
         ];
         res.json({
           tools,
@@ -262,6 +281,7 @@ class HTTPMCPServer {
         const result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
+            // Route legislation tools
             if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
               let routed;
               switch (toolName) {
@@ -282,6 +302,30 @@ class HTTPMCPServer {
                   break;
                 default:
                   throw new Error(`Unknown legislation tool: ${toolName}`);
+              }
+              return {
+                content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
+              };
+            }
+
+            // Route document analysis tools
+            if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
+              let routed;
+              switch (toolName) {
+                case 'parse_document':
+                  routed = await this.documentAnalysisTools.parseDocument(args as any);
+                  break;
+                case 'extract_key_clauses':
+                  routed = await this.documentAnalysisTools.extractKeyClauses(args as any);
+                  break;
+                case 'summarize_document':
+                  routed = await this.documentAnalysisTools.summarizeDocument(args as any);
+                  break;
+                case 'compare_documents':
+                  routed = await this.documentAnalysisTools.compareDocuments(args as any);
+                  break;
+                default:
+                  throw new Error(`Unknown document analysis tool: ${toolName}`);
               }
               return {
                 content: [
@@ -443,6 +487,7 @@ class HTTPMCPServer {
     try {
       await this.db.connect();
       await this.embeddingService.initialize();
+      await this.documentParser.initialize();
       logger.info('HTTP MCP Server services initialized');
     } catch (error) {
       logger.error('Failed to initialize server:', error);

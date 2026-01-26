@@ -17,6 +17,7 @@ build/
 
 # Secrets
 google_OAUTH2.json
+vision-ocr-credentials.json
 
 # Logs
 logs/

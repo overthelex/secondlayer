@@ -17,10 +17,8 @@ ADD COLUMN IF NOT EXISTS openai_completion_tokens INTEGER DEFAULT 0;
 ALTER TABLE cost_tracking
 ADD COLUMN IF NOT EXISTS openai_calls JSONB DEFAULT '[]';
 
-ALTER TABLE cost_tracking
-ADD COLUMN IF NOT EXISTS execution_time_ms INTEGER;
-
 -- Rename duration_ms to execution_time_ms if it exists
+-- IMPORTANT: Must run BEFORE adding execution_time_ms column
 DO $$
 BEGIN
   IF EXISTS (
@@ -33,6 +31,10 @@ BEGIN
     ALTER TABLE cost_tracking RENAME COLUMN duration_ms TO execution_time_ms;
   END IF;
 END $$;
+
+-- Add execution_time_ms if it still doesn't exist (when duration_ms didn't exist)
+ALTER TABLE cost_tracking
+ADD COLUMN IF NOT EXISTS execution_time_ms INTEGER;
 
 -- Update total_cost_usd based on individual cost components
 UPDATE cost_tracking

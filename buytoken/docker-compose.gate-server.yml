@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_DB: payments_db
       POSTGRES_USER: financemanager
-      POSTGRES_PASSWORD: payments_secure_pass_2024
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
     volumes:
       - payments_db_data:/var/lib/postgresql/data
     networks:
@@ -33,7 +33,7 @@ services:
         condition: service_healthy
     environment:
       # Database
-      DATABASE_URL: postgresql://financemanager:payments_secure_pass_2024@payments-db:5432/payments_db
+      DATABASE_URL: postgresql://financemanager:${POSTGRES_PASSWORD:-change_me_in_production}@payments-db:5432/payments_db
 
       # Server
       HTTP_PORT: 3001
