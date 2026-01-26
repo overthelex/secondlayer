@@ -68,7 +68,7 @@ URL: https://dev.legal.org.ua
 ## Технічні деталі
 
 ### Build Process
-- Node.js 18-alpine для збірки
+- Node.js 20-alpine для збірки
 - Vite build з production оптимізацією
 - Nginx alpine для статичної роздачі
 - Gzip compression enabled
