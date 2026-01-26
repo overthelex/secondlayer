@@ -2,6 +2,20 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install build dependencies for native modules (playwright)
+# Playwright requires chromium and dependencies for browser automation
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Tell Playwright to use installed chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Copy manifests first for better caching
 COPY mcp_backend/package.json mcp_backend/package.json
 COPY mcp_backend/package-lock.json* mcp_backend/
@@ -39,6 +53,19 @@ RUN cd mcp_backend \
 FROM node:20-alpine
 
 WORKDIR /app/mcp_backend
+
+# Install runtime dependencies for Playwright
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Tell Playwright to use installed chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY --from=builder /app/mcp_backend/package.json ./package.json
 COPY --from=builder /app/mcp_backend/package-lock.json* ./
