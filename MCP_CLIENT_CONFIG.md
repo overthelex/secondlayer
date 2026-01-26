@@ -10,7 +10,7 @@
     "SecondLayerMCP": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -25,7 +25,7 @@
     "SecondLayerMCP": {
       "url": "https://legal.org.ua/api/tools/get_legal_advice/stream",
       "headers": {
-        "Authorization": "Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -37,20 +37,20 @@
 From `mcp_backend/.env`:
 
 ```bash
-SECONDARY_LAYER_KEYS=test-key-123,dev-key-456,c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4
+SECONDARY_LAYER_KEYS=test-key-123,dev-key-456,YOUR_API_KEY_PROD
 ```
 
 **Valid API Keys**:
 - `test-key-123` (development)
 - `dev-key-456` (development)
-- `c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4` (production)
+- `YOUR_API_KEY_PROD` (production)
 
 ## Authentication Types
 
 ### API Keys (for MCP Clients) ✅
 - **Use case**: Claude Desktop, MCP clients, automated tools
 - **Format**: Plain string (no dots)
-- **Example**: `Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4`
+- **Example**: `Bearer YOUR_API_KEY_PROD`
 - **Expiry**: Never expires
 - **Access**: MCP tools only (`/api/tools/*`)
 
@@ -91,7 +91,7 @@ curl -I https://legal.org.ua/api/tools/get_legal_advice/stream
 ```bash
 # Test with valid API key
 curl -X POST https://legal.org.ua/api/tools/get_legal_advice \
-  -H "Authorization: Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4" \
+  -H "Authorization: Bearer YOUR_API_KEY_PROD" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Test query",
@@ -132,7 +132,7 @@ For **Claude Desktop** (claude_desktop_config.json):
         "QDRANT_URL": "http://localhost:6333",
         "REDIS_URL": "redis://localhost:6379",
         "OPENAI_API_KEY": "sk-proj-...",
-        "ZAKONONLINE_API_TOKEN": "E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B"
+        "ZAKONONLINE_API_TOKEN": "YOUR_ZAKONONLINE_TOKEN"
       }
     }
   }
@@ -147,7 +147,7 @@ For **Claude Desktop** (claude_desktop_config.json):
     "secondlayer-remote": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }
@@ -200,7 +200,7 @@ pm2 restart secondlayer
     "SecondLayerMCP": {
       "url": "https://mcp.legal.org.ua/v1/sse",
       "headers": {
-        "Authorization": "Bearer c3462787ee0a9b45a1102cc195a65f8ce82c7609242aab5628d4a111c52727b4"
+        "Authorization": "Bearer YOUR_API_KEY_PROD"
       }
     }
   }

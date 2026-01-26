@@ -9,7 +9,7 @@ This document lists all the secure credentials that have been generated for the 
 
 **Generated Value**:
 ```
-7K9mL2nP8qR5sT7uV3wX6yZ1aB4cD0eF2gH5iJ8kM1nO4pQ7rS0tU3vW6xY9zA2bC5dE8fG1hI4jK7lM0nP3qR6sT9uV
+YOUR_SECURE_JWT_SECRET_MIN_64_CHARS
 ```
 
 - **Length**: 86 characters
@@ -22,22 +22,22 @@ This document lists all the secure credentials that have been generated for the 
 
 **Credentials**:
 - **User**: `financemanager`
-- **Password**: `payments_secure_pass_2024`
+- **Password**: `YOUR_DB_PASSWORD`
 - **Database**: `payments_db`
 - **Host**: `payments-db` (Docker service name)
 - **Port**: `5432`
 
 **Connection String**:
 ```
-postgresql://financemanager:payments_secure_pass_2024@payments-db:5432/payments_db
+postgresql://financemanager:YOUR_DB_PASSWORD@payments-db:5432/payments_db
 ```
 
 ### 3. Google OAuth2
 **Location**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` in `.env` files
 
 **Credentials** (from existing config):
-- **Client ID**: `323273425312-4chgdc38o82r611f9r1403sfcrvcs5jp.apps.googleusercontent.com`
-- **Client Secret**: `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`
+- **Client ID**: `YOUR_GOOGLE_CLIENT_ID`
+- **Client Secret**: `YOUR_GOOGLE_CLIENT_SECRET`
 - **Callback URL**: `https://legal.org.ua/console/api/auth/google/callback`
 
 **Source**: Google Cloud Console
