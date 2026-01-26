@@ -2,15 +2,18 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install build dependencies for native modules (canvas, playwright)
+# Install dependencies for Playwright (browser automation)
 RUN apk add --no-cache \
-    build-base \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev \
-    python3
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Tell Playwright to use installed chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # Install dependencies
 COPY package.json package-lock.json* ./
