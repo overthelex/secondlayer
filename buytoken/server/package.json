@@ -35,7 +35,7 @@
     "dotenv": "^16.3.1",
     "express-validator": "^7.0.1",
     "express-rate-limit": "^7.1.5",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^7.0.12",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -47,7 +47,7 @@
     "@types/passport-google-oauth20": "^2.0.14",
     "@types/passport-jwt": "^4.0.0",
     "@types/cors": "^2.8.17",
-    "@types/nodemailer": "^6.4.14",
+    "@types/nodemailer": "^7.0.5",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",
     "typescript": "^5.3.3",
