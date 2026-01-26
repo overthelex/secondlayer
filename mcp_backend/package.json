@@ -32,7 +32,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@google-cloud/vision": "^5.3.4",
-    "@modelcontextprotocol/sdk": "^0.5.0",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@qdrant/js-client-rest": "^1.9.0",
     "@secondlayer/shared": "file:../packages/shared",
     "@types/express-session": "^1.18.2",
