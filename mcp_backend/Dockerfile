@@ -2,6 +2,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install build dependencies for native modules (canvas, playwright)
+RUN apk add --no-cache \
+    build-base \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    python3
+
 # Install dependencies
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
