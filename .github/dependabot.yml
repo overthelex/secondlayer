@@ -1,0 +1,136 @@
+# Dependabot configuration for SecondLayer monorepo
+# See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+updates:
+  # Root package dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      # Group security updates together
+      security-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+          - "minor"
+
+  # mcp_backend - Primary MCP server
+  - package-ecosystem: "npm"
+    directory: "/mcp_backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "mcp_backend"
+    commit-message:
+      prefix: "chore(backend)"
+      include: "scope"
+
+  # mcp_rada - Parliament data server
+  - package-ecosystem: "npm"
+    directory: "/mcp_rada"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "mcp_rada"
+    commit-message:
+      prefix: "chore(rada)"
+      include: "scope"
+
+  # lexwebapp - Web frontend
+  - package-ecosystem: "npm"
+    directory: "/lexwebapp"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(webapp)"
+      include: "scope"
+
+  # buytoken/server - Token purchase service
+  - package-ecosystem: "npm"
+    directory: "/buytoken/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "buytoken"
+    commit-message:
+      prefix: "chore(buytoken)"
+      include: "scope"
+
+  # mcpadmin_ui - Admin interface
+  - package-ecosystem: "npm"
+    directory: "/mcpadmin_ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "admin-ui"
+    commit-message:
+      prefix: "chore(admin)"
+      include: "scope"
+
+  # packages/shared - Shared utilities
+  - package-ecosystem: "npm"
+    directory: "/packages/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "shared"
+    commit-message:
+      prefix: "chore(shared)"
+      include: "scope"
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/deployment"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "chore(docker)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
