@@ -11,7 +11,7 @@
     "check-env": "node check-env.js"
   },
   "dependencies": {
-    "@refinedev/antd": "^5.42.3",
+    "@refinedev/antd": "^6.0.3",
     "@refinedev/core": "^4.54.1",
     "@refinedev/react-router-v6": "^4.5.8",
     "@refinedev/simple-rest": "^5.0.8",
