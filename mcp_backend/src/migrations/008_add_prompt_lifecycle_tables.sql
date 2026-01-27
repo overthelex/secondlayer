@@ -85,8 +85,3 @@ LEFT JOIN prompt_executions pe ON pi.instance_id = pe.instance_id
 WHERE pe.executed_at >= NOW() - INTERVAL '30 days'
 GROUP BY pi.intent_name, pi.template_id, pi.template_version
 ORDER BY total_cost DESC;
-
--- Record migration
-INSERT INTO migrations (version, description, executed_at)
-VALUES (8, 'Add prompt lifecycle tables for ADR-002', CURRENT_TIMESTAMP)
-ON CONFLICT (version) DO NOTHING;
