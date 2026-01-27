@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondLayer MCP API Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2c5f8d;
+            --secondary: #1a3a52;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #17a2b8;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --border: #dee2e6;
+            --text: #333;
+            --text-muted: #6c757d;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: #f5f7fa;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 2rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--border);
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .tool-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .tool-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+
+        .tool-card-header {
+            padding: 1.25rem;
+            border-bottom: 2px solid var(--light);
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .tool-number {
+            background: var(--primary);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .tool-title {
+            flex: 1;
+            margin-left: 1rem;
+        }
+
+        .tool-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .tool-description {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .tool-card-body {
+            padding: 1.25rem;
+        }
+
+        .tool-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .tag {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .tag.category {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .tag.cost {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .tag.free {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .tool-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            padding: 2rem;
+            border-bottom: 2px solid var(--light);
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .modal-close {
+            float: right;
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--text-muted);
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--dark);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section h3 {
+            font-size: 1.3rem;
+            color: var(--dark);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--light);
+        }
+
+        .param-list {
+            background: var(--light);
+            border-radius: 6px;
+            padding: 1rem;
+        }
+
+        .param-item {
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .param-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .param-name {
+            font-weight: 600;
+            color: var(--primary);
+            font-family: 'Courier New', monospace;
+        }
+
+        .param-required {
+            color: var(--danger);
+            font-size: 0.75rem;
+            margin-left: 0.5rem;
+        }
+
+        .param-type {
+            color: var(--info);
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 1.5rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .copy-btn.copied {
+            background: var(--success);
+            border-color: var(--success);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            border-color: var(--warning);
+            color: #856404;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            border-color: var(--info);
+            color: #0c5460;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 768px) {
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🔧 SecondLayer MCP API Explorer</h1>
+            <p>Інтерактивна документація всіх 41 MCP інструментів для юридичного аналізу</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">41</div>
+                <div class="stat-label">Всього інструментів</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">8</div>
+                <div class="stat-label">Категорій</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">3</div>
+                <div class="stat-label">Типи транспорту</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">HTTP</div>
+                <div class="stat-label">REST API</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Пошук інструментів... (назва, опис, категорія)">
+            </div>
+            <div class="filter-group">
+                <button class="filter-btn active" data-category="all">Всі</button>
+                <button class="filter-btn" data-category="query">Query Pipeline</button>
+                <button class="filter-btn" data-category="search">Пошук</button>
+                <button class="filter-btn" data-category="document">Документи</button>
+                <button class="filter-btn" data-category="legislation">Законодавство</button>
+                <button class="filter-btn" data-category="analysis">Аналіз</button>
+                <button class="filter-btn" data-category="free">Безкоштовні</button>
+                <button class="filter-btn" data-category="premium">Преміум</button>
+            </div>
+        </div>
+
+        <div class="tools-grid" id="toolsGrid"></div>
+        <div class="no-results" id="noResults" style="display: none;">
+            <h3>🔍 Нічого не знайдено</h3>
+            <p>Спробуйте змінити пошуковий запит або фільтри</p>
+        </div>
+    </div>
+
+    <div class="modal" id="toolModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="modal-close" onclick="closeModal()">&times;</span>
+                <h2 id="modalTitle"></h2>
+                <p id="modalDescription" style="color: #6c757d; margin-top: 0.5rem;"></p>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        const tools = [
+            // Core Query Pipeline Tools
+            {
+                id: 1,
+                name: "classify_intent",
+                title: "Класифікація запиту",
+                description: "Query classification: service/task/depth (entry-point для роутингу pipeline)",
+                category: "query",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Запит користувача для класифікації" },
+                    { name: "context", required: false, type: "object", description: "Додатковий контекст" },
+                    { name: "reasoning_budget", required: false, type: "string", description: "quick | standard | deep" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/classify_intent \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "Які строки апеляційного оскарження?",
+    "reasoning_budget": "quick"
+  }'`
+            },
+            {
+                id: 2,
+                name: "retrieve_legal_sources",
+                title: "RAG retrieval джерел",
+                description: "Повертає raw sources (cases/laws/guidance) без аналізу",
+                category: "search",
+                cost: "paid",
+                costText: "$0.01-$0.05",
+                params: [
+                    { name: "context", required: true, type: "object", description: "Контекст з обов'язковим полем query" },
+                    { name: "limits", required: false, type: "object", description: "Ліміти на кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/retrieve_legal_sources \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "context": { "query": "поновлення строку апеляції" },
+    "limits": { "cases": 5, "laws": 3 }
+  }'`
+            },
+            {
+                id: 3,
+                name: "analyze_legal_patterns",
+                title: "Аналіз юридичних паттернів",
+                description: "Виділяє success_arguments/risk_factors по джерелах",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.02-$0.08",
+                params: [
+                    { name: "documents", required: false, type: "array", description: "Масив документів для аналізу" },
+                    { name: "query", required: false, type: "string", description: "Запит для контекстуалізації" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/analyze_legal_patterns \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "query": "ризики при поновленні строку апеляції" }'`
+            },
+            {
+                id: 4,
+                name: "validate_response",
+                title: "Trust layer валідація",
+                description: "Перевірка що відповідь спирається на джерела (anti-hallucination)",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.005-$0.02",
+                params: [
+                    { name: "answer", required: true, type: "string", description: "Відповідь для перевірки" },
+                    { name: "sources", required: true, type: "array", description: "Масив джерел" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/validate_response \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "answer": "Строк апеляції 30 днів згідно ст. 354 ЦПК",
+    "sources": [{ "id": "cpc-354", "text": "..." }]
+  }'`
+            },
+
+            // Legal Research & Precedent Search
+            {
+                id: 5,
+                name: "search_legal_precedents",
+                title: "Пошук прецедентів",
+                description: "Семантичний пошук юридичних прецедентів з аналізом",
+                category: "search",
+                cost: "paid",
+                costText: "$0.03-$0.10",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "domain", required: false, type: "string", description: "court | npa | echr | all" },
+                    { name: "time_range", required: false, type: "object", description: "Діапазон дат" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів (max 50)" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/search_legal_precedents \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "поновлення пропущеного строку апеляції",
+    "domain": "court",
+    "limit": 10
+  }'`
+            },
+            {
+                id: 6,
+                name: "analyze_case_pattern",
+                title: "Аналіз паттернів справ",
+                description: "Аналізує паттерни судової практики: аргументи, ризики, статистика",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.02-$0.08",
+                params: [
+                    { name: "intent", required: true, type: "string", description: "Намір/тип ситуації" },
+                    { name: "case_ids", required: false, type: "array", description: "Масив ID справ" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/analyze_case_pattern \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "intent": "поновлення строку апеляції" }'`
+            },
+            {
+                id: 7,
+                name: "get_similar_reasoning",
+                title: "Схоже обґрунтування",
+                description: "Знаходить схожі судові обґрунтування по векторній подібності",
+                category: "search",
+                cost: "paid",
+                costText: "$0.01-$0.03",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Текст для пошуку подібних" },
+                    { name: "section_type", required: false, type: "string", description: "FACTS | COURT_REASONING | DECISION" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_similar_reasoning \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "суд відмовив у поновленні строку",
+    "section_type": "COURT_REASONING",
+    "limit": 5
+  }'`
+            },
+            {
+                id: 8,
+                name: "search_supreme_court_practice",
+                title: "Практика Верховного Суду",
+                description: "Пошук практики ВС включаючи ВП/КЦС/КГС/КАС/ККС",
+                category: "search",
+                cost: "paid",
+                costText: "$0.02-$0.06",
+                params: [
+                    { name: "procedure_code", required: true, type: "string", description: "cpc | gpc | cac | crpc" },
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "court_level", required: false, type: "string", description: "SC | GrandChamber" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/search_supreme_court_practice \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "procedure_code": "cpc",
+    "query": "строки апеляційного оскарження"
+  }'`
+            },
+            {
+                id: 9,
+                name: "compare_practice_pro_contra",
+                title: "Практика за/проти",
+                description: "Підбірка практики \"за/проти\" по тезі (дві лінії практики)",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.05-$0.15",
+                params: [
+                    { name: "procedure_code", required: true, type: "string", description: "cpc | gpc | cac | crpc" },
+                    { name: "query", required: true, type: "string", description: "Теза для порівняння" },
+                    { name: "limit", required: false, type: "number", description: "Кількість справ на лінію" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/compare_practice_pro_contra \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "procedure_code": "cpc",
+    "query": "можливість поновлення строку апеляції"
+  }'`
+            },
+            {
+                id: 10,
+                name: "find_similar_fact_pattern_cases",
+                title: "Схожі фактичні обставини",
+                description: "Пошук справ по схожим фактам",
+                category: "search",
+                cost: "paid",
+                costText: "$0.03-$0.08",
+                params: [
+                    { name: "procedure_code", required: true, type: "string", description: "cpc | gpc | cac | crpc" },
+                    { name: "facts_text", required: true, type: "string", description: "Текст фактів" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/find_similar_fact_pattern_cases \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "procedure_code": "cpc",
+    "facts_text": "Позивач не був належним чином повідомлений..."
+  }'`
+            },
+
+            // Document Analysis
+            {
+                id: 11,
+                name: "extract_document_sections",
+                title: "Витяг секцій документа",
+                description: "Витягує структуровані секції (FACTS, REASONING, DECISION)",
+                category: "document",
+                cost: "paid",
+                costText: "$0.005-$0.05",
+                params: [
+                    { name: "doc_id", required: false, type: "string", description: "ID документа в ZakonOnline" },
+                    { name: "text", required: false, type: "string", description: "Повний текст документа" },
+                    { name: "use_llm", required: false, type: "boolean", description: "Використовувати LLM для екстракції" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/extract_document_sections \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "doc_id": 110679112, "use_llm": false }'`
+            },
+            {
+                id: 12,
+                name: "get_court_decision",
+                title: "Отримання судового рішення",
+                description: "Завантаження повного тексту та витяг секцій",
+                category: "document",
+                cost: "paid",
+                costText: "$0.01-$0.08",
+                params: [
+                    { name: "doc_id", required: false, type: "string", description: "ID документа" },
+                    { name: "case_number", required: false, type: "string", description: "Номер справи" },
+                    { name: "depth", required: false, type: "number", description: "Глибина деталізації (1-5)" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_court_decision \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "doc_id": 110679112, "depth": 3 }'`
+            },
+            {
+                id: 13,
+                name: "get_case_text",
+                title: "Отримання тексту справи",
+                description: "Alias для get_court_decision",
+                category: "document",
+                cost: "paid",
+                costText: "$0.01-$0.08",
+                params: [
+                    { name: "doc_id", required: false, type: "string", description: "ID документа" },
+                    { name: "case_number", required: false, type: "string", description: "Номер справи" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_case_text \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "case_number": "756/655/23" }'`
+            },
+
+            // Party & Citation Analysis
+            {
+                id: 14,
+                name: "count_cases_by_party",
+                title: "Підрахунок справ по стороні",
+                description: "Підраховує точну кількість судових справ за назвою сторони",
+                category: "analysis",
+                cost: "paid",
+                costText: "~$0.007/1000 справ",
+                params: [
+                    { name: "party_name", required: true, type: "string", description: "Назва компанії або ПІБ" },
+                    { name: "party_type", required: false, type: "string", description: "plaintiff | defendant | any" },
+                    { name: "return_cases", required: false, type: "boolean", description: "Повернути список справ" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/count_cases_by_party \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "party_name": "ТОВ Інвестбуд",
+    "party_type": "defendant"
+  }'`
+            },
+            {
+                id: 15,
+                name: "get_citation_graph",
+                title: "Граф цитувань",
+                description: "Будує граф цитувань між справами",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.005-$0.02",
+                params: [
+                    { name: "case_id", required: true, type: "string", description: "ID справи" },
+                    { name: "depth", required: false, type: "number", description: "Глибина графа (1-5)" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_citation_graph \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "case_id": "110679112", "depth": 2 }'`
+            },
+
+            // Legislation Tools (16-22)
+            {
+                id: 16,
+                name: "get_legislation_article",
+                title: "Отримання статті закону",
+                description: "Повний текст статті законодавчого акту (ЦПК, ГПК, КАС, КПК)",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "rada_id", required: true, type: "string", description: "ID законодавчого акту" },
+                    { name: "article_number", required: true, type: "string", description: "Номер статті" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_legislation_article \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "rada_id": "1618-15", "article_number": "354" }'`
+            },
+            {
+                id: 17,
+                name: "get_legislation_section",
+                title: "Отримання розділу закону",
+                description: "Отримати фрагмент за посиланням (ст. 625 ЦК)",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "query", required: false, type: "string", description: "Посилання (ст. 354 ЦПК)" },
+                    { name: "rada_id", required: false, type: "string", description: "ID законодавчого акту" },
+                    { name: "article_number", required: false, type: "string", description: "Номер статті" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_legislation_section \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "query": "ст. 625 ЦК" }'`
+            },
+            {
+                id: 18,
+                name: "get_legislation_articles",
+                title: "Отримання кількох статей",
+                description: "Отримати кілька статей одночасно",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "rada_id", required: true, type: "string", description: "ID законодавчого акту" },
+                    { name: "article_numbers", required: true, type: "array", description: "Масив номерів статей" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_legislation_articles \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "rada_id": "1618-15",
+    "article_numbers": ["354", "355", "356"]
+  }'`
+            },
+            {
+                id: 19,
+                name: "search_legislation",
+                title: "Пошук законодавства",
+                description: "Семантичний пошук релевантних статей законодавства",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "rada_id", required: false, type: "string", description: "Обмежити конкретним актом" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/search_legislation \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "поновлення пропущеного строку",
+    "limit": 10
+  }'`
+            },
+            {
+                id: 20,
+                name: "get_legislation_structure",
+                title: "Структура законодавчого акту",
+                description: "Отримати структуру (зміст, розділи, статті)",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "rada_id", required: true, type: "string", description: "ID законодавчого акту" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_legislation_structure \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "rada_id": "1618-15" }'`
+            },
+            {
+                id: 21,
+                name: "find_relevant_law_articles",
+                title: "Релевантні статті законів",
+                description: "Знаходить часто застосовувані статті в справах на тему",
+                category: "legislation",
+                cost: "paid",
+                costText: "$0.01-$0.02",
+                params: [
+                    { name: "topic", required: true, type: "string", description: "Тема для пошуку" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/find_relevant_law_articles \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "topic": "відшкодування моральної шкоди" }'`
+            },
+            {
+                id: 22,
+                name: "search_procedural_norms",
+                title: "Пошук процесуальних норм",
+                description: "Smart search процесуальних норм (ЦПК/ГПК) через RADA MCP",
+                category: "legislation",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "procedure_code", required: false, type: "string", description: "cpc | gpc | cac" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/search_procedural_norms \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "query": "строки касаційного оскарження" }'`
+            },
+
+            // Document Processing Tools (23-26)
+            {
+                id: 23,
+                name: "parse_document",
+                title: "Парсинг документа",
+                description: "Parse document (PDF/DOCX/HTML) з витягом тексту",
+                category: "document",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "file_path", required: false, type: "string", description: "Шлях до файлу" },
+                    { name: "url", required: false, type: "string", description: "URL документа" },
+                    { name: "content", required: false, type: "string", description: "Base64 контент" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/parse_document \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "url": "https://example.com/doc.pdf" }'`
+            },
+            {
+                id: 24,
+                name: "extract_key_clauses",
+                title: "Витяг ключових положень",
+                description: "Витягує ключові положення з договору",
+                category: "document",
+                cost: "paid",
+                costText: "$0.02-$0.05",
+                params: [
+                    { name: "text", required: true, type: "string", description: "Текст договору" },
+                    { name: "document_type", required: false, type: "string", description: "Тип документа" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/extract_key_clauses \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "text": "ДОГОВІР ОРЕНДИ...", "document_type": "lease" }'`
+            },
+            {
+                id: 25,
+                name: "summarize_document",
+                title: "Резюме документа",
+                description: "Створює коротке та детальне резюме документа",
+                category: "document",
+                cost: "paid",
+                costText: "$0.03-$0.08",
+                params: [
+                    { name: "text", required: true, type: "string", description: "Текст документа" },
+                    { name: "summary_type", required: false, type: "string", description: "short | detailed | both" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/summarize_document \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "text": "...", "summary_type": "both" }'`
+            },
+            {
+                id: 26,
+                name: "compare_documents",
+                title: "Порівняння документів",
+                description: "Семантичне порівняння двох версій документа",
+                category: "document",
+                cost: "paid",
+                costText: "$0.04-$0.10",
+                params: [
+                    { name: "text1", required: true, type: "string", description: "Перший документ" },
+                    { name: "text2", required: true, type: "string", description: "Другий документ" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/compare_documents \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "text1": "...", "text2": "..." }'`
+            },
+
+            // Document Vault Tools (27-30)
+            {
+                id: 27,
+                name: "store_document",
+                title: "Зберегти документ у Vault",
+                description: "Зберігає документ з автоматичною обробкою",
+                category: "vault",
+                cost: "paid",
+                costText: "$0.02-$0.08",
+                params: [
+                    { name: "content", required: true, type: "string", description: "Контент документа" },
+                    { name: "metadata", required: false, type: "object", description: "Метадані" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/store_document \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "content": "...", "metadata": { "type": "contract" } }'`
+            },
+            {
+                id: 28,
+                name: "get_document",
+                title: "Отримати документ з Vault",
+                description: "Отримує документ за ID",
+                category: "vault",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "document_id", required: true, type: "string", description: "ID документа" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_document \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "document_id": "doc_123" }'`
+            },
+            {
+                id: 29,
+                name: "list_documents",
+                title: "Список документів у Vault",
+                description: "Список документів з фільтрацією та пагінацією",
+                category: "vault",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "filter", required: false, type: "object", description: "Фільтри" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/list_documents \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "limit": 20 }'`
+            },
+            {
+                id: 30,
+                name: "semantic_search",
+                title: "Семантичний пошук у Vault",
+                description: "Семантичний пошук по документах vault",
+                category: "vault",
+                cost: "paid",
+                costText: "$0.01-$0.03",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "limit", required: false, type: "number", description: "Кількість результатів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/semantic_search \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "query": "договори оренди", "limit": 10 }'`
+            },
+
+            // Due Diligence Tools (31-33)
+            {
+                id: 31,
+                name: "bulk_review_runner",
+                title: "Batch огляд документів",
+                description: "Batch orchestration документів для due diligence",
+                category: "due-diligence",
+                cost: "paid",
+                costText: "~$0.10/документ",
+                params: [
+                    { name: "document_ids", required: true, type: "array", description: "Масив ID документів" },
+                    { name: "review_type", required: false, type: "string", description: "Тип огляду" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/bulk_review_runner \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "document_ids": ["doc1", "doc2"], "review_type": "full" }'`
+            },
+            {
+                id: 32,
+                name: "risk_scoring",
+                title: "Оцінка ризиків",
+                description: "Розрахунок ризик-скорів для документів",
+                category: "due-diligence",
+                cost: "paid",
+                costText: "$0.02-$0.05",
+                params: [
+                    { name: "document_id", required: true, type: "string", description: "ID документа" },
+                    { name: "findings", required: false, type: "array", description: "Виявлені проблеми" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/risk_scoring \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "document_id": "doc_123" }'`
+            },
+            {
+                id: 33,
+                name: "generate_dd_report",
+                title: "Генерація DD звіту",
+                description: "Генерує форматований DD звіт з таблицею findings",
+                category: "due-diligence",
+                cost: "paid",
+                costText: "$0.05-$0.15",
+                params: [
+                    { name: "review_results", required: true, type: "array", description: "Результати огляду" },
+                    { name: "format", required: false, type: "string", description: "html | pdf | docx" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/generate_dd_report \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "review_results": [...], "format": "pdf" }'`
+            },
+
+            // Procedural & Calculation Tools (34-37)
+            {
+                id: 34,
+                name: "check_precedent_status",
+                title: "Статус прецедента",
+                description: "Перевіряє статус прецедента: active, overturned, questionable",
+                category: "analysis",
+                cost: "paid",
+                costText: "$0.005-$0.015",
+                params: [
+                    { name: "case_id", required: true, type: "string", description: "ID справи" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/check_precedent_status \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "case_id": "110679112" }'`
+            },
+            {
+                id: 35,
+                name: "calculate_procedural_deadlines",
+                title: "Розрахунок процесуальних строків",
+                description: "Калькулятор процесуальних строків (approximate)",
+                category: "procedural",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "deadline_type", required: true, type: "string", description: "appeal | cassation | etc" },
+                    { name: "start_date", required: true, type: "string", description: "Дата початку" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/calculate_procedural_deadlines \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "deadline_type": "appeal", "start_date": "2024-01-15" }'`
+            },
+            {
+                id: 36,
+                name: "build_procedural_checklist",
+                title: "Процесуальний чеклист",
+                description: "Створює процесуальний чеклист (template + норми)",
+                category: "procedural",
+                cost: "paid",
+                costText: "$0.01-$0.03",
+                params: [
+                    { name: "procedure_type", required: true, type: "string", description: "Тип процедури" },
+                    { name: "jurisdiction", required: false, type: "string", description: "Юрисдикція" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/build_procedural_checklist \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "procedure_type": "appeal_filing" }'`
+            },
+            {
+                id: 37,
+                name: "calculate_monetary_claims",
+                title: "Розрахунок грошових вимог",
+                description: "Розрахунки для грошових вимог (min 3% річних)",
+                category: "procedural",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "principal", required: true, type: "number", description: "Основна сума" },
+                    { name: "interest_rate", required: false, type: "number", description: "Відсоткова ставка" },
+                    { name: "days", required: true, type: "number", description: "Кількість днів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/calculate_monetary_claims \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "principal": 100000, "interest_rate": 3, "days": 365 }'`
+            },
+
+            // Bulk Operations (38-39)
+            {
+                id: 38,
+                name: "load_full_texts",
+                title: "Завантаження повних текстів",
+                description: "Завантажує повні тексти рішень та зберігає в БД",
+                category: "bulk",
+                cost: "paid",
+                costText: "~$0.01/документ",
+                params: [
+                    { name: "doc_ids", required: true, type: "array", description: "Масив ID документів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/load_full_texts \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "doc_ids": ["110679112", "110441965"] }'`
+            },
+            {
+                id: 39,
+                name: "bulk_ingest_court_decisions",
+                title: "Bulk інгест рішень",
+                description: "Bulk знаходить та завантажує рішення з індексацією секцій",
+                category: "bulk",
+                cost: "paid",
+                costText: "~$0.02/документ",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Пошуковий запит" },
+                    { name: "limit", required: false, type: "number", description: "Кількість документів" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/bulk_ingest_court_decisions \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "query": "відшкодування моральної шкоди", "limit": 100 }'`
+            },
+
+            // Advanced Analysis (40-41)
+            {
+                id: 40,
+                name: "format_answer_pack",
+                title: "Форматування відповіді",
+                description: "Упаковщик в структуру norm/position/conclusion/risks (без генерації тексту)",
+                category: "advanced",
+                cost: "free",
+                costText: "Безкоштовно",
+                params: [
+                    { name: "desired_output", required: false, type: "string", description: "Бажаний формат" },
+                    { name: "norm", required: false, type: "object", description: "Правова рамка" },
+                    { name: "position", required: false, type: "object", description: "Позиція суду" },
+                    { name: "conclusion", required: false, type: "object", description: "Висновок" },
+                    { name: "risks", required: false, type: "object", description: "Ризики" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/format_answer_pack \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "norm": { "norms": [...] },
+    "conclusion": "Позов підлягає задоволенню"
+  }'`
+            },
+            {
+                id: 41,
+                name: "get_legal_advice",
+                title: "Комплексний юридичний аналіз",
+                description: "⭐ ГОЛОВНИЙ ІНСТРУМЕНТ: повний юридичний аналіз з перевіркою джерел та anti-hallucination",
+                category: "advanced",
+                cost: "premium",
+                costText: "$0.10-$0.30",
+                params: [
+                    { name: "query", required: true, type: "string", description: "Запит для аналізу" },
+                    { name: "reasoning_budget", required: false, type: "string", description: "quick | standard | deep" }
+                ],
+                example: `curl -X POST http://localhost:3000/api/tools/get_legal_advice \\
+  -H "Authorization: Bearer test-key-123" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "Чи можна поновити строк апеляції якщо повний текст рішення отримано через 40 днів?",
+    "reasoning_budget": "standard"
+  }'`
+            }
+        ];
+
+        // Render tools
+        function renderTools(filteredTools) {
+            const grid = document.getElementById('toolsGrid');
+            const noResults = document.getElementById('noResults');
+
+            if (filteredTools.length === 0) {
+                grid.style.display = 'none';
+                noResults.style.display = 'block';
+                return;
+            }
+
+            grid.style.display = 'grid';
+            noResults.style.display = 'none';
+
+            grid.innerHTML = filteredTools.map(tool => `
+                <div class="tool-card" onclick="openModal(${tool.id})">
+                    <div class="tool-card-header">
+                        <div class="tool-number">${tool.id}</div>
+                        <div class="tool-title">
+                            <div class="tool-name">${tool.name}</div>
+                            <div class="tool-description">${tool.title}</div>
+                        </div>
+                    </div>
+                    <div class="tool-card-body">
+                        <div class="tool-tags">
+                            <span class="tag category">${getCategoryLabel(tool.category)}</span>
+                            <span class="tag ${tool.cost === 'free' ? 'free' : 'cost'}">${tool.costText}</span>
+                        </div>
+                        <p style="font-size: 0.9rem; color: var(--text-muted); margin: 0;">${tool.description}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getCategoryLabel(category) {
+            const labels = {
+                query: 'Query Pipeline',
+                search: 'Пошук',
+                document: 'Документи',
+                legislation: 'Законодавство',
+                analysis: 'Аналіз',
+                vault: 'Vault',
+                'due-diligence': 'Due Diligence',
+                procedural: 'Процесуальне',
+                bulk: 'Bulk операції',
+                advanced: '⭐ Advanced'
+            };
+            return labels[category] || category;
+        }
+
+        // Search and filter
+        let currentFilter = 'all';
+
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            filterTools();
+        });
+
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.category;
+                filterTools();
+            });
+        });
+
+        function filterTools() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            let filtered = tools.filter(tool => {
+                // Category filter
+                if (currentFilter !== 'all') {
+                    if (currentFilter === 'free' && tool.cost !== 'free') return false;
+                    if (currentFilter === 'premium' && tool.cost !== 'premium') return false;
+                    if (currentFilter !== 'free' && currentFilter !== 'premium' && tool.category !== currentFilter) return false;
+                }
+
+                // Search filter
+                if (searchTerm) {
+                    return tool.name.toLowerCase().includes(searchTerm) ||
+                           tool.title.toLowerCase().includes(searchTerm) ||
+                           tool.description.toLowerCase().includes(searchTerm) ||
+                           tool.category.toLowerCase().includes(searchTerm);
+                }
+
+                return true;
+            });
+
+            renderTools(filtered);
+        }
+
+        // Modal
+        function openModal(toolId) {
+            const tool = tools.find(t => t.id === toolId);
+            if (!tool) return;
+
+            document.getElementById('modalTitle').textContent = `${tool.id}. ${tool.name}`;
+            document.getElementById('modalDescription').textContent = tool.description;
+
+            const modalBody = document.getElementById('modalBody');
+            modalBody.innerHTML = `
+                <div class="alert alert-info">
+                    <strong>📊 Вартість:</strong> ${tool.costText}
+                    ${tool.cost === 'premium' ? '<br><strong>⚠️ НАЙДОРОЖЧИЙ ІНСТРУМЕНТ В СИСТЕМІ!</strong>' : ''}
+                </div>
+
+                <div class="section">
+                    <h3>📝 Параметри</h3>
+                    <div class="param-list">
+                        ${tool.params.map(param => `
+                            <div class="param-item">
+                                <span class="param-name">${param.name}</span>
+                                ${param.required ? '<span class="param-required">REQUIRED</span>' : ''}
+                                <span class="param-type">${param.type}</span>
+                                <p style="margin: 0.5rem 0 0 0; color: var(--text-muted);">${param.description}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>💻 Приклад використання</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">📋 Копіювати</button>
+                        <pre>${tool.example}</pre>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔗 HTTP Endpoint</h3>
+                    <div class="code-block">
+                        <pre>POST http://localhost:3000/api/tools/${tool.name}</pre>
+                    </div>
+                </div>
+
+                ${tool.id === 41 ? `
+                <div class="alert alert-warning">
+                    <strong>⚠️ ВАЖЛИВО для get_legal_advice:</strong><br>
+                    • Найдорожчий інструмент ($0.10-$0.30 USD)<br>
+                    • Використовуйте reasoning_budget=quick для простих питань<br>
+                    • standard для більшості запитів (рекомендовано)<br>
+                    • deep тільки для критичних аналізів<br>
+                    • Включає anti-hallucination guard<br>
+                    • Повна атрибуція джерел
+                </div>
+                ` : ''}
+            `;
+
+            document.getElementById('toolModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('toolModal').classList.remove('active');
+        }
+
+        function copyCode(btn) {
+            const code = btn.nextElementSibling.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Скопійовано!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('toolModal').addEventListener('click', (e) => {
+            if (e.target.id === 'toolModal') {
+                closeModal();
+            }
+        });
+
+        // Close modal on ESC
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Initial render
+        renderTools(tools);
+    </script>
+</body>
+</html>
