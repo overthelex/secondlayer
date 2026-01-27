@@ -141,6 +141,7 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
 
     test('search_supreme_court_practice - should find Supreme Court cases', async () => {
       const result = await callTool('search_supreme_court_practice', {
+        procedure_code: 'cpc',
         query: 'тлумачення норм цивільного права',
         limit: 5,
       });
@@ -150,7 +151,8 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
 
     test('compare_practice_pro_contra - should find pro/contra practice', async () => {
       const result = await callTool('compare_practice_pro_contra', {
-        thesis: 'Можливість стягнення інфляційних втрат',
+        procedure_code: 'cpc',
+        query: 'Можливість стягнення інфляційних втрат',
       });
 
       expect(result).toBeDefined();
@@ -158,7 +160,8 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
 
     test('find_similar_fact_pattern_cases - should find similar fact patterns', async () => {
       const result = await callTool('find_similar_fact_pattern_cases', {
-        fact_pattern: 'ДТП з участю двох автомобілів, один водій був у стані алкогольного сп\'яніння',
+        procedure_code: 'cpc',
+        facts_text: 'ДТП з участю двох автомобілів, один водій був у стані алкогольного сп\'яніння',
         limit: 5,
       });
 
@@ -301,8 +304,9 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
   describe('Procedural Tools', () => {
     test('calculate_procedural_deadlines - should calculate deadlines', async () => {
       const result = await callTool('calculate_procedural_deadlines', {
-        start_date: '2024-01-15',
-        procedure_type: 'appeal',
+        procedure_code: 'cpc',
+        event_type: 'judgment_delivered',
+        event_date: '2024-01-15',
       });
 
       expect(result).toBeDefined();
@@ -311,7 +315,8 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
 
     test('build_procedural_checklist - should build checklist', async () => {
       const result = await callTool('build_procedural_checklist', {
-        procedure_type: 'civil_lawsuit',
+        procedure_code: 'cpc',
+        stage: 'позов',
       });
 
       expect(result).toBeDefined();
