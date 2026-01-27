@@ -56,12 +56,15 @@ export class RadaLegislationAdapter {
         'User-Agent': 'Mozilla/5.0 (compatible; SecondLayer/1.0; +https://secondlayer.com)',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'uk,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate',
       },
+      decompress: true,
     });
   }
 
   async fetchLegislation(radaId: string): Promise<{ metadata: LegislationMetadata; articles: LegislationArticle[] }> {
-    const url = `${this.BASE_URL}/laws/show/${radaId}`;
+    // Use /print endpoint for full text with all articles
+    const url = `${this.BASE_URL}/laws/show/${radaId}/print`;
     logger.info(`Fetching legislation from ${url}`);
 
     try {
@@ -105,38 +108,54 @@ export class RadaLegislationAdapter {
 
   private extractArticles($: cheerio.CheerioAPI, radaId: string): LegislationArticle[] {
     const articles: LegislationArticle[] = [];
-    
-    let currentSection: string | undefined;
-    let currentChapter: string | undefined;
 
-    $('.article, .law-article, div[class*="article"]').each((_index, element) => {
-      const $el = $(element);
-      
-      const articleNumber = this.extractArticleNumber($el);
-      if (!articleNumber) return;
+    // Parse /print endpoint format: <span class=rvts9>Стаття N.</span>
+    // Note: cheerio adds quotes to attributes, so we match both class=rvts9 and class="rvts9"
+    const bodyHtml = $('body').html() || '';
+    const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9|$)/gs;
 
-      const articleTitle = $el.find('.article-title, .title, h2, h3').first().text().trim();
-      const fullText = this.extractArticleText($el);
-      const fullTextHtml = $el.html() || '';
+    let match;
+    while ((match = articleRegex.exec(bodyHtml)) !== null) {
+      const articleNumber = match[1];
+      const articleHtml = match[2];
 
-      if (fullText.length < 10) return;
+      // Load the article HTML into cheerio for text extraction
+      const $article = cheerio.load(`<div>${articleHtml}</div>`);
+
+      // Extract clean text (remove HTML tags, scripts, styles)
+      $article('script, style, em').remove();
+      const fullText = $article.text()
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/\{[^}]+\}/g, '') // Remove {...} comments
+        .trim();
+
+      if (fullText.length < 10) continue;
+
+      // Try to extract article title from first sentence
+      let title: string | undefined;
+      const firstSentence = fullText.split(/[.;]/)[0];
+      if (firstSentence && firstSentence.length < 200) {
+        title = firstSentence.trim();
+      }
 
       articles.push({
         article_number: articleNumber,
-        section_number: currentSection,
-        chapter_number: currentChapter,
-        title: articleTitle || undefined,
+        title: title,
         full_text: fullText,
-        full_text_html: fullTextHtml,
+        full_text_html: articleHtml.substring(0, 10000), // Limit HTML size
         byte_size: Buffer.byteLength(fullText, 'utf8'),
         metadata: {
           rada_id: radaId,
           extraction_date: new Date().toISOString(),
+          extraction_method: 'print_endpoint',
         },
       });
-    });
+    }
 
+    // Fallback to old method if no articles found
     if (articles.length === 0) {
+      logger.warn(`No articles found with print endpoint parser, trying fallback for ${radaId}`);
       articles.push(...this.extractArticlesFallback($, radaId));
     }
 
