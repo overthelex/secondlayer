@@ -26,6 +26,7 @@ import { CostTracker } from './services/cost-tracker.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
 import passport from 'passport';
+import { MCPSSEServer } from './api/mcp-sse-server.js';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ class HTTPMCPServer {
   private documentParser: DocumentParser;
   private documentAnalysisTools: DocumentAnalysisTools;
   private costTracker: CostTracker;
+  private mcpSSEServer: MCPSSEServer;
 
   constructor() {
     this.app = express();
@@ -95,6 +97,14 @@ class HTTPMCPServer {
     this.zoPracticeAdapter.setCostTracker(this.costTracker);
     logger.info('Cost tracking initialized');
 
+    // Initialize MCP SSE Server for ChatGPT integration
+    this.mcpSSEServer = new MCPSSEServer(
+      this.mcpAPI,
+      this.legislationTools,
+      this.documentAnalysisTools
+    );
+    logger.info('MCP SSE Server initialized');
+
     // Initialize authentication
     configurePassport(this.db);
     initializeDualAuth(this.db);
@@ -141,6 +151,56 @@ class HTTPMCPServer {
         status: 'ok',
         service: 'secondlayer-mcp-http',
         version: '1.0.0',
+      });
+    });
+
+    // MCP SSE endpoint for ChatGPT web integration (public - uses OAuth)
+    // Endpoint: POST /sse
+    // This implements the Model Context Protocol over Server-Sent Events
+    // Reference: https://platform.openai.com/docs/mcp
+    this.app.post('/sse', (async (req: Request, res: Response) => {
+      try {
+        // Optional: Add OAuth validation here if needed
+        // For now, we use the existing dual auth middleware
+        await this.mcpSSEServer.handleSSEConnection(req, res);
+      } catch (error: any) {
+        logger.error('[MCP SSE] Connection error:', error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'MCP SSE connection failed',
+            message: error.message,
+          });
+        }
+      }
+    }) as any);
+
+    // MCP discovery endpoint (public - lists available tools)
+    // GET /mcp - Returns MCP server info and capabilities
+    this.app.get('/mcp', (_req: Request, res: Response) => {
+      const tools = this.mcpSSEServer.getAllTools();
+      res.json({
+        protocolVersion: '2024-11-05',
+        serverInfo: {
+          name: 'SecondLayer Legal MCP Server',
+          version: '1.0.0',
+          description: 'Ukrainian legal research and document analysis platform',
+        },
+        capabilities: {
+          tools: {
+            count: tools.length,
+            listChanged: false,
+          },
+          prompts: {},
+          resources: {},
+        },
+        endpoints: {
+          sse: '/sse',
+          http: '/api/tools',
+        },
+        tools: tools.map(t => ({
+          name: t.name,
+          description: t.description,
+        })),
       });
     });
 
@@ -580,10 +640,17 @@ class HTTPMCPServer {
       logger.info(`HTTP MCP Server started on http://${host}:${port}`);
       logger.info('Available endpoints:');
       logger.info('  GET  /health - Health check');
+      logger.info('  GET  /mcp - MCP server info and capabilities');
+      logger.info('  POST /sse - MCP SSE endpoint for ChatGPT web');
       logger.info('  GET  /api/tools - List available tools');
       logger.info('  POST /api/tools/:toolName - Call a tool (JSON or SSE)');
       logger.info('  POST /api/tools/:toolName/stream - Stream tool execution (SSE)');
       logger.info('  POST /api/tools/batch - Batch tool calls');
+      logger.info('');
+      logger.info('ChatGPT Web Integration:');
+      logger.info('  - MCP Server URL: https://mcp.legal.org.ua/sse');
+      logger.info('  - Discovery: https://mcp.legal.org.ua/mcp');
+      logger.info('  - Protocol: MCP over SSE (Model Context Protocol)');
       logger.info('');
       logger.info('SSE Streaming:');
       logger.info('  - Add Accept: text/event-stream header for streaming');
