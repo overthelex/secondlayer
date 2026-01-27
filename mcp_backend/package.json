@@ -17,6 +17,8 @@
     "process:docs": "npm run build && node dist/scripts/process-existing-documents.js",
     "process:docs:dev": "ts-node-dev --transpile-only scripts/process-existing-documents.ts",
     "migrate:legislation": "bash scripts/migrate-legislation-schema.sh",
+    "docs": "xdg-open docs/index.html || open docs/index.html || start docs/index.html",
+    "docs:api": "xdg-open docs/api-explorer.html || open docs/api-explorer.html || start docs/api-explorer.html",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
     "lint": "eslint src --ext .ts"

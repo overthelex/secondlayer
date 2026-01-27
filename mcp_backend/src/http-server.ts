@@ -160,6 +160,13 @@ class HTTPMCPServer {
     // Reference: https://platform.openai.com/docs/mcp
     this.app.post('/sse', (async (req: Request, res: Response) => {
       try {
+        // CRITICAL: Set SSE headers BEFORE any other processing
+        // This must be done here to override express.json() middleware
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
         // Optional: Add OAuth validation here if needed
         // For now, we use the existing dual auth middleware
         await this.mcpSSEServer.handleSSEConnection(req, res);
