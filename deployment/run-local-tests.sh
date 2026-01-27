@@ -139,21 +139,30 @@ wait_for_service() {
   return 1
 }
 
-# Run tests in container
-run_tests_in_container() {
-  local container=$1
+# Run tests from host (not in container, since containers don't have dev dependencies)
+run_tests_from_host() {
+  local project_dir=$1
   local test_path=$2
   local test_name=$3
 
   print_info "Running $test_name..."
 
+  # Save current directory
+  local original_dir=$(pwd)
+
+  # Change to project directory
+  cd "$project_dir" || return 1
+
   if [ "$VERBOSE" = true ]; then
-    docker exec -it "$container" npm test -- "$test_path"
+    npm test -- "$test_path"
   else
-    docker exec "$container" npm test -- "$test_path" 2>&1 | grep -E "(PASS|FAIL|Tests:|Test Suites:)" || true
+    npm test -- "$test_path" 2>&1 | grep -E "(PASS|FAIL|Tests:|Test Suites:)" || true
   fi
 
   local exit_code=${PIPESTATUS[0]}
+
+  # Change back to original directory
+  cd "$original_dir" || return 1
 
   if [ $exit_code -eq 0 ]; then
     print_success "$test_name passed"
@@ -236,7 +245,7 @@ if [ "$RADA_ONLY" = false ]; then
     print_info "Quick mode: Running smoke tests only"
 
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "smoke-test-all-tools.test.ts" "Backend Smoke Tests"; then
+    if run_tests_from_host "./mcp_backend" "smoke-test-all-tools.test.ts" "Backend Smoke Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -247,7 +256,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Smoke tests
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "smoke-test-all-tools.test.ts" "Backend Smoke Tests"; then
+    if run_tests_from_host "./mcp_backend" "smoke-test-all-tools.test.ts" "Backend Smoke Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -255,7 +264,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Integration tests
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "all-tools-integration.test.ts" "Backend Integration Tests"; then
+    if run_tests_from_host "./mcp_backend" "all-tools-integration.test.ts" "Backend Integration Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -263,7 +272,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Document analysis E2E
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "document-analysis-e2e.test.ts" "Document Service E2E Tests"; then
+    if run_tests_from_host "./mcp_backend" "document-analysis-e2e.test.ts" "Document Service E2E Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -271,7 +280,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Due diligence tools
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "due-diligence-tools.test.ts" "Due Diligence Tools Tests"; then
+    if run_tests_from_host "./mcp_backend" "due-diligence-tools.test.ts" "Due Diligence Tools Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -279,7 +288,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Legal advice tests
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "get-legal-advice-cpc-gpc.test.ts" "Legal Advice Tests"; then
+    if run_tests_from_host "./mcp_backend" "get-legal-advice-cpc-gpc.test.ts" "Legal Advice Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -287,7 +296,7 @@ if [ "$RADA_ONLY" = false ]; then
 
     # Legal precedents tests
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "secondlayer-app-local" "search-legal-precedents.test.ts" "Legal Precedents Tests"; then
+    if run_tests_from_host "./mcp_backend" "search-legal-precedents.test.ts" "Legal Precedents Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -296,13 +305,16 @@ if [ "$RADA_ONLY" = false ]; then
     # ZO Adapter tests
     print_info "Running ZO Adapter tests..."
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if docker exec secondlayer-app-local npm test -- "zo-adapter" > /dev/null 2>&1; then
+    original_dir=$(pwd)
+    cd ./mcp_backend
+    if npm test -- "zo-adapter" > /dev/null 2>&1; then
       print_success "ZO Adapter tests passed"
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       print_warning "ZO Adapter tests failed or skipped"
       FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
+    cd "$original_dir"
   fi
 fi
 
@@ -316,7 +328,7 @@ if [ "$RADA_RUNNING" = true ] && [ "$BACKEND_ONLY" = false ]; then
   if [ "$QUICK_MODE" = true ]; then
     # Quick mode - only smoke tests
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "rada-mcp-app-local" "smoke-test-rada-tools.test.ts" "RADA Smoke Tests"; then
+    if run_tests_from_host "./mcp_rada" "smoke-test-rada-tools.test.ts" "RADA Smoke Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -324,14 +336,14 @@ if [ "$RADA_RUNNING" = true ] && [ "$BACKEND_ONLY" = false ]; then
   else
     # Full test suite
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "rada-mcp-app-local" "smoke-test-rada-tools.test.ts" "RADA Smoke Tests"; then
+    if run_tests_from_host "./mcp_rada" "smoke-test-rada-tools.test.ts" "RADA Smoke Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
 
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    if run_tests_in_container "rada-mcp-app-local" "all-rada-tools-integration.test.ts" "RADA Integration Tests"; then
+    if run_tests_from_host "./mcp_rada" "all-rada-tools-integration.test.ts" "RADA Integration Tests"; then
       PASSED_TESTS=$((PASSED_TESTS + 1))
     else
       FAILED_TESTS=$((FAILED_TESTS + 1))

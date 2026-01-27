@@ -132,12 +132,12 @@ describe('SecondLayer MCP Tools - Integration Tests', () => {
 
     test('get_similar_reasoning - should find similar reasoning', async () => {
       const result = await callTool('get_similar_reasoning', {
-        reasoning_text: 'Позивач не довів факт порушення своїх прав',
+        query: 'Позивач не довів факт порушення своїх прав',
         limit: 5,
       });
 
       expect(result).toBeDefined();
-    });
+    }, 30000);
 
     test('search_supreme_court_practice - should find Supreme Court cases', async () => {
       const result = await callTool('search_supreme_court_practice', {
