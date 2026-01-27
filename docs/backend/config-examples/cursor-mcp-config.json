@@ -1,0 +1,31 @@
+{
+  "_comment": "Помістіть цей файл як .cursor/mcp.json в корені вашого проекту",
+  "mcpServers": {
+    "secondlayer": {
+      "command": "node",
+      "args": [
+        "/Users/vovkes/ZOMCP/SecondLayer/mcp_backend/dist/index.js"
+      ],
+      "env": {
+        "POSTGRES_HOST": "localhost",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_USER": "secondlayer",
+        "POSTGRES_PASSWORD": "YOUR_POSTGRES_PASSWORD",
+        "POSTGRES_DB": "secondlayer_db",
+        "QDRANT_URL": "http://localhost:6333",
+        "REDIS_URL": "redis://localhost:6379",
+        "OPENAI_API_KEY": "YOUR_OPENAI_API_KEY",
+        "OPENAI_API_KEY2": "YOUR_OPENAI_API_KEY2",
+        "ZAKONONLINE_API_TOKEN": "YOUR_ZAKONONLINE_TOKEN",
+        "ZAKONONLINE_API_TOKEN2": "YOUR_ZAKONONLINE_TOKEN2",
+        "OPENAI_MODEL_QUICK": "gpt-4o-mini",
+        "OPENAI_MODEL_STANDARD": "gpt-4o-mini",
+        "OPENAI_MODEL_DEEP": "gpt-4o",
+        "OPENAI_EMBEDDING_MODEL": "text-embedding-ada-002",
+        "LLM_PROVIDER_STRATEGY": "openai-first",
+        "NODE_ENV": "production",
+        "LOG_LEVEL": "info"
+      }
+    }
+  }
+}

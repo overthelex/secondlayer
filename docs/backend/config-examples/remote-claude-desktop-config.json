@@ -1,0 +1,20 @@
+{
+  "_comment": "Remote MCP Server Configuration for Claude Desktop",
+  "_note": "Use this config to connect to SecondLayer MCP via HTTPS",
+  "_docs": "https://modelcontextprotocol.io/docs/concepts/transports#http-with-sse",
+
+  "mcpServers": {
+    "secondlayer-remote": {
+      "url": "https://mcp.legal.org.ua/mcp/sse",
+      "transport": {
+        "type": "sse"
+      },
+      "headers": {
+        "Authorization": "Bearer YOUR-TOKEN-HERE"
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

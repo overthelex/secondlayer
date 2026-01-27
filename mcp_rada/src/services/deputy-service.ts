@@ -380,29 +380,82 @@ export class DeputyService {
    * Transform raw RADA API data to Deputy type
    */
   private transformRawDeputy(raw: any, convocation: number): Deputy {
+    // Build full name from surname, firstname, patronymic or use existing full_name
+    let fullName = raw.full_name || raw.name;
+    let shortName = raw.short_name;
+
+    if (!fullName && (raw.surname || raw.firstname)) {
+      const nameParts = [
+        raw.surname || '',
+        raw.firstname || '',
+        raw.patronymic || ''
+      ].filter(p => p);
+      fullName = nameParts.join(' ');
+      shortName = `${raw.surname || ''} ${raw.firstname || ''}`.trim();
+    }
+
+    // Extract faction from post_frs array
+    let factionId = raw.current_fr_id || raw.faction_id || null;
+    let factionName = raw.current_fr_name || raw.faction_name || null;
+
+    if (!factionName && raw.post_frs && Array.isArray(raw.post_frs)) {
+      const factionPost = raw.post_frs.find((p: any) => p.is_fr === 1);
+      if (factionPost) {
+        factionId = factionPost.fr_association_id || null;
+        factionName = factionPost.association_name || null;
+      }
+    }
+
+    // Extract primary committee from post_frs array
+    let committeeId = raw.main_komitet_id || raw.committee_id || null;
+    let committeeName = raw.main_komitet_name || raw.committee_name || null;
+    let committeeRole = raw.main_komitet_role || raw.committee_role || null;
+
+    if (!committeeName && raw.post_frs && Array.isArray(raw.post_frs)) {
+      const committeePost = raw.post_frs.find((p: any) =>
+        p.type === 2 || (p.association_name && p.association_name.includes('Комітет'))
+      );
+      if (committeePost) {
+        committeeId = committeePost.fr_association_id || null;
+        committeeName = committeePost.association_name || null;
+        committeeRole = committeePost.post_name || null;
+      }
+    }
+
+    // Truncate long fields to fit VARCHAR(255)
+    if (committeeName && committeeName.length > 255) {
+      committeeName = committeeName.substring(0, 252) + '...';
+    }
+    if (factionName && factionName.length > 255) {
+      factionName = factionName.substring(0, 252) + '...';
+    }
+    if (committeeRole && committeeRole.length > 100) {
+      committeeRole = committeeRole.substring(0, 97) + '...';
+    }
+
     return {
       id: raw.uuid || uuidv4(),
-      rada_id: raw.id || raw.rada_id,
-      full_name: raw.full_name || raw.name,
-      short_name: raw.short_name || null,
+      rada_id: String(raw.rada_id || raw.id),
+      full_name: fullName,
+      short_name: shortName || fullName,
       convocation,
-      active: raw.active_mps !== undefined ? raw.active_mps : true,
+      active: raw.resignation_date ? false : (raw.active_mps !== undefined ? raw.active_mps : true),
       status: raw.status || null,
-      faction_id: raw.current_fr_id || raw.faction_id || null,
-      faction_name: raw.current_fr_name || raw.faction_name || null,
-      committee_id: raw.main_komitet_id || raw.committee_id || null,
-      committee_name: raw.main_komitet_name || raw.committee_name || null,
-      committee_role: raw.main_komitet_role || raw.committee_role || null,
-      gender: raw.sex || raw.gender || null,
-      birth_date: raw.birth_date || null,
+      faction_id: factionId ? String(factionId) : undefined,
+      faction_name: factionName || undefined,
+      committee_id: committeeId ? String(committeeId) : undefined,
+      committee_name: committeeName || undefined,
+      committee_role: committeeRole || undefined,
+      gender: raw.gender === 1 ? 'M' : raw.gender === 2 ? 'F' : (raw.sex || raw.gender || null),
+      birth_date: raw.birthday || raw.birth_date || null,
       birth_place: raw.birth_place || null,
-      region: raw.region || null,
-      district: raw.district || null,
-      phone: raw.phone || null,
+      region: raw.region_name || raw.region || null,
+      district: raw.district_num ? String(raw.district_num) : (raw.district || null),
+      phone: raw.phones && raw.phones.length > 0 ? raw.phones[0].value : (raw.phone || null),
       email: raw.email || null,
       photo_url: raw.photo || raw.photo_url || null,
-      biography: raw.bio || raw.biography || null,
-      assistant_count: raw.assistant_count || 0,
+      biography: raw.short_info || raw.bio || raw.biography || null,
+      assistant_count: raw.assistants && Array.isArray(raw.assistants) ? raw.assistants.length : (raw.assistant_count || 0),
       metadata: raw,
     };
   }
