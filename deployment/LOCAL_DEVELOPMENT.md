@@ -540,19 +540,19 @@ After starting services, verify everything works by running tests:
 
 ```bash
 # Quick smoke tests (30 seconds) - Recommended first run
-./run-tests.sh --quick
+./run-local-tests.sh --quick
 
 # Full test suite (~15 minutes) - Before committing changes
-./run-tests.sh
+./run-local-tests.sh
 
 # Verbose output for debugging
-./run-tests.sh --verbose
+./run-local-tests.sh --verbose
 
 # Backend tests only
-./run-tests.sh --backend
+./run-local-tests.sh --backend
 
 # RADA MCP tests only
-./run-tests.sh --rada
+./run-local-tests.sh --rada
 ```
 
 **Test coverage:**
