@@ -49,7 +49,7 @@ Complete index of all deployment files for the multi-environment setup.
 See `./manage-gateway.sh` (no arguments) for full help.
 
 ### Test Runner Script
-- [`run-tests.sh`](./run-tests.sh) - Run all tests for local deployment
+- [`run-local-tests.sh`](./run-local-tests.sh) - Run all tests for local deployment
 
 **Capabilities**:
 - Smoke tests (quick validation)
@@ -60,7 +60,7 @@ See `./manage-gateway.sh` (no arguments) for full help.
 
 **Usage**:
 ```bash
-./run-tests.sh [--quick|--backend|--rada|--verbose]
+./run-local-tests.sh [--quick|--backend|--rada|--verbose]
 ```
 
 See [`TESTING.md`](./TESTING.md) for complete testing documentation.
@@ -130,7 +130,7 @@ deployment/
 ├── .env.stage                       # ⚠️ Actual stage env (gitignored)
 ├── .env.prod                        # ⚠️ Actual prod env (gitignored)
 ├── manage-gateway.sh                # Management script
-├── run-tests.sh                     # Test runner script
+├── run-local-tests.sh                     # Test runner script
 ├── LOCAL_DEVELOPMENT.md             # Local dev guide (START HERE!)
 ├── TESTING.md                       # Testing guide
 ├── LOCAL_DEPLOYMENT_FIXES.md        # Recent fixes
@@ -209,7 +209,7 @@ Each `.env.*` file needs:
 - [ ] Add OpenAI and ZakonOnline API keys
 - [ ] Run `./manage-gateway.sh start local`
 - [ ] Access http://localhost:3000
-- [ ] Run `./run-tests.sh --quick` to verify setup
+- [ ] Run `./run-local-tests.sh --quick` to verify setup
 
 **For Gateway Deployment** (DevOps):
 - [ ] Read [`QUICK_START.md`](./QUICK_START.md)

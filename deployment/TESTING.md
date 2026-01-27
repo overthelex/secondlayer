@@ -8,13 +8,13 @@ This guide explains how to run tests for locally deployed SecondLayer services.
 cd deployment
 
 # Run all tests (recommended)
-./run-tests.sh
+./run-local-tests.sh
 
 # Run only smoke tests (fast)
-./run-tests.sh --quick
+./run-local-tests.sh --quick
 
 # Run with detailed output
-./run-tests.sh --verbose
+./run-local-tests.sh --verbose
 ```
 
 ## Prerequisites
@@ -38,7 +38,7 @@ cd deployment
 
 ## Test Script Options
 
-### `./run-tests.sh` - Main test runner
+### `./run-local-tests.sh` - Main test runner
 
 **Options:**
 - `--quick` - Run only smoke tests (fastest, ~30 seconds)
@@ -52,19 +52,19 @@ cd deployment
 
 ```bash
 # Quick smoke tests (30 seconds)
-./run-tests.sh --quick
+./run-local-tests.sh --quick
 
 # Full backend test suite (5-10 minutes)
-./run-tests.sh --backend
+./run-local-tests.sh --backend
 
 # Full RADA test suite
-./run-tests.sh --rada
+./run-local-tests.sh --rada
 
 # All tests with detailed output
-./run-tests.sh --verbose
+./run-local-tests.sh --verbose
 
 # Run without waiting (when services already ready)
-./run-tests.sh --no-wait
+./run-local-tests.sh --no-wait
 ```
 
 ## Test Suites
@@ -269,7 +269,7 @@ docker logs -f secondlayer-app-local
 docker logs -f rada-mcp-app-local
 
 # Run tests with verbose output
-./run-tests.sh --verbose
+./run-local-tests.sh --verbose
 ```
 
 ## Continuous Integration
@@ -288,7 +288,7 @@ cd deployment
 sleep 30
 
 # Run tests
-./run-tests.sh --quick
+./run-local-tests.sh --quick
 
 # Stop services
 ./manage-gateway.sh stop local
@@ -338,4 +338,4 @@ Coverage reports will be generated in `coverage/` directory.
 
 ---
 
-**Need help?** Check the main documentation or run `./run-tests.sh --help`
+**Need help?** Check the main documentation or run `./run-local-tests.sh --help`
