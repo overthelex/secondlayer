@@ -15,9 +15,14 @@ build/
 .env.*
 !.env.example
 
-# Secrets
+# Secrets & Credentials
 google_OAUTH2.json
 vision-ocr-credentials.json
+*-credentials.json
+*-service-account.json
+*.pem
+*.key
+*.p12
 
 # Logs
 logs/

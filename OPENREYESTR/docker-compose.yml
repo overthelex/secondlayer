@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: opendata_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opendata_db
+      POSTGRES_USER: opendatauser
+      POSTGRES_PASSWORD: REDACTED_ODATA_PASS
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opendatauser -d opendata_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opendata-network
+
+  openreyestr-postgres:
+    image: postgres:15-alpine
+    container_name: openreyestr_postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openreyestr}
+      POSTGRES_USER: ${POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - openreyestr_postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openreyestr} -d ${POSTGRES_DB:-openreyestr}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openreyestr-network
+
+  openreyestr-redis:
+    image: redis:7-alpine
+    container_name: openreyestr_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6381}:6379"
+    volumes:
+      - openreyestr_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - openreyestr-network
+
+  openreyestr-mcp:
+    build:
+      context: ./mcp_openreyestr
+      dockerfile: Dockerfile
+    image: openreyestr-mcp:latest
+    container_name: openreyestr_mcp
+    restart: unless-stopped
+    depends_on:
+      openreyestr-postgres:
+        condition: service_healthy
+      openreyestr-redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: openreyestr-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-openreyestr}
+      POSTGRES_USER: ${POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-openreyestr}:${POSTGRES_PASSWORD}@openreyestr-postgres:5432/${POSTGRES_DB:-openreyestr}
+      REDIS_HOST: openreyestr-redis
+      REDIS_PORT: 6379
+      HTTP_PORT: 3004
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "${HTTP_PORT:-3004}:3004"
+    networks:
+      - openreyestr-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+  openreyestr_postgres_data:
+    name: openreyestr-postgres-data
+  openreyestr_redis_data:
+    name: openreyestr-redis-data
+
+networks:
+  opendata-network:
+    name: opendata-network
+    driver: bridge
+  openreyestr-network:
+    name: openreyestr-network
+    driver: bridge

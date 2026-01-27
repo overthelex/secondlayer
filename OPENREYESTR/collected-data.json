@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "url": "/m/ediniy-derjavniy-reestr-yuridichnih-osib-fizichnih-osib-pidpriemtsiv-ta-gromadskih-formuvan",
+    "title": "Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців та громадських формувань",
+    "downloadLinks": [
+      {
+        "url": "https://nais.gov.ua/files/general/2026/01/26/20260126174103-69.zip",
+        "text": "16‑UFOPFSU_26.01.2026",
+        "type": "dataset",
+        "description": "гіперпосилання на розширений набір даних (електронний документ для завантаження або інтерфейс прикладного програмування)"
+      },
+      {
+        "url": "https://nais.gov.ua/files/general/2026/01/19/20260119053247-12.zip",
+        "text": "16-ufopfsu_xsd",
+        "type": "schema",
+        "description": "гіперпосилання на структуру набору даних (електронний документ для завантаження або інтерфейс прикладного програмування)"
+      }
+    ],
+    "scrapedAt": "2026-01-27T00:00:00.000Z",
+    "status": "success"
+  }
+]

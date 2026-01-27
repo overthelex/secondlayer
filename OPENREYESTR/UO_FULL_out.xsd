@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+
+<xs:element name="SUBJECT">
+  <xs:annotation><xs:documentation>Юридична особа</xs:documentation></xs:annotation>
+  <xs:complexType>
+    <xs:sequence>
+      <xs:element name="RECORD" type="xs:string" minOccurs="1"><xs:annotation><xs:documentation>Унікальний ідентифікатор суб’єкта в Єдиному державному реєстрі</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="NAME" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Найменування</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="SHORT_NAME" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Скорочене найменування</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="OPF" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Організаційно-правова форма</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="EDRPOU" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>ідентифікаційний код в Єдиному державному реєстрі підприємств і організацій України</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="STAN" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Стан діяльності</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="FOUNDING_DOCUMENT_NUM" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Цифровий код модельного статуту</xs:documentation></xs:annotation></xs:element>
+
+      <xs:element name="EXECUTIVE_POWER" type="EXECUTIVE_POWER_Type" minOccurs="0"/>
+      <xs:element name="PURPOSE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Мета діяльності громадського формування</xs:documentation></xs:annotation></xs:element>
+
+      <xs:element name="FOUNDERS" type="FOUNDERS_Type" minOccurs="0"/>
+      <xs:element name="BENEFICIARIES" type="BENEFICIARIES_Type" minOccurs="0"/>
+      <xs:element name="SUPERIOR_MANAGEMENT" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Назви органів управління</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="SIGNERS" type="SIGNERS_Type" minOccurs="0"/>
+      <xs:element name="AUTHORIZED_CAPITAL" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Розмір статутного (складеного) капіталу (пайового фонду)</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="MEMBERS" type="MEMBERS_Type" minOccurs="0"/>
+      <xs:element name="STATUTE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Відомості про діяльність на підставі установчих документів, затверджених засновниками (учасниками) чи на підставі модельного статуту</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="REGISTRATION" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата державної реєстрації, дата та номер реєстраційної дії</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="MANAGING_PAPER" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дані про розпорядчий акт, на підставі якого створено юридичну особу (назва, номер та дата)</xs:documentation></xs:annotation></xs:element>
+
+      <xs:element name="BRANCHES" type="BRANCHES_Type" minOccurs="0"/>
+      <xs:element name="TERMINATION_STARTED_INFO" type="TERMINATION_STARTED_INFO_Type" minOccurs="0"/>
+      <xs:element name="BANKRUPTCY_READJUSTMENT_INFO" type="BANKRUPTCY_READJUSTMENT_INFO_Type" minOccurs="0"/>
+      <xs:element name="PREDECESSORS" type="PREDECESSORS_Type" minOccurs="0"/>
+      <xs:element name="ASSIGNEES" type="ASSIGNEES_Type" minOccurs="0"/>
+
+      <xs:element name="TERMINATED_INFO" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата та номер запису про державну реєстрацію припинення юридичної особи, підстава для його внесення</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="TERMINATION_CANCEL_INFO" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата та номер запису про відміну державної реєстрації припинення юридичної особи, підстава для його внесення</xs:documentation></xs:annotation></xs:element>
+      <xs:element name="EXCHANGE_DATA" type="EXCHANGE_DATA_Type" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:element>
+
+<xs:complexType name="EXECUTIVE_POWER_Type" mixed="true">
+  <xs:annotation><xs:documentation>Відомості про центральний чи місцевий орган виконавчої влади, до сфери управління якого належить державне підприємство, або частку держави у статутному капіталі юридичної особи, якщо ця частка становить не менше 25 відсотків</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="NAME" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Найменування</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="CODE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Ідентифікаційний код в Єдиному державному реєстрі підприємств і організацій України</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="FOUNDERS_Type" mixed="true">
+  <xs:annotation><xs:documentation>Перелік засновників (учасників) юридичної особи (відомості про фізичних та юридичних осіб, що містяться в Єдиному державному реєстрі юридичних осіб, фізичних осіб-підприємців та громадських формувань в структурованому вигляді)</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="FOUNDER" type="xs:string" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>Прізвище, ім'я, по батькові або найменування; ідентифікаційний код в Єдиному державному реєстрі підприємств і організацій України (якщо засновник - юридична особа); країна громадянства або резидентства; розмір частки</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="BENEFICIARIES_Type" mixed="true">
+  <xs:annotation><xs:documentation>Перелік кінцевих бенефіціарних власників або обґрунтована причина його відсутності</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="BENEFICIARY" type="xs:string" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>Прізвище, ім'я, по батькові; країна громадянства; тип впливу; відсоток частки</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="SIGNERS_Type" mixed="true">
+  <xs:annotation><xs:documentation>Відомості про керівника юридичної особи, інших осіб, які можуть вчиняти дії від імені юридичної особи, у тому числі підписувати договори, подавати документи для державної реєстрації тощо</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="SIGNER" type="xs:string" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>Прізвище, ім’‎я, по батькові; дата призначення; дані про наявність обмежень щодо представництва юридичної особи; роль</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="MEMBERS_Type" mixed="true">
+  <xs:annotation><xs:documentation>Відомості про членів керівних органів</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="MEMBER" type="xs:string" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>Прізвище, ім’‎я, по батькові; посада</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="BRANCHES_Type" mixed="true">
+  <xs:annotation><xs:documentation>Перелік відокремлених підрозділів юридичної особи</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="BRANCH" type="BRANCH_Type" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+</xs:complexType>
+<xs:complexType name="BRANCH_Type" mixed="true">
+  <xs:annotation><xs:documentation>Запис про відокремлений підрозділ юридичної особи</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="CODE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Ідентифікаційний код відокремленого підрозділу в Єдиному державному реєстрі підприємств і організацій України</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="NAME" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Найменування</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="SIGNER" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Відомості про керівника відокремленого підрозділу: прізвище, ім'я, по батькові; посада; дата призначення; наявність обмежень щодо представництва від імені юридичної особи</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="CREATE_DATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата створення відокремленого підрозділу</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="EXCHANGE_DATA" type="EXCHANGE_DATA_Type" minOccurs="0"/>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="TERMINATION_STARTED_INFO_Type" mixed="true">
+  <xs:annotation><xs:documentation>Дані про перебування юридичної особи у процесі припинення</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="OP_DATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата реєстраційної дії</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="REASON" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Підстава</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="SBJ_STATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Стан суб’єкта</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="SIGNER_NAME" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Відомості про голову комісії з припинення або ліквідатора: прізвище, ім'я, по батькові; роль</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="CREDITOR_REQ_END_DATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Строк для заявлення кредиторами своїх вимог</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="BANKRUPTCY_READJUSTMENT_INFO_Type" mixed="true">
+  <xs:annotation><xs:documentation>Дані про перебування юридичної особи у процесі провадження у справі про банкрутство, санації</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="OP_DATE" type="xs:string" minOccurs="0"/>
+    <xs:element name="REASON" type="xs:string" minOccurs="0"/>
+    <xs:element name="SBJ_STATE" type="xs:string" minOccurs="0"/>
+    <xs:element name="BANKRUPTCY_READJUSTMENT_HEAD_NAME" type="xs:string" minOccurs="0"/>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="PREDECESSORS_Type" mixed="true">
+  <xs:annotation><xs:documentation>Дані про юридичних осіб, правонаступником яких є зареєстрована юридична особа</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="PREDECESSOR" type="PREDECESSOR_Type" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+</xs:complexType>
+<xs:complexType name="PREDECESSOR_Type" mixed="true">
+  <xs:sequence>
+    <xs:element name="NAME" type="xs:string" minOccurs="0"/>
+    <xs:element name="CODE" type="xs:string" minOccurs="0"/>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="ASSIGNEES_Type" mixed="true">
+  <xs:annotation><xs:documentation>Дані про юридичних осіб – правонаступників</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="ASSIGNEE" type="ASSIGNEE_Type" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+</xs:complexType>
+<xs:complexType name="ASSIGNEE_Type" mixed="true">
+  <xs:sequence>
+    <xs:element name="NAME" type="xs:string" minOccurs="0"/>
+    <xs:element name="CODE" type="xs:string" minOccurs="0"/>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="EXCHANGE_DATA_Type" mixed="true">
+  <xs:annotation><xs:documentation>Відомості, отримані в порядку інформаційної взаємодії між Єдиним державним реєстром та інформаційними системами державних органів</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="EXCHANGE_ANSWER" type="EXCHANGE_ANSWER_Type" minOccurs="0" maxOccurs="unbounded"/>
+  </xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="EXCHANGE_ANSWER_Type" mixed="true">
+  <xs:annotation><xs:documentation>Окремий набір даних від одного органу</xs:documentation></xs:annotation>
+  <xs:sequence>
+    <xs:element name="TAX_PAYER_TYPE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Відомості про відомчий реєстр Державної податкової служби України</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="START_DATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата запису про взяття на облік</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="START_NUM" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Номер запису про взяття на облік</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="END_DATE" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Дата запису про зняття з обліку</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="END_NUM" type="xs:string" minOccurs="0"><xs:annotation><xs:documentation>Номер запису про зняття з обліку</xs:documentation></xs:annotation></xs:element>
+  </xs:sequence>
+</xs:complexType>
+
+</xs:schema>

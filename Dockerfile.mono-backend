@@ -10,7 +10,12 @@ RUN apk add --no-cache \
     freetype \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    tzdata
+
+# Set timezone to EET (Europe/Kiev)
+ENV TZ=Europe/Kiev
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Tell Playwright to use installed chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
@@ -32,7 +37,7 @@ RUN cd packages/shared \
 
 # Install backend deps (will resolve @secondlayer/shared from ../packages/shared)
 RUN cd mcp_backend \
-  && if [ -f package-lock.json ]; then npm ci; else npm install; fi
+  && npm install
 
 # Copy backend source and build
 COPY mcp_backend/tsconfig.json mcp_backend/tsconfig.json
@@ -61,7 +66,12 @@ RUN apk add --no-cache \
     freetype \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    tzdata
+
+# Set timezone to EET (Europe/Kiev)
+ENV TZ=Europe/Kiev
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Tell Playwright to use installed chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \

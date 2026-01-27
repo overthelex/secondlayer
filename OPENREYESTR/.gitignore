@@ -1,0 +1,7 @@
+node_modules/
+nais-data.json
+nais-opendata.html
+*.log
+.DS_Store
+# Large data files
+*.zip
