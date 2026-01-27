@@ -1,0 +1,94 @@
+# Local Development Environment Configuration
+# Copy this file to .env.local and fill in your actual values
+
+# =============================================================================
+# PostgreSQL Database Configuration
+# =============================================================================
+POSTGRES_USER=secondlayer
+POSTGRES_PASSWORD=local_dev_password
+POSTGRES_DB=secondlayer_local
+
+# RADA MCP Database Configuration
+RADA_POSTGRES_USER=rada_mcp
+RADA_POSTGRES_PASSWORD=rada_password
+RADA_POSTGRES_SCHEMA=rada
+
+# =============================================================================
+# Application Configuration
+# =============================================================================
+NODE_ENV=development
+HTTP_PORT=3000
+LOG_LEVEL=debug
+
+# JWT Secret (change in production!)
+JWT_SECRET=local-dev-jwt-secret-change-in-production
+
+# =============================================================================
+# AI Model Configuration - OpenAI
+# =============================================================================
+# Get your API key from https://platform.openai.com/api-keys
+# External APIs - Primary
+OPENAI_API_KEY=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
+# openai account igor_kirichenko@ukr.net
+OPENAI_API_KEY2=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
+#OPENAI_API_KEY=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
+ZAKONONLINE_API_TOKEN=E67988-51C592-408BA4-650017-3513F1-4B6EEC-B76ECD-4C4A2B
+#OPENAI_API_KEY2=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
+ZAKONONLINE_API_TOKEN2=DEC348-DDF5B0-45389B-7A4EB5-4A2BF2-C6AD0C-8DECCD-7A4886
+ANTHROPIC_API_KEY=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
+
+# Model selection for different complexity levels
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+OPENAI_MODEL_QUICK=gpt-4o-mini
+OPENAI_MODEL_STANDARD=gpt-4o-mini
+OPENAI_MODEL_DEEP=gpt-4o
+
+# =============================================================================
+# AI Model Configuration - Anthropic (Optional)
+# =============================================================================
+# Get your API key from https://console.anthropic.com/
+ANTHROPIC_MODEL_QUICK=claude-haiku-4.5
+ANTHROPIC_MODEL_STANDARD=claude-sonnet-4.5
+ANTHROPIC_MODEL_DEEP=claude-opus-4.5
+
+# LLM Provider Strategy: openai-first, anthropic-first, or openai-only
+LLM_PROVIDER_STRATEGY=openai-first
+
+# =============================================================================
+# Security & Authentication
+# =============================================================================
+# API keys for accessing SecondLayer services (comma-separated)
+SECONDARY_LAYER_KEYS=local-dev-key,test-key-123
+RADA_API_KEYS=test-key-123
+
+# RADA MCP integration
+RADA_MCP_URL=http://rada-mcp-app-local:3001
+RADA_API_KEY=test-rada-key
+
+# Google OAuth (Optional)
+GOOGLE_CLIENT_ID=323273425312-4chgdc38o82r611f9r1403sfcrvcs5jp.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+
+# =============================================================================
+# CORS & Frontend Configuration
+# =============================================================================
+FRONTEND_URL=http://localhost:5173
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# =============================================================================
+# Redis Configuration
+# =============================================================================
+REDIS_HOST=redis-local
+REDIS_PORT=6379
+
+# =============================================================================
+# Qdrant Vector Database Configuration
+# =============================================================================
+QDRANT_URL=http://qdrant-local:6333
+
+# =============================================================================
+# Google Cloud Vision API Configuration (for OCR)
+# =============================================================================
+VISION_CREDENTIALS_PATH=/home/vovkes/SecondLayer/vision-ocr-credentials.json
+GOOGLE_APPLICATION_CREDENTIALS=/home/vovkes/SecondLayer/vision-ocr-credentials.json

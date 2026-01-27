@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondLayer Documentation Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .doc-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .doc-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .doc-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .doc-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #667eea;
+        }
+
+        .doc-description {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        .doc-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: #f0f0f0;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #555;
+            margin-right: 0.5rem;
+        }
+
+        .doc-badge.new {
+            background: #4caf50;
+            color: white;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: white;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 SecondLayer Documentation Hub</h1>
+            <p>Повна документація MCP серверів для юридичного аналізу</p>
+        </div>
+
+        <div class="cards-grid">
+            <a href="api-explorer.html" class="doc-card">
+                <div class="doc-icon">🔧</div>
+                <div class="doc-title">API Explorer</div>
+                <div class="doc-description">
+                    Інтерактивна документація всіх 41 MCP інструментів у стилі Swagger.
+                    Пошук, фільтрація, приклади curl запитів.
+                </div>
+                <span class="doc-badge new">NEW</span>
+                <span class="doc-badge">41 tools</span>
+                <span class="doc-badge">Interactive</span>
+            </a>
+
+            <a href="CLIENT_INTEGRATION.md" class="doc-card">
+                <div class="doc-icon">🔌</div>
+                <div class="doc-title">Client Integration</div>
+                <div class="doc-description">
+                    Гід з інтеграції клієнтів: HTTP API, MCP stdio, SSE streaming.
+                    Приклади коду для різних мов програмування.
+                </div>
+                <span class="doc-badge">Markdown</span>
+            </a>
+
+            <a href="SSE_STREAMING.md" class="doc-card">
+                <div class="doc-icon">📡</div>
+                <div class="doc-title">SSE Streaming</div>
+                <div class="doc-description">
+                    Документація SSE протоколу для real-time streaming довгих операцій.
+                    Remote MCP over HTTPS.
+                </div>
+                <span class="doc-badge">Advanced</span>
+            </a>
+
+            <a href="DATABASE_SETUP.md" class="doc-card">
+                <div class="doc-icon">🗄️</div>
+                <div class="doc-title">Database Setup</div>
+                <div class="doc-description">
+                    Налаштування PostgreSQL, Redis, Qdrant. Міграції, схема бази даних,
+                    оптимізація індексів.
+                </div>
+                <span class="doc-badge">Infrastructure</span>
+            </a>
+
+            <a href="CHATGPT_INTEGRATION.md" class="doc-card">
+                <div class="doc-icon">🤖</div>
+                <div class="doc-title">ChatGPT Integration</div>
+                <div class="doc-description">
+                    Інтеграція з ChatGPT як MCP client. Actions, OAuth, deployment
+                    на custom domain.
+                </div>
+                <span class="doc-badge">AI Integration</span>
+            </a>
+
+            <a href="DEPLOYMENT_CHATGPT.md" class="doc-card">
+                <div class="doc-icon">🚀</div>
+                <div class="doc-title">Deployment Guide</div>
+                <div class="doc-description">
+                    Розгортання multi-environment (dev/stage/prod). Docker Compose,
+                    Nginx gateway, SSL certificates.
+                </div>
+                <span class="doc-badge">DevOps</span>
+            </a>
+
+            <a href="postgres-optimization.md" class="doc-card">
+                <div class="doc-icon">⚡</div>
+                <div class="doc-title">PostgreSQL Optimization</div>
+                <div class="doc-description">
+                    Оптимізація запитів, індекси, partitioning, вакуумінг.
+                    Performance tuning для великих датасетів.
+                </div>
+                <span class="doc-badge">Performance</span>
+            </a>
+
+            <a href="../CLAUDE.md" class="doc-card">
+                <div class="doc-icon">📖</div>
+                <div class="doc-title">CLAUDE.md</div>
+                <div class="doc-description">
+                    Project overview для Claude Code. Архітектура, команди,
+                    патерни, environment variables.
+                </div>
+                <span class="doc-badge">Overview</span>
+            </a>
+
+            <a href="../../START_HERE.md" class="doc-card">
+                <div class="doc-icon">🎯</div>
+                <div class="doc-title">START HERE</div>
+                <div class="doc-description">
+                    Quick start guide для всього monorepo. Перші кроки,
+                    установка, запуск, базова конфігурація.
+                </div>
+                <span class="doc-badge">Getting Started</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>SecondLayer MCP Backend v2.0 | © 2024</p>
+            <p style="margin-top: 0.5rem; font-size: 0.9rem;">
+                <a href="https://github.com/anthropics/claude-code" style="color: white;">Built with Claude Code</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

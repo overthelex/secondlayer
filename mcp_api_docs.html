@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Legal Tools API Documentation</title>
+    <style>
+        :root {
+            --primary: #1a1a1a;
+            --accent: #4a9eff;
+            --background: #ffffff;
+            --border: #e1e4e8;
+            --code-bg: #f6f8fa;
+            --success: #28a745;
+            --warning: #ffa726;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            line-height: 1.6;
+            color: var(--primary);
+            background: var(--background);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Top Navigation Bar */
+        .top-nav {
+            background: var(--primary);
+            color: var(--background);
+            padding: 0 2rem;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .version-badge {
+            background: var(--accent);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .top-nav-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-input {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--background);
+            padding: 0.5rem 2.5rem 0.5rem 1rem;
+            border-radius: 6px;
+            width: 300px;
+            font-size: 0.9rem;
+        }
+
+        .search-input::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255,255,255,0.15);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.6;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            height: calc(100vh - 60px);
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--background);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-section {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-section-header {
+            padding: 1rem 1.25rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6a737d;
+            background: var(--code-bg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+        }
+
+        .sidebar-section-header:hover {
+            background: #e8eaed;
+        }
+
+        .collapse-icon {
+            transition: transform 0.2s;
+        }
+
+        .sidebar-section.collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+
+        .sidebar-section.collapsed .sidebar-items {
+            display: none;
+        }
+
+        .sidebar-items {
+            background: var(--background);
+        }
+
+        .sidebar-item {
+            padding: 0.75rem 1.25rem;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+        }
+
+        .sidebar-item:hover {
+            background: var(--code-bg);
+            border-left-color: var(--accent);
+        }
+
+        .sidebar-item.active {
+            background: #e3f2fd;
+            border-left-color: var(--accent);
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .method-badge {
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .method-post {
+            background: var(--accent);
+            color: var(--background);
+        }
+
+        .method-get {
+            background: var(--success);
+            color: var(--background);
+        }
+
+        .method-premium {
+            background: var(--warning);
+            color: var(--background);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--background);
+        }
+
+        .content-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* API Endpoint Card */
+        .endpoint-card {
+            background: var(--background);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .endpoint-method {
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            color: var(--primary);
+            flex: 1;
+            word-break: break-all;
+        }
+
+        .endpoint-body {
+            padding: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6a737d;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .description {
+            color: #586069;
+            margin-bottom: 1.5rem;
+            line-height: 1.7;
+        }
+
+        /* Parameters Table */
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .params-table th {
+            text-align: left;
+            padding: 0.75rem;
+            background: var(--code-bg);
+            font-weight: 600;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #6a737d;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .params-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .param-name {
+            font-family: 'Courier New', monospace;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .param-required {
+            color: #d73a49;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .param-type {
+            color: #6a737d;
+            font-size: 0.85rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Code Block */
+        .code-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .code-header {
+            background: var(--primary);
+            color: var(--background);
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-radius: 6px 6px 0 0;
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .code-tab {
+            padding: 0.25rem 0.75rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
+            font-size: 0.8rem;
+        }
+
+        .code-tab:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .code-tab.active {
+            background: rgba(255,255,255,0.15);
+            font-weight: 600;
+        }
+
+        .copy-btn {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: var(--background);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.15s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--background);
+        }
+
+        .code-block {
+            background: var(--primary);
+            color: #e6e6e6;
+            padding: 1.25rem;
+            border-radius: 0 0 6px 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            border: 1px solid var(--border);
+            border-top: none;
+        }
+
+        .code-block .keyword { color: #ff7b72; }
+        .code-block .string { color: #a5d6ff; }
+        .code-block .number { color: #79c0ff; }
+        .code-block .comment { color: #8b949e; }
+
+        /* Response Schema */
+        .response-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .response-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--code-bg);
+            border-radius: 6px;
+            border-left: 4px solid var(--success);
+        }
+
+        .status-code {
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            color: var(--success);
+        }
+
+        .status-description {
+            color: #586069;
+            font-size: 0.9rem;
+        }
+
+        /* Tags */
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tag {
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .tag-cost {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+
+        .tag-category {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #90caf9;
+        }
+
+        .tag-source {
+            background: #f3e5f5;
+            color: #7b1fa2;
+            border: 1px solid #ce93d8;
+        }
+
+        /* Try It Out Section */
+        .try-section {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-top: 1.5rem;
+        }
+
+        .try-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .try-title {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .execute-btn {
+            background: var(--accent);
+            color: var(--background);
+            border: none;
+            padding: 0.6rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 0.9rem;
+        }
+
+        .execute-btn:hover {
+            background: #3d8ee6;
+            transform: translateY(-1px);
+        }
+
+        .execute-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Welcome Screen */
+        .welcome-screen {
+            text-align: center;
+            padding: 4rem 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .welcome-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .welcome-title {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .welcome-subtitle {
+            font-size: 1.2rem;
+            color: #6a737d;
+            margin-bottom: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .stat-box {
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--background);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: #6a737d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .getting-started {
+            background: var(--code-bg);
+            padding: 2rem;
+            border-radius: 8px;
+            margin-top: 3rem;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        .getting-started h3 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .getting-started ol {
+            margin-left: 1.5rem;
+            color: #586069;
+        }
+
+        .getting-started li {
+            margin-bottom: 0.75rem;
+            line-height: 1.7;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--code-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0a0a0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-height: 40vh;
+            }
+
+            .search-input {
+                width: 200px;
+            }
+
+            .welcome-title {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Loading State */
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="logo">
+            <span>⚡</span>
+            <span>MCP Legal Tools API</span>
+            <span class="version-badge">v1.0</span>
+        </div>
+        <div class="top-nav-actions">
+            <div class="search-container">
+                <input type="text" class="search-input" id="globalSearch" placeholder="Search endpoints...">
+                <span class="search-icon">🔍</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Core Query Pipeline (4)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="classify_intent">
+                        <span class="method-badge method-post">POST</span>
+                        <span>classify_intent</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="retrieve_legal_sources">
+                        <span class="method-badge method-post">POST</span>
+                        <span>retrieve_legal_sources</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="analyze_legal_patterns">
+                        <span class="method-badge method-post">POST</span>
+                        <span>analyze_legal_patterns</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="validate_response">
+                        <span class="method-badge method-post">POST</span>
+                        <span>validate_response</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Legal Research (6)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="search_legal_precedents">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>search_legal_precedents</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="analyze_case_pattern">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>analyze_case_pattern</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_similar_reasoning">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>get_similar_reasoning</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="search_supreme_court">
+                        <span class="method-badge method-post">POST</span>
+                        <span>search_supreme_court</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="compare_practice">
+                        <span class="method-badge method-post">POST</span>
+                        <span>compare_practice</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="find_similar_facts">
+                        <span class="method-badge method-post">POST</span>
+                        <span>find_similar_facts</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Document Analysis (3)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="extract_sections">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>extract_sections</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_court_decision">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_court_decision</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_case_text">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_case_text</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Legislation Tools (7)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="get_legislation_article">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_legislation_article</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_legislation_section">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_legislation_section</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_legislation_articles">
+                        <span class="method-badge method-post">POST</span>
+                        <span>get_legislation_articles</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="search_legislation">
+                        <span class="method-badge method-post">POST</span>
+                        <span>search_legislation</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_legislation_structure">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_legislation_structure</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="find_relevant_articles">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>find_relevant_articles</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="search_procedural_norms">
+                        <span class="method-badge method-post">POST</span>
+                        <span>search_procedural_norms</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Document Vault (4)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="store_document">
+                        <span class="method-badge method-post">POST</span>
+                        <span>store_document</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="get_document">
+                        <span class="method-badge method-get">GET</span>
+                        <span>get_document</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="list_documents">
+                        <span class="method-badge method-get">GET</span>
+                        <span>list_documents</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="semantic_search">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>semantic_search</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Due Diligence (3)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="bulk_review_runner">
+                        <span class="method-badge method-post">POST</span>
+                        <span>bulk_review_runner</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="risk_scoring">
+                        <span class="method-badge method-post">POST</span>
+                        <span>risk_scoring</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="generate_dd_report">
+                        <span class="method-badge method-post">POST</span>
+                        <span>generate_dd_report</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-header" onclick="toggleSection(this)">
+                    <span>Procedural Tools (4)</span>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="sidebar-items">
+                    <div class="sidebar-item" data-endpoint="check_precedent_status">
+                        <span class="method-badge method-premium">PAID</span>
+                        <span>check_precedent_status</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="calculate_deadlines">
+                        <span class="method-badge method-post">POST</span>
+                        <span>calculate_deadlines</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="build_checklist">
+                        <span class="method-badge method-post">POST</span>
+                        <span>build_checklist</span>
+                    </div>
+                    <div class="sidebar-item" data-endpoint="calculate_claims">
+                        <span class="method-badge method-post">POST</span>
+                        <span>calculate_claims</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="content-area" id="contentArea">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-icon">⚡</div>
+                <h1 class="welcome-title">MCP Legal Tools API</h1>
+                <p class="welcome-subtitle">Comprehensive legal analysis and research API documentation</p>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-value">40+</div>
+                        <div class="stat-label">Endpoints</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">7</div>
+                        <div class="stat-label">Categories</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">15+</div>
+                        <div class="stat-label">Premium Tools</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">REST</div>
+                        <div class="stat-label">API Type</div>
+                    </div>
+                </div>
+
+                <div class="getting-started">
+                    <h3>Getting Started</h3>
+                    <ol>
+                        <li>Select an endpoint from the sidebar to view detailed documentation</li>
+                        <li>Review the request parameters and response schema</li>
+                        <li>Use the interactive examples to test API calls</li>
+                        <li>Implement the endpoints in your application using the provided code samples</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Dynamic Content Container -->
+            <div class="content-wrapper hidden" id="endpointContent"></div>
+        </main>
+    </div>
+
+    <script>
+        // API Endpoints Data
+        const endpoints = {
+            classify_intent: {
+                name: 'classify_intent',
+                method: 'POST',
+                path: '/api/tools/classify_intent',
+                description: 'Query classification system that determines service type, task complexity, and analysis depth. Serves as the entry-point for routing pipeline requests to appropriate handlers.',
+                category: 'Core Query Pipeline',
+                cost: null,
+                parameters: [
+                    { name: 'query', type: 'string', required: true, description: 'The user query to classify' },
+                    { name: 'context', type: 'object', required: false, description: 'Additional context for classification' },
+                    { name: 'options', type: 'ClassificationOptions', required: false, description: 'Classification configuration options' }
+                ],
+                response: {
+                    status: 200,
+                    description: 'Classification result with confidence score',
+                    schema: `{
+  "service_type": "string",
+  "task_type": "string",
+  "depth": "shallow | deep",
+  "confidence": 0.95,
+  "routing": {
+    "handler": "string",
+    "priority": "number"
+  }
+}`
+                },
+                example: `curl -X POST https://api.mcp-legal.com/api/tools/classify_intent \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "Find cases about contract breach",
+    "context": {
+      "jurisdiction": "Ukraine"
+    }
+  }'`
+            },
+            semantic_search: {
+                name: 'semantic_search',
+                method: 'POST',
+                path: '/api/tools/semantic_search',
+                description: 'Advanced semantic search across all vault documents using vector embeddings and cosine similarity. Supports filtering by document type, tags, and similarity threshold for intelligent content discovery.',
+                category: 'Document Vault',
+                cost: '$0.001-$0.01',
+                parameters: [
+                    { name: 'query', type: 'string', required: true, description: 'Semantic search query (max 8000 characters)' },
+                    { name: 'type', type: 'string', required: false, description: 'Filter by document type: contract | court_decision | legal_opinion' },
+                    { name: 'tags', type: 'string[]', required: false, description: 'Filter by document tags' },
+                    { name: 'limit', type: 'number', required: false, description: 'Maximum results to return (default: 10)' },
+                    { name: 'threshold', type: 'number', required: false, description: 'Minimum similarity score 0-1 (default: 0.7)' }
+                ],
+                response: {
+                    status: 200,
+                    description: 'List of semantically similar documents',
+                    schema: `{
+  "results": [
+    {
+      "document_id": "uuid",
+      "title": "string",
+      "type": "string",
+      "similarity": 0.85,
+      "preview": "string",
+      "metadata": {
+        "uploadedAt": "ISO8601",
+        "tags": ["string"]
+      }
+    }
+  ],
+  "total": 42,
+  "query_embedding_cost": 0.0001
+}`
+                },
+                example: `curl -X POST https://api.mcp-legal.com/api/tools/semantic_search \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "форс мажор та непереборна сила",
+    "type": "contract",
+    "limit": 10,
+    "threshold": 0.7
+  }'`
+            },
+            search_legal_precedents: {
+                name: 'search_legal_precedents',
+                method: 'POST',
+                path: '/api/tools/search_legal_precedents',
+                description: 'Advanced semantic search for legal precedents with comprehensive analysis capabilities. Powered by vector similarity and contextual understanding for precise legal research.',
+                category: 'Legal Research',
+                cost: '$0.03-$0.10',
+                parameters: [
+                    { name: 'query', type: 'string', required: true, description: 'Legal research query' },
+                    { name: 'jurisdiction', type: 'string', required: false, description: 'Jurisdiction filter' },
+                    { name: 'date_from', type: 'string', required: false, description: 'Start date for precedents (ISO format)' },
+                    { name: 'date_to', type: 'string', required: false, description: 'End date for precedents (ISO format)' },
+                    { name: 'court_level', type: 'string', required: false, description: 'Court level filter' },
+                    { name: 'limit', type: 'number', required: false, description: 'Maximum results (default: 20)' }
+                ],
+                response: {
+                    status: 200,
+                    description: 'List of relevant legal precedents',
+                    schema: `{
+  "precedents": [
+    {
+      "case_id": "string",
+      "title": "string",
+      "date": "ISO8601",
+      "court": "string",
+      "relevance_score": 0.92,
+      "summary": "string",
+      "citations": ["string"]
+    }
+  ],
+  "total": 15,
+  "cost": 0.05
+}`
+                },
+                example: `curl -X POST https://api.mcp-legal.com/api/tools/search_legal_precedents \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "query": "порушення договору постачання",
+    "court_level": "Supreme Court",
+    "limit": 20
+  }'`
+            },
+            get_court_decision: {
+                name: 'get_court_decision',
+                method: 'GET',
+                path: '/api/tools/get_court_decision/:id',
+                description: 'Loads complete text of court decisions and rulings with automatic extraction of FACTS, COURT_REASONING, and DECISION sections for structured analysis.',
+                category: 'Document Analysis',
+                cost: null,
+                parameters: [
+                    { name: 'id', type: 'string', required: true, description: 'Court decision ID or case number' },
+                    { name: 'include_full_text', type: 'boolean', required: false, description: 'Include full document text (default: true)' },
+                    { name: 'extract_sections', type: 'boolean', required: false, description: 'Extract structured sections (default: true)' }
+                ],
+                response: {
+                    status: 200,
+                    description: 'Complete court decision with structured sections',
+                    schema: `{
+  "case_id": "string",
+  "title": "string",
+  "court": "string",
+  "date": "ISO8601",
+  "sections": {
+    "FACTS": "string",
+    "COURT_REASONING": "string",
+    "DECISION": "string"
+  },
+  "full_text": "string",
+  "metadata": {
+    "parties": ["string"],
+    "judges": ["string"]
+  }
+}`
+                },
+                example: `curl -X GET https://api.mcp-legal.com/api/tools/get_court_decision/12345 \\
+  -H "Authorization: Bearer YOUR_API_KEY"`
+            },
+            store_document: {
+                name: 'store_document',
+                method: 'POST',
+                path: '/api/tools/store_document',
+                description: 'Stores documents in Vault with automatic processing pipeline: parse → section extraction → embedding generation → semantic analysis. Supports PDF, DOCX, and plain text formats.',
+                category: 'Document Vault',
+                cost: null,
+                parameters: [
+                    { name: 'file', type: 'File', required: true, description: 'Document file to store (PDF, DOCX, TXT)' },
+                    { name: 'title', type: 'string', required: true, description: 'Document title' },
+                    { name: 'type', type: 'string', required: true, description: 'Document type: contract | court_decision | legal_opinion' },
+                    { name: 'tags', type: 'string[]', required: false, description: 'Document tags for categorization' },
+                    { name: 'metadata', type: 'object', required: false, description: 'Additional metadata' }
+                ],
+                response: {
+                    status: 201,
+                    description: 'Document stored successfully',
+                    schema: `{
+  "document_id": "uuid",
+  "status": "processed",
+  "processing_time": 1250,
+  "sections_extracted": 15,
+  "embeddings_generated": 42,
+  "storage_url": "string"
+}`
+                },
+                example: `curl -X POST https://api.mcp-legal.com/api/tools/store_document \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -F "file=@contract.pdf" \\
+  -F "title=Supply Agreement 2024" \\
+  -F "type=contract" \\
+  -F "tags=supply,2024"`
+            }
+        };
+
+        // Event Listeners
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const endpoint = this.dataset.endpoint;
+                loadEndpoint(endpoint);
+                
+                // Update active state
+                document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Search functionality
+        document.getElementById('globalSearch').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(searchTerm) ? 'flex' : 'none';
+            });
+        });
+
+        // Toggle sidebar sections
+        function toggleSection(header) {
+            const section = header.parentElement;
+            section.classList.toggle('collapsed');
+        }
+
+        // Load endpoint content
+        function loadEndpoint(endpointKey) {
+            const endpoint = endpoints[endpointKey];
+            if (!endpoint) return;
+
+            document.getElementById('welcomeScreen').classList.add('hidden');
+            document.getElementById('endpointContent').classList.remove('hidden');
+
+            const methodClass = endpoint.method === 'GET' ? 'method-get' : 
+                               endpoint.cost ? 'method-premium' : 'method-post';
+
+            let parametersHtml = '';
+            if (endpoint.parameters && endpoint.parameters.length > 0) {
+                parametersHtml = `
+                    <div class="section-title">Parameters</div>
+                    <table class="params-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${endpoint.parameters.map(p => `
+                                <tr>
+                                    <td>
+                                        <span class="param-name">${p.name}</span>
+                                        ${p.required ? '<span class="param-required">*required</span>' : ''}
+                                    </td>
+                                    <td><span class="param-type">${p.type}</span></td>
+                                    <td>${p.description}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            }
+
+            const content = `
+                <div class="endpoint-card">
+                    <div class="endpoint-header">
+                        <span class="endpoint-method ${methodClass}">${endpoint.method}</span>
+                        <span class="endpoint-path">${endpoint.path}</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <div class="tags-container">
+                            <span class="tag tag-category">${endpoint.category}</span>
+                            ${endpoint.cost ? `<span class="tag tag-cost">💰 ${endpoint.cost}</span>` : ''}
+                            <span class="tag tag-source">MCP Backend</span>
+                        </div>
+
+                        <div class="section-title">Description</div>
+                        <p class="description">${endpoint.description}</p>
+
+                        ${parametersHtml}
+
+                        <div class="section-title">Response</div>
+                        <div class="response-container">
+                            <div class="response-status">
+                                <span class="status-code">${endpoint.response.status}</span>
+                                <span class="status-description">${endpoint.response.description}</span>
+                            </div>
+                            <div class="code-container">
+                                <div class="code-header">
+                                    <div class="code-tabs">
+                                        <span class="code-tab active">Response Schema</span>
+                                    </div>
+                                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                                </div>
+                                <pre class="code-block">${endpoint.response.schema}</pre>
+                            </div>
+                        </div>
+
+                        <div class="section-title">Example Request</div>
+                        <div class="code-container">
+                            <div class="code-header">
+                                <div class="code-tabs">
+                                    <span class="code-tab active">cURL</span>
+                                </div>
+                                <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                            </div>
+                            <pre class="code-block">${endpoint.example}</pre>
+                        </div>
+
+                        <div class="try-section">
+                            <div class="try-header">
+                                <span class="try-title">Try it out</span>
+                                <button class="execute-btn" onclick="alert('Interactive testing coming soon!')">
+                                    Execute Request
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('endpointContent').innerHTML = content;
+            document.getElementById('contentArea').scrollTop = 0;
+        }
+
+        // Copy code functionality
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-container').querySelector('.code-block');
+            const text = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        // Initialize - load first endpoint
+        document.addEventListener('DOMContentLoaded', () => {
+            // Optional: auto-load first endpoint
+            // document.querySelector('.sidebar-item').click();
+        });
+    </script>
+</body>
+</html>

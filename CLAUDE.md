@@ -305,8 +305,31 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ## Related Documentation
 
-- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration guide
-- `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol
+### 🔧 API Documentation
+
+- **`mcp_backend/docs/api-explorer.html`** ⭐ **NEW!** - Interactive API Explorer (Swagger-style)
+  - All 41 MCP tools with search and filtering
+  - Copy-paste curl examples
+  - Cost information and parameter descriptions
+  - Open in browser: `file:///.../mcp_backend/docs/api-explorer.html`
+
+- **`mcp_backend/docs/index.html`** - Documentation Hub with navigation to all docs
+
+### 📚 Integration & Deployment
+
+- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration guide (HTTP, MCP stdio, SSE)
+- `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol for long operations
+- `mcp_backend/docs/CHATGPT_INTEGRATION.md` - ChatGPT Actions integration
+- `mcp_backend/docs/DEPLOYMENT_CHATGPT.md` - Multi-environment deployment guide
 - `deployment/LOCAL_DEVELOPMENT.md` - Local development setup
-- `deployment/GATEWAY_SETUP.md` - Multi-environment deployment
+- `deployment/GATEWAY_SETUP.md` - Multi-environment gateway configuration
+
+### 🗄️ Database & Infrastructure
+
+- `mcp_backend/docs/DATABASE_SETUP.md` - PostgreSQL, Redis, Qdrant setup
+- `mcp_backend/docs/postgres-optimization.md` - Query optimization and indexing
+
+### 📖 Getting Started
+
 - `START_HERE.md` - Quick start guide for the monorepo
+- `mcp_backend/docs/README.md` - Complete documentation index

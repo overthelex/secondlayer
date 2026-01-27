@@ -19,8 +19,8 @@ NC='\033[0m' # No Color
 
 # Configuration
 GATE_SERVER="gate.lexapp.co.ua"
-GATE_USER="root"
-REMOTE_PATH="/root/secondlayer-deployment"
+GATE_USER="vovkes"
+REMOTE_PATH="/home/vovkes/secondlayer-deployment"
 
 # Print colored message
 print_msg() {
