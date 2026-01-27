@@ -534,10 +534,40 @@ After setting up local environment:
    - `deployment/QUICK_START.md` - 5-minute deployment guide
    - `deployment/GATEWAY_SETUP.md` - Complete setup guide
 
+## Testing
+
+After starting services, verify everything works by running tests:
+
+```bash
+# Quick smoke tests (30 seconds) - Recommended first run
+./run-tests.sh --quick
+
+# Full test suite (~15 minutes) - Before committing changes
+./run-tests.sh
+
+# Verbose output for debugging
+./run-tests.sh --verbose
+
+# Backend tests only
+./run-tests.sh --backend
+
+# RADA MCP tests only
+./run-tests.sh --rada
+```
+
+**Test coverage:**
+- Backend: API, adapters, services (12 test files)
+- RADA MCP: Parliament data tools (2 test files)
+- Document Service: OCR, parsing (integrated in backend)
+
+See `TESTING.md` for complete testing documentation.
+
 ## Support
 
 **Documentation**:
 - This guide: `deployment/LOCAL_DEVELOPMENT.md`
+- Testing guide: `deployment/TESTING.md`
+- Recent fixes: `deployment/LOCAL_DEPLOYMENT_FIXES.md`
 - Quick start: `deployment/QUICK_START.md`
 - Full guide: `deployment/GATEWAY_SETUP.md`
 
