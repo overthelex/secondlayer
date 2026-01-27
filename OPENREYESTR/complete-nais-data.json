@@ -1,0 +1,114 @@
+[
+  {
+    "id": 1,
+    "url": "/m/ediniy-derjavniy-reestr-yuridichnih-osib-fizichnih-osib-pidpriemtsiv-ta-gromadskih-formuvan",
+    "title": "Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців та громадських формувань",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/26/20260126174103-69.zip", "text": "16‑UFOPFSU_26.01.2026", "type": "dataset", "description": "Розширений набір даних (оновлено 26.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/2026/01/19/20260119053247-12.zip", "text": "16-ufopfsu_xsd", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 2,
+    "url": "/m/ediniy-reestr-notariusiv-188",
+    "title": "Єдиний реєстр нотаріусів",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120140657-96.zip", "text": "17-ex_xml_wern.zip", "type": "dataset", "description": "Набір даних (оновлено 20.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/18-ex_xml_wern_xsd.zip", "text": "17-ex_xml_wern_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 3,
+    "url": "/m/derjavniy-reestr-atestovanih-sudovih-ekspertiv-189",
+    "title": "Державний реєстр атестованих судових експертів",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120140658-98.zip", "text": "18-Ex_Xml_EXPERT.zip", "type": "dataset", "description": "Набір даних (оновлено 20.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/19-Ex_Xml_EXPERT_xsd.zip", "text": "18-Ex_Xml_EXPERT_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 4,
+    "url": "/m/ediniy-reestr-spetsialnih-blankiv-notarialnih-dokumentiv-190",
+    "title": "Єдиний реєстр спеціальних бланків нотаріальних документів",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/20-ex_xml_ernb.zip", "text": "19-ex_xml_ernb.zip", "type": "dataset", "description": "Повний набір даних"},
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120140659-13.zip", "text": "19-ex_xml_ernb_29.12.2025-19.01.2026.zip", "type": "dataset", "description": "Набір даних за період 29.12.2025-19.01.2026"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/20-ex_xml_ernb_xsd.zip", "text": "19-ex_xml_ernb_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 5,
+    "url": "/m/reestr-metodik-provedennya-sudovih-ekspertiz-192",
+    "title": "Реєстр методик проведення судових експертиз",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120140659-71.zip", "text": "22-ex_xml_methodics.zip", "type": "dataset", "description": "Набір даних (оновлено 20.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/23-ex_xml_methodics_xsd.zip", "text": "22-ex_xml_methodics_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 6,
+    "url": "/m/ediniy-reestr-pidpriemstv-schodo-yakih-porusheno-vprovadjennya-u-spravi-pro-bankrutstvo",
+    "title": "Єдиний реєстр підприємств, щодо яких порушено впровадження у справі про банкрутство",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2024/06/01/20240601181406-29.zip", "text": "23-EX_XML_RBA.zip", "type": "dataset", "description": "Набір даних (оновлено 31.05.2024)"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/25-EX_XML_RBA_xsd.zip", "text": "23-EX_XML_RBA _xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 7,
+    "url": "/m/ediniy-reestr-arbitrajnih-keruyuchih-ukraini",
+    "title": "Єдиний реєстр арбітражних керуючих України",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2024/06/01/20240601181407-88.zip", "text": "24-ex_xml_arbker.zip", "type": "dataset", "description": "Набір даних (оновлено 31.05.2024)"},
+      {"url": "https://nais.gov.ua/files/general/2020/05/06/20200506194052-53.zip", "text": "24-ex_xml_arbker_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 8,
+    "url": "/m/ediniy-derjavniy-reestr-normativno-pravovih-aktiv-196",
+    "title": "Єдиний державний реєстр нормативно-правових актів",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120143108-94.zip", "text": "25.1-edrnpa_cards.zip", "type": "dataset", "description": "Картки нормативно-правових актів"},
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120143446-54.zip", "text": "25.2-edrnpa_text.zip", "type": "dataset", "description": "Тексти нормативно-правових актів"},
+      {"url": "https://nais.gov.ua/files/general/imported/download/open_data/27-edrnpa_xsd.zip", "text": "25-edrnpa_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 9,
+    "url": "/m/slovnik-administrativno-teritorialnogo-ustroyu-ukraini-slovnik-vulits-naselenih-punktiv-ta-vulits-imenovanih-obektiv",
+    "title": "Словник адміністративно-територіального устрою України та словник вулиць",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/20/20260120140701-22.zip", "text": "26-EX_XML_ATU.xml", "type": "dataset", "description": "Набір даних (оновлено 20.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/2021/10/06/20211006164800-79.zip", "text": "26-EX_XML_ATU_xsd.zip", "type": "schema", "description": "Структура набору даних (XSD схема)"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 10,
+    "url": "/m/informatsiya-z-avtomatizovanoi-sistemi-vikonavchogo-provadjennya-595",
+    "title": "Інформація з автоматизованої системи виконавчого провадження",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/26/20260126081038-95.zip", "text": "28-ex_csv_asvp.zip", "type": "dataset", "description": "Набір даних CSV (оновлено 23.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/2021/09/01/20210901154817-77.zip", "text": "28-ex_csv_asvp_struct.zip", "type": "schema", "description": "Структура набору даних CSV"}
+    ],
+    "status": "success"
+  },
+  {
+    "id": 11,
+    "url": "/m/ediniy-reestr-borjnikiv-549",
+    "title": "Єдиний реєстр боржників",
+    "downloadLinks": [
+      {"url": "https://nais.gov.ua/files/general/2026/01/26/20260126081507-44.zip", "text": "29-ex_csv_erb.zip", "type": "dataset", "description": "Набір даних CSV (оновлено 23.01.2026)"},
+      {"url": "https://nais.gov.ua/files/general/2023/06/15/20230615104134-54.zip", "text": "29-ex_csv_erb_struct.zip", "type": "schema", "description": "Структура набору даних CSV"}
+    ],
+    "status": "success"
+  }
+]

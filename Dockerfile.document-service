@@ -27,7 +27,13 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     wget \
     ca-certificates \
+    # Timezone data
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set timezone to EET (Europe/Kiev)
+ENV TZ=Europe/Kiev
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Set working directory
 WORKDIR /app

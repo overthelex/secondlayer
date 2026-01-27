@@ -22,6 +22,34 @@ export class BillService {
   }
 
   /**
+   * Validate date format (YYYY-MM-DD)
+   */
+  private validateDateFormat(dateString: string): boolean {
+    // Check format with regex
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(dateString)) {
+      return false;
+    }
+
+    // Check if it's a valid date
+    const date = new Date(dateString);
+    const timestamp = date.getTime();
+
+    // Check if date is valid (not NaN) and matches the input
+    if (isNaN(timestamp)) {
+      return false;
+    }
+
+    // Verify the date components match (prevents cases like 2024-02-30)
+    const [year, month, day] = dateString.split('-').map(Number);
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }
+
+  /**
    * Get bill by number with cache-first strategy
    */
   async getBillByNumber(
@@ -66,6 +94,19 @@ export class BillService {
    */
   async searchBills(params: BillSearchParams): Promise<BillSearchResult> {
     try {
+      // Validate date parameters
+      if (params.date_from && !this.validateDateFormat(params.date_from)) {
+        throw new Error(
+          `Invalid date_from format: "${params.date_from}". Expected YYYY-MM-DD (e.g., 2024-01-15)`
+        );
+      }
+
+      if (params.date_to && !this.validateDateFormat(params.date_to)) {
+        throw new Error(
+          `Invalid date_to format: "${params.date_to}". Expected YYYY-MM-DD (e.g., 2024-12-31)`
+        );
+      }
+
       let query = 'SELECT * FROM bills WHERE 1=1';
       const queryParams: any[] = [];
       let paramIndex = 1;
