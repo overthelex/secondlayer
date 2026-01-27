@@ -4,7 +4,7 @@
 # SecondLayer Local Deployment - Test Runner
 # ============================================================================
 # Runs all tests for locally deployed services
-# Usage: ./run-tests.sh [options]
+# Usage: ./run-local-tests.sh [options]
 #
 # Options:
 #   --quick       Run only smoke tests
@@ -362,7 +362,7 @@ else
   print_error "Some tests failed. Check the output above for details."
   echo ""
   print_info "To see detailed output, run with --verbose flag:"
-  print_info "  ./run-tests.sh --verbose"
+  print_info "  ./run-local-tests.sh --verbose"
   echo ""
   exit 1
 fi
