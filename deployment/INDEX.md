@@ -5,6 +5,7 @@ Complete index of all deployment files for the multi-environment setup.
 ## Quick Navigation
 
 - **Local Development**: [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md) - Start here for local development
+- **Testing**: [`TESTING.md`](./TESTING.md) - Run tests for local deployment
 - **Getting Started**: [`QUICK_START.md`](./QUICK_START.md) - Deploy to gateway server
 - **Full Documentation**: [`GATEWAY_SETUP.md`](./GATEWAY_SETUP.md) - Complete setup guide
 - **Architecture**: [`ARCHITECTURE.md`](./ARCHITECTURE.md) - System architecture
@@ -28,6 +29,7 @@ Complete index of all deployment files for the multi-environment setup.
 
 **⚠️ Important**: Copy `.env.*.example` to `.env.*` and fill in real values before starting.
 ## Scripts
+
 ### Management Script
 - [`manage-gateway.sh`](./manage-gateway.sh) - Main deployment management script
 
@@ -42,14 +44,33 @@ Complete index of all deployment files for the multi-environment setup.
 **Usage**:
 ```bash
 ./manage-gateway.sh <command> [environment]
-```bash
+```
 
 See `./manage-gateway.sh` (no arguments) for full help.
+
+### Test Runner Script
+- [`run-tests.sh`](./run-tests.sh) - Run all tests for local deployment
+
+**Capabilities**:
+- Smoke tests (quick validation)
+- Full integration tests
+- Backend and RADA MCP tests
+- Automatic service health checks
+- Detailed test reports
+
+**Usage**:
+```bash
+./run-tests.sh [--quick|--backend|--rada|--verbose]
+```
+
+See [`TESTING.md`](./TESTING.md) for complete testing documentation.
 ## Documentation
 
 | Document | Description | Audience |
 |----------|-------------|----------|
 | [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md) | Local dev setup guide | Developers (START HERE!) |
+| [`TESTING.md`](./TESTING.md) | Testing guide for local deployment | Developers/QA |
+| [`LOCAL_DEPLOYMENT_FIXES.md`](./LOCAL_DEPLOYMENT_FIXES.md) | Recent deployment fixes | Developers |
 | [`QUICK_START.md`](./QUICK_START.md) | Gateway deployment guide | DevOps/Deployment |
 | [`GATEWAY_SETUP.md`](./GATEWAY_SETUP.md) | Complete setup guide | DevOps/Deployment |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Architecture details | Technical team |
@@ -109,13 +130,16 @@ deployment/
 ├── .env.stage                       # ⚠️ Actual stage env (gitignored)
 ├── .env.prod                        # ⚠️ Actual prod env (gitignored)
 ├── manage-gateway.sh                # Management script
+├── run-tests.sh                     # Test runner script
 ├── LOCAL_DEVELOPMENT.md             # Local dev guide (START HERE!)
+├── TESTING.md                       # Testing guide
+├── LOCAL_DEPLOYMENT_FIXES.md        # Recent fixes
 ├── QUICK_START.md                   # Gateway deployment guide
 ├── GATEWAY_SETUP.md                 # Complete documentation
 ├── ARCHITECTURE.md                  # Architecture details
 ├── INDEX.md                         # This file
 └── README.md                        # Legacy docs
-```bash
+```
 ## Environment Variables Required
 
 Each `.env.*` file needs:
@@ -185,6 +209,7 @@ Each `.env.*` file needs:
 - [ ] Add OpenAI and ZakonOnline API keys
 - [ ] Run `./manage-gateway.sh start local`
 - [ ] Access http://localhost:3000
+- [ ] Run `./run-tests.sh --quick` to verify setup
 
 **For Gateway Deployment** (DevOps):
 - [ ] Read [`QUICK_START.md`](./QUICK_START.md)
