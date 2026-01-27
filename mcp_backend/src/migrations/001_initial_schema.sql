@@ -120,12 +120,21 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Триггеры для автоматического обновления updated_at
-CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON documents
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Триггеры для автоматического обновления updated_at (идемпотентно)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_documents_updated_at') THEN
+        CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON documents
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 
-CREATE TRIGGER update_legal_patterns_updated_at BEFORE UPDATE ON legal_patterns
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_legal_patterns_updated_at') THEN
+        CREATE TRIGGER update_legal_patterns_updated_at BEFORE UPDATE ON legal_patterns
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 
-CREATE TRIGGER update_precedent_status_updated_at BEFORE UPDATE ON precedent_status
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_precedent_status_updated_at') THEN
+        CREATE TRIGGER update_precedent_status_updated_at BEFORE UPDATE ON precedent_status
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;

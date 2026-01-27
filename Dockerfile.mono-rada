@@ -60,7 +60,7 @@ COPY --from=builder /app/mcp_rada/package-lock.json* ./
 COPY --from=builder /app/mcp_rada/node_modules ./node_modules
 COPY --from=builder /app/mcp_rada/dist ./dist
 COPY --from=builder /app/mcp_rada/scripts ./scripts
-COPY --from=builder /app/mcp_rada/src/migrations/*.sql ./src/migrations/
+COPY --from=builder /app/mcp_rada/src/migrations ./src/migrations
 
 EXPOSE 3001
 

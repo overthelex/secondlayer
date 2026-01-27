@@ -1,6 +1,5 @@
 # Local development environment for SecondLayer
 # Simplified setup for running on developer machines
-version: '3.8'
 
 services:
   postgres-local:
@@ -14,7 +13,6 @@ services:
       - "5432:5432"  # Standard PostgreSQL port
     volumes:
       - postgres_local_data:/var/lib/postgresql/data
-      - ../mcp_backend/src/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_local}"]
       interval: 5s
@@ -105,6 +103,32 @@ services:
     networks:
       - secondlayer-local
 
+  migrate-local:
+    build:
+      context: ..
+      dockerfile: Dockerfile.mono-backend
+    image: secondlayer-app:latest
+    container_name: secondlayer-migrate-local
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+      redis-local:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      POSTGRES_HOST: postgres-local
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+    working_dir: /app/mcp_backend
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-local
+
   app-local:
     build:
       context: ..
@@ -182,8 +206,8 @@ services:
       - "3000:3000"  # Standard backend port
 
     depends_on:
-      postgres-local:
-        condition: service_healthy
+      migrate-local:
+        condition: service_completed_successfully
       qdrant-local:
         condition: service_started
       redis-local:
@@ -225,6 +249,9 @@ services:
           memory: 512M
 
   rada-migrate-local:
+    build:
+      context: ..
+      dockerfile: Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-local
     profiles: ["rada"]
@@ -375,7 +402,10 @@ services:
 
     volumes:
       # Optional: Mount vision credentials if available
-      - ${VISION_CREDENTIALS_PATH:-/dev/null}:/app/credentials/vision-credentials.json:ro
+      # Comment out if VISION_CREDENTIALS_PATH is not set
+      # - ${VISION_CREDENTIALS_PATH}:/app/credentials/vision-credentials.json:ro
+      # Fallback: Create empty tmpfs for credentials directory
+      - document_service_credentials:/app/credentials
 
     healthcheck:
       test:
@@ -427,6 +457,8 @@ volumes:
   redis_local_data:
     driver: local
   app_local_data:
+    driver: local
+  document_service_credentials:
     driver: local
 
 networks:
