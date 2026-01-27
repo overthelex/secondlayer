@@ -132,12 +132,12 @@ start_env() {
                 print_msg "$YELLOW" "    Copy .env.local.example to .env.local for custom configuration"
                 $compose_cmd -f docker-compose.local.yml up -d --build \
                     postgres-local redis-local qdrant-local \
-                    app-local \
+                    migrate-local app-local document-service-local \
                     rada-db-init-local rada-migrate-local rada-mcp-app-local
             else
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d --build \
                     postgres-local redis-local qdrant-local \
-                    app-local \
+                    migrate-local app-local document-service-local \
                     rada-db-init-local rada-migrate-local rada-mcp-app-local
             fi
             ;;
