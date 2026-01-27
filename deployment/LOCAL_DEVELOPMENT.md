@@ -10,6 +10,18 @@ The local environment is optimized for developer productivity with:
 - **Simplified config**: Minimal setup, sensible defaults
 - **No gateway**: Direct access to services, no nginx proxy needed
 - **Debug mode**: Verbose logging for troubleshooting
+- **Auto-migrations**: Database migrations run automatically on startup
+- **Multi-service**: Includes Document Service (OCR) and optional RADA MCP
+
+## What's New in This Setup
+
+**Recent improvements for reliable local deployment:**
+
+1. **Automatic Database Migrations** - New `migrate-local` service runs all SQL migrations on startup
+2. **Document Service** - Separate OCR/document processing service on port 3002
+3. **RADA MCP Support** - Optional parliament data service (requires `--profile rada`)
+4. **Fixed Dockerfile** - SQL migrations now properly included in container images
+5. **Better Volume Management** - Credentials mounted via volumes instead of /dev/null
 
 ## Quick Start (5 minutes)
 
@@ -82,13 +94,26 @@ npm run dev
 
 Frontend (Vite Dev Server)          Backend Services (Docker)
 ┌──────────────────────┐            ┌────────────────────────┐
-│  http://localhost:5173│            │ secondlayer-app-local  │
-│  React + Hot Reload  │◄───────────│ http://localhost:3000  │
-└──────────────────────┘   API      └────────────────────────┘
-                           Calls              │
+│  http://localhost:5173│            │ migrate-local          │
+│  React + Hot Reload  │            │ (runs once & exits)    │
+└──────────────────────┘            └────────┬───────────────┘
+         │                                   │
+         │ API Calls                         ▼
+         │                          ┌────────────────────────┐
+         └─────────────────────────►│ secondlayer-app-local  │
+                                    │ http://localhost:3000  │
+                                    └────────────────────────┘
+                                              │
                                               ├─► PostgreSQL (5432)
                                               ├─► Redis (6379)
-                                              └─► Qdrant (6333)
+                                              ├─► Qdrant (6333)
+                                              └─► Document Service (3002)
+
+Optional RADA MCP (with --profile rada):
+                                    ┌────────────────────────┐
+                                    │ rada-mcp-app-local     │
+                                    │ http://localhost:3001  │
+                                    └────────────────────────┘
 ```
 
 ## Port Reference
@@ -97,10 +122,14 @@ Frontend (Vite Dev Server)          Backend Services (Docker)
 |---------|------|----------------|-----|
 | Frontend (Dev) | 5173 | (host process) | http://localhost:5173 |
 | Backend API | 3000 | secondlayer-app-local | http://localhost:3000 |
+| Document Service | 3002 | document-service-local | http://localhost:3002 |
+| RADA MCP* | 3001 | rada-mcp-app-local | http://localhost:3001 |
 | PostgreSQL | 5432 | secondlayer-postgres-local | postgresql://localhost:5432 |
 | Redis | 6379 | secondlayer-redis-local | redis://localhost:6379 |
 | Qdrant HTTP | 6333 | secondlayer-qdrant-local | http://localhost:6333 |
 | Qdrant gRPC | 6334 | secondlayer-qdrant-local | - |
+
+*RADA MCP requires `--profile rada` flag to start
 
 ## Common Commands
 
@@ -109,8 +138,11 @@ Frontend (Vite Dev Server)          Backend Services (Docker)
 ```bash
 cd deployment
 
-# Start local environment
+# Start local environment (backend only)
 ./manage-gateway.sh start local
+
+# Start with RADA MCP support (parliament data)
+docker compose -f docker-compose.local.yml --profile rada up -d
 
 # Stop local environment
 ./manage-gateway.sh stop local
@@ -122,7 +154,10 @@ cd deployment
 ./manage-gateway.sh logs local
 
 # View specific service logs
+docker logs -f secondlayer-migrate-local  # Migrations (runs once)
 docker logs -f secondlayer-app-local      # Backend
+docker logs -f document-service-local     # Document/OCR service
+docker logs -f rada-mcp-app-local         # RADA MCP (if started)
 docker logs -f secondlayer-postgres-local # Database
 docker logs -f secondlayer-redis-local    # Cache
 docker logs -f secondlayer-qdrant-local   # Vector DB
@@ -130,8 +165,10 @@ docker logs -f secondlayer-qdrant-local   # Vector DB
 # Check status
 ./manage-gateway.sh status
 
-# Health check
-curl http://localhost:3000/health
+# Health checks
+curl http://localhost:3000/health         # Main backend
+curl http://localhost:3002/health         # Document service
+curl http://localhost:3001/health         # RADA MCP (if started)
 ```
 
 ### Database Operations
@@ -140,12 +177,15 @@ curl http://localhost:3000/health
 # Connect to PostgreSQL
 PGPASSWORD=local_dev_password psql -h localhost -U secondlayer -d secondlayer_local
 
-# Run migrations (if needed)
-cd ../mcp_backend
-npm run migrate
+# Migrations are run automatically on startup via migrate-local service
+# To manually re-run migrations:
+docker compose -f docker-compose.local.yml up migrate-local
 
 # View tables
 docker exec -it secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -c "\dt"
+
+# View migration status
+docker logs secondlayer-migrate-local
 ```
 
 ### Frontend Development
@@ -224,6 +264,11 @@ GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-secret
 GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
 
+# Google Cloud Vision API (for OCR in Document Service)
+# If not provided, OCR features will be disabled
+VISION_CREDENTIALS_PATH=/path/to/your/vision-credentials.json
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/vision-credentials.json
+
 # Model selection (cost optimization)
 OPENAI_MODEL_QUICK=gpt-4o-mini       # $0.15/1M tokens
 OPENAI_MODEL_STANDARD=gpt-4o-mini
@@ -297,6 +342,26 @@ docker volume rm deployment_postgres_local_data
 ./manage-gateway.sh start local
 ```
 
+### Migration Failures
+
+**Problem**: Backend starts but migrations didn't run
+
+**Solution 1**: Check migration logs
+```bash
+docker logs secondlayer-migrate-local
+```
+
+**Solution 2**: Manually run migrations
+```bash
+# From deployment directory
+docker compose -f docker-compose.local.yml up migrate-local --force-recreate
+```
+
+**Solution 3**: Verify migrations are in container
+```bash
+docker exec secondlayer-app-local ls -la src/migrations/
+```
+
 ### Frontend 401 Errors
 
 **Problem**: API calls return 401 Unauthorized
@@ -357,17 +422,22 @@ If you want to start fresh with a clean environment:
 ```bash
 cd deployment
 
-# Stop all local services
+# Stop all local services (including RADA if running)
 ./manage-gateway.sh stop local
+docker compose -f docker-compose.local.yml --profile rada down
 
 # Remove all local volumes (WARNING: deletes all data!)
 docker volume rm deployment_postgres_local_data
 docker volume rm deployment_redis_local_data
 docker volume rm deployment_qdrant_local_data
 docker volume rm deployment_app_local_data
+docker volume rm deployment_document_service_credentials
 
-# Start fresh
+# Start fresh (backend only)
 ./manage-gateway.sh start local
+
+# Or start with RADA MCP
+docker compose -f docker-compose.local.yml --profile rada up -d
 ```
 
 ## Best Practices

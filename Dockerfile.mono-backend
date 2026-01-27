@@ -82,6 +82,7 @@ COPY --from=builder /app/mcp_backend/package-lock.json* ./
 COPY --from=builder /app/mcp_backend/node_modules ./node_modules
 COPY --from=builder /app/mcp_backend/dist ./dist
 COPY --from=builder /app/mcp_backend/scripts ./scripts
+COPY --from=builder /app/mcp_backend/src/migrations ./src/migrations
 
 EXPOSE 3000
 
