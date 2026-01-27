@@ -1,0 +1,17 @@
+{
+  "_comment": "Remote MCP Server Configuration for Cursor IDE",
+  "_note": "Place this as .cursor/mcp.json in your project root",
+  "_docs": "https://cursor.com/docs/context/mcp",
+
+  "mcpServers": {
+    "secondlayer-remote": {
+      "url": "https://mcp.legal.org.ua/mcp/sse",
+      "transport": {
+        "type": "sse"
+      },
+      "headers": {
+        "Authorization": "Bearer YOUR-TOKEN-HERE"
+      }
+    }
+  }
+}

@@ -10,6 +10,20 @@
 ![OpenAI](https://img.shields.io/badge/OpenAI-API-000000?logo=openai&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
+## 📚 Documentation
+
+Complete documentation is available in the [docs/](docs/) directory:
+- **[Getting Started](docs/guides/START_HERE.md)** - Quick start guide
+- **[API Documentation](docs/api/)** - MCP tools and API reference
+- **[Deployment Guide](docs/deployment/)** - Deployment and infrastructure
+- **[Testing](docs/testing/)** - Testing guides and examples
+- **[Security](docs/security/)** - Security configuration
+- **[Backend Services](docs/backend/)** - Backend service documentation
+
+See [docs/README.md](docs/README.md) for complete documentation index.
+
+---
+
 `SecondLayer` — MCP (Model Context Protocol) серверный слой для семантической работы с юридическими данными (в т.ч. интеграция с Zakononline), с поддержкой нескольких транспортов запуска:
 
 - **MCP stdio** (для локальной интеграции с MCP-клиентами)
