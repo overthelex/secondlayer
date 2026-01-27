@@ -1,0 +1,31 @@
+{
+  "name": "nais-opendata-scraper",
+  "version": "1.0.0",
+  "description": "Scraper for NAIS (Ministry of Justice Ukraine) open data registries",
+  "main": "scrape-nais.js",
+  "scripts": {
+    "scrape": "node scrape-nais.js",
+    "start": "node scrape-nais.js",
+    "report": "node create-html-report.js",
+    "db:setup": "node setup-database.js",
+    "db:setup:shell": "./setup-database.sh",
+    "db:test": "node test-database.js"
+  },
+  "keywords": [
+    "nais",
+    "ukraine",
+    "opendata",
+    "scraper",
+    "registry",
+    "database",
+    "postgresql"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "pg": "^8.11.0",
+    "playwright": "^1.40.0",
+    "xml2js": "^0.6.2"
+  }
+}

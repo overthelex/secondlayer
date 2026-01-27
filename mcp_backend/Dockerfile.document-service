@@ -29,7 +29,13 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     wget \
     ca-certificates \
+    # Timezone data
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set timezone to EET (Europe/Kiev)
+ENV TZ=Europe/Kiev
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Set working directory
 WORKDIR /app
@@ -59,12 +65,12 @@ COPY mcp_backend/dist ./dist
 # Create temp directory for document processing
 RUN mkdir -p /tmp/document-parser && chmod 777 /tmp/document-parser
 
-# Health check (update port if needed)
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+    CMD node -e "require('http').get('http://127.0.0.1:3002/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Expose port
-EXPOSE 3001
+# Expose port (will be overridden by DOCUMENT_SERVICE_PORT env var)
+EXPOSE 3002
 
 # Run document service from mcp_backend directory
 CMD ["node", "dist/document-service.js"]

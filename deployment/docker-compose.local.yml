@@ -296,6 +296,115 @@ services:
     networks:
       - secondlayer-local
 
+  document-service-local:
+    build:
+      context: ..
+      dockerfile: mcp_backend/Dockerfile.document-service
+    image: document-service:latest
+    container_name: document-service-local
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+      qdrant-local:
+        condition: service_started
+      redis-local:
+        condition: service_healthy
+    environment:
+      # Application
+      NODE_ENV: ${NODE_ENV:-development}
+      DOCUMENT_SERVICE_PORT: 3002
+      PORT: 3002
+      HTTP_PORT: 3002
+      HTTP_HOST: 0.0.0.0
+
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      POSTGRES_HOST: postgres-local
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
+
+      # Vector DB
+      QDRANT_URL: http://qdrant-local:6333
+
+      # Cache
+      REDIS_URL: redis://redis-local:6379
+      REDIS_HOST: redis-local
+      REDIS_PORT: 6379
+
+      # OpenAI Configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+
+      # Dynamic model selection
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+
+      # Anthropic (optional)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
+      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
+      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
+      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+
+      # LLM Provider Strategy
+      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
+
+      # Vision/OCR credentials path (inside container, always same path)
+      VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
+
+      # External APIs (ZakonOnline)
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
+
+      # Security
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-test-key-123}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-in-production}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # CORS
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+
+    ports:
+      - "3002:3002"
+
+    volumes:
+      # Optional: Mount vision credentials if available
+      - ${VISION_CREDENTIALS_PATH:-/dev/null}:/app/credentials/vision-credentials.json:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3002/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+
+    networks:
+      - secondlayer-local
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
   # Frontend - typically run with npm run dev outside Docker for hot reload
   # Uncomment if you want to run frontend in Docker
   # lexwebapp-local:

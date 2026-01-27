@@ -304,17 +304,23 @@ build_images() {
 
     cd ..
 
-    # Build backend
+    # Build backend (from root context with backend Dockerfile)
     print_msg "$BLUE" "Building backend image..."
-    cd mcp_backend
-    docker build -t secondlayer-app:latest .
+    docker build -f mcp_backend/Dockerfile -t secondlayer-app:latest .
 
     # Build frontend
     print_msg "$BLUE" "Building frontend image..."
-    cd ../frontend
-    docker build -t lexwebapp-lexwebapp:latest .
+    if [ -d "frontend" ]; then
+        cd frontend
+        docker build -t lexwebapp-lexwebapp:latest .
+        cd ..
+    elif [ -d "lexwebapp" ]; then
+        cd lexwebapp
+        docker build -t lexwebapp-lexwebapp:latest .
+        cd ..
+    fi
 
-    cd ../deployment
+    cd deployment
     print_msg "$GREEN" "✅ Images built successfully"
 }
 
