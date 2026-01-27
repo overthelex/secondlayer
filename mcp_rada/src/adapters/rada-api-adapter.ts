@@ -73,9 +73,11 @@ export class RadaAPIAdapter {
       const response = await this.client.get(endpoint);
       const data = response.data;
 
-      // Response can be array directly or object with mps_list
+      // Response can be array directly or object with mps/mps_list/deputies
       if (Array.isArray(data)) {
         return data;
+      } else if (data.mps && Array.isArray(data.mps)) {
+        return data.mps;
       } else if (data.mps_list && Array.isArray(data.mps_list)) {
         return data.mps_list;
       } else if (data.deputies && Array.isArray(data.deputies)) {
