@@ -102,11 +102,12 @@ export class MCPSSEServer {
     res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
     // Send initial connection event
+    // OpenAI uses newer protocol versions (2025-03-26, 2025-11-25)
     this.sendSSEMessage(res, {
       jsonrpc: '2.0',
       method: 'server/initialized',
       params: {
-        protocolVersion: '2024-11-05',
+        protocolVersion: '2025-11-05',
         capabilities: {
           tools: {},
           prompts: {},
@@ -135,10 +136,19 @@ export class MCPSSEServer {
     });
 
     // Process incoming messages from POST body
-    if (req.body) {
+    if (req.body && Object.keys(req.body).length > 0) {
       try {
         const mcpRequest = req.body as MCPRequest;
         await this.handleMCPRequest(res, mcpRequest, sessionId);
+
+        // OpenAI makes separate POST for each message, so close after response
+        // Wait a bit for SSE message to be flushed
+        setTimeout(() => {
+          clearInterval(pingInterval);
+          if (!res.writableEnded) {
+            res.end();
+          }
+        }, 100);
       } catch (error: any) {
         logger.error('[MCP SSE] Error handling request', {
           sessionId,
@@ -153,11 +163,19 @@ export class MCPSSEServer {
             data: error.message,
           },
         });
-      }
-    }
 
-    // Don't end the connection - keep it open for SSE
-    // The connection will be closed by client or timeout
+        // Close on error too
+        setTimeout(() => {
+          clearInterval(pingInterval);
+          if (!res.writableEnded) {
+            res.end();
+          }
+        }, 100);
+      }
+    } else {
+      // No request body - just keep connection alive for long-polling
+      // This will be closed by client or keepalive timeout
+    }
   }
 
   /**
@@ -247,7 +265,7 @@ export class MCPSSEServer {
       jsonrpc: '2.0',
       id: request.id,
       result: {
-        protocolVersion: '2024-11-05',
+        protocolVersion: '2025-11-05',
         capabilities: {
           tools: {},
           prompts: {},

@@ -472,12 +472,13 @@ export class MCPQueryAPI {
         metadata = searchResult.data[0];
       }
 
-      // Then get full text
+      // Then get full text (now includes case_number extracted from HTML)
       fullTextData = await this.zoAdapter.getDocumentFullText(docId);
       doc = {
         ...metadata,
         text: fullTextData?.text,
         html: fullTextData?.html,
+        case_number: fullTextData?.case_number || metadata?.case_number,  // Prefer HTML-extracted case_number
       };
     } else if (caseNumber) {
       // getDocumentByCaseNumber already returns full document with metadata
