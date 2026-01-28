@@ -400,11 +400,12 @@ deploy_to_gate() {
     scp $compose_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
     scp $env_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
 
-    # Start containers on server
-    print_msg "$BLUE" "🔄 Starting containers on gate server..."
+    # Stop and remove old containers, then start new ones
+    print_msg "$BLUE" "🔄 Updating containers on gate server..."
     ssh ${GATE_USER}@${GATE_SERVER} << EOF
         cd ${REMOTE_PATH}
-        docker compose -f $compose_file --env-file $env_file up -d
+        docker compose -f $compose_file --env-file $env_file down
+        docker compose -f $compose_file --env-file $env_file up -d --force-recreate
 EOF
 
     print_msg "$GREEN" "✅ $env deployed to gate server"
