@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { RadaLegislationAdapter, LegislationArticle } from '../adapters/rada-legislation-adapter';
 import { logger } from '../utils/logger';
 import { EmbeddingService } from './embedding-service';
+import { createHash } from 'crypto';
 
 export interface LegislationReference {
   rada_id: string;
@@ -296,9 +297,13 @@ export class LegislationService {
       for (const chunk of chunks) {
         try {
           const embedding = await this.embeddingService.generateEmbedding(chunk.text);
-          
-          const vectorId = `leg_${radaId}_art_${article.article_number}_chunk_${chunk.chunk_index}`;
-          
+
+          // Create UUID-based vector ID (Qdrant requires UUID or unsigned integer)
+          // Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (UUID v4 style from MD5 hash)
+          const idString = `leg_${radaId}_art_${article.article_number}_chunk_${chunk.chunk_index}`;
+          const hash = createHash('md5').update(idString).digest('hex');
+          const vectorId = `${hash.substring(0, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}`;
+
           await this.embeddingService.upsertVector(
             vectorId,
             embedding,
