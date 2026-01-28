@@ -863,7 +863,7 @@ export class ZOAdapter {
    * Downloads HTML page and extracts text content
    * Returns both HTML and extracted text
    */
-  async getDocumentFullText(docId: string | number): Promise<{ html: string; text: string } | null> {
+  async getDocumentFullText(docId: string | number): Promise<{ html: string; text: string; case_number?: string } | null> {
     const cacheKey = `zo:fulltext:${docId}`;
 
     // Check cache first
@@ -877,9 +877,9 @@ export class ZOAdapter {
 
     try {
       const url = `https://zakononline.ua/court-decisions/show/${docId}`;
-      
+
       logger.info(`Fetching full text from ${url}`);
-      
+
       // Download HTML page
       const response = await axios.get(url, {
         timeout: 15000,
@@ -887,7 +887,7 @@ export class ZOAdapter {
           'User-Agent': 'Mozilla/5.0 (compatible; SecondLayerBot/1.0)',
         },
       });
-      
+
       if (response.status !== 200) {
         logger.warn(`Failed to fetch document HTML, status: ${response.status}`);
         return null;
@@ -897,24 +897,29 @@ export class ZOAdapter {
 
       // Parse HTML using specialized court decision parser
       const parser = new CourtDecisionHTMLParser(htmlContent);
-      
+
       // Extract full text (all content)
       const fullText = parser.toText('full');
-      
+
       // Extract only article HTML (without page styles, scripts, navigation)
       const articleHTML = parser.extractArticleHTML();
-      
+
+      // Extract metadata (including case number)
+      const metadata = parser.getMetadata();
+
       if (fullText && fullText.length > 100) {
         const result = {
           html: articleHTML,  // Only article content, not full page HTML
-          text: fullText
+          text: fullText,
+          case_number: metadata.caseNumber || undefined  // Add case_number from HTML
         };
 
         logger.info(`Successfully extracted full text using HTML parser`, {
           docId,
           textLength: fullText.length,
           htmlLength: articleHTML.length,
-          originalHtmlLength: htmlContent.length
+          originalHtmlLength: htmlContent.length,
+          caseNumber: metadata.caseNumber
         });
 
         // Cache for 7 days
@@ -930,6 +935,7 @@ export class ZOAdapter {
             full_text: result.text,
             full_text_html: result.html,
             url: `https://zakononline.ua/court-decisions/show/${docId}`,
+            case_number: metadata.caseNumber || undefined
           },
         ]);
 
@@ -938,7 +944,7 @@ export class ZOAdapter {
 
       logger.warn(`Could not extract meaningful text from document`, { docId });
       return null;
-      
+
     } catch (error: any) {
       logger.error(`Failed to fetch document full text ${docId}:`, error?.message);
       return null;
