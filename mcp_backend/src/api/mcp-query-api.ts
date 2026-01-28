@@ -431,10 +431,16 @@ export class MCPQueryAPI {
   }
 
   private async getCourtDecision(args: any): Promise<any> {
+    console.log('========== [TRACE] getCourtDecision ENTRY ==========');
+    console.log('[TRACE] Args:', JSON.stringify(args).substring(0, 200));
+    logger.info('[TRACE] getCourtDecision called', { args: JSON.stringify(args).substring(0, 100) });
+
     const docIdRaw = args.doc_id ?? args.document_id ?? args.case_id;
     const caseNumber = typeof args.case_number === 'string' ? args.case_number.trim() : '';
     const depth = Math.min(5, Math.max(1, Number(args.depth || 2)));
     const budget = args.reasoning_budget || 'standard';
+
+    console.log('[TRACE] Parsed:', { docIdRaw, caseNumber, depth, budget });
 
     logger.info('[MCP Tool] get_court_decision started', {
       docId: docIdRaw,
@@ -450,20 +456,63 @@ export class MCPQueryAPI {
     }
 
     let doc: any = null;
+    let fullTextData: any = null;
+    let metadata: any = null;
+
     if (docId) {
-      doc = await this.zoAdapter.getDocumentFullText(docId);
+      // When fetching by doc_id, we need both text and metadata
+      // First get metadata from API search
+      const searchResult = await this.zoAdapter.searchCourtDecisions({
+        meta: { search: String(docId) },
+        limit: 1,
+        fulldata: 1,
+      });
+
+      if (searchResult?.data && searchResult.data.length > 0) {
+        metadata = searchResult.data[0];
+      }
+
+      // Then get full text
+      fullTextData = await this.zoAdapter.getDocumentFullText(docId);
+      doc = {
+        ...metadata,
+        text: fullTextData?.text,
+        html: fullTextData?.html,
+      };
     } else if (caseNumber) {
+      // getDocumentByCaseNumber already returns full document with metadata
       doc = await this.zoAdapter.getDocumentByCaseNumber(caseNumber);
     } else {
       throw new Error('Provide doc_id (preferred) or case_number');
     }
 
-    const fullText = typeof doc?.text === 'string' ? doc.text : '';
+    // getDocumentFullText returns { text, html }, getDocumentByCaseNumber returns doc with full_text
+    const fullText = typeof doc?.full_text === 'string' ? doc.full_text : (typeof doc?.text === 'string' ? doc.text : '');
     const url = typeof doc?.url === 'string' ? doc.url : (docId ? `https://zakononline.ua/court-decisions/show/${docId}` : undefined);
+
+    // Extract doc_id and case_number from the fetched document
+    const actualDocId = doc?.doc_id || doc?.zakononline_id || docId || null;
+    const actualCaseNumber = doc?.case_number || caseNumber || undefined;
+
+    logger.info('[DEBUG] After doc fetch', {
+      hasDoc: !!doc,
+      hasFullText: !!doc?.full_text,
+      hasText: !!doc?.text,
+      fullTextLength: fullText.length,
+      urlFromDoc: doc?.url,
+      actualDocId,
+      actualCaseNumber
+    });
 
     const extractedSections = fullText
       ? await this.sectionizer.extractSections(fullText, budget === 'deep')
       : [];
+
+    logger.info('[DEBUG] After section extraction', {
+      fullTextLength: fullText.length,
+      extractedSectionsCount: extractedSections.length,
+      extractedSectionsType: Array.isArray(extractedSections) ? 'array' : typeof extractedSections
+    });
 
     const sections = Array.isArray(extractedSections)
       ? extractedSections
@@ -475,14 +524,24 @@ export class MCPQueryAPI {
           }))
       : [];
 
+    logger.info('[DEBUG] Final sections', {
+      sectionsCount: sections.length,
+      fullTextLength: fullText.length
+    });
+
     const payload: any = {
-      doc_id: docId || undefined,
-      case_number: caseNumber || undefined,
+      doc_id: actualDocId || undefined,
+      case_number: actualCaseNumber || undefined,
       url,
       depth,
       sections: sections.slice(0, depth),
       full_text_length: fullText.length,
     };
+
+    logger.info('[DEBUG] Returning payload', {
+      payloadFullTextLength: payload.full_text_length,
+      payloadSectionsCount: payload.sections.length
+    });
 
     return {
       content: [
