@@ -23,6 +23,7 @@ import { createRestAPIRouter } from './routes/rest-api.js';
 import path from 'path';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
+import { BillingService } from './services/billing-service.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
 import passport from 'passport';
@@ -47,6 +48,7 @@ class HTTPMCPServer {
   private documentParser: DocumentParser;
   private documentAnalysisTools: DocumentAnalysisTools;
   private costTracker: CostTracker;
+  private billingService: BillingService;
   private mcpSSEServer: MCPSSEServer;
 
   constructor() {
@@ -89,19 +91,23 @@ class HTTPMCPServer {
       this.legislationTools
     );
 
-    // Initialize cost tracker and inject into adapters
+    // Initialize cost tracker and billing service
     this.costTracker = new CostTracker(this.db);
+    this.billingService = new BillingService(this.db);
+    this.costTracker.setBillingService(this.billingService);
+
     const openaiManager = getOpenAIManager();
     openaiManager.setCostTracker(this.costTracker);
     this.zoAdapter.setCostTracker(this.costTracker);
     this.zoPracticeAdapter.setCostTracker(this.costTracker);
-    logger.info('Cost tracking initialized');
+    logger.info('Cost tracking and billing initialized');
 
     // Initialize MCP SSE Server for ChatGPT integration
     this.mcpSSEServer = new MCPSSEServer(
       this.mcpAPI,
       this.legislationTools,
-      this.documentAnalysisTools
+      this.documentAnalysisTools,
+      this.costTracker
     );
     logger.info('MCP SSE Server initialized');
 
@@ -154,11 +160,11 @@ class HTTPMCPServer {
       });
     });
 
-    // MCP SSE endpoint for ChatGPT web integration (public - uses OAuth)
+    // MCP SSE endpoint for ChatGPT web integration (optional auth)
     // Endpoint: POST /sse
     // This implements the Model Context Protocol over Server-Sent Events
     // Reference: https://platform.openai.com/docs/mcp
-    this.app.post('/sse', (async (req: Request, res: Response) => {
+    this.app.post('/sse', (async (req: DualAuthRequest, res: Response) => {
       try {
         // CRITICAL: Set SSE headers BEFORE any other processing
         // This must be done here to override express.json() middleware
@@ -167,9 +173,35 @@ class HTTPMCPServer {
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
 
-        // Optional: Add OAuth validation here if needed
-        // For now, we use the existing dual auth middleware
-        await this.mcpSSEServer.handleSSEConnection(req, res);
+        // Extract user ID from optional auth header
+        let userId: string | undefined;
+        let clientKey: string | undefined;
+
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          const token = authHeader.replace('Bearer ', '');
+
+          // Try to authenticate (JWT or API key)
+          try {
+            if (token.includes('.')) {
+              // JWT token - verify and extract userId
+              const jwt = await import('jsonwebtoken');
+              const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
+              userId = decoded.userId;
+              logger.debug('[MCP SSE] Authenticated with JWT', { userId });
+            } else {
+              // API key - just log it
+              clientKey = token;
+              logger.debug('[MCP SSE] Using API key', { keyPrefix: token.substring(0, 8) + '...' });
+            }
+          } catch (error) {
+            // Auth failed, but continue without userId (for backward compatibility)
+            logger.debug('[MCP SSE] Auth failed, continuing without userId', { error: (error as Error).message });
+          }
+        }
+
+        // Pass userId and clientKey to SSE handler
+        await this.mcpSSEServer.handleSSEConnection(req, res, userId, clientKey);
       } catch (error: any) {
         logger.error('[MCP SSE] Connection error:', error);
         if (!res.headersSent) {
@@ -224,6 +256,139 @@ class HTTPMCPServer {
 
     // EULA endpoints - REMOVED: not needed
     // this.app.use('/api/eula', createEULARouter(this.db.getPool()));
+
+    // Billing endpoints - require JWT (user login)
+    // GET /api/billing/balance - Get current balance and limits
+    this.app.get('/api/billing/balance', requireJWT as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
+      try {
+        const userId = req.user!.id;
+        const summary = await this.billingService.getBillingSummary(userId);
+
+        if (!summary) {
+          return res.status(404).json({
+            error: 'Billing account not found',
+          });
+        }
+
+        res.json({
+          success: true,
+          billing: {
+            balance_usd: summary.balance_usd,
+            balance_uah: summary.balance_uah,
+            total_spent_usd: summary.total_spent_usd,
+            total_requests: summary.total_requests,
+            limits: {
+              daily_usd: summary.daily_limit_usd,
+              monthly_usd: summary.monthly_limit_usd,
+            },
+            usage: {
+              today_usd: summary.today_spent_usd,
+              month_usd: summary.month_spent_usd,
+            },
+            last_request_at: summary.last_request_at,
+          },
+        });
+      } catch (error: any) {
+        logger.error('Failed to get billing balance', { error: error.message });
+        res.status(500).json({
+          error: 'Failed to get billing balance',
+          message: error.message,
+        });
+      }
+    }) as any);
+
+    // GET /api/billing/history - Get transaction history
+    this.app.get('/api/billing/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+        const type = req.query.type as string;
+
+        const transactions = await this.billingService.getTransactionHistory(userId, {
+          limit,
+          offset,
+          type,
+        });
+
+        res.json({
+          success: true,
+          transactions,
+          pagination: {
+            limit,
+            offset,
+            count: transactions.length,
+          },
+        });
+      } catch (error: any) {
+        logger.error('Failed to get billing history', { error: error.message });
+        res.status(500).json({
+          error: 'Failed to get billing history',
+          message: error.message,
+        });
+      }
+    }) as any);
+
+    // POST /api/billing/topup - Top up balance (admin or payment integration)
+    this.app.post('/api/billing/topup', requireJWT as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
+      try {
+        const userId = req.user!.id;
+        const { amount_usd, amount_uah, description, payment_provider, payment_id } = req.body;
+
+        if (!amount_usd || amount_usd <= 0) {
+          return res.status(400).json({
+            error: 'Invalid amount',
+            message: 'amount_usd must be positive',
+          });
+        }
+
+        const transaction = await this.billingService.topUpBalance({
+          userId,
+          amountUsd: amount_usd,
+          amountUah: amount_uah || 0,
+          description: description || `Top up $${amount_usd}`,
+          paymentProvider: payment_provider,
+          paymentId: payment_id,
+        });
+
+        res.json({
+          success: true,
+          message: 'Balance topped up successfully',
+          transaction,
+        });
+      } catch (error: any) {
+        logger.error('Failed to top up balance', { error: error.message });
+        res.status(500).json({
+          error: 'Failed to top up balance',
+          message: error.message,
+        });
+      }
+    }) as any);
+
+    // PUT /api/billing/settings - Update billing settings
+    this.app.put('/api/billing/settings', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const { daily_limit_usd, monthly_limit_usd } = req.body;
+
+        const settings: any = {};
+        if (daily_limit_usd !== undefined) settings.dailyLimitUsd = daily_limit_usd;
+        if (monthly_limit_usd !== undefined) settings.monthlyLimitUsd = monthly_limit_usd;
+
+        await this.billingService.updateBillingSettings(userId, settings);
+
+        res.json({
+          success: true,
+          message: 'Billing settings updated',
+        });
+      } catch (error: any) {
+        logger.error('Failed to update billing settings', { error: error.message });
+        res.status(500).json({
+          error: 'Failed to update billing settings',
+          message: error.message,
+        });
+      }
+    }) as any);
 
     // Query history endpoint - require JWT (user login)
     this.app.get('/api/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
@@ -320,7 +485,8 @@ class HTTPMCPServer {
         await this.costTracker.createTrackingRecord({
           requestId,
           toolName,
-          clientKey: req.clientKey || 'unknown',
+          clientKey: req.clientKey,
+          userId: req.user?.id,
           userQuery: args.query || JSON.stringify(args),
           queryParams: args,
         });
