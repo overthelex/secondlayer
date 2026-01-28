@@ -24,6 +24,13 @@ import path from 'path';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
 import { BillingService } from './services/billing-service.js';
+import { StripeService } from './services/stripe-service.js';
+import { FondyService } from './services/fondy-service.js';
+import { EmailService } from './services/email-service.js';
+import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
+import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
+import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
+import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
 import passport from 'passport';
@@ -49,6 +56,9 @@ class HTTPMCPServer {
   private documentAnalysisTools: DocumentAnalysisTools;
   private costTracker: CostTracker;
   private billingService: BillingService;
+  private stripeService: StripeService | MockStripeService;
+  private fondyService: FondyService | MockFondyService;
+  private emailService: EmailService;
   private mcpSSEServer: MCPSSEServer;
 
   constructor() {
@@ -96,6 +106,35 @@ class HTTPMCPServer {
     this.billingService = new BillingService(this.db);
     this.costTracker.setBillingService(this.billingService);
 
+    // Initialize payment services
+    this.emailService = new EmailService();
+
+    // Use mock services if in test/development mode
+    const useMockStripe = !process.env.STRIPE_SECRET_KEY ||
+                          process.env.STRIPE_SECRET_KEY.includes('mock') ||
+                          process.env.STRIPE_SECRET_KEY.includes('test');
+    const useMockFondy = !process.env.FONDY_SECRET_KEY ||
+                         process.env.FONDY_SECRET_KEY.includes('mock') ||
+                         process.env.FONDY_SECRET_KEY.includes('test');
+
+    if (useMockStripe) {
+      this.stripeService = new MockStripeService(this.billingService, this.emailService);
+      logger.warn('Using MOCK Stripe service (no real payments will be processed)');
+    } else {
+      this.stripeService = new StripeService(this.billingService, this.emailService);
+      logger.info('Using REAL Stripe service');
+    }
+
+    if (useMockFondy) {
+      this.fondyService = new MockFondyService(this.billingService, this.emailService);
+      logger.warn('Using MOCK Fondy service (no real payments will be processed)');
+    } else {
+      this.fondyService = new FondyService(this.billingService, this.emailService);
+      logger.info('Using REAL Fondy service');
+    }
+
+    logger.info('Payment services initialized');
+
     const openaiManager = getOpenAIManager();
     openaiManager.setCostTracker(this.costTracker);
     this.zoAdapter.setCostTracker(this.costTracker);
@@ -128,8 +167,16 @@ class HTTPMCPServer {
       credentials: true,
     }));
 
-    // JSON parsing with UTF-8 support
-    this.app.use(express.json({ 
+    // IMPORTANT: Stripe webhooks need raw body BEFORE json parsing
+    // Mount webhook routes with raw body parser
+    this.app.use(
+      '/webhooks/stripe',
+      express.raw({ type: 'application/json', limit: '10mb' }),
+      createWebhookRouter(this.stripeService, this.fondyService)
+    );
+
+    // JSON parsing with UTF-8 support (for all other routes)
+    this.app.use(express.json({
       limit: '10mb',
       verify: (req: any, _res, buf) => {
         req.rawBody = buf.toString('utf8');
@@ -390,6 +437,28 @@ class HTTPMCPServer {
       }
     }) as any);
 
+    // Payment routes - require JWT (user login)
+    // POST /api/billing/payment/stripe/create - Create Stripe PaymentIntent
+    // POST /api/billing/payment/fondy/create - Create Fondy payment
+    // GET /api/billing/payment/:provider/:paymentId/status - Check payment status
+    this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.stripeService, this.fondyService));
+
+    // Webhook routes - public (signature verified by services)
+    // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
+    // POST /webhooks/fondy - mount here with JSON body
+    this.app.post('/webhooks/fondy', (async (req: Request, res: Response) => {
+      try {
+        await this.fondyService.handleCallback(req.body);
+        res.json({ received: true });
+      } catch (error: any) {
+        logger.error('Fondy callback failed', { error: error.message });
+        res.status(400).json({
+          error: 'Callback processing failed',
+          message: error.message,
+        });
+      }
+    }) as any);
+
     // Query history endpoint - require JWT (user login)
     this.app.get('/api/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
       try {
@@ -465,7 +534,9 @@ class HTTPMCPServer {
     }) as any);
 
     // Call MCP tool (with SSE support and cost tracking)
-    this.app.post('/api/tools/:toolName', dualAuth as any, (async (req: DualAuthRequest, res: Response) => {
+    // Balance check middleware ensures user has sufficient funds before execution
+    const balanceCheckMiddleware = createBalanceCheckMiddleware(this.billingService, this.costTracker);
+    this.app.post('/api/tools/:toolName', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
       const requestId = uuidv4();
       const startTime = Date.now();
 
@@ -626,8 +697,8 @@ class HTTPMCPServer {
       }
     }) as any);
 
-    // Dedicated SSE streaming endpoint
-    this.app.post('/api/tools/:toolName/stream', dualAuth as any, (async (req: DualAuthRequest, res: Response) => {
+    // Dedicated SSE streaming endpoint (with balance check)
+    this.app.post('/api/tools/:toolName/stream', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
       try {
         const { toolName } = req.params;
         const args = req.body.arguments || req.body;
@@ -650,8 +721,8 @@ class HTTPMCPServer {
       }
     }) as any);
 
-    // Batch tool calls
-    this.app.post('/api/tools/batch', dualAuth as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
+    // Batch tool calls (with balance check)
+    this.app.post('/api/tools/batch', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
       try {
         const { calls } = req.body;
 
