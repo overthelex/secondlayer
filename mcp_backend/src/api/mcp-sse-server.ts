@@ -15,6 +15,8 @@ import { logger } from '../utils/logger.js';
 import { MCPQueryAPI } from './mcp-query-api.js';
 import { LegislationTools } from './legislation-tools.js';
 import { DocumentAnalysisTools } from './document-analysis-tools.js';
+import { CostTracker } from '../services/cost-tracker.js';
+import { requestContext } from '../utils/openai-client.js';
 
 export interface MCPToolDefinition {
   name: string;
@@ -50,11 +52,19 @@ export interface MCPNotification {
   params?: any;
 }
 
+interface SessionContext {
+  userId?: string;
+  clientKey?: string;
+}
+
 export class MCPSSEServer {
+  private sessions: Map<string, SessionContext> = new Map();
+
   constructor(
     private mcpAPI: MCPQueryAPI,
     private legislationTools: LegislationTools,
-    private documentAnalysisTools: DocumentAnalysisTools
+    private documentAnalysisTools: DocumentAnalysisTools,
+    private costTracker: CostTracker
   ) {}
 
   /**
@@ -86,11 +96,21 @@ export class MCPSSEServer {
    * Handle MCP SSE connection
    * Main endpoint: POST /sse
    */
-  async handleSSEConnection(req: Request, res: Response): Promise<void> {
+  async handleSSEConnection(
+    req: Request,
+    res: Response,
+    userId?: string,
+    clientKey?: string
+  ): Promise<void> {
     const sessionId = uuidv4();
+
+    // Store session context
+    this.sessions.set(sessionId, { userId, clientKey });
 
     logger.info('[MCP SSE] New connection', {
       sessionId,
+      userId: userId || 'anonymous',
+      clientKey: clientKey ? clientKey.substring(0, 8) + '...' : 'none',
       ip: req.ip,
       userAgent: req.headers['user-agent'],
     });
@@ -101,24 +121,9 @@ export class MCPSSEServer {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
-    // Send initial connection event
-    // OpenAI uses newer protocol versions (2025-03-26, 2025-11-25)
-    this.sendSSEMessage(res, {
-      jsonrpc: '2.0',
-      method: 'server/initialized',
-      params: {
-        protocolVersion: '2025-11-05',
-        capabilities: {
-          tools: {},
-          prompts: {},
-          resources: {},
-        },
-        serverInfo: {
-          name: 'SecondLayer Legal MCP Server',
-          version: '1.0.0',
-        },
-      },
-    });
+    // Don't send server/initialized notification here
+    // According to MCP spec, this notification is sent by CLIENT after receiving initialize response
+    // OpenAI ChatGPT uses protocol versions 2025-03-26 or 2025-11-25
 
     // Keep connection alive with periodic pings
     const pingInterval = setInterval(() => {
@@ -132,6 +137,7 @@ export class MCPSSEServer {
     // Handle client disconnect
     req.on('close', () => {
       clearInterval(pingInterval);
+      this.sessions.delete(sessionId);
       logger.info('[MCP SSE] Connection closed', { sessionId });
     });
 
@@ -142,13 +148,14 @@ export class MCPSSEServer {
         await this.handleMCPRequest(res, mcpRequest, sessionId);
 
         // OpenAI makes separate POST for each message, so close after response
-        // Wait a bit for SSE message to be flushed
+        // Wait for SSE messages to be flushed (increased from 100ms to 1000ms to handle slow tools)
         setTimeout(() => {
           clearInterval(pingInterval);
           if (!res.writableEnded) {
+            logger.info('[MCP SSE] Closing connection after response', { sessionId });
             res.end();
           }
-        }, 100);
+        }, 1000);
       } catch (error: any) {
         logger.error('[MCP SSE] Error handling request', {
           sessionId,
@@ -164,13 +171,14 @@ export class MCPSSEServer {
           },
         });
 
-        // Close on error too
+        // Close on error too (increased timeout)
         setTimeout(() => {
           clearInterval(pingInterval);
           if (!res.writableEnded) {
+            logger.info('[MCP SSE] Closing connection after error', { sessionId });
             res.end();
           }
-        }, 100);
+        }, 1000);
       }
     } else {
       // No request body - just keep connection alive for long-polling
@@ -255,21 +263,28 @@ export class MCPSSEServer {
    */
   private async handleInitialize(res: Response, request: MCPRequest): Promise<void> {
     const clientInfo = request.params?.clientInfo;
+    const clientProtocolVersion = request.params?.protocolVersion;
 
     logger.info('[MCP SSE] Initialize', {
       clientInfo,
-      protocolVersion: request.params?.protocolVersion,
+      protocolVersion: clientProtocolVersion,
     });
+
+    // Use client's protocol version if it's newer than ours
+    const supportedVersions = ['2024-11-05', '2025-11-05', '2025-03-26', '2025-11-25'];
+    const protocolVersion = supportedVersions.includes(clientProtocolVersion)
+      ? clientProtocolVersion
+      : '2025-11-05';
 
     this.sendSSEMessage(res, {
       jsonrpc: '2.0',
       id: request.id,
       result: {
-        protocolVersion: '2025-11-05',
+        protocolVersion,
         capabilities: {
-          tools: {},
-          prompts: {},
-          resources: {},
+          tools: {
+            listChanged: false,
+          },
         },
         serverInfo: {
           name: 'SecondLayer Legal MCP Server',
@@ -320,13 +335,30 @@ export class MCPSSEServer {
       return;
     }
 
+    // Get session context (userId, clientKey)
+    const context = this.sessions.get(sessionId) || {};
+
     logger.info('[MCP SSE] Tool call', {
       sessionId,
       tool: name,
+      userId: context.userId || 'anonymous',
       args: JSON.stringify(args).substring(0, 200),
     });
 
+    const requestId = `sse-${request.id}-${Date.now()}`;
+    const startTime = Date.now();
+
     try {
+      // 1. Create cost tracking record
+      await this.costTracker.createTrackingRecord({
+        requestId,
+        toolName: name,
+        clientKey: context.clientKey,
+        userId: context.userId,
+        userQuery: args.query || JSON.stringify(args),
+        queryParams: args,
+      });
+
       // Send progress notification
       this.sendSSEMessage(res, {
         jsonrpc: '2.0',
@@ -338,17 +370,28 @@ export class MCPSSEServer {
         },
       });
 
-      // Execute tool
-      let result;
+      // 2. Execute tool in request context
+      const result = await requestContext.run(
+        { requestId, task: name },
+        async () => {
+          // Route to appropriate tool handler
+          if (name.startsWith('get_legislation_') || name === 'search_legislation') {
+            return await this.executeLegislationTool(name, args);
+          } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(name)) {
+            return await this.executeDocumentTool(name, args);
+          } else {
+            return await this.mcpAPI.handleToolCall(name, args);
+          }
+        }
+      );
 
-      // Route to appropriate tool handler
-      if (name.startsWith('get_legislation_') || name === 'search_legislation') {
-        result = await this.executeLegislationTool(name, args);
-      } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(name)) {
-        result = await this.executeDocumentTool(name, args);
-      } else {
-        result = await this.mcpAPI.handleToolCall(name, args);
-      }
+      // 3. Complete cost tracking
+      const executionTime = Date.now() - startTime;
+      await this.costTracker.completeTrackingRecord({
+        requestId,
+        executionTimeMs: executionTime,
+        status: 'completed',
+      });
 
       // Send completion notification
       this.sendSSEMessage(res, {
@@ -362,6 +405,14 @@ export class MCPSSEServer {
       });
 
       // Send result
+      logger.info('[MCP SSE] Sending tool result', {
+        sessionId,
+        tool: name,
+        userId: context.userId || 'anonymous',
+        resultSize: JSON.stringify(result).length,
+        executionTimeMs: executionTime,
+      });
+
       this.sendSSEMessage(res, {
         jsonrpc: '2.0',
         id: request.id,
@@ -379,8 +430,22 @@ export class MCPSSEServer {
       logger.error('[MCP SSE] Tool execution error', {
         sessionId,
         tool: name,
+        userId: context.userId || 'anonymous',
         error: error.message,
       });
+
+      // Record failure in cost tracking
+      const executionTime = Date.now() - startTime;
+      try {
+        await this.costTracker.completeTrackingRecord({
+          requestId,
+          executionTimeMs: executionTime,
+          status: 'failed',
+          errorMessage: error.message,
+        });
+      } catch (trackingError) {
+        logger.error('[MCP SSE] Failed to record error in cost tracking', { trackingError });
+      }
 
       this.sendSSEMessage(res, {
         jsonrpc: '2.0',

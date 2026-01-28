@@ -7,9 +7,20 @@ import {
   ZOCallRecord,
   SecondLayerCallRecord,
 } from '../types/cost.js';
+import { BillingService } from './billing-service.js';
 
 export class CostTracker {
+  private billingService?: BillingService;
+
   constructor(private db: Database) {}
+
+  /**
+   * Set billing service for automatic charging
+   */
+  setBillingService(billingService: BillingService): void {
+    this.billingService = billingService;
+    logger.info('BillingService connected to CostTracker');
+  }
 
   /**
    * ZakonOnline pricing tiers (USD)
@@ -50,7 +61,8 @@ export class CostTracker {
   async createTrackingRecord(params: {
     requestId: string;
     toolName: string;
-    clientKey: string;
+    clientKey?: string;
+    userId?: string;
     userQuery: string;
     queryParams: any;
   }): Promise<void> {
@@ -58,13 +70,14 @@ export class CostTracker {
 
     await this.db.query(
       `INSERT INTO cost_tracking (
-        request_id, tool_name, client_key, user_query, query_params,
+        request_id, tool_name, client_key, user_id, user_query, query_params,
         zakononline_monthly_total, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         params.requestId,
         params.toolName,
-        params.clientKey,
+        params.clientKey || null,
+        params.userId || null,
         params.userQuery,
         JSON.stringify(params.queryParams),
         monthlyTotal,
@@ -72,7 +85,11 @@ export class CostTracker {
       ]
     );
 
-    logger.debug('Cost tracking record created', { requestId: params.requestId });
+    logger.debug('Cost tracking record created', {
+      requestId: params.requestId,
+      userId: params.userId,
+      clientKey: params.clientKey ? params.clientKey.substring(0, 8) + '...' : 'none',
+    });
   }
 
   /**
@@ -452,7 +469,32 @@ export class CostTracker {
       requestId: params.requestId,
       status: params.status,
       totalCostUsd: totalCostUsd.toFixed(6),
+      userId: record.user_id || 'none',
     });
+
+    // Automatically charge user if billing service is configured and request was completed
+    if (this.billingService && record.user_id && params.status === 'completed' && totalCostUsd > 0) {
+      try {
+        await this.billingService.chargeUser({
+          userId: record.user_id,
+          requestId: params.requestId,
+          amountUsd: totalCostUsd,
+          description: `${record.tool_name}: ${record.user_query?.substring(0, 100) || 'N/A'}`,
+        });
+        logger.debug('User automatically charged', {
+          requestId: params.requestId,
+          userId: record.user_id,
+          amount: totalCostUsd.toFixed(6),
+        });
+      } catch (error: any) {
+        // Don't fail the request if billing fails
+        logger.error('Failed to charge user automatically', {
+          requestId: params.requestId,
+          userId: record.user_id,
+          error: error.message,
+        });
+      }
+    }
 
     return breakdown;
   }
