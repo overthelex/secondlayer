@@ -5,14 +5,15 @@
   "private": true,
   "workspaces": [
     "mcp_backend",
-    "frontend"
+    "lexwebapp",
+    "packages/shared"
   ],
   "scripts": {
     "backend": "cd mcp_backend && npm run dev:http",
-    "frontend": "cd frontend && npm run dev",
+    "frontend": "cd lexwebapp && npm run dev",
     "backend:build": "cd mcp_backend && npm run build",
-    "frontend:build": "cd frontend && npm run build",
-    "install:all": "npm install && cd mcp_backend && npm install && cd ../frontend && npm install"
+    "frontend:build": "cd lexwebapp && npm run build",
+    "install:all": "npm install"
   },
   "keywords": [
     "mcp",
