@@ -16,7 +16,7 @@ export interface PaymentIntentResult {
 }
 
 export interface PaymentStatus {
-  status: 'succeeded' | 'processing' | 'requires_payment_method' | 'canceled' | 'failed';
+  status: 'succeeded' | 'processing' | 'requires_payment_method' | 'requires_action' | 'requires_capture' | 'requires_confirmation' | 'canceled' | 'failed';
   amount: number;
   currency: string;
   metadata?: any;
@@ -38,7 +38,7 @@ export class StripeService {
     }
 
     this.stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia', // Latest API version
+      apiVersion: '2023-10-16', // Stable API version
     });
 
     logger.info('StripeService initialized', {

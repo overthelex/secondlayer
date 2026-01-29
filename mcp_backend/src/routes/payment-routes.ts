@@ -6,14 +6,16 @@
 import { Router, Request, Response } from 'express';
 import { StripeService } from '../services/stripe-service.js';
 import { FondyService } from '../services/fondy-service.js';
+import { MockStripeService } from '../services/__mocks__/stripe-service-mock.js';
+import { MockFondyService } from '../services/__mocks__/fondy-service-mock.js';
 import { logger } from '../utils/logger.js';
 
 /**
  * Create payment router
  */
 export function createPaymentRouter(
-  stripeService: StripeService,
-  fondyService: FondyService
+  stripeService: StripeService | MockStripeService,
+  fondyService: FondyService | MockFondyService
 ): Router {
   const router = Router();
 
@@ -42,12 +44,12 @@ export function createPaymentRouter(
         metadata
       );
 
-      res.json(result);
+      return res.json(result);
     } catch (error: any) {
       logger.error('Failed to create Stripe payment', {
         error: error.message,
       });
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Payment creation failed',
         message: error.message,
       });
@@ -84,12 +86,12 @@ export function createPaymentRouter(
         description
       );
 
-      res.json(result);
+      return res.json(result);
     } catch (error: any) {
       logger.error('Failed to create Fondy payment', {
         error: error.message,
       });
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Payment creation failed',
         message: error.message,
       });
@@ -117,12 +119,12 @@ export function createPaymentRouter(
         });
       }
 
-      res.json(status);
+      return res.json(status);
     } catch (error: any) {
       logger.error('Failed to get payment status', {
         error: error.message,
       });
-      res.status(500).json({
+      return res.status(500).json({
         error: 'Failed to get payment status',
         message: error.message,
       });
@@ -136,8 +138,8 @@ export function createPaymentRouter(
  * Create webhook router (no JWT, uses signature verification)
  */
 export function createWebhookRouter(
-  stripeService: StripeService,
-  fondyService: FondyService
+  stripeService: StripeService | MockStripeService,
+  fondyService: FondyService | MockFondyService
 ): Router {
   const router = Router();
 
@@ -166,12 +168,12 @@ export function createWebhookRouter(
           signature
         );
 
-        res.json(result);
+        return res.json(result);
       } catch (error: any) {
         logger.error('Stripe webhook failed', {
           error: error.message,
         });
-        res.status(400).json({
+        return res.status(400).json({
           error: 'Webhook processing failed',
           message: error.message,
         });
