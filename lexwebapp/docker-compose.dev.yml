@@ -1,0 +1,31 @@
+# Docker Compose for DEVELOPMENT deployment on gate server
+version: '3.8'
+
+services:
+  lexwebapp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+    container_name: lexwebapp-dev
+    ports:
+      - "8091:80"
+    environment:
+      - NODE_ENV=development
+    networks:
+      - secondlayer_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "com.docker.compose.project=lexwebapp-dev"
+
+networks:
+  secondlayer_network:
+    external: true
+    name: secondlayer_secondlayer-network

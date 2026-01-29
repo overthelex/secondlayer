@@ -52,7 +52,14 @@ export function createBalanceCheckMiddleware(
 
       // Estimate cost for this request
       const toolName = req.params.toolName || req.body.toolName || 'unknown';
-      const estimatedCost = costTracker.estimateCost(toolName, req.body);
+      const queryLength = JSON.stringify(req.body).length;
+      const reasoningBudget = (req.body.reasoning_budget || 'standard') as 'quick' | 'standard' | 'deep';
+
+      const estimatedCost = await costTracker.estimateCost({
+        toolName,
+        queryLength,
+        reasoningBudget,
+      });
 
       logger.debug('Pre-flight balance check', {
         userId,
@@ -88,47 +95,28 @@ export function createBalanceCheckMiddleware(
       }
 
       // Check daily and monthly limits
-      const limitsCheck = await billingService.checkLimits(userId);
+      const limitsCheck = await billingService.checkLimits(userId, estimatedCost.total_estimated_cost_usd);
 
-      if (!limitsCheck.withinDailyLimit) {
-        logger.warn('Daily limit exceeded', {
+      if (!limitsCheck.withinLimits) {
+        const isDaily = limitsCheck.reason?.includes('Daily');
+        logger.warn(isDaily ? 'Daily limit exceeded' : 'Monthly limit exceeded', {
           userId,
-          dailySpent: limitsCheck.todaySpent,
+          dailySpent: limitsCheck.dailySpent,
           dailyLimit: limitsCheck.dailyLimit,
-        });
-
-        return res.status(429).json({
-          error: 'Daily limit exceeded',
-          message: `You have reached your daily spending limit of $${limitsCheck.dailyLimit.toFixed(2)}`,
-          code: 'DAILY_LIMIT_EXCEEDED',
-          limits: {
-            daily_limit_usd: limitsCheck.dailyLimit,
-            daily_spent_usd: limitsCheck.todaySpent,
-            monthly_limit_usd: limitsCheck.monthlyLimit,
-            monthly_spent_usd: limitsCheck.monthSpent,
-          },
-          reset_at: limitsCheck.dailyResetAt,
-        });
-      }
-
-      if (!limitsCheck.withinMonthlyLimit) {
-        logger.warn('Monthly limit exceeded', {
-          userId,
-          monthlySpent: limitsCheck.monthSpent,
+          monthlySpent: limitsCheck.monthlySpent,
           monthlyLimit: limitsCheck.monthlyLimit,
         });
 
         return res.status(429).json({
-          error: 'Monthly limit exceeded',
-          message: `You have reached your monthly spending limit of $${limitsCheck.monthlyLimit.toFixed(2)}`,
-          code: 'MONTHLY_LIMIT_EXCEEDED',
+          error: isDaily ? 'Daily limit exceeded' : 'Monthly limit exceeded',
+          message: limitsCheck.reason,
+          code: isDaily ? 'DAILY_LIMIT_EXCEEDED' : 'MONTHLY_LIMIT_EXCEEDED',
           limits: {
             daily_limit_usd: limitsCheck.dailyLimit,
-            daily_spent_usd: limitsCheck.todaySpent,
+            daily_spent_usd: limitsCheck.dailySpent,
             monthly_limit_usd: limitsCheck.monthlyLimit,
-            monthly_spent_usd: limitsCheck.monthSpent,
+            monthly_spent_usd: limitsCheck.monthlySpent,
           },
-          reset_at: limitsCheck.monthlyResetAt,
         });
       }
 

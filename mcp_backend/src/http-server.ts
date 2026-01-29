@@ -31,6 +31,7 @@ import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
 import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
 import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
+import { createTestEmailRoute } from './routes/test-email-route.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
 import passport from 'passport';
@@ -109,31 +110,38 @@ class HTTPMCPServer {
     // Initialize payment services
     this.emailService = new EmailService();
 
-    // Use mock services if in test/development mode
-    const useMockStripe = !process.env.STRIPE_SECRET_KEY ||
+    // Use mock services if MOCK_PAYMENTS=true or keys not configured
+    const mockPaymentsEnabled = process.env.MOCK_PAYMENTS === 'true';
+    const useMockStripe = mockPaymentsEnabled ||
+                          !process.env.STRIPE_SECRET_KEY ||
                           process.env.STRIPE_SECRET_KEY.includes('mock') ||
                           process.env.STRIPE_SECRET_KEY.includes('test');
-    const useMockFondy = !process.env.FONDY_SECRET_KEY ||
+    const useMockFondy = mockPaymentsEnabled ||
+                         !process.env.FONDY_SECRET_KEY ||
                          process.env.FONDY_SECRET_KEY.includes('mock') ||
                          process.env.FONDY_SECRET_KEY.includes('test');
 
     if (useMockStripe) {
       this.stripeService = new MockStripeService(this.billingService, this.emailService);
-      logger.warn('Using MOCK Stripe service (no real payments will be processed)');
+      logger.warn('🧪 Using MOCK Stripe service (no real payments will be processed)');
     } else {
       this.stripeService = new StripeService(this.billingService, this.emailService);
-      logger.info('Using REAL Stripe service');
+      logger.info('💳 Using REAL Stripe service');
     }
 
     if (useMockFondy) {
       this.fondyService = new MockFondyService(this.billingService, this.emailService);
-      logger.warn('Using MOCK Fondy service (no real payments will be processed)');
+      logger.warn('🧪 Using MOCK Fondy service (no real payments will be processed)');
     } else {
       this.fondyService = new FondyService(this.billingService, this.emailService);
-      logger.info('Using REAL Fondy service');
+      logger.info('💳 Using REAL Fondy service');
     }
 
-    logger.info('Payment services initialized');
+    logger.info('Payment services initialized', {
+      mockPayments: mockPaymentsEnabled,
+      stripeMode: useMockStripe ? 'MOCK' : 'REAL',
+      fondyMode: useMockFondy ? 'MOCK' : 'REAL',
+    });
 
     const openaiManager = getOpenAIManager();
     openaiManager.setCostTracker(this.costTracker);
@@ -442,6 +450,10 @@ class HTTPMCPServer {
     // POST /api/billing/payment/fondy/create - Create Fondy payment
     // GET /api/billing/payment/:provider/:paymentId/status - Check payment status
     this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.stripeService, this.fondyService));
+
+    // Test email route - require JWT (user login)
+    // POST /api/billing/test-email - Send test email
+    this.app.use('/api/billing/test-email', requireJWT as any, createTestEmailRoute(this.emailService));
 
     // Webhook routes - public (signature verified by services)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
