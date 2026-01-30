@@ -1,4 +1,4 @@
--- Migration 008: Add User Billing Infrastructure
+-- Migration 015: Add User Billing Infrastructure
 -- Adds user_id tracking to cost_tracking and creates billing tables
 
 -- 1. Add user_id to cost_tracking table
