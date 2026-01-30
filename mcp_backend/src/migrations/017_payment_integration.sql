@@ -1,4 +1,4 @@
--- Migration 012: Payment Integration
+-- Migration 017: Payment Integration
 -- Adds payment tracking fields and idempotency tables
 
 -- 1. Add payment tracking fields to user_billing
