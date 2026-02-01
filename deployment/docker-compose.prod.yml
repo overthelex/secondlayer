@@ -1,5 +1,6 @@
 # Production environment for SecondLayer
-version: '3.8'
+# Main production on gate.legal.org.ua
+# URLs: https://legal.org.ua + https://mcp.legal.org.ua/sse
 
 services:
   postgres-prod:
@@ -59,14 +60,36 @@ services:
     networks:
       - secondlayer-prod-network
 
+  migrate-prod:
+    image: secondlayer-app:latest
+    container_name: secondlayer-migrate-prod
+    depends_on:
+      postgres-prod:
+        condition: service_healthy
+      redis-prod:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-prod:5432/${POSTGRES_DB:-secondlayer_db}
+      POSTGRES_HOST: postgres-prod
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_db}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+    working_dir: /app/mcp_backend
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-prod-network
+
   app-prod:
     image: secondlayer-app:latest
     container_name: secondlayer-app-prod
     command: ["node", "--max-old-space-size=6144", "dist/http-server.js"]
     environment:
       NODE_ENV: production
-      PORT: ${HTTP_PORT:-3001}
-      HTTP_PORT: ${HTTP_PORT:-3001}
+      HTTP_PORT: ${HTTP_PORT:-3000}
       HTTP_HOST: 0.0.0.0
       JWT_SECRET: ${JWT_SECRET}
       DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-prod:5432/${POSTGRES_DB:-secondlayer_db}
@@ -101,7 +124,7 @@ services:
       ALLOWED_ORIGINS: https://legal.org.ua
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "3001:3001"
+      - "3001:3000"
     depends_on:
       postgres-prod:
         condition: service_healthy
@@ -109,11 +132,13 @@ services:
         condition: service_started
       redis-prod:
         condition: service_healthy
+      migrate-prod:
+        condition: service_completed_successfully
     volumes:
       - ../mcp_backend/logs:/app/logs
       - app_prod_data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

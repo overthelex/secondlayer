@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondLayer User Settings - Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            color: #555;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .preset-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .preset-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .preset-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .preset-card.active {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .preset-card.active::before {
+            content: '✓';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .preset-name {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .preset-cost {
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .preset-desc {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .range-value {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #667eea;
+            margin-left: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 26px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .toggle-group:last-child {
+            border-bottom: none;
+        }
+
+        .toggle-info {
+            flex: 1;
+            margin-right: 20px;
+        }
+
+        .toggle-label {
+            font-weight: 500;
+            color: #333;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .cost-estimate {
+            background: #f8f9ff;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .cost-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .cost-item {
+            text-align: center;
+        }
+
+        .cost-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .cost-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>SecondLayer User Settings</h1>
+            <p class="subtitle">Control your request parameters and manage costs</p>
+
+            <div class="alert alert-info">
+                <strong>Cost Control:</strong> Adjust settings below to balance quality and costs. Lower values = cheaper requests.
+            </div>
+
+            <!-- Pricing Tier Info -->
+            <div id="pricingTierInfo" style="display: none;">
+                <h2>Your Pricing Tier</h2>
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+                    <div style="flex: 1;">
+                        <div style="font-size: 24px; font-weight: 700; color: #667eea;" id="currentTier">Startup</div>
+                        <div style="font-size: 14px; color: #666;" id="tierDescription">30% markup on API costs</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 12px; color: #888;">Monthly Spending</div>
+                        <div style="font-size: 20px; font-weight: 600; color: #333;" id="monthlySpending">$0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <h2>Quick Presets</h2>
+            <div class="preset-selector">
+                <div class="preset-card" data-preset="economy">
+                    <div class="preset-name">Economy</div>
+                    <div class="preset-cost">~$0.01 per request</div>
+                    <div class="preset-desc">Minimize costs with quick analysis and basic results</div>
+                </div>
+                <div class="preset-card active" data-preset="balanced">
+                    <div class="preset-name">Balanced</div>
+                    <div class="preset-cost">~$0.02 per request</div>
+                    <div class="preset-desc">Balance cost and quality with standard coverage</div>
+                </div>
+                <div class="preset-card" data-preset="quality">
+                    <div class="preset-name">Quality</div>
+                    <div class="preset-cost">~$0.05 per request</div>
+                    <div class="preset-desc">Maximum accuracy with comprehensive deep analysis</div>
+                </div>
+            </div>
+
+            <!-- Advanced Settings -->
+            <h2>Advanced Settings</h2>
+
+            <h3>Document Retrieval</h3>
+            <div class="form-group">
+                <label>
+                    Maximum Search Results: <span class="range-value" id="maxSearchValue">10</span>
+                </label>
+                <input type="range" id="maxSearch" min="1" max="50" value="10" step="1">
+                <div class="help-text">How many documents to retrieve (1-50). More = higher ZakonOnline API costs.</div>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Analysis Depth: <span class="range-value" id="maxDepthValue">2</span>
+                </label>
+                <input type="range" id="maxDepth" min="1" max="5" value="2" step="1">
+                <div class="help-text">How deep to analyze documents (1-5). Higher = more OpenAI tokens.</div>
+            </div>
+
+            <h3>Practice Cases Analysis</h3>
+            <div class="form-group">
+                <label>
+                    Maximum Practice Cases: <span class="range-value" id="maxPracticeValue">15</span>
+                </label>
+                <input type="range" id="maxPractice" min="3" max="25" value="15" step="1">
+                <div class="help-text">How many practice cases to analyze (3-25). More = higher costs.</div>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Practice Expansion Depth: <span class="range-value" id="practiceDepthValue">2</span>
+                </label>
+                <input type="range" id="practiceDepth" min="1" max="5" value="2" step="1">
+                <div class="help-text">Depth of practice case expansion (1-5). Higher = more OpenAI tokens.</div>
+            </div>
+
+            <h3>Quality Settings</h3>
+            <div class="form-group">
+                <label>Reasoning Budget</label>
+                <select id="reasoningBudget" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="quick">Quick (lowest cost, faster)</option>
+                    <option value="standard" selected>Standard (balanced)</option>
+                    <option value="deep">Deep (highest quality, slower)</option>
+                </select>
+                <div class="help-text">Affects AI reasoning depth and token usage</div>
+            </div>
+
+            <h3>Feature Toggles</h3>
+            <div class="toggle-group">
+                <div class="toggle-info">
+                    <span class="toggle-label">Aggressive Caching</span>
+                    <div class="help-text">Reduce API calls by using cached results (may be slightly outdated)</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="aggressiveCaching" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-group">
+                <div class="toggle-info">
+                    <span class="toggle-label">Semantic Search</span>
+                    <div class="help-text">Use AI embeddings for better search (costs OpenAI, better results)</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="semanticSearch" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-group">
+                <div class="toggle-info">
+                    <span class="toggle-label">Auto Citations</span>
+                    <div class="help-text">Automatically validate and enhance citations (extra OpenAI calls)</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="autoCitations" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-group">
+                <div class="toggle-info">
+                    <span class="toggle-label">Legal Pattern Extraction</span>
+                    <div class="help-text">Extract legal reasoning patterns (experimental, adds cost)</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="legalPatterns">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <!-- Cost Estimate -->
+            <div class="cost-estimate">
+                <h3 style="margin-top: 0;">Estimated Cost per Request</h3>
+                <div class="cost-breakdown">
+                    <div class="cost-item">
+                        <div class="cost-label">OpenAI Tokens</div>
+                        <div class="cost-value" id="estimatedTokens">~3,000</div>
+                    </div>
+                    <div class="cost-item">
+                        <div class="cost-label">API Calls</div>
+                        <div class="cost-value" id="estimatedCalls">~3</div>
+                    </div>
+                    <div class="cost-item">
+                        <div class="cost-label">Base Cost</div>
+                        <div class="cost-value" id="baseCost">$0.015</div>
+                    </div>
+                    <div class="cost-item">
+                        <div class="cost-label">Your Price</div>
+                        <div class="cost-value" id="yourPrice" style="font-size: 24px;">$0.020</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; text-align: center; font-size: 13px; color: #666;">
+                    Based on <span id="markupPercent">30%</span> markup (Your pricing tier)
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <div style="margin-top: 30px; text-align: center;">
+                <button id="saveButton">Save Settings</button>
+            </div>
+
+            <div id="successMessage" class="alert alert-success" style="display: none; margin-top: 20px;">
+                ✓ Settings saved successfully!
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Preset data (would come from API in production)
+        const presets = {
+            economy: {
+                reasoning_budget: 'quick',
+                max_search_results: 5,
+                max_analysis_depth: 1,
+                max_practice_cases: 5,
+                max_practice_depth: 1,
+                aggressive_caching: true,
+                enable_semantic_search: false,
+                enable_auto_citations: false,
+                enable_legal_patterns: false
+            },
+            balanced: {
+                reasoning_budget: 'standard',
+                max_search_results: 10,
+                max_analysis_depth: 2,
+                max_practice_cases: 15,
+                max_practice_depth: 2,
+                aggressive_caching: true,
+                enable_semantic_search: true,
+                enable_auto_citations: true,
+                enable_legal_patterns: false
+            },
+            quality: {
+                reasoning_budget: 'deep',
+                max_search_results: 25,
+                max_analysis_depth: 5,
+                max_practice_cases: 25,
+                max_practice_depth: 5,
+                aggressive_caching: false,
+                enable_semantic_search: true,
+                enable_auto_citations: true,
+                enable_legal_patterns: true
+            }
+        };
+
+        // UI Elements
+        const presetCards = document.querySelectorAll('.preset-card');
+        const maxSearch = document.getElementById('maxSearch');
+        const maxDepth = document.getElementById('maxDepth');
+        const maxPractice = document.getElementById('maxPractice');
+        const practiceDepth = document.getElementById('practiceDepth');
+        const reasoningBudget = document.getElementById('reasoningBudget');
+        const aggressiveCaching = document.getElementById('aggressiveCaching');
+        const semanticSearch = document.getElementById('semanticSearch');
+        const autoCitations = document.getElementById('autoCitations');
+        const legalPatterns = document.getElementById('legalPatterns');
+        const saveButton = document.getElementById('saveButton');
+        const successMessage = document.getElementById('successMessage');
+
+        // Update range value displays
+        maxSearch.addEventListener('input', (e) => {
+            document.getElementById('maxSearchValue').textContent = e.target.value;
+            updateCostEstimate();
+        });
+        maxDepth.addEventListener('input', (e) => {
+            document.getElementById('maxDepthValue').textContent = e.target.value;
+            updateCostEstimate();
+        });
+        maxPractice.addEventListener('input', (e) => {
+            document.getElementById('maxPracticeValue').textContent = e.target.value;
+            updateCostEstimate();
+        });
+        practiceDepth.addEventListener('input', (e) => {
+            document.getElementById('practiceDepthValue').textContent = e.target.value;
+            updateCostEstimate();
+        });
+
+        reasoningBudget.addEventListener('change', updateCostEstimate);
+        semanticSearch.addEventListener('change', updateCostEstimate);
+
+        // Preset selection
+        presetCards.forEach(card => {
+            card.addEventListener('click', () => {
+                presetCards.forEach(c => c.classList.remove('active'));
+                card.classList.add('active');
+                applyPreset(card.dataset.preset);
+            });
+        });
+
+        function applyPreset(presetName) {
+            const preset = presets[presetName];
+            if (!preset) return;
+
+            maxSearch.value = preset.max_search_results;
+            maxDepth.value = preset.max_analysis_depth;
+            maxPractice.value = preset.max_practice_cases;
+            practiceDepth.value = preset.max_practice_depth;
+            reasoningBudget.value = preset.reasoning_budget;
+            aggressiveCaching.checked = preset.aggressive_caching;
+            semanticSearch.checked = preset.enable_semantic_search;
+            autoCitations.checked = preset.enable_auto_citations;
+            legalPatterns.checked = preset.enable_legal_patterns;
+
+            // Update value displays
+            document.getElementById('maxSearchValue').textContent = preset.max_search_results;
+            document.getElementById('maxDepthValue').textContent = preset.max_analysis_depth;
+            document.getElementById('maxPracticeValue').textContent = preset.max_practice_cases;
+            document.getElementById('practiceDepthValue').textContent = preset.max_practice_depth;
+
+            updateCostEstimate();
+        }
+
+        function updateCostEstimate() {
+            const searchResults = parseInt(maxSearch.value);
+            const depth = parseInt(maxDepth.value);
+            const practiceCases = parseInt(maxPractice.value);
+            const reasoningMultiplier = reasoningBudget.value === 'deep' ? 2.0 : reasoningBudget.value === 'quick' ? 0.5 : 1.0;
+
+            // Estimate tokens
+            const searchTokens = searchResults * 200;
+            const analysisTokens = depth * 1000;
+            const practiceTokens = practiceCases * 500;
+            const totalTokens = Math.floor((searchTokens + analysisTokens + practiceTokens) * reasoningMultiplier);
+
+            // Estimate API calls
+            const zakononlineCalls = Math.ceil(searchResults / 10);
+            const secondlayerDocs = semanticSearch.checked ? searchResults : 0;
+            const totalCalls = zakononlineCalls + secondlayerDocs;
+
+            // Estimate costs
+            const openaiCost = (totalTokens / 1000) * 0.002;
+            const zakononlineCost = zakononlineCalls * 0.00714;
+            const secondlayerCost = secondlayerDocs * 0.00714;
+            const baseCost = openaiCost + zakononlineCost + secondlayerCost;
+
+            // Apply 30% markup (startup tier)
+            const markup = 0.30;
+            const yourPrice = baseCost * (1 + markup);
+
+            // Update UI
+            document.getElementById('estimatedTokens').textContent = `~${totalTokens.toLocaleString()}`;
+            document.getElementById('estimatedCalls').textContent = `~${totalCalls}`;
+            document.getElementById('baseCost').textContent = `$${baseCost.toFixed(3)}`;
+            document.getElementById('yourPrice').textContent = `$${yourPrice.toFixed(3)}`;
+        }
+
+        // Save settings
+        saveButton.addEventListener('click', () => {
+            // In production, this would call the API
+            console.log('Saving settings:', {
+                default_reasoning_budget: reasoningBudget.value,
+                max_search_results: parseInt(maxSearch.value),
+                max_analysis_depth: parseInt(maxDepth.value),
+                max_practice_cases: parseInt(maxPractice.value),
+                max_practice_depth: parseInt(practiceDepth.value),
+                aggressive_caching: aggressiveCaching.checked,
+                enable_semantic_search: semanticSearch.checked,
+                enable_auto_citations: autoCitations.checked,
+                enable_legal_patterns: legalPatterns.checked
+            });
+
+            successMessage.style.display = 'block';
+            setTimeout(() => {
+                successMessage.style.display = 'none';
+            }, 3000);
+        });
+
+        // Initial cost estimate
+        updateCostEstimate();
+    </script>
+</body>
+</html>

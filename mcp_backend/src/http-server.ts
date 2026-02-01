@@ -31,11 +31,15 @@ import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
 import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
 import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
+import { createBillingRoutes } from './routes/billing-routes.js';
 import { createTestEmailRoute } from './routes/test-email-route.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
 import passport from 'passport';
 import { MCPSSEServer } from './api/mcp-sse-server.js';
+import { ApiKeyService } from './services/api-key-service.js';
+import { CreditService } from './services/credit-service.js';
+import { createApiKeyRouter } from './routes/api-key-routes.js';
 
 dotenv.config();
 
@@ -61,6 +65,8 @@ class HTTPMCPServer {
   private fondyService: FondyService | MockFondyService;
   private emailService: EmailService;
   private mcpSSEServer: MCPSSEServer;
+  private apiKeyService: ApiKeyService;
+  private creditService: CreditService;
 
   constructor() {
     this.app = express();
@@ -106,6 +112,11 @@ class HTTPMCPServer {
     this.costTracker = new CostTracker(this.db);
     this.billingService = new BillingService(this.db);
     this.costTracker.setBillingService(this.billingService);
+
+    // Initialize Phase 2 billing services (API keys & credits)
+    this.apiKeyService = new ApiKeyService(this.db.getPool());
+    this.creditService = new CreditService(this.db.getPool());
+    logger.info('Phase 2 billing services initialized (API keys & credits)');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -154,9 +165,10 @@ class HTTPMCPServer {
       this.mcpAPI,
       this.legislationTools,
       this.documentAnalysisTools,
-      this.costTracker
+      this.costTracker,
+      this.creditService
     );
-    logger.info('MCP SSE Server initialized');
+    logger.info('MCP SSE Server initialized with Phase 2 billing support');
 
     // Initialize authentication
     configurePassport(this.db);
@@ -245,9 +257,47 @@ class HTTPMCPServer {
               userId = decoded.userId;
               logger.debug('[MCP SSE] Authenticated with JWT', { userId });
             } else {
-              // API key - just log it
+              // API key - validate and get user info (Phase 2 Billing)
               clientKey = token;
-              logger.debug('[MCP SSE] Using API key', { keyPrefix: token.substring(0, 8) + '...' });
+              const keyInfo = await this.apiKeyService.validateApiKey(token);
+
+              if (keyInfo) {
+                // Valid API key - check rate limits
+                const rateLimit = await this.apiKeyService.checkRateLimit(token);
+
+                if (!rateLimit.allowed) {
+                  logger.warn('[MCP SSE] Rate limit exceeded', {
+                    keyId: keyInfo.id,
+                    reason: rateLimit.reason,
+                  });
+                  return res.status(429).json({
+                    error: 'Rate limit exceeded',
+                    code: 'RATE_LIMIT_EXCEEDED',
+                    reason: rateLimit.reason,
+                    requestsToday: rateLimit.requestsToday,
+                    rateLimitPerDay: rateLimit.rateLimitPerDay,
+                  });
+                }
+
+                // Get userId from API key
+                userId = keyInfo.userId;
+                logger.debug('[MCP SSE] Authenticated with API key', {
+                  userId,
+                  keyId: keyInfo.id,
+                  userEmail: keyInfo.userEmail,
+                });
+
+                // Update API key usage (async, don't wait)
+                this.apiKeyService.updateUsage(token).catch((err) => {
+                  logger.error('[MCP SSE] Failed to update API key usage', { error: err.message });
+                });
+              } else {
+                // Invalid API key - continue as anonymous for backward compatibility
+                logger.debug('[MCP SSE] Invalid API key, continuing as anonymous', {
+                  keyPrefix: token.substring(0, 12) + '...',
+                });
+                clientKey = undefined;
+              }
             }
           } catch (error) {
             // Auth failed, but continue without userId (for backward compatibility)
@@ -308,6 +358,10 @@ class HTTPMCPServer {
 
     // User profile endpoint - require JWT
     this.app.use('/api/auth', requireJWT as any, authRouter);
+
+    // Phase 2 Billing: API key management - require JWT (user login)
+    this.app.use('/api/keys', requireJWT as any, createApiKeyRouter(this.db.getPool()));
+    logger.info('API key management routes registered at /api/keys');
 
     // EULA endpoints - REMOVED: not needed
     // this.app.use('/api/eula', createEULARouter(this.db.getPool()));
@@ -454,6 +508,17 @@ class HTTPMCPServer {
     // Test email route - require JWT (user login)
     // POST /api/billing/test-email - Send test email
     this.app.use('/api/billing/test-email', requireJWT as any, createTestEmailRoute(this.emailService));
+
+    // Billing and user preferences routes
+    // GET /api/billing/preferences - Get user request preferences
+    // PUT /api/billing/preferences - Update user preferences
+    // POST /api/billing/preferences/preset - Apply preset configuration
+    // GET /api/billing/presets - Get all available presets
+    // POST /api/billing/estimate-costs - Estimate costs for different presets
+    // GET /api/billing/full-settings - Get combined billing and preferences
+    // GET /api/billing/pricing-info - Get pricing tier information
+    // POST /api/billing/estimate-price - Estimate price with user's tier
+    this.app.use('/api/billing', requireJWT as any, createBillingRoutes(this.db));
 
     // Webhook routes - public (signature verified by services)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
