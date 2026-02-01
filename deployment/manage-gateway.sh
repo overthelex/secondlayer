@@ -405,7 +405,24 @@ deploy_to_gate() {
     ssh ${GATE_USER}@${GATE_SERVER} << EOF
         cd ${REMOTE_PATH}
         docker compose -f $compose_file --env-file $env_file down
-        docker compose -f $compose_file --env-file $env_file up -d --force-recreate
+
+        # Start infrastructure services first
+        docker compose -f $compose_file --env-file $env_file up -d postgres-$env redis-$env qdrant-$env
+
+        # Wait for database to be ready
+        echo "⏳ Waiting for database..."
+        sleep 15
+
+        # Run migrations
+        echo "🔄 Running database migrations..."
+        docker compose -f $compose_file --env-file $env_file up migrate-$env
+
+        # Start application services
+        echo "▶️  Starting application..."
+        docker compose -f $compose_file --env-file $env_file up -d app-$env lexwebapp-$env
+
+        echo "✅ Deployment complete"
+        docker compose -f $compose_file --env-file $env_file ps
 EOF
 
     print_msg "$GREEN" "✅ $env deployed to gate server"

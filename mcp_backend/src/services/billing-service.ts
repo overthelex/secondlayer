@@ -5,6 +5,7 @@
 
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
+import { PricingService, PricingTier, PriceCalculation } from './pricing-service.js';
 
 export interface UserBilling {
   id: string;
@@ -18,6 +19,7 @@ export interface UserBilling {
   total_requests: number;
   is_active: boolean;
   billing_enabled: boolean;
+  pricing_tier: PricingTier;
   created_at: Date;
   updated_at: Date;
 }
@@ -48,13 +50,20 @@ export interface BillingSummary {
   total_requests: number;
   daily_limit_usd: number;
   monthly_limit_usd: number;
+  pricing_tier: PricingTier;
+  billing_enabled: boolean;
+  is_active: boolean;
   today_spent_usd: number;
   month_spent_usd: number;
   last_request_at?: Date;
 }
 
 export class BillingService {
-  constructor(private db: Database) {}
+  private pricingService: PricingService;
+
+  constructor(private db: Database) {
+    this.pricingService = new PricingService();
+  }
 
   /**
    * Get or create user billing account
@@ -72,13 +81,14 @@ export class BillingService {
       }
 
       // Create new billing account with default values
+      const defaultTier = this.pricingService.getDefaultTier();
       const createResult = await this.db.query(
         `INSERT INTO user_billing (
           user_id, balance_usd, balance_uah,
-          daily_limit_usd, monthly_limit_usd
-        ) VALUES ($1, $2, $3, $4, $5)
+          daily_limit_usd, monthly_limit_usd, pricing_tier
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *`,
-        [userId, 0.00, 0.00, 10.00, 100.00]
+        [userId, 0.00, 0.00, 10.00, 100.00, defaultTier]
       );
 
       logger.info('Created billing account', { userId });
@@ -185,15 +195,15 @@ export class BillingService {
   }
 
   /**
-   * Charge user for a completed request
+   * Charge user for a completed request with pricing tier markup
    */
   async chargeUser(params: {
     userId: string;
     requestId: string;
-    amountUsd: number;
+    amountUsd: number; // This is the BASE cost (our actual cost)
     amountUah?: number;
     description?: string;
-  }): Promise<BillingTransaction> {
+  }): Promise<BillingTransaction & { pricing_details?: PriceCalculation }> {
     const client = await this.db.getPool().connect();
 
     try {
@@ -210,8 +220,16 @@ export class BillingService {
       }
 
       const billing = billingResult.rows[0];
+      const pricingTier: PricingTier = billing.pricing_tier || 'startup';
+
+      // Calculate price with markup based on tier
+      const priceCalc = this.pricingService.calculatePrice(params.amountUsd, pricingTier);
+
+      // The amount we charge the client
+      const chargeAmount = priceCalc.price_usd;
+
       const balanceBefore = parseFloat(billing.balance_usd);
-      const balanceAfter = balanceBefore - params.amountUsd;
+      const balanceAfter = balanceBefore - chargeAmount;
 
       // Update balance and statistics
       await client.query(
@@ -223,26 +241,53 @@ export class BillingService {
              total_requests = total_requests + 1,
              updated_at = NOW()
          WHERE user_id = $3`,
-        [params.amountUsd, params.amountUah || 0, params.userId]
+        [chargeAmount, params.amountUah || 0, params.userId]
       );
 
-      // Record transaction
+      // Record transaction with pricing metadata
+      const transactionMetadata = {
+        base_cost_usd: priceCalc.cost_usd,
+        markup_percentage: priceCalc.markup_percentage,
+        markup_amount_usd: priceCalc.markup_amount_usd,
+        pricing_tier: pricingTier,
+      };
+
       const transactionResult = await client.query(
         `INSERT INTO billing_transactions (
           user_id, type, amount_usd, amount_uah,
           balance_before_usd, balance_after_usd,
-          request_id, description
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          request_id, description, metadata
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
         [
           params.userId,
           'charge',
-          params.amountUsd,
+          chargeAmount,
           params.amountUah || 0,
           balanceBefore,
           balanceAfter,
           params.requestId,
           params.description || `Request ${params.requestId}`,
+          JSON.stringify(transactionMetadata),
+        ]
+      );
+
+      // Update cost_tracking table with pricing details
+      await client.query(
+        `UPDATE cost_tracking
+         SET base_cost_usd = $1,
+             markup_percentage = $2,
+             markup_amount_usd = $3,
+             client_tier = $4,
+             total_cost_usd = $5
+         WHERE request_id = $6`,
+        [
+          priceCalc.cost_usd,
+          priceCalc.markup_percentage,
+          priceCalc.markup_amount_usd,
+          pricingTier,
+          priceCalc.price_usd,
+          params.requestId,
         ]
       );
 
@@ -250,14 +295,21 @@ export class BillingService {
 
       const transaction = transactionResult.rows[0] as BillingTransaction;
 
-      logger.info('User charged', {
+      logger.info('User charged with markup', {
         userId: params.userId,
         requestId: params.requestId,
-        amount: params.amountUsd,
-        balanceAfter,
+        baseCost: `$${priceCalc.cost_usd.toFixed(6)}`,
+        markup: `${priceCalc.markup_percentage}%`,
+        charged: `$${chargeAmount.toFixed(6)}`,
+        profit: `$${priceCalc.markup_amount_usd.toFixed(6)}`,
+        tier: pricingTier,
+        balanceAfter: `$${balanceAfter.toFixed(2)}`,
       });
 
-      return transaction;
+      return {
+        ...transaction,
+        pricing_details: priceCalc,
+      };
     } catch (error: any) {
       await client.query('ROLLBACK');
       logger.error('Failed to charge user', {
@@ -422,7 +474,7 @@ export class BillingService {
   }
 
   /**
-   * Update user billing settings (limits, status)
+   * Update user billing settings (limits, status, pricing tier)
    */
   async updateBillingSettings(
     userId: string,
@@ -431,6 +483,7 @@ export class BillingService {
       monthlyLimitUsd?: number;
       isActive?: boolean;
       billingEnabled?: boolean;
+      pricingTier?: PricingTier;
     }
   ): Promise<void> {
     try {
@@ -458,6 +511,15 @@ export class BillingService {
         params.push(settings.billingEnabled);
       }
 
+      if (settings.pricingTier !== undefined) {
+        // Validate pricing tier
+        if (!this.pricingService.isValidTier(settings.pricingTier)) {
+          throw new Error(`Invalid pricing tier: ${settings.pricingTier}`);
+        }
+        updates.push(`pricing_tier = $${paramIndex++}`);
+        params.push(settings.pricingTier);
+      }
+
       if (updates.length === 0) {
         return;
       }
@@ -479,5 +541,62 @@ export class BillingService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Get user's pricing tier
+   */
+  async getUserPricingTier(userId: string): Promise<PricingTier> {
+    const billing = await this.getOrCreateUserBilling(userId);
+    return billing.pricing_tier || 'startup';
+  }
+
+  /**
+   * Get pricing information for user
+   */
+  async getUserPricingInfo(userId: string): Promise<{
+    current_tier: PricingTier;
+    tier_config: any;
+    recommended_tier?: PricingTier;
+    monthly_spending_usd: number;
+  }> {
+    const billing = await this.getOrCreateUserBilling(userId);
+    const tier = billing.pricing_tier || 'startup';
+    const tierConfig = this.pricingService.getTierConfig(tier);
+
+    // Get monthly spending
+    const monthResult = await this.db.query(
+      `SELECT COALESCE(SUM(total_cost_usd), 0) as spent
+       FROM cost_tracking
+       WHERE user_id = $1
+         AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
+         AND status = 'completed'`,
+      [userId]
+    );
+    const monthlySpending = parseFloat(monthResult.rows[0]?.spent || '0');
+
+    const recommendedTier = this.pricingService.getRecommendedTier(monthlySpending);
+
+    return {
+      current_tier: tier,
+      tier_config: tierConfig,
+      recommended_tier: tier !== recommendedTier ? recommendedTier : undefined,
+      monthly_spending_usd: monthlySpending,
+    };
+  }
+
+  /**
+   * Get all available pricing tiers
+   */
+  getAllPricingTiers(): any[] {
+    return this.pricingService.getAllTiers();
+  }
+
+  /**
+   * Calculate estimated price for a cost
+   */
+  calculateEstimatedPrice(costUsd: number, tier?: PricingTier): PriceCalculation {
+    const pricingTier = tier || this.pricingService.getDefaultTier();
+    return this.pricingService.calculatePrice(costUsd, pricingTier);
   }
 }

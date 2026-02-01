@@ -1,6 +1,5 @@
 # Development environment for SecondLayer
 # Runs alongside production with different ports
-version: '3.8'
 
 services:
   postgres-dev:
@@ -56,6 +55,29 @@ services:
     networks:
       - secondlayer-dev-network
 
+  migrate-dev:
+    image: secondlayer-app:latest
+    container_name: secondlayer-migrate-dev
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-dev:5432/${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+    working_dir: /app/mcp_backend
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-dev-network
+
   app-dev:
     image: secondlayer-app:latest
     container_name: secondlayer-app-dev
@@ -63,7 +85,6 @@ services:
     environment:
       # Application
       NODE_ENV: development
-      PORT: ${HTTP_PORT:-3003}
       HTTP_PORT: ${HTTP_PORT:-3003}
       HTTP_HOST: 0.0.0.0
 
@@ -123,13 +144,15 @@ services:
         condition: service_started
       redis-dev:
         condition: service_healthy
+      migrate-dev:
+        condition: service_completed_successfully
 
     volumes:
       - ../mcp_backend/logs:/app/logs
       - app_dev_data:/app/data
 
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3003/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})\""]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3003/health"]
       interval: 30s
       timeout: 10s
       retries: 3
