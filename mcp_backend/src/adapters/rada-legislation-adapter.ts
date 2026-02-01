@@ -111,8 +111,9 @@ export class RadaLegislationAdapter {
 
     // Parse /print endpoint format: <span class=rvts9>Стаття N.</span>
     // Note: cheerio adds quotes to attributes, so we match both class=rvts9 and class="rvts9"
+    // Allow optional whitespace before closing </span> tag (some articles have extra spaces)
     const bodyHtml = $('body').html() || '';
-    const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9|$)/gs;
+    const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?\s*<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9|$)/gs;
 
     let match;
     while ((match = articleRegex.exec(bodyHtml)) !== null) {
