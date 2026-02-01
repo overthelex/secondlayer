@@ -77,11 +77,17 @@ cd ~/secondlayer-deployment
 echo "🛑 Stopping existing dev containers (if any)..."
 sudo docker compose -f docker-compose.dev.yml down || true
 
-echo "🐳 Building development images..."
-sudo docker compose -f docker-compose.dev.yml build
+echo "▶️  Starting database and services..."
+sudo docker compose -f docker-compose.dev.yml up -d postgres-dev redis-dev qdrant-dev
 
-echo "▶️  Starting development containers..."
-sudo docker compose -f docker-compose.dev.yml up -d
+echo "⏳ Waiting for database to be ready..."
+sleep 15
+
+echo "🔄 Running database migrations..."
+sudo docker compose -f docker-compose.dev.yml up migrate-dev
+
+echo "▶️  Starting application containers..."
+sudo docker compose -f docker-compose.dev.yml up -d app-dev lexwebapp-dev
 
 echo "⏳ Waiting for containers to start..."
 sleep 10

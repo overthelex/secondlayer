@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondLayer MCP - Pricing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1a1f36 0%, #2d3748 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            font-size: 1.125rem;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f8fafc;
+            border-bottom: 2px solid #e2e8f0;
+            padding: 0 2rem;
+        }
+        
+        .tab {
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .tab:hover {
+            background: #e2e8f0;
+        }
+        
+        .tab.active {
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 2rem;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+        
+        .pricing-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .pricing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.1);
+            border-color: #3b82f6;
+        }
+        
+        .pricing-card.popular {
+            border-color: #3b82f6;
+            border-width: 3px;
+        }
+        
+        .popular-badge {
+            position: absolute;
+            top: -12px;
+            right: 1rem;
+            background: #3b82f6;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .card-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1a1f36;
+        }
+        
+        .card-description {
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 0.5rem;
+        }
+        
+        .card-price-detail {
+            font-size: 0.875rem;
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-features {
+            list-style: none;
+            margin: 1.5rem 0;
+        }
+        
+        .card-features li {
+            padding: 0.5rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+        
+        .card-features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: 700;
+        }
+        
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 0.875rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 2rem 0;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .comparison-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #1a1f36;
+        }
+        
+        .comparison-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .badge-warning { background: #fed7aa; color: #92400e; }
+        
+        .calculator {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        
+        .calculator-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin: 1rem 0;
+        }
+        
+        .calculator label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #1a1f36;
+        }
+        
+        .calculator input,
+        .calculator select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .calculator-result {
+            background: white;
+            border: 2px solid #3b82f6;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .result-price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #3b82f6;
+            text-align: center;
+        }
+        
+        .result-detail {
+            text-align: center;
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+        
+        .savings {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: center;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 SecondLayer MCP Pricing</h1>
+            <p>Transparent pay-per-use pricing. No subscription lock-in. Pay only for what you use.</p>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('packages')">Credit Packages</div>
+            <div class="tab" onclick="showTab('subscriptions')">Subscription Plans</div>
+            <div class="tab" onclick="showTab('calculator')">Cost Calculator</div>
+            <div class="tab" onclick="showTab('comparison')">vs Competitors</div>
+        </div>
+        
+        <!-- CREDIT PACKAGES TAB -->
+        <div id="packages" class="tab-content active">
+            <h2 style="margin-bottom: 1rem;">Pre-paid Credit Packages</h2>
+            <p style="color: #64748b; margin-bottom: 2rem;">Buy credits in bulk and save up to 20%. Credits never expire.</p>
+            
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="card-name">Starter</div>
+                    <div class="card-description">Perfect for trying out the API</div>
+                    <div class="card-price">$50</div>
+                    <div class="card-price-detail">50 credits • $1.00/credit</div>
+                    <ul class="card-features">
+                        <li>50 API calls</li>
+                        <li>No expiration</li>
+                        <li>Email support</li>
+                    </ul>
+                    <a href="#" class="btn">Buy Now</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <div class="card-name">Basic</div>
+                    <div class="card-description">Great for solo practitioners</div>
+                    <div class="card-price">$95</div>
+                    <div class="card-price-detail">105 credits (5 bonus) • $0.90/credit</div>
+                    <ul class="card-features">
+                        <li><strong>+5 bonus credits</strong></li>
+                        <li>5% discount</li>
+                        <li>No expiration</li>
+                    </ul>
+                    <a href="#" class="btn">Buy Now</a>
+                </div>
+                
+                <div class="pricing-card popular">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <div class="card-name">Pro</div>
+                    <div class="card-description">Best value for money</div>
+                    <div class="card-price">$225</div>
+                    <div class="card-price-detail">275 credits (25 bonus) • $0.82/credit</div>
+                    <ul class="card-features">
+                        <li><strong>+25 bonus credits</strong></li>
+                        <li><strong>10% discount</strong></li>
+                        <li>No expiration</li>
+                        <li>Priority support</li>
+                    </ul>
+                    <a href="#" class="btn">Buy Now</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <div class="card-name">Business</div>
+                    <div class="card-description">For small law firms</div>
+                    <div class="card-price">$425</div>
+                    <div class="card-price-detail">575 credits (75 bonus) • $0.74/credit</div>
+                    <ul class="card-features">
+                        <li><strong>+75 bonus credits</strong></li>
+                        <li><strong>15% discount</strong></li>
+                        <li>Team sharing</li>
+                        <li>Priority support</li>
+                    </ul>
+                    <a href="#" class="btn">Buy Now</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <div class="card-name">Enterprise</div>
+                    <div class="card-description">Maximum savings for high volume</div>
+                    <div class="card-price">$800</div>
+                    <div class="card-price-detail">1200 credits (200 bonus) • $0.67/credit</div>
+                    <ul class="card-features">
+                        <li><strong>+200 bonus credits</strong></li>
+                        <li><strong>20% discount</strong></li>
+                        <li>Team sharing</li>
+                        <li>Phone support</li>
+                        <li>SLA guarantee</li>
+                    </ul>
+                    <a href="#" class="btn">Buy Now</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SUBSCRIPTION PLANS TAB -->
+        <div id="subscriptions" class="tab-content">
+            <h2 style="margin-bottom: 1rem;">Monthly & Annual Plans</h2>
+            <p style="color: #64748b; margin-bottom: 2rem;">Get monthly credits + discounts on tool usage. Cancel anytime.</p>
+            
+            <h3 style="margin: 2rem 0 1rem 0;">Monthly Plans</h3>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="card-name">Starter</div>
+                    <div class="card-description">Essential tools for solo practitioners</div>
+                    <div class="card-price">$29<span style="font-size: 1rem; color: #64748b;">/mo</span></div>
+                    <div class="card-price-detail">40 credits/month</div>
+                    <ul class="card-features">
+                        <li>40 API calls/month</li>
+                        <li>Standard tier: 50% off</li>
+                        <li>Email support</li>
+                        <li>7-day history</li>
+                    </ul>
+                    <a href="#" class="btn">Start Free Trial</a>
+                </div>
+                
+                <div class="pricing-card popular">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <div class="card-name">Professional</div>
+                    <div class="card-description">Perfect for active legal professionals</div>
+                    <div class="card-price">$79<span style="font-size: 1rem; color: #64748b;">/mo</span></div>
+                    <div class="card-price-detail">120 credits/month</div>
+                    <ul class="card-features">
+                        <li>120 API calls/month</li>
+                        <li>Advanced tier: 30% off</li>
+                        <li>Priority support</li>
+                        <li>30-day history</li>
+                        <li>API access</li>
+                    </ul>
+                    <a href="#" class="btn">Start Free Trial</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <div class="card-name">Business</div>
+                    <div class="card-description">For law firms and legal departments</div>
+                    <div class="card-price">$199<span style="font-size: 1rem; color: #64748b;">/mo</span></div>
+                    <div class="card-price-detail">350 credits/month</div>
+                    <ul class="card-features">
+                        <li>350 API calls/month</li>
+                        <li>Premium tier: 20% off</li>
+                        <li>Phone + email support</li>
+                        <li>Unlimited history</li>
+                        <li>Team collaboration</li>
+                        <li>Custom integrations</li>
+                    </ul>
+                    <a href="#" class="btn">Contact Sales</a>
+                </div>
+            </div>
+            
+            <h3 style="margin: 3rem 0 1rem 0;">Annual Plans <span class="badge badge-success">Save 17% (2 months free)</span></h3>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="card-name">Starter Annual</div>
+                    <div class="card-description">Save $58/year</div>
+                    <div class="card-price">$290<span style="font-size: 1rem; color: #64748b;">/yr</span></div>
+                    <div class="card-price-detail">480 credits/year ($24.17/mo)</div>
+                    <ul class="card-features">
+                        <li>All Starter features</li>
+                        <li><strong>2 months free</strong></li>
+                        <li>17% savings</li>
+                    </ul>
+                    <a href="#" class="btn">Start Free Trial</a>
+                </div>
+                
+                <div class="pricing-card popular">
+                    <div class="popular-badge">BEST VALUE</div>
+                    <div class="card-name">Professional Annual</div>
+                    <div class="card-description">Save $158/year</div>
+                    <div class="card-price">$790<span style="font-size: 1rem; color: #64748b;">/yr</span></div>
+                    <div class="card-price-detail">1440 credits/year ($65.83/mo)</div>
+                    <ul class="card-features">
+                        <li>All Professional features</li>
+                        <li><strong>2 months free</strong></li>
+                        <li>17% savings</li>
+                    </ul>
+                    <a href="#" class="btn">Start Free Trial</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <div class="card-name">Business Annual</div>
+                    <div class="card-description">Save $398/year</div>
+                    <div class="card-price">$1,990<span style="font-size: 1rem; color: #64748b;">/yr</span></div>
+                    <div class="card-price-detail">4200 credits/year ($165.83/mo)</div>
+                    <ul class="card-features">
+                        <li>All Business features</li>
+                        <li><strong>2 months free</strong></li>
+                        <li>17% savings</li>
+                    </ul>
+                    <a href="#" class="btn">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CALCULATOR TAB -->
+        <div id="calculator" class="tab-content">
+            <h2 style="margin-bottom: 1rem;">Cost Calculator</h2>
+            <p style="color: #64748b; margin-bottom: 2rem;">Estimate your monthly costs based on usage</p>
+            
+            <div class="calculator">
+                <div class="calculator-row">
+                    <div>
+                        <label>Light Tier Requests/month (e.g. check_precedent_status)</label>
+                        <input type="number" id="lightRequests" value="20" min="0" oninput="calculateCost()">
+                        <small style="color: #64748b;">$0.01 - $0.03 per request</small>
+                    </div>
+                    <div>
+                        <label>Standard Tier Requests/month (e.g. get_case_text)</label>
+                        <input type="number" id="standardRequests" value="100" min="0" oninput="calculateCost()">
+                        <small style="color: #64748b;">$0.04 - $0.08 per request</small>
+                    </div>
+                </div>
+                
+                <div class="calculator-row">
+                    <div>
+                        <label>Advanced Tier Requests/month (e.g. search_legal_precedents)</label>
+                        <input type="number" id="advancedRequests" value="50" min="0" oninput="calculateCost()">
+                        <small style="color: #64748b;">$0.08 - $0.20 per request</small>
+                    </div>
+                    <div>
+                        <label>Flagship Requests/month (get_legal_advice)</label>
+                        <input type="number" id="flagshipRequests" value="20" min="0" oninput="calculateCost()">
+                        <small style="color: #64748b;">$0.75 per request</small>
+                    </div>
+                </div>
+                
+                <div class="calculator-result" id="result">
+                    <div class="result-price">$0.00</div>
+                    <div class="result-detail">Estimated monthly cost</div>
+                    <div id="savingsInfo"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- COMPARISON TAB -->
+        <div id="comparison" class="tab-content">
+            <h2 style="margin-bottom: 1rem;">vs Traditional Legal Research Platforms</h2>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Platform</th>
+                        <th>Pricing Model</th>
+                        <th>Monthly Cost</th>
+                        <th>Pay-per-use</th>
+                        <th>AI Features</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>SecondLayer MCP</strong></td>
+                        <td><span class="badge badge-success">Flexible</span> Pay-per-use + Subscriptions</td>
+                        <td>$16 - $199/mo</td>
+                        <td>✅ Yes</td>
+                        <td>✅ Full AI suite</td>
+                    </tr>
+                    <tr>
+                        <td>LexisNexis</td>
+                        <td><span class="badge badge-warning">Fixed</span> Subscription only</td>
+                        <td>$100 - $300/mo</td>
+                        <td>❌ No</td>
+                        <td>⚠️ Limited</td>
+                    </tr>
+                    <tr>
+                        <td>Westlaw Edge</td>
+                        <td><span class="badge badge-warning">Fixed</span> Subscription only</td>
+                        <td>$100 - $150/mo</td>
+                        <td>❌ No</td>
+                        <td>⚠️ Limited</td>
+                    </tr>
+                    <tr>
+                        <td>Casetext (CARA AI)</td>
+                        <td><span class="badge badge-warning">Fixed</span> Subscription only</td>
+                        <td>$89 - $129/mo</td>
+                        <td>❌ No</td>
+                        <td>✅ AI-powered</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="savings" style="margin-top: 2rem;">
+                💡 SecondLayer MCP saves 70-90% for occasional users compared to traditional platforms
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function calculateCost() {
+            const light = parseInt(document.getElementById('lightRequests').value) || 0;
+            const standard = parseInt(document.getElementById('standardRequests').value) || 0;
+            const advanced = parseInt(document.getElementById('advancedRequests').value) || 0;
+            const flagship = parseInt(document.getElementById('flagshipRequests').value) || 0;
+            
+            // Average prices per tier
+            const lightCost = light * 0.022;
+            const standardCost = standard * 0.061;
+            const advancedCost = advanced * 0.142;
+            const flagshipCost = flagship * 0.75;
+            
+            const total = lightCost + standardCost + advancedCost + flagshipCost;
+            
+            document.querySelector('.result-price').textContent = '$' + total.toFixed(2);
+            
+            // Compare with competitors
+            const westlawCost = 125; // Average
+            const savings = westlawCost - total;
+            const savingsPercent = (savings / westlawCost * 100).toFixed(0);
+            
+            if (savings > 0) {
+                document.getElementById('savingsInfo').innerHTML = 
+                    `<div class="savings">🎉 Save $${savings.toFixed(2)}/month (${savingsPercent}%) vs Westlaw Edge!</div>`;
+            }
+        }
+        
+        // Initial calculation
+        calculateCost();
+    </script>
+</body>
+</html>

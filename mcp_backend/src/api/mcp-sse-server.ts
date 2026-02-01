@@ -16,6 +16,7 @@ import { MCPQueryAPI } from './mcp-query-api.js';
 import { LegislationTools } from './legislation-tools.js';
 import { DocumentAnalysisTools } from './document-analysis-tools.js';
 import { CostTracker } from '../services/cost-tracker.js';
+import { CreditService } from '../services/credit-service.js';
 import { requestContext } from '../utils/openai-client.js';
 
 export interface MCPToolDefinition {
@@ -64,7 +65,8 @@ export class MCPSSEServer {
     private mcpAPI: MCPQueryAPI,
     private legislationTools: LegislationTools,
     private documentAnalysisTools: DocumentAnalysisTools,
-    private costTracker: CostTracker
+    private costTracker: CostTracker,
+    private creditService?: CreditService
   ) {}
 
   /**
@@ -392,6 +394,52 @@ export class MCPSSEServer {
         executionTimeMs: executionTime,
         status: 'completed',
       });
+
+      // 4. Phase 2 Billing: Deduct credits if user is authenticated
+      if (context.userId && this.creditService) {
+        try {
+          const creditsRequired = await this.creditService.calculateCreditsForTool(name, context.userId);
+
+          if (creditsRequired > 0) {
+            const deduction = await this.creditService.deductCredits(
+              context.userId,
+              creditsRequired,
+              name,
+              requestId,
+              `Tool execution: ${name}`
+            );
+
+            if (deduction.success) {
+              logger.info('[MCP SSE] Credits deducted', {
+                userId: context.userId,
+                tool: name,
+                creditsDeducted: creditsRequired,
+                newBalance: deduction.newBalance,
+              });
+            } else {
+              logger.warn('[MCP SSE] Failed to deduct credits (insufficient balance)', {
+                userId: context.userId,
+                tool: name,
+                creditsRequired,
+              });
+              // Note: We don't fail the request if credit deduction fails
+              // The tool was already executed successfully
+            }
+          } else {
+            logger.debug('[MCP SSE] Free tier tool, no credits deducted', {
+              userId: context.userId,
+              tool: name,
+            });
+          }
+        } catch (creditError: any) {
+          logger.error('[MCP SSE] Error deducting credits', {
+            userId: context.userId,
+            tool: name,
+            error: creditError.message,
+          });
+          // Don't fail the request if credit deduction fails
+        }
+      }
 
       // Send completion notification
       this.sendSSEMessage(res, {
