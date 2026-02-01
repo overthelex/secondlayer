@@ -52,6 +52,12 @@ coverage/
 *.temp
 .cache/
 
+# Archives
+*.tar.gz
+*.zip
+*.tar
+*.rar
+
 # Docker
 docker-compose.override.yml
 
