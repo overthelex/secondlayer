@@ -404,9 +404,22 @@ deploy_to_gate() {
     print_msg "$BLUE" "🔄 Updating containers on gate server..."
     ssh ${GATE_USER}@${GATE_SERVER} << EOF
         cd ${REMOTE_PATH}
+
+        # Stop and remove containers
+        echo "🛑 Stopping old containers..."
         docker compose -f $compose_file --env-file $env_file down
 
+        # Remove any stopped containers for this environment
+        echo "🧹 Cleaning up stopped containers..."
+        docker ps -a --filter "name=secondlayer-.*-$env" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=secondlayer-.*-$env" --filter "status=dead" -q | xargs -r docker rm -f
+
+        # Remove old/dangling images to free space
+        echo "🗑️  Removing old images..."
+        docker image prune -f
+
         # Start infrastructure services first
+        echo "🚀 Starting infrastructure services..."
         docker compose -f $compose_file --env-file $env_file up -d postgres-$env redis-$env qdrant-$env
 
         # Wait for database to be ready
