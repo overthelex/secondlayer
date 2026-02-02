@@ -132,10 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(null);
     setUser(null);
 
-    showToast.info('You have been logged out');
-
-    // Redirect to login
-    window.location.href = '/login';
+    showToast.info('Ви вийшли з системи');
   };
 
   const refreshToken = async () => {

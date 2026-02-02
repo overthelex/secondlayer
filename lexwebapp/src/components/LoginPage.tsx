@@ -70,17 +70,15 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           // Clear token from URL for security
           window.history.replaceState({}, '', window.location.pathname);
 
-          // Call success callback or redirect to billing
+          // Call success callback if provided
           if (onLoginSuccess) {
             onLoginSuccess();
-          } else {
-            // Default redirect to main page
-            window.location.href = '/';
           }
+          // No need to redirect - App.tsx will automatically show ChatLayout
         } catch (err: any) {
           console.error('Login failed:', err);
-          setError('Failed to complete login. Please try again.');
-          showToast.error('Login failed');
+          setError('Не вдалося завершити вхід. Спробуйте ще раз.');
+          showToast.error('Помилка входу');
         } finally {
           setIsLoading(false);
         }
@@ -95,9 +93,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     if (isAuthenticated && !isLoading) {
       if (onLoginSuccess) {
         onLoginSuccess();
-      } else {
-        window.location.href = '/';
       }
+      // No need to redirect - App.tsx will automatically show ChatLayout
     }
   }, [isAuthenticated, isLoading, onLoginSuccess]);
 

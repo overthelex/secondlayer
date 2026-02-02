@@ -12,7 +12,6 @@ import { ClientsPage } from './ClientsPage';
 import { CasesPage } from './CasesPage';
 import { HistoryPage } from './HistoryPage';
 import { DecisionsSearchPage } from './DecisionsSearchPage';
-import { LoginPage } from './LoginPage';
 import { PersonDetailPage } from './PersonDetailPage';
 import { ClientDetailPage } from './ClientDetailPage';
 import { ClientMessagingPage } from './ClientMessagingPage';
@@ -25,6 +24,7 @@ import { VotingAnalysisPage } from './VotingAnalysisPage';
 import { LegalCodesLibraryPage } from './LegalCodesLibraryPage';
 import { HistoricalAnalysisPage } from './HistoricalAnalysisPage';
 import { BillingDashboard } from './BillingDashboard';
+import { useAuth } from '../contexts/AuthContext';
 import {
   PanelRightOpen,
   PanelLeftOpen,
@@ -42,7 +42,6 @@ type ViewState =
 'cases' |
 'history' |
 'decisions' |
-'login' |
 'billing' |
 'person-detail' |
 'client-detail' |
@@ -78,6 +77,7 @@ interface Client {
   type: 'individual' | 'corporate';
 }
 export function ChatLayout() {
+  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [messages, setMessages] = useState<MessageProps[]>([]);
@@ -186,12 +186,14 @@ export function ChatLayout() {
     setMessagingClientIds([]);
   };
   const handleLogout = () => {
-    setCurrentView('login');
+    // Clear local state
     setMessages([]);
     setIsStreaming(false);
     setSelectedPerson(null);
     setSelectedClient(null);
     setMessagingClientIds([]);
+    // Call logout from AuthContext (will redirect to login page)
+    logout();
   };
   // Get page title based on current view
   const getPageTitle = () => {
@@ -218,10 +220,6 @@ export function ChatLayout() {
     if (selectedClient) return selectedClient.name;
     return 'Чат';
   };
-  // If on login page, show only login
-  if (currentView === 'login') {
-    return <LoginPage />;
-  }
   const renderContent = () => {
     if (currentView === 'profile') {
       return (
