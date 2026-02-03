@@ -55,6 +55,27 @@ services:
     networks:
       - secondlayer-dev-network
 
+  postgres-openreyestr-dev:
+    image: postgres:15-alpine
+    container_name: openreyestr-postgres-dev
+    environment:
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_openreyestr_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OPENREYESTR_POSTGRES_USER:-openreyestr} -d ${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
+
   migrate-dev:
     image: secondlayer-app:latest
     container_name: secondlayer-migrate-dev
@@ -123,6 +144,14 @@ services:
 
       # Security
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+
+      # RADA MCP Integration
+      RADA_MCP_URL: ${RADA_MCP_URL}
+      RADA_API_KEY: ${RADA_API_KEY}
+
+      # OpenReyestr MCP Integration
+      OPENREYESTR_MCP_URL: http://app-openreyestr-dev:3005
+      OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY}
 
       # Google OAuth2 (with development URLs)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
@@ -193,6 +222,91 @@ services:
     labels:
       - "com.docker.compose.project=lexwebapp-dev"
 
+  migrate-openreyestr-dev:
+    image: openreyestr-app:latest
+    container_name: openreyestr-migrate-dev
+    depends_on:
+      postgres-openreyestr-dev:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-dev:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}
+      POSTGRES_HOST: postgres-openreyestr-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-dev-network
+
+  app-openreyestr-dev:
+    image: openreyestr-app:latest
+    container_name: openreyestr-app-dev
+    command: ["node", "dist/http-server.js"]
+    environment:
+      # Application
+      NODE_ENV: development
+      HTTP_PORT: 3005
+      HTTP_HOST: 0.0.0.0
+
+      # Database
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-dev:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}
+      POSTGRES_HOST: postgres-openreyestr-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_dev}
+
+      # Authentication
+      OPENREYESTR_API_KEYS: ${OPENREYESTR_API_KEYS}
+
+      # OpenAI Configuration (optional for future AI features)
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+
+      # SecondLayer Integration (for cross-referencing)
+      SECONDLAYER_URL: http://app-dev:3003
+      SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+    ports:
+      - "3005:3005"
+
+    depends_on:
+      postgres-openreyestr-dev:
+        condition: service_healthy
+      migrate-openreyestr-dev:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
+
+    networks:
+      - secondlayer-dev-network
+
+    # Resource limits for dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
 volumes:
   postgres_dev_data:
     driver: local
@@ -201,6 +315,8 @@ volumes:
   redis_dev_data:
     driver: local
   app_dev_data:
+    driver: local
+  postgres_openreyestr_dev_data:
     driver: local
 
 networks:

@@ -1,13 +1,9 @@
 import { Pool } from 'pg';
 import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 async function runMigrations() {
   const pool = new Pool({
@@ -33,6 +29,7 @@ async function runMigrations() {
     // Read migration files
     const migrations = [
       '001_initial_schema.sql',
+      '002_add_cost_tracking.sql',
     ];
 
     for (const migrationFile of migrations) {
