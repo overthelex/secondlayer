@@ -47,6 +47,7 @@ Complete documentation for the SecondLayer legal analysis platform.
 
 ## API Documentation
 
+- **[ALL MCP TOOLS](ALL_MCP_TOOLS.md) - Complete list of all 43 MCP tools (mcp_backend, mcp_rada, mcp_openreyestr)** ⭐
 - [MCP Tools List](api/MCP_TOOLS_LIST.md) - List of all MCP tools
 - [MCP Tools Schema](api/MCP_TOOLS_SCHEMA.json) - JSON schema for MCP tools
 - [MCP Tools Summary](api/MCP_TOOLS_SUMMARY.md) - Tools summary
