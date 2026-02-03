@@ -10,6 +10,7 @@ SecondLayer is a monorepo containing multiple MCP (Model Context Protocol) serve
 
 - **mcp_backend/** - Primary MCP server for court cases and legal documents (ZakonOnline integration)
 - **mcp_rada/** - Secondary MCP server for Ukrainian Parliament data (deputies, bills, legislation)
+- **mcp_openreyestr/** - Tertiary MCP server for Ukrainian State Register (business entities, beneficiaries)
 - **lexwebapp/** - Web frontend/admin panel
 - **packages/shared/** - Shared TypeScript types and utilities
 - **deployment/** - Multi-environment Docker deployment configurations
@@ -81,6 +82,30 @@ npm run build
 npm test
 ```
 
+### OpenReyestr Server (mcp_openreyestr)
+
+```bash
+cd mcp_openreyestr
+
+# Development (uses different ports to avoid conflicts)
+npm run dev:http     # HTTP server (port 3004)
+npm run dev          # MCP stdio mode
+
+# Database (separate from mcp_backend and mcp_rada)
+npm run db:setup
+npm run migrate
+
+# Data import from XML files
+npm run import:all /path/to/openreyestr-full.zip  # Import all entity types
+npm run import:uo /path/to/UO_FULL_out.xml        # Legal entities only
+npm run import:fop /path/to/FOP_FULL_out.xml      # Individual entrepreneurs only
+npm run import:fsu /path/to/FSU_FULL_out.xml      # Public associations only
+
+# Build and test
+npm run build
+npm test
+```
+
 ### Monorepo Root
 
 ```bash
@@ -105,6 +130,11 @@ npm run frontend     # Start lexwebapp dev server
 - PostgreSQL: 5433
 - Redis: 6380
 - Qdrant: 6335-6336
+
+**mcp_openreyestr** (state register server):
+- HTTP: 3004
+- PostgreSQL: 5435
+- Redis: 6382 (optional, not currently used)
 
 **Development environments** (on gateway server):
 - Local: 3000 (PostgreSQL 5432, Redis 6379)
@@ -307,7 +337,13 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ### 🔧 API Documentation
 
-- **`mcp_backend/docs/api-explorer.html`** ⭐ **NEW!** - Interactive API Explorer (Swagger-style)
+- **`docs/ALL_MCP_TOOLS.md`** ⭐ **NEW!** - Complete list of all 43 MCP tools
+  - mcp_backend: 34 tools (court cases, legal analysis, document parsing)
+  - mcp_rada: 4 tools (parliament data, bills, deputies)
+  - mcp_openreyestr: 5 tools (state registry, beneficiaries, EDRPOU)
+  - Cost breakdown, parameters, examples, integrations
+
+- **`mcp_backend/docs/api-explorer.html`** - Interactive API Explorer (Swagger-style)
   - All 41 MCP tools with search and filtering
   - Copy-paste curl examples
   - Cost information and parameter descriptions

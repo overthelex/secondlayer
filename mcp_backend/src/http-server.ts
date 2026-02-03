@@ -32,6 +32,7 @@ import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
 import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { createBillingRoutes } from './routes/billing-routes.js';
+import { createAdminRoutes } from './routes/admin-routes.js';
 import { createTestEmailRoute } from './routes/test-email-route.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
@@ -519,6 +520,23 @@ class HTTPMCPServer {
     // GET /api/billing/pricing-info - Get pricing tier information
     // POST /api/billing/estimate-price - Estimate price with user's tier
     this.app.use('/api/billing', requireJWT as any, createBillingRoutes(this.db));
+
+    // Admin routes - require JWT + admin privileges
+    // GET /api/admin/stats/overview - Dashboard statistics
+    // GET /api/admin/stats/revenue-chart - Revenue chart data
+    // GET /api/admin/stats/tier-distribution - User tier distribution
+    // GET /api/admin/users - List all users
+    // GET /api/admin/users/:userId - Get user details
+    // PUT /api/admin/users/:userId/tier - Update user tier
+    // POST /api/admin/users/:userId/adjust-balance - Adjust user balance
+    // PUT /api/admin/users/:userId/limits - Update user limits
+    // GET /api/admin/transactions - List all transactions
+    // POST /api/admin/transactions/:transactionId/refund - Refund transaction
+    // GET /api/admin/analytics/cohorts - Cohort analysis
+    // GET /api/admin/analytics/usage - Usage analytics
+    // GET /api/admin/api-keys - List API keys
+    // GET /api/admin/settings - Get system settings
+    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.db));
 
     // Webhook routes - public (signature verified by services)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body

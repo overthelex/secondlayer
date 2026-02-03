@@ -308,6 +308,12 @@ build_images() {
     print_msg "$BLUE" "Building backend image..."
     docker build -f mcp_backend/Dockerfile -t secondlayer-app:latest .
 
+    # Build OpenReyestr MCP
+    print_msg "$BLUE" "Building OpenReyestr MCP image..."
+    cd mcp_openreyestr
+    docker build -t openreyestr-app:latest .
+    cd ..
+
     # Build frontend
     print_msg "$BLUE" "Building frontend image..."
     if [ -d "frontend" ]; then
@@ -402,17 +408,38 @@ deploy_to_gate() {
 
     # Stop and remove old containers, then start new ones
     print_msg "$BLUE" "🔄 Updating containers on gate server..."
-    ssh ${GATE_USER}@${GATE_SERVER} << EOF
-        cd ${REMOTE_PATH}
+
+    # Pass environment to SSH session
+    ssh ${GATE_USER}@${GATE_SERVER} "export DEPLOY_ENV='$env'; bash -s" << 'EOF'
+        cd /home/vovkes/secondlayer-deployment
+
+        # Determine compose file and env file based on DEPLOY_ENV
+        case "$DEPLOY_ENV" in
+            prod|production)
+                COMPOSE_FILE="docker-compose.prod.yml"
+                ENV_FILE=".env.prod"
+                ENV_SHORT="prod"
+                ;;
+            stage|staging)
+                COMPOSE_FILE="docker-compose.stage.yml"
+                ENV_FILE=".env.stage"
+                ENV_SHORT="stage"
+                ;;
+            dev|development)
+                COMPOSE_FILE="docker-compose.dev.yml"
+                ENV_FILE=".env.dev"
+                ENV_SHORT="dev"
+                ;;
+        esac
 
         # Stop and remove containers
         echo "🛑 Stopping old containers..."
-        docker compose -f $compose_file --env-file $env_file down
+        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE down
 
         # Remove any stopped containers for this environment
         echo "🧹 Cleaning up stopped containers..."
-        docker ps -a --filter "name=secondlayer-.*-$env" --filter "status=exited" -q | xargs -r docker rm -f
-        docker ps -a --filter "name=secondlayer-.*-$env" --filter "status=dead" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=dead" -q | xargs -r docker rm -f
 
         # Remove old/dangling images to free space
         echo "🗑️  Removing old images..."
@@ -420,7 +447,11 @@ deploy_to_gate() {
 
         # Start infrastructure services first
         echo "🚀 Starting infrastructure services..."
-        docker compose -f $compose_file --env-file $env_file up -d postgres-$env redis-$env qdrant-$env
+        if [ "$ENV_SHORT" = "dev" ]; then
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT postgres-openreyestr-dev
+        else
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT
+        fi
 
         # Wait for database to be ready
         echo "⏳ Waiting for database..."
@@ -428,14 +459,26 @@ deploy_to_gate() {
 
         # Run migrations
         echo "🔄 Running database migrations..."
-        docker compose -f $compose_file --env-file $env_file up migrate-$env
+        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-$ENV_SHORT
+
+        # Run OpenReyestr migrations for dev environment
+        if [ "$ENV_SHORT" = "dev" ]; then
+            echo "🔄 Running OpenReyestr migrations..."
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-dev
+        fi
 
         # Start application services
         echo "▶️  Starting application..."
-        docker compose -f $compose_file --env-file $env_file up -d app-$env lexwebapp-$env
+        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-$ENV_SHORT lexwebapp-$ENV_SHORT
+
+        # Start OpenReyestr app for dev environment
+        if [ "$ENV_SHORT" = "dev" ]; then
+            echo "▶️  Starting OpenReyestr app..."
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-openreyestr-dev
+        fi
 
         echo "✅ Deployment complete"
-        docker compose -f $compose_file --env-file $env_file ps
+        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps
 EOF
 
     print_msg "$GREEN" "✅ $env deployed to gate server"

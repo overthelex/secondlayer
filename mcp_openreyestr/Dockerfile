@@ -17,11 +17,15 @@ COPY tsconfig.json ./
 # Install dependencies
 RUN npm ci
 
-# Copy source code
+# Copy source code and migrations
 COPY src ./src
 
 # Build TypeScript
 RUN npm run build
+
+# Copy SQL migration files to dist
+RUN mkdir -p dist/migrations && \
+    cp src/migrations/*.sql dist/migrations/
 
 # Production stage
 FROM node:20-alpine
