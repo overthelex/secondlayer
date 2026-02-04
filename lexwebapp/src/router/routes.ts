@@ -1,0 +1,50 @@
+/**
+ * Application Routes
+ * Centralized route path constants
+ */
+
+export const ROUTES = {
+  // Auth
+  LOGIN: '/login',
+
+  // Main
+  HOME: '/',
+  CHAT: '/chat',
+
+  // Profile & Settings
+  PROFILE: '/profile',
+  BILLING: '/billing',
+
+  // Legal Entities
+  JUDGES: '/judges',
+  JUDGE_DETAIL: '/judges/:id',
+  LAWYERS: '/lawyers',
+  LAWYER_DETAIL: '/lawyers/:id',
+  CLIENTS: '/clients',
+  CLIENT_DETAIL: '/clients/:id',
+  CLIENT_MESSAGING: '/clients/messaging',
+
+  // Cases & Decisions
+  CASES: '/cases',
+  CASE_ANALYSIS: '/case-analysis',
+  DECISIONS_SEARCH: '/decisions',
+
+  // History
+  HISTORY: '/history',
+
+  // Legislation & Analysis
+  LEGISLATION_MONITORING: '/legislation/monitoring',
+  LEGISLATION_STATISTICS: '/legislation/statistics',
+  LEGAL_INITIATIVES: '/legislation/initiatives',
+  LEGAL_CODES_LIBRARY: '/legislation/library',
+  VOTING_ANALYSIS: '/legislation/voting',
+  HISTORICAL_ANALYSIS: '/legislation/historical',
+  COURT_PRACTICE_ANALYSIS: '/analysis/court-practice',
+} as const;
+
+// Helper function to generate dynamic routes
+export const generateRoute = {
+  judgeDetail: (id: string) => `/judges/${id}`,
+  lawyerDetail: (id: string) => `/lawyers/${id}`,
+  clientDetail: (id: string) => `/clients/${id}`,
+};

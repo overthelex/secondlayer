@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing Dashboard - SecondLayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">SecondLayer</h1>
+                    <div class="ml-10 flex space-x-8">
+                        <a href="01-dashboard.html" class="border-b-2 border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium">Огляд</a>
+                        <a href="02-plans.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Тарифи</a>
+                        <a href="03-usage.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Статистика</a>
+                        <a href="04-payment.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Платежі</a>
+                        <a href="05-limits.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Ліміти</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 mr-4">ivan.petrenko@example.com</span>
+                    <a href="index.html" class="text-sm text-blue-600 hover:text-blue-700">Назад до списку</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Панель керування підпискою</h1>
+            <p class="text-gray-600 mt-1">Огляд поточного тарифу та використання ресурсів</p>
+        </div>
+
+        <!-- Current Plan Card -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="text-sm text-gray-600 mb-1">Поточний тариф</div>
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2">Professional</h2>
+                    <p class="text-gray-600 mb-4">1,000 запитів на місяць • Повний доступ до API • Email підтримка</p>
+                    <div class="flex items-center space-x-6 text-sm text-gray-600">
+                        <div>
+                            <span>Період:</span>
+                            <span class="font-semibold ml-1">1 лютого - 1 березня 2026</span>
+                        </div>
+                        <div>
+                            <span>Наступний платіж:</span>
+                            <span class="font-semibold ml-1">1 березня 2026</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="text-4xl font-bold text-gray-900">₴999</div>
+                    <div class="text-sm text-gray-600">на місяць</div>
+                    <button class="mt-4 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
+                        Змінити тариф
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Summary Cards -->
+        <div class="grid md:grid-cols-4 gap-6 mb-8">
+            <!-- Queries Used -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-600 mb-4">Використано запитів</div>
+                <div class="text-3xl font-bold text-gray-900 mb-2">742</div>
+                <div class="text-sm text-gray-500 mb-3">з 1,000 (74.2%)</div>
+                <div class="bg-gray-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full" style="width: 74.2%"></div>
+                </div>
+            </div>
+
+            <!-- Total Cost -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-600 mb-4">Витрати цього місяця</div>
+                <div class="text-3xl font-bold text-gray-900 mb-2">₴856</div>
+                <div class="text-sm text-gray-500">↓ 12% порівняно з минулим місяцем</div>
+            </div>
+
+            <!-- API Calls -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-600 mb-4">API виклики</div>
+                <div class="text-3xl font-bold text-gray-900 mb-2">2,847</div>
+                <div class="text-sm text-gray-500">Середньо 95/день</div>
+            </div>
+
+            <!-- Tokens Used -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-600 mb-4">Токени OpenAI</div>
+                <div class="text-3xl font-bold text-gray-900 mb-2">1.2M</div>
+                <div class="text-sm text-gray-500">Промпт: 840K | Відповідь: 360K</div>
+            </div>
+        </div>
+
+        <!-- Usage Chart and Top Tools -->
+        <div class="grid md:grid-cols-2 gap-8 mb-8">
+            <!-- Usage Over Time -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Використання за останні 30 днів</h3>
+                <div style="height: 300px;">
+                    <canvas id="usageChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Top Tools -->
+            <div class="bg-white border border-gray-200 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Найбільш використовувані інструменти</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-700 font-medium">packaged_lawyer_answer</span>
+                            <span class="text-gray-500">342 викликів</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 46%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-700 font-medium">search_court_cases</span>
+                            <span class="text-gray-500">218 викликів</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 29%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-700 font-medium">get_legislation_section</span>
+                            <span class="text-gray-500">127 викликів</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 17%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-700 font-medium">semantic_search</span>
+                            <span class="text-gray-500">85 викликів</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 11%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-700 font-medium">validate_citations</span>
+                            <span class="text-gray-500">42 викликів</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 6%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Швидкі дії</h3>
+            <div class="grid md:grid-cols-3 gap-4">
+                <button class="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition text-center">
+                    <span class="font-medium text-gray-900">Оновити тариф</span>
+                </button>
+                <button class="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition text-center">
+                    <span class="font-medium text-gray-900">Додати картку</span>
+                </button>
+                <button class="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition text-center">
+                    <span class="font-medium text-gray-900">Завантажити звіт</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Alerts / Notifications -->
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <div class="w-5 h-5 text-yellow-600 font-bold">!</div>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">Ви використали 74% ліміту запитів</h3>
+                    <p class="mt-1 text-sm text-yellow-700">
+                        У вас залишилось 258 запитів до кінця поточного періоду (1 березня 2026).
+                        <a href="02-plans.html" class="font-semibold underline">Оновіть тариф</a> щоб отримати більше запитів.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Usage Chart with fixed sizing
+        const ctx = document.getElementById('usageChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['1 січ', '5 січ', '10 січ', '15 січ', '20 січ', '25 січ', '30 січ', '1 лют'],
+                datasets: [{
+                    label: 'Запити на день',
+                    data: [12, 19, 15, 25, 32, 28, 35, 42],
+                    borderColor: 'rgb(37, 99, 235)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
