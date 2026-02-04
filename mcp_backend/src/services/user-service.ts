@@ -17,6 +17,7 @@ export interface User {
   last_login?: Date;
   created_at: Date;
   updated_at: Date;
+  password_hash?: string;
 }
 
 export interface UserCreate {

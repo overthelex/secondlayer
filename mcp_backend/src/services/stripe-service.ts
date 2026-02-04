@@ -38,7 +38,7 @@ export class StripeService {
     }
 
     this.stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2023-10-16', // Stable API version
+      apiVersion: '2026-01-28.clover', // Updated for Stripe SDK v20
     });
 
     logger.info('StripeService initialized', {

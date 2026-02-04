@@ -10,6 +10,14 @@ import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * Helper to ensure param is a string (Express can return string | string[])
+ */
+function getStringParam(param: string | string[] | undefined): string | null {
+  if (!param) return null;
+  return Array.isArray(param) ? param[0] : param;
+}
+
 export function createAdminRoutes(db: Database): express.Router {
   const router = express.Router();
   const billingService = new BillingService(db);
@@ -340,7 +348,7 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.get('/users/:userId', async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = getStringParam(req.params.userId);
 
       const userResult = await db.query(`
         SELECT
@@ -400,7 +408,7 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.put('/users/:userId/tier', async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = getStringParam(req.params.userId);
       const { tier } = req.body;
 
       if (!['free', 'startup', 'business', 'enterprise', 'internal'].includes(tier)) {
@@ -444,7 +452,7 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.post('/users/:userId/adjust-balance', async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = getStringParam(req.params.userId);
       const { amount, reason } = req.body;
 
       if (typeof amount !== 'number' || isNaN(amount)) {
@@ -508,7 +516,7 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.put('/users/:userId/limits', async (req: Request, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = getStringParam(req.params.userId);
       const { dailyLimitUsd, monthlyLimitUsd } = req.body;
 
       const updates: string[] = [];
@@ -635,7 +643,7 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.post('/transactions/:transactionId/refund', async (req: Request, res: Response) => {
     try {
-      const { transactionId } = req.params;
+      const transactionId = getStringParam(req.params.transactionId);
       const { reason } = req.body;
 
       const txResult = await db.query(

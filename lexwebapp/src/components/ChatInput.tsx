@@ -44,6 +44,8 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           </button>
 
           <textarea
+            id="chat-message-input"
+            name="message"
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}

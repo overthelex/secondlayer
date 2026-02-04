@@ -139,7 +139,7 @@ npm run frontend     # Start lexwebapp dev server
 **Development environments** (on gateway server):
 - Local: 3000 (PostgreSQL 5432, Redis 6379)
 - Dev: 3003 (PostgreSQL 5433, Redis 6380)
-- Stage: 3002 (PostgreSQL 5434, Redis 6381)
+- Stage: 3004 (PostgreSQL 5434, Redis 6381)
 - Prod: 3001 (PostgreSQL 5432, Redis 6379)
 
 ## Key Architectural Patterns

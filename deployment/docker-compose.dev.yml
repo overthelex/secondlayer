@@ -78,6 +78,9 @@ services:
 
   migrate-dev:
     image: secondlayer-app:latest
+    build:
+      context: .
+      dockerfile: mcp_backend/Dockerfile
     container_name: secondlayer-migrate-dev
     depends_on:
       postgres-dev:
@@ -101,6 +104,9 @@ services:
 
   app-dev:
     image: secondlayer-app:latest
+    build:
+      context: .
+      dockerfile: mcp_backend/Dockerfile
     container_name: secondlayer-app-dev
     command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
     environment:
@@ -156,9 +162,9 @@ services:
       # Google OAuth2 (with development URLs)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: https://dev.legal.org.ua/auth/callback
+      GOOGLE_CALLBACK_URL: https://dev.legal.org.ua/auth/google/callback
       FRONTEND_URL: https://dev.legal.org.ua
-      ALLOWED_ORIGINS: https://legal.org.ua
+      ALLOWED_ORIGINS: https://dev.legal.org.ua
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-debug}
@@ -204,6 +210,11 @@ services:
 
   lexwebapp-dev:
     image: lexwebapp-lexwebapp:latest
+    build:
+      context: .
+      dockerfile: lexwebapp/Dockerfile
+      args:
+        VITE_API_URL: https://dev.legal.org.ua/api
     container_name: lexwebapp-dev
     ports:
       - "8091:80"

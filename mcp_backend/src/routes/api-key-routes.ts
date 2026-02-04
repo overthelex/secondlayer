@@ -14,6 +14,14 @@ export interface AuthenticatedRequest extends Request {
   user?: any;
 }
 
+/**
+ * Helper to ensure param is a string (Express can return string | string[])
+ */
+function getStringParam(param: string | string[] | undefined): string {
+  if (!param) return '';
+  return Array.isArray(param) ? param[0] : param;
+}
+
 export function createApiKeyRouter(pool: Pool): Router {
   const router = Router();
   const apiKeyService = new ApiKeyService(pool);
@@ -123,7 +131,7 @@ export function createApiKeyRouter(pool: Pool): Router {
         });
       }
 
-      const { keyId } = req.params;
+      const keyId = getStringParam(req.params.keyId);
 
       if (!keyId) {
         return res.status(400).json({

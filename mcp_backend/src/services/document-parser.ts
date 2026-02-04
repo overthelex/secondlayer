@@ -101,9 +101,9 @@ export class DocumentParser {
 
       // Use pdftoppm to convert PDF pages to PNG images
       // -png: output format
-      // -r 300: 300 DPI resolution for high quality OCR
+      // -r 150: 150 DPI resolution (reduced from 300 to fit Vision API limits)
       // -f 1 -l 5: first 5 pages only
-      await execAsync(`pdftoppm -png -r 300 -f 1 -l 5 "${tempPdfPath}" "${tempPngPrefix}"`);
+      await execAsync(`pdftoppm -png -r 150 -f 1 -l 5 "${tempPdfPath}" "${tempPngPrefix}"`);
 
       // Find all generated PNG files
       const files = await fs.readdir(this.tempDir);
