@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Платежі та рахунки - SecondLayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">SecondLayer</h1>
+                    <div class="ml-10 flex space-x-8">
+                        <a href="01-dashboard.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Огляд</a>
+                        <a href="02-plans.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Тарифи</a>
+                        <a href="03-usage.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Статистика</a>
+                        <a href="04-payment.html" class="border-b-2 border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium">Платежі</a>
+                        <a href="05-limits.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Ліміти</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 mr-4">ivan.petrenko@example.com</span>
+                    <a href="index.html" class="text-sm text-blue-600 hover:text-blue-700">Назад до списку</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Платежі та рахунки</h1>
+            <p class="text-gray-600 mt-1">Керуйте способами оплати та переглядайте історію платежів</p>
+        </div>
+
+        <!-- Payment Methods Section -->
+        <div class="bg-white border border-gray-200 rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-900">Способи оплати</h2>
+                <button class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                    Додати картку
+                </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <!-- Primary Card -->
+                <div class="border-2 border-blue-600 bg-blue-50 rounded-lg p-4 relative">
+                    <div class="absolute top-4 right-4 bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">
+                        ОСНОВНА
+                    </div>
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-16 h-10 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">
+                                VISA
+                            </div>
+                            <div>
+                                <div class="text-lg font-semibold text-gray-900">•••• •••• •••• 4532</div>
+                                <div class="text-sm text-gray-600">Термін дії: 08/2027</div>
+                                <div class="text-sm text-gray-600">ПриватБанк</div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="px-3 py-1 text-sm text-blue-600 hover:bg-blue-100 rounded">Редагувати</button>
+                            <button class="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded">Видалити</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Card -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-16 h-10 bg-red-600 rounded flex items-center justify-center text-white font-bold text-xs">
+                                MC
+                            </div>
+                            <div>
+                                <div class="text-lg font-semibold text-gray-900">•••• •••• •••• 8901</div>
+                                <div class="text-sm text-gray-600">Термін дії: 12/2025</div>
+                                <div class="text-sm text-gray-600">monobank</div>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="px-3 py-1 text-sm text-blue-600 hover:bg-blue-100 rounded">Зробити основною</button>
+                            <button class="px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded">Видалити</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Card Prompt -->
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 hover:bg-blue-50 transition cursor-pointer">
+                    <div class="text-gray-700 font-medium">Додати новий спосіб оплати</div>
+                    <div class="text-sm text-gray-500 mt-1">Підтримується Visa, Mastercard, LiqPay</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-Pay Settings -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-1">Автоматична оплата</h3>
+                    <p class="text-sm text-gray-600">Автоматично списувати кошти в день поновлення підписки</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked class="sr-only peer">
+                    <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+            <div class="mt-4 bg-blue-50 border-l-4 border-blue-600 p-4 rounded">
+                <p class="text-sm text-blue-900">
+                    Наступний платіж ₴999 буде списано 1 березня 2026 з картки •••• 4532
+                </p>
+            </div>
+        </div>
+
+        <!-- Billing Information -->
+        <div class="bg-white border border-gray-200 rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Платіжна інформація</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Назва компанії</label>
+                        <input type="text" value="Адвокатське об'єднання 'Петренко і партнери'" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">ЄДРПОУ</label>
+                        <input type="text" value="12345678" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Юридична адреса</label>
+                        <input type="text" value="вул. Хрещатик, 22, м. Київ, 01001" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Email для рахунків</label>
+                        <input type="email" value="accounting@petrenko-partners.ua" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Телефон</label>
+                        <input type="tel" value="+380 44 123 4567" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                        Зберегти зміни
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Billing History -->
+        <div class="bg-white border border-gray-200 rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-gray-900">Історія платежів</h2>
+                <div class="flex space-x-3">
+                    <select class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option>Усі статуси</option>
+                        <option>Сплачено</option>
+                        <option>В обробці</option>
+                        <option>Невдало</option>
+                    </select>
+                    <button class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">
+                        Експортувати
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Рахунок</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Дата</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Опис</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Сума</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Статус</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Дії</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2026-002</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">1 лютого 2026</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Professional Plan - Лютий 2026</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴999.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Сплачено
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Завантажити</button>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2026-001</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">1 січня 2026</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Professional Plan - Січень 2026</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴999.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Сплачено
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Завантажити</button>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2025-148</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">28 грудня 2025</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Додатковий пакет запитів (+1000)</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴500.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Сплачено
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Завантажити</button>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2025-147</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">1 грудня 2025</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Professional Plan - Грудень 2025</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴999.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Сплачено
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Завантажити</button>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2025-146</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">1 листопада 2025</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Professional Plan - Листопад 2025</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴999.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    Невдало
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-red-600 hover:text-red-900 text-sm font-medium">Повторити</button>
+                            </td>
+                        </tr>
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-blue-600">INV-2025-145</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">15 жовтня 2025</td>
+                            <td class="px-6 py-4 text-sm text-gray-900">Оновлення: Free → Professional (пропорційно)</td>
+                            <td class="px-6 py-4 text-sm text-right font-semibold text-gray-900">₴516.00</td>
+                            <td class="px-6 py-4 text-center">
+                                <span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Сплачено
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center space-x-2">
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Переглянути</button>
+                                <button class="text-blue-600 hover:text-blue-900 text-sm">Завантажити</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Показано <span class="font-medium">1</span> до <span class="font-medium">6</span> з <span class="font-medium">24</span> результатів
+                </div>
+                <div class="flex space-x-2">
+                    <button class="px-3 py-2 border border-gray-300 rounded bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Попередня
+                    </button>
+                    <button class="px-3 py-2 border border-blue-500 rounded bg-blue-500 text-sm font-medium text-white">1</button>
+                    <button class="px-3 py-2 border border-gray-300 rounded bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">2</button>
+                    <button class="px-3 py-2 border border-gray-300 rounded bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">3</button>
+                    <button class="px-3 py-2 border border-gray-300 rounded bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Наступна
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

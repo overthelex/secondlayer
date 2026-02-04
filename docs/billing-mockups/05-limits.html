@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ліміти та сповіщення - SecondLayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">SecondLayer</h1>
+                    <div class="ml-10 flex space-x-8">
+                        <a href="01-dashboard.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Огляд</a>
+                        <a href="02-plans.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Тарифи</a>
+                        <a href="03-usage.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Статистика</a>
+                        <a href="04-payment.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Платежі</a>
+                        <a href="05-limits.html" class="border-b-2 border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium">Ліміти</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 mr-4">ivan.petrenko@example.com</span>
+                    <a href="index.html" class="text-sm text-blue-600 hover:text-blue-700">Назад до списку</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Ліміти та сповіщення</h1>
+            <p class="text-gray-600 mt-1">Відстежуйте використання та налаштовуйте автоматичні сповіщення</p>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-lg p-8 mb-8">
+            <div class="grid md:grid-cols-3 gap-8">
+                <div>
+                    <div class="text-sm text-gray-600 mb-2">Поточний період</div>
+                    <div class="text-2xl font-bold text-gray-900 mb-1">1 лютого - 1 березня</div>
+                    <div class="text-sm text-gray-500">До оновлення: 28 днів</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600 mb-2">Використано запитів</div>
+                    <div class="text-2xl font-bold text-gray-900 mb-1">742 з 1,000</div>
+                    <div class="w-full bg-gray-200 rounded-full h-3 mt-2">
+                        <div class="bg-blue-600 h-3 rounded-full" style="width: 74.2%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600 mb-2">Залишилось запитів</div>
+                    <div class="text-2xl font-bold text-gray-900 mb-1">258</div>
+                    <div class="text-sm text-gray-500">Середньо 9.2 запитів на день</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white border border-gray-200 rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">Деталізація використання</h2>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Пошукові запити</span>
+                            <span class="text-sm text-gray-600">342 / ∞</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-600 h-2 rounded-full" style="width: 34.2%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">search_court_cases, semantic_search</div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Аналітичні запити</span>
+                            <span class="text-sm text-gray-600">285 / ∞</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 28.5%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">packaged_lawyer_answer, find_legal_patterns</div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Законодавство</span>
+                            <span class="text-sm text-gray-600">115 / ∞</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-600 h-2 rounded-full" style="width: 11.5%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">get_legislation_section, search_legislation</div>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-base font-semibold text-gray-900">Загалом</span>
+                            <span class="text-base font-bold text-gray-900">742 / 1,000</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div class="bg-blue-600 h-3 rounded-full" style="width: 74.2%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white border border-gray-200 rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">Бюджетні обмеження</h2>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Місячний бюджет</span>
+                            <span class="text-sm text-gray-600">₴856 / ₴1,500</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-green-600 h-2 rounded-full" style="width: 57.1%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">Залишилось: ₴644</div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">OpenAI API</span>
+                            <span class="text-sm text-gray-600">₴701 / ₴1,200</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: 58.4%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">GPT-4o: ₴487, GPT-4o-mini: ₴214</div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Зовнішні API</span>
+                            <span class="text-sm text-gray-600">₴155 / ₴300</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-600 h-2 rounded-full" style="width: 51.7%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">ZakonOnline, RADA API</div>
+                    </div>
+
+                    <div class="pt-4 border-t border-gray-200">
+                        <button class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm">
+                            Налаштувати бюджет
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Налаштування сповіщень</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <h3 class="font-semibold text-gray-900 mb-4">Email сповіщення</h3>
+
+                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">50% використання</div>
+                                <div class="text-sm text-gray-500">Коли використано половину ліміту</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">80% використання</div>
+                                <div class="text-sm text-gray-500">Попередження про наближення до ліміту</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">95% використання</div>
+                                <div class="text-sm text-gray-500">Критичне попередження</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">Досягнуто ліміт</div>
+                                <div class="text-sm text-gray-500">Коли вичерпано всі запити</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h3 class="font-semibold text-gray-900 mb-4">Розширені сповіщення</h3>
+
+                        <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                            <div>
+                                <div class="font-medium text-gray-900">Webhook сповіщення</div>
+                                <div class="text-sm text-gray-500">API події для інтеграцій</div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div class="p-4 border border-gray-200 rounded-lg">
+                            <div class="font-medium text-gray-900 mb-2">Webhook URL</div>
+                            <input type="text" placeholder="https://your-domain.com/webhooks/billing" class="w-full px-3 py-2 border border-gray-300 rounded text-sm mb-2">
+                            <div class="text-xs text-gray-500">Події: usage.quota_warning, usage.quota_exceeded, billing.payment_succeeded</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Поведінка при перевищенні ліміту</h2>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div class="flex items-start space-x-4 p-4 border-2 border-blue-600 bg-blue-50 rounded-lg">
+                        <input type="radio" name="overage" id="auto-upgrade" checked class="mt-1">
+                        <label for="auto-upgrade" class="flex-1 cursor-pointer">
+                            <div class="font-semibold text-gray-900">Автоматично оновити тариф</div>
+                            <div class="text-sm text-gray-600 mt-1">При досягненні ліміту автоматично перейти на вищий тариф. Зміни застосовуються миттєво з пропорційною оплатою.</div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-start space-x-4 p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300">
+                        <input type="radio" name="overage" id="pay-as-you-go" class="mt-1">
+                        <label for="pay-as-you-go" class="flex-1 cursor-pointer">
+                            <div class="font-semibold text-gray-900">Pay-as-you-go (понадлімітні запити)</div>
+                            <div class="text-sm text-gray-600 mt-1">Оплачуйте додаткові запити за вищою ставкою: ₴1.50 за запит (замість ₴0.99)</div>
+                        </label>
+                    </div>
+
+                    <div class="flex items-start space-x-4 p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300">
+                        <input type="radio" name="overage" id="hard-stop" class="mt-1">
+                        <label for="hard-stop" class="flex-1 cursor-pointer">
+                            <div class="font-semibold text-gray-900">Жорстке обмеження (припинити доступ)</div>
+                            <div class="text-sm text-gray-600 mt-1">Заблокувати всі запити до наступного періоду або ручного оновлення тарифу</div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                        Зберегти налаштування
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Прогноз використання</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="text-sm text-gray-600 mb-1">Прогноз на кінець періоду</div>
+                    <div class="text-2xl font-bold text-gray-900">~1,020 запитів</div>
+                    <div class="text-sm text-red-600 mt-2">Можливе перевищення на ~20 запитів</div>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="text-sm text-gray-600 mb-1">Очікувана вартість</div>
+                    <div class="text-2xl font-bold text-gray-900">~₴1,028</div>
+                    <div class="text-sm text-gray-500 mt-2">Підписка ₴999 + ₴29 за перевищення</div>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="text-sm text-gray-600 mb-1">Рекомендація</div>
+                    <div class="text-base font-semibold text-blue-600">Залишитись на поточному тарифі</div>
+                    <div class="text-sm text-gray-500 mt-2">Невелике перевищення дешевше за оновлення</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
