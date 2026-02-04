@@ -22,6 +22,7 @@ import { DocumentServiceClient } from './clients/document-service-client.js';
 import { DocumentParser } from './services/document-parser.js';
 import { DueDiligenceService } from './services/due-diligence-service.js';
 import { DueDiligenceTools } from './api/due-diligence-tools.js';
+import { getRedisClient } from './utils/redis-client.js';
 
 dotenv.config();
 
@@ -442,6 +443,15 @@ class SecondLayerMCPServer {
     try {
       await this.db.connect();
       await this.embeddingService.initialize();
+
+      // Initialize Redis for AI-powered legislation classification (optional)
+      const redis = await getRedisClient();
+      if (redis) {
+        this.legislationTools.setRedisClient(redis);
+        logger.info('Redis connected - AI legislation classification with caching enabled');
+      } else {
+        logger.info('Redis not available - AI legislation classification will work without caching');
+      }
 
       // Check document service health
       if (this.documentServiceClient.isEnabled()) {

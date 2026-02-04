@@ -3,6 +3,8 @@ import { RadaLegislationAdapter, LegislationArticle } from '../adapters/rada-leg
 import { logger } from '../utils/logger';
 import { EmbeddingService } from './embedding-service';
 import { createHash } from 'crypto';
+import { LegislationClassifier } from './legislation-classifier';
+import { createClient } from 'redis';
 
 export interface LegislationReference {
   rada_id: string;
@@ -21,6 +23,10 @@ export interface LegislationSearchResult {
   rada_id: string;
 }
 
+/**
+ * Парсит ссылку на законодательство из текста, используя regexp.
+ * Для сложных случаев следует использовать parseLegislationReferenceWithAI.
+ */
 export function parseLegislationReference(text: string): { radaId: string; articleNumber: string } | null {
   const input = String(text || '').trim();
   if (!input) return null;
@@ -34,6 +40,11 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'ГК': '436-15',
     'ПКУ': '2755-17',
     'ПОДАТКОВИЙ КОДЕКС': '2755-17',
+    'КЗПП': '322-08',
+    'КЗпП': '322-08',
+    'СК': '2947-14',
+    'ЗК': '2768-14',
+    'КК': '2341-14',
   };
 
   const normalized = input
@@ -43,9 +54,9 @@ export function parseLegislationReference(text: string): { radaId: string; artic
 
   const patterns: Array<{ regex: RegExp; codeGroupIndex: number; articleGroupIndex: number } | { regex: RegExp; radaIdIndex: number; articleIndex: number }> = [
     // Note: don't use \b for Cyrillic words (JS \b is ASCII-centric)
-    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
-    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
-    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
+    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
     { regex: /(?:^|\s)(\d{3,4}-\d{2}).*?ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, radaIdIndex: 1, articleIndex: 2 },
   ];
 
@@ -82,15 +93,78 @@ export function parseLegislationReference(text: string): { radaId: string; artic
   return null;
 }
 
+/**
+ * Парсит ссылку на законодательство используя AI-классификацию как fallback,
+ * когда regexp не дает результата.
+ */
+export async function parseLegislationReferenceWithAI(
+  text: string,
+  classifier?: LegislationClassifier,
+  confidenceThreshold: number = 0.7
+): Promise<{ radaId: string; articleNumber: string; source: 'regexp' | 'ai'; confidence?: number } | null> {
+  // Сначала пробуем regexp
+  const regexpResult = parseLegislationReference(text);
+  if (regexpResult) {
+    return { ...regexpResult, source: 'regexp' };
+  }
+
+  // Если regexp не сработал и есть classifier, используем AI
+  if (classifier) {
+    logger.info('[parseLegislationReferenceWithAI] Regexp failed, trying AI classification', {
+      query: text.substring(0, 100),
+    });
+
+    const aiResult = await classifier.classify(text, 'quick');
+
+    if (aiResult.rada_id && aiResult.article_number && aiResult.confidence >= confidenceThreshold) {
+      logger.info('[parseLegislationReferenceWithAI] AI classification successful', {
+        rada_id: aiResult.rada_id,
+        article: aiResult.article_number,
+        confidence: aiResult.confidence,
+        code: aiResult.code_name,
+      });
+
+      return {
+        radaId: aiResult.rada_id,
+        articleNumber: aiResult.article_number,
+        source: 'ai',
+        confidence: aiResult.confidence,
+      };
+    } else {
+      logger.warn('[parseLegislationReferenceWithAI] AI classification low confidence or incomplete', {
+        rada_id: aiResult.rada_id,
+        article: aiResult.article_number,
+        confidence: aiResult.confidence,
+      });
+    }
+  }
+
+  return null;
+}
+
 export class LegislationService {
   private adapter: RadaLegislationAdapter;
   private embeddingService: EmbeddingService;
   private db: Pool;
+  private classifier: LegislationClassifier | null = null;
 
-  constructor(db: Pool, embeddingService: EmbeddingService) {
+  constructor(db: Pool, embeddingService: EmbeddingService, redis?: ReturnType<typeof createClient>) {
     this.db = db;
     this.adapter = new RadaLegislationAdapter(db);
     this.embeddingService = embeddingService;
+
+    // Инициализируем classifier (с Redis или без)
+    this.classifier = new LegislationClassifier(redis);
+  }
+
+  /**
+   * Устанавливает Redis клиент для AI-классификации законодательства.
+   * Используется для кэширования результатов классификации.
+   */
+  setRedisClient(redis: ReturnType<typeof createClient> | null): void {
+    if (this.classifier) {
+      this.classifier.setRedisClient(redis);
+    }
   }
 
   async ensureLegislationExists(radaId: string): Promise<boolean> {
@@ -398,7 +472,20 @@ export class LegislationService {
     }
   }
 
+  /**
+   * Синхронный парсинг через regexp (для обратной совместимости)
+   */
   parseArticleReference(text: string): { radaId: string; articleNumber: string } | null {
     return parseLegislationReference(text);
+  }
+
+  /**
+   * Асинхронный парсинг с использованием AI как fallback
+   */
+  async parseArticleReferenceWithAI(
+    text: string,
+    confidenceThreshold: number = 0.7
+  ): Promise<{ radaId: string; articleNumber: string; source: 'regexp' | 'ai'; confidence?: number } | null> {
+    return await parseLegislationReferenceWithAI(text, this.classifier || undefined, confidenceThreshold);
   }
 }
