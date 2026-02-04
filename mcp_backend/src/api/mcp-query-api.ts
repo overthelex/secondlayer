@@ -352,7 +352,12 @@ export class MCPQueryAPI {
     const courtLevel = String(args.court_level || 'SC');
 
     if (!procedureCode) {
-      throw new Error('procedure_code must be one of: cpc, gpc, cac, crpc');
+      const providedValue = args.procedure_code || args.code;
+      throw new Error(
+        `procedure_code must be one of: cpc, gpc, cac, crpc. ` +
+        `Received: ${providedValue ? `'${providedValue}'` : 'undefined'}. ` +
+        `Valid values: 'cpc' (civil), 'gpc' (commercial), 'cac' (administrative), 'crpc' (criminal).`
+      );
     }
     if (!query) {
       throw new Error('query parameter is required');
@@ -622,7 +627,12 @@ export class MCPQueryAPI {
     const factsText = typeof args.facts_text === 'string' ? args.facts_text.trim() : '';
     const limit = Math.min(20, Math.max(1, Number(args.limit || 10)));
     if (!procedureCode) {
-      throw new Error('procedure_code must be one of: cpc, gpc, cac, crpc');
+      const providedValue = args.procedure_code || args.code;
+      throw new Error(
+        `procedure_code must be one of: cpc, gpc, cac, crpc. ` +
+        `Received: ${providedValue ? `'${providedValue}'` : 'undefined'}. ` +
+        `Valid values: 'cpc' (civil), 'gpc' (commercial), 'cac' (administrative), 'crpc' (criminal).`
+      );
     }
     if (!factsText) {
       throw new Error('facts_text parameter is required');
@@ -2623,19 +2633,25 @@ export class MCPQueryAPI {
   }
 
   private async searchLegalPrecedents(args: any) {
+    // Validate query parameter
+    const query = String(args.query || '').trim();
+    if (!query) {
+      throw new Error('query parameter is required and cannot be empty');
+    }
+
     // If count_all is requested, use pagination to count ALL results
     if (args.count_all === true) {
-      logger.info('count_all requested, starting pagination', { query: args.query });
+      logger.info('count_all requested, starting pagination', { query });
 
       try {
-        const countResult = await this.countAllResults(args.query);
+        const countResult = await this.countAllResults(query);
 
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
-                query: args.query,
+                query,
                 count_all_mode: true,
                 total_count: countResult.total_count,
                 pages_fetched: countResult.pages_fetched,
@@ -2665,7 +2681,7 @@ export class MCPQueryAPI {
 
     // Detect if query contains a case number (e.g., 756/655/23)
     const caseNumberPattern = /\b(\d{1,4}\/\d{1,6}\/\d{2}(-\w)?)\b/;
-    const caseNumberMatch = args.query?.match(caseNumberPattern);
+    const caseNumberMatch = query.match(caseNumberPattern);
 
     // If searching for a specific case number, use semantic search
     if (caseNumberMatch) {
@@ -3038,10 +3054,16 @@ export class MCPQueryAPI {
    * Regular text-based search (original implementation)
    */
   private async performRegularSearch(args: any) {
+    // Validate query parameter
+    const query = String(args.query || '').trim();
+    if (!query) {
+      throw new Error('query parameter is required and cannot be empty');
+    }
+
     // Use 'quick' budget to avoid LLM timeouts for simple searches
-    const budget = args.query?.length < 30 ? 'quick' : 'standard';
-    const intent = await this.queryPlanner.classifyIntent(args.query, budget as 'quick' | 'standard');
-    const queryParams = this.queryPlanner.buildQueryParams(intent, args.query);
+    const budget = query.length < 30 ? 'quick' : 'standard';
+    const intent = await this.queryPlanner.classifyIntent(query, budget as 'quick' | 'standard');
+    const queryParams = this.queryPlanner.buildQueryParams(intent, query);
     
     // Only use court endpoint for now (NPA/ECHR endpoints not available on court.searcher domain)
     const endpoints = this.queryPlanner.selectEndpoints(intent).filter(e => e === 'court');

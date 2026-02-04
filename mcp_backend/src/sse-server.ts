@@ -17,6 +17,7 @@ import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
 import { LegislationTools } from './api/legislation-tools.js';
 import { authenticateJWT } from './middleware/jwt-auth.js';
+import { getRedisClient } from './utils/redis-client.js';
 
 dotenv.config();
 
@@ -241,6 +242,16 @@ class SSEServer {
     try {
       await this.db.connect();
       await this.embeddingService.initialize();
+
+      // Initialize Redis for AI-powered legislation classification (optional)
+      const redis = await getRedisClient();
+      if (redis) {
+        this.legislationTools.setRedisClient(redis);
+        logger.info('Redis connected - AI legislation classification with caching enabled');
+      } else {
+        logger.info('Redis not available - AI legislation classification will work without caching');
+      }
+
       logger.info('SSE MCP Server services initialized');
     } catch (error) {
       logger.error('Failed to initialize server:', error);
