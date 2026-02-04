@@ -6,7 +6,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import passport from 'passport';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { User } from '../services/user-service.js';
 import { logger } from '../utils/logger.js';
 import { getUserService } from '../middleware/dual-auth.js';

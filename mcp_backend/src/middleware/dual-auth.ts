@@ -96,7 +96,16 @@ async function authenticateWithAPIKey(req: AuthenticatedRequest, apiKey: string)
   // First try to validate as Phase 2 billing API key from database
   if (apiKeyService) {
     try {
+      logger.debug('Attempting Phase 2 API key validation', {
+        keyPrefix: apiKey.substring(0, 12) + '...',
+      });
       const keyInfo = await apiKeyService.validateApiKey(apiKey);
+
+      logger.debug('Phase 2 API key validation result', {
+        keyPrefix: apiKey.substring(0, 12) + '...',
+        found: keyInfo !== null,
+        userId: keyInfo?.userId,
+      });
 
       if (keyInfo) {
         // Phase 2 API key found - load user from database
