@@ -351,7 +351,62 @@ export class MCPSSEServer {
     const startTime = Date.now();
 
     try {
-      // 1. Create cost tracking record
+      // 1. Phase 2 Billing: Check credits BEFORE execution
+      if (context.userId && this.creditService) {
+        try {
+          const creditsRequired = await this.creditService.calculateCreditsForTool(name, context.userId);
+
+          if (creditsRequired > 0) {
+            const balance = await this.creditService.checkBalance(context.userId, creditsRequired);
+
+            if (!balance.hasCredits) {
+              logger.warn('[MCP SSE] Insufficient credits, blocking request', {
+                userId: context.userId,
+                tool: name,
+                creditsRequired,
+                currentBalance: balance.currentBalance,
+              });
+
+              this.sendSSEMessage(res, {
+                jsonrpc: '2.0',
+                id: request.id,
+                error: {
+                  code: -32000,
+                  message: 'Insufficient credits',
+                  data: {
+                    code: 'INSUFFICIENT_CREDITS',
+                    currentBalance: balance.currentBalance,
+                    creditsRequired,
+                    message: 'Your credit balance is too low to perform this operation. Please purchase more credits.',
+                  },
+                },
+              });
+              return;
+            }
+
+            logger.debug('[MCP SSE] Credit check passed', {
+              userId: context.userId,
+              tool: name,
+              creditsRequired,
+              currentBalance: balance.currentBalance,
+            });
+          } else {
+            logger.debug('[MCP SSE] Free tier tool, no credit check needed', {
+              userId: context.userId,
+              tool: name,
+            });
+          }
+        } catch (creditError: any) {
+          logger.error('[MCP SSE] Error checking credits', {
+            userId: context.userId,
+            tool: name,
+            error: creditError.message,
+          });
+          // On error, allow the request to proceed (fail open)
+        }
+      }
+
+      // 2. Create cost tracking record
       await this.costTracker.createTrackingRecord({
         requestId,
         toolName: name,
@@ -372,7 +427,7 @@ export class MCPSSEServer {
         },
       });
 
-      // 2. Execute tool in request context
+      // 3. Execute tool in request context
       const result = await requestContext.run(
         { requestId, task: name },
         async () => {
@@ -387,7 +442,7 @@ export class MCPSSEServer {
         }
       );
 
-      // 3. Complete cost tracking
+      // 4. Complete cost tracking
       const executionTime = Date.now() - startTime;
       await this.costTracker.completeTrackingRecord({
         requestId,
@@ -395,7 +450,7 @@ export class MCPSSEServer {
         status: 'completed',
       });
 
-      // 4. Phase 2 Billing: Deduct credits if user is authenticated
+      // 5. Phase 2 Billing: Deduct credits after successful execution
       if (context.userId && this.creditService) {
         try {
           const creditsRequired = await this.creditService.calculateCreditsForTool(name, context.userId);
@@ -417,13 +472,14 @@ export class MCPSSEServer {
                 newBalance: deduction.newBalance,
               });
             } else {
-              logger.warn('[MCP SSE] Failed to deduct credits (insufficient balance)', {
+              // This should not happen since we checked balance before execution
+              // but log as error if it does (possible race condition)
+              logger.error('[MCP SSE] Failed to deduct credits after execution', {
                 userId: context.userId,
                 tool: name,
                 creditsRequired,
+                message: 'Balance was sufficient before execution but deduction failed',
               });
-              // Note: We don't fail the request if credit deduction fails
-              // The tool was already executed successfully
             }
           } else {
             logger.debug('[MCP SSE] Free tier tool, no credits deducted', {
@@ -437,7 +493,6 @@ export class MCPSSEServer {
             tool: name,
             error: creditError.message,
           });
-          // Don't fail the request if credit deduction fails
         }
       }
 

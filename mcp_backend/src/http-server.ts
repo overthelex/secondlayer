@@ -41,6 +41,7 @@ import { MCPSSEServer } from './api/mcp-sse-server.js';
 import { ApiKeyService } from './services/api-key-service.js';
 import { CreditService } from './services/credit-service.js';
 import { createApiKeyRouter } from './routes/api-key-routes.js';
+import { getRedisClient } from './utils/redis-client.js';
 
 dotenv.config();
 
@@ -650,7 +651,49 @@ class HTTPMCPServer {
           streaming: acceptHeader.includes('text/event-stream'),
         });
 
-        // 1. Create tracking record (pending)
+        // 1. Check credits BEFORE execution (for API key users)
+        if (req.authType === 'apikey' && req.user?.userId) {
+          try {
+            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
+
+            if (creditsRequired > 0) {
+              const balance = await this.creditService.checkBalance(req.user.userId, creditsRequired);
+
+              if (!balance.hasCredits) {
+                logger.warn('[HTTP API] Insufficient credits, blocking request', {
+                  userId: req.user.userId,
+                  tool: toolName,
+                  creditsRequired,
+                  currentBalance: balance.currentBalance,
+                });
+
+                return res.status(402).json({
+                  error: 'Insufficient credits',
+                  code: 'INSUFFICIENT_CREDITS',
+                  currentBalance: balance.currentBalance,
+                  creditsRequired,
+                  message: 'Your credit balance is too low to perform this operation. Please purchase more credits.',
+                });
+              }
+
+              logger.debug('[HTTP API] Credit check passed', {
+                userId: req.user.userId,
+                tool: toolName,
+                creditsRequired,
+                currentBalance: balance.currentBalance,
+              });
+            }
+          } catch (creditError: any) {
+            logger.error('[HTTP API] Error checking credits', {
+              userId: req.user.userId,
+              tool: toolName,
+              error: creditError.message,
+            });
+            // On error, allow the request to proceed (fail open)
+          }
+        }
+
+        // 2. Create tracking record (pending)
         await this.costTracker.createTrackingRecord({
           requestId,
           toolName,
@@ -660,7 +703,7 @@ class HTTPMCPServer {
           queryParams: args,
         });
 
-        // 2. Estimate cost BEFORE execution
+        // 3. Estimate cost BEFORE execution
         const estimate = await this.costTracker.estimateCost({
           toolName,
           queryLength: (args.query || '').length,
@@ -679,7 +722,7 @@ class HTTPMCPServer {
           return this.handleStreamingToolCall(req, res, toolName, args);
         }
 
-        // 3. Execute in request context
+        // 4. Execute in request context
         const result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
@@ -743,7 +786,7 @@ class HTTPMCPServer {
           }
         );
 
-        // 4. Complete tracking and get breakdown
+        // 5. Complete tracking and get breakdown
         const executionTime = Date.now() - startTime;
         const breakdown = await this.costTracker.completeTrackingRecord({
           requestId,
@@ -757,7 +800,47 @@ class HTTPMCPServer {
           totalCostUsd: breakdown.totals.cost_usd.toFixed(6),
         });
 
-        // 5. Return result with cost tracking info
+        // 6. Deduct credits after successful execution (for API key users)
+        if (req.authType === 'apikey' && req.user?.userId) {
+          try {
+            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
+
+            if (creditsRequired > 0) {
+              const deduction = await this.creditService.deductCredits(
+                req.user.userId,
+                creditsRequired,
+                toolName,
+                requestId,
+                `Tool execution: ${toolName}`
+              );
+
+              if (deduction.success) {
+                logger.info('[HTTP API] Credits deducted', {
+                  userId: req.user.userId,
+                  tool: toolName,
+                  creditsDeducted: creditsRequired,
+                  newBalance: deduction.newBalance,
+                });
+              } else {
+                // This should not happen since we checked balance before execution
+                logger.error('[HTTP API] Failed to deduct credits after execution', {
+                  userId: req.user.userId,
+                  tool: toolName,
+                  creditsRequired,
+                  message: 'Balance was sufficient before execution but deduction failed',
+                });
+              }
+            }
+          } catch (creditError: any) {
+            logger.error('[HTTP API] Error deducting credits', {
+              userId: req.user.userId,
+              tool: toolName,
+              error: creditError.message,
+            });
+          }
+        }
+
+        // 7. Return result with cost tracking info
         res.json({
           success: true,
           tool: toolName,
@@ -893,6 +976,16 @@ class HTTPMCPServer {
       await this.db.connect();
       await this.embeddingService.initialize();
       await this.documentParser.initialize();
+
+      // Initialize Redis for AI-powered legislation classification (optional)
+      const redis = await getRedisClient();
+      if (redis) {
+        this.legislationTools.setRedisClient(redis);
+        logger.info('Redis connected - AI legislation classification with caching enabled');
+      } else {
+        logger.info('Redis not available - AI legislation classification will work without caching');
+      }
+
       logger.info('HTTP MCP Server services initialized');
     } catch (error) {
       logger.error('Failed to initialize server:', error);
