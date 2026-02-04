@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { Database } from '../database/database.js';
 import { UserService, User } from '../services/user-service.js';
+import { ApiKeyService } from '../services/api-key-service.js';
 import { logger } from '../utils/logger.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
@@ -27,12 +28,14 @@ export interface AuthenticatedRequest extends Request {
 }
 
 let userService: UserService;
+let apiKeyService: ApiKeyService;
 
 /**
  * Initialize dual auth middleware with database instance
  */
-export function initializeDualAuth(db: Database) {
+export function initializeDualAuth(db: Database, apiKeySvc: ApiKeyService) {
   userService = new UserService(db);
+  apiKeyService = apiKeySvc;
   logger.info('Dual auth middleware initialized');
 }
 
@@ -87,25 +90,69 @@ async function authenticateWithJWT(req: AuthenticatedRequest, token: string): Pr
 
 /**
  * Authenticate with API key
+ * Supports both Phase 2 billing API keys (from database) and legacy env-based keys
  */
-function authenticateWithAPIKey(req: AuthenticatedRequest, apiKey: string): void {
-  // Get current API keys from environment
+async function authenticateWithAPIKey(req: AuthenticatedRequest, apiKey: string): Promise<void> {
+  // First try to validate as Phase 2 billing API key from database
+  if (apiKeyService) {
+    try {
+      const keyInfo = await apiKeyService.validateApiKey(apiKey);
+
+      if (keyInfo) {
+        // Phase 2 API key found - load user from database
+        if (!userService) {
+          throw new Error('UserService not initialized');
+        }
+
+        const user = await userService.findById(keyInfo.userId);
+
+        if (!user) {
+          logger.error('User not found for valid API key', {
+            userId: keyInfo.userId,
+            keyId: keyInfo.id,
+          });
+          throw new Error('User not found');
+        }
+
+        // Attach user and API key to request
+        req.user = user;
+        req.clientKey = apiKey;
+        req.authType = 'apikey';
+
+        logger.debug('Phase 2 API key authentication successful', {
+          userId: user.id,
+          email: user.email,
+          keyId: keyInfo.id,
+          keyName: keyInfo.name,
+        });
+
+        return;
+      }
+    } catch (error: any) {
+      logger.error('Error validating Phase 2 API key', {
+        error: error.message,
+        keyPrefix: apiKey.substring(0, 12) + '...',
+      });
+      // Continue to check legacy keys
+    }
+  }
+
+  // Fall back to legacy env-based API keys
   const validKeys = getSecondaryLayerKeys();
-  
-  // Check if API key is valid
+
   if (!validKeys.includes(apiKey)) {
-    logger.warn('Invalid API key attempt', {
+    logger.warn('Invalid API key attempt (not found in Phase 2 or legacy keys)', {
       keyPrefix: apiKey.substring(0, 8) + '...',
       validKeysCount: validKeys.length,
     });
     throw new Error('Invalid API key');
   }
 
-  // Attach API key to request
+  // Legacy key validated - attach to request but no user
   req.clientKey = apiKey;
   req.authType = 'apikey';
 
-  logger.debug('API key authentication successful', {
+  logger.debug('Legacy API key authentication successful', {
     keyPrefix: apiKey.substring(0, 8) + '...',
   });
 }
@@ -210,11 +257,11 @@ export async function requireJWT(
  * Require API key authentication only (no JWTs)
  * Use this for MCP tool endpoints that require client API keys
  */
-export function requireAPIKey(
+export async function requireAPIKey(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
 
@@ -238,7 +285,7 @@ export function requireAPIKey(
     }
 
     // Authenticate with API key
-    authenticateWithAPIKey(req, token);
+    await authenticateWithAPIKey(req, token);
     next();
   } catch (error: any) {
     logger.warn('API key authentication failed', {
