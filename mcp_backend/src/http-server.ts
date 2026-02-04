@@ -652,7 +652,7 @@ class HTTPMCPServer {
         });
 
         // 1. Check credits BEFORE execution (for API key users)
-        if (req.authType === 'apikey' && req.user?.userId) {
+        if (req.authType === 'apikey' && req.user?.id) {
           try {
             const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
 
@@ -801,7 +801,7 @@ class HTTPMCPServer {
         });
 
         // 6. Deduct credits after successful execution (for API key users)
-        if (req.authType === 'apikey' && req.user?.userId) {
+        if (req.authType === 'apikey' && req.user?.id) {
           try {
             const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
 
