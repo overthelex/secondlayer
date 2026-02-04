@@ -194,7 +194,7 @@ export function createAdminRoutes(db: Database): express.Router {
       `);
 
       res.json({
-        data: result.rows.map(row => ({
+        data: result.rows.map((row: any) => ({
           date: row.date,
           revenue_usd: parseFloat(row.revenue_usd),
           cost_usd: parseFloat(row.cost_usd),
@@ -225,7 +225,7 @@ export function createAdminRoutes(db: Database): express.Router {
       `);
 
       res.json({
-        tiers: result.rows.map(row => ({
+        tiers: result.rows.map((row: any) => ({
           tier: row.pricing_tier,
           user_count: parseInt(row.user_count),
           total_balance_usd: parseFloat(row.total_balance),
@@ -318,7 +318,7 @@ export function createAdminRoutes(db: Database): express.Router {
       `, params);
 
       res.json({
-        users: result.rows.map(row => ({
+        users: result.rows.map((row: any) => ({
           id: row.id,
           email: row.email,
           created_at: row.created_at,
@@ -731,7 +731,7 @@ export function createAdminRoutes(db: Database): express.Router {
       `);
 
       res.json({
-        cohorts: result.rows.map(row => ({
+        cohorts: result.rows.map((row: any) => ({
           month: row.cohort_month,
           users: parseInt(row.users),
           active_users: parseInt(row.active_users),
@@ -767,7 +767,7 @@ export function createAdminRoutes(db: Database): express.Router {
       `);
 
       res.json({
-        usage: result.rows.map(row => ({
+        usage: result.rows.map((row: any) => ({
           tool_name: row.tool_name,
           request_count: parseInt(row.request_count),
           total_revenue_usd: parseFloat(row.total_revenue),
