@@ -36,9 +36,25 @@ REPO_EXISTS=$(ssh ${MAIL_SERVER} "[ -d ${REPO_PATH} ] && echo 'yes' || echo 'no'
 if [ "$REPO_EXISTS" = "yes" ]; then
     echo -e "${GREEN}✓ Repository found at ${REPO_PATH}${NC}"
 
-    # Pull latest changes
-    echo "Pulling latest changes..."
-    ssh ${MAIL_SERVER} "cd ${REPO_PATH} && git pull"
+    # Copy modified files from local machine
+    echo "Copying modified files from local machine..."
+
+    # Get script directory and go to repo root
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$SCRIPT_DIR/.."
+
+    # Copy mcp_backend source files
+    rsync -avz --exclude 'node_modules' --exclude 'dist' \
+        mcp_backend/src/ \
+        ${MAIL_SERVER}:${REPO_PATH}/mcp_backend/src/
+
+    # Copy Dockerfile
+    scp Dockerfile.mono-backend ${MAIL_SERVER}:${REPO_PATH}/
+
+    # Copy deployment configs
+    scp deployment/docker-compose.stage.yml ${MAIL_SERVER}:${REPO_PATH}/deployment/
+
+    echo -e "${GREEN}✓ Files copied${NC}"
 else
     echo -e "${YELLOW}⚠ Repository not found at ${REPO_PATH}${NC}"
     echo "Please specify the correct path or clone the repository first:"
