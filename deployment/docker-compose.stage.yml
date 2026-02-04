@@ -1,6 +1,3 @@
-# Staging environment for SecondLayer
-# Deployed on mail.legal.org.ua server
-
 services:
   postgres-stage:
     image: postgres:15-alpine
@@ -9,56 +6,57 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      TZ: Europe/Kiev
     ports:
-      - "5434:5432"
+    - 5434:5432
     volumes:
-      - postgres_stage_data:/var/lib/postgresql/data
+    - postgres_stage_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_stage}"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_stage}
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     restart: unless-stopped
     networks:
-      - secondlayer-stage-network
-
+    - secondlayer-stage-network
   qdrant-stage:
     image: qdrant/qdrant:latest
     container_name: secondlayer-qdrant-stage
     ports:
-      - "6337:6333"
-      - "6338:6334"
+    - 6337:6333
+    - 6338:6334
     volumes:
-      - qdrant_stage_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
+    - qdrant_stage_data:/qdrant/storage
     restart: unless-stopped
     networks:
-      - secondlayer-stage-network
-
+    - secondlayer-stage-network
+    environment:
+      TZ: Europe/Kiev
   redis-stage:
     image: redis:7-alpine
     container_name: secondlayer-redis-stage
     ports:
-      - "6381:6379"
+    - 6381:6379
     volumes:
-      - redis_stage_data:/data
+    - redis_stage_data:/data
     command: redis-server --appendonly yes --maxmemory 1536mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 5s
     restart: unless-stopped
     networks:
-      - secondlayer-stage-network
-
+    - secondlayer-stage-network
+    environment:
+      TZ: Europe/Kiev
   migrate-stage:
     image: secondlayer-app:latest
     container_name: secondlayer-migrate-stage
@@ -76,16 +74,21 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: staging
+      TZ: Europe/Kiev
     working_dir: /app/mcp_backend
-    command: ["node", "dist/migrations/migrate.js"]
-    restart: "no"
+    command:
+    - node
+    - dist/migrations/migrate.js
+    restart: 'no'
     networks:
-      - secondlayer-stage-network
-
+    - secondlayer-stage-network
   app-stage:
     image: secondlayer-app:latest
     container_name: secondlayer-app-stage
-    command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
+    command:
+    - node
+    - --max-old-space-size=4096
+    - dist/http-server.js
     environment:
       NODE_ENV: staging
       HTTP_PORT: ${HTTP_PORT:-3000}
@@ -122,8 +125,9 @@ services:
       FRONTEND_URL: https://stage.legal.org.ua
       ALLOWED_ORIGINS: https://legal.org.ua
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: Europe/Kiev
     ports:
-      - "3004:3000"
+    - 3004:3000
     depends_on:
       postgres-stage:
         condition: service_healthy
@@ -134,17 +138,22 @@ services:
       migrate-stage:
         condition: service_completed_successfully
     volumes:
-      - ../mcp_backend/logs:/app/logs
-      - app_stage_data:/app/data
+    - ../mcp_backend/logs:/app/logs
+    - app_stage_data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
+      test:
+      - CMD
+      - wget
+      - --spider
+      - -q
+      - http://127.0.0.1:3000/health
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     restart: unless-stopped
     networks:
-      - secondlayer-stage-network
+    - secondlayer-stage-network
     deploy:
       resources:
         limits:
@@ -153,27 +162,30 @@ services:
         reservations:
           cpus: '0.75'
           memory: 1.5G
-
   lexwebapp-stage:
     image: lexwebapp-lexwebapp:latest
     container_name: lexwebapp-stage
     ports:
-      - "8093:80"
+    - 8093:80
     environment:
-      - NODE_ENV=staging
-      - VITE_API_URL=https://stage.legal.org.ua/api
+    - NODE_ENV=staging
+    - VITE_API_URL=https://stage.legal.org.ua/api
+    - TZ=Europe/Kiev
     networks:
-      - secondlayer-stage-network
+    - secondlayer-stage-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "curl -f -s http://localhost:80/ > /dev/null"]
+      test:
+      - CMD
+      - sh
+      - -c
+      - curl -f -s http://localhost:80/ > /dev/null
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 5s
     labels:
-      - "com.docker.compose.project=lexwebapp-stage"
-
+    - com.docker.compose.project=lexwebapp-stage
 volumes:
   postgres_stage_data:
     driver: local
@@ -183,7 +195,6 @@ volumes:
     driver: local
   app_stage_data:
     driver: local
-
 networks:
   secondlayer-stage-network:
     driver: bridge
