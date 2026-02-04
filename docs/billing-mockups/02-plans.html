@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тарифні плани - SecondLayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold text-gray-900">SecondLayer</h1>
+                    <div class="ml-10 flex space-x-8">
+                        <a href="01-dashboard.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Огляд</a>
+                        <a href="02-plans.html" class="border-b-2 border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 text-sm font-medium">Тарифи</a>
+                        <a href="03-usage.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Статистика</a>
+                        <a href="04-payment.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Платежі</a>
+                        <a href="05-limits.html" class="border-b-2 border-transparent text-gray-500 hover:text-gray-700 inline-flex items-center px-1 pt-1 text-sm font-medium">Ліміти</a>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-gray-600 mr-4">ivan.petrenko@example.com</span>
+                    <a href="index.html" class="text-sm text-blue-600 hover:text-blue-700">Назад до списку</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Page Header -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-900 mb-4">Оберіть тариф для вашої практики</h1>
+            <p class="text-xl text-gray-600">Гнучкі тарифи для юристів, адвокатів та юридичних компаній</p>
+
+            <!-- Billing Period Toggle -->
+            <div class="mt-6 inline-flex items-center bg-white rounded-lg border border-gray-200 p-1">
+                <button class="px-6 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 transition">Місячна оплата</button>
+                <button class="px-6 py-2 rounded-md text-sm font-medium bg-gray-900 text-white transition">
+                    Річна оплата
+                    <span class="ml-2 bg-green-500 text-white px-2 py-0.5 rounded-full text-xs font-bold">-20%</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Pricing Cards -->
+        <div class="grid md:grid-cols-4 gap-6 mb-12">
+            <!-- Free Tier -->
+            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Безкоштовний</h3>
+                <div class="text-3xl font-bold text-gray-900 mb-1">₴0</div>
+                <div class="text-sm text-gray-500 mb-6">назавжди</div>
+
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">100 запитів на місяць</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Пошук судових рішень</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✗</span>
+                        <span class="text-gray-400">Семантичний пошук</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✗</span>
+                        <span class="text-gray-400">Аналіз практики</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✗</span>
+                        <span class="text-gray-400">API доступ</span>
+                    </li>
+                </ul>
+
+                <button class="w-full py-3 px-4 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 transition">
+                    Поточний тариф
+                </button>
+            </div>
+
+            <!-- Professional -->
+            <div class="bg-white rounded-lg border-2 border-blue-600 p-6 relative">
+                <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-3 py-1 text-xs font-bold rounded">
+                    ПОТОЧНИЙ
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Professional</h3>
+                <div class="text-3xl font-bold text-gray-900 mb-1">₴999</div>
+                <div class="text-sm text-gray-500 mb-6">на місяць</div>
+
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">1,000 запитів на місяць</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Повний пошук + семантика</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Перевірка цитувань</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Аналіз судової практики</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">HTTP API + Email підтримка</span>
+                    </li>
+                </ul>
+
+                <button disabled class="w-full py-3 px-4 bg-gray-100 rounded-lg font-semibold text-gray-400 cursor-not-allowed">
+                    Активний тариф
+                </button>
+            </div>
+
+            <!-- Business -->
+            <div class="bg-white rounded-lg border-2 border-gray-200 p-6">
+                <h3 class="text-xl font-bold text-gray-900 mb-2">Business</h3>
+                <div class="text-3xl font-bold text-gray-900 mb-1">₴2,999</div>
+                <div class="text-sm text-gray-500 mb-6">на місяць</div>
+
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">5,000 запитів на місяць</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Всі функції Professional</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Захист від галюцинацій</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">SSE стрімінг + Команди</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-900 mr-2">✓</span>
+                        <span class="text-gray-700">Пріоритетна підтримка</span>
+                    </li>
+                </ul>
+
+                <button class="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">
+                    Оновити тариф
+                </button>
+                <div class="text-center mt-2 text-xs text-gray-500">Пропорційна оплата за період</div>
+            </div>
+
+            <!-- Enterprise -->
+            <div class="bg-gray-900 rounded-lg p-6 text-white border-2 border-gray-900">
+                <h3 class="text-xl font-bold mb-2">Enterprise</h3>
+                <div class="text-3xl font-bold mb-1">Індивідуально</div>
+                <div class="text-sm text-gray-400 mb-6">за запитом</div>
+
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✓</span>
+                        <span>Необмежені запити</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✓</span>
+                        <span>Виділена інфраструктура</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✓</span>
+                        <span>SLA гарантії</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✓</span>
+                        <span>On-premise розгортання</span>
+                    </li>
+                    <li class="flex items-start text-sm">
+                        <span class="text-gray-300 mr-2">✓</span>
+                        <span>Персональний менеджер</span>
+                    </li>
+                </ul>
+
+                <button class="w-full py-3 px-4 bg-white text-gray-900 rounded-lg font-semibold hover:bg-gray-100 transition">
+                    Зв'язатися з нами
+                </button>
+            </div>
+        </div>
+
+        <!-- Feature Comparison Table -->
+        <div class="bg-white rounded-lg border border-gray-200 overflow-hidden mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-900">Детальне порівняння функцій</h2>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Функція</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Free</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-blue-50">Professional</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Business</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Enterprise</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Запити на місяць</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">100</td>
+                            <td class="px-6 py-4 text-sm text-center font-semibold text-gray-900 bg-blue-50">1,000</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">5,000</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">Необмежено</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Пошук судових рішень</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Семантичний пошук</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Аналіз судової практики</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Перевірка цитувань</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Захист від галюцинацій AI</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">HTTP API доступ</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">SSE стрімінг</td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center bg-blue-50"><span class="text-gray-300">✗</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                            <td class="px-6 py-4 text-center"><span class="text-gray-900">✓</span></td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Користувачів в команді</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">1</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700 bg-blue-50">1</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">До 10</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">Необмежено</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium text-gray-900">Підтримка</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">Спільнота</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700 bg-blue-50">Email</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">Email + Чат</td>
+                            <td class="px-6 py-4 text-sm text-center text-gray-700">24/7 + Менеджер</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="bg-white rounded-lg border border-gray-200 p-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Часті питання</h2>
+
+            <div class="space-y-6">
+                <div>
+                    <h3 class="font-semibold text-gray-900 mb-2">Чи можу я змінити тариф у будь-який час?</h3>
+                    <p class="text-gray-600">Так! Ви можете оновити тариф будь-коли. При оновленні ви платите пропорційну суму за залишок поточного періоду. При зниженні тарифу зміни вступлять в силу з наступного платіжного циклу.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-gray-900 mb-2">Що станеться, якщо я перевищу ліміт запитів?</h3>
+                    <p class="text-gray-600">Коли ви досягнете ліміту, система запропонує оновити тариф або придбати додаткові запити. Ви також можете налаштувати автоматичне оновлення тарифу при досягненні ліміту.</p>
+                </div>
+
+                <div>
+                    <h3 class="font-semibold text-gray-900 mb-2">Чи надаєте ви знижки для освітніх установ?</h3>
+                    <p class="text-gray-600">Так, ми пропонуємо спеціальні тарифи для університетів та науково-дослідних інституцій. Зв'яжіться з нами для отримання деталей.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

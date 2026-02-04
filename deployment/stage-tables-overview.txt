@@ -1,0 +1,737 @@
+[0;34m========================================[0m
+[0;34mStage Database Tables Overview[0m
+[0;34m========================================[0m
+
+[0;36mDatabase: secondlayer_stage[0m
+[0;36mContainer: secondlayer-postgres-stage[0m
+
+[1;33mFetching table list...[0m
+[0;32mFound 26 tables[0m
+
+[0;34m========================================[0m
+[0;34m[1/26] Table: [0;36mapi_keys[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 2[0m
+[1;33mColumns:[0m
+       column_name       |        data_type         | nullable 
+-------------------------+--------------------------+----------
+ id                      | uuid                     | NOT NULL
+ user_id                 | uuid                     | NOT NULL
+ key                     | character varying        | NOT NULL
+ name                    | character varying        | NOT NULL
+ is_active               | boolean                  | NOT NULL
+ last_used_at            | timestamp with time zone | NULL
+ usage_count             | integer                  | NOT NULL
+ rate_limit_per_minute   | integer                  | NOT NULL
+ rate_limit_per_day      | integer                  | NOT NULL
+ requests_today          | integer                  | NOT NULL
+ requests_today_reset_at | date                     | NOT NULL
+ expires_at              | timestamp with time zone | NULL
+ created_at              | timestamp with time zone | NOT NULL
+ updated_at              | timestamp with time zone | NOT NULL
+ description             | text                     | NULL
+(15 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |               user_id                |                key                |     name     | is_active |         last_used_at          | usage_count | rate_limit_per_minute | rate_limit_per_day | requests_today | requests_today_reset_at | expires_at |          created_at           |          updated_at           |                 description                  
+--------------------------------------+--------------------------------------+-----------------------------------+--------------+-----------+-------------------------------+-------------+-----------------------+--------------------+----------------+-------------------------+------------+-------------------------------+-------------------------------+----------------------------------------------
+ cea67b90-f4e0-4829-bdf6-6d8f961d6677 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | test-key-123                      | Test API Key | t         | 2026-02-04 14:28:59.55822+00  |          89 |                  1000 |             100000 |             89 | 2026-02-04              |            | 2026-02-04 13:18:06.089697+00 | 2026-02-04 14:28:59.55822+00  | Test API key for development and debugging
+ b70f97be-b12b-4221-97f8-2d12afeb7fa3 | 4717e330-4f11-4de0-bf22-fb31c74108ac | REDACTED_SL_KEY_STAGE | MCP Test Key | t         | 2026-02-04 15:09:13.962571+00 |          38 |                   120 |              50000 |             38 | 2026-02-04              |            | 2026-02-04 14:30:14.842004+00 | 2026-02-04 15:09:13.962571+00 | Test API key for MCP tools with $100 balance
+(2 rows)
+
+
+[0;34m========================================[0m
+[0;34m[2/26] Table: [0;36mbilling_transactions[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 7[0m
+[1;33mColumns:[0m
+    column_name     |          data_type          | nullable 
+--------------------+-----------------------------+----------
+ id                 | uuid                        | NOT NULL
+ user_id            | uuid                        | NOT NULL
+ type               | character varying           | NOT NULL
+ amount_usd         | numeric                     | NOT NULL
+ amount_uah         | numeric                     | NOT NULL
+ balance_before_usd | numeric                     | NOT NULL
+ balance_after_usd  | numeric                     | NOT NULL
+ request_id         | character varying           | NULL
+ payment_provider   | character varying           | NULL
+ payment_id         | character varying           | NULL
+ description        | text                        | NULL
+ metadata           | jsonb                       | NULL
+ created_at         | timestamp without time zone | NOT NULL
+(13 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |               user_id                |  type  | amount_usd | amount_uah | balance_before_usd | balance_after_usd |      request_id      | payment_provider | payment_id |                                                              description                                                              |                                                    metadata                                                    |         created_at         
+--------------------------------------+--------------------------------------+--------+------------+------------+--------------------+-------------------+----------------------+------------------+------------+---------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------+----------------------------
+ 93eaa9ea-8890-45b4-87a5-ed4bc0c82691 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | charge |       0.02 |       0.00 |               0.00 |             -0.02 | sse-28-1770215066439 |                  |            | find_similar_fact_pattern_cases: {"procedure_code":"cac","facts_text":"позов до територіального центру комплектування та соціальної п | {"pricing_tier": "startup", "base_cost_usd": 0.012205, "markup_amount_usd": 0.003661, "markup_percentage": 30} | 2026-02-04 14:24:33.925798
+ d762c80a-edeb-403e-96ea-b4e00cac0052 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | charge |       0.02 |       0.00 |              -0.02 |             -0.04 | sse-30-1770215068134 |                  |            | search_legal_precedents: "територiальний центр комплектування" "Єдиний державний реєстр призовникiв, вiйськовозобов'язаних та         | {"pricing_tier": "startup", "base_cost_usd": 0.011845, "markup_amount_usd": 0.003553, "markup_percentage": 30} | 2026-02-04 14:24:36.848204
+ 809bef41-4d89-44c3-a5f0-021e3ab30190 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | charge |       0.01 |       0.00 |              -0.04 |             -0.05 | sse-26-1770215066294 |                  |            | search_supreme_court_practice: бездiяльнiсть територiального центру комплектування та соцiальної пiдтримки щодо невнесення або несв   | {"pricing_tier": "startup", "base_cost_usd": 0.00714, "markup_amount_usd": 0.002142, "markup_percentage": 30}  | 2026-02-04 14:24:37.705503
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[3/26] Table: [0;36mcitation_links[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+  column_name  |          data_type          | nullable 
+---------------+-----------------------------+----------
+ id            | uuid                        | NOT NULL
+ from_case_id  | uuid                        | NULL
+ to_case_id    | uuid                        | NULL
+ citation_type | character varying           | NULL
+ context       | text                        | NULL
+ section_type  | character varying           | NULL
+ confidence    | double precision            | NULL
+ created_at    | timestamp without time zone | NULL
+(8 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[4/26] Table: [0;36mcost_tracking[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 73[0m
+[1;33mColumns:[0m
+        column_name        |          data_type          | nullable 
+---------------------------+-----------------------------+----------
+ id                        | uuid                        | NOT NULL
+ request_id                | character varying           | NOT NULL
+ tool_name                 | character varying           | NOT NULL
+ client_key                | character varying           | NULL
+ user_query                | text                        | NULL
+ query_params              | jsonb                       | NULL
+ openai_total_tokens       | integer                     | NULL
+ openai_prompt_tokens      | integer                     | NULL
+ openai_completion_tokens  | integer                     | NULL
+ openai_cost_usd           | numeric                     | NULL
+ openai_calls              | jsonb                       | NULL
+ zakononline_api_calls     | integer                     | NULL
+ zakononline_monthly_total | integer                     | NULL
+ zakononline_calls         | jsonb                       | NULL
+ total_cost_usd            | numeric                     | NULL
+ execution_time_ms         | integer                     | NULL
+ status                    | character varying           | NULL
+ error_message             | text                        | NULL
+ created_at                | timestamp without time zone | NULL
+ completed_at              | timestamp without time zone | NULL
+ secondlayer_api_calls     | integer                     | NULL
+ secondlayer_cost_usd      | numeric                     | NULL
+ secondlayer_monthly_total | integer                     | NULL
+ secondlayer_calls         | jsonb                       | NULL
+ zakononline_cost_usd      | numeric                     | NULL
+ user_id                   | uuid                        | NULL
+ base_cost_usd             | numeric                     | NULL
+ markup_percentage         | numeric                     | NULL
+ markup_amount_usd         | numeric                     | NULL
+ client_tier               | character varying           | NULL
+(30 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |      request_id      |           tool_name           | client_key | user_query |                         query_params                          | openai_total_tokens | openai_prompt_tokens | openai_completion_tokens | openai_cost_usd | openai_calls | zakononline_api_calls | zakononline_monthly_total | zakononline_calls | total_cost_usd | execution_time_ms |  status   | error_message |         created_at         |        completed_at        | secondlayer_api_calls | secondlayer_cost_usd | secondlayer_monthly_total | secondlayer_calls | zakononline_cost_usd | user_id | base_cost_usd | markup_percentage | markup_amount_usd | client_tier 
+--------------------------------------+----------------------+-------------------------------+------------+------------+---------------------------------------------------------------+---------------------+----------------------+--------------------------+-----------------+--------------+-----------------------+---------------------------+-------------------+----------------+-------------------+-----------+---------------+----------------------------+----------------------------+-----------------------+----------------------+---------------------------+-------------------+----------------------+---------+---------------+-------------------+-------------------+-------------
+ 5e691d2b-b712-4e9a-83b5-47a2fb5976cd | sse-22-1770074590305 | search_supreme_court_practice |            | 3503313834 | {"limit": 15, "query": "3503313834", "procedure_code": "cac"} |                   0 |                    0 |                        0 |        0.000000 | []           |                     0 |                         7 | []                |       0.000000 |                22 | completed |               | 2026-02-02 23:23:10.305986 | 2026-02-02 23:23:10.328105 |                     0 |             0.000000 |                         0 | []                |             0.000000 |         |      0.000000 |              0.00 |          0.000000 | 
+ 22f41b9d-1c32-4b99-af26-0324c49f1647 | sse-24-1770074590926 | search_legal_precedents       |            | 3503313834 | {"limit": 25, "query": "3503313834", "domain": "all"}         |                   0 |                    0 |                        0 |        0.000000 | []           |                     0 |                         7 | []                |       0.000000 |                 3 | completed |               | 2026-02-02 23:23:10.92705  | 2026-02-02 23:23:10.930526 |                     0 |             0.000000 |                         0 | []                |             0.000000 |         |      0.000000 |              0.00 |          0.000000 | 
+ 038e5a50-ade9-4395-98cb-7661ed3b35e5 | sse-26-1770074593936 | search_legal_precedents       |            | 3503313834 | {"limit": 15, "query": "3503313834", "domain": "echr"}        |                   0 |                    0 |                        0 |        0.000000 | []           |                     0 |                         7 | []                |       0.000000 |                 3 | completed |               | 2026-02-02 23:23:13.937754 | 2026-02-02 23:23:13.940822 |                     0 |             0.000000 |                         0 | []                |             0.000000 |         |      0.000000 |              0.00 |          0.000000 | 
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[5/26] Table: [0;36mcredit_transactions[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 28[0m
+[1;33mColumns:[0m
+   column_name    |        data_type         | nullable 
+------------------+--------------------------+----------
+ id               | uuid                     | NOT NULL
+ user_id          | uuid                     | NOT NULL
+ transaction_type | character varying        | NOT NULL
+ amount           | numeric                  | NOT NULL
+ balance_before   | numeric                  | NOT NULL
+ balance_after    | numeric                  | NOT NULL
+ source           | character varying        | NULL
+ source_id        | character varying        | NULL
+ description      | text                     | NULL
+ metadata         | jsonb                    | NULL
+ created_at       | timestamp with time zone | NOT NULL
+(11 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |               user_id                | transaction_type | amount | balance_before | balance_after |             source              |      source_id       |                   description                   | metadata |          created_at           
+--------------------------------------+--------------------------------------+------------------+--------+----------------+---------------+---------------------------------+----------------------+-------------------------------------------------+----------+-------------------------------
+ 4f945b2e-c019-4f7e-817e-9116fcab326e | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | deduction        |  -1.00 |         100.00 |         99.00 | find_similar_fact_pattern_cases | sse-30-1770212198255 | Tool execution: find_similar_fact_pattern_cases | {}       | 2026-02-04 13:36:38.28479+00
+ a9c1d2a6-c892-4b96-bfa8-ef16107e6ed6 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | deduction        |  -1.00 |          99.00 |         98.00 | search_supreme_court_practice   | sse-31-1770212198249 | Tool execution: search_supreme_court_practice   | {}       | 2026-02-04 13:36:38.285866+00
+ 5417a4dd-9985-4d0f-9ff9-9e01ad6f4180 | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | deduction        |  -1.00 |          98.00 |         97.00 | search_legal_precedents         | sse-33-1770212198375 | Tool execution: search_legal_precedents         | {}       | 2026-02-04 13:36:46.927618+00
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[6/26] Table: [0;36mdocument_sections[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+ column_name  |          data_type          | nullable 
+--------------+-----------------------------+----------
+ id           | uuid                        | NOT NULL
+ document_id  | uuid                        | NULL
+ section_type | character varying           | NULL
+ text         | text                        | NULL
+ start_index  | integer                     | NULL
+ end_index    | integer                     | NULL
+ confidence   | double precision            | NULL
+ created_at   | timestamp without time zone | NULL
+(8 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[7/26] Table: [0;36mdocuments[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 100[0m
+[1;33mColumns:[0m
+   column_name    |          data_type          | nullable 
+------------------+-----------------------------+----------
+ id               | uuid                        | NOT NULL
+ zakononline_id   | character varying           | NULL
+ type             | character varying           | NULL
+ title            | text                        | NULL
+ date             | date                        | NULL
+ full_text        | text                        | NULL
+ metadata         | jsonb                       | NULL
+ created_at       | timestamp without time zone | NULL
+ updated_at       | timestamp without time zone | NULL
+ full_text_html   | text                        | NULL
+ case_number      | text                        | NULL
+ court            | text                        | NULL
+ chamber          | text                        | NULL
+ dispute_category | text                        | NULL
+ outcome          | text                        | NULL
+ deviation_flag   | boolean                     | NULL
+(16 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  | zakononline_id |      type      |                                           title                                            |    date    | full_text |                                                                                                                                                                                                                                                                                                                                                                                        metadata                                                                                                                                                                                                                                                                                                                                                                                         |         created_at         |         updated_at         | full_text_html |       case_number        | court | chamber | dispute_category |  outcome  | deviation_flag 
+--------------------------------------+----------------+----------------+--------------------------------------------------------------------------------------------+------------+-----------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+----------------------------+----------------+--------------------------+-------+---------+------------------+-----------+----------------
+ afe277dd-306b-4603-8846-7f8d9afc5ad6 | 132744823      | court_decision | Постанова від 09.12.2025 по справі № 911/1245/21 (911/591/23) Касаційний господарський суд | 2025-12-09 |           | {"_raw": {"id": 129076174, "url": "https://zakononline.ua/court-decisions/show/132744823", "doc_id": 132744823, "snippet": " ... такі обставини, як: відсутність сталої <b class=\"snippet\">судової практики</b> в питаннях, що визначаються як ... наслідками судових рішень, не зазначено <b class=\"snippet\">судової практики,</b> яка б свідчила про  ... власності скаржника відповідає критеріям \"трискладового <b class=\"snippet\">тесту\"</b> ЄСПЛ: є законним, переслідує легітимну ... "}, "judge": "Погребняк В.Я.", "cause_num": "911/1245/21 (911/591/23)", "court_code": "9911", "resolution": "Про витребування майна, визнання недійсним договору та скасування рішень державного реєстратора", "justice_kind": 3, "category_code": 1021}                           | 2026-02-04 13:41:24.290392 | 2026-02-04 13:41:24.290392 |                | 911/1245/21 (911/591/23) | 9911  | КАС     | 1021             | cancelled | 
+ ee1362e5-202f-42ef-a949-354df5e1c556 | 121174235      | court_decision | Постанова від 20.08.2024 по справі № 910/13105/21 Касаційний господарський суд             | 2024-08-20 |           | {"_raw": {"id": 117512000, "url": "https://zakononline.ua/court-decisions/show/121174235", "doc_id": 121174235, "snippet": " ...  цьому, визначальним критерієм оцінки є <b class=\"snippet\">тест</b> на виконання заявленим кольором основної ...  цьому, визначальним критерієм оцінки є <b class=\"snippet\">тест</b> на виконання заявленим кольором основної ...  доводів, що свідчать про неусталеність <b class=\"snippet\">судової практики</b> при вирішенні питання щодо застосування ... "}, "judge": "Малашенкова Т.М.", "cause_num": "910/13105/21", "court_code": "9911", "resolution": "Про визнання незаконними і скасування рішень та зобов`язання вчинити дії", "justice_kind": 3, "category_code": 1021}                                                            | 2026-02-04 13:41:24.290392 | 2026-02-04 13:41:24.290392 |                | 910/13105/21             | 9911  | КАС     | 1021             | cancelled | 
+ 12f3e851-27d2-46ff-8786-b6d527728aff | 104178190      | court_decision | Постанова від 29.04.2022 по справі № 201/6658/18 Касаційний цивільний суд                  | 2022-04-29 |           | {"_raw": {"id": 101032211, "url": "https://zakononline.ua/court-decisions/show/104178190", "doc_id": 104178190, "snippet": " ...  між батьком та дитиною, оскільки <b class=\"snippet\">ДНК-тест</b> є єдиним науковим методом точного  ... суд призначив <b class=\"snippet\">ДНК-тест</b> з метою вирішення цього спору про батьківство. <b class=\"snippet\">Тест</b> продемонстрував, що ...  такі обставини, як відсутність сталої <b class=\"snippet\">судової практики</b> в питаннях, що визначаються, як  ... "}, "judge": "Усик Григорій Іванович", "cause_num": "201/6658/18", "court_code": "9931", "resolution": "Про виключення відомостей про батька з актового запису про народження дитини, припинення стягнення аліментів", "justice_kind": 1, "category_code": 1021} | 2026-02-04 13:41:24.290392 | 2026-02-04 13:41:24.290392 |                | 201/6658/18              | 9931  |         | 1021             |           | 
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[8/26] Table: [0;36membedding_chunks[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+     column_name     |          data_type          | nullable 
+---------------------+-----------------------------+----------
+ id                  | uuid                        | NOT NULL
+ document_section_id | uuid                        | NULL
+ vector_id           | character varying           | NULL
+ text                | text                        | NULL
+ metadata            | jsonb                       | NULL
+ created_at          | timestamp without time zone | NULL
+(6 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[9/26] Table: [0;36meula_acceptances[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+ column_name  |          data_type          | nullable 
+--------------+-----------------------------+----------
+ id           | uuid                        | NOT NULL
+ user_id      | uuid                        | NOT NULL
+ eula_version | character varying           | NOT NULL
+ accepted_at  | timestamp without time zone | NOT NULL
+ ip_address   | character varying           | NULL
+ user_agent   | text                        | NULL
+(6 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[10/26] Table: [0;36meula_documents[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 1[0m
+[1;33mColumns:[0m
+  column_name   |          data_type          | nullable 
+----------------+-----------------------------+----------
+ id             | uuid                        | NOT NULL
+ version        | character varying           | NOT NULL
+ content        | text                        | NOT NULL
+ content_type   | character varying           | NOT NULL
+ is_active      | boolean                     | NOT NULL
+ created_at     | timestamp without time zone | NOT NULL
+ effective_date | timestamp without time zone | NOT NULL
+(7 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  | version |                         content                          | content_type | is_active |         created_at         |       effective_date       
+--------------------------------------+---------+----------------------------------------------------------+--------------+-----------+----------------------------+----------------------------
+ 7c6e6718-95aa-4926-8700-9f97bb223192 | 1.0     | EULA content will be loaded from EULA_manual_license.txt | markdown     | t         | 2026-02-02 02:46:36.855677 | 2026-02-02 02:46:36.855677
+(1 row)
+
+
+[0;34m========================================[0m
+[0;34m[11/26] Table: [0;36mevents[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+ column_name |          data_type          | nullable 
+-------------+-----------------------------+----------
+ id          | uuid                        | NOT NULL
+ event_type  | character varying           | NULL
+ payload     | jsonb                       | NULL
+ created_at  | timestamp without time zone | NULL
+(4 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[12/26] Table: [0;36mlegal_patterns[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+    column_name    |          data_type          | nullable 
+-------------------+-----------------------------+----------
+ id                | uuid                        | NOT NULL
+ intent            | character varying           | NULL
+ law_articles      | ARRAY                       | NULL
+ decision_outcome  | character varying           | NULL
+ frequency         | integer                     | NULL
+ confidence        | double precision            | NULL
+ example_cases     | ARRAY                       | NULL
+ risk_factors      | ARRAY                       | NULL
+ success_arguments | ARRAY                       | NULL
+ anti_patterns     | jsonb                       | NULL
+ created_at        | timestamp without time zone | NULL
+ updated_at        | timestamp without time zone | NULL
+(12 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[13/26] Table: [0;36mlegislation[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 3[0m
+[1;33mColumns:[0m
+    column_name     |          data_type          | nullable 
+--------------------+-----------------------------+----------
+ id                 | integer                     | NOT NULL
+ rada_id            | character varying           | NOT NULL
+ type               | character varying           | NOT NULL
+ title              | text                        | NOT NULL
+ short_title        | text                        | NULL
+ full_url           | text                        | NOT NULL
+ adoption_date      | date                        | NULL
+ effective_date     | date                        | NULL
+ last_amended_date  | date                        | NULL
+ status             | character varying           | NOT NULL
+ total_articles     | integer                     | NULL
+ total_sections     | integer                     | NULL
+ structure_metadata | jsonb                       | NULL
+ created_at         | timestamp without time zone | NOT NULL
+ updated_at         | timestamp without time zone | NOT NULL
+(15 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+ id |  rada_id   |    type    | title | short_title |                       full_url                       | adoption_date | effective_date | last_amended_date | status | total_articles | total_sections | structure_metadata |         created_at         |         updated_at         
+----+------------+------------+-------+-------------+------------------------------------------------------+---------------+----------------+-------------------+--------+----------------+----------------+--------------------+----------------------------+----------------------------
+  1 | 254к/96-вр | regulation |       |             | https://zakon.rada.gov.ua/laws/show/254к/96-вр/print |               |                |                   | active |            158 |                | {}                 | 2026-02-02 03:06:13.227888 | 2026-02-02 03:06:13.227888
+  2 | 2755-17    | law        |       |             | https://zakon.rada.gov.ua/laws/show/2755-17/print    |               |                |                   | active |            272 |                | {}                 | 2026-02-04 14:17:07.412951 | 2026-02-04 14:17:07.412951
+  3 | 1618-15    | law        |       |             | https://zakon.rada.gov.ua/laws/show/1618-15/print    |               |                |                   | active |            513 |                | {}                 | 2026-02-04 14:18:49.508742 | 2026-02-04 14:18:49.508742
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[14/26] Table: [0;36mlegislation_articles[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 936[0m
+[1;33mColumns:[0m
+   column_name    |          data_type          | nullable 
+------------------+-----------------------------+----------
+ id               | integer                     | NOT NULL
+ legislation_id   | integer                     | NOT NULL
+ article_number   | character varying           | NOT NULL
+ section_number   | character varying           | NULL
+ chapter_number   | character varying           | NULL
+ title            | text                        | NULL
+ full_text        | text                        | NOT NULL
+ full_text_html   | text                        | NULL
+ part_number      | integer                     | NULL
+ paragraph_number | integer                     | NULL
+ notes            | text                        | NULL
+ version_date     | timestamp without time zone | NOT NULL
+ byte_size        | integer                     | NULL
+ is_current       | boolean                     | NOT NULL
+ metadata         | jsonb                       | NULL
+ created_at       | timestamp without time zone | NOT NULL
+ updated_at       | timestamp without time zone | NOT NULL
+(17 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+ id | legislation_id | article_number | section_number | chapter_number |                                                           title                                                            |                                                                                                                                                                         full_text                                                                                                                                                                          |                                                                                                                            full_text_html                                                                                                                             | part_number | paragraph_number | notes |      version_date       | byte_size | is_current |                                                    metadata                                                     |         created_at         |         updated_at         
+----+----------------+----------------+----------------+----------------+----------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+------------------+-------+-------------------------+-----------+------------+-----------------------------------------------------------------------------------------------------------------+----------------------------+----------------------------
+  1 |              1 | 1              |                |                | Україна є суверенна і незалежна, демократична, соціальна, правова держава                                                  | Україна є суверенна і незалежна, демократична, соціальна, правова держава.                                                                                                                                                                                                                                                                                 | Україна є суверенна і незалежна, демократична, соціальна, правова держава.</p>                                                                                                                                                                                       +|             |                  |       | 2026-02-02 05:06:13.229 |       136 | t          | {"rada_id": "254к/96-вр", "extraction_date": "2026-02-02T03:06:13.091Z", "extraction_method": "print_endpoint"} | 2026-02-02 03:06:13.227888 | 2026-02-02 03:06:13.227888
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <em><p class="rvps2"><a name="n4982"></a>                                                                                                                                                                                                                            +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <span class="rvts46">{Офіційне тлумачення положення статті 1 див. в Рішенні Конституційного Суду </span><a class="rvts100" href="https://zakon.rada.gov.ua/laws/show/v003p710-12#n54" target="_blank">№ 3-рп/2012 від 25.01.2012</a><span class="rvts46">}</span></p>+|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | </em><p class="rvps2"><a name="n4175"></a>                                                                                                                                                                                                                           +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            |                                                                                                                                                                                                                                                                       |             |                  |       |                         |           |            |                                                                                                                 |                            | 
+  2 |              1 | 2              |                |                | Суверенітет України поширюється на всю її територію                                                                        | Суверенітет України поширюється на всю її територію. Україна є унітарною державою. Територія України в межах існуючого кордону є цілісною і недоторканною.                                                                                                                                                                                                 | Суверенітет України поширюється на всю її територію.</p>                                                                                                                                                                                                             +|             |                  |       | 2026-02-02 05:06:13.231 |       285 | t          | {"rada_id": "254к/96-вр", "extraction_date": "2026-02-02T03:06:13.091Z", "extraction_method": "print_endpoint"} | 2026-02-02 03:06:13.227888 | 2026-02-02 03:06:13.227888
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <p class="rvps2"><a name="n4176"></a>                                                                                                                                                                                                                                +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | Україна є унітарною державою.</p>                                                                                                                                                                                                                                    +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <p class="rvps2"><a name="n4177"></a>                                                                                                                                                                                                                                +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | Територія України в межах існуючого кордону є цілісною і недоторканною.</p>                                                                                                                                                                                          +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <p class="rvps2"><a name="n4178"></a>                                                                                                                                                                                                                                +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            |                                                                                                                                                                                                                                                                       |             |                  |       |                         |           |            |                                                                                                                 |                            | 
+  3 |              1 | 3              |                |                | Людина, її життя і здоров'я, честь і гідність, недоторканність і безпека визнаються в Україні найвищою соціальною цінністю | Людина, її життя і здоров'я, честь і гідність, недоторканність і безпека визнаються в Україні найвищою соціальною цінністю. Права і свободи людини та їх гарантії визначають зміст і спрямованість діяльності держави. Держава відповідає перед людиною за свою діяльність. Утвердження і забезпечення прав і свобод людини є головним обов'язком держави. | Людина, її життя і здоров'я, честь і гідність, недоторканність і безпека визнаються в Україні найвищою соціальною цінністю.</p>                                                                                                                                      +|             |                  |       | 2026-02-02 05:06:13.232 |       636 | t          | {"rada_id": "254к/96-вр", "extraction_date": "2026-02-02T03:06:13.092Z", "extraction_method": "print_endpoint"} | 2026-02-02 03:06:13.227888 | 2026-02-02 03:06:13.227888
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <p class="rvps2"><a name="n4179"></a>                                                                                                                                                                                                                                +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | Права і свободи людини та їх гарантії визначають зміст і спрямованість діяльності держави. Держава відповідає перед людиною за свою діяльність. Утвердження і забезпечення прав і свобод людини є головним обов'язком держави.</p>                                   +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            | <p class="rvps2"><a name="n4180"></a>                                                                                                                                                                                                                                +|             |                  |       |                         |           |            |                                                                                                                 |                            | 
+    |                |                |                |                |                                                                                                                            |                                                                                                                                                                                                                                                                                                                                                            |                                                                                                                                                                                                                                                                       |             |                  |       |                         |           |            |                                                                                                                 |                            | 
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[15/26] Table: [0;36mlegislation_chunks[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 2731[0m
+[1;33mColumns:[0m
+  column_name   |          data_type          | nullable 
+----------------+-----------------------------+----------
+ id             | integer                     | NOT NULL
+ article_id     | integer                     | NULL
+ legislation_id | integer                     | NULL
+ chunk_index    | integer                     | NOT NULL
+ text           | text                        | NOT NULL
+ vector_id      | character varying           | NULL
+ context_before | text                        | NULL
+ context_after  | text                        | NULL
+ metadata       | jsonb                       | NULL
+ created_at     | timestamp without time zone | NULL
+ updated_at     | timestamp without time zone | NULL
+(11 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+ id | article_id | legislation_id | chunk_index |                                                                                                                                                                            text                                                                                                                                                                            |              vector_id               | context_before | context_after |                                                                                                    metadata                                                                                                    |         created_at         |         updated_at         
+----+------------+----------------+-------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------+----------------+---------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------+----------------------------
+  1 |          1 |              1 |           0 | Україна є суверенна і незалежна, демократична, соціальна, правова держава.                                                                                                                                                                                                                                                                                 | 3b1e438a-648f-4400-c9fe-5cb276fb3028 |                |               | {"title": "Україна є суверенна і незалежна, демократична, соціальна, правова держава", "article_number": "1", "chapter_number": null, "section_number": null}                                                  | 2026-02-02 03:06:14.0942   | 2026-02-02 03:06:14.0942
+  2 |          2 |              1 |           0 | Суверенітет України поширюється на всю її територію. Україна є унітарною державою. Територія України в межах існуючого кордону є цілісною і недоторканною.                                                                                                                                                                                                 | a2629899-0830-da5d-64c7-f74a74b0a622 |                |               | {"title": "Суверенітет України поширюється на всю її територію", "article_number": "2", "chapter_number": null, "section_number": null}                                                                        | 2026-02-02 03:06:14.332339 | 2026-02-02 03:06:14.332339
+  3 |          3 |              1 |           0 | Людина, її життя і здоров'я, честь і гідність, недоторканність і безпека визнаються в Україні найвищою соціальною цінністю. Права і свободи людини та їх гарантії визначають зміст і спрямованість діяльності держави. Держава відповідає перед людиною за свою діяльність. Утвердження і забезпечення прав і свобод людини є головним обов'язком держави. | 20ef82a2-1c60-2907-6a5c-d295b4f02aad |                |               | {"title": "Людина, її життя і здоров'я, честь і гідність, недоторканність і безпека визнаються в Україні найвищою соціальною цінністю", "article_number": "3", "chapter_number": null, "section_number": null} | 2026-02-02 03:06:14.777181 | 2026-02-02 03:06:14.777181
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[16/26] Table: [0;36mmonthly_api_usage[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 1[0m
+[1;33mColumns:[0m
+        column_name         |          data_type          | nullable 
+----------------------------+-----------------------------+----------
+ id                         | uuid                        | NOT NULL
+ year_month                 | character varying           | NOT NULL
+ zakononline_total_calls    | integer                     | NULL
+ openai_total_tokens        | integer                     | NULL
+ openai_total_cost_usd      | numeric                     | NULL
+ updated_at                 | timestamp without time zone | NULL
+ secondlayer_total_calls    | integer                     | NULL
+ secondlayer_total_cost_usd | numeric                     | NULL
+ zakononline_total_cost_usd | numeric                     | NULL
+(9 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  | year_month | zakononline_total_calls | openai_total_tokens | openai_total_cost_usd |        updated_at         | secondlayer_total_calls | secondlayer_total_cost_usd | zakononline_total_cost_usd 
+--------------------------------------+------------+-------------------------+---------------------+-----------------------+---------------------------+-------------------------+----------------------------+----------------------------
+ d308da83-ff4c-4ae7-9481-5e3845e09e1b | 2026-02    |                      14 |                   0 |              0.000000 | 2026-02-04 14:40:53.96576 |                       0 |                   0.000000 |                   0.099960
+(1 row)
+
+
+[0;34m========================================[0m
+[0;34m[17/26] Table: [0;36mpayment_intents[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+ column_name |        data_type         | nullable 
+-------------+--------------------------+----------
+ id          | uuid                     | NOT NULL
+ user_id     | uuid                     | NOT NULL
+ provider    | character varying        | NOT NULL
+ external_id | character varying        | NOT NULL
+ amount_usd  | numeric                  | NOT NULL
+ amount_uah  | numeric                  | NULL
+ status      | character varying        | NOT NULL
+ metadata    | jsonb                    | NULL
+ created_at  | timestamp with time zone | NOT NULL
+ updated_at  | timestamp with time zone | NOT NULL
+(10 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[18/26] Table: [0;36mprecedent_status[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+   column_name    |          data_type          | nullable 
+------------------+-----------------------------+----------
+ case_id          | uuid                        | NOT NULL
+ status           | character varying           | NULL
+ reversed_by      | ARRAY                       | NULL
+ overruled_by     | ARRAY                       | NULL
+ distinguished_in | ARRAY                       | NULL
+ last_checked     | timestamp without time zone | NULL
+ confidence       | double precision            | NULL
+ updated_at       | timestamp without time zone | NULL
+(8 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[19/26] Table: [0;36mprompt_executions[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+    column_name    |          data_type          | nullable 
+-------------------+-----------------------------+----------
+ execution_id      | integer                     | NOT NULL
+ instance_id       | text                        | NULL
+ model_used        | text                        | NOT NULL
+ tokens_input      | integer                     | NOT NULL
+ tokens_output     | integer                     | NOT NULL
+ cost_usd          | numeric                     | NOT NULL
+ execution_time_ms | integer                     | NOT NULL
+ validation_passed | boolean                     | NOT NULL
+ retry_count       | integer                     | NULL
+ output            | jsonb                       | NULL
+ error             | text                        | NULL
+ executed_at       | timestamp without time zone | NULL
+(12 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[20/26] Table: [0;36mprompt_instances[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+     column_name     |          data_type          | nullable 
+---------------------+-----------------------------+----------
+ instance_id         | text                        | NOT NULL
+ intent_name         | text                        | NOT NULL
+ template_id         | text                        | NOT NULL
+ template_version    | text                        | NOT NULL
+ system_instructions | jsonb                       | NOT NULL
+ user_message        | text                        | NOT NULL
+ sources             | jsonb                       | NOT NULL
+ constraints         | jsonb                       | NOT NULL
+ assembled_at        | timestamp without time zone | NULL
+(9 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[21/26] Table: [0;36mrequest_preset_configs[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 3[0m
+[1;33mColumns:[0m
+        column_name        |        data_type         | nullable 
+---------------------------+--------------------------+----------
+ preset_name               | character varying        | NOT NULL
+ description               | text                     | NULL
+ reasoning_budget          | character varying        | NULL
+ max_search_results        | integer                  | NULL
+ max_analysis_depth        | integer                  | NULL
+ max_practice_cases        | integer                  | NULL
+ max_practice_depth        | integer                  | NULL
+ aggressive_caching        | boolean                  | NULL
+ enable_semantic_search    | boolean                  | NULL
+ estimated_cost_multiplier | numeric                  | NULL
+ created_at                | timestamp with time zone | NULL
+(11 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+ preset_name |                           description                           | reasoning_budget | max_search_results | max_analysis_depth | max_practice_cases | max_practice_depth | aggressive_caching | enable_semantic_search | estimated_cost_multiplier |          created_at           
+-------------+-----------------------------------------------------------------+------------------+--------------------+--------------------+--------------------+--------------------+--------------------+------------------------+---------------------------+-------------------------------
+ economy     | Minimize costs - quick analysis with basic results              | quick            |                  5 |                  1 |                  5 |                  1 | t                  | f                      |                      1.00 | 2026-02-02 02:46:36.973273+00
+ balanced    | Balance cost and quality - standard analysis with good coverage | standard         |                 10 |                  2 |                 15 |                  2 | t                  | t                      |                      1.50 | 2026-02-02 02:46:36.973273+00
+ quality     | Maximum accuracy - deep analysis with comprehensive coverage    | deep             |                 25 |                  5 |                 25 |                  5 | f                  | t                      |                      3.00 | 2026-02-02 02:46:36.973273+00
+(3 rows)
+
+
+[0;34m========================================[0m
+[0;34m[22/26] Table: [0;36muser_billing[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 2[0m
+[1;33mColumns:[0m
+    column_name     |          data_type          | nullable 
+--------------------+-----------------------------+----------
+ id                 | uuid                        | NOT NULL
+ user_id            | uuid                        | NOT NULL
+ balance_usd        | numeric                     | NOT NULL
+ balance_uah        | numeric                     | NOT NULL
+ daily_limit_usd    | numeric                     | NOT NULL
+ monthly_limit_usd  | numeric                     | NOT NULL
+ total_spent_usd    | numeric                     | NOT NULL
+ total_spent_uah    | numeric                     | NOT NULL
+ total_requests     | integer                     | NOT NULL
+ is_active          | boolean                     | NOT NULL
+ billing_enabled    | boolean                     | NOT NULL
+ created_at         | timestamp without time zone | NOT NULL
+ updated_at         | timestamp without time zone | NOT NULL
+ pricing_tier       | character varying           | NULL
+ last_alert_sent_at | timestamp with time zone    | NULL
+ stripe_customer_id | character varying           | NULL
+ fondy_customer_id  | character varying           | NULL
+(17 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |               user_id                | balance_usd | balance_uah | daily_limit_usd | monthly_limit_usd | total_spent_usd | total_spent_uah | total_requests | is_active | billing_enabled |         created_at         |         updated_at         | pricing_tier | last_alert_sent_at | stripe_customer_id | fondy_customer_id 
+--------------------------------------+--------------------------------------+-------------+-------------+-----------------+-------------------+-----------------+-----------------+----------------+-----------+-----------------+----------------------------+----------------------------+--------------+--------------------+--------------------+-------------------
+ 66eee686-8f41-499f-af72-f5f108ece69e | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 |       -0.07 |        0.00 |           10.00 |            100.00 |            0.07 |            0.00 |              5 | t         | t               | 2026-02-04 13:26:07.327968 | 2026-02-04 14:24:50.093966 | startup      |                    |                    | 
+ b633512b-64a5-4b3a-826f-3472f791124a | 4717e330-4f11-4de0-bf22-fb31c74108ac |       99.97 |        0.00 |           50.00 |            500.00 |            0.03 |            0.00 |              2 | t         | t               | 2026-02-04 14:30:14.842004 | 2026-02-04 14:40:56.573613 | business     |                    |                    | 
+(2 rows)
+
+
+[0;34m========================================[0m
+[0;34m[23/26] Table: [0;36muser_credits[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 2[0m
+[1;33mColumns:[0m
+ column_name  |        data_type         | nullable 
+--------------+--------------------------+----------
+ id           | uuid                     | NOT NULL
+ user_id      | uuid                     | NOT NULL
+ balance      | numeric                  | NOT NULL
+ total_earned | numeric                  | NOT NULL
+ total_spent  | numeric                  | NOT NULL
+ created_at   | timestamp with time zone | NOT NULL
+ updated_at   | timestamp with time zone | NOT NULL
+(7 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |               user_id                | balance  | total_earned | total_spent |          created_at           |          updated_at           
+--------------------------------------+--------------------------------------+----------+--------------+-------------+-------------------------------+-------------------------------
+ b865bb4e-28b8-4262-9ef0-396a60c457eb | 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 |    73.00 |       100.00 |       27.00 | 2026-02-04 13:26:07.358273+00 | 2026-02-04 14:24:50.097935+00
+ 22c4f288-4445-4c63-8fd0-82bb72cdd702 | 4717e330-4f11-4de0-bf22-fb31c74108ac | 10000.00 |     10000.00 |        0.00 | 2026-02-04 14:32:15.612174+00 | 2026-02-04 14:42:18.357614+00
+(2 rows)
+
+
+[0;34m========================================[0m
+[0;34m[24/26] Table: [0;36muser_request_preferences[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+       column_name        |        data_type         | nullable 
+--------------------------+--------------------------+----------
+ id                       | uuid                     | NOT NULL
+ user_id                  | uuid                     | NOT NULL
+ default_reasoning_budget | character varying        | NULL
+ max_search_results       | integer                  | NULL
+ max_analysis_depth       | integer                  | NULL
+ max_practice_cases       | integer                  | NULL
+ max_practice_depth       | integer                  | NULL
+ quality_preference       | character varying        | NULL
+ aggressive_caching       | boolean                  | NULL
+ enable_semantic_search   | boolean                  | NULL
+ enable_auto_citations    | boolean                  | NULL
+ enable_legal_patterns    | boolean                  | NULL
+ created_at               | timestamp with time zone | NULL
+ updated_at               | timestamp with time zone | NULL
+(14 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[25/26] Table: [0;36muser_sessions[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 0[0m
+[1;33mColumns:[0m
+  column_name  |          data_type          | nullable 
+---------------+-----------------------------+----------
+ id            | uuid                        | NOT NULL
+ user_id       | uuid                        | NULL
+ session_token | character varying           | NOT NULL
+ expires_at    | timestamp without time zone | NOT NULL
+ created_at    | timestamp without time zone | NULL
+(5 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+[0;36m  (Table is empty)[0m
+
+[0;34m========================================[0m
+[0;34m[26/26] Table: [0;36musers[0m
+[0;34m========================================[0m
+[1;33mTotal rows: 2[0m
+[1;33mColumns:[0m
+  column_name   |          data_type          | nullable 
+----------------+-----------------------------+----------
+ id             | uuid                        | NOT NULL
+ google_id      | character varying           | NOT NULL
+ email          | character varying           | NOT NULL
+ name           | character varying           | NULL
+ picture        | character varying           | NULL
+ email_verified | boolean                     | NULL
+ locale         | character varying           | NULL
+ last_login     | timestamp without time zone | NULL
+ created_at     | timestamp without time zone | NULL
+ updated_at     | timestamp without time zone | NULL
+(10 rows)
+
+
+[1;33mSample data (first 3 rows):[0m
+                  id                  |       google_id       |           email           |     name      | picture | email_verified | locale | last_login |         created_at         |         updated_at         
+--------------------------------------+-----------------------+---------------------------+---------------+---------+----------------+--------+------------+----------------------------+----------------------------
+ 51f2ebc4-3071-4aed-bd63-bc41b4c59b68 | test-google-id-123    | test@secondlayer.local    | Test User     |         | t              |        |            | 2026-02-04 13:18:01.64151  | 2026-02-04 13:18:01.64151
+ 4717e330-4f11-4de0-bf22-fb31c74108ac | test-google-id-504009 | mcp-test@secondlayer.test | MCP Test User |         | t              |        |            | 2026-02-04 14:30:14.842004 | 2026-02-04 14:30:14.842004
+(2 rows)
+
+
+[0;34m========================================[0m
+[0;32m✓ Overview complete![0m
+[0;34m========================================[0m
+
+[1;33mSummary:[0m
+  Database: secondlayer_stage
+  Total tables: 26
+
