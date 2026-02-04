@@ -174,7 +174,7 @@ class HTTPMCPServer {
 
     // Initialize authentication
     configurePassport(this.db);
-    initializeDualAuth(this.db);
+    initializeDualAuth(this.db, this.apiKeyService);
     logger.info('Authentication configured (Google OAuth2 + dual auth)');
 
     // Setup middleware and routes AFTER services are initialized
