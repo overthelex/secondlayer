@@ -16,6 +16,8 @@ import { useAuth } from '../contexts/AuthContext';
 import showToast from '../utils/toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Auth endpoints are at root level, not under /api
+const BASE_URL = API_URL.replace(/\/api$/, '');
 
 type AuthMethod = 'password' | 'hardware-key' | 'phone-key';
 
@@ -100,17 +102,53 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const handleGoogleAuth = () => {
     setError(null);
-    // Redirect to backend Google OAuth endpoint
-    window.location.href = `${API_URL}/auth/google`;
+    // Redirect to backend Google OAuth endpoint (auth routes are at root level)
+    window.location.href = `${BASE_URL}/auth/google`;
   };
 
-  const handlePasswordAuth = () => {
+  const handlePasswordAuth = async () => {
     setError(null);
-    showToast.info('Password authentication is not yet implemented');
-    console.log('Password authentication', {
-      email,
-      password
-    });
+
+    // Validate inputs
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Call login API
+      const response = await fetch(`${BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+
+      // Login with the token
+      await login(data.token);
+
+      showToast.success('Login successful!');
+
+      // Call success callback if provided
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
+    } catch (err: any) {
+      console.error('Password login failed:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
+      showToast.error('Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleHardwareKey = () => {
@@ -324,7 +362,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               className="space-y-4">
 
                 <div>
-                  <label className="block text-sm font-medium text-claude-text font-sans mb-2">
+                  <label htmlFor="email" className="block text-sm font-medium text-claude-text font-sans mb-2">
                     Email
                   </label>
                   <div className="relative">
@@ -332,17 +370,20 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       <Mail size={18} className="text-claude-subtext" />
                     </div>
                     <input
+                    id="email"
+                    name="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
+                    autoComplete="email"
                     className="block w-full pl-10 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
 
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-claude-text font-sans mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-claude-text font-sans mb-2">
                     Пароль
                   </label>
                   <div className="relative">
@@ -350,10 +391,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       <Lock size={18} className="text-claude-subtext" />
                     </div>
                     <input
+                    id="password"
+                    name="password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePasswordAuth()}
                     placeholder="••••••••"
+                    autoComplete="current-password"
                     className="block w-full pl-10 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
 
                   </div>

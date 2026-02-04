@@ -13,6 +13,8 @@ import {
   Network,
   Clock } from
 'lucide-react';
+import { useBackNavigation } from '../hooks/useBackNavigation';
+
 interface CaseAnalysisPageProps {
   onBack?: () => void;
 }
@@ -31,6 +33,7 @@ interface TimelineEvent {
   description: string;
 }
 export function CaseAnalysisPage({ onBack }: CaseAnalysisPageProps) {
+  const handleBack = useBackNavigation(onBack);
   const [loadingStage, setLoadingStage] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [category, setCategory] = useState('');
@@ -268,7 +271,7 @@ export function CaseAnalysisPage({ onBack }: CaseAnalysisPageProps) {
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
-              onClick={onBack}
+              onClick={handleBack}
               className="p-2 hover:bg-claude-bg rounded-lg transition-colors">
 
               <ArrowLeft size={20} className="text-claude-text" />

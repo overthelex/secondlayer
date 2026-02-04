@@ -1,4 +1,4 @@
--- Migration 015: Add User Billing Infrastructure
+-- Migration 013: Add User Billing Infrastructure
 -- Adds user_id tracking to cost_tracking and creates billing tables
 
 -- 1. Add user_id to cost_tracking table
@@ -98,7 +98,9 @@ CREATE TRIGGER trigger_update_user_billing_updated_at
   EXECUTE FUNCTION update_user_billing_updated_at();
 
 -- 5. Create view for user billing summary
-CREATE OR REPLACE VIEW user_billing_summary AS
+DROP VIEW IF EXISTS user_billing_summary CASCADE;
+
+CREATE VIEW user_billing_summary AS
 SELECT
   u.id AS user_id,
   u.email,

@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import passport from 'passport';
+import bcrypt from 'bcrypt';
 import { User } from '../services/user-service.js';
 import { logger } from '../utils/logger.js';
 import { getUserService } from '../middleware/dual-auth.js';
@@ -300,6 +301,89 @@ export async function updateProfile(req: AuthenticatedRequest, res: Response): P
     return res.status(500).json({
       error: 'Internal server error',
       message: error.message,
+    });
+  }
+}
+
+/**
+ * Login with email and password
+ * Public route - no authentication required
+ */
+export async function loginWithPassword(req: Request, res: Response): Promise<Response> {
+  try {
+    const { email, password } = req.body;
+
+    // Validate inputs
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Email and password are required',
+      });
+    }
+
+    // Get user service
+    const userService = getUserService();
+
+    // Find user by email
+    const user = await userService.findByEmail(email);
+
+    if (!user) {
+      // Don't reveal if user exists or not
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid email or password',
+      });
+    }
+
+    // Check if user has password set
+    if (!user.password_hash) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Password authentication not enabled for this account. Please use Google OAuth.',
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isPasswordValid) {
+      logger.warn('Failed login attempt', { email });
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid email or password',
+      });
+    }
+
+    // Update last login
+    await userService.updateLastLogin(user.id);
+
+    // Generate JWT token
+    const token = generateToken(user);
+
+    logger.info('User logged in with password', {
+      userId: user.id,
+      email: user.email,
+    });
+
+    // Return token and user data
+    return res.json({
+      token,
+      expiresIn: JWT_EXPIRES_IN,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        emailVerified: user.email_verified,
+        lastLogin: user.last_login,
+        createdAt: user.created_at,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error during password login:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred during login',
     });
   }
 }

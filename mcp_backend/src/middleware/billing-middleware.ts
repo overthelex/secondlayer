@@ -16,6 +16,14 @@ export interface BillingRequest extends Request {
 }
 
 /**
+ * Helper to ensure param is a string (Express can return string | string[])
+ */
+function getStringParam(param: string | string[] | undefined): string {
+  if (!param) return '';
+  return Array.isArray(param) ? param[0] : param;
+}
+
+/**
  * Middleware to validate API key and attach user info to request
  * This does NOT block anonymous requests - for backward compatibility
  */
@@ -154,7 +162,7 @@ export function checkCredits(
         );
       } else if (req.params?.toolName) {
         creditsRequired = await creditService.calculateCreditsForTool(
-          req.params.toolName,
+          getStringParam(req.params.toolName),
           req.userId
         );
       }

@@ -4,18 +4,9 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api } from '../utils/api-client';
+import { authService } from '../services';
+import { User } from '../types/models';
 import showToast from '../utils/toast';
-
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  picture?: string;
-  emailVerified?: boolean;
-  lastLogin?: string;
-  createdAt?: string;
-}
 
 interface AuthContextType {
   user: User | null;
@@ -51,8 +42,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(JSON.parse(storedUser));
 
           // Verify token is still valid by fetching user profile
-          const response = await api.auth.getMe();
-          const userData = response.data.user;
+          const userData = await authService.getMe();
 
           // Update user data from server
           setUser(userData);
@@ -99,8 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(newToken);
 
       // Fetch user profile
-      const response = await api.auth.getMe();
-      const userData = response.data.user;
+      const userData = await authService.getMe();
 
       // Store user data
       setUser(userData);
@@ -118,7 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     try {
       // Call backend logout (for logging purposes)
-      await api.auth.logout();
+      await authService.logout();
     } catch (error) {
       console.error('Logout API call failed:', error);
       // Continue with client-side logout even if API fails
@@ -137,8 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshToken = async () => {
     try {
-      const response = await api.auth.refreshToken();
-      const newToken = response.data.token;
+      const newToken = await authService.refreshToken();
 
       // Update token
       localStorage.setItem('auth_token', newToken);

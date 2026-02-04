@@ -10,6 +10,13 @@ import * as authController from '../controllers/auth.js';
 const router = Router();
 
 /**
+ * @route   POST /auth/login
+ * @desc    Login with email and password
+ * @access  Public
+ */
+router.post('/login', authController.loginWithPassword as any);
+
+/**
  * @route   GET /auth/google
  * @desc    Initiate Google OAuth flow
  * @access  Public

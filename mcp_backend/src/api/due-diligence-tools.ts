@@ -138,6 +138,9 @@ Breakdown по категориям:
             },
             findings: {
               type: 'array',
+              items: {
+                type: 'object',
+              },
               description:
                 'Findings из bulk_review_runner (опционально, если не указаны - загрузятся из БД)',
             },

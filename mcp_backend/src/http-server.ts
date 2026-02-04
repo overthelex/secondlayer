@@ -636,7 +636,10 @@ class HTTPMCPServer {
       const startTime = Date.now();
 
       try {
-        const { toolName } = req.params;
+        const toolName = Array.isArray(req.params.toolName) ? req.params.toolName[0] : req.params.toolName;
+        if (!toolName) {
+          return res.status(400).json({ error: 'Tool name is required' });
+        }
         const args = req.body.arguments || req.body;
         const acceptHeader = req.headers.accept || '';
 
@@ -795,7 +798,10 @@ class HTTPMCPServer {
     // Dedicated SSE streaming endpoint (with balance check)
     this.app.post('/api/tools/:toolName/stream', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
       try {
-        const { toolName } = req.params;
+        const toolName = Array.isArray(req.params.toolName) ? req.params.toolName[0] : req.params.toolName;
+        if (!toolName) {
+          return res.status(400).json({ error: 'Tool name is required' });
+        }
         const args = req.body.arguments || req.body;
 
         logger.info('Streaming tool call request', {
