@@ -5,23 +5,32 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY lexwebapp/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Copy shared package for dependencies
+COPY packages/shared ./packages/shared
 
-# Copy source code
-COPY . .
+# Install shared package dependencies first
+WORKDIR /app/packages/shared
+RUN npm install
 
-# Build the application (uses .env.production by default)
-# For dev builds, use: docker build --build-arg NODE_ENV=development
-ARG NODE_ENV=production
-RUN if [ "$NODE_ENV" = "development" ]; then \
-      cp .env.development .env.production && \
-      npm run build; \
-    else \
-      npm run build; \
-    fi
+# Back to app directory and install app dependencies
+WORKDIR /app
+RUN npm install
+
+# Accept build arguments BEFORE copying source
+ARG BUILD_ENV=production
+ARG VITE_API_URL
+
+# Copy source code (excluding already copied files)
+COPY lexwebapp/ .
+
+# Create .env file with VITE_API_URL for Vite build
+RUN echo "VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}" > .env.production && \
+    echo "Created .env.production with VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}"
+
+# Build the application
+RUN npm run build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine

@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   DollarSign,
@@ -27,7 +28,16 @@ interface BillingDashboardProps {
 }
 
 export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDashboardProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<BillingTab>(initialTab);
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    } else {
+      navigate(-1);
+    }
+  };
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: DollarSign },
@@ -42,13 +52,11 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
       {/* Header */}
       <div className="bg-white border-b border-claude-border px-6 py-4">
         <div className="flex items-center gap-4">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-2 hover:bg-claude-bg rounded-lg transition-colors">
-              <ArrowLeft size={20} className="text-claude-text" />
-            </button>
-          )}
+          <button
+            onClick={handleBack}
+            className="p-2 hover:bg-claude-bg rounded-lg transition-colors">
+            <ArrowLeft size={20} className="text-claude-text" />
+          </button>
           <div>
             <h1 className="text-2xl font-semibold text-claude-text">Billing Dashboard</h1>
             <p className="text-sm text-claude-subtext mt-1">

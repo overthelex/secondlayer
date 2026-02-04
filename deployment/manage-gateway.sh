@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 # Configuration
 GATE_SERVER="gate.lexapp.co.ua"
 GATE_USER="vovkes"
-REMOTE_PATH="/home/vovkes/secondlayer-deployment"
+REMOTE_PATH="/home/vovkes/secondlayer/deployment"
 
 # Print colored message
 print_msg() {
@@ -406,6 +406,26 @@ deploy_to_gate() {
     scp $compose_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
     scp $env_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
 
+    # Copy source code for building images on server
+    print_msg "$BLUE" "📦 Syncing source code..."
+    cd ..
+    rsync -avz --delete \
+        --exclude 'node_modules' \
+        --exclude 'dist' \
+        --exclude '.git' \
+        --exclude '.env*' \
+        --exclude 'logs' \
+        --exclude 'data' \
+        --exclude 'postgres_data' \
+        --exclude 'qdrant_data' \
+        --exclude 'redis_data' \
+        --exclude '.claude' \
+        --exclude '.cursor' \
+        --exclude 'test-results' \
+        mcp_backend lexwebapp packages \
+        ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
+    cd deployment
+
     # Stop and remove old containers, then start new ones
     print_msg "$BLUE" "🔄 Updating containers on gate server..."
 
@@ -466,6 +486,10 @@ deploy_to_gate() {
             echo "🔄 Running OpenReyestr migrations..."
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-dev
         fi
+
+        # Rebuild application services without cache
+        echo "🔨 Building application images without cache..."
+        docker compose -f $compose_file --env-file $env_file build --no-cache app-$env lexwebapp-$env
 
         # Start application services
         echo "▶️  Starting application..."

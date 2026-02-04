@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Second Layer MCP for Zakononline - Semantic legal analysis layer",
   "main": "dist/index.js",
+  "bin": {
+    "secondlayer-mcp": "./bin/mcp-start.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
@@ -25,7 +28,8 @@
     "docs:api": "xdg-open docs/api-explorer.html || open docs/api-explorer.html || start docs/api-explorer.html",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "create-api-keys": "ts-node bin/create-api-keys.ts"
   },
   "keywords": [
     "mcp",
@@ -45,11 +49,13 @@
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@qdrant/js-client-rest": "^1.9.0",
     "@secondlayer/shared": "file:../packages/shared",
+    "@types/bcrypt": "^6.0.0",
     "@types/express-session": "^1.18.2",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
     "axios": "^1.6.5",
+    "bcrypt": "^6.0.0",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "diff": "^4.0.4",
