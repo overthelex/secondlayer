@@ -49,7 +49,11 @@ export class CreditService {
   async checkBalance(userId: string, requiredCredits: number = 1): Promise<UserBalance> {
     try {
       const result = await this.pool.query<UserBalance>(
-        `SELECT * FROM check_user_balance($1, $2)`,
+        `SELECT
+          has_credits AS "hasCredits",
+          current_balance AS "currentBalance",
+          reason
+         FROM check_user_balance($1, $2)`,
         [userId, requiredCredits]
       );
 
@@ -83,7 +87,11 @@ export class CreditService {
   ): Promise<CreditDeduction> {
     try {
       const result = await this.pool.query<CreditDeduction>(
-        `SELECT * FROM deduct_credits($1, $2, $3, $4, $5)`,
+        `SELECT
+          success,
+          new_balance AS "newBalance",
+          transaction_id AS "transactionId"
+         FROM deduct_credits($1, $2, $3, $4, $5)`,
         [userId, amount, toolName, costTrackingId || null, description || null]
       );
 
@@ -140,7 +148,11 @@ export class CreditService {
   ): Promise<CreditAddition> {
     try {
       const result = await this.pool.query<CreditAddition>(
-        `SELECT * FROM add_credits($1, $2, $3, $4, $5, $6, $7)`,
+        `SELECT
+          success,
+          new_balance AS "newBalance",
+          transaction_id AS "transactionId"
+         FROM add_credits($1, $2, $3, $4, $5, $6, $7)`,
         [
           userId,
           amount,
