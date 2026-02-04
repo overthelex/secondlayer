@@ -1,8 +1,9 @@
 import { Pool } from 'pg';
-import { LegislationService, parseLegislationReference } from '../services/legislation-service';
+import { LegislationService, parseLegislationReference, parseLegislationReferenceWithAI } from '../services/legislation-service';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { EmbeddingService } from '../services/embedding-service';
 import { logger } from '../utils/logger';
+import { createClient } from 'redis';
 
 export interface LegislationToolArgs {
   rada_id?: string;
@@ -18,9 +19,16 @@ export class LegislationTools {
   private service: LegislationService;
   private renderer: LegislationRenderer;
 
-  constructor(db: Pool, embeddingService: EmbeddingService) {
-    this.service = new LegislationService(db, embeddingService);
+  constructor(db: Pool, embeddingService: EmbeddingService, redis?: ReturnType<typeof createClient>) {
+    this.service = new LegislationService(db, embeddingService, redis);
     this.renderer = new LegislationRenderer();
+  }
+
+  /**
+   * Устанавливает Redis клиент для AI-классификации законодательства
+   */
+  setRedisClient(redis: ReturnType<typeof createClient> | null): void {
+    this.service.setRedisClient(redis);
   }
 
   async getLegislationArticle(args: LegislationToolArgs): Promise<any> {
@@ -67,18 +75,30 @@ export class LegislationTools {
     const radaId = args.rada_id ? String(args.rada_id).trim() : '';
     const articleNumber = args.article_number ? String(args.article_number).trim() : '';
 
-    let resolved = radaId && articleNumber ? { radaId, articleNumber } : null;
-    if (!resolved && query) {
-      resolved = parseLegislationReference(query);
+    let resolved: { radaId: string; articleNumber: string; source?: 'regexp' | 'ai'; confidence?: number } | null = null;
+
+    // Если явно переданы rada_id и article_number, используем их
+    if (radaId && articleNumber) {
+      resolved = { radaId, articleNumber };
+    }
+    // Иначе пытаемся парсить из query
+    else if (query) {
+      // Используем AI-классификацию для улучшенного парсинга
+      const aiResult = await this.service.parseArticleReferenceWithAI(query);
+      if (aiResult) {
+        resolved = aiResult;
+      }
     }
 
     if (!resolved) {
-      throw new Error('Provide either (rada_id + article_number) or query like "ст. 625 ЦК"');
+      throw new Error('Provide either (rada_id + article_number) or query like "ст. 625 ЦК" or "стаття 44 податкового кодексу"');
     }
 
     logger.info('[MCP Tool] get_legislation_section started', {
       rada_id: resolved.radaId,
       article_number: resolved.articleNumber,
+      source: resolved.source || 'explicit',
+      confidence: resolved.confidence,
       from_query: Boolean(query) && !(radaId && articleNumber),
       query: query.substring(0, 50)
     });
@@ -98,7 +118,11 @@ export class LegislationTools {
       full_text: article.full_text,
       url: article.url,
       metadata: article.metadata,
-      resolved_from: query && !(radaId && articleNumber) ? { query } : undefined,
+      resolved_from: query && !(radaId && articleNumber) ? {
+        query,
+        method: resolved.source || 'explicit',
+        confidence: resolved.confidence
+      } : undefined,
     };
 
     if (args.include_html) {
@@ -169,7 +193,8 @@ export class LegislationTools {
       limit
     });
 
-    const directRef = parseLegislationReference(args.query);
+    // Пытаемся определить прямую ссылку на статью с помощью AI
+    const directRef = await this.service.parseArticleReferenceWithAI(args.query);
     if (directRef) {
       const article = await this.service.getArticle(directRef.radaId, directRef.articleNumber);
       if (!article) {
@@ -186,6 +211,8 @@ export class LegislationTools {
         resolved_reference: {
           rada_id: directRef.radaId,
           article_number: directRef.articleNumber,
+          source: directRef.source,
+          confidence: directRef.confidence,
         },
         total_found: 1,
         articles: [

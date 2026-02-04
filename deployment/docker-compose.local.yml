@@ -26,7 +26,6 @@ services:
   rada-db-init-local:
     image: postgres:15-alpine
     container_name: rada-db-init-local
-    profiles: ["rada"]
     depends_on:
       postgres-local:
         condition: service_healthy
@@ -251,7 +250,6 @@ services:
       dockerfile: Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-local
-    profiles: ["rada"]
     depends_on:
       rada-db-init-local:
         condition: service_completed_successfully
@@ -276,7 +274,6 @@ services:
   rada-mcp-app-local:
     image: rada-mcp:latest
     container_name: rada-mcp-app-local
-    profiles: ["rada"]
     depends_on:
       rada-migrate-local:
         condition: service_completed_successfully
@@ -429,6 +426,122 @@ services:
           cpus: '0.5'
           memory: 512M
 
+  # OpenReyestr MCP Server - Ukrainian State Register
+  postgres-openreyestr-local:
+    image: postgres:15-alpine
+    container_name: openreyestr-postgres-local
+    environment:
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD:-openreyestr_dev_password}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_openreyestr_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OPENREYESTR_POSTGRES_USER:-openreyestr} -d ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+
+  migrate-openreyestr-local:
+    build:
+      context: ../mcp_openreyestr
+      dockerfile: Dockerfile
+    image: openreyestr-app:latest
+    container_name: openreyestr-migrate-local
+    depends_on:
+      postgres-openreyestr-local:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD:-openreyestr_dev_password}@postgres-openreyestr-local:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
+      POSTGRES_HOST: postgres-openreyestr-local
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD:-openreyestr_dev_password}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-local
+
+  app-openreyestr-local:
+    image: openreyestr-app:latest
+    container_name: openreyestr-app-local
+    command: ["node", "dist/http-server.js"]
+    environment:
+      # Application
+      NODE_ENV: ${NODE_ENV:-development}
+      HTTP_PORT: 3004
+      HTTP_HOST: 0.0.0.0
+
+      # Database
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD:-openreyestr_dev_password}@postgres-openreyestr-local:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
+      POSTGRES_HOST: postgres-openreyestr-local
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD:-openreyestr_dev_password}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
+
+      # Authentication
+      OPENREYESTR_API_KEYS: ${OPENREYESTR_API_KEYS:-test-key-123,local-dev-key}
+
+      # OpenAI Configuration (optional for future AI features)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+
+      # SecondLayer Integration (for cross-referencing)
+      SECONDLAYER_URL: http://app-local:3000
+      SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS:-test-key-123}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+    ports:
+      - "3004:3004"
+
+    depends_on:
+      postgres-openreyestr-local:
+        condition: service_healthy
+      migrate-openreyestr-local:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3004/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    restart: unless-stopped
+
+    networks:
+      - secondlayer-local
+
+    # Resource limits for local development
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   # Frontend - typically run with npm run dev outside Docker for hot reload
   # Uncomment if you want to run frontend in Docker
   # lexwebapp-local:
@@ -453,6 +566,8 @@ volumes:
   app_local_data:
     driver: local
   document_service_credentials:
+    driver: local
+  postgres_openreyestr_local_data:
     driver: local
 
 networks:
