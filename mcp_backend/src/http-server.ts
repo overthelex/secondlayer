@@ -654,14 +654,14 @@ class HTTPMCPServer {
         // 1. Check credits BEFORE execution (for API key users)
         if (req.authType === 'apikey' && req.user?.id) {
           try {
-            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
+            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.id);
 
             if (creditsRequired > 0) {
-              const balance = await this.creditService.checkBalance(req.user.userId, creditsRequired);
+              const balance = await this.creditService.checkBalance(req.user.id, creditsRequired);
 
               if (!balance.hasCredits) {
                 logger.warn('[HTTP API] Insufficient credits, blocking request', {
-                  userId: req.user.userId,
+                  userId: req.user.id,
                   tool: toolName,
                   creditsRequired,
                   currentBalance: balance.currentBalance,
@@ -677,7 +677,7 @@ class HTTPMCPServer {
               }
 
               logger.debug('[HTTP API] Credit check passed', {
-                userId: req.user.userId,
+                userId: req.user.id,
                 tool: toolName,
                 creditsRequired,
                 currentBalance: balance.currentBalance,
@@ -685,7 +685,7 @@ class HTTPMCPServer {
             }
           } catch (creditError: any) {
             logger.error('[HTTP API] Error checking credits', {
-              userId: req.user.userId,
+              userId: req.user.id,
               tool: toolName,
               error: creditError.message,
             });
@@ -803,11 +803,11 @@ class HTTPMCPServer {
         // 6. Deduct credits after successful execution (for API key users)
         if (req.authType === 'apikey' && req.user?.id) {
           try {
-            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.userId);
+            const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, req.user.id);
 
             if (creditsRequired > 0) {
               const deduction = await this.creditService.deductCredits(
-                req.user.userId,
+                req.user.id,
                 creditsRequired,
                 toolName,
                 requestId,
@@ -816,7 +816,7 @@ class HTTPMCPServer {
 
               if (deduction.success) {
                 logger.info('[HTTP API] Credits deducted', {
-                  userId: req.user.userId,
+                  userId: req.user.id,
                   tool: toolName,
                   creditsDeducted: creditsRequired,
                   newBalance: deduction.newBalance,
@@ -824,7 +824,7 @@ class HTTPMCPServer {
               } else {
                 // This should not happen since we checked balance before execution
                 logger.error('[HTTP API] Failed to deduct credits after execution', {
-                  userId: req.user.userId,
+                  userId: req.user.id,
                   tool: toolName,
                   creditsRequired,
                   message: 'Balance was sufficient before execution but deduction failed',
@@ -833,7 +833,7 @@ class HTTPMCPServer {
             }
           } catch (creditError: any) {
             logger.error('[HTTP API] Error deducting credits', {
-              userId: req.user.userId,
+              userId: req.user.id,
               tool: toolName,
               error: creditError.message,
             });
