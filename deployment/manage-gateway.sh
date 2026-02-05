@@ -403,6 +403,9 @@ deploy_to_gate() {
     # Copy source code for building images on server
     print_msg "$BLUE" "📦 Syncing source code..."
     cd ..
+
+    # Copy Dockerfile
+    scp Dockerfile.mono-backend ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/../
     rsync -avz --delete \
         --exclude 'node_modules' \
         --exclude 'dist' \
