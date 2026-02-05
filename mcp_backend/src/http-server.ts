@@ -42,6 +42,9 @@ import { ApiKeyService } from './services/api-key-service.js';
 import { CreditService } from './services/credit-service.js';
 import { createApiKeyRouter } from './routes/api-key-routes.js';
 import { getRedisClient } from './utils/redis-client.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 dotenv.config();
 
@@ -320,6 +323,276 @@ class HTTPMCPServer {
       }
     }) as any);
 
+    // Standard MCP SSE endpoint for MCP clients (Claude Desktop, Jan chat, etc.)
+    // Endpoint: POST /v1/sse
+    // This implements the standard Model Context Protocol over SSE Transport
+    // Reference: https://spec.modelcontextprotocol.io/specification/transports/#server-sent-events
+    this.app.post('/v1/sse', (async (req: DualAuthRequest, res: Response) => {
+      try {
+        logger.info('[MCP v1/sse] New standard MCP SSE connection');
+
+        // Extract user ID from optional auth header (same logic as /sse endpoint)
+        let userId: string | undefined;
+        let clientKey: string | undefined;
+
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          const token = authHeader.replace('Bearer ', '');
+
+          try {
+            if (token.includes('.')) {
+              // JWT token
+              const jwt = await import('jsonwebtoken');
+              const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
+              userId = decoded.userId;
+              logger.debug('[MCP v1/sse] Authenticated with JWT', { userId });
+            } else {
+              // API key
+              clientKey = token;
+              const keyInfo = await this.apiKeyService.validateApiKey(token);
+
+              if (keyInfo) {
+                const rateLimit = await this.apiKeyService.checkRateLimit(token);
+
+                if (!rateLimit.allowed) {
+                  logger.warn('[MCP v1/sse] Rate limit exceeded', {
+                    keyId: keyInfo.id,
+                    reason: rateLimit.reason,
+                  });
+                  return res.status(429).json({
+                    error: 'Rate limit exceeded',
+                    code: 'RATE_LIMIT_EXCEEDED',
+                    reason: rateLimit.reason,
+                  });
+                }
+
+                userId = keyInfo.userId;
+                logger.debug('[MCP v1/sse] Authenticated with API key', {
+                  userId,
+                  keyId: keyInfo.id,
+                });
+
+                // Update API key usage
+                this.apiKeyService.updateUsage(token).catch((err) => {
+                  logger.error('[MCP v1/sse] Failed to update API key usage', { error: err.message });
+                });
+              } else {
+                logger.debug('[MCP v1/sse] Invalid API key, continuing as anonymous');
+                clientKey = undefined;
+              }
+            }
+          } catch (error) {
+            logger.debug('[MCP v1/sse] Auth failed, continuing without userId', { error: (error as Error).message });
+          }
+        }
+
+        // Create MCP Server instance for this connection
+        const mcpServer = new Server(
+          {
+            name: 'secondlayer-mcp',
+            version: '1.0.0',
+          },
+          {
+            capabilities: {
+              tools: {},
+            },
+          }
+        );
+
+        // Setup tools/list handler
+        mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
+          return {
+            tools: [
+              ...this.mcpAPI.getTools(),
+              ...this.legislationTools.getToolDefinitions(),
+              ...this.documentAnalysisTools.getToolDefinitions(),
+            ],
+          };
+        });
+
+        // Setup tools/call handler with billing integration
+        mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+          const toolName = request.params.name;
+          const args = request.params.arguments || {};
+          const requestId = `mcp-v1-${uuidv4()}`;
+          const startTime = Date.now();
+
+          try {
+            logger.info('[MCP v1/sse] Tool call', {
+              tool: toolName,
+              userId: userId || 'anonymous',
+            });
+
+            // Phase 2 Billing: Check credits BEFORE execution
+            if (userId && this.creditService) {
+              const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, userId);
+
+              if (creditsRequired > 0) {
+                const balance = await this.creditService.checkBalance(userId, creditsRequired);
+
+                if (!balance.hasCredits) {
+                  logger.warn('[MCP v1/sse] Insufficient credits', {
+                    userId,
+                    tool: toolName,
+                    creditsRequired,
+                  });
+
+                  return {
+                    content: [
+                      {
+                        type: 'text',
+                        text: `Error: Insufficient credits. Required: ${creditsRequired}, Current balance: ${balance.currentBalance}`,
+                      },
+                    ],
+                    isError: true,
+                  };
+                }
+              }
+            }
+
+            // Create cost tracking record
+            await this.costTracker.createTrackingRecord({
+              requestId,
+              toolName,
+              clientKey,
+              userId,
+              userQuery: args.query || JSON.stringify(args),
+              queryParams: args,
+            });
+
+            // Execute tool in request context
+            const result = await requestContext.run(
+              { requestId, task: toolName },
+              async () => {
+                // Route to appropriate tool handler
+                if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
+                  switch (toolName) {
+                    case 'get_legislation_article':
+                      return await this.legislationTools.getLegislationArticle(args as any);
+                    case 'get_legislation_section':
+                      return await this.legislationTools.getLegislationSection(args as any);
+                    case 'get_legislation_articles':
+                      return await this.legislationTools.getLegislationArticles(args as any);
+                    case 'search_legislation':
+                      return await this.legislationTools.searchLegislation(args as any);
+                    case 'get_legislation_structure':
+                      return await this.legislationTools.getLegislationStructure(args as any);
+                    default:
+                      throw new Error(`Unknown legislation tool: ${toolName}`);
+                  }
+                } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
+                  switch (toolName) {
+                    case 'parse_document':
+                      return await this.documentAnalysisTools.parseDocument(args as any);
+                    case 'extract_key_clauses':
+                      return await this.documentAnalysisTools.extractKeyClauses(args as any);
+                    case 'summarize_document':
+                      return await this.documentAnalysisTools.summarizeDocument(args as any);
+                    case 'compare_documents':
+                      return await this.documentAnalysisTools.compareDocuments(args as any);
+                    default:
+                      throw new Error(`Unknown document tool: ${toolName}`);
+                  }
+                } else {
+                  return await this.mcpAPI.handleToolCall(toolName, args);
+                }
+              }
+            );
+
+            // Complete cost tracking
+            const executionTime = Date.now() - startTime;
+            await this.costTracker.completeTrackingRecord({
+              requestId,
+              executionTimeMs: executionTime,
+              status: 'completed',
+            });
+
+            // Phase 2 Billing: Deduct credits after successful execution
+            if (userId && this.creditService) {
+              const creditsRequired = await this.creditService.calculateCreditsForTool(toolName, userId);
+
+              if (creditsRequired > 0) {
+                const deduction = await this.creditService.deductCredits(
+                  userId,
+                  creditsRequired,
+                  toolName,
+                  requestId,
+                  `Tool execution: ${toolName}`
+                );
+
+                if (deduction.success) {
+                  logger.info('[MCP v1/sse] Credits deducted', {
+                    userId,
+                    tool: toolName,
+                    creditsDeducted: creditsRequired,
+                    newBalance: deduction.newBalance,
+                  });
+                }
+              }
+            }
+
+            // Return result in MCP format
+            return {
+              content: result.content || [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2),
+                },
+              ],
+            };
+
+          } catch (error: any) {
+            logger.error('[MCP v1/sse] Tool execution error', {
+              tool: toolName,
+              error: error.message,
+            });
+
+            // Record failure
+            const executionTime = Date.now() - startTime;
+            await this.costTracker.completeTrackingRecord({
+              requestId,
+              executionTimeMs: executionTime,
+              status: 'failed',
+              errorMessage: error.message,
+            });
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: ${error.message}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        });
+
+        // Create SSE transport
+        const transport = new SSEServerTransport('/v1/sse', res);
+
+        // Connect MCP server to transport
+        await mcpServer.connect(transport);
+
+        logger.info('[MCP v1/sse] Connection established');
+
+        // Handle client disconnect
+        req.on('close', () => {
+          logger.info('[MCP v1/sse] Client disconnected');
+          mcpServer.close();
+        });
+
+      } catch (error: any) {
+        logger.error('[MCP v1/sse] Connection error:', error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'Failed to establish MCP SSE connection',
+            message: error.message,
+          });
+        }
+      }
+    }) as any);
+
     // MCP discovery endpoint (public - lists available tools)
     // GET /mcp - Returns MCP server info and capabilities
     this.app.get('/mcp', (_req: Request, res: Response) => {
@@ -341,6 +614,7 @@ class HTTPMCPServer {
         },
         endpoints: {
           sse: '/sse',
+          'sse-standard': '/v1/sse',
           http: '/api/tools',
         },
         tools: tools.map(t => ({
