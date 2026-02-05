@@ -121,7 +121,7 @@ export class ApiKeyService {
    */
   async updateUsage(apiKey: string): Promise<void> {
     try {
-      await this.pool.query(`SELECT update_api_key_usage($1)`, [apiKey]);
+      await this.pool.query(`SELECT increment_api_key_usage($1)`, [apiKey]);
     } catch (error: any) {
       logger.error('[ApiKeyService] Error updating API key usage', {
         error: error.message,
