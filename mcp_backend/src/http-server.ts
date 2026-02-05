@@ -324,10 +324,10 @@ class HTTPMCPServer {
     }) as any);
 
     // Standard MCP SSE endpoint for MCP clients (Claude Desktop, Jan chat, etc.)
-    // Endpoint: POST /v1/sse
+    // Endpoint: GET /v1/sse
     // This implements the standard Model Context Protocol over SSE Transport
     // Reference: https://spec.modelcontextprotocol.io/specification/transports/#server-sent-events
-    this.app.post('/v1/sse', (async (req: DualAuthRequest, res: Response) => {
+    this.app.get('/v1/sse', (async (req: DualAuthRequest, res: Response) => {
       try {
         logger.info('[MCP v1/sse] New standard MCP SSE connection');
 
