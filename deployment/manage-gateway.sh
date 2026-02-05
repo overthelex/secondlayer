@@ -403,9 +403,6 @@ deploy_to_gate() {
     # Copy source code for building images on server
     print_msg "$BLUE" "📦 Syncing source code..."
     cd ..
-
-    # Copy Dockerfile
-    scp Dockerfile.mono-backend ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/../
     rsync -avz --delete \
         --exclude 'node_modules' \
         --exclude 'dist' \
@@ -421,6 +418,9 @@ deploy_to_gate() {
         --exclude 'test-results' \
         mcp_backend lexwebapp packages \
         ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
+
+    # Copy Dockerfile AFTER rsync (so it doesn't get deleted by --delete flag)
+    scp Dockerfile.mono-backend ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/../
     cd deployment
 
     # Stop and remove old containers, then start new ones
