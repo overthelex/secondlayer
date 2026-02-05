@@ -456,7 +456,7 @@ class HTTPMCPServer {
               toolName,
               clientKey,
               userId,
-              userQuery: args.query || JSON.stringify(args),
+              userQuery: String(args.query || JSON.stringify(args)),
               queryParams: args,
             });
 
