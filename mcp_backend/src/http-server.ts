@@ -45,6 +45,7 @@ import { getRedisClient } from './utils/redis-client.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
 
 dotenv.config();
 
@@ -193,9 +194,10 @@ class HTTPMCPServer {
     }));
 
     // IMPORTANT: Stripe webhooks need raw body BEFORE json parsing
-    // Mount webhook routes with raw body parser
+    // Mount webhook routes with raw body parser and rate limiting
     this.app.use(
       '/webhooks/stripe',
+      webhookRateLimit as any,
       express.raw({ type: 'application/json', limit: '10mb' }),
       createWebhookRouter(this.stripeService, this.fondyService)
     );
@@ -223,8 +225,8 @@ class HTTPMCPServer {
   }
 
   private setupRoutes() {
-    // Health check (public - no auth)
-    this.app.get('/health', (_req, res) => {
+    // Health check (public - no auth, rate limited)
+    this.app.get('/health', healthCheckRateLimit as any, (_req, res) => {
       res.json({
         status: 'ok',
         service: 'secondlayer-mcp-http',
@@ -232,83 +234,96 @@ class HTTPMCPServer {
       });
     });
 
-    // MCP SSE endpoint for ChatGPT web integration (optional auth)
+    // MCP SSE endpoint for ChatGPT web integration (REQUIRED auth)
     // Endpoint: POST /sse
     // This implements the Model Context Protocol over Server-Sent Events
     // Reference: https://platform.openai.com/docs/mcp
     this.app.post('/sse', (async (req: DualAuthRequest, res: Response) => {
       try {
-        // CRITICAL: Set SSE headers BEFORE any other processing
-        // This must be done here to override express.json() middleware
+        // CRITICAL: Authentication is REQUIRED for usage tracking
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          logger.warn('[MCP SSE] Missing or invalid Authorization header');
+          return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Authorization header with Bearer token is required',
+            code: 'MISSING_AUTH',
+          });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+        let userId: string | undefined;
+        let clientKey: string | undefined;
+
+        // Authenticate (JWT or API key)
+        try {
+          if (token.includes('.')) {
+            // JWT token - verify and extract userId
+            const jwt = await import('jsonwebtoken');
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
+            userId = decoded.userId;
+            logger.debug('[MCP SSE] Authenticated with JWT', { userId });
+          } else {
+            // API key - validate and get user info
+            clientKey = token;
+            const keyInfo = await this.apiKeyService.validateApiKey(token);
+
+            if (!keyInfo) {
+              logger.warn('[MCP SSE] Invalid API key', {
+                keyPrefix: token.substring(0, 12) + '...',
+              });
+              return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Invalid API key',
+                code: 'INVALID_API_KEY',
+              });
+            }
+
+            // Valid API key - check rate limits
+            const rateLimit = await this.apiKeyService.checkRateLimit(token);
+
+            if (!rateLimit.allowed) {
+              logger.warn('[MCP SSE] Rate limit exceeded', {
+                keyId: keyInfo.id,
+                reason: rateLimit.reason,
+              });
+              return res.status(429).json({
+                error: 'Rate limit exceeded',
+                code: 'RATE_LIMIT_EXCEEDED',
+                reason: rateLimit.reason,
+                requestsToday: rateLimit.requestsToday,
+                rateLimitPerDay: rateLimit.rateLimitPerDay,
+              });
+            }
+
+            // Get userId from API key
+            userId = keyInfo.userId;
+            logger.debug('[MCP SSE] Authenticated with API key', {
+              userId,
+              keyId: keyInfo.id,
+              userEmail: keyInfo.userEmail,
+            });
+
+            // Update API key usage (async, don't wait)
+            this.apiKeyService.updateUsage(token).catch((err) => {
+              logger.error('[MCP SSE] Failed to update API key usage', { error: err.message });
+            });
+          }
+        } catch (error) {
+          // Auth failed - return 401
+          logger.warn('[MCP SSE] Authentication failed', { error: (error as Error).message });
+          return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Authentication failed: ' + (error as Error).message,
+            code: 'AUTH_FAILED',
+          });
+        }
+
+        // Authentication successful - set SSE headers and handle connection
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
-
-        // Extract user ID from optional auth header
-        let userId: string | undefined;
-        let clientKey: string | undefined;
-
-        const authHeader = req.headers.authorization;
-        if (authHeader?.startsWith('Bearer ')) {
-          const token = authHeader.replace('Bearer ', '');
-
-          // Try to authenticate (JWT or API key)
-          try {
-            if (token.includes('.')) {
-              // JWT token - verify and extract userId
-              const jwt = await import('jsonwebtoken');
-              const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
-              userId = decoded.userId;
-              logger.debug('[MCP SSE] Authenticated with JWT', { userId });
-            } else {
-              // API key - validate and get user info (Phase 2 Billing)
-              clientKey = token;
-              const keyInfo = await this.apiKeyService.validateApiKey(token);
-
-              if (keyInfo) {
-                // Valid API key - check rate limits
-                const rateLimit = await this.apiKeyService.checkRateLimit(token);
-
-                if (!rateLimit.allowed) {
-                  logger.warn('[MCP SSE] Rate limit exceeded', {
-                    keyId: keyInfo.id,
-                    reason: rateLimit.reason,
-                  });
-                  return res.status(429).json({
-                    error: 'Rate limit exceeded',
-                    code: 'RATE_LIMIT_EXCEEDED',
-                    reason: rateLimit.reason,
-                    requestsToday: rateLimit.requestsToday,
-                    rateLimitPerDay: rateLimit.rateLimitPerDay,
-                  });
-                }
-
-                // Get userId from API key
-                userId = keyInfo.userId;
-                logger.debug('[MCP SSE] Authenticated with API key', {
-                  userId,
-                  keyId: keyInfo.id,
-                  userEmail: keyInfo.userEmail,
-                });
-
-                // Update API key usage (async, don't wait)
-                this.apiKeyService.updateUsage(token).catch((err) => {
-                  logger.error('[MCP SSE] Failed to update API key usage', { error: err.message });
-                });
-              } else {
-                // Invalid API key - continue as anonymous for backward compatibility
-                logger.debug('[MCP SSE] Invalid API key, continuing as anonymous', {
-                  keyPrefix: token.substring(0, 12) + '...',
-                });
-                clientKey = undefined;
-              }
-            }
-          } catch (error) {
-            // Auth failed, but continue without userId (for backward compatibility)
-            logger.debug('[MCP SSE] Auth failed, continuing without userId', { error: (error as Error).message });
-          }
-        }
 
         // Pass userId and clientKey to SSE handler
         await this.mcpSSEServer.handleSSEConnection(req, res, userId, clientKey);
@@ -331,59 +346,79 @@ class HTTPMCPServer {
       try {
         logger.info('[MCP v1/sse] New standard MCP SSE connection');
 
-        // Extract user ID from optional auth header (same logic as /sse endpoint)
+        // REQUIRED authentication for usage tracking
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          logger.warn('[MCP v1/sse] Missing or invalid Authorization header');
+          return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Authorization header with Bearer token is required',
+            code: 'MISSING_AUTH',
+          });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
         let userId: string | undefined;
         let clientKey: string | undefined;
 
-        const authHeader = req.headers.authorization;
-        if (authHeader?.startsWith('Bearer ')) {
-          const token = authHeader.replace('Bearer ', '');
+        // Authenticate (JWT or API key)
+        try {
+          if (token.includes('.')) {
+            // JWT token
+            const jwt = await import('jsonwebtoken');
+            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
+            userId = decoded.userId;
+            logger.debug('[MCP v1/sse] Authenticated with JWT', { userId });
+          } else {
+            // API key
+            clientKey = token;
+            const keyInfo = await this.apiKeyService.validateApiKey(token);
 
-          try {
-            if (token.includes('.')) {
-              // JWT token
-              const jwt = await import('jsonwebtoken');
-              const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
-              userId = decoded.userId;
-              logger.debug('[MCP v1/sse] Authenticated with JWT', { userId });
-            } else {
-              // API key
-              clientKey = token;
-              const keyInfo = await this.apiKeyService.validateApiKey(token);
-
-              if (keyInfo) {
-                const rateLimit = await this.apiKeyService.checkRateLimit(token);
-
-                if (!rateLimit.allowed) {
-                  logger.warn('[MCP v1/sse] Rate limit exceeded', {
-                    keyId: keyInfo.id,
-                    reason: rateLimit.reason,
-                  });
-                  return res.status(429).json({
-                    error: 'Rate limit exceeded',
-                    code: 'RATE_LIMIT_EXCEEDED',
-                    reason: rateLimit.reason,
-                  });
-                }
-
-                userId = keyInfo.userId;
-                logger.debug('[MCP v1/sse] Authenticated with API key', {
-                  userId,
-                  keyId: keyInfo.id,
-                });
-
-                // Update API key usage
-                this.apiKeyService.updateUsage(token).catch((err) => {
-                  logger.error('[MCP v1/sse] Failed to update API key usage', { error: err.message });
-                });
-              } else {
-                logger.debug('[MCP v1/sse] Invalid API key, continuing as anonymous');
-                clientKey = undefined;
-              }
+            if (!keyInfo) {
+              logger.warn('[MCP v1/sse] Invalid API key', {
+                keyPrefix: token.substring(0, 12) + '...',
+              });
+              return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Invalid API key',
+                code: 'INVALID_API_KEY',
+              });
             }
-          } catch (error) {
-            logger.debug('[MCP v1/sse] Auth failed, continuing without userId', { error: (error as Error).message });
+
+            // Check rate limits
+            const rateLimit = await this.apiKeyService.checkRateLimit(token);
+
+            if (!rateLimit.allowed) {
+              logger.warn('[MCP v1/sse] Rate limit exceeded', {
+                keyId: keyInfo.id,
+                reason: rateLimit.reason,
+              });
+              return res.status(429).json({
+                error: 'Rate limit exceeded',
+                code: 'RATE_LIMIT_EXCEEDED',
+                reason: rateLimit.reason,
+              });
+            }
+
+            userId = keyInfo.userId;
+            logger.debug('[MCP v1/sse] Authenticated with API key', {
+              userId,
+              keyId: keyInfo.id,
+            });
+
+            // Update API key usage
+            this.apiKeyService.updateUsage(token).catch((err) => {
+              logger.error('[MCP v1/sse] Failed to update API key usage', { error: err.message });
+            });
           }
+        } catch (error) {
+          // Auth failed - return 401
+          logger.warn('[MCP v1/sse] Authentication failed', { error: (error as Error).message });
+          return res.status(401).json({
+            error: 'Unauthorized',
+            message: 'Authentication failed: ' + (error as Error).message,
+            code: 'AUTH_FAILED',
+          });
         }
 
         // Create MCP Server instance for this connection
@@ -593,9 +628,9 @@ class HTTPMCPServer {
       }
     }) as any);
 
-    // MCP discovery endpoint (public - lists available tools)
+    // MCP discovery endpoint (public - lists available tools, rate limited)
     // GET /mcp - Returns MCP server info and capabilities
-    this.app.get('/mcp', (_req: Request, res: Response) => {
+    this.app.get('/mcp', mcpDiscoveryRateLimit as any, (_req: Request, res: Response) => {
       const tools = this.mcpSSEServer.getAllTools();
       res.json({
         protocolVersion: '2024-11-05',
@@ -813,10 +848,10 @@ class HTTPMCPServer {
     // GET /api/admin/settings - Get system settings
     this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.db));
 
-    // Webhook routes - public (signature verified by services)
+    // Webhook routes - public (signature verified by services, rate limited)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
     // POST /webhooks/fondy - mount here with JSON body
-    this.app.post('/webhooks/fondy', (async (req: Request, res: Response) => {
+    this.app.post('/webhooks/fondy', webhookRateLimit as any, (async (req: Request, res: Response) => {
       try {
         await this.fondyService.handleCallback(req.body);
         res.json({ received: true });

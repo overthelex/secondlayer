@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger';
 import { requireAPIKey } from './middleware/dual-auth';
+import { healthCheckRateLimit } from './middleware/rate-limit';
 import { Database } from './database/database';
 import { RadaAPIAdapter } from './adapters/rada-api-adapter';
 import { ZakonRadaAdapter } from './adapters/zakon-rada-adapter';
@@ -106,8 +107,8 @@ class HTTPRadaServer {
   }
 
   private setupRoutes() {
-    // Health check (public - no auth)
-    this.app.get('/health', (_req, res) => {
+    // Health check (public - no auth, rate limited)
+    this.app.get('/health', healthCheckRateLimit as any, (_req, res) => {
       res.json({
         status: 'ok',
         service: 'rada-mcp-http',
