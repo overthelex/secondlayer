@@ -353,7 +353,12 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ### 📚 Integration & Deployment
 
-- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration guide (HTTP, MCP stdio, SSE)
+- **`docs/MCP_CLIENT_INTEGRATION_GUIDE.md`** ⭐ **NEW!** - Complete guide for connecting 10+ LLM clients
+  - Desktop: Claude Desktop, Jan AI, Cherry Studio, Chat-MCP, BoltAI
+  - Web: LibreChat, AnythingLLM, Open WebUI, Chainlit, ChatGPT Web
+  - All transports (stdio, HTTP, SSE, Streamable HTTP)
+  - Configurations, examples, troubleshooting
+- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration quick start (HTTP, MCP stdio, SSE)
 - `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol for long operations
 - `mcp_backend/docs/CHATGPT_INTEGRATION.md` - ChatGPT Actions integration
 - `mcp_backend/docs/DEPLOYMENT_CHATGPT.md` - Multi-environment deployment guide
