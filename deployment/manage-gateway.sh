@@ -18,8 +18,9 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-GATE_SERVER="gate.lexapp.co.ua"
-GATE_USER="vovkes"
+GATE_SERVER="gate.lexapp.co.ua"  # For dev environment
+MAIL_SERVER="mail.lexapp.co.ua"  # For stage and prod environments
+DEPLOY_USER="vovkes"
 REMOTE_PATH="/home/vovkes/secondlayer/deployment"
 
 # Print colored message
@@ -53,11 +54,17 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  prod              Production (legal.org.ua)
-  stage             Staging (legal.org.ua/staging)
-  dev               Development (dev.legal.org.ua)
-  local             Local development (localhost:3000)
-  all               All gateway environments (prod+stage+dev, excludes local)
+  prod              Production (legal.org.ua) → mail.lexapp.co.ua
+  stage             Staging (stage.legal.org.ua) → mail.lexapp.co.ua
+  dev               Development (dev.legal.org.ua) → gate.lexapp.co.ua
+  local             Local development (localhost:3000) → localhost
+  all               All remote environments (prod+stage+dev)
+
+Deployment Targets:
+  - Dev: Deploys to gate.lexapp.co.ua
+  - Stage: Deploys to mail.lexapp.co.ua
+  - Prod: Deploys to mail.lexapp.co.ua
+  - Local: Runs on localhost (no remote deployment)
 
 Examples:
   $0 start local             # Start local development environment
@@ -328,50 +335,53 @@ build_images() {
 check_health() {
     print_msg "$BLUE" "🏥 Checking health of all services...\n"
 
-    # Production
-    print_msg "$YELLOW" "=== Production ==="
+    # Production (mail server)
+    print_msg "$YELLOW" "=== Production (mail.lexapp.co.ua) ==="
     curl -sf https://legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
     curl -sf https://legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
-    # Staging
-    print_msg "$YELLOW" "\n=== Staging ==="
+    # Staging (mail server)
+    print_msg "$YELLOW" "\n=== Staging (mail.lexapp.co.ua) ==="
     curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
     curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
-    # Development
-    print_msg "$YELLOW" "\n=== Development ==="
+    # Development (gate server)
+    print_msg "$YELLOW" "\n=== Development (gate.lexapp.co.ua) ==="
     curl -sf https://dev.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
     curl -sf https://dev.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    curl -sf https://dev.legal.org.ua:3005/health > /dev/null && print_msg "$GREEN" "✅ OpenReyestr: healthy" || print_msg "$RED" "❌ OpenReyestr: unhealthy"
 
     # Local
-    print_msg "$YELLOW" "\n=== Local ==="
+    print_msg "$YELLOW" "\n=== Local (localhost) ==="
     curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf http://localhost:3000 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
-
-    # Gateway
-    print_msg "$YELLOW" "\n=== Gateway ==="
-    curl -sf http://localhost:8080/health > /dev/null && print_msg "$GREEN" "✅ Gateway: healthy" || print_msg "$RED" "❌ Gateway: unhealthy"
+    curl -sf http://localhost:8080 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
 
     echo ""
 }
 
-# Deploy to gate server
+# Deploy to server (gate or mail based on environment)
 deploy_to_gate() {
     local env=$1
 
-    print_msg "$BLUE" "🚀 Deploying $env to gate server..."
-
-    # Check if .env file exists
+    # Determine target server based on environment
+    local target_server
+    local server_name
     case $env in
         prod|production)
+            target_server="${MAIL_SERVER}"
+            server_name="mail server"
             local env_file=".env.prod"
             local compose_file="docker-compose.prod.yml"
             ;;
         stage|staging)
+            target_server="${MAIL_SERVER}"
+            server_name="mail server"
             local env_file=".env.stage"
             local compose_file="docker-compose.stage.yml"
             ;;
         dev|development)
+            target_server="${GATE_SERVER}"
+            server_name="gate server"
             local env_file=".env.dev"
             local compose_file="docker-compose.dev.yml"
             ;;
@@ -387,18 +397,20 @@ deploy_to_gate() {
             ;;
     esac
 
+    print_msg "$BLUE" "🚀 Deploying $env to $server_name ($target_server)..."
+
     if [ ! -f "$env_file" ]; then
         print_msg "$RED" "❌ $env_file not found"
         exit 1
     fi
 
     # Create deployment directory on server
-    ssh ${GATE_USER}@${GATE_SERVER} "mkdir -p ${REMOTE_PATH}"
+    ssh ${DEPLOY_USER}@${target_server} "mkdir -p ${REMOTE_PATH}"
 
     # Copy files
-    print_msg "$BLUE" "📤 Copying files to gate server..."
-    scp $compose_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
-    scp $env_file ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
+    print_msg "$BLUE" "📤 Copying files to $server_name..."
+    scp $compose_file ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
+    scp $env_file ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
 
     # Copy source code for building images on server
     print_msg "$BLUE" "📦 Syncing source code..."
@@ -417,17 +429,17 @@ deploy_to_gate() {
         --exclude '.cursor' \
         --exclude 'test-results' \
         mcp_backend/ lexwebapp/ packages/ \
-        ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
+        ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
 
     # Copy Dockerfile AFTER rsync (so it doesn't get deleted by --delete flag)
-    scp Dockerfile.mono-backend ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/../
+    scp Dockerfile.mono-backend ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/../
     cd deployment
 
     # Stop and remove old containers, then start new ones
-    print_msg "$BLUE" "🔄 Updating containers on gate server..."
+    print_msg "$BLUE" "🔄 Updating containers on $server_name..."
 
     # Pass environment to SSH session
-    ssh ${GATE_USER}@${GATE_SERVER} "export DEPLOY_ENV='$env' REMOTE_PATH='${REMOTE_PATH}'; bash -s" << 'EOF'
+    ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_PATH='${REMOTE_PATH}'; bash -s" << 'EOF'
         cd "$REMOTE_PATH"
 
         # Determine compose file and env file based on DEPLOY_ENV
@@ -502,7 +514,7 @@ deploy_to_gate() {
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps
 EOF
 
-    print_msg "$GREEN" "✅ $env deployed to gate server"
+    print_msg "$GREEN" "✅ $env deployed to $server_name ($target_server)"
 }
 
 # Clean environment data
