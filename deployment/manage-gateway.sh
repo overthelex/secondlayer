@@ -403,7 +403,7 @@ deploy_to_gate() {
     # Copy source code for building images on server
     print_msg "$BLUE" "📦 Syncing source code..."
     cd ..
-    rsync -avz --delete \
+    rsync -avz \
         --exclude 'node_modules' \
         --exclude 'dist' \
         --exclude '.git' \
@@ -416,7 +416,7 @@ deploy_to_gate() {
         --exclude '.claude' \
         --exclude '.cursor' \
         --exclude 'test-results' \
-        mcp_backend lexwebapp packages \
+        mcp_backend/ lexwebapp/ packages/ \
         ${GATE_USER}@${GATE_SERVER}:${REMOTE_PATH}/
 
     # Copy Dockerfile AFTER rsync (so it doesn't get deleted by --delete flag)
