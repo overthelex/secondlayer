@@ -8,6 +8,14 @@ Complete documentation for the SecondLayer legal analysis platform.
 - [QUICK_REFERENCE](guides/QUICK_REFERENCE.md) - Quick reference for common tasks
 - [QUICK_START](guides/QUICK_START.md) - Quick start guide
 
+## Client Integration
+
+- **[MCP Client Integration Guide](MCP_CLIENT_INTEGRATION_GUIDE.md) - Complete guide for connecting 10+ LLM clients** ⭐ **NEW**
+  - Desktop clients: Claude Desktop, Jan AI, Cherry Studio, Chat-MCP, BoltAI
+  - Web clients: LibreChat, AnythingLLM, Open WebUI, Chainlit, ChatGPT Web
+  - All transport protocols (stdio, HTTP, SSE, Streamable HTTP)
+  - Complete configurations, examples, and troubleshooting
+
 ## Backend Services
 
 ### MCP Backend (Court Cases & Documents)

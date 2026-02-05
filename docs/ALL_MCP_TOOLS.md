@@ -5,6 +5,13 @@
 - **mcp_rada**: 4 инструмента (порт 3001)
 - **mcp_openreyestr**: 5 инструментов (порт 3005)
 
+## 📚 Related Documentation
+
+- **[MCP Client Integration Guide](MCP_CLIENT_INTEGRATION_GUIDE.md)** - Comprehensive guide for connecting 10+ LLM clients (Claude Desktop, Jan AI, LibreChat, AnythingLLM, Open WebUI, etc.) with complete configurations and examples
+- **[API Explorer](../mcp_backend/docs/api-explorer.html)** - Interactive documentation for all MCP tools
+- **[Client Integration Quick Start](../mcp_backend/docs/CLIENT_INTEGRATION.md)** - Quick start guide for client integration
+- **[SSE Streaming](../mcp_backend/docs/SSE_STREAMING.md)** - Server-Sent Events protocol documentation
+
 ---
 
 ## 🏛️ MCP_BACKEND - Юридический анализ и судебная практика (34 инструмента)

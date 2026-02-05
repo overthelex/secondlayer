@@ -50,6 +50,7 @@ VITE_SECONDARY_LAYER_KEY=test-key-123
 ## Документация
 
 - **README.md** - общее описание проекта
+- **[MCP Client Integration Guide](../MCP_CLIENT_INTEGRATION_GUIDE.md)** ⭐ - Полный гид по подключению 10+ LLM клиентов (Claude Desktop, LibreChat, Jan AI и др.)
 - **mcp_backend/README.md** - документация MCP сервера
 - **frontend/README.md** - документация админки
 - **MIGRATION_SUMMARY.md** - детали миграции
