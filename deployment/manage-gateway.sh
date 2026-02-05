@@ -424,8 +424,8 @@ deploy_to_gate() {
     print_msg "$BLUE" "🔄 Updating containers on gate server..."
 
     # Pass environment to SSH session
-    ssh ${GATE_USER}@${GATE_SERVER} "export DEPLOY_ENV='$env'; bash -s" << 'EOF'
-        cd /home/vovkes/secondlayer-deployment
+    ssh ${GATE_USER}@${GATE_SERVER} "export DEPLOY_ENV='$env' REMOTE_PATH='${REMOTE_PATH}'; bash -s" << 'EOF'
+        cd "$REMOTE_PATH"
 
         # Determine compose file and env file based on DEPLOY_ENV
         case "$DEPLOY_ENV" in
@@ -483,7 +483,7 @@ deploy_to_gate() {
 
         # Rebuild application services without cache
         echo "🔨 Building application images without cache..."
-        docker compose -f $compose_file --env-file $env_file build --no-cache app-$env lexwebapp-$env
+        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT
 
         # Start application services
         echo "▶️  Starting application..."
