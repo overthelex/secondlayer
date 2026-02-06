@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "secondlayer-stage": {
+      "url": "https://stage.mcp.legal.org.ua/v1/sse",
+      "transport": {
+        "type": "sse"
+      },
+      "headers": {
+        "Authorization": "Bearer REDACTED_SL_KEY_STAGE"
+      }
+    }
+  }
+}

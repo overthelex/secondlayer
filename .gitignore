@@ -75,3 +75,5 @@ redis_data/
 # Cleanup backups (temporary)
 .cleanup_backup/
 vulnerability-fix-backup/
+.cursor/
+pip
