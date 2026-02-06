@@ -77,7 +77,7 @@ CREATE OR REPLACE FUNCTION deduct_credits(
   p_user_id UUID,
   p_amount DECIMAL,
   p_tool_name VARCHAR,
-  p_cost_tracking_id UUID,
+  p_cost_tracking_id VARCHAR,  -- Changed from UUID to VARCHAR to support string request IDs
   p_description TEXT
 )
 RETURNS TABLE (
