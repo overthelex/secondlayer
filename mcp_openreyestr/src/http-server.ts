@@ -10,7 +10,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Pool } from 'pg';
 import { logger } from './utils/logger';
 import { requireAPIKey, AuthenticatedRequest } from './middleware/dual-auth';
-import { healthCheckRateLimit } from './middleware/rate-limit';
 import { Database } from './database/database';
 import { OpenReyestrTools } from './api/openreyestr-tools';
 import { CostTracker } from './services/cost-tracker';
@@ -78,8 +77,8 @@ class HTTPOpenReyestrServer {
 
   private setupRoutes() {
 
-    // Health check (public - no auth, rate limited)
-    this.app.get('/health', healthCheckRateLimit as any, (_req, res) => {
+    // Health check (public - no auth)
+    this.app.get('/health', (_req, res) => {
       res.json({
         status: 'ok',
         service: 'openreyestr-mcp-http',
