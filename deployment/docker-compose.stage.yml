@@ -224,8 +224,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://stage.legal.org.ua}
       TZ: Europe/Kiev
-    ports:
-      - "3006:3001"
+    # Ports removed - service accessed via unified gateway only
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health"]
@@ -285,8 +284,7 @@ services:
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TZ: Europe/Kiev
-    ports:
-      - "3007:3005"
+    # Ports removed - service accessed via unified gateway only
     depends_on:
       postgres-openreyestr-stage:
         condition: service_healthy
@@ -350,10 +348,18 @@ services:
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
-      RADA_MCP_URL: ${RADA_MCP_URL}
+
+      # Unified Gateway Configuration
+      ENABLE_UNIFIED_GATEWAY: "true"
+      RADA_MCP_URL: http://rada-mcp-app-stage:3001
       RADA_API_KEY: ${RADA_API_KEY}
-      OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL}
+      OPENREYESTR_MCP_URL: http://app-openreyestr-stage:3005
       OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY}
+
+      # Google Cloud Vision API (for OCR in document analysis tools)
+      VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
+
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: https://stage.legal.org.ua/auth/google/callback
@@ -375,6 +381,8 @@ services:
     volumes:
     - ../mcp_backend/logs:/app/logs
     - app_stage_data:/app/data
+    # Vision API credentials for document analysis (OCR)
+    - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
     healthcheck:
       test:
       - CMD

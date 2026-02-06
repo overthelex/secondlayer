@@ -580,22 +580,113 @@ export class MCPQueryAPI {
       groupByInstance
     });
 
-    // Search for ALL documents with this case number (not limit: 1!)
-    const searchResult = await this.zoAdapter.searchCourtDecisions({
-      meta: { search: caseNumber },
-      target: 'title', // Search in case number field for better accuracy
-      limit: maxDocs,
-      fulldata: 1,
-      orderBy: {
-        field: 'adjudication_date',
-        direction: 'asc', // Chronological order
-      },
+    // Generate case number variations (short/long year, with/without suffix)
+    const caseVariations = this.generateCaseNumberVariations(caseNumber);
+    logger.info('Generated case number variations', { variations: caseVariations });
+
+    // Strategy: Multiple searches to maximize document discovery
+    // 1. Search by title (exact case number in title field)
+    // 2. Search by text (finds documents that reference the case in body)
+    const allDocs: any[] = [];
+    const seenDocIds = new Set<string>();
+    const searchStats = {
+      byTitle: 0,
+      byText: 0,
+      duplicates: 0,
+    };
+
+    // Search 1: By title (most precise)
+    for (const variation of caseVariations) {
+      try {
+        const titleSearchResult = await this.zoAdapter.searchCourtDecisions({
+          meta: { search: variation },
+          target: 'title',
+          limit: Math.ceil(maxDocs / 2), // Split limit between searches
+          fulldata: 1,
+          orderBy: {
+            field: 'adjudication_date',
+            direction: 'asc',
+          },
+        });
+
+        const normalized = await this.zoAdapter.normalizeResponse(titleSearchResult);
+        const docs = normalized.data || [];
+
+        for (const doc of docs) {
+          const docId = doc?.doc_id || doc?.zakononline_id;
+          if (docId && !seenDocIds.has(String(docId))) {
+            seenDocIds.add(String(docId));
+            allDocs.push(doc);
+            searchStats.byTitle++;
+          } else if (docId) {
+            searchStats.duplicates++;
+          }
+        }
+
+        logger.info(`Title search for variation "${variation}"`, { found: docs.length });
+
+        // If we found many documents with first variation, skip others
+        if (searchStats.byTitle > 10) break;
+      } catch (err) {
+        logger.warn(`Title search failed for variation "${variation}"`, { error: err });
+      }
+    }
+
+    // Search 2: By text (catches higher instance documents that reference the case)
+    for (const variation of caseVariations) {
+      try {
+        const textSearchResult = await this.zoAdapter.searchCourtDecisions({
+          meta: { search: variation },
+          target: 'text', // Search in full document text
+          limit: Math.ceil(maxDocs / 2),
+          fulldata: 1,
+          orderBy: {
+            field: 'adjudication_date',
+            direction: 'asc',
+          },
+        });
+
+        const normalized = await this.zoAdapter.normalizeResponse(textSearchResult);
+        const docs = normalized.data || [];
+
+        for (const doc of docs) {
+          const docId = doc?.doc_id || doc?.zakononline_id;
+          if (docId && !seenDocIds.has(String(docId))) {
+            seenDocIds.add(String(docId));
+            allDocs.push(doc);
+            searchStats.byText++;
+          } else if (docId) {
+            searchStats.duplicates++;
+          }
+        }
+
+        logger.info(`Text search for variation "${variation}"`, { found: docs.length });
+
+        // If we found many documents with first variation, skip others
+        if (searchStats.byText > 10) break;
+      } catch (err) {
+        logger.warn(`Text search failed for variation "${variation}"`, { error: err });
+      }
+    }
+
+    // Sort all documents by date
+    allDocs.sort((a, b) => {
+      const dateA = a?.adjudication_date || a?.date || '';
+      const dateB = b?.adjudication_date || b?.date || '';
+      return dateA.localeCompare(dateB);
     });
 
-    const normalized = await this.zoAdapter.normalizeResponse(searchResult);
-    const docs = normalized.data || [];
+    logger.info('Document search completed', {
+      caseNumber,
+      variations: caseVariations,
+      totalFound: allDocs.length,
+      byTitle: searchStats.byTitle,
+      byText: searchStats.byText,
+      duplicatesSkipped: searchStats.duplicates,
+      docIds: allDocs.map(d => d?.doc_id || d?.zakononline_id).slice(0, 10), // First 10 IDs for debugging
+    });
 
-    if (docs.length === 0) {
+    if (allDocs.length === 0) {
       return {
         content: [
           {
@@ -604,14 +695,15 @@ export class MCPQueryAPI {
               case_number: caseNumber,
               total_documents: 0,
               documents: [],
-              message: `No documents found for case number: ${caseNumber}`,
+              search_stats: searchStats,
+              message: `No documents found for case number: ${caseNumber} (tried variations: ${caseVariations.join(', ')})`,
             }, null, 2),
           },
         ],
       };
     }
 
-    logger.info(`Found ${docs.length} documents for case ${caseNumber}`);
+    const docs = allDocs;
 
     // Helper function to classify document type from judgment_form or metadata
     const classifyDocumentType = (doc: any): string => {
@@ -758,6 +850,15 @@ export class MCPQueryAPI {
       total_documents: mappedDocs.length,
       documents: groupByInstance ? undefined : mappedDocs,
       grouped_documents: groupByInstance ? groupedDocs : undefined,
+      search_strategy: {
+        variations_tried: caseVariations,
+        sources: {
+          by_title: searchStats.byTitle,
+          by_text: searchStats.byText,
+          duplicates_removed: searchStats.duplicates,
+        },
+        note: 'Multiple search strategies used to find all related documents across all court instances',
+      },
       summary: {
         instances: {
           first_instance: mappedDocs.filter((d: any) => d.instance === 'Перша інстанція').length,
@@ -787,6 +888,54 @@ export class MCPQueryAPI {
         },
       ],
     };
+  }
+
+  /**
+   * Generate case number variations to maximize search coverage
+   * Examples:
+   *   "922/989/18" -> ["922/989/18", "922/989/2018"]
+   *   "123/456/23-ц" -> ["123/456/23-ц", "123/456/2023-ц", "123/456/23", "123/456/2023"]
+   */
+  private generateCaseNumberVariations(caseNumber: string): string[] {
+    const variations = new Set<string>();
+
+    // Always include original
+    variations.add(caseNumber);
+
+    // Pattern: 123/456/18 or 123/456/18-ц or 123/456/2018
+    const match = caseNumber.match(/^(\d+\/\d+\/)(\d{2,4})(-[а-яіїєґА-ЯІЇЄҐ])?$/);
+
+    if (match) {
+      const prefix = match[1]; // "123/456/"
+      const year = match[2];    // "18" or "2018"
+      const suffix = match[3] || ''; // "-ц" or empty
+
+      // Generate short and long year versions
+      let shortYear = year;
+      let longYear = year;
+
+      if (year.length === 2) {
+        shortYear = year;
+        // Convert 18 -> 2018, 23 -> 2023, etc.
+        const yearNum = parseInt(year, 10);
+        longYear = yearNum < 50 ? `20${year}` : `19${year}`;
+      } else if (year.length === 4) {
+        longYear = year;
+        shortYear = year.slice(-2); // 2018 -> 18
+      }
+
+      // Add variations with/without suffix
+      variations.add(`${prefix}${shortYear}${suffix}`);
+      variations.add(`${prefix}${longYear}${suffix}`);
+
+      // If there's a suffix, also try without it
+      if (suffix) {
+        variations.add(`${prefix}${shortYear}`);
+        variations.add(`${prefix}${longYear}`);
+      }
+    }
+
+    return Array.from(variations);
   }
 
   private async comparePracticeProContra(args: any): Promise<any> {

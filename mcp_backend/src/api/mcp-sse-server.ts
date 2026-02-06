@@ -15,6 +15,7 @@ import { logger } from '../utils/logger.js';
 import { MCPQueryAPI } from './mcp-query-api.js';
 import { LegislationTools } from './legislation-tools.js';
 import { DocumentAnalysisTools } from './document-analysis-tools.js';
+import { BatchDocumentTools } from './batch-document-tools.js';
 import { CostTracker } from '../services/cost-tracker.js';
 import { CreditService } from '../services/credit-service.js';
 import { requestContext } from '../utils/openai-client.js';
@@ -65,6 +66,7 @@ export class MCPSSEServer {
     private mcpAPI: MCPQueryAPI,
     private legislationTools: LegislationTools,
     private documentAnalysisTools: DocumentAnalysisTools,
+    private batchDocumentTools: BatchDocumentTools,
     private costTracker: CostTracker,
     private creditService?: CreditService
   ) {}
@@ -76,11 +78,13 @@ export class MCPSSEServer {
     const mcpTools = this.mcpAPI.getTools();
     const legislationToolsList = this.legislationTools.getToolDefinitions();
     const documentToolsList = this.documentAnalysisTools.getToolDefinitions();
+    const batchToolsList = this.batchDocumentTools.getToolDefinitions();
 
     const allTools = [
       ...mcpTools,
       ...legislationToolsList,
       ...documentToolsList,
+      ...batchToolsList,
     ];
 
     // Convert to MCP format
@@ -436,6 +440,8 @@ export class MCPSSEServer {
             return await this.executeLegislationTool(name, args);
           } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(name)) {
             return await this.executeDocumentTool(name, args);
+          } else if (name === 'batch_process_documents') {
+            return await this.batchDocumentTools.processBatch(args);
           } else {
             return await this.mcpAPI.handleToolCall(name, args);
           }
