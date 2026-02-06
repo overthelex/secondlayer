@@ -559,6 +559,208 @@ export class MCPQueryAPI {
     };
   }
 
+  /**
+   * Get all related documents for a case by case number
+   * Returns all instances (first, appeal, cassation), all judgments (decisions, rulings)
+   */
+  private async getCaseDocumentsChain(args: any): Promise<any> {
+    const caseNumber = typeof args.case_number === 'string' ? args.case_number.trim() : '';
+    const includeFullText = args.include_full_text !== false; // Default true
+    const maxDocs = Math.min(100, Math.max(1, Number(args.max_docs || 50)));
+    const groupByInstance = args.group_by_instance !== false; // Default true
+
+    if (!caseNumber) {
+      throw new Error('case_number parameter is required');
+    }
+
+    logger.info('[MCP Tool] get_case_documents_chain started', {
+      caseNumber,
+      includeFullText,
+      maxDocs,
+      groupByInstance
+    });
+
+    // Search for ALL documents with this case number (not limit: 1!)
+    const searchResult = await this.zoAdapter.searchCourtDecisions({
+      meta: { search: caseNumber },
+      target: 'title', // Search in case number field for better accuracy
+      limit: maxDocs,
+      fulldata: 1,
+      orderBy: {
+        field: 'adjudication_date',
+        direction: 'asc', // Chronological order
+      },
+    });
+
+    const normalized = await this.zoAdapter.normalizeResponse(searchResult);
+    const docs = normalized.data || [];
+
+    if (docs.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              case_number: caseNumber,
+              total_documents: 0,
+              documents: [],
+              message: `No documents found for case number: ${caseNumber}`,
+            }, null, 2),
+          },
+        ],
+      };
+    }
+
+    logger.info(`Found ${docs.length} documents for case ${caseNumber}`);
+
+    // Helper function to classify document type from judgment_form or metadata
+    const classifyDocumentType = (doc: any): string => {
+      const form = doc?.judgment_form || doc?.form_name || doc?.judgment_form_name || doc?.metadata?.judgment_form || '';
+      const formLower = String(form).toLowerCase();
+
+      if (formLower.includes('постанова')) return 'Постанова';
+      if (formLower.includes('рішення')) return 'Рішення';
+      if (formLower.includes('ухвала')) return 'Ухвала';
+      if (formLower.includes('вирок')) return 'Вирок';
+      if (formLower.includes('окрема')) return 'Окрема ухвала';
+
+      // Fallback: try to detect from title or resolution
+      const title = doc?.title || '';
+      if (title.includes('Постанова')) return 'Постанова';
+      if (title.includes('Рішення')) return 'Рішення';
+      if (title.includes('Ухвала')) return 'Ухвала';
+
+      return 'Невідомо';
+    };
+
+    // Helper function to classify court instance
+    const classifyInstance = (doc: any): string => {
+      const court = (doc?.court || doc?.court_name || '').toLowerCase();
+      const chamber = (doc?.chamber || '').toLowerCase();
+      const title = (doc?.title || '').toLowerCase();
+
+      // Check chamber first (more reliable for Supreme Court)
+      if (chamber.includes('велика палата') || chamber.includes('вп вс')) {
+        return 'Велика Палата ВС';
+      }
+      if (chamber.includes('кцс') || chamber.includes('касаційний цивільний')) {
+        return 'Касація (КЦС ВС)';
+      }
+      if (chamber.includes('кгс') || chamber.includes('касаційний господарський')) {
+        return 'Касація (КГС ВС)';
+      }
+      if (chamber.includes('кас') || chamber.includes('касаційний адміністративний')) {
+        return 'Касація (КАС ВС)';
+      }
+      if (chamber.includes('ккс') || chamber.includes('касаційний кримінальний')) {
+        return 'Касація (ККС ВС)';
+      }
+
+      // Check court name
+      if (court.includes('касаці') || court.includes('верховн')) {
+        return 'Касація';
+      }
+      if (court.includes('апеляці')) {
+        return 'Апеляція';
+      }
+      if (court.includes('окружний') || court.includes('районний') || court.includes('міськ')) {
+        return 'Перша інстанція';
+      }
+
+      // Check title
+      if (title.includes('касаці')) return 'Касація';
+      if (title.includes('апеляці')) return 'Апеляція';
+
+      return 'Невідомо';
+    };
+
+    // Map documents to structured format
+    const mappedDocs = docs.map((doc: any) => ({
+      doc_id: doc?.doc_id || doc?.zakononline_id,
+      case_number: doc?.cause_num || doc?.case_number || caseNumber,
+      document_type: classifyDocumentType(doc),
+      instance: classifyInstance(doc),
+      court: doc?.court || doc?.court_name,
+      chamber: doc?.chamber,
+      judge: doc?.judge,
+      date: doc?.adjudication_date || doc?.date,
+      url: doc?.url || (doc?.doc_id ? `https://zakononline.ua/court-decisions/show/${doc.doc_id}` : undefined),
+      resolution: doc?.resolution,
+      snippet: doc?.snippet,
+      // Only include full_text if requested
+      ...(includeFullText && doc?.full_text ? { full_text: doc.full_text } : {}),
+    }));
+
+    // Group by instance if requested
+    let groupedDocs: any = null;
+    if (groupByInstance) {
+      groupedDocs = {
+        'Перша інстанція': [] as any[],
+        'Апеляція': [] as any[],
+        'Касація': [] as any[],
+        'Велика Палата ВС': [] as any[],
+        'Невідомо': [] as any[],
+      };
+
+      for (const doc of mappedDocs) {
+        const instance = doc.instance || 'Невідомо';
+        // Handle specific cassation chambers
+        if (instance.startsWith('Касація')) {
+          if (!groupedDocs['Касація']) {
+            groupedDocs['Касація'] = [];
+          }
+          groupedDocs['Касація'].push(doc);
+        } else if (groupedDocs[instance]) {
+          groupedDocs[instance].push(doc);
+        } else {
+          groupedDocs['Невідомо'].push(doc);
+        }
+      }
+
+      // Remove empty groups
+      Object.keys(groupedDocs).forEach(key => {
+        if (groupedDocs[key].length === 0) {
+          delete groupedDocs[key];
+        }
+      });
+    }
+
+    const payload: any = {
+      case_number: caseNumber,
+      total_documents: mappedDocs.length,
+      documents: groupByInstance ? undefined : mappedDocs,
+      grouped_documents: groupByInstance ? groupedDocs : undefined,
+      summary: {
+        instances: {
+          first_instance: mappedDocs.filter((d: any) => d.instance === 'Перша інстанція').length,
+          appeal: mappedDocs.filter((d: any) => d.instance === 'Апеляція').length,
+          cassation: mappedDocs.filter((d: any) => d.instance.includes('Касація')).length,
+          grand_chamber: mappedDocs.filter((d: any) => d.instance === 'Велика Палата ВС').length,
+        },
+        document_types: {
+          decisions: mappedDocs.filter((d: any) => d.document_type === 'Рішення' || d.document_type === 'Вирок').length,
+          rulings: mappedDocs.filter((d: any) => d.document_type === 'Постанова').length,
+          orders: mappedDocs.filter((d: any) => d.document_type.includes('Ухвала')).length,
+        },
+      },
+    };
+
+    logger.info('[MCP Tool] get_case_documents_chain completed', {
+      caseNumber,
+      totalDocs: mappedDocs.length,
+      instances: payload.summary.instances,
+    });
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(payload, null, 2),
+        },
+      ],
+    };
+  }
+
   private async comparePracticeProContra(args: any): Promise<any> {
     const procedureCode = this.mapProcedureCodeToShort(args.procedure_code || args.code);
     const query = typeof args.query === 'string' ? args.query.trim() : '';
@@ -2238,6 +2440,47 @@ export class MCPQueryAPI {
         },
       },
       {
+        name: 'get_case_documents_chain',
+        description: `Получение всех связанных документов по номеру дела (все инстанции, все решения/постановления/ухвалы)
+
+💰 Примерная стоимость: $0.005-$0.02 USD
+Находит ВСЕ судебные документы по номеру дела:
+- Решения первой инстанции
+- Постановления апелляционной инстанции
+- Постановления кассационной инстанции (КЦС/КГС/КАС/ККС ВС)
+- Постановления Великой Палаты ВС
+- Ухвалы (определения)
+- Решения после нового рассмотрения
+
+Возвращает структурированный список всех документов с группировкой по инстанциям и типам.
+Используйте этот инструмент когда нужно проанализировать полную историю дела через все судебные инстанции.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            case_number: {
+              type: 'string',
+              description: 'Номер дела (например, "123/456/23")'
+            },
+            include_full_text: {
+              type: 'boolean',
+              default: false,
+              description: 'Включить полный текст документов (увеличивает размер ответа)'
+            },
+            max_docs: {
+              type: 'number',
+              default: 50,
+              description: 'Максимальное количество документов для возврата (1-100)'
+            },
+            group_by_instance: {
+              type: 'boolean',
+              default: true,
+              description: 'Группировать документы по инстанциям (перша/апеляція/касація)'
+            },
+          },
+          required: ['case_number'],
+        },
+      },
+      {
         name: 'compare_practice_pro_contra',
         description: `Подборка практики “за/против” по тезе (две линии практики)`,
         inputSchema: {
@@ -2463,6 +2706,9 @@ export class MCPQueryAPI {
           break;
         case 'get_case_text':
           result = await this.getCourtDecision(args);
+          break;
+        case 'get_case_documents_chain':
+          result = await this.getCaseDocumentsChain(args);
           break;
         case 'compare_practice_pro_contra':
           result = await this.comparePracticeProContra(args);
