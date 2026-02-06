@@ -5,8 +5,10 @@
 
 set -e
 
-STAGE_URL="https://stage.legal.org.ua"
-API_KEY="${SECONDARY_LAYER_KEYS}"
+# Use document-service directly (port 3005) instead of mcp_backend
+STAGE_URL="http://localhost:3005"
+# Document-service doesn't require API key for direct access
+API_KEY=""
 TEST_DATA_DIR="/home/vovkes/SecondLayer/test_data"
 TMP_DIR="/tmp/stage-doc-test-$$"
 
@@ -50,13 +52,12 @@ test_parse_document() {
 }
 EOF
 
-    # Call parse_document API
+    # Call document-service API directly (not through MCP tools)
     local start_time=$(date +%s%3N)
 
     local response_file="${TMP_DIR}/response.json"
     local http_code=$(curl -s -w "%{http_code}" -o "$response_file" \
-        -X POST "${STAGE_URL}/api/tools/parse_document" \
-        -H "Authorization: Bearer ${API_KEY}" \
+        -X POST "${STAGE_URL}/api/parse-document" \
         -H "Content-Type: application/json" \
         --data-binary "@${payload_file}")
 
@@ -71,11 +72,18 @@ EOF
         return 1
     fi
 
-    # Parse response
-    local success=$(cat "$response_file" | jq -r '.success // false')
+    # Parse response (document-service returns direct format, not MCP format)
+    local text=$(cat "$response_file" | jq -r '.text // ""')
+    local error=$(cat "$response_file" | jq -r '.error // ""')
 
-    if [ "$success" = "true" ]; then
-        local text=$(cat "$response_file" | jq -r '.result.text // ""')
+    if [ -n "$error" ] && [ "$error" != "null" ]; then
+        echo -e "  ${RED}✗ FAILED${NC}"
+        echo "  Error: ${error}"
+        echo "  Duration: ${duration}ms"
+        return 1
+    fi
+
+    if [ -n "$text" ] && [ "$text" != "null" ]; then
         local text_length=${#text}
         local word_count=$(echo "$text" | wc -w)
 
@@ -90,10 +98,10 @@ EOF
         fi
 
         # Check OCR info if available
-        local ocr_used=$(cat "$response_file" | jq -r '.result.metadata.ocr_used // false')
+        local ocr_used=$(cat "$response_file" | jq -r '.metadata.ocr_used // false')
         if [ "$ocr_used" = "true" ]; then
             echo -e "  ${YELLOW}📷 OCR used (Google Vision API)${NC}"
-            local ocr_confidence=$(cat "$response_file" | jq -r '.result.metadata.ocr_confidence // "N/A"')
+            local ocr_confidence=$(cat "$response_file" | jq -r '.metadata.ocr_confidence // "N/A"')
             echo "  OCR confidence: ${ocr_confidence}"
         fi
 
@@ -104,9 +112,8 @@ EOF
 
         return 0
     else
-        local error=$(cat "$response_file" | jq -r '.error // "Unknown error"')
         echo -e "  ${RED}✗ FAILED${NC}"
-        echo "  Error: ${error}"
+        echo "  Error: Empty response"
         echo "  Duration: ${duration}ms"
         return 1
     fi
