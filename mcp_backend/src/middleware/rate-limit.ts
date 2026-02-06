@@ -18,7 +18,10 @@ export function createRateLimiter(options: RateLimitOptions) {
 
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const redis = getRedisClient();
+      const redis = await getRedisClient();
+      if (!redis) {
+        return next(); // Redis unavailable, skip rate limiting
+      }
       const identifier = req.ip || req.socket.remoteAddress || 'unknown';
       const key = keyPrefix + ':' + identifier;
 
