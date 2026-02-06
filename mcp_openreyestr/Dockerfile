@@ -48,6 +48,9 @@ RUN npm ci --production
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
+# Copy SQL migrations explicitly (needed for migration runner)
+COPY --from=builder /app/src/migrations ./src/migrations
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \

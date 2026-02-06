@@ -136,11 +136,11 @@ npm run frontend     # Start lexwebapp dev server
 - PostgreSQL: 5435
 - Redis: 6382 (optional, not currently used)
 
-**Development environments** (on gateway server):
-- Local: 3000 (PostgreSQL 5432, Redis 6379)
-- Dev: 3003 (PostgreSQL 5433, Redis 6380)
-- Stage: 3004 (PostgreSQL 5434, Redis 6381)
-- Prod: 3001 (PostgreSQL 5432, Redis 6379)
+**Deployment environments**:
+- Local: localhost:3000 (PostgreSQL 5432, Redis 6379)
+- Dev: gate.lexapp.co.ua:3003 (PostgreSQL 5433, Redis 6380)
+- Stage: mail.lexapp.co.ua:3004 (PostgreSQL 5434, Redis 6381)
+- Prod: mail.lexapp.co.ua:3001 (PostgreSQL 5432, Redis 6379)
 
 ## Key Architectural Patterns
 
@@ -277,7 +277,7 @@ cd deployment
 ./manage-gateway.sh status
 ./manage-gateway.sh health
 
-# Deploy to gate server
+# Deploy to remote servers (dev→gate, stage/prod→mail)
 ./manage-gateway.sh deploy all
 ```
 

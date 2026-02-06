@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 GATE_SERVER="gate.lexapp.co.ua"  # For dev environment
 MAIL_SERVER="mail.lexapp.co.ua"  # For stage and prod environments
 DEPLOY_USER="vovkes"
-REMOTE_PATH="/home/vovkes/secondlayer/deployment"
+REMOTE_PATH="/home/vovkes/SecondLayer/deployment"
 
 # Print colored message
 print_msg() {

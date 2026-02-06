@@ -22,6 +22,81 @@ services:
     restart: unless-stopped
     networks:
     - secondlayer-stage-network
+
+  # RADA MCP Database Initialization - creates schema and user in main DB
+  rada-db-init-stage:
+    image: postgres:15-alpine
+    container_name: rada-db-init-stage
+    depends_on:
+      postgres-stage:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      RADA_POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      RADA_POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      RADA_POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      TZ: Europe/Kiev
+    command:
+      - sh
+      - -lc
+      - |
+        echo "Initializing RADA schema/user...";
+        cat <<'SQL' | psql -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+          -v rada_user="$$RADA_POSTGRES_USER" \
+          -v rada_pass="$$RADA_POSTGRES_PASSWORD" \
+          -v rada_schema="$$RADA_POSTGRES_SCHEMA" \
+          -v db_name="$$POSTGRES_DB"
+
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+        -- Create role if missing
+        SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'rada_user', :'rada_pass')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'rada_user')\gexec
+
+        -- Always set/refresh password (idempotent)
+        SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'rada_user', :'rada_pass')\gexec
+
+        -- Create schema if missing
+        SELECT format('CREATE SCHEMA %I AUTHORIZATION %I', :'rada_schema', :'rada_user')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = :'rada_schema')\gexec
+
+        -- Ensure privileges
+        SELECT format('GRANT USAGE, CREATE ON SCHEMA %I TO %I', :'rada_schema', :'rada_user')\gexec
+
+        -- Ensure default search_path
+        SELECT format('ALTER ROLE %I IN DATABASE %I SET search_path=%I,public', :'rada_user', :'db_name', :'rada_schema')\gexec
+        SQL
+    restart: "no"
+    networks:
+    - secondlayer-stage-network
+
+  # OpenReyestr PostgreSQL Database
+  postgres-openreyestr-stage:
+    image: postgres:15-alpine
+    container_name: openreyestr-postgres-stage
+    environment:
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
+      TZ: Europe/Kiev
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_openreyestr_stage_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OPENREYESTR_POSTGRES_USER:-openreyestr} -d ${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+
   qdrant-stage:
     image: qdrant/qdrant:latest
     container_name: secondlayer-qdrant-stage
@@ -82,6 +157,159 @@ services:
     restart: 'no'
     networks:
     - secondlayer-stage-network
+
+  # RADA MCP Migrations
+  rada-migrate-stage:
+    build:
+      context: ..
+      dockerfile: Dockerfile.mono-rada
+    image: rada-mcp:latest
+    container_name: rada-mcp-migrate-stage
+    depends_on:
+      rada-db-init-stage:
+        condition: service_completed_successfully
+      redis-stage:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_HOST: redis-stage
+      REDIS_PORT: 6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: staging
+      TZ: Europe/Kiev
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-stage-network
+
+  # RADA MCP Application Server
+  rada-mcp-app-stage:
+    image: rada-mcp:latest
+    container_name: rada-mcp-app-stage
+    depends_on:
+      rada-migrate-stage:
+        condition: service_completed_successfully
+      redis-stage:
+        condition: service_healthy
+    environment:
+      NODE_ENV: staging
+      PORT: 3001
+      HTTP_PORT: 3001
+      HTTP_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_HOST: redis-stage
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
+      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
+      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
+      SECONDLAYER_URL: http://app-stage:3000
+      SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
+      RADA_API_KEYS: ${RADA_API_KEYS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://stage.legal.org.ua}
+      TZ: Europe/Kiev
+    ports:
+      - "3006:3001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - secondlayer-stage-network
+
+  # OpenReyestr MCP Migrations
+  migrate-openreyestr-stage:
+    image: openreyestr-app:latest
+    build:
+      context: ../mcp_openreyestr
+      dockerfile: Dockerfile
+    container_name: openreyestr-migrate-stage
+    depends_on:
+      postgres-openreyestr-stage:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-stage:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
+      POSTGRES_HOST: postgres-openreyestr-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: staging
+      TZ: Europe/Kiev
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-stage-network
+
+  # OpenReyestr MCP Application Server
+  app-openreyestr-stage:
+    image: openreyestr-app:latest
+    container_name: openreyestr-app-stage
+    command: ["node", "dist/http-server.js"]
+    environment:
+      NODE_ENV: staging
+      HTTP_PORT: 3005
+      HTTP_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-stage:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
+      POSTGRES_HOST: postgres-openreyestr-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
+      POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
+      OPENREYESTR_API_KEYS: ${OPENREYESTR_API_KEYS}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      SECONDLAYER_URL: http://app-stage:3000
+      SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: Europe/Kiev
+    ports:
+      - "3007:3005"
+    depends_on:
+      postgres-openreyestr-stage:
+        condition: service_healthy
+      migrate-openreyestr-stage:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - secondlayer-stage-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   app-stage:
     build:
       context: ..
@@ -122,11 +350,15 @@ services:
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+      RADA_MCP_URL: ${RADA_MCP_URL}
+      RADA_API_KEY: ${RADA_API_KEY}
+      OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL}
+      OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: https://stage.legal.org.ua/auth/google/callback
       FRONTEND_URL: https://stage.legal.org.ua
-      ALLOWED_ORIGINS: https://legal.org.ua
+      ALLOWED_ORIGINS: https://stage.legal.org.ua,https://stage.mcp.legal.org.ua,https://legal.org.ua
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TZ: Europe/Kiev
     ports:
@@ -166,23 +398,36 @@ services:
           cpus: '0.75'
           memory: 1.5G
   lexwebapp-stage:
+    build:
+      context: ../lexwebapp
+      dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=staging
+        - VITE_API_URL=https://stage.legal.org.ua/api
+        - VITE_API_KEY=${VITE_API_KEY_STAGE:-REDACTED_SL_KEY_STAGE}
+        - VITE_ENABLE_SSE_STREAMING=true
+        - VITE_ENABLE_ALL_MCP_TOOLS=true
+        - VITE_SHOW_TOOL_SELECTOR=true
+        - VITE_ENABLE_THINKING_STEPS=true
+        - VITE_AUTO_EXPAND_THINKING=true
     image: lexwebapp-lexwebapp:latest
     container_name: lexwebapp-stage
     ports:
     - 8093:80
     environment:
     - NODE_ENV=staging
-    - VITE_API_URL=https://stage.legal.org.ua/api
     - TZ=Europe/Kiev
     networks:
     - secondlayer-stage-network
     restart: unless-stopped
+    depends_on:
+      - app-stage
     healthcheck:
       test:
       - CMD
       - sh
       - -c
-      - curl -f -s http://localhost:80/ > /dev/null
+      - wget --quiet --tries=1 --spider http://localhost/ || exit 1
       interval: 30s
       timeout: 3s
       retries: 3
@@ -191,6 +436,8 @@ services:
     - com.docker.compose.project=lexwebapp-stage
 volumes:
   postgres_stage_data:
+    driver: local
+  postgres_openreyestr_stage_data:
     driver: local
   qdrant_stage_data:
     driver: local
