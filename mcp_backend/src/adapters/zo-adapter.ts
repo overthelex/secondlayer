@@ -198,7 +198,11 @@ export class ZOAdapter {
     if (rawId == null || String(rawId).length === 0) return null;
     const domainName = this.domainConfig?.name || 'unknown';
     if (domainName === 'court_decisions') {
-      return { zakononline_id: String(rawId), type: 'court_decision' };
+      // Extract judgment form (Постанова, Ухвала, Рішення, etc.) from API response
+      // API provides this in judgment_form, form_name, or judgment_form_name fields
+      const judgmentForm = doc?.judgment_form || doc?.form_name || doc?.judgment_form_name;
+      const documentType = judgmentForm ? String(judgmentForm) : 'court_decision';
+      return { zakononline_id: String(rawId), type: documentType };
     }
     return { zakononline_id: `${domainName}:${String(rawId)}`, type: domainName };
   }
@@ -326,6 +330,7 @@ export class ZOAdapter {
               court_code: doc.court_code,
               category_code: doc.category_code,
               justice_kind: doc.justice_kind,
+              judgment_form: doc.judgment_form || doc.form_name || doc.judgment_form_name || null,
             },
           } as Document;
         })
