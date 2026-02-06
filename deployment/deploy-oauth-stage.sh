@@ -12,8 +12,8 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m'
 
-STAGE_HOST="root@mail.lexapp.co.ua"
-STAGE_DIR="/root/SecondLayer"
+STAGE_HOST="vovkes@mail.lexapp.co.ua"
+STAGE_DIR="/home/vovkes/SecondLayer"
 CONTAINER_APP="secondlayer-app-stage"
 CONTAINER_DB="secondlayer-postgres-stage"
 DB_USER="secondlayer"
@@ -38,10 +38,15 @@ echo ""
 
 # Check if migration file exists locally
 echo -e "${YELLOW}[2/8] Checking migration file...${NC}"
-MIGRATION_FILE="mcp_backend/src/migrations/014_add_oauth_tables.sql"
+MIGRATION_FILE="../mcp_backend/src/migrations/014_add_oauth_tables.sql"
 if [ ! -f "$MIGRATION_FILE" ]; then
   echo -e "${RED}✗ Migration file not found: $MIGRATION_FILE${NC}"
-  exit 1
+  echo -e "${YELLOW}Trying absolute path...${NC}"
+  MIGRATION_FILE="/home/vovkes/SecondLayer/mcp_backend/src/migrations/014_add_oauth_tables.sql"
+  if [ ! -f "$MIGRATION_FILE" ]; then
+    echo -e "${RED}✗ Migration file not found: $MIGRATION_FILE${NC}"
+    exit 1
+  fi
 fi
 echo -e "${GREEN}✓ Migration file found${NC}"
 echo ""

@@ -315,7 +315,7 @@ export class OAuthService {
       'SELECT client_id, redirect_uris, name, created_at FROM oauth_clients ORDER BY created_at DESC'
     );
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       ...row,
       redirect_uris: typeof row.redirect_uris === 'string'
         ? JSON.parse(row.redirect_uris)
