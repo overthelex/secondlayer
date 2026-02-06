@@ -2913,6 +2913,15 @@ export class MCPQueryAPI {
       throw new Error('query parameter is required and cannot be empty');
     }
 
+    // Log incoming request with parameters
+    logger.info('[MCP Tool] search_legal_precedents called', {
+      query: query.substring(0, 100),
+      limit: args.limit || 10,
+      offset: args.offset || 0,
+      count_all: args.count_all || false,
+      domain: args.domain || 'all',
+    });
+
     // If count_all is requested, use pagination to count ALL results
     if (args.count_all === true) {
       logger.info('count_all requested, starting pagination', { query });
@@ -3334,17 +3343,27 @@ export class MCPQueryAPI {
       throw new Error('query parameter is required and cannot be empty');
     }
 
+    // Extract pagination parameters
+    const limit = Math.min(50, Math.max(1, Number(args.limit || 10)));
+    const offset = Math.max(0, Number(args.offset || 0));
+
+    logger.info('[MCP Tool] search_legal_precedents (regular search)', {
+      query: query.substring(0, 100),
+      limit,
+      offset,
+    });
+
     // Use 'quick' budget to avoid LLM timeouts for simple searches
     const budget = query.length < 30 ? 'quick' : 'standard';
     const intent = await this.queryPlanner.classifyIntent(query, budget as 'quick' | 'standard');
     const queryParams = this.queryPlanner.buildQueryParams(intent, query);
-    
+
     // Only use court endpoint for now (NPA/ECHR endpoints not available on court.searcher domain)
     const endpoints = this.queryPlanner.selectEndpoints(intent).filter(e => e === 'court');
 
     const results: any[] = [];
     const errors: string[] = [];
-    
+
     for (const endpoint of endpoints) {
       try {
         let response;
@@ -3364,7 +3383,17 @@ export class MCPQueryAPI {
         }
 
         const normalized = await this.zoAdapter.normalizeResponse(response);
-        results.push(...normalized.data.slice(0, args.limit || 10));
+
+        // Apply offset and limit to results
+        const slicedResults = normalized.data.slice(offset, offset + limit);
+        results.push(...slicedResults);
+
+        logger.info(`Endpoint ${endpoint} returned results`, {
+          totalResults: normalized.data.length,
+          afterPagination: slicedResults.length,
+          offset,
+          limit,
+        });
       } catch (error: any) {
         logger.warn(`Endpoint ${endpoint} failed:`, error.message);
         errors.push(`${endpoint}: ${error.message}`);
