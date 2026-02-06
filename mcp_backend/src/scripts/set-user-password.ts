@@ -41,7 +41,7 @@ async function setUserPassword() {
       console.log('\nAvailable users:');
 
       const allUsersResult = await db.query('SELECT email, name FROM users ORDER BY email');
-      allUsersResult.rows.forEach((user) => {
+      allUsersResult.rows.forEach((user: any) => {
         console.log(`  - ${user.email} (${user.name || 'No name'})`);
       });
 
