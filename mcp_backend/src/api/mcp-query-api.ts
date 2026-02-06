@@ -624,13 +624,29 @@ export class MCPQueryAPI {
       if (formLower.includes('вирок')) return 'Вирок';
       if (formLower.includes('окрема')) return 'Окрема ухвала';
 
-      // Fallback: try to detect from title or resolution
+      // Fallback: try to detect from title, snippet or resolution
       const title = doc?.title || '';
-      if (title.includes('Постанова')) return 'Постанова';
-      if (title.includes('Рішення')) return 'Рішення';
-      if (title.includes('Ухвала')) return 'Ухвала';
+      const snippet = doc?.snippet || '';
+      if (title.includes('Постанова') || snippet.includes('Постанова')) return 'Постанова';
+      if (title.includes('Рішення') || snippet.includes('Рішення')) return 'Рішення';
+      if (title.includes('Ухвала') || snippet.includes('Ухвала')) return 'Ухвала';
+      if (title.includes('Окрема думка') || snippet.includes('Окрема думка')) return 'Окрема думка';
 
       return 'Невідомо';
+    };
+
+    // Helper function to extract court name from snippet
+    const extractCourtFromSnippet = (snippet: string): string | null => {
+      if (!snippet) return null;
+
+      // Pattern: "... по справі № [case_number] [Court Name]"
+      // Example: "Ухвала суду від 26.01.2023 по справі № 756/655/23 Оболонський районний суд міста Києва"
+      const match = snippet.match(/по справі №.*?\d+\/\d+\/\d+[^\s]*\s+(.+?)(?:<|$)/i);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+
+      return null;
     };
 
     // Helper function to classify court instance
@@ -638,6 +654,7 @@ export class MCPQueryAPI {
       const court = (doc?.court || doc?.court_name || '').toLowerCase();
       const chamber = (doc?.chamber || '').toLowerCase();
       const title = (doc?.title || '').toLowerCase();
+      const snippet = (doc?.snippet || '').toLowerCase();
 
       // Check chamber first (more reliable for Supreme Court)
       if (chamber.includes('велика палата') || chamber.includes('вп вс')) {
@@ -656,14 +673,25 @@ export class MCPQueryAPI {
         return 'Касація (ККС ВС)';
       }
 
-      // Check court name
-      if (court.includes('касаці') || court.includes('верховн')) {
+      // Check court name (from court field or snippet)
+      const courtText = court || snippet;
+
+      // ВАЖЛИВО: Велику Палату перевіряємо ПЕРШЕ, бо інакше вона потрапить в "Касація" через слово "верховн"
+      if (courtText.includes('велика палата') || courtText.includes('вп вс') || courtText.includes('велика палата верховного суду')) {
+        return 'Велика Палата ВС';
+      }
+
+      if (courtText.includes('касаці') || courtText.includes('верховн')) {
         return 'Касація';
       }
-      if (court.includes('апеляці')) {
+      if (courtText.includes('апеляці')) {
         return 'Апеляція';
       }
-      if (court.includes('окружний') || court.includes('районний') || court.includes('міськ')) {
+      if (courtText.includes('окружний') || courtText.includes('районний') || courtText.includes('міськ')) {
+        return 'Перша інстанція';
+      }
+      // Господарський/цивільний/адміністративний суд області/міста - це перша інстанція
+      if (courtText.match(/господарський суд .*(області|міста)|цивільний суд .*(області|міста)|адміністративний суд/)) {
         return 'Перша інстанція';
       }
 
@@ -680,7 +708,7 @@ export class MCPQueryAPI {
       case_number: doc?.cause_num || doc?.case_number || caseNumber,
       document_type: classifyDocumentType(doc),
       instance: classifyInstance(doc),
-      court: doc?.court || doc?.court_name,
+      court: doc?.court || doc?.court_name || extractCourtFromSnippet(doc?.snippet),
       chamber: doc?.chamber,
       judge: doc?.judge,
       date: doc?.adjudication_date || doc?.date,
