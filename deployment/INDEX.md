@@ -6,7 +6,7 @@ Complete index of all deployment files for the multi-environment setup.
 
 - **Local Development**: [`LOCAL_DEVELOPMENT.md`](./LOCAL_DEVELOPMENT.md) - Start here for local development
 - **Testing**: [`TESTING.md`](./TESTING.md) - Run tests for local deployment
-- **Getting Started**: [`QUICK_START.md`](./QUICK_START.md) - Deploy to gateway server
+- **Getting Started**: [`QUICK_START.md`](./QUICK_START.md) - Deploy to remote servers
 - **Full Documentation**: [`GATEWAY_SETUP.md`](./GATEWAY_SETUP.md) - Complete setup guide
 - **Architecture**: [`ARCHITECTURE.md`](./ARCHITECTURE.md) - System architecture
 ## Docker Compose Files
@@ -14,18 +14,18 @@ Complete index of all deployment files for the multi-environment setup.
 | File | Purpose | Location | Containers |
 |------|---------|----------|-----------|
 | [`docker-compose.local.yml`](./docker-compose.local.yml) | Local development | Your machine | app-local, postgres-local, redis-local, qdrant-local |
-| [`docker-compose.dev.yml`](./docker-compose.dev.yml) | Development environment | Gate server | app-dev, postgres-dev, redis-dev, qdrant-dev, lexwebapp-dev |
-| [`docker-compose.stage.yml`](./docker-compose.stage.yml) | Staging environment | Gate server | app-stage, postgres-stage, redis-stage, qdrant-stage, lexwebapp-stage |
-| [`docker-compose.prod.yml`](./docker-compose.prod.yml) | Production environment | Gate server | app-prod, postgres-prod, redis-prod, qdrant-prod, lexwebapp-prod |
-| [`docker-compose.gateway.yml`](./docker-compose.gateway.yml) | Nginx gateway proxy | Gate server | legal-nginx-gateway |
+| [`docker-compose.dev.yml`](./docker-compose.dev.yml) | Development environment | gate.lexapp.co.ua | app-dev, postgres-dev, redis-dev, qdrant-dev, lexwebapp-dev |
+| [`docker-compose.stage.yml`](./docker-compose.stage.yml) | Staging environment | mail.lexapp.co.ua | app-stage, postgres-stage, redis-stage, qdrant-stage, lexwebapp-stage |
+| [`docker-compose.prod.yml`](./docker-compose.prod.yml) | Production environment | mail.lexapp.co.ua | app-prod, postgres-prod, redis-prod, qdrant-prod, lexwebapp-prod |
+| [`docker-compose.gateway.yml`](./docker-compose.gateway.yml) | Nginx gateway proxy | Both servers | legal-nginx-gateway |
 ## Configuration Files
 ### Nginx Configuration
 - [`nginx-gateway-3env.conf`](./nginx-gateway-3env.conf) - Routes traffic to all 3 environments
 ### Environment Variables (Templates)
 - [`.env.local.example`](./.env.local.example) - Local development variables template (your machine)
-- [`.env.dev.example`](./.env.dev.example) - Development environment variables template (gate server)
-- [`.env.stage.example`](./.env.stage.example) - Staging environment variables template (gate server)
-- [`.env.prod.example`](./.env.prod.example) - Production environment variables template (gate server)
+- [`.env.dev.example`](./.env.dev.example) - Development environment variables template (gate.lexapp.co.ua)
+- [`.env.stage.example`](./.env.stage.example) - Staging environment variables template (mail.lexapp.co.ua)
+- [`.env.prod.example`](./.env.prod.example) - Production environment variables template (mail.lexapp.co.ua)
 
 **⚠️ Important**: Copy `.env.*.example` to `.env.*` and fill in real values before starting.
 ## Scripts
@@ -36,7 +36,7 @@ Complete index of all deployment files for the multi-environment setup.
 **Capabilities**:
 - Start/stop/restart environments
 - View status and logs
-- Deploy to gate server
+- Deploy to remote servers (dev→gate, stage/prod→mail)
 - Build Docker images
 - Gateway management
 - Health checks
@@ -107,19 +107,19 @@ graph LR
 
 ```bash
 http://localhost:3000                    → Local (your machine)
-https://dev.legal.org.ua/        → Development (gate server)
-https://stage.legal.org.ua/            → Staging (gate server)
-https://legal.org.ua/                    → Production (gate server)
+https://dev.legal.org.ua/        → Development (gate.lexapp.co.ua)
+https://stage.legal.org.ua/            → Staging (mail.lexapp.co.ua)
+https://legal.org.ua/                    → Production (mail.lexapp.co.ua)
 ```bash
 ## File Structure
 
 ```bash
 deployment/
 ├── docker-compose.local.yml         # Local development (your machine)
-├── docker-compose.dev.yml           # Development (gate server)
-├── docker-compose.stage.yml         # Staging (gate server)
-├── docker-compose.prod.yml          # Production (gate server)
-├── docker-compose.gateway.yml       # Nginx gateway (gate server)
+├── docker-compose.dev.yml           # Development (gate.lexapp.co.ua)
+├── docker-compose.stage.yml         # Staging (mail.lexapp.co.ua)
+├── docker-compose.prod.yml          # Production (mail.lexapp.co.ua)
+├── docker-compose.gateway.yml       # Nginx gateway (both servers)
 ├── nginx-gateway-3env.conf          # Nginx routing config
 ├── .env.local.example               # Local env template
 ├── .env.dev.example                 # Development env template
@@ -170,16 +170,16 @@ Each `.env.*` file needs:
 ./manage-gateway.sh start local      # Start local environment
 ./manage-gateway.sh stop local       # Stop local environment
 ./manage-gateway.sh logs local       # View local logs
-# Gateway environments (gate server)
-./manage-gateway.sh start all        # Start all gateway envs (dev+stage+prod)
+# Remote environments (gate and mail servers)
+./manage-gateway.sh start all        # Start all remote envs (dev+stage+prod)
 ./manage-gateway.sh stop dev         # Stop specific environment
 ./manage-gateway.sh logs prod        # View production logs
 # Management
 ./manage-gateway.sh status           # View status of all containers
 ./manage-gateway.sh health           # Check health of all services
-# Deploy to gate server
-./manage-gateway.sh deploy all       # Deploy all environments to gate
-# Gateway operations (gate server)
+# Deploy to remote servers
+./manage-gateway.sh deploy all       # Deploy all (dev→gate, stage/prod→mail)
+# Gateway operations (remote servers)
 ./manage-gateway.sh gateway start    # Start nginx gateway
 ./manage-gateway.sh gateway restart  # Restart nginx gateway
 ./manage-gateway.sh gateway test     # Test nginx configuration

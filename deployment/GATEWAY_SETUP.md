@@ -1,11 +1,23 @@
 
-# SecondLayer 3-Environment Gateway Setup
+# SecondLayer 3-Environment Deployment Setup
 
-Complete guide for deploying Production, Staging, and Development environments on a single gateway server.
+Complete guide for deploying Production, Staging, and Development environments across multiple servers.
 ## Architecture Overview
+
+### Server Allocation
+
+Environments are deployed across multiple servers:
+
+| Environment | Server | Purpose |
+|------------|--------|---------|
+| **Development** | gate.lexapp.co.ua | Development & testing |
+| **Staging** | mail.lexapp.co.ua | Pre-production testing |
+| **Production** | mail.lexapp.co.ua | Live production system |
+| **Local** | localhost | Local development |
+
 ### Environment Separation
 
-Three completely isolated environments running on the same server:
+Three completely isolated remote environments plus local development:
 
 | Environment | Purpose | URL | Stability |
 |------------|---------|-----|-----------|

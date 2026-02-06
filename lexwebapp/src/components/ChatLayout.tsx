@@ -6,6 +6,9 @@ import { MessageThread } from './MessageThread';
 import { EmptyState } from './EmptyState';
 import { MessageProps } from './Message';
 import { ProfilePage } from './ProfilePage';
+import { useChatStore } from '../stores';
+import { useMCPTool } from '../hooks/useMCPTool';
+import showToast from '../utils/toast';
 import { JudgesPage } from './JudgesPage';
 import { LawyersPage } from './LawyersPage';
 import { ClientsPage } from './ClientsPage';
@@ -80,115 +83,75 @@ export function ChatLayout() {
   const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [messages, setMessages] = useState<MessageProps[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [selectedTool, setSelectedTool] = useState('get_legal_advice');
   const [currentView, setCurrentView] = useState<ViewState>('chat');
   const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(
     null
   );
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [messagingClientIds, setMessagingClientIds] = useState<string[]>([]);
-  const handleSend = async (content: string) => {
-    const API_URL = import.meta.env.VITE_API_URL || 'https://dev.legal.org.ua/api';
-    const API_KEY = import.meta.env.VITE_API_KEY || 'REDACTED_SL_KEY_LOCAL';
 
-    const userMessage: MessageProps = {
-      id: Date.now().toString(),
-      role: 'user',
-      content
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsStreaming(true);
+  // Use Zustand store for messages and streaming state
+  const { messages, isStreaming } = useChatStore();
+
+  // MCP Tool hook with streaming support
+  const { executeTool } = useMCPTool(selectedTool, {
+    enableStreaming: import.meta.env.VITE_ENABLE_SSE_STREAMING !== 'false',
+  });
+  /**
+   * Parse content to tool-specific parameters
+   */
+  const parseContentToToolParams = (toolName: string, content: string): any => {
+    switch (toolName) {
+      case 'get_legal_advice':
+      case 'packaged_lawyer_answer':
+        return {
+          query: content,
+          max_precedents: 5,
+          include_reasoning: true,
+        };
+
+      case 'search_court_cases':
+        return {
+          query: content,
+          limit: 10,
+        };
+
+      case 'search_legislation':
+      case 'search_legal_precedents':
+        return {
+          query: content,
+          limit: 5,
+        };
+
+      default:
+        return { query: content };
+    }
+  };
+
+  const handleSend = async (content: string, toolName?: string) => {
+    const tool = toolName || selectedTool;
+    const params = parseContentToToolParams(tool, content);
 
     try {
-      const response = await fetch(`${API_URL}/tools/get_legal_advice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
-        },
-        body: JSON.stringify({
-          query: content,
-          max_precedents: 5
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Parse the backend response structure
-      let parsedResult: any = {};
-      try {
-        // Backend returns result in content[0].text as JSON string
-        if (data.result?.content?.[0]?.text) {
-          parsedResult = JSON.parse(data.result.content[0].text);
-        }
-      } catch (e) {
-        console.warn('Failed to parse result content:', e);
-      }
-
-      // Extract answer from summary or fallback messages
-      const answerText = parsedResult.summary ||
-                        parsedResult.answer ||
-                        data.result?.answer ||
-                        data.answer ||
-                        'Відповідь отримано від backend.';
-
-      const aiMessage: MessageProps = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: answerText,
-        isStreaming: false,
-        thinkingSteps: parsedResult.reasoning_chain?.map((step: any, index: number) => ({
-          id: `s${index + 1}`,
-          title: `Крок ${step.step || index + 1}: ${step.action || 'Обробка'}`,
-          content: step.output ? JSON.stringify(step.output, null, 2) : step.explanation || '',
-          isComplete: true
-        })) || [],
-        decisions: parsedResult.precedent_chunks?.map((prec: any, index: number) => ({
-          id: `d${index + 1}`,
-          number: prec.case_number || prec.number || `Справа ${index + 1}`,
-          court: prec.court || 'Невідомий суд',
-          date: prec.date || '',
-          summary: prec.summary || prec.reasoning || prec.content || '',
-          relevance: Math.round((prec.similarity || prec.relevance || 0.5) * 100),
-          status: 'active'
-        })) || [],
-        citations: parsedResult.source_attribution?.map((src: any, index: number) => ({
-          text: src.text || src.content || '',
-          source: src.citation || src.source || `Джерело ${index + 1}`
-        })) || []
-      };
-
-      setMessages((prev) => [...prev, aiMessage]);
-      setIsStreaming(false);
-    } catch (error) {
-      console.error('API Error:', error);
-      const errorMessage: MessageProps = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Помилка при зверненні до API: ${error instanceof Error ? error.message : 'Невідома помилка'}. Будь ласка, спробуйте пізніше.`,
-        isStreaming: false
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      setIsStreaming(false);
+      await executeTool(params);
+    } catch (error: any) {
+      console.error('MCP tool execution error:', error);
+      showToast.error(
+        error.message || 'Помилка при зверненні до API. Спробуйте пізніше.'
+      );
     }
   };
   const handleNewChat = () => {
-    setMessages([]);
-    setIsStreaming(false);
+    useChatStore.getState().clearMessages();
     setCurrentView('chat');
     setSelectedPerson(null);
     setSelectedClient(null);
     setMessagingClientIds([]);
   };
   const handleLogout = () => {
-    // Clear local state
-    setMessages([]);
-    setIsStreaming(false);
+    // Clear chat state
+    useChatStore.getState().clearMessages();
     setSelectedPerson(null);
     setSelectedClient(null);
     setMessagingClientIds([]);

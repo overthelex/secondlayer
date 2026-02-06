@@ -1,42 +1,45 @@
 # Multi-stage build for Lexwebapp frontend
 # Stage 1: Build the React application
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY lexwebapp/package*.json ./
+COPY package*.json ./
 
-# Copy shared package for dependencies
-COPY packages/shared ./packages/shared
+# Install dependencies
+RUN npm ci --legacy-peer-deps
 
-# Install shared package dependencies first
-WORKDIR /app/packages/shared
-RUN npm install
+# Accept build arguments
+ARG BUILD_ENV=staging
+ARG VITE_API_URL=https://stage.legal.org.ua/api
+ARG VITE_API_KEY
+ARG VITE_ENABLE_SSE_STREAMING=true
+ARG VITE_ENABLE_ALL_MCP_TOOLS=true
+ARG VITE_SHOW_TOOL_SELECTOR=true
+ARG VITE_ENABLE_THINKING_STEPS=true
+ARG VITE_AUTO_EXPAND_THINKING=true
 
-# Back to app directory and install app dependencies
-WORKDIR /app
-RUN npm install
+# Copy source code
+COPY . .
 
-# Accept build arguments BEFORE copying source
-ARG BUILD_ENV=production
-ARG VITE_API_URL
+# Set env vars for build
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_API_KEY=$VITE_API_KEY
+ENV VITE_ENABLE_SSE_STREAMING=$VITE_ENABLE_SSE_STREAMING
+ENV VITE_ENABLE_ALL_MCP_TOOLS=$VITE_ENABLE_ALL_MCP_TOOLS
+ENV VITE_SHOW_TOOL_SELECTOR=$VITE_SHOW_TOOL_SELECTOR
+ENV VITE_ENABLE_THINKING_STEPS=$VITE_ENABLE_THINKING_STEPS
+ENV VITE_AUTO_EXPAND_THINKING=$VITE_AUTO_EXPAND_THINKING
 
-# Copy source code (excluding already copied files)
-COPY lexwebapp/ .
-
-# Create .env file with VITE_API_URL for Vite build
-RUN echo "VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}" > .env.production && \
-    echo "Created .env.production with VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}"
-
-# Build the application
-RUN npm run build
+# Build the application for staging
+RUN npm run build:staging
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
 
-# Copy built assets from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built assets from builder stage (staging build outputs to dist-staging)
+COPY --from=builder /app/dist-staging /usr/share/nginx/html
 
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
