@@ -218,8 +218,14 @@ class HTTPMCPServer {
       }
     }));
 
+    // URL-encoded form parsing (required for OAuth 2.0 token endpoint)
+    this.app.use(express.urlencoded({
+      extended: true,
+      limit: '10mb'
+    }));
+
     // Initialize Passport middleware
-    this.app.use(passport.initialize());
+    this.app.use(passport.initialize() as any);
 
     // Request logging
     this.app.use((req, _res, next) => {
@@ -239,6 +245,73 @@ class HTTPMCPServer {
         status: 'ok',
         service: 'secondlayer-mcp-http',
         version: '1.0.0',
+      });
+    });
+
+    // OPTIONS handler for /sse - returns OAuth configuration
+    // This allows ChatGPT to discover OAuth endpoints
+    this.app.options('/sse', (req: Request, res: Response) => {
+      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+
+      res.setHeader('MCP-Auth-Type', 'oauth2');
+      res.setHeader('MCP-Auth-Authorization-Endpoint', `${baseUrl}/oauth/authorize`);
+      res.setHeader('MCP-Auth-Token-Endpoint', `${baseUrl}/oauth/token`);
+      res.setHeader('MCP-Auth-Scopes', 'mcp');
+      res.setHeader('Allow', 'GET, POST, OPTIONS');
+      res.status(200).send();
+    });
+
+    // GET handler for /sse - returns OAuth configuration as JSON
+    // ChatGPT may use this for discovery
+    this.app.get('/sse', (req: Request, res: Response) => {
+      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+
+      res.json({
+        protocol: 'mcp',
+        version: '1.0',
+        auth: {
+          type: 'oauth2',
+          authorization_endpoint: `${baseUrl}/oauth/authorize`,
+          token_endpoint: `${baseUrl}/oauth/token`,
+          scopes: ['mcp'],
+        },
+        capabilities: {
+          tools: true,
+        },
+      });
+    });
+
+    // OAuth 2.0 Authorization Server Metadata (RFC 8414)
+    // ChatGPT checks this for OAuth discovery
+    this.app.get('/sse/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
+      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/oauth/authorize`,
+        token_endpoint: `${baseUrl}/oauth/token`,
+        revocation_endpoint: `${baseUrl}/oauth/revoke`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        token_endpoint_auth_methods_supported: ['client_secret_post'],
+        scopes_supported: ['mcp'],
+        code_challenge_methods_supported: [],
+      });
+    });
+
+    // OpenID Connect Discovery (for compatibility)
+    this.app.get('/sse/.well-known/openid-configuration', (_req: Request, res: Response) => {
+      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/oauth/authorize`,
+        token_endpoint: `${baseUrl}/oauth/token`,
+        revocation_endpoint: `${baseUrl}/oauth/revoke`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        token_endpoint_auth_methods_supported: ['client_secret_post'],
+        scopes_supported: ['mcp'],
       });
     });
 
