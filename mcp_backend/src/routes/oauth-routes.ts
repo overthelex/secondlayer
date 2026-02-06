@@ -75,8 +75,7 @@ export function createOAuthRouter(db: Database): Router {
         });
       }
 
-      // Render authorization form
-      // In production, this should be a proper HTML page with styling
+      // Render authorization form with modern design
       const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -86,118 +85,202 @@ export function createOAuthRouter(db: Database): Router {
   <title>SecondLayer MCP - Authorization</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      overflow: hidden;
       padding: 20px;
     }
+
+    /* Full-page background image */
+    .background {
+      position: absolute;
+      inset: 0;
+      background-image: url('https://cdn.magicpatterns.com/uploads/94NC27nbdKFZJnUMAiJT3K/BACK2.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      z-index: 0;
+    }
+
+    /* Subtle overlay for readability */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(2px);
+      z-index: 1;
+    }
+
+    /* White card with login form */
     .container {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      max-width: 400px;
+      position: relative;
+      z-index: 2;
       width: 100%;
+      max-width: 480px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5);
       padding: 40px;
     }
+
+    .header {
+      margin-bottom: 32px;
+    }
+
     h1 {
-      color: #333;
-      font-size: 24px;
-      margin-bottom: 10px;
-      text-align: center;
+      color: #1a1a1a;
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
     }
+
     .subtitle {
-      color: #666;
-      font-size: 14px;
-      text-align: center;
-      margin-bottom: 30px;
+      color: #6b7280;
+      font-size: 15px;
+      line-height: 1.5;
     }
+
     .client-info {
-      background: #f7fafc;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 25px;
-      border-left: 4px solid #667eea;
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 28px;
+      border-left: 4px solid #1a1a1a;
     }
+
     .client-info strong {
-      color: #333;
+      color: #374151;
       display: block;
-      margin-bottom: 5px;
-    }
-    .client-info span {
-      color: #667eea;
+      margin-bottom: 6px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       font-weight: 600;
     }
-    .form-group {
-      margin-bottom: 20px;
+
+    .client-info span {
+      color: #1a1a1a;
+      font-weight: 700;
+      font-size: 15px;
     }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
     label {
       display: block;
       color: #333;
-      font-weight: 500;
+      font-weight: 600;
       margin-bottom: 8px;
-      font-size: 14px;
+      font-size: 13px;
     }
+
     input[type="email"],
     input[type="password"] {
       width: 100%;
-      padding: 12px;
-      border: 2px solid #e2e8f0;
+      padding: 12px 14px;
+      border: 1px solid #e5e7eb;
       border-radius: 8px;
-      font-size: 14px;
-      transition: all 0.2s;
+      font-size: 15px;
+      background: #f9fafb;
+      transition: all 0.15s ease;
     }
+
+    input[type="email"]:hover,
+    input[type="password"]:hover {
+      border-color: #d1d5db;
+    }
+
     input[type="email"]:focus,
     input[type="password"]:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      border-color: #1a1a1a;
+      background: #ffffff;
     }
+
+    input::placeholder {
+      color: #9ca3af;
+    }
+
     button {
       width: 100%;
       padding: 14px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: #000;
+      color: #fff;
       border: none;
       border-radius: 8px;
       font-size: 16px;
       font-weight: 600;
       cursor: pointer;
-      transition: transform 0.2s;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      transition: all 0.15s ease;
     }
-    button:hover {
-      transform: translateY(-2px);
+
+    button:hover:not(:disabled) {
+      background: #333;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      transform: translateY(-1px);
     }
-    button:active {
+
+    button:active:not(:disabled) {
       transform: translateY(0);
     }
+
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
     .error {
-      background: #fee;
-      color: #c33;
-      padding: 12px;
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 12px 16px;
       border-radius: 8px;
       margin-bottom: 20px;
       font-size: 14px;
       display: none;
+      border-left: 4px solid #dc2626;
     }
+
     .footer {
       text-align: center;
-      margin-top: 20px;
-      color: #999;
+      margin-top: 24px;
+      color: #9ca3af;
       font-size: 12px;
+    }
+
+    @media (max-width: 640px) {
+      .container {
+        padding: 28px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="background"></div>
+  <div class="overlay"></div>
+
   <div class="container">
-    <h1>🔐 SecondLayer MCP</h1>
-    <p class="subtitle">Ukrainian Legal AI Platform</p>
+    <div class="header">
+      <h1>Welcome back</h1>
+      <p class="subtitle">MCP legal.org.ua — OAuth2 Authorization</p>
+    </div>
 
     <div class="client-info">
-      <strong>Application requesting access:</strong>
+      <strong>Application requesting access</strong>
       <span>${client.name}</span>
     </div>
 
@@ -205,12 +288,12 @@ export function createOAuthRouter(db: Database): Router {
 
     <form id="authForm" onsubmit="handleSubmit(event)">
       <div class="form-group">
-        <label for="email">Email Address</label>
+        <label for="email">Email</label>
         <input
           type="email"
           id="email"
           name="email"
-          placeholder="igor@legal.org.ua"
+          placeholder="Email Address"
           required
           autocomplete="email"
         />
@@ -222,7 +305,7 @@ export function createOAuthRouter(db: Database): Router {
           type="password"
           id="password"
           name="password"
-          placeholder="••••••••"
+          placeholder="Password 8-16 characters"
           required
           autocomplete="current-password"
         />
@@ -506,6 +589,49 @@ export function createOAuthRouter(db: Database): Router {
         error: 'server_error',
       });
     }
+  });
+
+  /**
+   * GET /.well-known/oauth-authorization-server
+   * OAuth 2.0 Authorization Server Metadata (RFC 8414)
+   *
+   * This endpoint provides discovery metadata for OAuth clients
+   */
+  router.get('/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
+    const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+
+    res.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      revocation_endpoint: `${baseUrl}/oauth/revoke`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code'],
+      token_endpoint_auth_methods_supported: ['client_secret_post'],
+      scopes_supported: ['mcp'],
+      code_challenge_methods_supported: [],
+    });
+  });
+
+  /**
+   * GET /.well-known/openid-configuration
+   * OpenID Connect Discovery (for compatibility)
+   *
+   * Some OAuth clients also check this endpoint
+   */
+  router.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
+    const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+
+    res.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/oauth/authorize`,
+      token_endpoint: `${baseUrl}/oauth/token`,
+      revocation_endpoint: `${baseUrl}/oauth/revoke`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code'],
+      token_endpoint_auth_methods_supported: ['client_secret_post'],
+      scopes_supported: ['mcp'],
+    });
   });
 
   return router;
