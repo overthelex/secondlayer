@@ -185,8 +185,12 @@ services:
       # Security (relaxed for local dev)
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
 
+      # Unified Gateway Configuration
+      ENABLE_UNIFIED_GATEWAY: ${ENABLE_UNIFIED_GATEWAY:-true}
       RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
-      RADA_API_KEY: ${RADA_API_KEY:-test-rada-key}
+      RADA_API_KEY: ${RADA_API_KEY:-test-key-123}
+      OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL:-http://openreyestr-app-local:3004}
+      OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY:-test-key-123}
 
       # OAuth (optional for local - can use API keys instead)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -305,7 +309,7 @@ services:
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
       SECONDLAYER_URL: http://app-local:3000
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS:-test-key-123}
-      RADA_API_KEYS: ${RADA_API_KEYS:-test-key-123}
+      RADA_API_KEYS: ${RADA_API_KEYS:-test-key-123,test-rada-key}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
@@ -392,11 +396,8 @@ services:
       - "3002:3002"
 
     volumes:
-      # Optional: Mount vision credentials if available
-      # Comment out if VISION_CREDENTIALS_PATH is not set
-      # - ${VISION_CREDENTIALS_PATH}:/app/credentials/vision-credentials.json:ro
-      # Fallback: Create empty tmpfs for credentials directory
-      - document_service_credentials:/app/credentials
+      # Vision API credentials for OCR
+      - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
 
     healthcheck:
       test:

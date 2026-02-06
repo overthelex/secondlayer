@@ -119,6 +119,20 @@ npm run frontend     # Start lexwebapp dev server
 
 ## Port Allocation
 
+### Unified Gateway (Stage Environment)
+
+**⭐ NEW: Unified Gateway Mode** (enabled via `ENABLE_UNIFIED_GATEWAY=true`)
+- **Public Access**: Port 3004 → All 44 MCP tools via unified gateway
+- **Internal Services**: RADA (3001) and OpenReyestr (3005) accessible only within Docker network
+- **Benefits**: Single endpoint, unified auth, aggregated cost tracking
+
+**Stage deployment** (with unified gateway):
+- ✅ **3004** → Unified gateway (public, all 44 tools)
+- ❌ **3006** → RADA (removed, now internal only)
+- ❌ **3007** → OpenReyestr (removed, now internal only)
+
+### Service Ports (Internal)
+
 **mcp_backend** (main court/legal server):
 - HTTP: 3000
 - PostgreSQL: 5432
@@ -126,20 +140,20 @@ npm run frontend     # Start lexwebapp dev server
 - Qdrant: 6333-6334
 
 **mcp_rada** (parliament server):
-- HTTP: 3001
+- HTTP: 3001 (internal in stage, via gateway)
 - PostgreSQL: 5433
 - Redis: 6380
 - Qdrant: 6335-6336
 
 **mcp_openreyestr** (state register server):
-- HTTP: 3004
+- HTTP: 3005 (internal in stage, via gateway)
 - PostgreSQL: 5435
 - Redis: 6382 (optional, not currently used)
 
 **Deployment environments**:
 - Local: localhost:3000 (PostgreSQL 5432, Redis 6379)
 - Dev: gate.lexapp.co.ua:3003 (PostgreSQL 5433, Redis 6380)
-- Stage: mail.lexapp.co.ua:3004 (PostgreSQL 5434, Redis 6381)
+- Stage: https://stage.legal.org.ua (Unified Gateway, all 44 tools)
 - Prod: mail.lexapp.co.ua:3001 (PostgreSQL 5432, Redis 6379)
 
 ## Key Architectural Patterns
@@ -326,18 +340,24 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ## Important Notes
 
+- **Unified Gateway**: Stage environment uses unified gateway (`ENABLE_UNIFIED_GATEWAY=true`) exposing all 45 tools via single endpoint
+  - Tool naming: Backend (no prefix, 36 tools), RADA (`rada_*`, 4 tools), OpenReyestr (`openreyestr_*`, 5 tools)
+  - Internal routing: Gateway proxies to RADA/OpenReyestr services via Docker network
+  - Cost tracking: Aggregates costs from all services into master tracking record
+  - See `docs/UNIFIED_GATEWAY_IMPLEMENTATION.md` for details
 - **Two ZOAdapter instances**: One for court cases search, one for legal practice database (different endpoints)
 - **Cache TTLs**: Deputies 7d, Bills 1d, Laws 30d (configured in RADA server)
 - **Model selection**: Use `ModelSelector` utility for budget-aware model choice (quick/standard/deep)
 - **Legislation aliases**: System recognizes "constitution", "цивільний кодекс", "кримінальний кодекс", etc.
-- **SSE streaming**: For long-running operations, use SSE endpoints to stream progress events
+- **SSE streaming**: For long-running operations, use SSE endpoints to stream progress events (works with gateway)
 - **Dual-auth**: HTTP mode supports both bearer token (for API clients) and JWT/OAuth (for web users)
 
 ## Related Documentation
 
 ### 🔧 API Documentation
 
-- **`docs/ALL_MCP_TOOLS.md`** ⭐ **NEW!** - Complete list of all 43 MCP tools
+- **`docs/ALL_MCP_TOOLS.md`** ⭐ - Complete list of all 45 MCP tools
+- **`docs/UNIFIED_GATEWAY_IMPLEMENTATION.md`** ⭐ **NEW!** - Unified gateway architecture and implementation
   - mcp_backend: 34 tools (court cases, legal analysis, document parsing)
   - mcp_rada: 4 tools (parliament data, bills, deputies)
   - mcp_openreyestr: 5 tools (state registry, beneficiaries, EDRPOU)

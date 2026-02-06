@@ -241,6 +241,53 @@ export class CostTracker {
   }
 
   /**
+   * Record cost from a remote MCP service call (RADA, OpenReyestr)
+   * Used by gateway to aggregate costs from proxied requests
+   */
+  async recordRemoteServiceCall(params: {
+    requestId: string;
+    service: 'rada' | 'openreyestr';
+    toolName: string;
+    costUsd: number;
+    details: any;
+  }): Promise<void> {
+    const { requestId, service, toolName, costUsd, details } = params;
+
+    try {
+      await this.db.query(
+        `UPDATE cost_tracking
+         SET secondlayer_cost_usd = secondlayer_cost_usd + $1,
+             total_cost_usd = total_cost_usd + $1,
+             secondlayer_calls = COALESCE(secondlayer_calls, '[]'::jsonb) || $2::jsonb
+         WHERE request_id = $3`,
+        [
+          costUsd,
+          JSON.stringify([
+            {
+              service,
+              tool_name: toolName,
+              cost_usd: costUsd,
+              timestamp: new Date().toISOString(),
+              details,
+            },
+          ]),
+          requestId,
+        ]
+      );
+
+      logger.debug('Remote service cost recorded in gateway', {
+        requestId,
+        service,
+        toolName,
+        costUsd: costUsd.toFixed(6),
+      });
+    } catch (error) {
+      logger.error('Failed to record remote service cost:', error);
+      // Don't throw - we don't want to interrupt the main request
+    }
+  }
+
+  /**
    * Record a SecondLayer MCP API call (web scraping, processing, etc.)
    * Only counts non-cached operations
    */

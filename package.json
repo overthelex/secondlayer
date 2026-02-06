@@ -13,7 +13,8 @@
     "frontend": "cd lexwebapp && npm run dev",
     "backend:build": "cd mcp_backend && npm run build",
     "frontend:build": "cd lexwebapp && npm run build",
-    "install:all": "npm install"
+    "install:all": "npm install",
+    "batch-process": "tsx scripts/batch-process-documents.ts"
   },
   "keywords": [
     "mcp",
@@ -30,6 +31,13 @@
   "devDependencies": {
     "@playwright/test": "^1.58.1",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "@types/node": "^20.0.0",
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.3",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.1",
+    "ora": "^8.0.1",
+    "tsx": "^4.7.0"
   }
 }

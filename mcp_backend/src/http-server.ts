@@ -18,6 +18,7 @@ import { HallucinationGuard } from './services/hallucination-guard.js';
 import { MCPQueryAPI } from './api/mcp-query-api.js';
 import { LegislationTools } from './api/legislation-tools.js';
 import { DocumentAnalysisTools } from './api/document-analysis-tools.js';
+import { BatchDocumentTools } from './api/batch-document-tools.js';
 import { DocumentParser } from './services/document-parser.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
 import path from 'path';
@@ -49,6 +50,9 @@ import { createOAuthRouter } from './routes/oauth-routes.js';
 import { OAuthService } from './services/oauth-service.js';
 import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
 import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
+import { ToolRegistry } from './api/tool-registry.js';
+import { ServiceProxy } from './services/service-proxy.js';
+import { ServiceType } from './types/gateway.js';
 
 dotenv.config();
 
@@ -68,6 +72,7 @@ class HTTPMCPServer {
   private legislationTools: LegislationTools;
   private documentParser: DocumentParser;
   private documentAnalysisTools: DocumentAnalysisTools;
+  private batchDocumentTools: BatchDocumentTools;
   private costTracker: CostTracker;
   private billingService: BillingService;
   private stripeService: StripeService | MockStripeService;
@@ -77,6 +82,8 @@ class HTTPMCPServer {
   private apiKeyService: ApiKeyService;
   private creditService: CreditService;
   private oauthService: OAuthService;
+  private toolRegistry: ToolRegistry;
+  private serviceProxy: ServiceProxy;
 
   constructor() {
     this.app = express();
@@ -95,7 +102,10 @@ class HTTPMCPServer {
     this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
 
     // Initialize document parser with Vision API credentials
-    const visionKeyPath = path.resolve(process.cwd(), '../vision-ocr-credentials.json');
+    // Use env var if set (for Docker), otherwise fallback to local path
+    const visionKeyPath = process.env.VISION_CREDENTIALS_PATH ||
+                         process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+                         path.resolve(process.cwd(), '../vision-ocr-credentials.json');
     this.documentParser = new DocumentParser(visionKeyPath);
     this.documentAnalysisTools = new DocumentAnalysisTools(
       this.documentParser,
@@ -105,6 +115,13 @@ class HTTPMCPServer {
       this.embeddingService,
       this.documentService
     );
+
+    // Initialize batch document tools
+    this.batchDocumentTools = new BatchDocumentTools(
+      this.documentParser,
+      this.documentAnalysisTools
+    );
+    logger.info('Batch document processing tools initialized');
 
     this.mcpAPI = new MCPQueryAPI(
       this.queryPlanner,
@@ -131,6 +148,11 @@ class HTTPMCPServer {
     // Initialize OAuth 2.0 service for ChatGPT integration
     this.oauthService = new OAuthService(this.db);
     logger.info('OAuth 2.0 service initialized');
+
+    // Initialize Unified Gateway components
+    this.toolRegistry = new ToolRegistry();
+    this.serviceProxy = new ServiceProxy(this.costTracker);
+    logger.info('Unified Gateway initialized (Tool Registry + Service Proxy)');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -179,6 +201,7 @@ class HTTPMCPServer {
       this.mcpAPI,
       this.legislationTools,
       this.documentAnalysisTools,
+      this.batchDocumentTools,
       this.costTracker,
       this.creditService
     );
@@ -544,6 +567,7 @@ class HTTPMCPServer {
               ...this.mcpAPI.getTools(),
               ...this.legislationTools.getToolDefinitions(),
               ...this.documentAnalysisTools.getToolDefinitions(),
+              ...this.batchDocumentTools.getToolDefinitions(),
             ],
           };
         });
@@ -631,6 +655,8 @@ class HTTPMCPServer {
                     default:
                       throw new Error(`Unknown document tool: ${toolName}`);
                   }
+                } else if (toolName === 'batch_process_documents') {
+                  return await this.batchDocumentTools.processBatch(args as any);
                 } else {
                   return await this.mcpAPI.handleToolCall(toolName, args);
                 }
@@ -1024,18 +1050,56 @@ class HTTPMCPServer {
     }) as any);
 
     // MCP tool endpoints - allow both JWT and API keys
-    // List available tools
-    this.app.get('/api/tools', dualAuth as any, ((_req: DualAuthRequest, res: Response) => {
+    // List available tools (unified gateway - returns all 44 tools)
+    this.app.get('/api/tools', dualAuth as any, ((async (_req: DualAuthRequest, res: Response) => {
       try {
-        const tools = [
-          ...this.mcpAPI.getTools(),
-          ...this.legislationTools.getToolDefinitions(),
-          ...this.documentAnalysisTools.getToolDefinitions(),
-        ];
-        res.json({
-          tools,
-          count: tools.length,
-        });
+        // Check if unified gateway is enabled
+        const gatewayEnabled = process.env.ENABLE_UNIFIED_GATEWAY === 'true';
+
+        if (gatewayEnabled) {
+          // Unified gateway mode - fetch from all services
+          const backendTools = [
+            ...this.mcpAPI.getTools(),
+            ...this.legislationTools.getToolDefinitions(),
+            ...this.documentAnalysisTools.getToolDefinitions(),
+            ...this.batchDocumentTools.getToolDefinitions(),
+          ];
+
+          const allTools = await this.toolRegistry.getAllTools(
+            backendTools,
+            process.env.RADA_MCP_URL,
+            process.env.RADA_API_KEY,
+            process.env.OPENREYESTR_MCP_URL,
+            process.env.OPENREYESTR_API_KEY
+          );
+
+          const counts = this.toolRegistry.getToolCounts();
+
+          res.json({
+            tools: allTools,
+            count: allTools.length,
+            gateway: {
+              enabled: true,
+              services: counts,
+            },
+          });
+        } else {
+          // Legacy mode - only backend tools
+          const tools = [
+            ...this.mcpAPI.getTools(),
+            ...this.legislationTools.getToolDefinitions(),
+            ...this.documentAnalysisTools.getToolDefinitions(),
+            ...this.batchDocumentTools.getToolDefinitions(),
+          ];
+
+          res.json({
+            tools,
+            count: tools.length,
+            gateway: {
+              enabled: false,
+            },
+          });
+        }
       } catch (error: any) {
         logger.error('Error listing tools:', error);
         res.status(500).json({
@@ -1043,7 +1107,7 @@ class HTTPMCPServer {
           message: error.message,
         });
       }
-    }) as any);
+    }) as any) as any);
 
     // Call MCP tool (with SSE support and cost tracking)
     // Balance check middleware ensures user has sufficient funds before execution
@@ -1132,75 +1196,136 @@ class HTTPMCPServer {
           estimate,
         });
 
-        // Check if client wants SSE streaming
-        if (acceptHeader.includes('text/event-stream')) {
-          // SSE streaming response (TODO: add cost tracking to streaming)
-          return this.handleStreamingToolCall(req, res, toolName, args);
-        }
+        // 4. Route to appropriate service (GATEWAY LOGIC)
+        const gatewayEnabled = process.env.ENABLE_UNIFIED_GATEWAY === 'true';
+        const route = gatewayEnabled ? this.toolRegistry.getRoute(toolName) : null;
 
-        // 4. Execute in request context
-        const result = await requestContext.run(
-          { requestId, task: toolName },
-          async () => {
-            // Route legislation tools
-            if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
-              let routed;
-              switch (toolName) {
-                case 'get_legislation_article':
-                  routed = await this.legislationTools.getLegislationArticle(args as any);
-                  break;
-                case 'get_legislation_section':
-                  routed = await this.legislationTools.getLegislationSection(args as any);
-                  break;
-                case 'get_legislation_articles':
-                  routed = await this.legislationTools.getLegislationArticles(args as any);
-                  break;
-                case 'search_legislation':
-                  routed = await this.legislationTools.searchLegislation(args as any);
-                  break;
-                case 'get_legislation_structure':
-                  routed = await this.legislationTools.getLegislationStructure(args as any);
-                  break;
-                default:
-                  throw new Error(`Unknown legislation tool: ${toolName}`);
-              }
-              return {
-                content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
-              };
-            }
+        let result: any;
 
-            // Route document analysis tools
-            if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
-              let routed;
-              switch (toolName) {
-                case 'parse_document':
-                  routed = await this.documentAnalysisTools.parseDocument(args as any);
-                  break;
-                case 'extract_key_clauses':
-                  routed = await this.documentAnalysisTools.extractKeyClauses(args as any);
-                  break;
-                case 'summarize_document':
-                  routed = await this.documentAnalysisTools.summarizeDocument(args as any);
-                  break;
-                case 'compare_documents':
-                  routed = await this.documentAnalysisTools.compareDocuments(args as any);
-                  break;
-                default:
-                  throw new Error(`Unknown document analysis tool: ${toolName}`);
-              }
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify(routed, null, 2),
-                  },
-                ],
-              };
-            }
+        if (gatewayEnabled && route && !route.local) {
+          // PROXIED EXECUTION - call remote service (RADA or OpenReyestr)
+          logger.info('[Gateway] Proxying to remote service', {
+            requestId,
+            tool: toolName,
+            service: route.service,
+            serviceName: route.serviceName,
+          });
 
-            return await this.mcpAPI.handleToolCall(toolName, args);
+          // Check if client wants SSE streaming
+          if (acceptHeader.includes('text/event-stream')) {
+            // Stream from remote service
+            return await this.handleStreamingProxyCall(
+              req,
+              res,
+              route.service,
+              route.serviceName,
+              args,
+              requestId
+            );
           }
-        );
+
+          // Regular JSON request to remote service
+          const remoteResult = await this.serviceProxy.callRemoteService({
+            service: route.service,
+            serviceName: route.serviceName,
+            args,
+            requestId,
+          });
+
+          // Extract result from remote service response
+          result = remoteResult.result || remoteResult;
+
+        } else {
+          // LOCAL EXECUTION - backend tools
+          logger.debug('[Gateway] Executing locally', {
+            requestId,
+            tool: toolName,
+            gatewayEnabled,
+            routeFound: !!route,
+          });
+
+          // Check if client wants SSE streaming
+          if (acceptHeader.includes('text/event-stream')) {
+            return this.handleStreamingToolCall(req, res, toolName, args);
+          }
+
+          // Execute in request context
+          result = await requestContext.run(
+            { requestId, task: toolName },
+            async () => {
+              // Route legislation tools
+              if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
+                let routed;
+                switch (toolName) {
+                  case 'get_legislation_article':
+                    routed = await this.legislationTools.getLegislationArticle(args as any);
+                    break;
+                  case 'get_legislation_section':
+                    routed = await this.legislationTools.getLegislationSection(args as any);
+                    break;
+                  case 'get_legislation_articles':
+                    routed = await this.legislationTools.getLegislationArticles(args as any);
+                    break;
+                  case 'search_legislation':
+                    routed = await this.legislationTools.searchLegislation(args as any);
+                    break;
+                  case 'get_legislation_structure':
+                    routed = await this.legislationTools.getLegislationStructure(args as any);
+                    break;
+                  default:
+                    throw new Error(`Unknown legislation tool: ${toolName}`);
+                }
+                return {
+                  content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
+                };
+              }
+
+              // Route document analysis tools
+              if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
+                let routed;
+                switch (toolName) {
+                  case 'parse_document':
+                    routed = await this.documentAnalysisTools.parseDocument(args as any);
+                    break;
+                  case 'extract_key_clauses':
+                    routed = await this.documentAnalysisTools.extractKeyClauses(args as any);
+                    break;
+                  case 'summarize_document':
+                    routed = await this.documentAnalysisTools.summarizeDocument(args as any);
+                    break;
+                  case 'compare_documents':
+                    routed = await this.documentAnalysisTools.compareDocuments(args as any);
+                    break;
+                  default:
+                    throw new Error(`Unknown document analysis tool: ${toolName}`);
+                }
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify(routed, null, 2),
+                    },
+                  ],
+                };
+              }
+
+              // Route batch document tools
+              if (toolName === 'batch_process_documents') {
+                const routed = await this.batchDocumentTools.processBatch(args as any);
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify(routed, null, 2),
+                    },
+                  ],
+                };
+              }
+
+              return await this.mcpAPI.handleToolCall(toolName, args);
+            }
+          );
+        }
 
         // 5. Complete tracking and get breakdown
         const executionTime = Date.now() - startTime;
@@ -1260,6 +1385,7 @@ class HTTPMCPServer {
         res.json({
           success: true,
           tool: toolName,
+          service: route?.service || 'backend',
           result,
           cost_tracking: {
             request_id: requestId,
@@ -1409,6 +1535,74 @@ class HTTPMCPServer {
     }
   }
 
+  private async handleStreamingProxyCall(
+    _req: DualAuthRequest,
+    res: Response,
+    service: ServiceType,
+    serviceName: string,
+    args: any,
+    requestId: string
+  ): Promise<void> {
+    // Validate service is not backend
+    if (service === 'backend') {
+      throw new Error('Cannot proxy backend service');
+    }
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      logger.info('[Gateway SSE] Proxying stream from remote service', {
+        requestId,
+        service,
+        tool: serviceName,
+      });
+
+      // Get remote service stream
+      const stream = await this.serviceProxy.callRemoteService({
+        service,
+        serviceName,
+        args,
+        requestId,
+        acceptHeader: 'text/event-stream',
+      });
+
+      // Forward SSE events from remote service to client
+      stream.on('data', (chunk: Buffer) => {
+        res.write(chunk);
+      });
+
+      stream.on('end', () => {
+        logger.info('[Gateway SSE] Stream completed', { requestId, service });
+        res.end();
+      });
+
+      stream.on('error', (error: Error) => {
+        logger.error('[Gateway SSE] Stream error', {
+          requestId,
+          service,
+          error: error.message,
+        });
+        res.write(`event: error\n`);
+        res.write(`data: ${JSON.stringify({ message: error.message })}\n\n`);
+        res.end();
+      });
+    } catch (error: any) {
+      logger.error('[Gateway SSE] Proxy failed', {
+        requestId,
+        service,
+        error: error.message,
+      });
+
+      // Send error event
+      res.write(`event: error\n`);
+      res.write(`data: ${JSON.stringify({ message: error.message })}\n\n`);
+      res.end();
+    }
+  }
+
   private async handleStreamingToolCall(
     _req: DualAuthRequest,
     res: Response,
@@ -1429,9 +1623,14 @@ class HTTPMCPServer {
     });
 
     try {
-      // Only get_legal_advice supports streaming currently
+      // Streaming support for different tools
       if (toolName === 'get_legal_advice') {
         await this.mcpAPI.getLegalAdviceStream(args, (event) => {
+          this.sendSSEEvent(res, event);
+        });
+      } else if (toolName === 'batch_process_documents') {
+        // Batch document processing with real-time progress
+        await this.batchDocumentTools.processBatch(args, (event) => {
           this.sendSSEEvent(res, event);
         });
       } else {
