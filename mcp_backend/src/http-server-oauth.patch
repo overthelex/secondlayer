@@ -1,0 +1,77 @@
+--- a/mcp_backend/src/http-server.ts
++++ b/mcp_backend/src/http-server.ts
+@@ -45,6 +45,9 @@ import { getRedisClient } from './utils/redis-client.js';
+ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
++import { createOAuthRouter } from './routes/oauth-routes.js';
++import { OAuthService } from './services/oauth-service.js';
++import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
+ import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
+
+ dotenv.config();
+@@ -74,6 +77,7 @@ class HTTPMCPServer {
+   private mcpSSEServer: MCPSSEServer;
+   private apiKeyService: ApiKeyService;
+   private creditService: CreditService;
++  private oauthService: OAuthService;
+
+   constructor() {
+     this.app = express();
+@@ -115,6 +119,9 @@ class HTTPMCPServer {
+     this.apiKeyService = new ApiKeyService(this.db.getPool());
+     this.creditService = new CreditService(this.db.getPool());
+
++    // Initialize OAuth service
++    this.oauthService = new OAuthService(this.db);
++
+     // Initialize dual auth (must be done after services are ready)
+     initializeDualAuth(this.db);
+
+@@ -237,31 +244,11 @@ class HTTPMCPServer {
+     // MCP SSE endpoint for ChatGPT web integration (REQUIRED auth)
+     // Endpoint: POST /sse
+     // This implements the Model Context Protocol over Server-Sent Events
+-    // Reference: https://platform.openai.com/docs/mcp
+-    this.app.post('/sse', (async (req: DualAuthRequest, res: Response) => {
++    // Reference: https://platform.openai.com/docs/mcp
++    this.app.post('/sse', createHybridAuthMiddleware(this.db), (async (req: any, res: Response) => {
+       try {
+-        // CRITICAL: Authentication is REQUIRED for usage tracking
+-        const authHeader = req.headers.authorization;
+-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+-          logger.warn('[MCP SSE] Missing or invalid Authorization header');
+-          return res.status(401).json({
+-            error: 'Unauthorized',
+-            message: 'Authorization header with Bearer token is required',
+-            code: 'MISSING_AUTH',
+-          });
+-        }
+-
+-        const token = authHeader.replace('Bearer ', '');
+-        let userId: string | undefined;
+-        let clientKey: string | undefined;
+-
+-        // Authenticate (JWT or API key)
+-        try {
+-          if (token.includes('.')) {
+-            // JWT token - verify and extract userId
+-            const jwt = await import('jsonwebtoken');
+-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
+-            userId = decoded.userId;
++        // Authentication handled by middleware
++        let userId: string | undefined = req.userId;
+             logger.debug('[MCP SSE] Authenticated with JWT', { userId });
+           } else {
+             // API key - validate and get user info
+@@ -662,6 +649,10 @@ class HTTPMCPServer {
+     // Authentication routes (public - OAuth endpoints)
+     this.app.use('/auth', authRouter);
+
++    // OAuth 2.0 routes for ChatGPT integration (public)
++    this.app.use('/oauth', createOAuthRouter(this.db));
++    logger.info('OAuth 2.0 routes registered at /oauth');
++
+     // REST API for admin panel (CRUD operations) - require JWT (user login)
+     this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.db));
+     this.app.use('/api/patterns', requireJWT as any, createRestAPIRouter(this.db));

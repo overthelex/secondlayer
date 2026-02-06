@@ -45,6 +45,9 @@ import { getRedisClient } from './utils/redis-client.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { createOAuthRouter } from './routes/oauth-routes.js';
+import { OAuthService } from './services/oauth-service.js';
+import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
 import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
 
 dotenv.config();
@@ -73,6 +76,7 @@ class HTTPMCPServer {
   private mcpSSEServer: MCPSSEServer;
   private apiKeyService: ApiKeyService;
   private creditService: CreditService;
+  private oauthService: OAuthService;
 
   constructor() {
     this.app = express();
@@ -123,6 +127,10 @@ class HTTPMCPServer {
     this.apiKeyService = new ApiKeyService(this.db.getPool());
     this.creditService = new CreditService(this.db.getPool());
     logger.info('Phase 2 billing services initialized (API keys & credits)');
+
+    // Initialize OAuth 2.0 service for ChatGPT integration
+    this.oauthService = new OAuthService(this.db);
+    logger.info('OAuth 2.0 service initialized');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -255,7 +263,7 @@ class HTTPMCPServer {
         let userId: string | undefined;
         let clientKey: string | undefined;
 
-        // Authenticate (JWT or API key)
+        // Authenticate (JWT, OAuth, or API key)
         try {
           if (token.includes('.')) {
             // JWT token - verify and extract userId
@@ -263,6 +271,28 @@ class HTTPMCPServer {
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'change-this-secret-in-production') as any;
             userId = decoded.userId;
             logger.debug('[MCP SSE] Authenticated with JWT', { userId });
+          } else if (token.startsWith('mcp_token_')) {
+            // OAuth 2.0 access token - verify with OAuth service
+            const tokenData = await this.oauthService.verifyAccessToken(token);
+
+            if (!tokenData) {
+              logger.warn('[MCP SSE] Invalid OAuth token', {
+                tokenPrefix: token.substring(0, 15) + '...',
+              });
+              return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Invalid or expired OAuth access token',
+                code: 'INVALID_OAUTH_TOKEN',
+              });
+            }
+
+            userId = tokenData.userId;
+            clientKey = tokenData.clientId;
+            logger.debug('[MCP SSE] Authenticated with OAuth token', {
+              userId,
+              clientId: tokenData.clientId,
+              scope: tokenData.scope,
+            });
           } else {
             // API key - validate and get user info
             clientKey = token;
@@ -661,6 +691,10 @@ class HTTPMCPServer {
 
     // Authentication routes (public - OAuth endpoints)
     this.app.use('/auth', authRouter);
+
+    // OAuth 2.0 routes for ChatGPT integration (public)
+    this.app.use('/oauth', createOAuthRouter(this.db));
+    logger.info('OAuth 2.0 routes registered at /oauth');
 
     // REST API for admin panel (CRUD operations) - require JWT (user login)
     this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.db));
