@@ -3,7 +3,7 @@
  * Axios instance with authentication and error handling
  */
 
-import axios, { AxiosError, AxiosInstance, InternalAxeOptions } from 'axios';
+import axios, { AxiosError, AxiosInstance } from 'axios';
 import toast from 'react-hot-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';

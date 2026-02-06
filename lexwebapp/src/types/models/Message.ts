@@ -26,7 +26,7 @@ export interface Decision {
   date: string;
   summary: string;
   relevance: number;
-  status: 'active' | 'inactive';
+  status: 'active' | 'overturned' | 'modified';
 }
 
 export interface Citation {
