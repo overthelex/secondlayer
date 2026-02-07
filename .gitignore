@@ -31,8 +31,9 @@ vision-ocr-credentials.json
 *.p12
 
 # Password scripts (contain hardcoded credentials)
-set-*-password.*
-**/set-*-password.*
+set-*-password*
+**/set-*-password*
+**/set-password-*
 create-*-user*
 **/create-*-user*
 create-*-remote*
