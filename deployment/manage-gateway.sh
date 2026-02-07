@@ -466,43 +466,23 @@ deploy_to_gate() {
         exit 1
     fi
 
-    # Create deployment directory on server
-    ssh ${DEPLOY_USER}@${target_server} "mkdir -p ${REMOTE_PATH}"
+    # Repo root on the remote server
+    local REMOTE_REPO="/home/${DEPLOY_USER}/SecondLayer"
 
-    # Copy files
-    print_msg "$BLUE" "📤 Copying files to $server_name..."
-    scp $compose_file ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
-    scp $env_file ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
+    # Pull latest code on the server via git
+    print_msg "$BLUE" "📥 Pulling latest code on $server_name..."
+    ssh ${DEPLOY_USER}@${target_server} "git -C ${REMOTE_REPO} fetch origin main && git -C ${REMOTE_REPO} reset --hard origin/main"
 
-    # Copy source code for building images on server
-    print_msg "$BLUE" "📦 Syncing source code..."
-    cd ..
-    rsync -avz \
-        --exclude 'node_modules' \
-        --exclude 'dist' \
-        --exclude '.git' \
-        --exclude '.env*' \
-        --exclude 'logs' \
-        --exclude 'data' \
-        --exclude 'postgres_data' \
-        --exclude 'qdrant_data' \
-        --exclude 'redis_data' \
-        --exclude '.claude' \
-        --exclude '.cursor' \
-        --exclude 'test-results' \
-        mcp_backend/ lexwebapp/ packages/ \
-        ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/
-
-    # Copy Dockerfile AFTER rsync (so it doesn't get deleted by --delete flag)
-    scp Dockerfile.mono-backend ${DEPLOY_USER}@${target_server}:${REMOTE_PATH}/../
-    cd deployment
+    # Copy env file (not tracked in git)
+    print_msg "$BLUE" "📤 Copying env file to $server_name..."
+    scp $env_file ${DEPLOY_USER}@${target_server}:${REMOTE_REPO}/deployment/
 
     # Stop and remove old containers, then start new ones
     print_msg "$BLUE" "🔄 Updating containers on $server_name..."
 
     # Pass environment to SSH session
-    ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_PATH='${REMOTE_PATH}'; bash -s" << 'EOF'
-        cd "$REMOTE_PATH"
+    ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
+        cd "$REMOTE_REPO/deployment"
 
         # Determine compose file and env file based on DEPLOY_ENV
         case "$DEPLOY_ENV" in
