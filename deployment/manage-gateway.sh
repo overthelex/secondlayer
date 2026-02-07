@@ -305,15 +305,17 @@ build_images() {
 
     cd ..
 
-    # Build backend (from root context with backend Dockerfile)
+    # Build backend (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building backend image..."
-    docker build -f mcp_backend/Dockerfile -t secondlayer-app:latest .
+    docker build -f Dockerfile.mono-backend -t secondlayer-app:latest .
 
-    # Build OpenReyestr MCP
+    # Build RADA MCP (from root context with mono Dockerfile)
+    print_msg "$BLUE" "Building RADA MCP image..."
+    docker build -f Dockerfile.mono-rada -t rada-mcp:latest .
+
+    # Build OpenReyestr MCP (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building OpenReyestr MCP image..."
-    cd mcp_openreyestr
-    docker build -t openreyestr-app:latest .
-    cd ..
+    docker build -f Dockerfile.mono-openreyestr -t openreyestr-app:latest .
 
     # Build frontend
     print_msg "$BLUE" "Building frontend image..."
