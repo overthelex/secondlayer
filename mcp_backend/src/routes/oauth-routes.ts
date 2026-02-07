@@ -33,7 +33,15 @@ export function createOAuthRouter(db: Database): Router {
    */
   router.get('/authorize', async (req: Request, res: Response) => {
     try {
-      const { response_type, client_id, redirect_uri, scope = 'mcp', state } = req.query;
+      const {
+        response_type,
+        client_id,
+        redirect_uri,
+        scope = 'mcp',
+        state,
+        code_challenge,
+        code_challenge_method,
+      } = req.query;
 
       // Validate required parameters
       if (!response_type || response_type !== 'code') {
@@ -348,6 +356,8 @@ export function createOAuthRouter(db: Database): Router {
             redirect_uri: '${redirect_uri}',
             scope: '${scope}',
             state: '${state || ''}',
+            code_challenge: '${code_challenge || ''}',
+            code_challenge_method: '${code_challenge_method || ''}',
           }),
         });
 
@@ -392,7 +402,16 @@ export function createOAuthRouter(db: Database): Router {
    */
   router.post('/authorize', async (req: Request, res: Response) => {
     try {
-      const { email, password, client_id, redirect_uri, scope = 'mcp', state } = req.body;
+      const {
+        email,
+        password,
+        client_id,
+        redirect_uri,
+        scope = 'mcp',
+        state,
+        code_challenge,
+        code_challenge_method,
+      } = req.body;
 
       // Validate inputs
       if (!email || !password || !client_id || !redirect_uri) {
@@ -451,6 +470,8 @@ export function createOAuthRouter(db: Database): Router {
         userId: user.id,
         redirectUri: redirect_uri,
         scope,
+        codeChallenge: code_challenge || undefined,
+        codeChallengeMethod: code_challenge_method || undefined,
       });
 
       // Build redirect URL
@@ -492,7 +513,7 @@ export function createOAuthRouter(db: Database): Router {
    */
   router.post('/token', async (req: Request, res: Response) => {
     try {
-      const { grant_type, code, redirect_uri, client_id, client_secret } = req.body;
+      const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier } = req.body;
 
       // Validate grant_type
       if (grant_type !== 'authorization_code') {
@@ -524,6 +545,7 @@ export function createOAuthRouter(db: Database): Router {
         code,
         clientId: client_id,
         redirectUri: redirect_uri,
+        codeVerifier: code_verifier || undefined,
       });
 
       if (!tokenData) {
