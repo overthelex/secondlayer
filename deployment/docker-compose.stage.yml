@@ -508,44 +508,51 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # TEMPORARILY DISABLED - lexwebapp package-lock.json needs updating
-  # lexwebapp-stage:
-  #   build:
-  #     context: ../lexwebapp
-  #     dockerfile: Dockerfile
-  #     args:
-  #       - BUILD_ENV=staging
-  #       - VITE_API_URL=https://stage.legal.org.ua/api
-  #       - VITE_API_KEY=${VITE_API_KEY_STAGE:-REDACTED_SL_KEY_STAGE}
-  #       - VITE_ENABLE_SSE_STREAMING=true
-  #       - VITE_ENABLE_ALL_MCP_TOOLS=true
-  #       - VITE_SHOW_TOOL_SELECTOR=true
-  #       - VITE_ENABLE_THINKING_STEPS=true
-  #       - VITE_AUTO_EXPAND_THINKING=true
-  #   image: lexwebapp-lexwebapp:latest
-  #   container_name: lexwebapp-stage
-  #   ports:
-  #   - 8093:80
-  #   environment:
-  #   - NODE_ENV=staging
-  #   - TZ=Europe/Kiev
-  #   networks:
-  #   - secondlayer-stage-network
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - app-stage
-  #   healthcheck:
-  #     test:
-  #     - CMD
-  #     - sh
-  #     - -c
-  #     - wget --quiet --tries=1 --spider http://localhost/ || exit 1
-  #     interval: 30s
-  #     timeout: 3s
-  #     retries: 3
-  #     start_period: 5s
-  #   labels:
-  #   - com.docker.compose.project=lexwebapp-stage
+  lexwebapp-stage:
+    build:
+      context: ../lexwebapp
+      dockerfile: Dockerfile
+      args:
+        - BUILD_ENV=staging
+        - VITE_API_URL=https://stage.legal.org.ua/api
+        - VITE_API_KEY=${VITE_API_KEY_STAGE:-REDACTED_SL_KEY_STAGE}
+        - VITE_ENABLE_SSE_STREAMING=true
+        - VITE_ENABLE_ALL_MCP_TOOLS=true
+        - VITE_SHOW_TOOL_SELECTOR=true
+        - VITE_ENABLE_THINKING_STEPS=true
+        - VITE_AUTO_EXPAND_THINKING=true
+    image: lexwebapp-lexwebapp:latest
+    container_name: lexwebapp-stage
+    ports:
+    - 8092:80
+    environment:
+    - NODE_ENV=staging
+    - TZ=Europe/Kiev
+    networks:
+    - secondlayer-stage-network
+    restart: unless-stopped
+    depends_on:
+      - app-stage
+    healthcheck:
+      test:
+      - CMD
+      - sh
+      - -c
+      - wget --quiet --tries=1 --spider http://localhost/ || exit 1
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    labels:
+    - com.docker.compose.project=lexwebapp-stage
 volumes:
   postgres_stage_data:
     driver: local
