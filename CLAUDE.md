@@ -88,23 +88,47 @@ npm test
 cd mcp_openreyestr
 
 # Development (uses different ports to avoid conflicts)
-npm run dev:http     # HTTP server (port 3004)
+npm run dev:http     # HTTP server (port 3005)
 npm run dev          # MCP stdio mode
 
 # Database (separate from mcp_backend and mcp_rada)
 npm run db:setup
 npm run migrate
 
-# Data import from XML files
-npm run import:all /path/to/openreyestr-full.zip  # Import all entity types
-npm run import:uo /path/to/UO_FULL_out.xml        # Legal entities only
-npm run import:fop /path/to/FOP_FULL_out.xml      # Individual entrepreneurs only
-npm run import:fsu /path/to/FSU_FULL_out.xml      # Public associations only
+# Data import
+npm run import:entities   # Import legal entities from XML
+npm run import:debtors    # Import debtors registry
 
 # Build and test
 npm run build
 npm test
 ```
+
+### Web Frontend (lexwebapp)
+
+```bash
+cd lexwebapp
+
+npm run dev            # Vite dev server
+npm run build          # Production build
+npm run build:staging  # Staging build
+npm run test           # Run tests (Vitest)
+npm run test:watch     # Watch mode
+npm run test:coverage  # Coverage report
+npm run lint
+```
+
+Tech: React 19, Vite, TailwindCSS 3, Zustand (state), TanStack Query (data fetching), Vitest
+
+### Shared Package (packages/shared)
+
+```bash
+cd packages/shared
+npm run build    # Must build before other services that depend on it
+npm run dev      # Watch mode (tsc --watch)
+```
+
+Referenced as `@secondlayer/shared` by all three MCP servers.
 
 ### Monorepo Root
 
@@ -121,13 +145,13 @@ npm run frontend     # Start lexwebapp dev server
 
 ### Unified Gateway (Stage Environment)
 
-**⭐ NEW: Unified Gateway Mode** (enabled via `ENABLE_UNIFIED_GATEWAY=true`)
-- **Public Access**: Port 3004 → All 44 MCP tools via unified gateway
+**⭐ Unified Gateway Mode** (enabled via `ENABLE_UNIFIED_GATEWAY=true`)
+- **Public Access**: Port 3004 → All MCP tools via unified gateway
 - **Internal Services**: RADA (3001) and OpenReyestr (3005) accessible only within Docker network
 - **Benefits**: Single endpoint, unified auth, aggregated cost tracking
 
 **Stage deployment** (with unified gateway):
-- ✅ **3004** → Unified gateway (public, all 44 tools)
+- ✅ **3004** → Unified gateway (public, all tools)
 - ❌ **3006** → RADA (removed, now internal only)
 - ❌ **3007** → OpenReyestr (removed, now internal only)
 
@@ -299,14 +323,22 @@ cd deployment
 
 ## Testing
 
-Both servers use Jest with TypeScript:
+Backend servers use Jest with TypeScript (`ts-jest`); lexwebapp uses Vitest.
 
 ```bash
-npm test              # Run all tests
-npm run test:watch    # Watch mode
+# Run all tests in a service
+cd mcp_backend && npm test
+cd lexwebapp && npm run test
+
+# Run a single test file
+cd mcp_backend && npx jest --no-cache path/to/file.test.ts
+cd lexwebapp && npx vitest run path/to/file.test.ts
+
+# Watch mode
+npm run test:watch
 ```
 
-Test files are in `__tests__/` directories alongside source files.
+Test files are in `__tests__/` directories alongside source files. Backend jest config uses `maxWorkers=1` and `testTimeout=120000` (tests may call external APIs).
 
 ## Common Workflows
 
@@ -340,7 +372,7 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ## Important Notes
 
-- **Unified Gateway**: Stage environment uses unified gateway (`ENABLE_UNIFIED_GATEWAY=true`) exposing all 45 tools via single endpoint
+- **Unified Gateway**: Stage environment uses unified gateway (`ENABLE_UNIFIED_GATEWAY=true`) exposing all tools via single endpoint
   - Tool naming: Backend (no prefix, 36 tools), RADA (`rada_*`, 4 tools), OpenReyestr (`openreyestr_*`, 5 tools)
   - Internal routing: Gateway proxies to RADA/OpenReyestr services via Docker network
   - Cost tracking: Aggregates costs from all services into master tracking record
@@ -354,43 +386,13 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 
 ## Related Documentation
 
-### 🔧 API Documentation
-
-- **`docs/ALL_MCP_TOOLS.md`** ⭐ - Complete list of all 45 MCP tools
-- **`docs/UNIFIED_GATEWAY_IMPLEMENTATION.md`** ⭐ **NEW!** - Unified gateway architecture and implementation
-  - mcp_backend: 34 tools (court cases, legal analysis, document parsing)
-  - mcp_rada: 4 tools (parliament data, bills, deputies)
-  - mcp_openreyestr: 5 tools (state registry, beneficiaries, EDRPOU)
-  - Cost breakdown, parameters, examples, integrations
-
-- **`mcp_backend/docs/api-explorer.html`** - Interactive API Explorer (Swagger-style)
-  - All 41 MCP tools with search and filtering
-  - Copy-paste curl examples
-  - Cost information and parameter descriptions
-  - Open in browser: `file:///.../mcp_backend/docs/api-explorer.html`
-
-- **`mcp_backend/docs/index.html`** - Documentation Hub with navigation to all docs
-
-### 📚 Integration & Deployment
-
-- **`docs/MCP_CLIENT_INTEGRATION_GUIDE.md`** ⭐ **NEW!** - Complete guide for connecting 10+ LLM clients
-  - Desktop: Claude Desktop, Jan AI, Cherry Studio, Chat-MCP, BoltAI
-  - Web: LibreChat, AnythingLLM, Open WebUI, Chainlit, ChatGPT Web
-  - All transports (stdio, HTTP, SSE, Streamable HTTP)
-  - Configurations, examples, troubleshooting
-- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration quick start (HTTP, MCP stdio, SSE)
-- `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol for long operations
-- `mcp_backend/docs/CHATGPT_INTEGRATION.md` - ChatGPT Actions integration
-- `mcp_backend/docs/DEPLOYMENT_CHATGPT.md` - Multi-environment deployment guide
+- `docs/ALL_MCP_TOOLS.md` - Complete list of all MCP tools across services
+- `docs/UNIFIED_GATEWAY_IMPLEMENTATION.md` - Unified gateway architecture
+- `docs/MCP_CLIENT_INTEGRATION_GUIDE.md` - Connecting LLM clients (Claude Desktop, ChatGPT, etc.)
+- `mcp_backend/docs/api-explorer.html` - Interactive API Explorer (open in browser)
+- `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration quick start
+- `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol
+- `mcp_backend/docs/DATABASE_SETUP.md` - PostgreSQL, Redis, Qdrant setup
 - `deployment/LOCAL_DEVELOPMENT.md` - Local development setup
 - `deployment/GATEWAY_SETUP.md` - Multi-environment gateway configuration
-
-### 🗄️ Database & Infrastructure
-
-- `mcp_backend/docs/DATABASE_SETUP.md` - PostgreSQL, Redis, Qdrant setup
-- `mcp_backend/docs/postgres-optimization.md` - Query optimization and indexing
-
-### 📖 Getting Started
-
 - `START_HERE.md` - Quick start guide for the monorepo
-- `mcp_backend/docs/README.md` - Complete documentation index
