@@ -12,7 +12,13 @@ export interface CostTrackerConfig {
   enableAnthropic?: boolean;
   enableZakonOnline?: boolean;
   enableRadaAPI?: boolean;
+  enableDatabase?: boolean;
   enableSecondLayer?: boolean;
+}
+
+export interface AdditionalCostResult {
+  additionalCostUsd: number;
+  additionalBreakdownSections: Partial<CostBreakdown>;
 }
 
 export abstract class BaseCostTracker {
@@ -27,6 +33,7 @@ export abstract class BaseCostTracker {
       enableAnthropic: false,
       enableZakonOnline: false,
       enableRadaAPI: false,
+      enableDatabase: false,
       enableSecondLayer: true,
       ...config,
     };
@@ -61,7 +68,8 @@ export abstract class BaseCostTracker {
   async createTrackingRecord(params: {
     requestId: string;
     toolName: string;
-    clientKey: string;
+    clientKey?: string;
+    userId?: string;
     userQuery: string;
     queryParams: any;
   }): Promise<void> {
@@ -72,7 +80,7 @@ export abstract class BaseCostTracker {
       [
         params.requestId,
         params.toolName,
-        params.clientKey,
+        params.clientKey || null,
         params.userQuery,
         JSON.stringify(params.queryParams),
         'pending',
@@ -252,6 +260,27 @@ export abstract class BaseCostTracker {
     reasoningBudget: 'quick' | 'standard' | 'deep';
   }): Promise<CostEstimate>;
 
+  /**
+   * Hook: return server-specific additional costs (e.g. zakononline, rada_api, database).
+   * Default returns 0 additional cost.
+   */
+  protected async calculateAdditionalCosts(_record: any): Promise<AdditionalCostResult> {
+    return { additionalCostUsd: 0, additionalBreakdownSections: {} };
+  }
+
+  /**
+   * Hook: post-processing after tracking is complete (e.g. billing charges).
+   * Default is a no-op.
+   */
+  protected async onTrackingComplete(
+    _record: any,
+    _breakdown: CostBreakdown,
+    _totalCostUsd: number,
+    _status: 'completed' | 'failed'
+  ): Promise<void> {
+    // no-op by default
+  }
+
   async completeTrackingRecord(params: {
     requestId: string;
     executionTimeMs: number;
@@ -272,7 +301,11 @@ export abstract class BaseCostTracker {
     const anthropicCostUsd = Number(record.anthropic_cost_usd || 0);
     const secondlayerCostUsd = Number(record.secondlayer_cost_usd || 0);
 
-    const totalCostUsd = openaiCostUsd + anthropicCostUsd + secondlayerCostUsd;
+    // Get server-specific additional costs
+    const { additionalCostUsd, additionalBreakdownSections } =
+      await this.calculateAdditionalCosts(record);
+
+    const totalCostUsd = openaiCostUsd + anthropicCostUsd + secondlayerCostUsd + additionalCostUsd;
 
     await this.db.query(
       `UPDATE cost_tracking
@@ -303,9 +336,12 @@ export abstract class BaseCostTracker {
         cost_usd: totalCostUsd,
         execution_time_ms: params.executionTimeMs,
       },
+      // Merge server-specific breakdown sections
+      ...additionalBreakdownSections,
     };
 
-    if (this.config.enableAnthropic) {
+    // Add anthropic section if enabled and data exists
+    if (this.config.enableAnthropic || Number(record.anthropic_cost_usd || 0) > 0) {
       breakdown.anthropic = {
         total_tokens: record.anthropic_total_tokens || 0,
         prompt_tokens: record.anthropic_prompt_tokens || 0,
@@ -320,6 +356,9 @@ export abstract class BaseCostTracker {
       status: params.status,
       totalCostUsd: totalCostUsd.toFixed(6),
     });
+
+    // Post-processing hook (e.g. billing)
+    await this.onTrackingComplete(record, breakdown, totalCostUsd, params.status);
 
     return breakdown;
   }

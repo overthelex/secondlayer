@@ -44,6 +44,13 @@ export interface SecondLayerCallRecord {
   cost_usd?: number;
 }
 
+export interface DatabaseQueryRecord {
+  query_type: string;
+  execution_time_ms: number;
+  rows_returned: number;
+  timestamp: string;
+}
+
 export interface CostEstimate {
   openai_estimated_tokens: number;
   openai_estimated_cost_usd: number;
@@ -52,6 +59,7 @@ export interface CostEstimate {
   zakononline_estimated_calls?: number;
   zakononline_estimated_cost_usd?: number;
   rada_estimated_calls?: number;
+  database_estimated_queries?: number;
   secondlayer_estimated_calls: number;
   secondlayer_estimated_cost_usd: number;
   total_estimated_cost_usd: number;
@@ -92,6 +100,12 @@ export interface CostBreakdown {
     cached_calls: number;
     total_bytes: number;
     calls: RadaAPICallRecord[];
+  };
+
+  database?: {
+    total_queries: number;
+    total_rows: number;
+    calls: DatabaseQueryRecord[];
   };
 
   secondlayer: {
