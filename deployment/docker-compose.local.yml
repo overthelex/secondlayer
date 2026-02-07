@@ -451,8 +451,8 @@ services:
 
   migrate-openreyestr-local:
     build:
-      context: ../mcp_openreyestr
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: Dockerfile.mono-openreyestr
     image: openreyestr-app:latest
     container_name: openreyestr-migrate-local
     depends_on:
