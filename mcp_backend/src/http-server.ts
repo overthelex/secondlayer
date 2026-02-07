@@ -763,6 +763,36 @@ class HTTPMCPServer {
       res.redirect(307, '/oauth/token');
     });
 
+    // Root-level .well-known endpoints for OAuth discovery (Claude.ai compatibility)
+    this.app.get('/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
+      const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/oauth/authorize`,
+        token_endpoint: `${baseUrl}/oauth/token`,
+        revocation_endpoint: `${baseUrl}/oauth/revoke`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        token_endpoint_auth_methods_supported: ['client_secret_post'],
+        scopes_supported: ['mcp', 'claudeai'],
+        code_challenge_methods_supported: ['S256', 'plain'],
+      });
+    });
+
+    this.app.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
+      const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/oauth/authorize`,
+        token_endpoint: `${baseUrl}/oauth/token`,
+        revocation_endpoint: `${baseUrl}/oauth/revoke`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        token_endpoint_auth_methods_supported: ['client_secret_post'],
+        scopes_supported: ['mcp', 'claudeai'],
+      });
+    });
+
     // OAuth 2.0 routes for ChatGPT integration (public)
     this.app.use('/oauth', createOAuthRouter(this.services.db));
     logger.info('OAuth 2.0 routes registered at /oauth');
