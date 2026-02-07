@@ -21,27 +21,7 @@ ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 -- Step 3: Add index for email lookups (for login)
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
--- Step 4: Insert admin user with password 'admin123'
--- Password hash is bcrypt hash of 'admin123' with salt rounds 10
--- Generated with: bcrypt.hash('admin123', 10)
-INSERT INTO users (
-  id,
-  email,
-  name,
-  password_hash,
-  email_verified,
-  created_at
-)
-VALUES (
-  gen_random_uuid(),
-  'admin@secondlayer.com',
-  'Admin User',
-  '$2b$10$82A0rQ0SI0zwQUEjnNa6pujeEGaNNbahTKdYfqSzu.Jdtgzt9acOK', -- admin123
-  true,
-  NOW()
-)
-ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    name = EXCLUDED.name;
+-- Step 4: Admin user should be created via set-user-password.ts script after migration
+-- Example: npx tsx src/scripts/set-user-password.ts admin@secondlayer.com <password>
 
 COMMENT ON COLUMN users.password_hash IS 'Bcrypt hashed password for email/password authentication';

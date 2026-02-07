@@ -130,7 +130,7 @@ echo "$HEALTH_RESPONSE"
 
 echo ""
 echo "Testing /mcp..."
-MCP_RESPONSE=$(ssh ${MAIL_SERVER} "curl -s -H 'Authorization: Bearer test-key-123' http://localhost:3004/mcp")
+MCP_RESPONSE=$(ssh ${MAIL_SERVER} "curl -s -H 'Authorization: Bearer ${SECONDARY_LAYER_KEYS}' http://localhost:3004/mcp")
 if echo "$MCP_RESPONSE" | grep -q "error"; then
     echo -e "${RED}✗ /mcp endpoint not working${NC}"
     echo "$MCP_RESPONSE"
@@ -142,7 +142,7 @@ fi
 
 echo ""
 echo "Testing /sse..."
-SSE_RESPONSE=$(ssh ${MAIL_SERVER} "curl -s -X POST -H 'Authorization: Bearer test-key-123' -H 'Content-Type: application/json' -H 'Accept: text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}' http://localhost:3004/sse" | head -c 500)
+SSE_RESPONSE=$(ssh ${MAIL_SERVER} "curl -s -X POST -H 'Authorization: Bearer ${SECONDARY_LAYER_KEYS}' -H 'Content-Type: application/json' -H 'Accept: text/event-stream' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test\",\"version\":\"1.0\"}}}' http://localhost:3004/sse" | head -c 500)
 
 if echo "$SSE_RESPONSE" | grep -q "error"; then
     echo -e "${RED}✗ /sse endpoint not working${NC}"

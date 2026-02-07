@@ -14,15 +14,35 @@ build/
 .env.production
 .env.*
 !.env.example
+# Env files without dot prefix (deployment/env, deployment/env.local, etc.)
+**/env
+**/env.local
+env
+env.local
 
 # Secrets & Credentials
 google_OAUTH2.json
 vision-ocr-credentials.json
 *-credentials.json
+*-credentials*.txt
 *-service-account.json
 *.pem
 *.key
 *.p12
+
+# Password scripts (contain hardcoded credentials)
+set-*-password.*
+**/set-*-password.*
+create-*-user*
+**/create-*-user*
+create-*-remote*
+**/create-*-remote*
+
+# Test scripts with embedded secrets
+test-mcp-stdio.sh
+
+# Personal legal documents
+tck/
 
 # Logs
 logs/
