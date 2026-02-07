@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     container_name: secondlayer-postgres
     environment:
-      POSTGRES_USER: secondlayer
-      POSTGRES_PASSWORD: secondlayer_password
-      POSTGRES_DB: secondlayer_db
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_db}
     command:
       - "postgres"
       - "-c"
@@ -28,7 +28,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U secondlayer -d secondlayer_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -71,12 +71,12 @@ services:
     environment:
       NODE_ENV: production
       # Database connection
-      DATABASE_URL: postgresql://secondlayer:secondlayer_password@postgres:5432/secondlayer_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-secondlayer_db}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_USER: secondlayer
-      POSTGRES_PASSWORD: secondlayer_password
-      POSTGRES_DB: secondlayer_db
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_db}
       # Vector DB and Cache
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
@@ -105,7 +105,7 @@ services:
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       # HTTP Server
-      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-test-key-123}
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:?SECONDARY_LAYER_KEYS is required}
       HTTP_PORT: 3000
       HTTP_HOST: 0.0.0.0
       PORT: 3000

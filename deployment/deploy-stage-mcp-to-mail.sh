@@ -12,8 +12,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-MAIL_SERVER="mail"
-MAIL_USER="vovkes"
+MAIL_SERVER="${DEPLOY_SSH_HOST:-mail}"
+MAIL_USER="${DEPLOY_SSH_USER:-vovkes}"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Deploy Stage MCP to Mail Server${NC}"
@@ -145,7 +145,7 @@ echo ""
 
 # Test MCP endpoint
 echo -e "${YELLOW}Step 8: Test MCP endpoint${NC}"
-MCP_RESPONSE=$(curl -s -H "Authorization: Bearer test-key-123" https://stage.mcp.legal.org.ua/mcp)
+MCP_RESPONSE=$(curl -s -H "Authorization: Bearer ${SECONDARY_LAYER_KEYS}" https://stage.mcp.legal.org.ua/mcp)
 echo "MCP Response:"
 echo "$MCP_RESPONSE" | jq '.' 2>/dev/null || echo "$MCP_RESPONSE"
 echo ""
@@ -163,7 +163,7 @@ echo -e "${YELLOW}MCP Server URL:${NC}"
 echo "  https://stage.mcp.legal.org.ua/sse"
 echo ""
 echo -e "${YELLOW}API Token:${NC}"
-echo "  test-key-123"
+echo "  ${SECONDARY_LAYER_KEYS}"
 echo ""
 echo -e "${YELLOW}Test with:${NC}"
 echo "  ./test-stage-mcp-connection.sh"
@@ -178,7 +178,7 @@ cat << 'EOFCONFIG'
         "type": "sse"
       },
       "headers": {
-        "Authorization": "Bearer test-key-123"
+        "Authorization": "Bearer ${SECONDARY_LAYER_KEYS}"
       }
     }
   }
