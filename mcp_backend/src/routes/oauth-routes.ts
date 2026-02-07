@@ -575,6 +575,18 @@ export function createOAuthRouter(db: Database): Router {
   });
 
   /**
+   * GET /oauth/token
+   * Handle GET requests to token endpoint (should be POST)
+   * Returns error indicating that POST method is required
+   */
+  router.get('/token', (req: Request, res: Response) => {
+    res.status(405).json({
+      error: 'invalid_request',
+      error_description: 'Token endpoint only accepts POST requests. Please use POST method with application/x-www-form-urlencoded or application/json content type.',
+    });
+  });
+
+  /**
    * POST /oauth/revoke
    * Revoke an access token
    */
