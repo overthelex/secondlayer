@@ -43,7 +43,7 @@ Commands:
   restart <env>     Restart environment (prod|stage|dev|local|all)
   status            Show status of all environments
   logs <env>        Show logs for environment (prod|stage|dev|local|gateway)
-  deploy <env>      Deploy to gate server (prod|stage|dev|all)
+  deploy <env>      Deploy environment (prod|stage|dev|local|all)
   build             Build Docker images
   gateway           Manage nginx gateway
     - start         Start nginx gateway
@@ -64,7 +64,7 @@ Deployment Targets:
   - Dev: Deploys to gate.lexapp.co.ua
   - Stage: Deploys to mail.lexapp.co.ua
   - Prod: Deploys to mail.lexapp.co.ua
-  - Local: Runs on localhost (no remote deployment)
+  - Local: Full rebuild on localhost (pull, rebuild --no-cache, migrate)
 
 Examples:
   $0 start local             # Start local development environment
@@ -361,6 +361,62 @@ check_health() {
     echo ""
 }
 
+# Deploy local environment (full rebuild without cache)
+deploy_local() {
+    local compose_cmd=$(get_compose_cmd)
+    local compose_args="-f docker-compose.local.yml"
+    if [ -f ".env.local" ]; then
+        compose_args="$compose_args --env-file .env.local"
+    fi
+
+    print_msg "$BLUE" "🚀 Deploying local environment (full rebuild)..."
+
+    # Step 1: Pull latest main
+    print_msg "$BLUE" "📥 Pulling latest main branch..."
+    git -C .. fetch origin main && git -C .. checkout main && git -C .. pull origin main
+
+    # Step 2: Stop existing containers
+    print_msg "$BLUE" "🛑 Stopping existing containers..."
+    stop_env local
+
+    # Step 3: Cleanup exited/dead containers and dangling images
+    print_msg "$BLUE" "🧹 Cleaning up stopped containers..."
+    docker ps -a --filter "name=secondlayer-.*-local" --filter "status=exited" -q | xargs -r docker rm -f
+    docker ps -a --filter "name=secondlayer-.*-local" --filter "status=dead" -q | xargs -r docker rm -f
+    print_msg "$BLUE" "🗑️  Removing dangling images..."
+    docker image prune -f
+
+    # Step 4: Start infrastructure services only
+    print_msg "$BLUE" "🚀 Starting infrastructure services..."
+    $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local
+
+    # Step 5: Wait for databases to be ready, then run init
+    print_msg "$BLUE" "⏳ Waiting for databases..."
+    sleep 15
+    print_msg "$BLUE" "🔧 Running RADA DB init..."
+    $compose_cmd $compose_args up rada-db-init-local
+
+    # Step 6: Run migrations sequentially
+    print_msg "$BLUE" "🔄 Running backend migrations..."
+    $compose_cmd $compose_args up migrate-local
+    print_msg "$BLUE" "🔄 Running RADA migrations..."
+    $compose_cmd $compose_args up rada-migrate-local
+    print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
+    $compose_cmd $compose_args up migrate-openreyestr-local
+
+    # Step 7: Rebuild app images without cache
+    print_msg "$BLUE" "🔨 Building application images without cache..."
+    $compose_cmd $compose_args build --no-cache app-local rada-mcp-app-local app-openreyestr-local document-service-local
+
+    # Step 8: Start app services
+    print_msg "$BLUE" "▶️  Starting application services..."
+    $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local
+
+    # Step 9: Show status
+    print_msg "$GREEN" "✅ Local deployment complete"
+    $compose_cmd $compose_args ps
+}
+
 # Deploy to server (gate or mail based on environment)
 deploy_to_gate() {
     local env=$1
@@ -386,6 +442,10 @@ deploy_to_gate() {
             server_name="gate server"
             local env_file=".env.dev"
             local compose_file="docker-compose.dev.yml"
+            ;;
+        local)
+            deploy_local
+            return
             ;;
         all)
             deploy_to_gate prod
