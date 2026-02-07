@@ -748,6 +748,21 @@ class HTTPMCPServer {
     // Authentication routes (public - OAuth endpoints)
     this.app.use('/auth', authRouter);
 
+    // Redirect /authorize to /oauth/authorize (for Claude.ai compatibility)
+    this.app.get('/authorize', (req: Request, res: Response) => {
+      const queryString = new URLSearchParams(req.query as any).toString();
+      res.redirect(301, `/oauth/authorize?${queryString}`);
+    });
+
+    this.app.post('/authorize', (req: Request, res: Response) => {
+      res.redirect(307, '/oauth/authorize');
+    });
+
+    // Redirect /token to /oauth/token (for Claude.ai compatibility)
+    this.app.post('/token', (req: Request, res: Response) => {
+      res.redirect(307, '/oauth/token');
+    });
+
     // OAuth 2.0 routes for ChatGPT integration (public)
     this.app.use('/oauth', createOAuthRouter(this.services.db));
     logger.info('OAuth 2.0 routes registered at /oauth');
@@ -1582,7 +1597,7 @@ class HTTPMCPServer {
     try {
       // Streaming support for different tools
       if (toolName === 'get_legal_advice') {
-        await this.services.mcpAPI.getLegalAdviceStream(args, (event) => {
+        await this.services.mcpAPI.getLegalAdviceStream(args, (event: any) => {
           this.sendSSEEvent(res, event);
         });
       } else if (toolName === 'batch_process_documents') {
