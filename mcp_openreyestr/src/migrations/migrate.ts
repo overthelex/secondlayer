@@ -1,21 +1,17 @@
-import { Pool } from 'pg';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import dotenv from 'dotenv';
+import { Database } from '../database/database';
 
 dotenv.config();
 
 async function runMigrations() {
-  const pool = new Pool({
-    host: process.env.POSTGRES_HOST || 'localhost',
-    port: parseInt(process.env.POSTGRES_PORT || '5435'),
-    user: process.env.POSTGRES_USER || 'openreyestr',
-    password: process.env.POSTGRES_PASSWORD,
-    database: process.env.POSTGRES_DB || 'openreyestr',
-  });
+  const db = new Database();
 
   try {
     console.log('Running migrations...');
+
+    const pool = db.getPool();
 
     // Create migrations tracking table
     await pool.query(`
@@ -61,7 +57,7 @@ async function runMigrations() {
     console.error('Migration error:', error);
     throw error;
   } finally {
-    await pool.end();
+    await db.close();
   }
 }
 

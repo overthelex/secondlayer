@@ -6,17 +6,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
-import { Database } from './database/database.js';
-import { DocumentService } from './services/document-service.js';
-import { ZOAdapter } from './adapters/zo-adapter.js';
-import { QueryPlanner } from './services/query-planner.js';
-import { SemanticSectionizer } from './services/semantic-sectionizer.js';
-import { EmbeddingService } from './services/embedding-service.js';
-import { LegalPatternStore } from './services/legal-pattern-store.js';
-import { CitationValidator } from './services/citation-validator.js';
-import { HallucinationGuard } from './services/hallucination-guard.js';
-import { MCPQueryAPI } from './api/mcp-query-api.js';
-import { LegislationTools } from './api/legislation-tools.js';
+import { createBackendCoreServices, BackendCoreServices } from './factories/core-services.js';
 import { VaultTools } from './api/vault-tools.js';
 import { DocumentServiceClient } from './clients/document-service-client.js';
 import { DocumentParser } from './services/document-parser.js';
@@ -28,18 +18,7 @@ dotenv.config();
 
 class SecondLayerMCPServer {
   private server: Server;
-  private db: Database;
-  private documentService: DocumentService;
-  private zoAdapter: ZOAdapter;
-  private zoPracticeAdapter: ZOAdapter;
-  private queryPlanner: QueryPlanner;
-  private sectionizer: SemanticSectionizer;
-  private embeddingService: EmbeddingService;
-  private patternStore: LegalPatternStore;
-  private citationValidator: CitationValidator;
-  private hallucinationGuard: HallucinationGuard;
-  private mcpAPI: MCPQueryAPI;
-  private legislationTools: LegislationTools;
+  private services: BackendCoreServices;
   private vaultTools: VaultTools;
   private documentServiceClient: DocumentServiceClient;
   private documentParser?: DocumentParser;
@@ -59,18 +38,8 @@ class SecondLayerMCPServer {
       }
     );
 
-    // Initialize services
-    this.db = new Database();
-    this.documentService = new DocumentService(this.db);
-    this.queryPlanner = new QueryPlanner();
-    this.sectionizer = new SemanticSectionizer();
-    this.embeddingService = new EmbeddingService();
-    this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
-    this.zoPracticeAdapter = new ZOAdapter('court_practice', this.documentService, this.embeddingService);
-    this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
-    this.citationValidator = new CitationValidator(this.db);
-    this.hallucinationGuard = new HallucinationGuard(this.db);
-    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
+    // Initialize core services via factory
+    this.services = createBackendCoreServices();
 
     // Initialize vault tools (Stage 4)
     // DocumentParser will be initialized if vision credentials are available
@@ -80,10 +49,10 @@ class SecondLayerMCPServer {
         this.documentParser = new DocumentParser(visionKeyPath);
         this.vaultTools = new VaultTools(
           this.documentParser,
-          this.sectionizer,
-          this.patternStore,
-          this.embeddingService,
-          this.documentService
+          this.services.sectionizer,
+          this.services.patternStore,
+          this.services.embeddingService,
+          this.services.documentService
         );
         logger.info('VaultTools initialized successfully');
       } else {
@@ -101,28 +70,16 @@ class SecondLayerMCPServer {
     // Initialize due diligence tools (Stage 5)
     try {
       this.ddService = new DueDiligenceService(
-        this.sectionizer,
-        this.patternStore,
-        this.citationValidator,
-        this.documentService
+        this.services.sectionizer,
+        this.services.patternStore,
+        this.services.citationValidator,
+        this.services.documentService
       );
       this.ddTools = new DueDiligenceTools(this.ddService);
       logger.info('DueDiligenceTools initialized successfully');
     } catch (error) {
       logger.warn('DueDiligenceTools initialization failed, DD features disabled', error);
     }
-
-    this.mcpAPI = new MCPQueryAPI(
-      this.queryPlanner,
-      this.zoAdapter,
-      this.zoPracticeAdapter,
-      this.sectionizer,
-      this.embeddingService,
-      this.patternStore,
-      this.citationValidator,
-      this.hallucinationGuard,
-      this.legislationTools
-    );
 
     this.setupHandlers();
   }
@@ -131,8 +88,8 @@ class SecondLayerMCPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       const tools: any[] = [
-        ...this.mcpAPI.getTools(),
-        ...this.legislationTools.getToolDefinitions(),
+        ...this.services.mcpAPI.getTools(),
+        ...this.services.legislationTools.getToolDefinitions(),
       ];
 
       // Add vault tools if available (Stage 4)
@@ -274,19 +231,19 @@ class SecondLayerMCPServer {
           let result;
           switch (toolName) {
             case 'get_legislation_article':
-              result = await this.legislationTools.getLegislationArticle(args as any);
+              result = await this.services.legislationTools.getLegislationArticle(args as any);
               break;
             case 'get_legislation_section':
-              result = await this.legislationTools.getLegislationSection(args as any);
+              result = await this.services.legislationTools.getLegislationSection(args as any);
               break;
             case 'get_legislation_articles':
-              result = await this.legislationTools.getLegislationArticles(args as any);
+              result = await this.services.legislationTools.getLegislationArticles(args as any);
               break;
             case 'search_legislation':
-              result = await this.legislationTools.searchLegislation(args as any);
+              result = await this.services.legislationTools.searchLegislation(args as any);
               break;
             case 'get_legislation_structure':
-              result = await this.legislationTools.getLegislationStructure(args as any);
+              result = await this.services.legislationTools.getLegislationStructure(args as any);
               break;
             default:
               throw new Error(`Unknown legislation tool: ${toolName}`);
@@ -422,7 +379,7 @@ class SecondLayerMCPServer {
         }
 
         // Route to main MCP API
-        const result = await this.mcpAPI.handleToolCall(toolName, args);
+        const result = await this.services.mcpAPI.handleToolCall(toolName, args);
         return result;
       } catch (error: any) {
         logger.error('Tool call error:', error);
@@ -441,13 +398,13 @@ class SecondLayerMCPServer {
 
   async initialize() {
     try {
-      await this.db.connect();
-      await this.embeddingService.initialize();
+      await this.services.db.connect();
+      await this.services.embeddingService.initialize();
 
       // Initialize Redis for AI-powered legislation classification (optional)
       const redis = await getRedisClient();
       if (redis) {
-        this.legislationTools.setRedisClient(redis);
+        this.services.legislationTools.setRedisClient(redis);
         logger.info('Redis connected - AI legislation classification with caching enabled');
       } else {
         logger.info('Redis not available - AI legislation classification will work without caching');
