@@ -7,7 +7,6 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
-import { Pool } from 'pg';
 import { logger } from './utils/logger';
 import { requireAPIKey, AuthenticatedRequest } from './middleware/dual-auth';
 import { Database } from './database/database';
@@ -20,7 +19,6 @@ dotenv.config();
 class HTTPOpenReyestrServer {
   private app: express.Application;
   private db: Database;
-  private pool: Pool;
   private tools: OpenReyestrTools;
   private costTracker: CostTracker;
   private mcpAPI: MCPOpenReyestrAPI;
@@ -30,19 +28,12 @@ class HTTPOpenReyestrServer {
 
     // Initialize database FIRST
     this.db = new Database();
-    this.pool = new Pool({
-      host: process.env.POSTGRES_HOST || 'localhost',
-      port: parseInt(process.env.POSTGRES_PORT || '5435'),
-      user: process.env.POSTGRES_USER || 'openreyestr',
-      password: process.env.POSTGRES_PASSWORD,
-      database: process.env.POSTGRES_DB || 'openreyestr',
-    });
 
     // Initialize cost tracker
     this.costTracker = new CostTracker(this.db);
 
     // Initialize services
-    this.tools = new OpenReyestrTools(this.pool);
+    this.tools = new OpenReyestrTools(this.db.getPool());
 
     // Initialize MCP API
     this.mcpAPI = new MCPOpenReyestrAPI(this.tools, this.costTracker);

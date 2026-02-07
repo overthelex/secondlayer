@@ -5,6 +5,8 @@
   "private": true,
   "workspaces": [
     "mcp_backend",
+    "mcp_rada",
+    "mcp_openreyestr",
     "lexwebapp",
     "packages/shared"
   ],

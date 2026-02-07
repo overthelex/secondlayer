@@ -10,7 +10,6 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { OpenReyestrTools } from './api/openreyestr-tools.js';
 import { MCPOpenReyestrAPI } from './api/mcp-openreyestr-api.js';
@@ -22,16 +21,8 @@ dotenv.config();
 
 // Initialize database and services
 const db = new Database();
-const pool = new Pool({
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: parseInt(process.env.POSTGRES_PORT || '5435'),
-  user: process.env.POSTGRES_USER || 'openreyestr',
-  password: process.env.POSTGRES_PASSWORD,
-  database: process.env.POSTGRES_DB || 'openreyestr',
-});
-
 const costTracker = new CostTracker(db);
-const tools = new OpenReyestrTools(pool);
+const tools = new OpenReyestrTools(db.getPool());
 const mcpAPI = new MCPOpenReyestrAPI(tools, costTracker);
 
 const server = new Server(

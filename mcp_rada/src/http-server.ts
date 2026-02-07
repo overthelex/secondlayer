@@ -10,17 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger';
 import { requireAPIKey } from './middleware/dual-auth';
 import { healthCheckRateLimit } from './middleware/rate-limit';
-import { Database } from './database/database';
-import { RadaAPIAdapter } from './adapters/rada-api-adapter';
-import { ZakonRadaAdapter } from './adapters/zakon-rada-adapter';
-import { DeputyService } from './services/deputy-service';
-import { BillService } from './services/bill-service';
-import { LegislationService } from './services/legislation-service';
-import { VotingService } from './services/voting-service';
-import { CrossReferenceService } from './services/cross-reference-service';
-import { CostTracker } from './services/cost-tracker';
-import { MCPRadaAPI } from './api/mcp-rada-api';
-import { getLLMManager } from './utils/llm-client-manager';
+import { createRadaCoreServices, RadaCoreServices } from './factories/rada-services';
 import { requestContext } from './utils/openai-client';
 
 dotenv.config();
@@ -31,53 +21,13 @@ interface AuthenticatedRequest extends Request {
 
 class HTTPRadaServer {
   private app: express.Application;
-  private db: Database;
-  private radaAdapter: RadaAPIAdapter;
-  private zakonAdapter: ZakonRadaAdapter;
-  private deputyService: DeputyService;
-  private billService: BillService;
-  private legislationService: LegislationService;
-  private votingService: VotingService;
-  private crossRefService: CrossReferenceService;
-  private costTracker: CostTracker;
-  private mcpAPI: MCPRadaAPI;
+  private services: RadaCoreServices;
 
   constructor() {
     this.app = express();
 
-    // Initialize database and adapters FIRST
-    this.db = new Database();
-    this.radaAdapter = new RadaAPIAdapter();
-    this.zakonAdapter = new ZakonRadaAdapter();
-
-    // Initialize cost tracker
-    this.costTracker = new CostTracker(this.db);
-
-    // Set cost tracker on LLM manager
-    const llmManager = getLLMManager();
-    llmManager.setCostTracker(this.costTracker);
-
-    // Initialize services
-    this.deputyService = new DeputyService(this.db, this.radaAdapter);
-    this.billService = new BillService(this.db, this.radaAdapter);
-    this.legislationService = new LegislationService(this.db, this.zakonAdapter);
-    this.votingService = new VotingService(this.db, this.radaAdapter);
-    this.crossRefService = new CrossReferenceService(this.db);
-
-    // Set cost tracker on adapters
-    this.radaAdapter.setCostTracker(this.costTracker);
-    this.zakonAdapter.setCostTracker(this.costTracker);
-
-    // Initialize MCP API
-    this.mcpAPI = new MCPRadaAPI(
-      this.deputyService,
-      this.billService,
-      this.legislationService,
-      this.votingService,
-      this.crossRefService,
-      this.costTracker
-    );
-
+    // Initialize all core services via factory
+    this.services = createRadaCoreServices();
     logger.info('Cost tracking initialized for RADA server');
 
     // Setup middleware and routes AFTER services are initialized
@@ -119,7 +69,7 @@ class HTTPRadaServer {
     // List available tools
     this.app.get('/api/tools', requireAPIKey as any, ((_req: AuthenticatedRequest, res: Response) => {
       try {
-        const tools = this.mcpAPI.getTools();
+        const tools = this.services.mcpAPI.getTools();
         res.json({
           tools,
           count: tools.length,
@@ -151,7 +101,7 @@ class HTTPRadaServer {
         });
 
         // 1. Create tracking record (pending)
-        await this.costTracker.createTrackingRecord({
+        await this.services.costTracker.createTrackingRecord({
           requestId,
           toolName,
           clientKey: req.clientKey || 'unknown',
@@ -160,7 +110,7 @@ class HTTPRadaServer {
         });
 
         // 2. Estimate cost BEFORE execution
-        const estimate = await this.costTracker.estimateCost({
+        const estimate = await this.services.costTracker.estimateCost({
           toolName,
           queryLength: (args.query || '').length,
           reasoningBudget: args.reasoning_budget || 'standard',
@@ -181,13 +131,13 @@ class HTTPRadaServer {
         const result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
-            return await this.mcpAPI.handleToolCall(toolName, args);
+            return await this.services.mcpAPI.handleToolCall(toolName, args);
           }
         );
 
         // 4. Complete tracking and get breakdown
         const executionTime = Date.now() - startTime;
-        const breakdown = await this.costTracker.completeTrackingRecord({
+        const breakdown = await this.services.costTracker.completeTrackingRecord({
           requestId,
           executionTimeMs: executionTime,
           status: 'completed',
@@ -216,7 +166,7 @@ class HTTPRadaServer {
         // Record failure
         const executionTime = Date.now() - startTime;
         try {
-          await this.costTracker.completeTrackingRecord({
+          await this.services.costTracker.completeTrackingRecord({
             requestId,
             executionTimeMs: executionTime,
             status: 'failed',
@@ -281,7 +231,7 @@ class HTTPRadaServer {
 
   async initialize() {
     try {
-      await this.db.connect();
+      await this.services.db.connect();
       logger.info('HTTP RADA Server services initialized');
     } catch (error) {
       logger.error('Failed to initialize server:', error);
@@ -316,7 +266,7 @@ class HTTPRadaServer {
         id: 'processing',
       });
 
-      const result = await this.mcpAPI.handleToolCall(toolName, args);
+      const result = await this.services.mcpAPI.handleToolCall(toolName, args);
 
       this.sendSSEEvent(res, {
         type: 'progress',

@@ -16,7 +16,7 @@ export function createRateLimiter(options: RateLimitOptions) {
     keyPrefix = 'ratelimit',
   } = options;
 
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const redis = getRedisClient();
       const identifier = req.ip || req.socket.remoteAddress || 'unknown';
@@ -33,12 +33,13 @@ export function createRateLimiter(options: RateLimitOptions) {
           path: req.path,
         });
 
-        return res.status(429).json({
+        res.status(429).json({
           error: 'Too Many Requests',
           message: 'Rate limit exceeded. Maximum ' + maxRequests + ' requests per ' + (windowMs / 1000) + ' seconds',
           code: 'RATE_LIMIT_EXCEEDED',
           retryAfter: Math.ceil(windowMs / 1000),
         });
+        return;
       }
 
       const multi = redis.multi();

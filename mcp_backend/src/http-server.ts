@@ -6,17 +6,7 @@ import { logger } from './utils/logger.js';
 import { dualAuth, requireJWT, initializeDualAuth, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
 import { configurePassport } from './config/passport.js';
 import authRouter from './routes/auth.js';
-import { Database } from './database/database.js';
-import { DocumentService } from './services/document-service.js';
-import { ZOAdapter } from './adapters/zo-adapter.js';
-import { QueryPlanner } from './services/query-planner.js';
-import { SemanticSectionizer } from './services/semantic-sectionizer.js';
-import { EmbeddingService } from './services/embedding-service.js';
-import { LegalPatternStore } from './services/legal-pattern-store.js';
-import { CitationValidator } from './services/citation-validator.js';
-import { HallucinationGuard } from './services/hallucination-guard.js';
-import { MCPQueryAPI } from './api/mcp-query-api.js';
-import { LegislationTools } from './api/legislation-tools.js';
+import { createBackendCoreServices, BackendCoreServices } from './factories/core-services.js';
 import { DocumentAnalysisTools } from './api/document-analysis-tools.js';
 import { BatchDocumentTools } from './api/batch-document-tools.js';
 import { DocumentParser } from './services/document-parser.js';
@@ -58,18 +48,7 @@ dotenv.config();
 
 class HTTPMCPServer {
   private app: express.Application;
-  private db: Database;
-  private documentService: DocumentService;
-  private zoAdapter: ZOAdapter;
-  private zoPracticeAdapter: ZOAdapter;
-  private queryPlanner: QueryPlanner;
-  private sectionizer: SemanticSectionizer;
-  private embeddingService: EmbeddingService;
-  private patternStore: LegalPatternStore;
-  private citationValidator: CitationValidator;
-  private hallucinationGuard: HallucinationGuard;
-  private mcpAPI: MCPQueryAPI;
-  private legislationTools: LegislationTools;
+  private services: BackendCoreServices;
   private documentParser: DocumentParser;
   private documentAnalysisTools: DocumentAnalysisTools;
   private batchDocumentTools: BatchDocumentTools;
@@ -88,18 +67,8 @@ class HTTPMCPServer {
   constructor() {
     this.app = express();
 
-    // Initialize services FIRST
-    this.db = new Database();
-    this.documentService = new DocumentService(this.db);
-    this.queryPlanner = new QueryPlanner();
-    this.sectionizer = new SemanticSectionizer();
-    this.embeddingService = new EmbeddingService();
-    this.zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
-    this.zoPracticeAdapter = new ZOAdapter('court_practice', this.documentService, this.embeddingService);
-    this.patternStore = new LegalPatternStore(this.db, this.embeddingService);
-    this.citationValidator = new CitationValidator(this.db);
-    this.hallucinationGuard = new HallucinationGuard(this.db);
-    this.legislationTools = new LegislationTools(this.db.getPool(), this.embeddingService);
+    // Initialize core services via factory
+    this.services = createBackendCoreServices();
 
     // Initialize document parser with Vision API credentials
     // Use env var if set (for Docker), otherwise fallback to local path
@@ -109,11 +78,11 @@ class HTTPMCPServer {
     this.documentParser = new DocumentParser(visionKeyPath);
     this.documentAnalysisTools = new DocumentAnalysisTools(
       this.documentParser,
-      this.sectionizer,
-      this.patternStore,
-      this.citationValidator,
-      this.embeddingService,
-      this.documentService
+      this.services.sectionizer,
+      this.services.patternStore,
+      this.services.citationValidator,
+      this.services.embeddingService,
+      this.services.documentService
     );
 
     // Initialize batch document tools
@@ -123,30 +92,18 @@ class HTTPMCPServer {
     );
     logger.info('Batch document processing tools initialized');
 
-    this.mcpAPI = new MCPQueryAPI(
-      this.queryPlanner,
-      this.zoAdapter,
-      this.zoPracticeAdapter,
-      this.sectionizer,
-      this.embeddingService,
-      this.patternStore,
-      this.citationValidator,
-      this.hallucinationGuard,
-      this.legislationTools
-    );
-
     // Initialize cost tracker and billing service
-    this.costTracker = new CostTracker(this.db);
-    this.billingService = new BillingService(this.db);
+    this.costTracker = new CostTracker(this.services.db);
+    this.billingService = new BillingService(this.services.db);
     this.costTracker.setBillingService(this.billingService);
 
     // Initialize Phase 2 billing services (API keys & credits)
-    this.apiKeyService = new ApiKeyService(this.db.getPool());
-    this.creditService = new CreditService(this.db.getPool());
+    this.apiKeyService = new ApiKeyService(this.services.db.getPool());
+    this.creditService = new CreditService(this.services.db.getPool());
     logger.info('Phase 2 billing services initialized (API keys & credits)');
 
     // Initialize OAuth 2.0 service for ChatGPT integration
-    this.oauthService = new OAuthService(this.db);
+    this.oauthService = new OAuthService(this.services.db);
     logger.info('OAuth 2.0 service initialized');
 
     // Initialize Unified Gateway components
@@ -192,14 +149,14 @@ class HTTPMCPServer {
 
     const openaiManager = getOpenAIManager();
     openaiManager.setCostTracker(this.costTracker);
-    this.zoAdapter.setCostTracker(this.costTracker);
-    this.zoPracticeAdapter.setCostTracker(this.costTracker);
+    this.services.zoAdapter.setCostTracker(this.costTracker);
+    this.services.zoPracticeAdapter.setCostTracker(this.costTracker);
     logger.info('Cost tracking and billing initialized');
 
     // Initialize MCP SSE Server for ChatGPT integration
     this.mcpSSEServer = new MCPSSEServer(
-      this.mcpAPI,
-      this.legislationTools,
+      this.services.mcpAPI,
+      this.services.legislationTools,
       this.documentAnalysisTools,
       this.batchDocumentTools,
       this.costTracker,
@@ -208,8 +165,8 @@ class HTTPMCPServer {
     logger.info('MCP SSE Server initialized with Phase 2 billing support');
 
     // Initialize authentication
-    configurePassport(this.db);
-    initializeDualAuth(this.db, this.apiKeyService);
+    configurePassport(this.services.db);
+    initializeDualAuth(this.services.db, this.apiKeyService);
     logger.info('Authentication configured (Google OAuth2 + dual auth)');
 
     // Setup middleware and routes AFTER services are initialized
@@ -564,8 +521,8 @@ class HTTPMCPServer {
         mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
           return {
             tools: [
-              ...this.mcpAPI.getTools(),
-              ...this.legislationTools.getToolDefinitions(),
+              ...this.services.mcpAPI.getTools(),
+              ...this.services.legislationTools.getToolDefinitions(),
               ...this.documentAnalysisTools.getToolDefinitions(),
               ...this.batchDocumentTools.getToolDefinitions(),
             ],
@@ -630,15 +587,15 @@ class HTTPMCPServer {
                 if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
                   switch (toolName) {
                     case 'get_legislation_article':
-                      return await this.legislationTools.getLegislationArticle(args as any);
+                      return await this.services.legislationTools.getLegislationArticle(args as any);
                     case 'get_legislation_section':
-                      return await this.legislationTools.getLegislationSection(args as any);
+                      return await this.services.legislationTools.getLegislationSection(args as any);
                     case 'get_legislation_articles':
-                      return await this.legislationTools.getLegislationArticles(args as any);
+                      return await this.services.legislationTools.getLegislationArticles(args as any);
                     case 'search_legislation':
-                      return await this.legislationTools.searchLegislation(args as any);
+                      return await this.services.legislationTools.searchLegislation(args as any);
                     case 'get_legislation_structure':
-                      return await this.legislationTools.getLegislationStructure(args as any);
+                      return await this.services.legislationTools.getLegislationStructure(args as any);
                     default:
                       throw new Error(`Unknown legislation tool: ${toolName}`);
                   }
@@ -658,7 +615,7 @@ class HTTPMCPServer {
                 } else if (toolName === 'batch_process_documents') {
                   return await this.batchDocumentTools.processBatch(args as any);
                 } else {
-                  return await this.mcpAPI.handleToolCall(toolName, args);
+                  return await this.services.mcpAPI.handleToolCall(toolName, args);
                 }
               }
             );
@@ -792,23 +749,23 @@ class HTTPMCPServer {
     this.app.use('/auth', authRouter);
 
     // OAuth 2.0 routes for ChatGPT integration (public)
-    this.app.use('/oauth', createOAuthRouter(this.db));
+    this.app.use('/oauth', createOAuthRouter(this.services.db));
     logger.info('OAuth 2.0 routes registered at /oauth');
 
     // REST API for admin panel (CRUD operations) - require JWT (user login)
-    this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.db));
-    this.app.use('/api/patterns', requireJWT as any, createRestAPIRouter(this.db));
-    this.app.use('/api/queries', requireJWT as any, createRestAPIRouter(this.db));
+    this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.services.db));
+    this.app.use('/api/patterns', requireJWT as any, createRestAPIRouter(this.services.db));
+    this.app.use('/api/queries', requireJWT as any, createRestAPIRouter(this.services.db));
 
     // User profile endpoint - require JWT
     this.app.use('/api/auth', requireJWT as any, authRouter);
 
     // Phase 2 Billing: API key management - require JWT (user login)
-    this.app.use('/api/keys', requireJWT as any, createApiKeyRouter(this.db.getPool()));
+    this.app.use('/api/keys', requireJWT as any, createApiKeyRouter(this.services.db.getPool()));
     logger.info('API key management routes registered at /api/keys');
 
     // EULA endpoints - REMOVED: not needed
-    // this.app.use('/api/eula', createEULARouter(this.db.getPool()));
+    // this.app.use('/api/eula', createEULARouter(this.services.db.getPool()));
 
     // Billing endpoints - require JWT (user login)
     // GET /api/billing/balance - Get current balance and limits
@@ -962,7 +919,7 @@ class HTTPMCPServer {
     // GET /api/billing/full-settings - Get combined billing and preferences
     // GET /api/billing/pricing-info - Get pricing tier information
     // POST /api/billing/estimate-price - Estimate price with user's tier
-    this.app.use('/api/billing', requireJWT as any, createBillingRoutes(this.db));
+    this.app.use('/api/billing', requireJWT as any, createBillingRoutes(this.services.db));
 
     // Admin routes - require JWT + admin privileges
     // GET /api/admin/stats/overview - Dashboard statistics
@@ -979,7 +936,7 @@ class HTTPMCPServer {
     // GET /api/admin/analytics/usage - Usage analytics
     // GET /api/admin/api-keys - List API keys
     // GET /api/admin/settings - Get system settings
-    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.db));
+    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db));
 
     // Webhook routes - public (signature verified by services, rate limited)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
@@ -1004,7 +961,7 @@ class HTTPMCPServer {
         const offset = parseInt(req.query.offset as string) || 0;
 
         // Get user's query history from cost_tracking
-        const result = await this.db.query(
+        const result = await this.services.db.query(
           `SELECT
             id,
             request_id,
@@ -1026,7 +983,7 @@ class HTTPMCPServer {
         );
 
         // Get total count
-        const countResult = await this.db.query(
+        const countResult = await this.services.db.query(
           `SELECT COUNT(*)
           FROM cost_tracking
           WHERE status IN ('completed', 'failed')
@@ -1059,8 +1016,8 @@ class HTTPMCPServer {
         if (gatewayEnabled) {
           // Unified gateway mode - fetch from all services
           const backendTools = [
-            ...this.mcpAPI.getTools(),
-            ...this.legislationTools.getToolDefinitions(),
+            ...this.services.mcpAPI.getTools(),
+            ...this.services.legislationTools.getToolDefinitions(),
             ...this.documentAnalysisTools.getToolDefinitions(),
             ...this.batchDocumentTools.getToolDefinitions(),
           ];
@@ -1086,8 +1043,8 @@ class HTTPMCPServer {
         } else {
           // Legacy mode - only backend tools
           const tools = [
-            ...this.mcpAPI.getTools(),
-            ...this.legislationTools.getToolDefinitions(),
+            ...this.services.mcpAPI.getTools(),
+            ...this.services.legislationTools.getToolDefinitions(),
             ...this.documentAnalysisTools.getToolDefinitions(),
             ...this.batchDocumentTools.getToolDefinitions(),
           ];
@@ -1258,19 +1215,19 @@ class HTTPMCPServer {
                 let routed;
                 switch (toolName) {
                   case 'get_legislation_article':
-                    routed = await this.legislationTools.getLegislationArticle(args as any);
+                    routed = await this.services.legislationTools.getLegislationArticle(args as any);
                     break;
                   case 'get_legislation_section':
-                    routed = await this.legislationTools.getLegislationSection(args as any);
+                    routed = await this.services.legislationTools.getLegislationSection(args as any);
                     break;
                   case 'get_legislation_articles':
-                    routed = await this.legislationTools.getLegislationArticles(args as any);
+                    routed = await this.services.legislationTools.getLegislationArticles(args as any);
                     break;
                   case 'search_legislation':
-                    routed = await this.legislationTools.searchLegislation(args as any);
+                    routed = await this.services.legislationTools.searchLegislation(args as any);
                     break;
                   case 'get_legislation_structure':
-                    routed = await this.legislationTools.getLegislationStructure(args as any);
+                    routed = await this.services.legislationTools.getLegislationStructure(args as any);
                     break;
                   default:
                     throw new Error(`Unknown legislation tool: ${toolName}`);
@@ -1322,7 +1279,7 @@ class HTTPMCPServer {
                 };
               }
 
-              return await this.mcpAPI.handleToolCall(toolName, args);
+              return await this.services.mcpAPI.handleToolCall(toolName, args);
             }
           );
         }
@@ -1463,7 +1420,7 @@ class HTTPMCPServer {
         const results = await Promise.all(
           calls.map(async (call: { name: string; arguments?: any }) => {
             try {
-              const result = await this.mcpAPI.handleToolCall(
+              const result = await this.services.mcpAPI.handleToolCall(
                 call.name,
                 call.arguments || {}
               );
@@ -1515,14 +1472,14 @@ class HTTPMCPServer {
 
   async initialize() {
     try {
-      await this.db.connect();
-      await this.embeddingService.initialize();
+      await this.services.db.connect();
+      await this.services.embeddingService.initialize();
       await this.documentParser.initialize();
 
       // Initialize Redis for AI-powered legislation classification (optional)
       const redis = await getRedisClient();
       if (redis) {
-        this.legislationTools.setRedisClient(redis);
+        this.services.legislationTools.setRedisClient(redis);
         logger.info('Redis connected - AI legislation classification with caching enabled');
       } else {
         logger.info('Redis not available - AI legislation classification will work without caching');
@@ -1625,7 +1582,7 @@ class HTTPMCPServer {
     try {
       // Streaming support for different tools
       if (toolName === 'get_legal_advice') {
-        await this.mcpAPI.getLegalAdviceStream(args, (event) => {
+        await this.services.mcpAPI.getLegalAdviceStream(args, (event) => {
           this.sendSSEEvent(res, event);
         });
       } else if (toolName === 'batch_process_documents') {
@@ -1635,7 +1592,7 @@ class HTTPMCPServer {
         });
       } else {
         // For other tools, stream the regular result
-        const result = await this.mcpAPI.handleToolCall(toolName, args);
+        const result = await this.services.mcpAPI.handleToolCall(toolName, args);
         this.sendSSEEvent(res, {
           type: 'progress',
           data: { message: 'Processing...', progress: 0.5 },
