@@ -133,21 +133,33 @@ export class OAuthService {
     userId: string;
     redirectUri: string;
     scope: string;
+    codeChallenge?: string;
+    codeChallengeMethod?: string;
   }): Promise<string> {
     const code = this.generateAuthorizationCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await this.db.query(
       `INSERT INTO oauth_authorization_codes
-       (code, client_id, user_id, redirect_uri, scope, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [code, params.clientId, params.userId, params.redirectUri, params.scope, expiresAt]
+       (code, client_id, user_id, redirect_uri, scope, expires_at, code_challenge, code_challenge_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        code,
+        params.clientId,
+        params.userId,
+        params.redirectUri,
+        params.scope,
+        expiresAt,
+        params.codeChallenge || null,
+        params.codeChallengeMethod || null,
+      ]
     );
 
     logger.info('Authorization code created', {
       clientId: params.clientId,
       userId: params.userId,
       expiresAt,
+      hasPKCE: !!params.codeChallenge,
     });
 
     return code;
@@ -160,6 +172,7 @@ export class OAuthService {
     code: string;
     clientId: string;
     redirectUri: string;
+    codeVerifier?: string;
   }): Promise<{ accessToken: string; expiresIn: number; tokenType: string } | null> {
     // Get and verify authorization code
     const codeResult = await this.db.query(
@@ -179,6 +192,35 @@ export class OAuthService {
     if (new Date(authCode.expires_at) < new Date()) {
       logger.warn('Authorization code expired', { code: params.code });
       return null;
+    }
+
+    // Verify PKCE code_verifier if code_challenge was provided
+    if (authCode.code_challenge) {
+      if (!params.codeVerifier) {
+        logger.warn('PKCE code_verifier required but not provided', {
+          code: params.code,
+        });
+        return null;
+      }
+
+      const isValid = this.verifyPKCE(
+        params.codeVerifier,
+        authCode.code_challenge,
+        authCode.code_challenge_method || 'S256'
+      );
+
+      if (!isValid) {
+        logger.warn('PKCE verification failed', {
+          code: params.code,
+          method: authCode.code_challenge_method,
+        });
+        return null;
+      }
+
+      logger.info('PKCE verification successful', {
+        code: params.code,
+        method: authCode.code_challenge_method,
+      });
     }
 
     // Mark code as used
@@ -333,5 +375,29 @@ export class OAuthService {
     );
 
     return result.rowCount !== null && result.rowCount > 0;
+  }
+
+  /**
+   * Verify PKCE code_verifier against code_challenge
+   * Implements RFC 7636 - Proof Key for Code Exchange
+   */
+  private verifyPKCE(
+    codeVerifier: string,
+    codeChallenge: string,
+    codeChallengeMethod: string
+  ): boolean {
+    if (codeChallengeMethod === 'S256') {
+      // SHA256 hash of code_verifier, base64url encoded
+      const hash = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+      return hash === codeChallenge;
+    } else if (codeChallengeMethod === 'plain') {
+      // Plain comparison
+      return codeVerifier === codeChallenge;
+    }
+
+    logger.warn('Unsupported PKCE code_challenge_method', {
+      method: codeChallengeMethod,
+    });
+    return false;
   }
 }
