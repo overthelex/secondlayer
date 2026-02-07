@@ -513,6 +513,14 @@ export function createOAuthRouter(db: Database): Router {
    */
   router.post('/token', async (req: Request, res: Response) => {
     try {
+      logger.info('Token request received', {
+        contentType: req.headers['content-type'],
+        bodyKeys: Object.keys(req.body || {}),
+        hasClientSecret: !!req.body?.client_secret,
+        hasCodeVerifier: !!req.body?.code_verifier,
+        clientId: req.body?.client_id,
+      });
+
       const { grant_type, code, redirect_uri, client_id, client_secret, code_verifier } = req.body;
 
       // Validate grant_type
@@ -523,21 +531,33 @@ export function createOAuthRouter(db: Database): Router {
         });
       }
 
-      // Validate required parameters
-      if (!code || !redirect_uri || !client_id || !client_secret) {
+      // Validate required parameters (client_secret optional when using PKCE with code_verifier)
+      if (!code || !redirect_uri || !client_id) {
         return res.status(400).json({
           error: 'invalid_request',
           error_description: 'Missing required parameters',
         });
       }
 
-      // Verify client credentials
-      const isValidClient = await oauthService.verifyClient(client_id, client_secret);
-      if (!isValidClient) {
-        return res.status(401).json({
-          error: 'invalid_client',
-          error_description: 'Invalid client credentials',
-        });
+      // Verify client: when PKCE code_verifier is present, skip secret check
+      // (the code_verifier proves client identity via the code_challenge)
+      if (client_secret && !code_verifier) {
+        const isValidClient = await oauthService.verifyClient(client_id, client_secret);
+        if (!isValidClient) {
+          return res.status(401).json({
+            error: 'invalid_client',
+            error_description: 'Invalid client credentials',
+          });
+        }
+      } else {
+        // PKCE flow or no secret — just verify client exists
+        const client = await oauthService.getClient(client_id);
+        if (!client) {
+          return res.status(401).json({
+            error: 'invalid_client',
+            error_description: 'Client not found',
+          });
+        }
       }
 
       // Exchange code for token
@@ -641,9 +661,9 @@ export function createOAuthRouter(db: Database): Router {
       revocation_endpoint: `${baseUrl}/oauth/revoke`,
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
-      token_endpoint_auth_methods_supported: ['client_secret_post'],
-      scopes_supported: ['mcp'],
-      code_challenge_methods_supported: [],
+      token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+      scopes_supported: ['mcp', 'claudeai'],
+      code_challenge_methods_supported: ['S256', 'plain'],
     });
   });
 
@@ -663,8 +683,9 @@ export function createOAuthRouter(db: Database): Router {
       revocation_endpoint: `${baseUrl}/oauth/revoke`,
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code'],
-      token_endpoint_auth_methods_supported: ['client_secret_post'],
-      scopes_supported: ['mcp'],
+      token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+      scopes_supported: ['mcp', 'claudeai'],
+      code_challenge_methods_supported: ['S256', 'plain'],
     });
   });
 
