@@ -118,8 +118,19 @@ BEGIN
 END $$;
 
 -- Auto-update trigger for updated_at
-CREATE TRIGGER update_law_citations_updated_at BEFORE UPDATE ON law_court_citations
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_law_citations_updated_at'
+  ) THEN
+    CREATE TRIGGER update_law_citations_updated_at BEFORE UPDATE ON law_court_citations
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
 
-CREATE TRIGGER update_bill_impact_updated_at BEFORE UPDATE ON bill_court_impact
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_bill_impact_updated_at'
+  ) THEN
+    CREATE TRIGGER update_bill_impact_updated_at BEFORE UPDATE ON bill_court_impact
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
