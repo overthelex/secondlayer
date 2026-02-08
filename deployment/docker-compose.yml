@@ -39,16 +39,11 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   # Document Analysis Microservice
   document-service:
     build:
-      context: .
+      context: ..
       dockerfile: deployment/Dockerfile.document-service
     environment:
       - NODE_ENV=${NODE_ENV:-development}
@@ -73,8 +68,8 @@ services:
   # Main MCP Server (optional - usually run via stdio)
   mcp-server:
     build:
-      context: ./mcp_backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: mcp_backend/Dockerfile
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=3000
@@ -100,7 +95,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
       document-service:
         condition: service_healthy
     restart: unless-stopped
