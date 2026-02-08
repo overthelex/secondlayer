@@ -10,10 +10,38 @@ SecondLayer is a monorepo containing multiple MCP (Model Context Protocol) serve
 
 - **mcp_backend/** - Primary MCP server for court cases and legal documents (ZakonOnline integration)
 - **mcp_rada/** - Secondary MCP server for Ukrainian Parliament data (deputies, bills, legislation)
+  - `mcp_rada/data/RADA/` - Raw RADA data files (deputies JSON, metadata)
 - **mcp_openreyestr/** - Tertiary MCP server for Ukrainian State Register (business entities, beneficiaries)
+  - `mcp_openreyestr/data/OPENREYESTR/` - Raw OpenReyestr data files (XML schemas, SQL, scripts)
 - **lexwebapp/** - Web frontend/admin panel
 - **packages/shared/** - Shared TypeScript types and utilities
-- **deployment/** - Multi-environment Docker deployment configurations
+- **deployment/** - Docker deployment configs, Dockerfiles, compose files, nginx configs
+  - `deployment/Dockerfile.mono-backend` - Backend Docker image
+  - `deployment/Dockerfile.mono-rada` - RADA Docker image
+  - `deployment/Dockerfile.mono-openreyestr` - OpenReyestr Docker image
+  - `deployment/Dockerfile.document-service` - Document/OCR service Docker image
+  - `deployment/docker-compose.{local,dev,stage,prod}.yml` - Per-environment compose files
+  - `deployment/manage-gateway.sh` - Main deployment management script
+- **scripts/** - Utility and operational scripts
+  - `scripts/deploy/` - Deployment scripts
+  - `scripts/rada/` - RADA data sync and import scripts
+  - `scripts/testing/` - Test runner scripts
+  - `scripts/utilities/` - File conversion and misc utilities
+- **tests/** - E2E tests, Playwright config, test data
+  - `tests/e2e/` - Playwright E2E test specs
+  - `tests/playwright.config.ts` - Playwright configuration
+  - `tests/test-batch-docs/` - Test document fixtures
+- **test_data/** - Data files for testing (JSON, text samples)
+- **docs/** - Documentation, reports, screenshots
+  - `docs/batch/` - Batch processing docs
+  - `docs/reports/` - Test and deployment reports
+  - `docs/screenshots/` - UI screenshots
+  - `docs/legal/` - EULA and license files
+  - `docs/api/` - API documentation (HTML explorer)
+- **config/** - Configuration files (MCP client configs)
+- **examples/** - Example scripts
+- **legacy/** - Legacy/archived code
+- **lexconfig/** - Application config files
 
 ## Architecture
 
@@ -284,40 +312,38 @@ npm run migrate  # Builds then runs dist/migrations/migrate.js
 
 ## Docker Deployment
 
+All Dockerfiles and compose files are in `deployment/`. Compose files use `context: ..` (repo root) and reference Dockerfiles as `deployment/Dockerfile.*`.
+
 ### Local Development (docker-compose.local.yml)
 
 ```bash
 cd deployment
-./manage-gateway.sh start local
+./manage-gateway.sh start local    # Start all services
+./manage-gateway.sh deploy local   # Full rebuild (pull, migrate, build --no-cache)
 ./manage-gateway.sh logs local
 ./manage-gateway.sh stop local
 ```
 
 ### Multi-Environment Gateway (dev/stage/prod)
 
-Located in `deployment/` directory with separate compose files for each environment.
-
 ```bash
 cd deployment
 
-# Build images
-./manage-gateway.sh build
-
-# Start specific environment
-./manage-gateway.sh start dev
+# Start specific environment (uses existing images)
 ./manage-gateway.sh start stage
-./manage-gateway.sh start prod
 
-# Start all environments
-./manage-gateway.sh start all
+# Deploy to remote servers (git pull, migrate, rebuild, restart)
+./manage-gateway.sh deploy stage   # → mail.lexapp.co.ua
+./manage-gateway.sh deploy dev     # → gate.lexapp.co.ua
+./manage-gateway.sh deploy prod    # → mail.lexapp.co.ua
+./manage-gateway.sh deploy all     # All environments
 
 # View status
 ./manage-gateway.sh status
 ./manage-gateway.sh health
-
-# Deploy to remote servers (dev→gate, stage/prod→mail)
-./manage-gateway.sh deploy all
 ```
+
+**Deploy process** (stage/dev): starts all services including RADA, OpenReyestr, and document-service. Pre-builds `packages/shared` and `mcp_backend` dist on remote for document-service Dockerfile.
 
 **Gateway routing**: Nginx at port 8080 routes to environments based on subdomain (dev.legal.org.ua, stage.legal.org.ua, legal.org.ua).
 
@@ -383,16 +409,18 @@ Stored in `cost_tracking` table and aggregated in `monthly_api_usage`.
 - **Legislation aliases**: System recognizes "constitution", "цивільний кодекс", "кримінальний кодекс", etc.
 - **SSE streaming**: For long-running operations, use SSE endpoints to stream progress events (works with gateway)
 - **Dual-auth**: HTTP mode supports both bearer token (for API clients) and JWT/OAuth (for web users)
+- **Dockerfiles**: All in `deployment/`, referenced from compose files as `deployment/Dockerfile.*` with `context: ..` (repo root)
 
 ## Related Documentation
 
 - `docs/ALL_MCP_TOOLS.md` - Complete list of all MCP tools across services
 - `docs/UNIFIED_GATEWAY_IMPLEMENTATION.md` - Unified gateway architecture
 - `docs/MCP_CLIENT_INTEGRATION_GUIDE.md` - Connecting LLM clients (Claude Desktop, ChatGPT, etc.)
-- `mcp_backend/docs/api-explorer.html` - Interactive API Explorer (open in browser)
+- `docs/MCP_TOOLS.md` - MCP tools reference
+- `docs/batch/` - Batch processing quickstart and README
+- `docs/api/mcp_api_docs.html` - Interactive API Explorer (open in browser)
 - `mcp_backend/docs/CLIENT_INTEGRATION.md` - Client integration quick start
 - `mcp_backend/docs/SSE_STREAMING.md` - SSE streaming protocol
 - `mcp_backend/docs/DATABASE_SETUP.md` - PostgreSQL, Redis, Qdrant setup
 - `deployment/LOCAL_DEVELOPMENT.md` - Local development setup
 - `deployment/GATEWAY_SETUP.md` - Multi-environment gateway configuration
-- `START_HERE.md` - Quick start guide for the monorepo
