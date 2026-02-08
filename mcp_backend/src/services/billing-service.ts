@@ -56,6 +56,21 @@ export interface BillingSummary {
   today_spent_usd: number;
   month_spent_usd: number;
   last_request_at?: Date;
+  email_notifications: boolean;
+  notify_low_balance: boolean;
+  notify_payment_success: boolean;
+  notify_payment_failure: boolean;
+  notify_monthly_report: boolean;
+  low_balance_threshold_usd: number;
+}
+
+export interface EmailPreferences {
+  email_notifications: boolean;
+  notify_low_balance: boolean;
+  notify_payment_success: boolean;
+  notify_payment_failure: boolean;
+  notify_monthly_report: boolean;
+  low_balance_threshold_usd: number;
 }
 
 export class BillingService {
@@ -484,6 +499,12 @@ export class BillingService {
       isActive?: boolean;
       billingEnabled?: boolean;
       pricingTier?: PricingTier;
+      email_notifications?: boolean;
+      notify_low_balance?: boolean;
+      notify_payment_success?: boolean;
+      notify_payment_failure?: boolean;
+      notify_monthly_report?: boolean;
+      low_balance_threshold_usd?: number;
     }
   ): Promise<void> {
     try {
@@ -518,6 +539,36 @@ export class BillingService {
         }
         updates.push(`pricing_tier = $${paramIndex++}`);
         params.push(settings.pricingTier);
+      }
+
+      if (settings.email_notifications !== undefined) {
+        updates.push(`email_notifications = $${paramIndex++}`);
+        params.push(settings.email_notifications);
+      }
+
+      if (settings.notify_low_balance !== undefined) {
+        updates.push(`notify_low_balance = $${paramIndex++}`);
+        params.push(settings.notify_low_balance);
+      }
+
+      if (settings.notify_payment_success !== undefined) {
+        updates.push(`notify_payment_success = $${paramIndex++}`);
+        params.push(settings.notify_payment_success);
+      }
+
+      if (settings.notify_payment_failure !== undefined) {
+        updates.push(`notify_payment_failure = $${paramIndex++}`);
+        params.push(settings.notify_payment_failure);
+      }
+
+      if (settings.notify_monthly_report !== undefined) {
+        updates.push(`notify_monthly_report = $${paramIndex++}`);
+        params.push(settings.notify_monthly_report);
+      }
+
+      if (settings.low_balance_threshold_usd !== undefined) {
+        updates.push(`low_balance_threshold_usd = $${paramIndex++}`);
+        params.push(settings.low_balance_threshold_usd);
       }
 
       if (updates.length === 0) {
@@ -598,5 +649,71 @@ export class BillingService {
   calculateEstimatedPrice(costUsd: number, tier?: PricingTier): PriceCalculation {
     const pricingTier = tier || this.pricingService.getDefaultTier();
     return this.pricingService.calculatePrice(costUsd, pricingTier);
+  }
+
+  /**
+   * Set invoice number on a billing transaction
+   */
+  async setTransactionInvoiceNumber(transactionId: string, invoiceNumber: string): Promise<void> {
+    try {
+      await this.db.query(
+        `UPDATE billing_transactions SET invoice_number = $1 WHERE id = $2`,
+        [invoiceNumber, transactionId]
+      );
+    } catch (error: any) {
+      logger.error('Failed to set invoice number', {
+        transactionId,
+        invoiceNumber,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get email notification preferences for a user
+   */
+  async getEmailPreferences(userId: string): Promise<EmailPreferences> {
+    try {
+      const result = await this.db.query(
+        `SELECT
+          email_notifications,
+          notify_low_balance,
+          notify_payment_success,
+          notify_payment_failure,
+          notify_monthly_report,
+          low_balance_threshold_usd
+        FROM user_billing
+        WHERE user_id = $1`,
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return {
+          email_notifications: true,
+          notify_low_balance: true,
+          notify_payment_success: true,
+          notify_payment_failure: true,
+          notify_monthly_report: true,
+          low_balance_threshold_usd: 5.00,
+        };
+      }
+
+      const row = result.rows[0];
+      return {
+        email_notifications: row.email_notifications ?? true,
+        notify_low_balance: row.notify_low_balance ?? true,
+        notify_payment_success: row.notify_payment_success ?? true,
+        notify_payment_failure: row.notify_payment_failure ?? true,
+        notify_monthly_report: row.notify_monthly_report ?? true,
+        low_balance_threshold_usd: parseFloat(row.low_balance_threshold_usd) || 5.00,
+      };
+    } catch (error: any) {
+      logger.error('Failed to get email preferences', {
+        userId,
+        error: error.message,
+      });
+      throw error;
+    }
   }
 }

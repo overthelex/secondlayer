@@ -6,6 +6,7 @@
 import Stripe from 'stripe';
 import { BillingService } from './billing-service.js';
 import { EmailService } from './email-service.js';
+import { InvoiceService, invoiceService } from './invoice-service.js';
 import { logger } from '../utils/logger.js';
 
 export interface PaymentIntentResult {
@@ -181,11 +182,16 @@ export class StripeService {
         metadata: paymentIntent.metadata,
       });
 
+      // Generate invoice number for this transaction
+      const invoiceNumber = invoiceService.generateInvoiceNumber(transaction.id);
+      await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
+
       logger.info('Balance topped up via Stripe', {
         userId,
         amountUsd,
         transactionId: transaction.id,
         paymentIntentId: paymentIntent.id,
+        invoiceNumber,
       });
 
       // Send confirmation email
@@ -197,6 +203,7 @@ export class StripeService {
           currency: 'USD',
           newBalance: transaction.balance_after_usd,
           paymentId: paymentIntent.id,
+          userId,
         });
       }
     } catch (error: any) {
@@ -231,6 +238,7 @@ export class StripeService {
           amount: amountUsd,
           currency: 'USD',
           reason: paymentIntent.last_payment_error?.message || 'Unknown error',
+          userId,
         });
       }
     } catch (error: any) {

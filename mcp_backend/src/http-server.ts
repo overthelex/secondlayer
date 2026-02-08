@@ -21,6 +21,7 @@ import { EmailService } from './services/email-service.js';
 import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
 import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
 import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
+import { InvoiceService } from './services/invoice-service.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { createBillingRoutes } from './routes/billing-routes.js';
 import { createAdminRoutes } from './routes/admin-routes.js';
@@ -57,6 +58,7 @@ class HTTPMCPServer {
   private stripeService: StripeService | MockStripeService;
   private fondyService: FondyService | MockFondyService;
   private emailService: EmailService;
+  private invoiceService: InvoiceService;
   private mcpSSEServer: MCPSSEServer;
   private apiKeyService: ApiKeyService;
   private creditService: CreditService;
@@ -95,6 +97,7 @@ class HTTPMCPServer {
     // Initialize cost tracker and billing service
     this.costTracker = new CostTracker(this.services.db);
     this.billingService = new BillingService(this.services.db);
+    this.invoiceService = new InvoiceService();
     this.costTracker.setBillingService(this.billingService);
 
     // Initialize Phase 2 billing services (API keys & credits)
@@ -113,6 +116,9 @@ class HTTPMCPServer {
 
     // Initialize payment services
     this.emailService = new EmailService();
+    this.emailService.setPreferenceFetcher((userId: string) =>
+      this.billingService.getEmailPreferences(userId)
+    );
 
     // Use mock services if MOCK_PAYMENTS=true or keys not configured
     const mockPaymentsEnabled = process.env.MOCK_PAYMENTS === 'true';
@@ -827,22 +833,17 @@ class HTTPMCPServer {
         }
 
         res.json({
-          success: true,
-          billing: {
-            balance_usd: summary.balance_usd,
-            balance_uah: summary.balance_uah,
-            total_spent_usd: summary.total_spent_usd,
-            total_requests: summary.total_requests,
-            limits: {
-              daily_usd: summary.daily_limit_usd,
-              monthly_usd: summary.monthly_limit_usd,
-            },
-            usage: {
-              today_usd: summary.today_spent_usd,
-              month_usd: summary.month_spent_usd,
-            },
-            last_request_at: summary.last_request_at,
-          },
+          balance_usd: summary.balance_usd,
+          balance_uah: summary.balance_uah,
+          total_spent_usd: summary.total_spent_usd,
+          total_requests: summary.total_requests,
+          daily_limit_usd: summary.daily_limit_usd,
+          monthly_limit_usd: summary.monthly_limit_usd,
+          today_spending_usd: summary.today_spent_usd,
+          monthly_spending_usd: summary.month_spent_usd,
+          last_request_at: summary.last_request_at,
+          is_active: summary.is_active,
+          pricing_tier: summary.pricing_tier,
         });
       } catch (error: any) {
         logger.error('Failed to get billing balance', { error: error.message });
@@ -907,10 +908,14 @@ class HTTPMCPServer {
           paymentId: payment_id,
         });
 
+        // Generate invoice number for the transaction
+        const invoiceNumber = this.invoiceService.generateInvoiceNumber(transaction.id);
+        await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
+
         res.json({
           success: true,
           message: 'Balance topped up successfully',
-          transaction,
+          transaction: { ...transaction, invoice_number: invoiceNumber },
         });
       } catch (error: any) {
         logger.error('Failed to top up balance', { error: error.message });
@@ -925,11 +930,26 @@ class HTTPMCPServer {
     this.app.put('/api/billing/settings', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
       try {
         const userId = req.user!.id;
-        const { daily_limit_usd, monthly_limit_usd } = req.body;
+        const {
+          daily_limit_usd,
+          monthly_limit_usd,
+          email_notifications,
+          notify_low_balance,
+          notify_payment_success,
+          notify_payment_failure,
+          notify_monthly_report,
+          low_balance_threshold_usd,
+        } = req.body;
 
         const settings: any = {};
         if (daily_limit_usd !== undefined) settings.dailyLimitUsd = daily_limit_usd;
         if (monthly_limit_usd !== undefined) settings.monthlyLimitUsd = monthly_limit_usd;
+        if (email_notifications !== undefined) settings.email_notifications = email_notifications;
+        if (notify_low_balance !== undefined) settings.notify_low_balance = notify_low_balance;
+        if (notify_payment_success !== undefined) settings.notify_payment_success = notify_payment_success;
+        if (notify_payment_failure !== undefined) settings.notify_payment_failure = notify_payment_failure;
+        if (notify_monthly_report !== undefined) settings.notify_monthly_report = notify_monthly_report;
+        if (low_balance_threshold_usd !== undefined) settings.low_balance_threshold_usd = low_balance_threshold_usd;
 
         await this.billingService.updateBillingSettings(userId, settings);
 
@@ -943,6 +963,148 @@ class HTTPMCPServer {
           error: 'Failed to update billing settings',
           message: error.message,
         });
+      }
+    }) as any);
+
+    // GET /api/billing/email-preferences - Get email notification preferences
+    this.app.get('/api/billing/email-preferences', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const preferences = await this.billingService.getEmailPreferences(userId);
+        res.json(preferences);
+      } catch (error: any) {
+        logger.error('Failed to get email preferences', { error: error.message });
+        res.status(500).json({
+          error: 'Failed to get email preferences',
+          message: error.message,
+        });
+      }
+    }) as any);
+
+    // GET /api/billing/invoices - Get invoice list for authenticated user
+    this.app.get('/api/billing/invoices', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
+
+        const query = `
+          SELECT
+            bt.id as transaction_id,
+            bt.invoice_number,
+            bt.created_at as date,
+            bt.amount_usd,
+            bt.amount_uah,
+            bt.description,
+            bt.payment_provider,
+            bt.payment_id,
+            bt.invoice_generated_at,
+            u.name as user_name,
+            u.email as user_email
+          FROM billing_transactions bt
+          JOIN users u ON bt.user_id = u.id
+          WHERE bt.user_id = $1
+            AND bt.type = 'topup'
+            AND bt.invoice_number IS NOT NULL
+          ORDER BY bt.created_at DESC
+          LIMIT $2 OFFSET $3
+        `;
+        const result = await this.services.db.query(query, [userId, limit, offset]);
+
+        const invoices = result.rows.map((row: any) => {
+          const amount = parseFloat(row.amount_usd) || parseFloat(row.amount_uah) || 0;
+          const currency = parseFloat(row.amount_usd) > 0 ? 'USD' : 'UAH';
+          return {
+            invoiceNumber: row.invoice_number,
+            date: row.date,
+            customerName: row.user_name || 'Customer',
+            customerEmail: row.user_email || '',
+            amount,
+            currency,
+            paymentMethod: row.payment_provider || 'Unknown',
+            status: 'paid',
+            transactionId: row.transaction_id,
+            paymentId: row.payment_id,
+          };
+        });
+
+        const countQuery = `
+          SELECT COUNT(*) FROM billing_transactions
+          WHERE user_id = $1 AND type = 'topup' AND invoice_number IS NOT NULL
+        `;
+        const countResult = await this.services.db.query(countQuery, [userId]);
+        const total = parseInt(countResult.rows[0].count);
+
+        res.json({
+          invoices,
+          total,
+          hasMore: offset + result.rows.length < total,
+        });
+      } catch (error: any) {
+        logger.error('Failed to get invoices', { error: error.message });
+        res.status(500).json({ error: 'Failed to retrieve invoices' });
+      }
+    }) as any);
+
+    // GET /api/billing/invoices/:invoiceNumber/pdf - Download invoice as PDF
+    this.app.get('/api/billing/invoices/:invoiceNumber/pdf', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const { invoiceNumber } = req.params;
+
+        const query = `
+          SELECT
+            bt.id,
+            bt.amount_usd,
+            bt.amount_uah,
+            bt.payment_provider,
+            bt.payment_id,
+            bt.created_at,
+            bt.invoice_number,
+            u.name as user_name,
+            u.email as user_email
+          FROM billing_transactions bt
+          JOIN users u ON bt.user_id = u.id
+          WHERE bt.invoice_number = $1 AND bt.user_id = $2
+        `;
+        const result = await this.services.db.query(query, [invoiceNumber, userId]);
+
+        if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'Invoice not found' });
+        }
+
+        const tx = result.rows[0];
+        const amount = parseFloat(tx.amount_usd) || parseFloat(tx.amount_uah) || 0;
+        const currency: 'USD' | 'UAH' = parseFloat(tx.amount_usd) > 0 ? 'USD' : 'UAH';
+
+        const invoiceData = this.invoiceService.createInvoiceFromTransaction(
+          tx.id,
+          tx.invoice_number,
+          tx.user_name || 'Customer',
+          tx.user_email || '',
+          amount,
+          currency,
+          tx.payment_provider || 'Unknown',
+          new Date(tx.created_at),
+          tx.payment_id
+        );
+
+        const pdfBuffer = await this.invoiceService.generateInvoicePDF(invoiceData);
+
+        // Update generation timestamp
+        await this.services.db.query(
+          `UPDATE billing_transactions SET invoice_generated_at = NOW() WHERE id = $1`,
+          [tx.id]
+        );
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${invoiceNumber}.pdf"`);
+        res.send(pdfBuffer);
+
+        logger.info('Invoice PDF generated', { invoiceNumber, userId });
+      } catch (error: any) {
+        logger.error('Failed to generate invoice PDF', { error: error.message });
+        res.status(500).json({ error: 'Failed to generate invoice' });
       }
     }) as any);
 

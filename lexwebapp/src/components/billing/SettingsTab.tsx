@@ -42,11 +42,21 @@ export function SettingsTab() {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
-        const response = await api.billing.getBalance();
-        const data = response.data;
+        const [balanceRes, prefsRes] = await Promise.all([
+          api.billing.getBalance(),
+          api.billing.getEmailPreferences(),
+        ]);
 
-        setDailyLimit(data.daily_limit_usd?.toFixed(2) || '10.00');
-        setMonthlyLimit(data.monthly_limit_usd?.toFixed(2) || '100.00');
+        const balanceData = balanceRes.data;
+        setDailyLimit(balanceData.daily_limit_usd?.toFixed(2) || '10.00');
+        setMonthlyLimit(balanceData.monthly_limit_usd?.toFixed(2) || '100.00');
+
+        const prefs = prefsRes.data;
+        setEmailNotifications({
+          lowBalance: prefs.notify_low_balance ?? true,
+          paymentConfirmations: prefs.notify_payment_success ?? true,
+          monthlyReports: prefs.notify_monthly_report ?? false,
+        });
       } catch (error) {
         console.error('Failed to load settings:', error);
       } finally {
@@ -64,6 +74,9 @@ export function SettingsTab() {
       await api.billing.updateSettings({
         daily_limit_usd: parseFloat(dailyLimit),
         monthly_limit_usd: parseFloat(monthlyLimit),
+        notify_low_balance: emailNotifications.lowBalance,
+        notify_payment_success: emailNotifications.paymentConfirmations,
+        notify_monthly_report: emailNotifications.monthlyReports,
       });
 
       showToast.success('Settings saved successfully');
