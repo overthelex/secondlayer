@@ -10,38 +10,13 @@ SecondLayer is a monorepo containing multiple MCP (Model Context Protocol) serve
 
 - **mcp_backend/** - Primary MCP server for court cases and legal documents (ZakonOnline integration)
 - **mcp_rada/** - Secondary MCP server for Ukrainian Parliament data (deputies, bills, legislation)
-  - `mcp_rada/data/RADA/` - Raw RADA data files (deputies JSON, metadata)
 - **mcp_openreyestr/** - Tertiary MCP server for Ukrainian State Register (business entities, beneficiaries)
-  - `mcp_openreyestr/data/OPENREYESTR/` - Raw OpenReyestr data files (XML schemas, SQL, scripts)
-- **lexwebapp/** - Web frontend/admin panel
-- **packages/shared/** - Shared TypeScript types and utilities
-- **deployment/** - Docker deployment configs, Dockerfiles, compose files, nginx configs
-  - `deployment/Dockerfile.mono-backend` - Backend Docker image
-  - `deployment/Dockerfile.mono-rada` - RADA Docker image
-  - `deployment/Dockerfile.mono-openreyestr` - OpenReyestr Docker image
-  - `deployment/Dockerfile.document-service` - Document/OCR service Docker image
-  - `deployment/docker-compose.{local,dev,stage,prod}.yml` - Per-environment compose files
-  - `deployment/manage-gateway.sh` - Main deployment management script
-- **scripts/** - Utility and operational scripts
-  - `scripts/deploy/` - Deployment scripts
-  - `scripts/rada/` - RADA data sync and import scripts
-  - `scripts/testing/` - Test runner scripts
-  - `scripts/utilities/` - File conversion and misc utilities
-- **tests/** - E2E tests, Playwright config, test data
-  - `tests/e2e/` - Playwright E2E test specs
-  - `tests/playwright.config.ts` - Playwright configuration
-  - `tests/test-batch-docs/` - Test document fixtures
-- **test_data/** - Data files for testing (JSON, text samples)
-- **docs/** - Documentation, reports, screenshots
-  - `docs/batch/` - Batch processing docs
-  - `docs/reports/` - Test and deployment reports
-  - `docs/screenshots/` - UI screenshots
-  - `docs/legal/` - EULA and license files
-  - `docs/api/` - API documentation (HTML explorer)
-- **config/** - Configuration files (MCP client configs)
-- **examples/** - Example scripts
-- **legacy/** - Legacy/archived code
-- **lexconfig/** - Application config files
+- **lexwebapp/** - Web frontend/admin panel (React 19, Vite, TailwindCSS, Zustand, TanStack Query)
+- **packages/shared/** - Shared TypeScript types and utilities (referenced as `@secondlayer/shared`)
+- **deployment/** - Docker configs, compose files, nginx configs, `manage-gateway.sh` script
+- **scripts/** - Utility scripts (deploy, rada sync, testing, file conversion)
+- **tests/** - E2E tests (Playwright), test fixtures
+- **docs/** - Documentation, API explorer, reports
 
 ## Architecture
 
@@ -145,8 +120,6 @@ npm run test:watch     # Watch mode
 npm run test:coverage  # Coverage report
 npm run lint
 ```
-
-Tech: React 19, Vite, TailwindCSS 3, Zustand (state), TanStack Query (data fetching), Vitest
 
 ### Shared Package (packages/shared)
 
@@ -253,52 +226,18 @@ Express app with:
 
 ## Environment Variables
 
-### Required for mcp_backend
+Each service has a `.env.example` file with all required variables:
+- `mcp_backend/.env.example` - Database, Redis, Qdrant, OpenAI, ZakonOnline, auth keys
+- `mcp_rada/.env.example` - Similar to backend with different ports (5433, 6380, 3001)
+- `mcp_openreyestr/.env.example` - State registry service configuration
 
-```bash
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/secondlayer
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=secondlayer
-POSTGRES_PASSWORD=<secret>
-POSTGRES_DB=secondlayer
-
-# Cache & Vectors
-REDIS_HOST=localhost
-REDIS_PORT=6379
-QDRANT_URL=http://localhost:6333
-
-# AI Models
-OPENAI_API_KEY=sk-...
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-
-# Dynamic model selection (budget-aware)
-OPENAI_MODEL_QUICK=gpt-4o-mini        # Simple tasks
-OPENAI_MODEL_STANDARD=gpt-4o-mini     # Moderate complexity
-OPENAI_MODEL_DEEP=gpt-4o              # Complex analysis
-
-# External APIs
-ZAKONONLINE_API_TOKEN=<token>
-
-# Security
-SECONDARY_LAYER_KEYS=test-key-123,prod-key-456
-JWT_SECRET=<64-char-secret>
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_CALLBACK_URL=https://domain/auth/google/callback
-```
-
-### Required for mcp_rada
-
-Similar to mcp_backend but with different ports (5433, 6380, 3001) and optional SecondLayer integration:
-
-```bash
-SECONDLAYER_URL=http://localhost:3000
-SECONDLAYER_API_KEY=<key>  # For cross-referencing court cases
-```
+Key variables across services:
+- `DATABASE_URL` / `POSTGRES_*` - PostgreSQL connection
+- `REDIS_HOST`, `REDIS_PORT` - Redis cache
+- `QDRANT_URL` - Vector database
+- `OPENAI_API_KEY` - AI embeddings and analysis
+- `SECONDARY_LAYER_KEYS` - API authentication tokens
+- `OPENAI_MODEL_QUICK/STANDARD/DEEP` - Budget-aware model selection (gpt-4o-mini → gpt-4o)
 
 ## Database Migrations
 
@@ -349,7 +288,7 @@ cd deployment
 
 ## Testing
 
-Backend servers use Jest with TypeScript (`ts-jest`); lexwebapp uses Vitest.
+Backend servers use Jest with TypeScript (`ts-jest`); lexwebapp uses Vitest; E2E uses Playwright.
 
 ```bash
 # Run all tests in a service
@@ -362,6 +301,10 @@ cd lexwebapp && npx vitest run path/to/file.test.ts
 
 # Watch mode
 npm run test:watch
+
+# E2E tests (Playwright)
+cd tests && npx playwright test
+cd tests && npx playwright test e2e/specific-test.spec.ts
 ```
 
 Test files are in `__tests__/` directories alongside source files. Backend jest config uses `maxWorkers=1` and `testTimeout=120000` (tests may call external APIs).
