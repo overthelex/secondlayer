@@ -546,6 +546,15 @@ deploy_to_gate() {
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-$ENV_SHORT
         fi
 
+        # Pre-build shared and backend dist (needed by document-service Dockerfile)
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            echo "📦 Building shared package and backend dist..."
+            cd "$REMOTE_REPO"
+            npm --prefix packages/shared install && npm --prefix packages/shared run build
+            npm --prefix mcp_backend install && npm --prefix mcp_backend run build
+            cd "$REMOTE_REPO/deployment"
+        fi
+
         # Rebuild application services without cache
         echo "🔨 Building application images without cache..."
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
