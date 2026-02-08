@@ -1,132 +1,119 @@
-# Quick Start Guide - 2-Environment Gateway
+# Quick Start: Local Deployment with Fixed Credentials
 
-Fast setup guide for SecondLayer 2-environment gateway (stage + dev).
-
-## Prerequisites
-
-- Docker and Docker Compose installed
-- SSH access to gate/mail servers (for remote deployment)
-- API keys: OpenAI, ZakonOnline, Google OAuth
-
-## 5-Minute Local Setup
-
-### 1. Configure Environment
+## TL;DR (30 seconds)
 
 ```bash
-cd deployment
+cd /home/vovkes/SecondLayer/deployment
 
-# Copy and edit environment files
-cp .env.stage.example .env.stage
-cp .env.dev.example .env.dev
+# 1. Create .env from template
+cp .env .env.local
 
-# Edit each file with your API keys
-nano .env.stage
-nano .env.dev
+# 2. Edit credentials (IMPORTANT!)
+nano .env.local
+# Set: POSTGRES_SUPERUSER_PASSWORD, POSTGRES_PASSWORD
+
+# 3. Check credentials
+bash check-credentials.sh
+
+# 4. Deploy!
+docker compose up -d
+
+# 5. Verify
+docker compose ps
 ```
 
-**Required fields in each `.env.*` file:**
-- `POSTGRES_PASSWORD` - Database password
-- `JWT_SECRET` - Random 64-char string
-- `OPENAI_API_KEY` - Your OpenAI key
-- `ZAKONONLINE_API_TOKEN` - Your ZO token
-- `SECONDARY_LAYER_KEYS` - API keys for HTTP auth
-- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET` - OAuth
+## What Changed?
 
-### 2. Build and Start
+The deployment now **automatically**:
+- ✅ Validates all credentials before starting
+- ✅ Creates PostgreSQL user and database automatically
+- ✅ Prevents "password authentication failed" errors
+- ✅ Provides detailed error messages if something is wrong
+
+## The 4 Required Passwords
+
+Edit `.env.local` and set these 4 passwords:
 
 ```bash
-# Build Docker images
-./manage-gateway.sh build
+# Superuser (PostgreSQL admin) - used only during initialization
+POSTGRES_SUPERUSER_PASSWORD=choose_a_strong_password_123
 
-# Start all environments
-./manage-gateway.sh start all
+# Application user (used by MCP server)
+POSTGRES_PASSWORD=another_strong_password_456
 
-# Start nginx gateway
-./manage-gateway.sh gateway start
+# Optional: Change these if you want
+POSTGRES_SUPERUSER=postgres  # Usually don't change
+POSTGRES_USER=secondlayer     # Usually don't change
+POSTGRES_DB=secondlayer_local # Usually don't change
 ```
 
-### 3. Verify
+## Commands
 
 ```bash
-# Check status
-./manage-gateway.sh status
+# Check credentials (before deploying)
+bash check-credentials.sh
 
-# Check health
-./manage-gateway.sh health
+# Deploy (automatic credential check)
+bash build-local.sh test
+
+# Full build pipeline
+bash build-local.sh full
+
+# Interactive menu
+bash build-local.sh
 ```
 
-**Access URLs:**
-- Staging: http://localhost:8080/staging/
-- Development: http://localhost:8080/development/
-
-## Common Commands
+## Verify It Works
 
 ```bash
-# Start/Stop/Restart
-./manage-gateway.sh start stage
-./manage-gateway.sh stop dev
-./manage-gateway.sh restart stage
+# Check containers are running
+docker compose ps
 
-# View logs
-./manage-gateway.sh logs stage
+# Check PostgreSQL user exists
+docker exec $(docker ps -q -f 'ancestor=postgres:15-alpine') \
+  psql -U secondlayer -d secondlayer_local -c "SELECT 1;"
 
-# Check status
-./manage-gateway.sh status
-
-# Deploy to remote server
-./manage-gateway.sh deploy stage
+# Expected output:
+# ?column?
+#----------
+#        1
+# (1 row)
 ```
 
-## Port Reference
+## If Something Goes Wrong
 
-| Service | Stage | Dev |
-|---------|-------|-----|
-| Backend | 3004 | 3003 |
-| Frontend | 8092 | 8091 |
-| PostgreSQL | 5434 | 5433 |
-| Redis | 6381 | 6380 |
-| Qdrant | 6337 | 6335 |
-
-**Gateway**: 8080
-
-## Troubleshooting
-
-### Health check fails
 ```bash
-# Check if containers are running
-./manage-gateway.sh status
+# 1. Run credential check first
+bash check-credentials.sh
 
-# View logs
-./manage-gateway.sh logs stage
+# 2. View PostgreSQL logs
+docker compose logs postgres --tail=50
 
-# Restart environment
-./manage-gateway.sh restart stage
+# 3. View MCP server logs
+docker compose logs mcp-server --tail=50
+
+# 4. Reset everything (WARNING: deletes data!)
+docker compose down -v
+# Edit .env.local, then:
+docker compose up -d
 ```
 
-### Port already in use
-```bash
-# Find what's using the port
-sudo lsof -i :3004
+## Files Changed
 
-# Kill the process or change port in docker-compose
-```
+- ✅ `docker-compose.yml` - Added auto-init script
+- ✅ `build-local.sh` - Added credential check
+- ✅ `docker/init-postgres.sh` - NEW: Auto-create user/db
+- ✅ `docker/init-db.sql` - NEW: SQL template
+- ✅ `check-credentials.sh` - NEW: Validates credentials
+- ✅ `CREDENTIALS_SETUP.md` - NEW: Full guide
+- ✅ `QUICK_START.md` - NEW: This file
 
-### Database connection error
-```bash
-# Check PostgreSQL is running
-docker ps | grep postgres
+## No More Manual Fixes! 🎉
 
-# View PostgreSQL logs
-docker logs secondlayer-postgres-stage
-```
+Before: You had to manually run SQL commands to create users
 
-## Next Steps
+Now: Everything happens automatically during `docker compose up`
 
-- Read full documentation: `GATEWAY_SETUP.md`
-- Configure SSL: Set up Let's Encrypt on servers
-- Set up monitoring: Configure health check alerts
-- Database backups: Schedule automated backups
+## Next: Read Full Guide
 
-## Support
-
-For detailed documentation, see `GATEWAY_SETUP.md`
+For details, see: `CREDENTIALS_SETUP.md`

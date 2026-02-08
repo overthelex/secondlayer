@@ -8,12 +8,18 @@ services:
       POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
       POSTGRES_DB: secondlayer_db
+      # Application user credentials for initialization
+      POSTGRES_APP_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+      POSTGRES_APP_DB: ${POSTGRES_DB:-secondlayer_local}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Mount initialization script
+      - ./docker/init-postgres.sh:/docker-entrypoint-initdb.d/01-init-postgres.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
