@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { BillingService } from './billing-service.js';
 import { EmailService } from './email-service.js';
+import { invoiceService } from './invoice-service.js';
 import { logger } from '../utils/logger.js';
 
 export interface FondyPaymentResult {
@@ -211,12 +212,17 @@ export class FondyService {
         },
       });
 
+      // Generate invoice number for this transaction
+      const invoiceNumber = invoiceService.generateInvoiceNumber(transaction.id);
+      await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
+
       logger.info('Balance topped up via Fondy', {
         userId,
         amountUah,
         amountUsd,
         transactionId: transaction.id,
         orderId,
+        invoiceNumber,
       });
 
       // Send confirmation email
@@ -228,6 +234,7 @@ export class FondyService {
           currency: 'UAH',
           newBalance: transaction.balance_after_usd,
           paymentId: orderId,
+          userId,
         });
       }
     } catch (error: any) {
@@ -258,12 +265,14 @@ export class FondyService {
 
       // Send failure notification
       if (callbackData.sender_email) {
+        const userId = merchantData.user_id;
         await this.emailService.sendPaymentFailure({
           email: callbackData.sender_email,
           name: merchantData.user_name || 'User',
           amount: amountUah,
           currency: 'UAH',
           reason: callbackData.response_description || 'Payment declined',
+          userId,
         });
       }
     } catch (error: any) {

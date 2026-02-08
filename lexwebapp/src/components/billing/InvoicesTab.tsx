@@ -15,7 +15,8 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { generateInvoicePDF, generateMockInvoices, InvoiceData } from '../../utils/invoice-generator';
+import { generateInvoicePDF, InvoiceData } from '../../utils/invoice-generator';
+import { api } from '../../utils/api-client';
 import showToast from '../../utils/toast';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -25,30 +26,64 @@ export function InvoicesTab() {
   const { user } = useAuth();
 
   useEffect(() => {
-    // Generate mock invoices with user data
-    setTimeout(() => {
-      const mockInvoices = generateMockInvoices(10);
+    const fetchInvoices = async () => {
+      try {
+        const response = await api.billing.getInvoices({ limit: 50 });
+        const data = response.data;
 
-      // Update customer info with actual user data
-      if (user) {
-        mockInvoices.forEach(invoice => {
-          invoice.customerName = user.name;
-          invoice.customerEmail = user.email;
-        });
+        const invoiceList: InvoiceData[] = (data.invoices || []).map((inv: any) => ({
+          invoiceNumber: inv.invoiceNumber,
+          date: new Date(inv.date),
+          customerName: inv.customerName || user?.name || 'Customer',
+          customerEmail: inv.customerEmail || user?.email || '',
+          items: [{
+            description: 'SecondLayer Account Top-Up',
+            amount: inv.amount,
+            currency: inv.currency,
+          }],
+          subtotal: inv.currency === 'UAH' ? inv.amount - inv.amount * 0.2 : inv.amount,
+          tax: inv.currency === 'UAH' ? inv.amount * 0.2 : 0,
+          total: inv.amount,
+          currency: inv.currency,
+          paymentMethod: inv.paymentMethod || 'Unknown',
+          status: inv.status || 'paid',
+        }));
+
+        setInvoices(invoiceList);
+      } catch (error) {
+        console.error('Failed to load invoices:', error);
+        showToast.error('Failed to load invoices');
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      setInvoices(mockInvoices);
-      setIsLoading(false);
-    }, 500);
+    fetchInvoices();
   }, [user]);
 
-  const handleDownloadInvoice = (invoice: InvoiceData) => {
+  const handleDownloadInvoice = async (invoice: InvoiceData) => {
     try {
-      generateInvoicePDF(invoice);
+      // Try backend PDF generation first
+      const response = await api.billing.downloadInvoicePDF(invoice.invoiceNumber);
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice_${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       showToast.success(`Invoice ${invoice.invoiceNumber} downloaded`);
-    } catch (error) {
-      console.error('Failed to generate PDF:', error);
-      showToast.error('Failed to generate invoice PDF');
+    } catch {
+      // Fall back to client-side PDF generation
+      try {
+        generateInvoicePDF(invoice);
+        showToast.success(`Invoice ${invoice.invoiceNumber} downloaded`);
+      } catch (error) {
+        console.error('Failed to generate PDF:', error);
+        showToast.error('Failed to generate invoice PDF');
+      }
     }
   };
 
@@ -128,12 +163,14 @@ export function InvoicesTab() {
         </div>
       </div>
 
-      {/* Info Banner */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <p className="text-sm text-blue-800">
-          <strong>Note:</strong> These are mock invoices for demonstration purposes. In production, invoices will be generated automatically for all top-up transactions.
-        </p>
-      </div>
+      {invoices.length === 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Invoices are generated automatically for all top-up transactions.
+            Top up your account to see invoices here.
+          </p>
+        </div>
+      )}
 
       {/* Invoices List */}
       <div className="bg-white border border-claude-border rounded-xl overflow-hidden">

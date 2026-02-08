@@ -7,7 +7,7 @@ import { Router } from 'express';
 import passport from 'passport';
 import * as authController from '../controllers/auth.js';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * @route   POST /auth/login

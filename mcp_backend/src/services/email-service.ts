@@ -5,6 +5,7 @@
 
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger.js';
+import type { EmailPreferences } from './billing-service.js';
 
 export interface EmailConfig {
   from: string;
@@ -44,10 +45,13 @@ export interface LowBalanceParams {
   currency: string;
 }
 
+export type PreferenceFetcher = (userId: string) => Promise<EmailPreferences>;
+
 export class EmailService {
   private transporter: nodemailer.Transporter;
   private config: EmailConfig;
   private frontendUrl: string;
+  private getPreferences?: PreferenceFetcher;
 
   constructor() {
     this.frontendUrl = process.env.FRONTEND_URL || 'https://billing.legal.org.ua';
@@ -82,10 +86,26 @@ export class EmailService {
   }
 
   /**
+   * Set the preference fetcher (called after construction to avoid circular deps)
+   */
+  setPreferenceFetcher(fetcher: PreferenceFetcher): void {
+    this.getPreferences = fetcher;
+  }
+
+  /**
    * Send payment success notification
    */
-  async sendPaymentSuccess(params: PaymentSuccessParams): Promise<void> {
+  async sendPaymentSuccess(params: PaymentSuccessParams & { userId?: string }): Promise<void> {
     try {
+      // Check user preferences if userId is available
+      if (params.userId && this.getPreferences) {
+        const prefs = await this.getPreferences(params.userId);
+        if (!prefs.email_notifications || !prefs.notify_payment_success) {
+          logger.info('Payment success email skipped due to user preferences', { userId: params.userId });
+          return;
+        }
+      }
+
       const html = this.generatePaymentSuccessTemplate(params);
 
       await this.transporter.sendMail({
@@ -111,8 +131,17 @@ export class EmailService {
   /**
    * Send payment failure notification
    */
-  async sendPaymentFailure(params: PaymentFailureParams): Promise<void> {
+  async sendPaymentFailure(params: PaymentFailureParams & { userId?: string }): Promise<void> {
     try {
+      // Check user preferences if userId is available
+      if (params.userId && this.getPreferences) {
+        const prefs = await this.getPreferences(params.userId);
+        if (!prefs.email_notifications || !prefs.notify_payment_failure) {
+          logger.info('Payment failure email skipped due to user preferences', { userId: params.userId });
+          return;
+        }
+      }
+
       const html = this.generatePaymentFailureTemplate(params);
 
       await this.transporter.sendMail({
@@ -138,8 +167,26 @@ export class EmailService {
   /**
    * Send low balance alert
    */
-  async sendLowBalanceAlert(params: LowBalanceParams): Promise<void> {
+  async sendLowBalanceAlert(params: LowBalanceParams & { userId?: string }): Promise<void> {
     try {
+      // Check user preferences if userId is available
+      if (params.userId && this.getPreferences) {
+        const prefs = await this.getPreferences(params.userId);
+        if (!prefs.email_notifications || !prefs.notify_low_balance) {
+          logger.info('Low balance email skipped due to user preferences', { userId: params.userId });
+          return;
+        }
+        // Use user's custom threshold
+        if (params.balance >= prefs.low_balance_threshold_usd) {
+          logger.info('Balance above user threshold, skipping alert', {
+            userId: params.userId,
+            balance: params.balance,
+            threshold: prefs.low_balance_threshold_usd,
+          });
+          return;
+        }
+      }
+
       const html = this.generateLowBalanceTemplate(params);
 
       await this.transporter.sendMail({

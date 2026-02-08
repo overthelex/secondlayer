@@ -114,8 +114,21 @@ export const api = {
     getBalance: () => apiClient.get('/api/billing/balance'),
     getHistory: (params?: { limit?: number; offset?: number; type?: string }) =>
       apiClient.get('/api/billing/history', { params }),
-    updateSettings: (data: { daily_limit_usd?: number; monthly_limit_usd?: number }) =>
-      apiClient.put('/api/billing/settings', data),
+    updateSettings: (data: {
+      daily_limit_usd?: number;
+      monthly_limit_usd?: number;
+      email_notifications?: boolean;
+      notify_low_balance?: boolean;
+      notify_payment_success?: boolean;
+      notify_payment_failure?: boolean;
+      notify_monthly_report?: boolean;
+      low_balance_threshold_usd?: number;
+    }) => apiClient.put('/api/billing/settings', data),
+    getEmailPreferences: () => apiClient.get('/api/billing/email-preferences'),
+    getInvoices: (params?: { limit?: number; offset?: number }) =>
+      apiClient.get('/api/billing/invoices', { params }),
+    downloadInvoicePDF: (invoiceNumber: string) =>
+      apiClient.get(`/api/billing/invoices/${invoiceNumber}/pdf`, { responseType: 'blob' }),
     testEmail: () => apiClient.post('/api/billing/test-email'),
   },
 

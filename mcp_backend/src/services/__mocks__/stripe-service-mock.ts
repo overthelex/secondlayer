@@ -5,6 +5,7 @@
 
 import { BillingService } from '../billing-service.js';
 import { EmailService } from '../email-service.js';
+import { invoiceService } from '../invoice-service.js';
 import { logger } from '../../utils/logger.js';
 
 export interface PaymentIntentResult {
@@ -149,11 +150,16 @@ export class MockStripeService {
         metadata: paymentIntent.metadata,
       });
 
+      // Generate invoice number
+      const invoiceNumber = invoiceService.generateInvoiceNumber(transaction.id);
+      await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
+
       logger.info('[MOCK] Balance topped up via Stripe', {
         userId,
         amountUsd,
         transactionId: transaction.id,
         paymentIntentId: paymentIntent.id,
+        invoiceNumber,
       });
 
       // Send confirmation email
@@ -165,6 +171,7 @@ export class MockStripeService {
           currency: 'USD',
           newBalance: transaction.balance_after_usd,
           paymentId: paymentIntent.id,
+          userId,
         });
       }
     } catch (error: any) {
@@ -196,6 +203,7 @@ export class MockStripeService {
         amount: amountUsd,
         currency: 'USD',
         reason: 'Mock payment failure',
+        userId,
       });
     }
   }
