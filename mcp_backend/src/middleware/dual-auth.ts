@@ -196,7 +196,7 @@ export async function dualAuth(
       await authenticateWithJWT(req, token);
     } else {
       // API key authentication
-      authenticateWithAPIKey(req, token);
+      await authenticateWithAPIKey(req, token);
     }
 
     next();
