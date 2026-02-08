@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS deputy_assistants (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_assistants_deputy ON deputy_assistants(deputy_id);
+CREATE INDEX IF NOT EXISTS idx_assistants_deputy ON deputy_assistants(deputy_id);
 
 -- Bills/законопроекти (hybrid: cache frequently accessed, fetch fresh for real-time)
 CREATE TABLE IF NOT EXISTS bills (
@@ -117,12 +117,12 @@ CREATE TABLE IF NOT EXISTS bills (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_bills_number ON bills(bill_number);
-CREATE INDEX idx_bills_status ON bills(status);
-CREATE INDEX idx_bills_committee ON bills(main_committee_id);
-CREATE INDEX idx_bills_registration_date ON bills(registration_date);
-CREATE INDEX idx_bills_cache_expires ON bills(cache_expires_at);
-CREATE INDEX idx_bills_title ON bills USING gin(to_tsvector('english', title));
+CREATE INDEX IF NOT EXISTS idx_bills_number ON bills(bill_number);
+CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status);
+CREATE INDEX IF NOT EXISTS idx_bills_committee ON bills(main_committee_id);
+CREATE INDEX IF NOT EXISTS idx_bills_registration_date ON bills(registration_date);
+CREATE INDEX IF NOT EXISTS idx_bills_cache_expires ON bills(cache_expires_at);
+CREATE INDEX IF NOT EXISTS idx_bills_title ON bills USING gin(to_tsvector('english', title));
 
 -- Legislation texts (cached from zakon.rada.gov.ua)
 CREATE TABLE IF NOT EXISTS legislation (
@@ -160,12 +160,12 @@ CREATE TABLE IF NOT EXISTS legislation (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_legislation_number ON legislation(law_number);
-CREATE INDEX idx_legislation_alias ON legislation(law_alias);
-CREATE INDEX idx_legislation_type ON legislation(law_type);
-CREATE INDEX idx_legislation_cache_expires ON legislation(cache_expires_at);
-CREATE INDEX idx_legislation_title ON legislation USING gin(to_tsvector('english', title));
-CREATE INDEX idx_legislation_full_text ON legislation USING gin(to_tsvector('english', full_text_plain));
+CREATE INDEX IF NOT EXISTS idx_legislation_number ON legislation(law_number);
+CREATE INDEX IF NOT EXISTS idx_legislation_alias ON legislation(law_alias);
+CREATE INDEX IF NOT EXISTS idx_legislation_type ON legislation(law_type);
+CREATE INDEX IF NOT EXISTS idx_legislation_cache_expires ON legislation(cache_expires_at);
+CREATE INDEX IF NOT EXISTS idx_legislation_title ON legislation USING gin(to_tsvector('english', title));
+CREATE INDEX IF NOT EXISTS idx_legislation_full_text ON legislation USING gin(to_tsvector('english', full_text_plain));
 
 -- Voting records
 CREATE TABLE IF NOT EXISTS voting_records (
@@ -198,10 +198,10 @@ CREATE TABLE IF NOT EXISTS voting_records (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_voting_session_date ON voting_records(session_date);
-CREATE INDEX idx_voting_bill_number ON voting_records(bill_number);
-CREATE INDEX idx_voting_result ON voting_records(result);
-CREATE INDEX idx_voting_question ON voting_records USING gin(to_tsvector('english', question_text));
+CREATE INDEX IF NOT EXISTS idx_voting_session_date ON voting_records(session_date);
+CREATE INDEX IF NOT EXISTS idx_voting_bill_number ON voting_records(bill_number);
+CREATE INDEX IF NOT EXISTS idx_voting_result ON voting_records(result);
+CREATE INDEX IF NOT EXISTS idx_voting_question ON voting_records USING gin(to_tsvector('english', question_text));
 
 -- Factions and committees (cached metadata)
 CREATE TABLE IF NOT EXISTS factions (
@@ -215,8 +215,8 @@ CREATE TABLE IF NOT EXISTS factions (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_factions_id ON factions(faction_id);
-CREATE INDEX idx_factions_convocation ON factions(convocation);
+CREATE INDEX IF NOT EXISTS idx_factions_id ON factions(faction_id);
+CREATE INDEX IF NOT EXISTS idx_factions_convocation ON factions(convocation);
 
 CREATE TABLE IF NOT EXISTS committees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -229,9 +229,9 @@ CREATE TABLE IF NOT EXISTS committees (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_committees_id ON committees(committee_id);
-CREATE INDEX idx_committees_convocation ON committees(convocation);
-CREATE INDEX idx_committees_chair ON committees(chair_deputy_id);
+CREATE INDEX IF NOT EXISTS idx_committees_id ON committees(committee_id);
+CREATE INDEX IF NOT EXISTS idx_committees_convocation ON committees(convocation);
+CREATE INDEX IF NOT EXISTS idx_committees_chair ON committees(chair_deputy_id);
 
 -- Migrations tracking table
 CREATE TABLE IF NOT EXISTS migrations (
@@ -250,11 +250,26 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply trigger to tables with updated_at
-CREATE TRIGGER update_deputies_updated_at BEFORE UPDATE ON deputies
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_deputies_updated_at'
+  ) THEN
+    CREATE TRIGGER update_deputies_updated_at BEFORE UPDATE ON deputies
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
 
-CREATE TRIGGER update_bills_updated_at BEFORE UPDATE ON bills
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_bills_updated_at'
+  ) THEN
+    CREATE TRIGGER update_bills_updated_at BEFORE UPDATE ON bills
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
 
-CREATE TRIGGER update_legislation_updated_at BEFORE UPDATE ON legislation
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'update_legislation_updated_at'
+  ) THEN
+    CREATE TRIGGER update_legislation_updated_at BEFORE UPDATE ON legislation
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
