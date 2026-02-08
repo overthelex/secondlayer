@@ -39,6 +39,13 @@ export class MCPService extends BaseService {
     this.sseClient = new SSEClient(this.API_URL, this.API_KEY);
   }
 
+  /**
+   * Get the current auth token (JWT from localStorage takes priority over API key)
+   */
+  private getAuthToken(): string {
+    return localStorage.getItem('auth_token') || this.API_KEY;
+  }
+
   // ============================================================================
   // Universal Tool Methods
   // ============================================================================
@@ -52,7 +59,7 @@ export class MCPService extends BaseService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.API_KEY}`,
+          Authorization: `Bearer ${this.getAuthToken()}`,
         },
         body: JSON.stringify(params),
       });
@@ -90,7 +97,7 @@ export class MCPService extends BaseService {
       return new AbortController(); // Return dummy controller
     }
 
-    return this.sseClient.streamToolWithRetry(toolName, params, callbacks);
+    return this.sseClient.streamToolWithRetry(toolName, params, callbacks, this.getAuthToken());
   }
 
   /**
@@ -101,7 +108,7 @@ export class MCPService extends BaseService {
       const response = await fetch(`${this.API_URL}/tools`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${this.API_KEY}`,
+          Authorization: `Bearer ${this.getAuthToken()}`,
         },
       });
 

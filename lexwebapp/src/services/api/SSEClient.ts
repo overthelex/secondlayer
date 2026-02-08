@@ -33,17 +33,19 @@ export class SSEClient {
   async streamTool(
     toolName: string,
     params: any,
-    handlers: StreamingCallbacks
+    handlers: StreamingCallbacks,
+    authToken?: string
   ): Promise<AbortController> {
     const controller = new AbortController();
     const url = `${this.apiUrl}/tools/${toolName}/stream`;
+    const token = authToken || this.apiKey;
 
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(params),
         signal: controller.signal,
@@ -203,6 +205,7 @@ export class SSEClient {
     toolName: string,
     params: any,
     handlers: StreamingCallbacks,
+    authToken?: string,
     retryCount: number = 0
   ): Promise<AbortController> {
     try {
@@ -213,20 +216,20 @@ export class SSEClient {
           if (retryCount < this.maxRetries) {
             console.log(`Retrying stream (${retryCount + 1}/${this.maxRetries})...`);
             setTimeout(() => {
-              this.streamToolWithRetry(toolName, params, handlers, retryCount + 1);
+              this.streamToolWithRetry(toolName, params, handlers, authToken, retryCount + 1);
             }, 1000 * Math.pow(2, retryCount)); // Exponential backoff
           } else {
             handlers.onError?.(error);
           }
         },
-      });
+      }, authToken);
     } catch (error: any) {
       if (retryCount < this.maxRetries) {
         console.log(`Retrying stream (${retryCount + 1}/${this.maxRetries})...`);
         await new Promise((resolve) =>
           setTimeout(resolve, 1000 * Math.pow(2, retryCount))
         );
-        return this.streamToolWithRetry(toolName, params, handlers, retryCount + 1);
+        return this.streamToolWithRetry(toolName, params, handlers, authToken, retryCount + 1);
       }
       throw error;
     }
