@@ -518,8 +518,8 @@ deploy_to_gate() {
 
         # Start infrastructure services first
         echo "🚀 Starting infrastructure services..."
-        if [ "$ENV_SHORT" = "dev" ]; then
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT postgres-openreyestr-dev
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT postgres-openreyestr-$ENV_SHORT
         else
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT
         fi
@@ -528,28 +528,40 @@ deploy_to_gate() {
         echo "⏳ Waiting for database..."
         sleep 15
 
+        # Run RADA DB init
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            echo "🔧 Running RADA DB init..."
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-db-init-$ENV_SHORT
+        fi
+
         # Run migrations
         echo "🔄 Running database migrations..."
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-$ENV_SHORT
 
-        # Run OpenReyestr migrations for dev environment
-        if [ "$ENV_SHORT" = "dev" ]; then
+        # Run RADA and OpenReyestr migrations
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            echo "🔄 Running RADA migrations..."
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-migrate-$ENV_SHORT
             echo "🔄 Running OpenReyestr migrations..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-dev
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-$ENV_SHORT
         fi
 
         # Rebuild application services without cache
         echo "🔨 Building application images without cache..."
-        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
+        else
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT
+        fi
 
         # Start application services
         echo "▶️  Starting application..."
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-$ENV_SHORT lexwebapp-$ENV_SHORT
 
-        # Start OpenReyestr app for dev environment
-        if [ "$ENV_SHORT" = "dev" ]; then
-            echo "▶️  Starting OpenReyestr app..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-openreyestr-dev
+        # Start RADA, OpenReyestr, and document-service
+        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
+            echo "▶️  Starting RADA, OpenReyestr, and document service..."
+            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
         fi
 
         echo "✅ Deployment complete"
