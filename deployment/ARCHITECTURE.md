@@ -1,6 +1,6 @@
-# 3-Environment Gateway Architecture
+# 2-Environment Gateway Architecture
 
-Visual overview of the SecondLayer 3-environment gateway deployment.
+Visual overview of the SecondLayer 2-environment gateway deployment.
 
 ## Network Architecture
 
@@ -9,7 +9,7 @@ Visual overview of the SecondLayer 3-environment gateway deployment.
                                      |
                                      v
                         +-----------------------+
-                        |    legal.org.ua:443   |
+                        |  stage.legal.org.ua   |
                         |   (System Nginx SSL)  |
                         +-----------------------+
                                      |
@@ -20,40 +20,18 @@ Visual overview of the SecondLayer 3-environment gateway deployment.
                         |   Path-based Routing  |
                         +-----------------------+
                                      |
-                +--------------------+--------------------+
-                |                    |                    |
-                v                    v                    v
-        +-------------+      +-------------+      +-------------+
-        | Production  |      |   Staging   |      | Development |
-        |     /       |      |  /staging   |      |/development |
-        +-------------+      +-------------+      +-------------+
+                        +------------+------------+
+                        |                         |
+                        v                         v
+                 +-------------+           +-------------+
+                 |   Staging   |           | Development |
+                 |  /staging   |           |/development |
+                 +-------------+           +-------------+
 ```
 
 ## Environment Isolation
 
 Each environment runs in its own isolated Docker network:
-
-### Production Environment (secondlayer-prod-network)
-```
-+----------------------------------------------------------+
-|  Production Network (secondlayer-prod-network)           |
-|                                                          |
-|  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    |
-|  │   Frontend  │  │   Backend   │  │  PostgreSQL │    |
-|  │ lexwebapp   │  │     app     │  │   postgres  │    |
-|  │  :8090      │  │   :3001     │  │   :5432     │    |
-|  └─────────────┘  └─────────────┘  └─────────────┘    |
-|         │                │                 │            |
-|         └────────────────┴─────────────────┘            |
-|                          │                              |
-|         ┌────────────────┴────────────────┐             |
-|         │                                 │             |
-|  ┌──────▼──────┐              ┌──────────▼──────┐     |
-|  │   Qdrant    │              │      Redis       │     |
-|  │  :6333-6334 │              │      :6379       │     |
-|  └─────────────┘              └──────────────────┘     |
-+----------------------------------------------------------+
-```
 
 ### Staging Environment (secondlayer-stage-network)
 ```
@@ -63,7 +41,7 @@ Each environment runs in its own isolated Docker network:
 |  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    |
 |  │   Frontend  │  │   Backend   │  │  PostgreSQL │    |
 |  │ lexwebapp   │  │     app     │  │   postgres  │    |
-|  │  :8092      │  │   :3002     │  │   :5434     │    |
+|  │  :8092      │  │   :3004     │  │   :5434     │    |
 |  └─────────────┘  └─────────────┘  └─────────────┘    |
 |         │                │                 │            |
 |         └────────────────┴─────────────────┘            |
@@ -101,18 +79,6 @@ Each environment runs in its own isolated Docker network:
 
 ## Request Flow
 
-### Production Request
-```
-User → HTTPS:443 → System Nginx → Gateway:8080
-                                      ↓
-                                   / (root)
-                                      ↓
-                     ┌────────────────┴────────────────┐
-                     ↓                                 ↓
-              Frontend:8090                      Backend:3001
-              (HTML/CSS/JS)                       (API /api/*)
-```
-
 ### Staging Request
 ```
 User → HTTPS:443 → System Nginx → Gateway:8080
@@ -121,7 +87,7 @@ User → HTTPS:443 → System Nginx → Gateway:8080
                                       ↓
                      ┌────────────────┴────────────────┐
                      ↓                                 ↓
-              Frontend:8092                      Backend:3002
+              Frontend:8092                      Backend:3004
               (HTML/CSS/JS)                  (API /staging/api/*)
 ```
 
@@ -174,26 +140,21 @@ Backend Node.js App
 | Port | Service | Environment | Protocol |
 |------|---------|-------------|----------|
 | 8080 | Gateway Nginx | All | HTTP |
-| 3001 | Backend API | Production | HTTP |
-| 3002 | Backend API | Staging | HTTP |
+| 3004 | Backend API | Staging | HTTP |
 | 3003 | Backend API | Development | HTTP |
-| 8090 | Frontend | Production | HTTP |
 | 8092 | Frontend | Staging | HTTP |
 | 8091 | Frontend | Development | HTTP |
-| 5432 | PostgreSQL | Production | PostgreSQL |
 | 5434 | PostgreSQL | Staging | PostgreSQL |
 | 5433 | PostgreSQL | Development | PostgreSQL |
-| 6379 | Redis | Production | Redis |
 | 6381 | Redis | Staging | Redis |
 | 6380 | Redis | Development | Redis |
-| 6333-6334 | Qdrant | Production | HTTP/gRPC |
 | 6337-6338 | Qdrant | Staging | HTTP/gRPC |
 | 6335-6336 | Qdrant | Development | HTTP/gRPC |
 
 ### Internal Ports (Within Docker Networks)
 
 All containers communicate on standard internal ports:
-- Backend: `3001`, `3002`, `3003` (same as host)
+- Backend: `3004`, `3003` (same as host)
 - Frontend: `80` (nginx inside container)
 - PostgreSQL: `5432` (mapped to different host ports)
 - Redis: `6379` (mapped to different host ports)
@@ -203,15 +164,6 @@ All containers communicate on standard internal ports:
 
 ### Dependency Graph
 ```
-Production:
-    app-prod
-        ├── depends_on: postgres-prod (healthy)
-        ├── depends_on: qdrant-prod (started)
-        └── depends_on: redis-prod (healthy)
-
-    lexwebapp-prod
-        └── (independent, no dependencies)
-
 Staging:
     app-stage
         ├── depends_on: postgres-stage (healthy)
@@ -260,36 +212,23 @@ Gateway:
 
 ### CPU Limits
 ```
-Production:   2.0 cores (reserved: 1.0)
 Staging:      1.5 cores (reserved: 0.75)
 Development:  1.0 core  (reserved: 0.5)
 ```
 
 ### Memory Limits
 ```
-Production:   4 GB (reserved: 2 GB)
 Staging:      3 GB (reserved: 1.5 GB)
 Development:  2 GB (reserved: 1 GB)
 ```
 
 ### Redis Memory
 ```
-Production:   2 GB (maxmemory + LRU eviction)
 Staging:      1.5 GB (maxmemory + LRU eviction)
 Development:  1 GB (maxmemory + LRU eviction)
 ```
 
 ## Scaling Considerations
-
-### Horizontal Scaling
-Each environment can be scaled independently:
-
-```bash
-# Scale production backend to 3 replicas
-docker compose -f docker-compose.prod.yml up -d --scale app-prod=3
-```
-
-For proper load balancing, update nginx upstream configuration.
 
 ### Vertical Scaling
 Adjust resource limits in `docker-compose.*.yml`:
@@ -345,5 +284,5 @@ Consider:
 
 ---
 
-**Architecture Version**: 1.0.0
-**Last Updated**: 2026-01-21
+**Architecture Version**: 2.0.0
+**Last Updated**: 2026-02-08

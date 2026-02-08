@@ -159,7 +159,7 @@ services:
       OPENREYESTR_MCP_URL: http://app-openreyestr-dev:3005
       OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY}
 
-      ***REMOVED***2 (with development URLs)
+      # Google OAuth2 (with development URLs)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: https://dev.legal.org.ua/auth/google/callback

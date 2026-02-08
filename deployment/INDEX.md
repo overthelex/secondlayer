@@ -16,18 +16,16 @@ Complete index of all deployment files for the multi-environment setup.
 | [`docker-compose.local.yml`](./docker-compose.local.yml) | Local development | Your machine | app-local, postgres-local, redis-local, qdrant-local |
 | [`docker-compose.dev.yml`](./docker-compose.dev.yml) | Development environment | gate.lexapp.co.ua | app-dev, postgres-dev, redis-dev, qdrant-dev, lexwebapp-dev |
 | [`docker-compose.stage.yml`](./docker-compose.stage.yml) | Staging environment | mail.lexapp.co.ua | app-stage, postgres-stage, redis-stage, qdrant-stage, lexwebapp-stage |
-| [`docker-compose.prod.yml`](./docker-compose.prod.yml) | Production environment | mail.lexapp.co.ua | app-prod, postgres-prod, redis-prod, qdrant-prod, lexwebapp-prod |
 | [`docker-compose.gateway.yml`](./docker-compose.gateway.yml) | Nginx gateway proxy | Both servers | legal-nginx-gateway |
 ## Configuration Files
 ### Nginx Configuration
-- [`nginx-gateway-3env.conf`](./nginx-gateway-3env.conf) - Routes traffic to all 3 environments
+- [`nginx-gateway-2env.conf`](./nginx-gateway-2env.conf) - Routes traffic to stage and dev environments
 ### Environment Variables (Templates)
 - [`.env.local.example`](./.env.local.example) - Local development variables template (your machine)
 - [`.env.dev.example`](./.env.dev.example) - Development environment variables template (gate.lexapp.co.ua)
 - [`.env.stage.example`](./.env.stage.example) - Staging environment variables template (mail.lexapp.co.ua)
-- [`.env.prod.example`](./.env.prod.example) - Production environment variables template (mail.lexapp.co.ua)
 
-**⚠️ Important**: Copy `.env.*.example` to `.env.*` and fill in real values before starting.
+**Warning**: Copy `.env.*.example` to `.env.*` and fill in real values before starting.
 ## Scripts
 
 ### Management Script
@@ -36,7 +34,7 @@ Complete index of all deployment files for the multi-environment setup.
 **Capabilities**:
 - Start/stop/restart environments
 - View status and logs
-- Deploy to remote servers (dev→gate, stage/prod→mail)
+- Deploy to remote servers (dev->gate, stage->mail)
 - Build Docker images
 - Gateway management
 - Health checks
@@ -75,7 +73,7 @@ See [`TESTING.md`](./TESTING.md) for complete testing documentation.
 | [`GATEWAY_SETUP.md`](./GATEWAY_SETUP.md) | Complete setup guide | DevOps/Deployment |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Architecture details | Technical team |
 | [`INDEX.md`](./INDEX.md) | This file - index of all files | Everyone |
-| [`README.md`](./README.md) | Legacy docs (2-env) | Reference only |
+| [`README.md`](./README.md) | Legacy docs (dev env) | Reference only |
 ## Deployment Workflow
 
 ```mermaid
@@ -84,11 +82,11 @@ graph LR
     B --> C[Start environments]
     C --> D[Start gateway]
     D --> E[Configure SSL]
-    E --> F[Deploy to gate]
-```bash
+    E --> F[Deploy to servers]
+```
 ### Step-by-Step
 
-1. **Setup**: Copy and configure `.env.*.example` → `.env.*`
+1. **Setup**: Copy and configure `.env.*.example` -> `.env.*`
 2. **Build**: Run `./manage-gateway.sh build`
 3. **Start**: Run `./manage-gateway.sh start all`
 4. **Gateway**: Run `./manage-gateway.sh gateway start`
@@ -100,37 +98,32 @@ graph LR
 |------------|---------|----------|------------|-------|---------|
 | **Local** | **3000** | **5173** | **5432** | **6379** | **6333-6334** |
 | Development | 3003 | 8091 | 5433 | 6380 | 6335-6336 |
-| Staging | 3002 | 8092 | 5434 | 6381 | 6337-6338 |
-| Production | 3001 | 8090 | 5432 | 6379 | 6333-6334 |
+| Staging | 3004 | 8092 | 5434 | 6381 | 6337-6338 |
 | **Gateway** | **8080** | - | - | - | - |
 ## URL Structure
 
-```bash
-http://localhost:3000                    → Local (your machine)
-https://dev.legal.org.ua/        → Development (gate.lexapp.co.ua)
-https://stage.legal.org.ua/            → Staging (mail.lexapp.co.ua)
-https://legal.org.ua/                    → Production (mail.lexapp.co.ua)
-```bash
+```
+http://localhost:3000                    -> Local (your machine)
+https://dev.legal.org.ua/        -> Development (gate.lexapp.co.ua)
+https://stage.legal.org.ua/            -> Staging (mail.lexapp.co.ua)
+```
 ## File Structure
 
-```bash
+```
 deployment/
 ├── docker-compose.local.yml         # Local development (your machine)
 ├── docker-compose.dev.yml           # Development (gate.lexapp.co.ua)
 ├── docker-compose.stage.yml         # Staging (mail.lexapp.co.ua)
-├── docker-compose.prod.yml          # Production (mail.lexapp.co.ua)
 ├── docker-compose.gateway.yml       # Nginx gateway (both servers)
-├── nginx-gateway-3env.conf          # Nginx routing config
+├── nginx-gateway-2env.conf          # Nginx routing config
 ├── .env.local.example               # Local env template
 ├── .env.dev.example                 # Development env template
 ├── .env.stage.example               # Staging env template
-├── .env.prod.example                # Production env template
-├── .env.local                       # ⚠️ Actual local env (gitignored)
-├── .env.dev                         # ⚠️ Actual dev env (gitignored)
-├── .env.stage                       # ⚠️ Actual stage env (gitignored)
-├── .env.prod                        # ⚠️ Actual prod env (gitignored)
+├── .env.local                       # Actual local env (gitignored)
+├── .env.dev                         # Actual dev env (gitignored)
+├── .env.stage                       # Actual stage env (gitignored)
 ├── manage-gateway.sh                # Management script
-├── run-local-tests.sh                     # Test runner script
+├── run-local-tests.sh               # Test runner script
 ├── LOCAL_DEVELOPMENT.md             # Local dev guide (START HERE!)
 ├── TESTING.md                       # Testing guide
 ├── LOCAL_DEPLOYMENT_FIXES.md        # Recent fixes
@@ -171,19 +164,19 @@ Each `.env.*` file needs:
 ./manage-gateway.sh stop local       # Stop local environment
 ./manage-gateway.sh logs local       # View local logs
 # Remote environments (gate and mail servers)
-./manage-gateway.sh start all        # Start all remote envs (dev+stage+prod)
+./manage-gateway.sh start all        # Start all remote envs (dev+stage)
 ./manage-gateway.sh stop dev         # Stop specific environment
-./manage-gateway.sh logs prod        # View production logs
+./manage-gateway.sh logs stage       # View staging logs
 # Management
 ./manage-gateway.sh status           # View status of all containers
 ./manage-gateway.sh health           # Check health of all services
 # Deploy to remote servers
-./manage-gateway.sh deploy all       # Deploy all (dev→gate, stage/prod→mail)
+./manage-gateway.sh deploy all       # Deploy all (dev->gate, stage->mail)
 # Gateway operations (remote servers)
 ./manage-gateway.sh gateway start    # Start nginx gateway
 ./manage-gateway.sh gateway restart  # Restart nginx gateway
 ./manage-gateway.sh gateway test     # Test nginx configuration
-```bash
+```
 ## Troubleshooting Quick Links
 
 - **Health checks fail**: [`GATEWAY_SETUP.md#troubleshooting`](./GATEWAY_SETUP.md#troubleshooting)
@@ -199,6 +192,7 @@ Each `.env.*` file needs:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.0.0 | 2026-02-08 | Removed production environment |
 | 1.1.0 | 2026-01-21 | Added local development environment |
 | 1.0.0 | 2026-01-21 | Initial 3-environment gateway setup |
 ## Getting Started Checklist
@@ -213,12 +207,12 @@ Each `.env.*` file needs:
 
 **For Gateway Deployment** (DevOps):
 - [ ] Read [`QUICK_START.md`](./QUICK_START.md)
-- [ ] Copy all `.env.*.example` files (dev, stage, prod)
+- [ ] Copy `.env.*.example` files (dev, stage)
 - [ ] Configure environment-specific values
 - [ ] Run `./manage-gateway.sh build`
 - [ ] Run `./manage-gateway.sh deploy all`
 
 ---
 
-**Generated**: 2026-01-21
+**Generated**: 2026-02-08
 **Maintainer**: SecondLayer Team

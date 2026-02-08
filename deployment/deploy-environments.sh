@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Deployment script for Production + Development environments
-# Deploys both environments to gate server with nginx routing
+# Deployment script for Development environment
+# Deploys dev environment to gate server with nginx routing
 
 set -e  # Exit on error
 
@@ -152,13 +152,6 @@ show_status() {
 
     ssh -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" bash <<'EOF'
 echo "========================================"
-echo "Production Containers:"
-echo "========================================"
-cd ~/secondlayer
-sudo docker compose -f docker-compose.prod.yml ps
-
-echo ""
-echo "========================================"
 echo "Development Containers:"
 echo "========================================"
 cd ~/secondlayer-deployment
@@ -192,7 +185,7 @@ stop_nginx_proxy() {
 
 show_help() {
     cat << EOF
-Deployment Script for Production + Development Environments
+Deployment Script for Development Environment
 
 Usage: ./deploy-environments.sh [COMMAND]
 
@@ -213,7 +206,6 @@ Environment Variables:
   DEPLOY_PATH  Deployment path on server (default: ~/secondlayer-deployment)
 
 URLs after deployment:
-  Production:  https://legal.org.ua/
   Development: https://dev.legal.org.ua/
 
 Example:
@@ -235,7 +227,6 @@ main() {
             start_nginx_proxy
             update_system_nginx
             log_success "🚀 Complete deployment finished!"
-            log_info "Production:  https://legal.org.ua/"
             log_info "Development: https://dev.legal.org.ua/"
             show_status
             ;;

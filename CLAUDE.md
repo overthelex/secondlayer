@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Defaults
+
+Primary stack: JavaScript, Shell, HTML, YAML, Markdown. When creating new files, default to JavaScript (not TypeScript) unless the project already uses TypeScript.
+
+Before implementing non-trivial features, use a task agent to investigate: (1) current state of the system/service, (2) exact API limits or format requirements, (3) existing configs or files that would conflict. Report findings before writing any code.
+
 ## Repository Overview
 
 SecondLayer is a monorepo for a Ukrainian legal tech platform. It provides AI-powered legal document analysis, semantic search over court decisions, legislation retrieval, parliament data, and business registry lookups via MCP (Model Context Protocol) servers.
@@ -172,7 +178,6 @@ npm run frontend       # Start lexwebapp dev server
 - Local: `localhost:3000`
 - Dev: `gate.lexapp.co.ua:3003`
 - Stage: `https://stage.legal.org.ua` (Unified Gateway on port 3004, all 45 tools)
-- Prod: `mail.lexapp.co.ua:3001`
 
 ## Environment Variables
 
@@ -213,7 +218,6 @@ cd deployment
 # Remote deployment (git pull, migrate, rebuild, restart)
 ./manage-gateway.sh deploy stage    # → mail.lexapp.co.ua
 ./manage-gateway.sh deploy dev      # → gate.lexapp.co.ua
-./manage-gateway.sh deploy prod     # → mail.lexapp.co.ua
 ./manage-gateway.sh deploy all
 
 # Status
@@ -280,7 +284,7 @@ Express app with:
 - **Two ZOAdapter instances**: Different ZakonOnline endpoints (court cases vs practice)
 - **Cache TTLs**: Deputies 7d, Bills 1d, Laws 30d (RADA server)
 - **Model selection**: `ModelSelector` from shared package for budget-aware choice
-- **Gateway routing**: Nginx at port 8080 routes by subdomain (dev/stage/prod)
+- **Gateway routing**: Nginx at port 8080 routes by path (dev/stage)
 - **SSE streaming**: For long-running ops, use SSE endpoints (works through gateway)
 - **Dual-auth**: Bearer token (API clients) + JWT/OAuth (web users)
 
@@ -290,6 +294,31 @@ Express app with:
 - `scripts/rada/` - RADA data sync and import (deputies, laws)
 - `scripts/testing/` - 14 test runner scripts for various scenarios
 - `scripts/utilities/` - File conversion (DOCX→text, PDF processing)
+
+## Deployment
+
+- Before deploying, always verify the target port is free with `ss -tlnp | grep <port>` and kill any conflicting process. Never assume a port is available.
+- Never force-move or overwrite docker-compose files, Dockerfiles, or lock files without first checking `git diff` or `git status`. Always preserve the newest version and confirm with the user before overwriting.
+
+## Remote Servers
+
+- Always try SSH before HTTPS for git clones on servers.
+- Use port 587 for mail relay instead of 25.
+- Verify correct server hostname/IP before attempting connections. Don't waste attempts on wrong hosts.
+
+## System Administration
+
+- If a database, config, or system state already exists, do NOT re-initialize it. Always check current state first (`aide --check`, `psql \dt`, etc.) before running destructive init commands. Ask the user before re-initializing anything.
+- Before running any destructive command (init, reset, force-push, rm -rf, overwrite), first show the current state of what's about to change, explain why the destructive action is necessary, and wait for explicit user confirmation.
+
+## Firewall / Network
+
+- When working with iptables/firewall rules, always test grep patterns against actual rule output format before writing scripts. Use `iptables -S` or `iptables -L -n` to verify exact syntax before pattern matching.
+
+## Code Patterns
+
+- When writing SQL in JavaScript string literals, use double-dollar quoting ($$) or parameterized queries instead of single quotes to avoid JS string escaping issues.
+- For PostgreSQL migrations, always use `IF NOT EXISTS` / `CREATE OR REPLACE` / `DO $$ BEGIN ... EXCEPTION WHEN ... END $$` patterns to make migrations idempotent.
 
 ## Related Documentation
 
