@@ -510,8 +510,8 @@ services:
 
   lexwebapp-stage:
     build:
-      context: ../lexwebapp
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: lexwebapp/Dockerfile
       args:
         - BUILD_ENV=staging
         - VITE_API_URL=https://stage.legal.org.ua/api
