@@ -185,27 +185,54 @@ show_images() {
     docker images | grep -E "REPOSITORY|secondlayer-app|lexwebapp-lexwebapp" | head -10
 }
 
+# Check credentials before deployment
+check_deployment_credentials() {
+    print_header "Verifying Deployment Credentials"
+
+    cd "$SCRIPT_DIR"
+
+    # Check if check-credentials.sh exists
+    if [ ! -f "check-credentials.sh" ]; then
+        print_msg "$RED" "❌ check-credentials.sh not found"
+        exit 1
+    fi
+
+    # Run credential check
+    bash check-credentials.sh || {
+        print_msg "$RED" "❌ Credential verification failed"
+        exit 1
+    }
+}
+
 # Test local deployment
 test_local() {
     print_header "Testing Local Deployment"
 
     cd "$SCRIPT_DIR"
 
+    # Check credentials first
+    check_deployment_credentials
+
     # Stop any running local environment
     print_msg "$YELLOW" "Stopping existing local environment..."
-    docker compose -f docker-compose.local.yml down 2>/dev/null || true
+    docker compose -f docker-compose.yml down 2>/dev/null || true
 
-    # Start local environment
+    # Start local environment with proper env file
     print_msg "$YELLOW" "Starting local environment..."
     if [ -f ".env.local" ]; then
-        docker compose -f docker-compose.local.yml --env-file .env.local up -d
+        print_msg "$YELLOW" "Using .env.local"
+        docker compose -f docker-compose.yml --env-file .env.local up -d
+    elif [ -f ".env" ]; then
+        print_msg "$YELLOW" "Using .env"
+        docker compose -f docker-compose.yml --env-file .env up -d
     else
-        docker compose -f docker-compose.local.yml up -d
+        print_msg "$RED" "❌ No .env or .env.local file found!"
+        exit 1
     fi
 
     # Wait for services
-    print_msg "$YELLOW" "Waiting for services to start..."
-    sleep 10
+    print_msg "$YELLOW" "Waiting for services to start (30s)..."
+    sleep 30
 
     # Check health
     print_msg "$YELLOW" "Checking service health..."
@@ -256,12 +283,13 @@ Local Build & Test Menu:
   1) Build all (parallel)
   2) Build backend only
   3) Build frontend only
-  4) Test local deployment
-  5) Show built images
-  6) Show logs
-  7) Clean old images
-  8) Full pipeline (clean + build + test)
-  9) Stop local environment
+  4) Check credentials
+  5) Test local deployment
+  6) Show built images
+  7) Show logs
+  8) Clean old images
+  9) Full pipeline (clean + build + test)
+ 10) Stop local environment
   0) Exit
 
 EOF
@@ -312,6 +340,9 @@ main() {
             build-frontend)
                 build_frontend
                 ;;
+            check-creds|check-credentials)
+                check_deployment_credentials
+                ;;
             test)
                 test_local
                 ;;
@@ -334,7 +365,7 @@ main() {
                 show_images
                 ;;
             *)
-                echo "Usage: $0 {build|build-backend|build-frontend|test|logs|clean|stop|full|info|images}"
+                echo "Usage: $0 {build|build-backend|build-frontend|check-credentials|test|logs|clean|stop|full|info|images}"
                 exit 1
                 ;;
         esac
@@ -350,12 +381,13 @@ main() {
             1) build_parallel ;;
             2) build_backend ;;
             3) build_frontend ;;
-            4) test_local ;;
-            5) show_images ;;
-            6) show_logs ;;
-            7) clean_old_images ;;
-            8) full_pipeline ;;
-            9) stop_local ;;
+            4) check_deployment_credentials ;;
+            5) test_local ;;
+            6) show_images ;;
+            7) show_logs ;;
+            8) clean_old_images ;;
+            9) full_pipeline ;;
+           10) stop_local ;;
             0)
                 print_msg "$GREEN" "Goodbye!"
                 exit 0
