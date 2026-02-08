@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,11 +7,13 @@ import {
   Key,
   Smartphone,
   QrCode,
-  Chrome,
   Shield,
   ArrowRight,
   Loader2,
-  AlertCircle } from
+  AlertCircle,
+  Eye,
+  EyeOff,
+  User } from
 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import showToast from '../utils/toast';
@@ -26,14 +28,33 @@ interface LoginPageProps {
   onLoginSuccess?: () => void;
 }
 
+// Password strength calculator
+function checkPasswordStrength(pwd: string): 'weak' | 'medium' | 'strong' {
+  let strength = 0;
+  if (pwd.length >= 8) strength++;
+  if (/[A-Z]/.test(pwd)) strength++;
+  if (/[a-z]/.test(pwd)) strength++;
+  if (/[0-9]/.test(pwd)) strength++;
+  if (/[^A-Za-z0-9]/.test(pwd)) strength++;
+
+  if (strength < 3) return 'weak';
+  if (strength < 5) return 'medium';
+  return 'strong';
+}
+
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [authMethod, setAuthMethod] = useState<AuthMethod>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong'>('weak');
   const [showQR, setShowQR] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
 
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -110,49 +131,120 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     window.location.href = `${BASE_URL}/auth/google`;
   };
 
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (!isLogin) {
+      setPasswordStrength(checkPasswordStrength(value));
+    }
+  };
+
   const handlePasswordAuth = async () => {
     setError(null);
 
-    // Validate inputs
-    if (!email || !password) {
-      setError('Please enter both email and password');
+    if (isLogin) {
+      // Login flow
+      if (!email || !password) {
+        setError('Please enter both email and password');
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const response = await fetch(`${BASE_URL}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Login failed');
+        }
+
+        await login(data.token);
+        showToast.success('Login successful!');
+
+        if (onLoginSuccess) {
+          onLoginSuccess();
+        }
+
+        navigate('/chat', { replace: true });
+      } catch (err: any) {
+        console.error('Password login failed:', err);
+        setError(err.message || 'Login failed. Please check your credentials.');
+        showToast.error('Login failed');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // Registration flow
+      if (!email || !password) {
+        setError('Please fill in email and password');
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        const response = await fetch(`${BASE_URL}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name: name || undefined }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Registration failed');
+        }
+
+        showToast.success('Registration successful! Please check your email to verify your account.');
+
+        // Switch to login mode
+        setIsLogin(true);
+        setEmail('');
+        setPassword('');
+        setName('');
+      } catch (err: any) {
+        console.error('Registration failed:', err);
+        setError(err.message || 'Registration failed. Please try again.');
+        showToast.error('Registration failed');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!forgotPasswordEmail) {
+      setError('Please enter your email');
       return;
     }
 
     setIsLoading(true);
+    setError(null);
 
     try {
-      // Call login API
-      const response = await fetch(`${BASE_URL}/auth/login`, {
+      const response = await fetch(`${BASE_URL}/auth/forgot-password`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        throw new Error(data.message || 'Failed to send reset email');
       }
 
-      // Login with the token
-      await login(data.token);
-
-      showToast.success('Login successful!');
-
-      // Call success callback if provided
-      if (onLoginSuccess) {
-        onLoginSuccess();
-      }
-
-      // Navigate to chat after successful login
-      navigate('/chat', { replace: true });
+      showToast.success('Password reset link sent to your email');
+      setShowForgotPassword(false);
+      setForgotPasswordEmail('');
     } catch (err: any) {
-      console.error('Password login failed:', err);
-      setError(err.message || 'Login failed. Please check your credentials.');
-      showToast.error('Login failed');
+      setError(err.message || 'Failed to send reset email');
+      showToast.error('Failed to send reset email');
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +264,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   };
 
   // Show loading state during OAuth callback processing
-  if (isLoading) {
+  if (isLoading && !showForgotPassword) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-claude-bg via-white to-claude-sidebar flex items-center justify-center p-4">
         <div className="text-center">
@@ -263,12 +355,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-sans text-claude-text font-medium mb-2">
-              {isLogin ? 'Вход в систему' : 'Регистрация'}
+              {isLogin ? 'Вхід в систему' : 'Реєстрація'}
             </h1>
             <p className="text-claude-subtext font-sans text-sm">
               {isLogin ?
-              'Выберите удобный способ входа' :
-              'Создайте аккаунт для начала работы'}
+              'Оберіть зручний спосіб входу' :
+              'Створіть акаунт для початку роботи'}
             </p>
           </div>
 
@@ -306,7 +398,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 fill="#EA4335" />
 
             </svg>
-            {isLogin ? 'Войти через Google' : 'Зарегистрироваться через Google'}
+            {isLogin ? 'Увійти через Google' : 'Зареєструватися через Google'}
           </motion.button>
 
           {/* Divider */}
@@ -316,7 +408,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-4 bg-white text-claude-subtext font-sans">
-                или
+                або
               </span>
             </div>
           </div>
@@ -368,6 +460,29 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               }}
               className="space-y-4">
 
+                {/* Name field (Registration only) */}
+                {!isLogin && (
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-claude-text font-sans mb-2">
+                      Ім'я
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <User size={18} className="text-claude-subtext" />
+                      </div>
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Іван Петренко"
+                        autoComplete="name"
+                        className="block w-full pl-10 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-claude-text font-sans mb-2">
                     Email
@@ -400,21 +515,50 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handlePasswordAuth()}
                     placeholder="••••••••"
-                    autoComplete="current-password"
-                    className="block w-full pl-10 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    className="block w-full pl-10 pr-12 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-claude-subtext hover:text-claude-text transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
+
+                  {/* Password strength indicator (Registration only) */}
+                  {!isLogin && password && (
+                    <div className="mt-2">
+                      <div className="flex gap-1 mb-1">
+                        <div className={`h-1 flex-1 rounded ${passwordStrength === 'weak' ? 'bg-red-500' : passwordStrength === 'medium' ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+                        <div className={`h-1 flex-1 rounded ${passwordStrength === 'medium' || passwordStrength === 'strong' ? (passwordStrength === 'medium' ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-200'}`}></div>
+                        <div className={`h-1 flex-1 rounded ${passwordStrength === 'strong' ? 'bg-green-500' : 'bg-gray-200'}`}></div>
+                      </div>
+                      <p className="text-xs text-claude-subtext">
+                        {passwordStrength === 'weak' && 'Слабкий пароль — додайте великі літери, цифри або спецсимволи'}
+                        {passwordStrength === 'medium' && 'Середній пароль'}
+                        {passwordStrength === 'strong' && 'Сильний пароль'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {isLogin &&
               <div className="flex justify-end">
-                    <button className="text-sm text-claude-accent hover:text-[#C66345] font-sans">
-                      Забыли пароль?
+                    <button
+                      onClick={() => {
+                        setShowForgotPassword(true);
+                        setForgotPasswordEmail(email);
+                        setError(null);
+                      }}
+                      className="text-sm text-claude-accent hover:text-[#C66345] font-sans"
+                    >
+                      Забули пароль?
                     </button>
                   </div>
               }
@@ -427,10 +571,17 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   scale: 0.98
                 }}
                 onClick={handlePasswordAuth}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-colors shadow-sm font-sans">
+                disabled={isLoading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-black text-white rounded-xl font-medium hover:bg-gray-800 transition-colors shadow-sm font-sans disabled:opacity-50">
 
-                  {isLogin ? 'Войти' : 'Зарегистрироваться'}
-                  <ArrowRight size={18} />
+                  {isLoading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <>
+                      {isLogin ? 'Увійти' : 'Зареєструватися'}
+                      <ArrowRight size={18} />
+                    </>
+                  )}
                 </motion.button>
               </motion.div>
             }
@@ -469,10 +620,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     <Shield size={40} className="text-claude-accent" />
                   </motion.div>
                   <h3 className="text-lg font-serif text-claude-text mb-2">
-                    Подключите ключ безопасности
+                    Підключіть ключ безпеки
                   </h3>
                   <p className="text-sm text-claude-subtext font-sans mb-6">
-                    Вставьте USB-ключ или используйте NFC
+                    Вставте USB-ключ або використайте NFC
                   </p>
                   <motion.button
                   whileHover={{
@@ -484,7 +635,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   onClick={handleHardwareKey}
                   className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
 
-                    Активировать ключ
+                    Активувати ключ
                   </motion.button>
                 </div>
               </motion.div>
@@ -525,10 +676,10 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       <Smartphone size={40} className="text-claude-accent" />
                     </motion.div>
                     <h3 className="text-lg font-serif text-claude-text mb-2">
-                      Вход через телефон
+                      Вхід через телефон
                     </h3>
                     <p className="text-sm text-claude-subtext font-sans mb-6">
-                      Отсканируйте QR-код в мобильном приложении
+                      Відскануйте QR-код у мобільному застосунку
                     </p>
                     <motion.button
                   whileHover={{
@@ -540,7 +691,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   onClick={handlePhoneKey}
                   className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
 
-                      Показать QR-код
+                      Показати QR-код
                     </motion.button>
                   </div> :
 
@@ -560,16 +711,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                       <div className="absolute inset-0 bg-gradient-to-br from-claude-accent/5 to-transparent"></div>
                     </div>
                     <h3 className="text-lg font-serif text-claude-text mb-2">
-                      Отсканируйте код
+                      Відскануйте код
                     </h3>
                     <p className="text-sm text-claude-subtext font-sans mb-4">
-                      Откройте приложение на телефоне и наведите камеру
+                      Відкрийте застосунок на телефоні та наведіть камеру
                     </p>
                     <button
                   onClick={() => setShowQR(false)}
                   className="text-sm text-claude-accent hover:text-[#C66345] font-sans">
 
-                      Отменить
+                      Скасувати
                     </button>
                   </motion.div>
               }
@@ -592,12 +743,16 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           className="text-center mt-6">
 
           <p className="text-claude-subtext font-sans text-sm">
-            {isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}{' '}
+            {isLogin ? 'Немає акаунту?' : 'Вже є акаунт?'}{' '}
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+                setPassword('');
+              }}
               className="text-claude-accent hover:text-[#C66345] font-medium">
 
-              {isLogin ? 'Зарегистрироваться' : 'Войти'}
+              {isLogin ? 'Зареєструватися' : 'Увійти'}
             </button>
           </p>
         </motion.div>
@@ -616,17 +771,78 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           className="text-center mt-8 text-xs text-claude-subtext font-sans">
 
           <p>
-            Продолжая, вы соглашаетесь с{' '}
+            Продовжуючи, ви погоджуєтесь з{' '}
             <a href="#" className="text-claude-accent hover:text-[#C66345]">
-              Условиями использования
+              Умовами використання
             </a>{' '}
-            и{' '}
+            та{' '}
             <a href="#" className="text-claude-accent hover:text-[#C66345]">
-              Политикой конфиденциальности
+              Політикою конфіденційності
             </a>
           </p>
         </motion.div>
       </motion.div>
+
+      {/* Forgot Password Modal */}
+      <AnimatePresence>
+        {showForgotPassword && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowForgotPassword(false);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <h2 className="text-xl font-sans text-claude-text mb-2">Скидання паролю</h2>
+              <p className="text-sm text-claude-subtext mb-6">
+                Введіть email вашого акаунту, і ми відправимо вам посилання для скидання паролю.
+              </p>
+
+              <div className="relative mb-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail size={18} className="text-claude-subtext" />
+                </div>
+                <input
+                  type="email"
+                  value={forgotPasswordEmail}
+                  onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                  placeholder="your@email.com"
+                  autoFocus
+                  className="block w-full pl-10 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setError(null);
+                  }}
+                  className="flex-1 px-4 py-3 border border-claude-border rounded-xl hover:bg-claude-bg transition-colors font-sans"
+                >
+                  Скасувати
+                </button>
+                <button
+                  onClick={handleForgotPassword}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-colors font-sans disabled:opacity-50 flex items-center justify-center"
+                >
+                  {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Відправити'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>);
 
 }

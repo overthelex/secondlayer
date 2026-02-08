@@ -106,7 +106,7 @@ export class TeamService {
       [org.id]
     );
 
-    return result.rows.map(row => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       name: row.name || row.email,
       initials: this.getInitials(row.name || row.email),

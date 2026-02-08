@@ -10,6 +10,7 @@ import bcrypt from 'bcryptjs';
 import { User } from '../services/user-service.js';
 import { logger } from '../utils/logger.js';
 import { getUserService } from '../middleware/dual-auth.js';
+import { EmailService } from '../services/email-service.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
 const JWT_EXPIRES_IN = '7d'; // 7 days
@@ -324,6 +325,15 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
     // Get user service
     const userService = getUserService();
 
+    // Check if account is locked
+    const isLocked = await userService.isAccountLocked(email);
+    if (isLocked) {
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: 'Account is temporarily locked due to too many failed login attempts. Please try again in 15 minutes.',
+      });
+    }
+
     // Find user by email
     const user = await userService.findByEmail(email);
 
@@ -347,12 +357,16 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
 
     if (!isPasswordValid) {
+      await userService.recordFailedLogin(email);
       logger.warn('Failed login attempt', { email });
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid email or password',
       });
     }
+
+    // Reset failed attempts on successful login
+    await userService.resetFailedAttempts(user.id);
 
     // Update last login
     await userService.updateLastLogin(user.id);
@@ -384,6 +398,225 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
     return res.status(500).json({
       error: 'Internal server error',
       message: 'An error occurred during login',
+    });
+  }
+}
+
+// Password validation helper
+function validatePassword(password: string): { valid: boolean; message?: string } {
+  if (password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters long' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  return { valid: true };
+}
+
+// Email validation helper
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+/**
+ * Register new user with email and password
+ * Public route
+ */
+export async function registerWithPassword(req: Request, res: Response): Promise<Response> {
+  try {
+    const { email, password, name } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Email and password are required',
+      });
+    }
+
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid email format',
+      });
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: passwordValidation.message,
+      });
+    }
+
+    const userService = getUserService();
+
+    // Check if user already exists
+    const existingUser = await userService.findByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'User with this email already exists',
+      });
+    }
+
+    // Create user
+    const user = await userService.createUserWithPassword({ email, password, name });
+
+    // Create verification token and send email
+    const verificationToken = await userService.createVerificationToken(user.id);
+
+    const emailService = new EmailService();
+    await emailService.sendVerificationEmail(email, verificationToken);
+
+    logger.info('User registered', { userId: user.id, email });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful. Please check your email to verify your account.',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error during registration:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred during registration',
+    });
+  }
+}
+
+/**
+ * Verify email with token
+ * Public route
+ */
+export async function verifyEmail(req: Request, res: Response): Promise<Response> {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Token is required',
+      });
+    }
+
+    const userService = getUserService();
+    const verified = await userService.verifyEmail(token);
+
+    if (!verified) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid or expired verification token',
+      });
+    }
+
+    logger.info('Email verified successfully');
+
+    return res.json({
+      success: true,
+      message: 'Email verified successfully. You can now login.',
+    });
+  } catch (error: any) {
+    logger.error('Error verifying email:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred during email verification',
+    });
+  }
+}
+
+/**
+ * Request password reset
+ * Public route
+ */
+export async function forgotPassword(req: Request, res: Response): Promise<Response> {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Email is required',
+      });
+    }
+
+    const userService = getUserService();
+    const token = await userService.createPasswordResetToken(email);
+
+    // Always return success even if user doesn't exist (security best practice)
+    if (token) {
+      const emailService = new EmailService();
+      await emailService.sendPasswordResetEmail(email, token);
+      logger.info('Password reset requested', { email });
+    }
+
+    return res.json({
+      success: true,
+      message: 'If an account exists with this email, a password reset link has been sent.',
+    });
+  } catch (error: any) {
+    logger.error('Error during password reset request:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred during password reset request',
+    });
+  }
+}
+
+/**
+ * Reset password with token
+ * Public route
+ */
+export async function resetPassword(req: Request, res: Response): Promise<Response> {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Token and password are required',
+      });
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: passwordValidation.message,
+      });
+    }
+
+    const userService = getUserService();
+    const success = await userService.resetPassword(token, password);
+
+    if (!success) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    logger.info('Password reset successfully');
+
+    return res.json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.',
+    });
+  } catch (error: any) {
+    logger.error('Error resetting password:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'An error occurred during password reset',
     });
   }
 }

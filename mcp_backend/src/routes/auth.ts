@@ -1,20 +1,49 @@
 /**
  * Authentication Routes
- * Handles Google OAuth, user profile, and logout
+ * Handles Google OAuth, password auth, registration, email verification, and password reset
  */
 
 import { Router } from 'express';
 import passport from 'passport';
 import * as authController from '../controllers/auth.js';
+import { authRateLimit, passwordResetRateLimit } from '../middleware/rate-limit.js';
 
 const router: Router = Router();
 
 /**
  * @route   POST /auth/login
  * @desc    Login with email and password
+ * @access  Public (rate limited)
+ */
+router.post('/login', authRateLimit as any, authController.loginWithPassword as any);
+
+/**
+ * @route   POST /auth/register
+ * @desc    Register new user with email and password
+ * @access  Public (rate limited)
+ */
+router.post('/register', authRateLimit as any, authController.registerWithPassword as any);
+
+/**
+ * @route   POST /auth/verify-email
+ * @desc    Verify email with token
  * @access  Public
  */
-router.post('/login', authController.loginWithPassword as any);
+router.post('/verify-email', authController.verifyEmail as any);
+
+/**
+ * @route   POST /auth/forgot-password
+ * @desc    Request password reset email
+ * @access  Public (strictly rate limited)
+ */
+router.post('/forgot-password', passwordResetRateLimit as any, authController.forgotPassword as any);
+
+/**
+ * @route   POST /auth/reset-password
+ * @desc    Reset password with token
+ * @access  Public (rate limited)
+ */
+router.post('/reset-password', authRateLimit as any, authController.resetPassword as any);
 
 /**
  * @route   GET /auth/google

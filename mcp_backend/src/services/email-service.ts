@@ -210,6 +210,138 @@ export class EmailService {
   }
 
   /**
+   * Send email verification link
+   */
+  async sendVerificationEmail(email: string, token: string): Promise<void> {
+    try {
+      const verificationUrl = `${this.frontendUrl}/verify-email?token=${token}`;
+
+      await this.transporter.sendMail({
+        from: `"${this.config.fromName}" <${this.config.from}>`,
+        to: email,
+        subject: 'Verify your email - SecondLayer',
+        html: this.generateVerificationEmailTemplate(email, verificationUrl),
+      });
+
+      logger.info('Verification email sent', { email });
+    } catch (error: any) {
+      logger.error('Failed to send verification email', {
+        email,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Send password reset link
+   */
+  async sendPasswordResetEmail(email: string, token: string): Promise<void> {
+    try {
+      const resetUrl = `${this.frontendUrl}/reset-password?token=${token}`;
+
+      await this.transporter.sendMail({
+        from: `"${this.config.fromName}" <${this.config.from}>`,
+        to: email,
+        subject: 'Reset your password - SecondLayer',
+        html: this.generatePasswordResetEmailTemplate(email, resetUrl),
+      });
+
+      logger.info('Password reset email sent', { email });
+    } catch (error: any) {
+      logger.error('Failed to send password reset email', {
+        email,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Generate verification email template
+   */
+  private generateVerificationEmailTemplate(email: string, verificationUrl: string): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+    .button { display: inline-block; background: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Verify Your Email</h1>
+    </div>
+    <div class="content">
+      <p>Thank you for registering with SecondLayer!</p>
+      <p>Please click the button below to verify your email address:</p>
+      <p style="text-align: center;">
+        <a href="${verificationUrl}" class="button">Verify Email</a>
+      </p>
+      <p>Or copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; font-size: 14px; color: #666;">${verificationUrl}</p>
+      <p>This link is valid for 24 hours.</p>
+      <p>If you didn't create an account, you can safely ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; ${new Date().getFullYear()} SecondLayer Legal Platform. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
+   * Generate password reset email template
+   */
+  private generatePasswordResetEmailTemplate(email: string, resetUrl: string): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #ff9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+    .button { display: inline-block; background: #2196F3; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Password Reset</h1>
+    </div>
+    <div class="content">
+      <p>You requested a password reset for your SecondLayer account.</p>
+      <p>Click the button below to create a new password:</p>
+      <p style="text-align: center;">
+        <a href="${resetUrl}" class="button">Reset Password</a>
+      </p>
+      <p>Or copy and paste this link into your browser:</p>
+      <p style="word-break: break-all; font-size: 14px; color: #666;">${resetUrl}</p>
+      <p>This link is valid for 1 hour.</p>
+      <p>If you didn't request a password reset, you can safely ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; ${new Date().getFullYear()} SecondLayer Legal Platform. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  /**
    * Generate payment success email template
    */
   private generatePaymentSuccessTemplate(params: PaymentSuccessParams): string {
