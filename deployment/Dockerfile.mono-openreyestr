@@ -59,6 +59,7 @@ COPY --from=builder /app/mcp_openreyestr/package-lock.json* ./
 COPY --from=builder /app/mcp_openreyestr/node_modules ./node_modules
 COPY --from=builder /app/mcp_openreyestr/dist ./dist
 COPY --from=builder /app/mcp_openreyestr/src/migrations ./src/migrations
+COPY --from=builder /app/mcp_openreyestr/src/migrations/*.sql ./dist/migrations/
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \

@@ -51,6 +51,7 @@ WORKDIR /app/mcp_backend
 RUN npm install --omit=dev
 
 # Install Playwright and browsers
+RUN npm install playwright@latest
 RUN npx playwright install chromium
 RUN npx playwright install-deps chromium
 
