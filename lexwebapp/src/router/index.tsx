@@ -13,6 +13,8 @@ import { MainLayout } from '../layouts/MainLayout';
 
 // Pages
 import { LoginPage } from '../components/LoginPage';
+import { VerifyEmailPage } from '../components/VerifyEmailPage';
+import { ResetPasswordPage } from '../components/ResetPasswordPage';
 import { ChatPage } from '../pages/ChatPage';
 import { ProfilePage } from '../components/ProfilePage';
 import { BillingDashboard } from '../components/BillingDashboard';
@@ -39,6 +41,14 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.LOGIN,
     element: <LoginPage />,
+  },
+  {
+    path: '/verify-email',
+    element: <VerifyEmailPage />,
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
   {
     element: <AuthGuard />,

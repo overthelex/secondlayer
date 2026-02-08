@@ -85,3 +85,17 @@ export const webhookRateLimit = createRateLimiter({
   maxRequests: 10,
   keyPrefix: 'ratelimit:webhook',
 });
+
+// Auth endpoint rate limiter (max 10 requests per 15 minutes)
+export const authRateLimit = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 10,
+  keyPrefix: 'ratelimit:auth',
+});
+
+// Strict rate limiter for password reset (max 3 requests per hour)
+export const passwordResetRateLimit = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  maxRequests: 3,
+  keyPrefix: 'ratelimit:password-reset',
+});

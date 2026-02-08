@@ -71,6 +71,54 @@ export class AuthService extends BaseService {
       return false;
     }
   }
+
+  /**
+   * Register new user with email and password
+   */
+  async register(email: string, password: string, name?: string): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/register', { email, password, name });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(token: string): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/verify-email', { token });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Request password reset email
+   */
+  async forgotPassword(email: string): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/forgot-password', { email });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, password: string): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/reset-password', { token, password });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
 }
 
 // Export singleton instance

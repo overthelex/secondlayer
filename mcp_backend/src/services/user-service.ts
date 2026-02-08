@@ -5,6 +5,8 @@
 
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export interface User {
   id: string;
@@ -27,6 +29,12 @@ export interface UserCreate {
   picture?: string;
   emailVerified?: boolean;
   locale?: string;
+}
+
+export interface UserCreateWithPassword {
+  email: string;
+  password: string;
+  name?: string;
 }
 
 export interface UserSession {
@@ -303,6 +311,223 @@ export class UserService {
     } catch (error) {
       logger.error('Error cleaning up sessions:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Create a new user with email and password (not OAuth)
+   */
+  async createUserWithPassword(data: UserCreateWithPassword): Promise<User> {
+    try {
+      const passwordHash = await bcrypt.hash(data.password, 10);
+      const result = await this.db.query(
+        `INSERT INTO users (email, name, password_hash, email_verified)
+         VALUES ($1, $2, $3, FALSE)
+         RETURNING *`,
+        [data.email, data.name || null, passwordHash]
+      );
+
+      const user = result.rows[0] as User;
+      logger.info('Created new user with password:', { userId: user.id, email: user.email });
+      return user;
+    } catch (error) {
+      logger.error('Error creating user with password:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create email verification token
+   */
+  async createVerificationToken(userId: string): Promise<string> {
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await this.db.query(
+        `INSERT INTO email_verification_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, $3)`,
+        [userId, token, expiresAt]
+      );
+
+      logger.debug('Created verification token for user:', { userId });
+      return token;
+    } catch (error) {
+      logger.error('Error creating verification token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify email using token
+   */
+  async verifyEmail(token: string): Promise<boolean> {
+    try {
+      const result = await this.db.query(
+        `SELECT user_id, expires_at FROM email_verification_tokens
+         WHERE token = $1 AND used_at IS NULL`,
+        [token]
+      );
+
+      if (result.rows.length === 0) return false;
+
+      const { user_id, expires_at } = result.rows[0];
+
+      if (new Date() > new Date(expires_at)) {
+        return false;
+      }
+
+      // Mark token as used and verify user in a transaction
+      await this.db.query('BEGIN');
+      try {
+        await this.db.query(
+          `UPDATE email_verification_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = $1`,
+          [token]
+        );
+        await this.db.query(
+          `UPDATE users SET email_verified = TRUE WHERE id = $1`,
+          [user_id]
+        );
+        await this.db.query('COMMIT');
+      } catch (err) {
+        await this.db.query('ROLLBACK');
+        throw err;
+      }
+
+      logger.info('Email verified for user:', { userId: user_id });
+      return true;
+    } catch (error) {
+      logger.error('Error verifying email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create password reset token for a user
+   */
+  async createPasswordResetToken(email: string): Promise<string | null> {
+    try {
+      const user = await this.findByEmail(email);
+      if (!user) return null;
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+
+      await this.db.query(
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, $3)`,
+        [user.id, token, expiresAt]
+      );
+
+      logger.debug('Created password reset token for user:', { userId: user.id });
+      return token;
+    } catch (error) {
+      logger.error('Error creating password reset token:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<boolean> {
+    try {
+      const result = await this.db.query(
+        `SELECT user_id, expires_at FROM password_reset_tokens
+         WHERE token = $1 AND used_at IS NULL`,
+        [token]
+      );
+
+      if (result.rows.length === 0) return false;
+
+      const { user_id, expires_at } = result.rows[0];
+
+      if (new Date() > new Date(expires_at)) {
+        return false;
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+
+      await this.db.query('BEGIN');
+      try {
+        await this.db.query(
+          `UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE token = $1`,
+          [token]
+        );
+        await this.db.query(
+          `UPDATE users SET password_hash = $1 WHERE id = $2`,
+          [passwordHash, user_id]
+        );
+        await this.db.query('COMMIT');
+      } catch (err) {
+        await this.db.query('ROLLBACK');
+        throw err;
+      }
+
+      logger.info('Password reset for user:', { userId: user_id });
+      return true;
+    } catch (error) {
+      logger.error('Error resetting password:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Record a failed login attempt and lock account after 5 failures
+   */
+  async recordFailedLogin(email: string): Promise<void> {
+    try {
+      await this.db.query(
+        `UPDATE users
+         SET failed_login_attempts = COALESCE(failed_login_attempts, 0) + 1,
+             locked_until = CASE
+               WHEN COALESCE(failed_login_attempts, 0) + 1 >= 5
+               THEN CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+               ELSE locked_until
+             END
+         WHERE email = $1`,
+        [email]
+      );
+    } catch (error) {
+      logger.error('Error recording failed login:', error);
+    }
+  }
+
+  /**
+   * Reset failed login attempts after successful login
+   */
+  async resetFailedAttempts(userId: string): Promise<void> {
+    try {
+      await this.db.query(
+        `UPDATE users
+         SET failed_login_attempts = 0, locked_until = NULL
+         WHERE id = $1`,
+        [userId]
+      );
+    } catch (error) {
+      logger.error('Error resetting failed attempts:', error);
+    }
+  }
+
+  /**
+   * Check if account is locked due to too many failed login attempts
+   */
+  async isAccountLocked(email: string): Promise<boolean> {
+    try {
+      const result = await this.db.query(
+        `SELECT locked_until FROM users WHERE email = $1`,
+        [email]
+      );
+
+      if (result.rows.length === 0) return false;
+
+      const lockedUntil = result.rows[0].locked_until;
+      if (!lockedUntil) return false;
+
+      return new Date() < new Date(lockedUntil);
+    } catch (error) {
+      logger.error('Error checking account lock:', error);
+      return false;
     }
   }
 }
