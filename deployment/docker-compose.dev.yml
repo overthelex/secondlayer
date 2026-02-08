@@ -287,6 +287,9 @@ services:
 
   migrate-openreyestr-dev:
     image: openreyestr-app:latest
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.mono-openreyestr
     container_name: openreyestr-migrate-dev
     depends_on:
       postgres-openreyestr-dev:
@@ -307,6 +310,9 @@ services:
 
   app-openreyestr-dev:
     image: openreyestr-app:latest
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.mono-openreyestr
     container_name: openreyestr-app-dev
     command: ["node", "dist/http-server.js"]
     environment:
