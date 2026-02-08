@@ -7,7 +7,6 @@ export { TemplateClassifier, createTemplateClassifier, getTemplateClassifier } f
 export { TemplateMatcher } from './TemplateMatcher.js';
 export { TemplateGenerator } from './TemplateGenerator.js';
 export { TemplateStorage, getTemplateStorage } from './TemplateStorage.js';
-export { TemplateVersionManager, getTemplateVersionManager } from './TemplateVersionManager.js';
 export type {
   QuestionClassification,
   ClassificationAlternative,
@@ -20,8 +19,3 @@ export type {
   TemplateMetrics,
   TemplateUsageStats,
 } from './types.js';
-export type {
-  VersionMetrics,
-  PromotionRequest,
-  PromotionEligibility,
-} from './TemplateVersionManager.js';
