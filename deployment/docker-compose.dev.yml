@@ -76,6 +76,56 @@ services:
     networks:
       - secondlayer-dev-network
 
+  # RADA MCP Database Initialization - creates schema and user in main DB
+  rada-db-init-dev:
+    image: postgres:15-alpine
+    container_name: rada-db-init-dev
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      RADA_POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      RADA_POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      RADA_POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+    command:
+      - sh
+      - -lc
+      - |
+        echo "Initializing RADA schema/user...";
+        cat <<'SQL' | psql -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+          -v rada_user="$$RADA_POSTGRES_USER" \
+          -v rada_pass="$$RADA_POSTGRES_PASSWORD" \
+          -v rada_schema="$$RADA_POSTGRES_SCHEMA" \
+          -v db_name="$$POSTGRES_DB"
+
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+        -- Create role if missing
+        SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'rada_user', :'rada_pass')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'rada_user')\gexec
+
+        -- Always set/refresh password (idempotent)
+        SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'rada_user', :'rada_pass')\gexec
+
+        -- Create schema if missing
+        SELECT format('CREATE SCHEMA %I AUTHORIZATION %I', :'rada_schema', :'rada_user')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = :'rada_schema')\gexec
+
+        -- Ensure privileges
+        SELECT format('GRANT USAGE, CREATE ON SCHEMA %I TO %I', :'rada_schema', :'rada_user')\gexec
+
+        -- Ensure default search_path
+        SELECT format('ALTER ROLE %I IN DATABASE %I SET search_path=%I,public', :'rada_user', :'db_name', :'rada_schema')\gexec
+        SQL
+    restart: "no"
+    networks:
+      - secondlayer-dev-network
+
   migrate-dev:
     image: secondlayer-app:latest
     build:
@@ -180,6 +230,8 @@ services:
       redis-dev:
         condition: service_healthy
       migrate-dev:
+        condition: service_completed_successfully
+      rada-migrate-dev:
         condition: service_completed_successfully
 
     volumes:
@@ -309,6 +361,77 @@ services:
       - secondlayer-dev-network
 
     # Resource limits for dev
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # RADA MCP Migrations
+  rada-migrate-dev:
+    build:
+      context: .
+      dockerfile: deployment/Dockerfile.mono-rada
+    image: rada-mcp:latest
+    container_name: rada-mcp-migrate-dev
+    depends_on:
+      rada-db-init-dev:
+        condition: service_completed_successfully
+      redis-dev:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_HOST: redis-dev
+      REDIS_PORT: 6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: development
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks:
+      - secondlayer-dev-network
+
+  # RADA MCP Application Server
+  rada-mcp-app-dev:
+    image: rada-mcp:latest
+    container_name: rada-mcp-app-dev
+    depends_on:
+      rada-migrate-dev:
+        condition: service_completed_successfully
+      redis-dev:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      HTTP_PORT: 3001
+      HTTP_HOST: 0.0.0.0
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
+      POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_HOST: redis-dev
+      REDIS_PORT: 6379
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3001:3001"
+    command: ["node", "dist/http-server.js"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
     deploy:
       resources:
         limits:
