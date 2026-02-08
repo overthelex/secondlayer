@@ -3,7 +3,10 @@
  * Exports all services for the self-learning template system
  */
 
-export { TemplateClassifier, createTemplateClassifier, getTemplateClassifier } from './TemplateClassifier';
+export { TemplateClassifier, createTemplateClassifier, getTemplateClassifier } from './TemplateClassifier.js';
+export { TemplateMatcher } from './TemplateMatcher.js';
+export { TemplateGenerator } from './TemplateGenerator.js';
+export { TemplateStorage, getTemplateStorage } from './TemplateStorage.js';
 export type {
   QuestionClassification,
   ClassificationAlternative,
@@ -15,4 +18,4 @@ export type {
   TemplateFeedback,
   TemplateMetrics,
   TemplateUsageStats,
-} from './types';
+} from './types.js';

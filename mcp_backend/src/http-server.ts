@@ -36,6 +36,7 @@ import { ApiKeyService } from './services/api-key-service.js';
 import { CreditService } from './services/credit-service.js';
 import { createApiKeyRouter } from './routes/api-key-routes.js';
 import { getRedisClient } from './utils/redis-client.js';
+import { createTemplateRoutes } from './routes/template-routes.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -1157,6 +1158,28 @@ class HTTPMCPServer {
     // GET /api/admin/api-keys - List API keys
     // GET /api/admin/settings - Get system settings
     this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db));
+
+    // Template system routes - Dynamic template classification, matching, generation, and analytics
+    // POST /api/templates/classify-question - Classify question intent
+    // GET /api/templates/classify-question/stats - Classification statistics
+    // GET /api/templates/match - Match question against existing templates
+    // POST /api/templates/match/batch - Batch match multiple questions
+    // POST /api/templates/generate - Generate new template from unmatched question
+    // GET /api/templates/generation/:id/status - Check generation status
+    // PUT /api/templates/generation/:id/approve - Approve generated template (admin)
+    // PUT /api/templates/generation/:id/reject - Reject generated template (admin)
+    // GET /api/templates/list - List all templates
+    // GET /api/templates/:id - Get template details
+    // PUT /api/templates/:id - Update template (admin)
+    // DELETE /api/templates/:id - Deprecate template (admin)
+    // GET /api/templates/recommendations/for-me - Personalized recommendations
+    // GET /api/templates/trending - Trending templates
+    // POST /api/templates/:id/feedback - Submit feedback
+    // POST /api/templates/:id/rate - Rate template
+    // GET /api/templates/:id/metrics - Get template metrics
+    // GET /api/templates/analytics/dashboard - Analytics dashboard
+    // POST /api/templates/metrics/aggregate - Aggregate metrics (admin)
+    this.app.use('/api/templates', requireJWT as any, createTemplateRoutes(this.services.db));
 
     // Webhook routes - public (signature verified by services, rate limited)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body

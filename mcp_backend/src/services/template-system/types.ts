@@ -61,6 +61,16 @@ export interface GeneratedTemplate {
   validationErrors?: string[];
 }
 
+// Template version record
+export interface TemplateVersion {
+  versionNumber: string; // e.g. "1.0.0"
+  changeType: 'initial' | 'major' | 'minor' | 'patch';
+  changeDescription: string;
+  releasedAt: string;
+  isCurrent: boolean;
+  isSupported: boolean;
+}
+
 // Template recommendation
 export interface TemplateRecommendation {
   templateId: string;
