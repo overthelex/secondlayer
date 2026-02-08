@@ -98,6 +98,7 @@ export function MainLayout() {
           onHistoryClick={() => navigate(ROUTES.HISTORY)}
           onDecisionsClick={() => navigate(ROUTES.DECISIONS_SEARCH)}
           onBillingClick={() => navigate(ROUTES.BILLING)}
+          onTeamClick={() => navigate(ROUTES.TEAM)}
           onLegislationMonitoringClick={() => navigate(ROUTES.LEGISLATION_MONITORING)}
           onCourtPracticeAnalysisClick={() => navigate(ROUTES.COURT_PRACTICE_ANALYSIS)}
           onLegalInitiativesClick={() => navigate(ROUTES.LEGAL_INITIATIVES)}

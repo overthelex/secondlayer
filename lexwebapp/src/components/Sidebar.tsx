@@ -19,7 +19,9 @@ import {
   BarChart3,
   History,
   FileCode,
-  DollarSign } from
+  DollarSign,
+  CreditCard,
+  UsersRound } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 interface SidebarProps {
@@ -34,6 +36,7 @@ interface SidebarProps {
   onHistoryClick?: () => void;
   onDecisionsClick?: () => void;
   onBillingClick?: () => void;
+  onTeamClick?: () => void;
   onLegislationMonitoringClick?: () => void;
   onCourtPracticeAnalysisClick?: () => void;
   onLegalInitiativesClick?: () => void;
@@ -55,6 +58,7 @@ export function Sidebar({
   onHistoryClick,
   onDecisionsClick,
   onBillingClick,
+  onTeamClick,
   onLegislationMonitoringClick,
   onCourtPracticeAnalysisClick,
   onLegalInitiativesClick,
@@ -96,13 +100,6 @@ export function Sidebar({
     icon: Briefcase,
     count: 8,
     onClick: onCasesClick
-  },
-  {
-    id: 'billing',
-    label: 'Billing',
-    icon: DollarSign,
-    count: null,
-    onClick: onBillingClick
   },
   {
     id: 'documents',
@@ -364,6 +361,47 @@ export function Sidebar({
                   </span>
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Finance Section */}
+          <div className="mb-6">
+            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+              Фінанси
+            </h3>
+            <div className="space-y-0.5">
+              <button
+                onClick={() => {
+                  if (onBillingClick) onBillingClick();
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+
+                <CreditCard
+                  size={15}
+                  strokeWidth={2}
+                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+
+                <span className="truncate font-medium tracking-tight font-sans">
+                  Біллінг
+                </span>
+              </button>
+              <button
+                onClick={() => {
+                  if (onTeamClick) onTeamClick();
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+
+                <UsersRound
+                  size={15}
+                  strokeWidth={2}
+                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+
+                <span className="truncate font-medium tracking-tight font-sans">
+                  Команда
+                </span>
+              </button>
             </div>
           </div>
 

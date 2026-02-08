@@ -13,14 +13,21 @@ import {
   FileText,
   Settings,
   ArrowLeft,
+  Zap,
+  TrendingUp,
+  AlertCircle,
 } from 'lucide-react';
 import { OverviewTab } from './billing/OverviewTab';
 import { TransactionsTab } from './billing/TransactionsTab';
 import { TopUpTab } from './billing/TopUpTab';
 import { InvoicesTab } from './billing/InvoicesTab';
 import { SettingsTab } from './billing/SettingsTab';
+import { TariffsTab } from './billing/TariffsTab';
+import { StatisticsTab } from './billing/StatisticsTab';
+import { PaymentsTab } from './billing/PaymentsTab';
+import { LimitsTab } from './billing/LimitsTab';
 
-type BillingTab = 'overview' | 'transactions' | 'topup' | 'invoices' | 'settings';
+type BillingTab = 'overview' | 'transactions' | 'topup' | 'invoices' | 'settings' | 'tariffs' | 'statistics' | 'payments' | 'limits';
 
 interface BillingDashboardProps {
   onBack?: () => void;
@@ -41,6 +48,10 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview', icon: DollarSign },
+    { id: 'tariffs' as const, label: 'Tariffs', icon: Zap },
+    { id: 'statistics' as const, label: 'Statistics', icon: TrendingUp },
+    { id: 'payments' as const, label: 'Payments', icon: CreditCard },
+    { id: 'limits' as const, label: 'Limits', icon: AlertCircle },
     { id: 'transactions' as const, label: 'Transactions', icon: Receipt },
     { id: 'topup' as const, label: 'Top Up', icon: CreditCard },
     { id: 'invoices' as const, label: 'Invoices', icon: FileText },
@@ -109,6 +120,10 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}>
             {activeTab === 'overview' && <OverviewTab />}
+            {activeTab === 'tariffs' && <TariffsTab />}
+            {activeTab === 'statistics' && <StatisticsTab />}
+            {activeTab === 'payments' && <PaymentsTab />}
+            {activeTab === 'limits' && <LimitsTab />}
             {activeTab === 'transactions' && <TransactionsTab />}
             {activeTab === 'topup' && <TopUpTab />}
             {activeTab === 'invoices' && <InvoicesTab />}

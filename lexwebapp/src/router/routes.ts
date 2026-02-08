@@ -14,6 +14,7 @@ export const ROUTES = {
   // Profile & Settings
   PROFILE: '/profile',
   BILLING: '/billing',
+  TEAM: '/team',
 
   // Legal Entities
   JUDGES: '/judges',
