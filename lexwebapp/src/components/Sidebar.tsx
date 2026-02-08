@@ -24,6 +24,7 @@ import {
   UsersRound } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,6 +69,7 @@ export function Sidebar({
   onHistoricalAnalysisClick,
   onLogout
 }: SidebarProps) {
+  const { user } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -226,7 +228,7 @@ export function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-[280px] bg-claude-sidebar border-r border-claude-border flex flex-col transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        className={`fixed lg:static inset-y-0 left-0 lg:inset-auto z-50 w-[280px] h-screen lg:h-full bg-claude-sidebar border-r border-claude-border flex flex-col transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
 
         {/* Header */}
         <div className="p-4 flex items-center justify-between border-b border-claude-border/50">
@@ -522,15 +524,22 @@ export function Sidebar({
             onClick={handleProfileMenuClick}
             className="w-full flex items-center gap-3 px-2 py-2 hover:bg-claude-subtext/8 rounded-lg transition-all duration-200">
 
+            {user?.picture ?
+            <img
+              src={user.picture}
+              alt={user.name}
+              className="w-8 h-8 rounded-full object-cover" /> :
+
             <div className="w-8 h-8 rounded-full bg-claude-subtext/15 flex items-center justify-center text-claude-subtext text-[11px] font-semibold">
-              JD
+              {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'}
             </div>
+            }
             <div className="flex-1 text-left">
               <div className="text-[13px] font-semibold text-claude-text tracking-tight font-sans">
-                John Doe
+                {user?.name || 'Користувач'}
               </div>
               <div className="text-[11px] text-claude-subtext/70 font-sans">
-                Юрист
+                {user?.email || ''}
               </div>
             </div>
           </button>

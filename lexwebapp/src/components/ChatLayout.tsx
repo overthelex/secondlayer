@@ -94,6 +94,17 @@ export function ChatLayout() {
   // Use Zustand store for messages and streaming state
   const { messages, isStreaming } = useChatStore();
 
+  // Get last message for RightPanel data
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.regulations?.length);
+
+  // Auto-open RightPanel when search results arrive
+  React.useEffect(() => {
+    if (hasSearchResults && currentView === 'chat') {
+      setIsRightPanelOpen(true);
+    }
+  }, [hasSearchResults, currentView]);
+
   // MCP Tool hook with streaming support
   const { executeTool } = useMCPTool(selectedTool, {
     enableStreaming: import.meta.env.VITE_ENABLE_SSE_STREAMING !== 'false',
@@ -393,7 +404,7 @@ export function ChatLayout() {
   return (
     <div className="flex h-screen bg-claude-bg overflow-hidden">
       {/* Sidebar */}
-      <div className={`${isSidebarOpen ? 'block' : 'hidden'} h-full`}>
+      <div className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block h-full flex-shrink-0`}>
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
@@ -545,8 +556,11 @@ export function ChatLayout() {
       <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`}>
         <RightPanel
           isOpen={isRightPanelOpen}
-          onClose={() => setIsRightPanelOpen(false)} />
-
+          onClose={() => setIsRightPanelOpen(false)}
+          decisions={lastMessage?.decisions}
+          regulations={lastMessage?.regulations}
+          commentary={lastMessage?.commentary}
+        />
       </div>
     </div>);
 
