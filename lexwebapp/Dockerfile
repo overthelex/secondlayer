@@ -4,10 +4,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy root and lexwebapp package files for monorepo
+COPY package.json package-lock.json ./
+COPY lexwebapp/package*.json ./lexwebapp/
 
-# Install dependencies
+# Install dependencies from root (includes workspaces)
 RUN npm ci --legacy-peer-deps
 
 # Accept build arguments
@@ -20,8 +21,8 @@ ARG VITE_SHOW_TOOL_SELECTOR=true
 ARG VITE_ENABLE_THINKING_STEPS=true
 ARG VITE_AUTO_EXPAND_THINKING=true
 
-# Copy source code
-COPY . .
+# Copy lexwebapp source code
+COPY lexwebapp ./lexwebapp
 
 # Set env vars for build
 ENV VITE_API_URL=$VITE_API_URL
@@ -32,17 +33,18 @@ ENV VITE_SHOW_TOOL_SELECTOR=$VITE_SHOW_TOOL_SELECTOR
 ENV VITE_ENABLE_THINKING_STEPS=$VITE_ENABLE_THINKING_STEPS
 ENV VITE_AUTO_EXPAND_THINKING=$VITE_AUTO_EXPAND_THINKING
 
-# Build the application for staging
+# Build the application for staging (from lexwebapp workspace)
+WORKDIR /app/lexwebapp
 RUN npm run build:staging
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
 
 # Copy built assets from builder stage (staging build outputs to dist-staging)
-COPY --from=builder /app/dist-staging /usr/share/nginx/html
+COPY --from=builder /app/lexwebapp/dist-staging /usr/share/nginx/html
 
 # Copy custom nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY lexwebapp/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80
