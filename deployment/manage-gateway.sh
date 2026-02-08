@@ -2,12 +2,13 @@
 
 ##############################################################################
 # SecondLayer Multi-Environment Management Script
-# Manages Production, Staging, Development, and Local environments
+# Manages Staging, Development, and Local environments
 ##############################################################################
 
 set -e  # Exit on error
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # Colors for output
@@ -19,9 +20,15 @@ NC='\033[0m' # No Color
 
 # Configuration
 GATE_SERVER="gate.lexapp.co.ua"  # For dev environment
-MAIL_SERVER="mail.lexapp.co.ua"  # For stage and prod environments
+MAIL_SERVER="mail.lexapp.co.ua"  # For stage environment
 DEPLOY_USER="vovkes"
 REMOTE_PATH="/home/vovkes/SecondLayer/deployment"
+
+# Source orchestrator libraries
+source "$SCRIPT_DIR/lib/preflight.sh"
+source "$SCRIPT_DIR/lib/backup.sh"
+source "$SCRIPT_DIR/lib/smoke-test.sh"
+source "$SCRIPT_DIR/lib/report.sh"
 
 # Print colored message
 print_msg() {
@@ -38,12 +45,12 @@ SecondLayer Multi-Environment Manager
 Usage: $0 <command> [environment] [options]
 
 Commands:
-  start <env>       Start environment (prod|stage|dev|local|all)
-  stop <env>        Stop environment (prod|stage|dev|local|all)
-  restart <env>     Restart environment (prod|stage|dev|local|all)
+  start <env>       Start environment (stage|dev|local|all)
+  stop <env>        Stop environment (stage|dev|local|all)
+  restart <env>     Restart environment (stage|dev|local|all)
   status            Show status of all environments
-  logs <env>        Show logs for environment (prod|stage|dev|local|gateway)
-  deploy <env>      Deploy environment (prod|stage|dev|local|all)
+  logs <env>        Show logs for environment (stage|dev|local|gateway)
+  deploy <env>      Deploy environment (stage|dev|local|all)
   build             Build Docker images
   gateway           Manage nginx gateway
     - start         Start nginx gateway
@@ -54,26 +61,24 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  prod              Production (legal.org.ua) → mail.lexapp.co.ua
   stage             Staging (stage.legal.org.ua) → mail.lexapp.co.ua
   dev               Development (dev.legal.org.ua) → gate.lexapp.co.ua
   local             Local development (localhost:3000) → localhost
-  all               All remote environments (prod+stage+dev)
+  all               All remote environments (stage+dev)
 
 Deployment Targets:
   - Dev: Deploys to gate.lexapp.co.ua
   - Stage: Deploys to mail.lexapp.co.ua
-  - Prod: Deploys to mail.lexapp.co.ua
   - Local: Full rebuild on localhost (pull, rebuild --no-cache, migrate)
 
 Examples:
   $0 start local             # Start local development environment
-  $0 start prod              # Start production environment
+  $0 start stage             # Start staging environment
   $0 start all               # Start all gateway environments (not local)
   $0 stop dev                # Stop development environment
   $0 restart stage           # Restart staging environment
   $0 logs local              # Show local environment logs
-  $0 deploy prod             # Deploy production to gate server
+  $0 deploy stage            # Deploy staging to mail server
   $0 gateway start           # Start nginx gateway
   $0 health                  # Check health of all services
   $0 status                  # Show status of all containers
@@ -112,13 +117,6 @@ start_env() {
     print_msg "$BLUE" "🚀 Starting $env environment..."
 
     case $env in
-        prod|production)
-            if [ ! -f ".env.prod" ]; then
-                print_msg "$RED" "❌ .env.prod not found. Copy .env.prod.example and configure it."
-                exit 1
-            fi
-            $compose_cmd -f docker-compose.prod.yml --env-file .env.prod up -d
-            ;;
         stage|staging)
             if [ ! -f ".env.stage" ]; then
                 print_msg "$RED" "❌ .env.stage not found. Copy .env.stage.example and configure it."
@@ -143,7 +141,6 @@ start_env() {
             fi
             ;;
         all)
-            start_env prod
             start_env stage
             start_env dev
             ;;
@@ -166,9 +163,6 @@ stop_env() {
     print_msg "$BLUE" "🛑 Stopping $env environment..."
 
     case $env in
-        prod|production)
-            $compose_cmd -f docker-compose.prod.yml --env-file .env.prod down
-            ;;
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage down
             ;;
@@ -183,7 +177,6 @@ stop_env() {
             fi
             ;;
         all)
-            stop_env prod
             stop_env stage
             stop_env dev
             ;;
@@ -212,10 +205,6 @@ show_status() {
 
     print_msg "$BLUE" "📊 Environment Status\n"
 
-    print_msg "$YELLOW" "=== Production ==="
-    docker ps --filter "name=secondlayer-.*-prod" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-    echo ""
-
     print_msg "$YELLOW" "=== Staging ==="
     docker ps --filter "name=secondlayer-.*-stage" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
@@ -239,9 +228,6 @@ show_logs() {
     local compose_cmd=$(get_compose_cmd)
 
     case $env in
-        prod|production)
-            $compose_cmd -f docker-compose.prod.yml --env-file .env.prod logs -f --tail=100
-            ;;
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage logs -f --tail=100
             ;;
@@ -337,11 +323,6 @@ build_images() {
 check_health() {
     print_msg "$BLUE" "🏥 Checking health of all services...\n"
 
-    # Production (mail server)
-    print_msg "$YELLOW" "=== Production (mail.lexapp.co.ua) ==="
-    curl -sf https://legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf https://legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
-
     # Staging (mail server)
     print_msg "$YELLOW" "\n=== Staging (mail.lexapp.co.ua) ==="
     curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
@@ -364,55 +345,91 @@ check_health() {
 # Deploy local environment (full rebuild without cache)
 deploy_local() {
     local compose_cmd=$(get_compose_cmd)
-    local compose_args="-f docker-compose.local.yml"
-    if [ -f ".env.local" ]; then
-        compose_args="$compose_args --env-file .env.local"
+    local env_file=".env.local"
+    local compose_file="docker-compose.local.yml"
+    local compose_args="-f $compose_file"
+    if [ -f "$env_file" ]; then
+        compose_args="$compose_args --env-file $env_file"
     fi
+
+    local deploy_start
+    deploy_start=$(date +%s)
 
     print_msg "$BLUE" "🚀 Deploying local environment (full rebuild)..."
 
-    # Step 1: Pull latest main
-    print_msg "$BLUE" "📥 Pulling latest main branch..."
-    git -C .. fetch origin main && git -C .. checkout main && git -C .. pull origin main
+    # Phase 1: Pre-flight checks
+    if ! preflight_check "local" "localhost" "$env_file" "$compose_file" "$REPO_ROOT"; then
+        generate_deploy_report "local" "failure" "" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
 
-    # Step 2: Stop existing containers
-    print_msg "$BLUE" "🛑 Stopping existing containers..."
-    stop_env local
+    # Phase 2: Backup current state
+    local backup_id
+    backup_id=$(create_backup "local" "localhost" "$REPO_ROOT")
 
-    # Step 3: Cleanup exited/dead containers and dangling images
-    print_msg "$BLUE" "🧹 Cleaning up stopped containers..."
-    docker ps -a --filter "name=secondlayer-.*-local" --filter "status=exited" -q | xargs -r docker rm -f
-    docker ps -a --filter "name=secondlayer-.*-local" --filter "status=dead" -q | xargs -r docker rm -f
-    print_msg "$BLUE" "🗑️  Removing dangling images..."
-    docker image prune -f
+    # Phase 3: Deploy
+    (
+        set -e
 
-    # Step 4: Start infrastructure services only
-    print_msg "$BLUE" "🚀 Starting infrastructure services..."
-    $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local
+        # Step 1: Pull latest main
+        print_msg "$BLUE" "📥 Pulling latest main branch..."
+        git -C "$REPO_ROOT" fetch origin main && git -C "$REPO_ROOT" checkout main && git -C "$REPO_ROOT" pull origin main
 
-    # Step 5: Wait for databases to be ready, then run init
-    print_msg "$BLUE" "⏳ Waiting for databases..."
-    sleep 15
-    print_msg "$BLUE" "🔧 Running RADA DB init..."
-    $compose_cmd $compose_args up rada-db-init-local
+        # Step 2: Stop existing containers
+        print_msg "$BLUE" "🛑 Stopping existing containers..."
+        stop_env local
 
-    # Step 6: Run migrations sequentially
-    print_msg "$BLUE" "🔄 Running backend migrations..."
-    $compose_cmd $compose_args up migrate-local
-    print_msg "$BLUE" "🔄 Running RADA migrations..."
-    $compose_cmd $compose_args up rada-migrate-local
-    print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
-    $compose_cmd $compose_args up migrate-openreyestr-local
+        # Step 3: Cleanup exited/dead containers and dangling images
+        print_msg "$BLUE" "🧹 Cleaning up stopped containers..."
+        docker ps -a --filter "name=secondlayer-.*-local" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=secondlayer-.*-local" --filter "status=dead" -q | xargs -r docker rm -f
+        print_msg "$BLUE" "🗑️  Removing dangling images..."
+        docker image prune -f
 
-    # Step 7: Rebuild app images without cache
-    print_msg "$BLUE" "🔨 Building application images without cache..."
-    $compose_cmd $compose_args build --no-cache app-local rada-mcp-app-local app-openreyestr-local document-service-local
+        # Step 4: Start infrastructure services only
+        print_msg "$BLUE" "🚀 Starting infrastructure services..."
+        $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local
 
-    # Step 8: Start app services
-    print_msg "$BLUE" "▶️  Starting application services..."
-    $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local
+        # Step 5: Wait for databases to be ready, then run init
+        print_msg "$BLUE" "⏳ Waiting for databases..."
+        sleep 15
+        print_msg "$BLUE" "🔧 Running RADA DB init..."
+        $compose_cmd $compose_args up rada-db-init-local
 
-    # Step 9: Show status
+        # Step 6: Run migrations sequentially
+        print_msg "$BLUE" "🔄 Running backend migrations..."
+        $compose_cmd $compose_args up migrate-local
+        print_msg "$BLUE" "🔄 Running RADA migrations..."
+        $compose_cmd $compose_args up rada-migrate-local
+        print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
+        $compose_cmd $compose_args up migrate-openreyestr-local
+
+        # Step 7: Rebuild app images without cache
+        print_msg "$BLUE" "🔨 Building application images without cache..."
+        $compose_cmd $compose_args build --no-cache app-local rada-mcp-app-local app-openreyestr-local document-service-local
+
+        # Step 8: Start app services
+        print_msg "$BLUE" "▶️  Starting application services..."
+        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local
+    )
+
+    if [ $? -ne 0 ]; then
+        print_msg "$RED" "Deploy failed, rolling back..."
+        rollback_to_backup "local" "localhost" "$compose_file" "$env_file"
+        generate_deploy_report "local" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
+
+    # Phase 4: Smoke tests
+    if ! run_smoke_tests "local" "localhost" "$compose_file" "$env_file"; then
+        print_msg "$RED" "Smoke tests failed, rolling back..."
+        rollback_to_backup "local" "localhost" "$compose_file" "$env_file"
+        generate_deploy_report "local" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
+
+    # Phase 5: Report
+    generate_deploy_report "local" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
     print_msg "$GREEN" "✅ Local deployment complete"
     $compose_cmd $compose_args ps
 }
@@ -424,31 +441,26 @@ deploy_to_gate() {
     # Determine target server based on environment
     local target_server
     local server_name
+    local env_file
+    local compose_file
     case $env in
-        prod|production)
-            target_server="${MAIL_SERVER}"
-            server_name="mail server"
-            local env_file=".env.prod"
-            local compose_file="docker-compose.prod.yml"
-            ;;
         stage|staging)
             target_server="${MAIL_SERVER}"
             server_name="mail server"
-            local env_file=".env.stage"
-            local compose_file="docker-compose.stage.yml"
+            env_file=".env.stage"
+            compose_file="docker-compose.stage.yml"
             ;;
         dev|development)
             target_server="${GATE_SERVER}"
             server_name="gate server"
-            local env_file=".env.dev"
-            local compose_file="docker-compose.dev.yml"
+            env_file=".env.dev"
+            compose_file="docker-compose.dev.yml"
             ;;
         local)
             deploy_local
             return
             ;;
         all)
-            deploy_to_gate prod
             deploy_to_gate stage
             deploy_to_gate dev
             return
@@ -459,19 +471,35 @@ deploy_to_gate() {
             ;;
     esac
 
+    local deploy_start
+    deploy_start=$(date +%s)
+
     print_msg "$BLUE" "🚀 Deploying $env to $server_name ($target_server)..."
 
-    if [ ! -f "$env_file" ]; then
-        print_msg "$RED" "❌ $env_file not found"
+    # Phase 1: Pre-flight checks
+    if ! preflight_check "$env" "$target_server" "$env_file" "$compose_file" "$REPO_ROOT"; then
+        generate_deploy_report "$env" "failure" "" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
+
+    # Phase 2: Backup current state
+    local backup_id
+    backup_id=$(create_backup "$env" "$target_server" "$REPO_ROOT")
 
     # Repo root on the remote server
     local REMOTE_REPO="/home/${DEPLOY_USER}/SecondLayer"
 
+    # Phase 3: Deploy
+    local deploy_failed=false
+
     # Pull latest code on the server via git
     print_msg "$BLUE" "📥 Pulling latest code on $server_name..."
-    ssh ${DEPLOY_USER}@${target_server} "git -C ${REMOTE_REPO} fetch origin main && git -C ${REMOTE_REPO} reset --hard origin/main"
+    if ! ssh ${DEPLOY_USER}@${target_server} "git -C ${REMOTE_REPO} fetch origin main && git -C ${REMOTE_REPO} reset --hard origin/main"; then
+        print_msg "$RED" "Git sync failed, rolling back..."
+        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
 
     # Copy env file (not tracked in git)
     print_msg "$BLUE" "📤 Copying env file to $server_name..."
@@ -481,16 +509,12 @@ deploy_to_gate() {
     print_msg "$BLUE" "🔄 Updating containers on $server_name..."
 
     # Pass environment to SSH session
-    ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
+    if ! ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
+        set -e
         cd "$REMOTE_REPO/deployment"
 
         # Determine compose file and env file based on DEPLOY_ENV
         case "$DEPLOY_ENV" in
-            prod|production)
-                COMPOSE_FILE="docker-compose.prod.yml"
-                ENV_FILE=".env.prod"
-                ENV_SHORT="prod"
-                ;;
             stage|staging)
                 COMPOSE_FILE="docker-compose.stage.yml"
                 ENV_FILE=".env.stage"
@@ -504,20 +528,20 @@ deploy_to_gate() {
         esac
 
         # Stop and remove containers
-        echo "🛑 Stopping old containers..."
+        echo "Stopping old containers..."
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE down
 
         # Remove any stopped containers for this environment
-        echo "🧹 Cleaning up stopped containers..."
+        echo "Cleaning up stopped containers..."
         docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=exited" -q | xargs -r docker rm -f
         docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=dead" -q | xargs -r docker rm -f
 
         # Remove old/dangling images to free space
-        echo "🗑️  Removing old images..."
+        echo "Removing old images..."
         docker image prune -f
 
         # Start infrastructure services first
-        echo "🚀 Starting infrastructure services..."
+        echo "Starting infrastructure services..."
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT postgres-openreyestr-$ENV_SHORT
         else
@@ -525,30 +549,30 @@ deploy_to_gate() {
         fi
 
         # Wait for database to be ready
-        echo "⏳ Waiting for database..."
+        echo "Waiting for database..."
         sleep 15
 
         # Run RADA DB init
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "🔧 Running RADA DB init..."
+            echo "Running RADA DB init..."
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-db-init-$ENV_SHORT
         fi
 
         # Run migrations
-        echo "🔄 Running database migrations..."
+        echo "Running database migrations..."
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-$ENV_SHORT
 
         # Run RADA and OpenReyestr migrations
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "🔄 Running RADA migrations..."
+            echo "Running RADA migrations..."
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-migrate-$ENV_SHORT
-            echo "🔄 Running OpenReyestr migrations..."
+            echo "Running OpenReyestr migrations..."
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-$ENV_SHORT
         fi
 
         # Pre-build shared and backend dist (needed by document-service Dockerfile)
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "📦 Building shared package and backend dist..."
+            echo "Building shared package and backend dist..."
             cd "$REMOTE_REPO"
             npm --prefix packages/shared install && npm --prefix packages/shared run build
             npm --prefix mcp_backend install && npm --prefix mcp_backend run build
@@ -556,7 +580,7 @@ deploy_to_gate() {
         fi
 
         # Rebuild application services without cache
-        echo "🔨 Building application images without cache..."
+        echo "Building application images without cache..."
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
         else
@@ -564,19 +588,39 @@ deploy_to_gate() {
         fi
 
         # Start application services
-        echo "▶️  Starting application..."
+        echo "Starting application..."
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-$ENV_SHORT lexwebapp-$ENV_SHORT
 
         # Start RADA, OpenReyestr, and document-service
         if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "▶️  Starting RADA, OpenReyestr, and document service..."
+            echo "Starting RADA, OpenReyestr, and document service..."
             docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
         fi
 
-        echo "✅ Deployment complete"
+        echo "Container deployment complete"
         docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps
 EOF
+    then
+        deploy_failed=true
+    fi
 
+    if [ "$deploy_failed" = true ]; then
+        print_msg "$RED" "Remote deploy failed, rolling back..."
+        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
+
+    # Phase 4: Smoke tests
+    if ! run_smoke_tests "$env" "$target_server" "$compose_file" "$env_file"; then
+        print_msg "$RED" "Smoke tests failed, rolling back..."
+        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        exit 1
+    fi
+
+    # Phase 5: Report
+    generate_deploy_report "$env" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
     print_msg "$GREEN" "✅ $env deployed to $server_name ($target_server)"
 }
 
@@ -594,9 +638,6 @@ clean_env() {
     fi
 
     case $env in
-        prod|production)
-            $compose_cmd -f docker-compose.prod.yml --env-file .env.prod down -v
-            ;;
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage down -v
             ;;

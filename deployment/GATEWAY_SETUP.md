@@ -1,7 +1,7 @@
 
-# SecondLayer 3-Environment Deployment Setup
+# SecondLayer 2-Environment Deployment Setup
 
-Complete guide for deploying Production, Staging, and Development environments across multiple servers.
+Complete guide for deploying Staging and Development environments across multiple servers.
 ## Architecture Overview
 
 ### Server Allocation
@@ -12,29 +12,27 @@ Environments are deployed across multiple servers:
 |------------|--------|---------|
 | **Development** | gate.lexapp.co.ua | Development & testing |
 | **Staging** | mail.lexapp.co.ua | Pre-production testing |
-| **Production** | mail.lexapp.co.ua | Live production system |
 | **Local** | localhost | Local development |
 
 ### Environment Separation
 
-Three completely isolated remote environments plus local development:
+Two completely isolated remote environments plus local development:
 
 | Environment | Purpose | URL | Stability |
 |------------|---------|-----|-----------|
-| **Production** | Live system for end users | `https://legal.org.ua/` | High - Production-ready code only |
 | **Staging** | Pre-production testing | `https://stage.legal.org.ua/` | Medium - Release candidates |
 | **Development** | Active development | `https://dev.legal.org.ua/` | Low - Unstable, latest features |
 ### Port Allocation
 
 Each environment has isolated ports to avoid conflicts:
 
-| Service | Production | Staging | Development |
-|---------|-----------|---------|-------------|
-| **Backend API** | 3001 | 3002 | 3003 |
-| **Frontend** | 8090 | 8092 | 8091 |
-| **PostgreSQL** | 5432 | 5434 | 5433 |
-| **Redis** | 6379 | 6381 | 6380 |
-| **Qdrant** | 6333-6334 | 6337-6338 | 6335-6336 |
+| Service | Staging | Development |
+|---------|---------|-------------|
+| **Backend API** | 3004 | 3003 |
+| **Frontend** | 8092 | 8091 |
+| **PostgreSQL** | 5434 | 5433 |
+| **Redis** | 6381 | 6380 |
+| **Qdrant** | 6337-6338 | 6335-6336 |
 
 **Nginx Gateway**: Port 8080 (routes to all environments)
 ### Container Names
@@ -42,26 +40,23 @@ Each environment has isolated ports to avoid conflicts:
 Containers follow a consistent naming pattern:
 
 ```bash
-Production:   secondlayer-{service}-prod   (e.g., secondlayer-app-prod)
 Staging:      secondlayer-{service}-stage  (e.g., secondlayer-postgres-stage)
 Development:  secondlayer-{service}-dev    (e.g., secondlayer-redis-dev)
 Gateway:      legal-nginx-gateway
-```bash
+```
 ## Files Structure
 
 ```bash
 deployment/
-├── docker-compose.prod.yml          # Production environment
 ├── docker-compose.stage.yml         # Staging environment
 ├── docker-compose.dev.yml           # Development environment
 ├── docker-compose.gateway.yml       # Nginx gateway proxy
-├── nginx-gateway-3env.conf          # Nginx routing config
-├── .env.prod.example                # Production env template
+├── nginx-gateway-2env.conf          # Nginx routing config
 ├── .env.stage.example               # Staging env template
 ├── .env.dev.example                 # Development env template
 ├── manage-gateway.sh                # Management script
 └── GATEWAY_SETUP.md                 # This file
-```bash
+```
 ## Initial Setup
 ### 1. Configure Environment Variables
 
@@ -69,16 +64,13 @@ Create environment files for each environment:
 
 ```bash
 cd deployment
-# Production
-cp .env.prod.example .env.prod
-nano .env.prod  # Edit with production values
 # Staging
 cp .env.stage.example .env.stage
 nano .env.stage  # Edit with staging values
 # Development
 cp .env.dev.example .env.dev
 nano .env.dev  # Edit with development values
-```bash
+```
 
 **Important Environment Variables:**
 
@@ -94,7 +86,7 @@ Build the application images:
 
 ```bash
 ./manage-gateway.sh build
-```bash
+```
 
 This builds:
 - `secondlayer-app:latest` - Backend Node.js application
@@ -108,20 +100,19 @@ Start all environments:
 # Start all at once
 ./manage-gateway.sh start all
 # Or start individually
-./manage-gateway.sh start prod
 ./manage-gateway.sh start stage
 ./manage-gateway.sh start dev
-```bash
+```
 ### 4. Start Nginx Gateway
 
 Start the nginx reverse proxy:
 
 ```bash
 ./manage-gateway.sh gateway start
-```bash
+```
 ### 5. Configure System Nginx (SSL Termination)
 
-On the gate server, configure system nginx to proxy to the gateway container:
+On the server, configure system nginx to proxy to the gateway container:
 
 ```nginx
 
@@ -129,7 +120,7 @@ On the gate server, configure system nginx to proxy to the gateway container:
 
 server {
     listen 443 ssl http2;
-    server_name legal.org.ua;
+    server_name stage.legal.org.ua;
 
     ssl_certificate /etc/letsencrypt/live/legal.org.ua/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/legal.org.ua/privkey.pem;
@@ -147,10 +138,10 @@ server {
 
 server {
     listen 80;
-    server_name legal.org.ua;
+    server_name stage.legal.org.ua;
     return 301 https://$server_name$request_uri;
 }
-```bash
+```
 
 Enable and reload:
 
@@ -158,23 +149,22 @@ Enable and reload:
 sudo ln -sf /etc/nginx/sites-available/legal.org.ua /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
-```bash
+```
 ## Management Commands
 ### Start/Stop/Restart
 
 ```bash
 
 # Start environments
-./manage-gateway.sh start prod       # Start production
 ./manage-gateway.sh start stage      # Start staging
 ./manage-gateway.sh start dev        # Start development
 ./manage-gateway.sh start all        # Start all environments
 # Stop environments
-./manage-gateway.sh stop prod        # Stop production
+./manage-gateway.sh stop stage       # Stop staging
 ./manage-gateway.sh stop all         # Stop all environments
 # Restart environments
 ./manage-gateway.sh restart stage    # Restart staging
-```bash
+```
 ### Gateway Management
 
 ```bash
@@ -184,7 +174,7 @@ sudo systemctl reload nginx
 ./manage-gateway.sh gateway stop     # Stop nginx gateway
 ./manage-gateway.sh gateway restart  # Restart nginx gateway
 ./manage-gateway.sh gateway test     # Test nginx configuration
-```bash
+```
 ### Monitoring
 
 ```bash
@@ -194,21 +184,19 @@ sudo systemctl reload nginx
 # Check health of all services
 ./manage-gateway.sh health
 # View logs
-./manage-gateway.sh logs prod        # Production logs
 ./manage-gateway.sh logs stage       # Staging logs
 ./manage-gateway.sh logs dev         # Development logs
 ./manage-gateway.sh logs gateway     # Gateway logs
-```bash
-### Deployment to Gate Server
+```
+### Deployment to Remote Server
 
 ```bash
 
-# Deploy to remote gate server
-./manage-gateway.sh deploy prod      # Deploy production
+# Deploy to remote server
 ./manage-gateway.sh deploy stage     # Deploy staging
 ./manage-gateway.sh deploy dev       # Deploy development
 ./manage-gateway.sh deploy all       # Deploy all environments
-```bash
+```
 ### Build and Clean
 
 ```bash
@@ -218,15 +206,10 @@ sudo systemctl reload nginx
 # Clean environment data (removes volumes)
 ./manage-gateway.sh clean dev        # Clean development data
 ./manage-gateway.sh clean stage      # Clean staging data
-```bash
+```
 ## URL Routing
 
 After deployment, environments are accessible via:
-### Production
-- **Frontend**: https://legal.org.ua/
-- **API**: https://legal.org.ua/api
-- **Auth**: https://legal.org.ua/auth
-- **Health**: https://legal.org.ua/health
 ### Staging
 - **Frontend**: https://stage.legal.org.ua/
 - **API**: https://stage.legal.org.ua/api
@@ -249,7 +232,7 @@ git push origin feature-branch
 # Restart dev environment
 ./manage-gateway.sh restart dev
 # Test at https://dev.legal.org.ua/
-```bash
+```
 ### 2. Staging Release
 
 ```bash
@@ -265,91 +248,66 @@ git merge feature-branch
 # Run integration tests
 
 # QA approval
-```bash
-### 3. Production Release
-
-```bash
-
-# Merge to main/production branch
-git checkout main
-git merge staging
-# Build production images
-./manage-gateway.sh build
-# Deploy to production
-./manage-gateway.sh restart prod
-# Verify at https://legal.org.ua/
-
-# Monitor logs for errors
-./manage-gateway.sh logs prod
-```bash
+```
 ## Database Migrations
 
 Each environment has its own isolated database. Run migrations separately:
 
 ```bash
 
-# Production
-docker exec secondlayer-app-prod npm run migrate
 # Staging
 docker exec secondlayer-app-stage npm run migrate
 # Development
 docker exec secondlayer-app-dev npm run migrate
-```bash
+```
 ## Backup and Restore
 ### Backup Databases
 
 ```bash
 
-# Production
-docker exec secondlayer-postgres-prod pg_dump -U secondlayer secondlayer_db > backup-prod-$(date +%Y%m%d).sql
 # Staging
 docker exec secondlayer-postgres-stage pg_dump -U secondlayer secondlayer_stage > backup-stage-$(date +%Y%m%d).sql
 # Development
 docker exec secondlayer-postgres-dev pg_dump -U secondlayer secondlayer_dev > backup-dev-$(date +%Y%m%d).sql
-```bash
+```
 ### Restore Databases
 
 ```bash
 
-# Restore production
-cat backup-prod-20260121.sql | docker exec -i secondlayer-postgres-prod psql -U secondlayer secondlayer_db
 # Restore staging
 cat backup-stage-20260121.sql | docker exec -i secondlayer-postgres-stage psql -U secondlayer secondlayer_stage
 # Restore development
 cat backup-dev-20260121.sql | docker exec -i secondlayer-postgres-dev psql -U secondlayer secondlayer_dev
-```bash
+```
 ## Troubleshooting
 ### Check Container Status
 
 ```bash
 ./manage-gateway.sh status
-```bash
+```
 ### View Container Logs
 
 ```bash
 
 # All logs for an environment
-./manage-gateway.sh logs prod
+./manage-gateway.sh logs stage
 # Specific container
-docker logs -f secondlayer-app-prod
+docker logs -f secondlayer-app-stage
 docker logs -f secondlayer-postgres-stage
 docker logs -f legal-nginx-gateway
-```bash
+```
 ### Test Health Endpoints
 
 ```bash
 
-# Production
-curl http://localhost:3001/health
 # Staging
-curl http://localhost:3002/health
+curl http://localhost:3004/health
 # Development
 curl http://localhost:3003/health
 # Through gateway
-curl http://localhost:8080/health
 curl http://localhost:8080/staging/health
 curl http://localhost:8080/development/health
-```bash
+```
 ### Port Conflicts
 
 If ports are already in use:
@@ -357,11 +315,11 @@ If ports are already in use:
 ```bash
 
 # Check what's using a port
-sudo lsof -i :3001
-sudo lsof -i :5432
+sudo lsof -i :3004
+sudo lsof -i :5434
 # Kill process if needed
 sudo kill -9 <PID>
-```bash
+```
 ### Nginx Configuration Issues
 
 ```bash
@@ -372,7 +330,7 @@ sudo kill -9 <PID>
 docker logs legal-nginx-gateway
 # Restart nginx gateway
 ./manage-gateway.sh gateway restart
-```bash
+```
 ### Database Connection Issues
 
 ```bash
@@ -380,10 +338,10 @@ docker logs legal-nginx-gateway
 # Check if PostgreSQL is running
 docker ps | grep postgres
 # Check PostgreSQL logs
-docker logs secondlayer-postgres-prod
+docker logs secondlayer-postgres-stage
 # Test connection from app container
-docker exec secondlayer-app-prod psql postgresql://secondlayer:password@postgres-prod:5432/secondlayer_db -c "SELECT 1"
-```bash
+docker exec secondlayer-app-stage psql postgresql://secondlayer:password@postgres-stage:5432/secondlayer_stage -c "SELECT 1"
+```
 ### Reset Environment
 
 If an environment is completely broken:
@@ -396,7 +354,7 @@ If an environment is completely broken:
 ./manage-gateway.sh build
 # Start fresh
 ./manage-gateway.sh start dev
-```bash
+```
 ## Security Considerations
 ### Environment Isolation
 
@@ -409,14 +367,13 @@ If an environment is completely broken:
 Update keys in `.env.*` files and restart:
 
 ```bash
-nano .env.prod  # Update OPENAI_API_KEY
-./manage-gateway.sh restart prod
-```bash
-##***REMOVED*** Configuration
+nano .env.stage  # Update OPENAI_API_KEY
+./manage-gateway.sh restart stage
+```
+### OAuth Configuration
 
 Each environment needs its own callback URL configured in Google Cloud Console:
 
-- Production: `https://legal.org.ua/auth/google/callback`
 - Staging: `https://stage.legal.org.ua/auth/google/callback`
 - Development: `https://dev.legal.org.ua/auth/google/callback`
 ## Resource Limits
@@ -425,7 +382,6 @@ Docker resource limits per environment:
 
 | Environment | CPU Limit | Memory Limit | CPU Reserved | Memory Reserved |
 |------------|-----------|--------------|--------------|-----------------|
-| Production | 2.0 cores | 4 GB | 1.0 core | 2 GB |
 | Staging | 1.5 cores | 3 GB | 0.75 core | 1.5 GB |
 | Development | 1.0 core | 2 GB | 0.5 core | 1 GB |
 
@@ -438,9 +394,8 @@ Set up monitoring for health endpoints:
 ```bash
 
 # Simple cron job to check health
-*/5 * * * * curl -sf https://legal.org.ua/health || echo "Production down!" | mail -s "Alert" admin@example.com
 */5 * * * * curl -sf https://stage.legal.org.ua/health || echo "Staging down!" | mail -s "Alert" admin@example.com
-```bash
+```
 ### Log Aggregation
 
 Container logs are stored in:
@@ -457,7 +412,7 @@ Consider stopping dev environment when not in use:
 ./manage-gateway.sh stop dev
 # Start when needed
 ./manage-gateway.sh start dev
-```bash
+```
 ### Shared Resources
 
 All environments share:
@@ -472,7 +427,7 @@ All environments share:
 - Review logs for errors
 
 **Weekly:**
-- Backup production database
+- Backup staging database
 - Check disk space: `df -h`
 - Review resource usage: `docker stats`
 
@@ -491,8 +446,7 @@ git pull origin main
 # Rolling restart (minimize downtime)
 ./manage-gateway.sh restart dev    # Test first
 ./manage-gateway.sh restart stage  # Then staging
-./manage-gateway.sh restart prod   # Finally production
-```bash
+```
 ## Support and Documentation
 
 - **Project**: SecondLayer - Semantic Legal Analysis Platform
@@ -502,5 +456,5 @@ git pull origin main
 
 ---
 
-**Last Updated**: 2026-01-21
-**Version**: 1.0.0
+**Last Updated**: 2026-02-08
+**Version**: 2.0.0

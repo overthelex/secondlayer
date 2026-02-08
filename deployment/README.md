@@ -1,29 +1,20 @@
-# Production + Development Environments Deployment
+# Development Environment Deployment
 
-This deployment setup creates two parallel environments on the gate server:
-- **Production**: https://legal.org.ua/
+This deployment setup creates the development environment on the gate server:
 - **Development**: https://dev.legal.org.ua/
 
 ## Architecture
 
-### Production Environment (existing)
-- **lexwebapp**: Frontend on port 8090
-- **secondlayer-app-prod**: Backend API on port 3001
-- **secondlayer-postgres-prod**: PostgreSQL on port 5432
-- **secondlayer-redis-prod**: Redis on port 6379
-- **secondlayer-qdrant-prod**: Qdrant vector DB on ports 6333-6334
-
-### Development Environment (new)
+### Development Environment
 - **lexwebapp-dev**: Frontend on port 8091
-- **secondlayer-app-dev**: Backend API on port 3002
+- **secondlayer-app-dev**: Backend API on port 3003
 - **secondlayer-postgres-dev**: PostgreSQL on port 5433
 - **secondlayer-redis-dev**: Redis on port 6380
 - **secondlayer-qdrant-dev**: Qdrant vector DB on ports 6335-6336
 
 ### Nginx Routing
 - **legal-nginx-proxy**: Nginx container on port 8080
-  - Routes `/` → production (ports 8090/3001)
-  - Routes `/development/` → development (ports 8091/3002)
+  - Routes `/development/` → development (ports 8091/3003)
 - **System nginx**: SSL termination and proxy to nginx container
 
 ## Files
@@ -97,17 +88,13 @@ Stop nginx proxy:
 ## URLs
 
 After deployment:
-- **Production**: https://legal.org.ua/
-  - Frontend: Routes to lexwebapp (port 8090)
-  - API: Routes to /api → secondlayer-app-prod (port 3001)
-
 - **Development**: https://dev.legal.org.ua/
   - Frontend: Routes to lexwebapp-dev (port 8091)
-  - API: Routes to /development/api → secondlayer-app-dev (port 3002)
+  - API: Routes to /development/api → secondlayer-app-dev (port 3003)
 
 ## Environment Variables
 
-Development environment uses the same `.env` file as production, with these differences:
+Development environment uses these key settings:
 
 - `NODE_ENV=development`
 - `LOG_LEVEL=debug`
@@ -157,7 +144,7 @@ ssh gate "cd ~/secondlayer-deployment && sudo docker compose -f docker-compose.n
 If ports are already in use, check what's using them:
 ```bash
 ssh gate "sudo lsof -i :8091"  # Dev frontend
-ssh gate "sudo lsof -i :3002"  # Dev backend
+ssh gate "sudo lsof -i :3003"  # Dev backend
 ssh gate "sudo lsof -i :8080"  # Nginx proxy
 ```
 
