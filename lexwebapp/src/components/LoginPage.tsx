@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Mail,
   Lock,
@@ -35,6 +36,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
 
   const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   // Handle OAuth callback on mount
   useEffect(() => {
@@ -76,7 +78,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
           if (onLoginSuccess) {
             onLoginSuccess();
           }
-          // No need to redirect - App.tsx will automatically show ChatLayout
+
+          // Navigate to chat after successful login
+          navigate('/chat', { replace: true });
         } catch (err: any) {
           console.error('Login failed:', err);
           setError('Не вдалося завершити вхід. Спробуйте ще раз.');
@@ -96,9 +100,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       if (onLoginSuccess) {
         onLoginSuccess();
       }
-      // No need to redirect - App.tsx will automatically show ChatLayout
+      navigate('/chat', { replace: true });
     }
-  }, [isAuthenticated, isLoading, onLoginSuccess]);
+  }, [isAuthenticated, isLoading, onLoginSuccess, navigate]);
 
   const handleGoogleAuth = () => {
     setError(null);
@@ -142,6 +146,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       if (onLoginSuccess) {
         onLoginSuccess();
       }
+
+      // Navigate to chat after successful login
+      navigate('/chat', { replace: true });
     } catch (err: any) {
       console.error('Password login failed:', err);
       setError(err.message || 'Login failed. Please check your credentials.');
