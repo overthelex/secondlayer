@@ -98,7 +98,10 @@ apiClient.interceptors.response.use(
 
 export default apiClient;
 
-// Typed API methods
+/**
+ * API Service Object
+ * Centralized API methods for auth, billing, payments, team, and tools
+ */
 export const api = {
   // Auth
   auth: {
@@ -112,6 +115,7 @@ export const api = {
   // Billing
   billing: {
     getBalance: () => apiClient.get('/api/billing/balance'),
+    getSettings: () => apiClient.get('/api/billing/settings'),
     getHistory: (params?: { limit?: number; offset?: number; type?: string }) =>
       apiClient.get('/api/billing/history', { params }),
     updateSettings: (data: {
@@ -130,6 +134,20 @@ export const api = {
     downloadInvoicePDF: (invoiceNumber: string) =>
       apiClient.get(`/api/billing/invoices/${invoiceNumber}/pdf`, { responseType: 'blob' }),
     testEmail: () => apiClient.post('/api/billing/test-email'),
+    getStatistics: (period: string = '30d') =>
+      apiClient.get(`/api/billing/statistics?period=${period}`),
+    getUsageChart: (days: number = 30) =>
+      apiClient.get(`/api/billing/usage-chart?days=${days}`),
+    getPaymentMethods: () => apiClient.get('/api/billing/payment-methods'),
+    addPaymentMethod: (data: any) =>
+      apiClient.post('/api/billing/payment-methods', data),
+    removePaymentMethod: (id: string) =>
+      apiClient.delete(`/api/billing/payment-methods/${id}`),
+    setPrimaryPaymentMethod: (id: string) =>
+      apiClient.put(`/api/billing/payment-methods/${id}/primary`, {}),
+    upgradePlan: (planId: string) =>
+      apiClient.post('/api/billing/upgrade', { planId }),
+    getPricingInfo: () => apiClient.get('/api/billing/pricing-info'),
   },
 
   // Payments
@@ -140,6 +158,20 @@ export const api = {
       apiClient.post('/api/billing/payment/fondy/create', data),
     getStatus: (provider: string, paymentId: string) =>
       apiClient.get(`/api/billing/payment/${provider}/${paymentId}/status`),
+  },
+
+  // Team Management
+  team: {
+    getMembers: () => apiClient.get('/api/team/members'),
+    getStats: () => apiClient.get('/api/team/stats'),
+    inviteMember: (email: string, role: string) =>
+      apiClient.post('/api/team/invite', { email, role }),
+    updateMember: (memberId: string, data: any) =>
+      apiClient.put(`/api/team/members/${memberId}`, data),
+    removeMember: (memberId: string) =>
+      apiClient.delete(`/api/team/members/${memberId}`),
+    resendInvite: (memberId: string) =>
+      apiClient.post(`/api/team/members/${memberId}/resend-invite`, {}),
   },
 
   // Tools

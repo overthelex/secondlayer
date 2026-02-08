@@ -25,6 +25,8 @@ import { InvoiceService } from './services/invoice-service.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { createBillingRoutes } from './routes/billing-routes.js';
 import { createAdminRoutes } from './routes/admin-routes.js';
+import { createTeamRoutes } from './routes/team-routes.js';
+import { createTeamService } from './services/team-service.js';
 import { createTestEmailRoute } from './routes/test-email-route.js';
 import { requestContext } from './utils/openai-client.js';
 import { getOpenAIManager } from './utils/openai-client.js';
@@ -1128,6 +1130,16 @@ class HTTPMCPServer {
     // GET /api/billing/pricing-info - Get pricing tier information
     // POST /api/billing/estimate-price - Estimate price with user's tier
     this.app.use('/api/billing', requireJWT as any, createBillingRoutes(this.services.db));
+
+    // Team management routes
+    // GET /api/team/members - Get team members
+    // POST /api/team/invite - Invite new member
+    // PUT /api/team/members/:memberId - Update member role
+    // DELETE /api/team/members/:memberId - Remove member
+    // POST /api/team/members/:memberId/resend-invite - Resend invitation
+    // GET /api/team/stats - Get team statistics
+    const teamService = createTeamService(this.services.db);
+    this.app.use('/api/team', requireJWT as any, createTeamRoutes(teamService));
 
     // Admin routes - require JWT + admin privileges
     // GET /api/admin/stats/overview - Dashboard statistics

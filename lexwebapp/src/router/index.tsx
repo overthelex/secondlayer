@@ -16,6 +16,7 @@ import { LoginPage } from '../components/LoginPage';
 import { ChatPage } from '../pages/ChatPage';
 import { ProfilePage } from '../components/ProfilePage';
 import { BillingDashboard } from '../components/BillingDashboard';
+import { TeamPage } from '../components/team/TeamPage';
 import { JudgesPage } from '../pages/JudgesPage';
 import { LawyersPage } from '../pages/LawyersPage';
 import { ClientsPage } from '../pages/ClientsPage';
@@ -60,6 +61,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.BILLING,
             element: <BillingDashboard />,
+          },
+          {
+            path: ROUTES.TEAM,
+            element: <TeamPage />,
           },
           {
             path: ROUTES.JUDGES,
