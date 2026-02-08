@@ -9,7 +9,7 @@
  */
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { getTemplateClassifier } from '../services/template-system';
+import { getTemplateClassifier, TemplateMatcher, TemplateGenerator, TemplateStorage } from '../services/template-system/index.js';
 import { AuthenticatedRequest } from '@secondlayer/shared';
 import { logger } from '@secondlayer/shared';
 import { BaseDatabase } from '@secondlayer/shared';
@@ -202,49 +202,49 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
   /**
    * GET /api/templates/match
    * Match a classified question against existing templates
-   * Note: Requires TemplateMatcher service (TBD)
+   * Uses TemplateMatcher for semantic and keyword-based search
    */
   router.get('/match', requireAuth, async (req: Request, res: Response) => {
     try {
-      const { intent, category, confidence } = req.query;
+      const { question, intent, category, confidence, entities } = req.query;
+      const authReq = req as AuthenticatedRequest;
 
-      if (!intent || !category) {
+      if (!question || !category || !intent) {
         return res.status(400).json({
-          error: 'Missing required parameters: intent, category',
+          error: 'Missing required parameters: question, category, intent',
         });
       }
 
-      // Query matching templates
-      const result = await db.query(
-        `SELECT id, name, category, intent_keywords, quality_score, success_rate, user_satisfaction
-        FROM question_templates
-        WHERE status = 'active'
-          AND category = $1
-          AND intent_keywords @> ARRAY[$2]
-        ORDER BY quality_score DESC, total_uses DESC
-        LIMIT 10`,
-        [category, intent]
-      );
+      // Build classification object
+      const classification = {
+        intent: intent as string,
+        category: category as string,
+        confidence: parseFloat(confidence as string) || 0.8,
+        entities: entities ? JSON.parse(entities as string) : {},
+        keywords: [],
+        reasoning: 'User provided classification',
+        alternatives: [],
+        executionTimeMs: 0,
+        costUsd: 0,
+      };
 
-      const matches = result.rows.map((row: any) => ({
-        templateId: row.id,
-        templateName: row.name,
-        matchScore: parseFloat((0.7 + Math.random() * 0.3).toFixed(2)), // TBD: Semantic matching
-        qualityScore: row.quality_score,
-        successRate: row.success_rate,
-        userSatisfaction: row.user_satisfaction,
-        shouldGenerateNew: false, // TBD: Check similarity threshold
-      }));
+      const matcher = new TemplateMatcher(db);
+      const matches = await matcher.matchQuestion(classification, question as string);
+
+      const shouldGenerate = matches.length === 0 ||
+        matcher.shouldGenerateTemplate(matches[0]?.matchScore || 0);
 
       logger.info('Templates matched', {
-        intent,
-        category,
+        userId: authReq.user?.id,
+        question: (question as string).substring(0, 50),
         matchCount: matches.length,
+        shouldGenerate,
       });
 
       return res.status(200).json({
         matches,
-        shouldGenerate: matches.length === 0,
+        shouldGenerate,
+        matchCount: matches.length,
       });
     } catch (error) {
       logger.error('Matching failed', {
@@ -328,7 +328,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
   /**
    * POST /api/templates/generate
    * Generate a new template from an unmatched question
-   * Note: Requires TemplateGenerator service (TBD)
+   * Uses TemplateGenerator for LLM-based template creation with validation
    */
   router.post(
     '/generate',
@@ -337,6 +337,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
       try {
         const { question, classification } = req.body;
         const authReq = req as AuthenticatedRequest;
+        const userId = authReq.user?.id || 'anonymous';
 
         if (!question || !classification) {
           return res.status(400).json({
@@ -344,53 +345,105 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
           });
         }
 
-        // Get the classification ID from database
-        const classificationResult = await db.query(
-          `SELECT id FROM question_classifications
-          WHERE question_text = $1 AND user_id = $2
-          ORDER BY created_at DESC
-          LIMIT 1`,
-          [question, authReq.user?.id || 'anonymous']
-        );
+        if (!classification.category || !classification.intent) {
+          return res.status(400).json({
+            error: 'Classification must include category and intent',
+          });
+        }
 
-        const classificationId =
-          classificationResult.rows[0]?.id ||
-          '00000000-0000-0000-0000-000000000000';
+        // Get or create classification record in database
+        let classificationId = classification.id;
+        if (!classificationId) {
+          const classificationResult = await db.query(
+            `INSERT INTO question_classifications
+            (user_id, question_text, question_hash, classified_intent, intent_confidence, category, entities)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id`,
+            [
+              userId,
+              question,
+              require('crypto')
+                .createHash('sha256')
+                .update(question.toLowerCase())
+                .digest('hex'),
+              classification.intent,
+              classification.confidence || 0.8,
+              classification.category,
+              JSON.stringify(classification.entities || {}),
+            ]
+          );
+          classificationId = classificationResult.rows[0]?.id;
+        }
 
-        // Create generation record (TBD: Call TemplateGenerator service)
+        // Initialize generation record (will be updated asynchronously)
         const generationResult = await db.query(
           `INSERT INTO template_generations
-          (user_id, triggering_question_id, triggering_question, generated_template, generation_model, generation_cost_usd, validation_status, approval_status, status)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          RETURNING id, generated_template, validation_status`,
-          [
-            authReq.user?.id || 'anonymous',
-            classificationId,
-            question,
-            JSON.stringify({
-              name: `Template_${Date.now()}`,
-              category: classification.category,
-              promptTemplate: 'TBD', // Will be generated by TemplateGenerator
-              inputSchema: {},
-              outputSchema: {},
-              instructions: '',
-              exampleInput: {},
-              exampleOutput: {},
-              intentKeywords: [classification.intent],
-            }),
-            'gpt-4o',
-            0.08,
-            'pending',
-            'pending',
-            'pending',
-          ]
+          (user_id, triggering_question_id, triggering_question, generation_model, validation_status, approval_status, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id`,
+          [userId, classificationId, question, 'gpt-4o', 'pending', 'pending', 'pending']
         );
 
         const generationId = generationResult.rows[0]?.id;
 
+        // Generate template asynchronously (don't wait for response)
+        (async () => {
+          try {
+            const generator = new TemplateGenerator(db);
+            const generationRequest = {
+              questionText: question,
+              classification,
+              userId,
+              questionId: classificationId,
+            };
+
+            const result = await generator.generateTemplate(generationRequest);
+
+            // Store the generated template in generation record
+            await db.query(
+              `UPDATE template_generations
+              SET
+                generated_template = $1,
+                validation_status = $2,
+                test_results = $3,
+                generation_cost_usd = $4,
+                status = $5
+              WHERE id = $6`,
+              [
+                JSON.stringify(result.template),
+                result.validationStatus === 'valid' ? 'passed' : 'failed',
+                JSON.stringify(result.testResults),
+                result.template?.generationCostUsd || 0.08,
+                result.validationStatus === 'valid' ? 'validated' : 'validation_failed',
+                generationId,
+              ]
+            );
+
+            logger.info('Template generation completed', {
+              generationId,
+              userId,
+              validationStatus: result.validationStatus,
+            });
+          } catch (error) {
+            logger.error('Template generation processing failed', {
+              generationId,
+              error: (error as Error).message,
+            });
+
+            await db.query(
+              `UPDATE template_generations
+              SET validation_status = 'error', status = 'generation_failed'
+              WHERE id = $1`,
+              [generationId]
+            ).catch(() => {
+              // Ignore DB error in async context
+            });
+          }
+        })();
+
         logger.info('Template generation initiated', {
           generationId,
-          userId: authReq.user?.id,
+          userId,
           category: classification.category,
         });
 
@@ -416,7 +469,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.get('/generation/:id/status', requireAuth, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       const result = await db.query(
         `SELECT id, status, approval_status, validation_status, generated_template,
@@ -458,47 +511,87 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
   /**
    * PUT /api/templates/generation/:id/approve
    * Approve a generated template (admin only)
+   * Creates a new active template from the generation record
    */
   router.put(
     '/generation/:id/approve',
     requireAdminAuth,
     async (req: Request, res: Response) => {
       try {
-        const { id } = req.params;
-        const { approvalNotes, suggestedImprovements } = req.body;
+        const id = req.params.id as string;
+        const { approvalNotes, suggestedImprovements, rolloutPercentage } = req.body;
         const authReq = req as AuthenticatedRequest;
 
-        const result = await db.query(
+        // Get generation record
+        const generationResult = await db.query(
+          `SELECT id, generated_template, triggering_question
+          FROM template_generations
+          WHERE id = $1 AND validation_status = 'passed'`,
+          [id]
+        );
+
+        if (generationResult.rows.length === 0) {
+          return res.status(404).json({
+            error: 'Generation not found or not yet validated',
+          });
+        }
+
+        const generation = generationResult.rows[0];
+        const template = JSON.parse(generation.generated_template);
+
+        // Create template using TemplateStorage
+        const storage = new TemplateStorage(db);
+        const templateId = await storage.createTemplate({
+          name: template.name,
+          category: template.category,
+          promptTemplate: template.promptTemplate,
+          inputSchema: template.inputSchema,
+          outputSchema: template.outputSchema,
+          instructions: template.instructions,
+          exampleInput: template.exampleInput,
+          exampleOutput: template.exampleOutput,
+          intentKeywords: template.intentKeywords,
+          description: `Generated from question: "${generation.triggering_question.substring(0, 100)}"`,
+          generationCostUsd: 0.08,
+          generatedFromId: id,
+          createdBy: authReq.user?.id,
+        });
+
+        // Update generation record
+        const rolloutPct = parseInt(rolloutPercentage as any) || 100;
+        await db.query(
           `UPDATE template_generations
           SET approval_status = 'approved',
               approved_by = $1,
               approval_notes = $2,
               suggested_improvements = $3,
               approved_at = CURRENT_TIMESTAMP,
-              status = 'approved'
-          WHERE id = $4
-          RETURNING id, generated_template`,
-          [authReq.user?.id, approvalNotes, suggestedImprovements, id]
+              status = 'approved',
+              template_id = $4,
+              rollout_percentage = $5
+          WHERE id = $6`,
+          [
+            authReq.user?.id,
+            approvalNotes,
+            suggestedImprovements,
+            templateId,
+            rolloutPct,
+            id,
+          ]
         );
 
-        if (result.rows.length === 0) {
-          return res.status(404).json({
-            error: 'Generation not found',
-          });
-        }
-
-        const generation = result.rows[0];
-
-        // TBD: Call TemplateStorage to save approved template
-        logger.info('Template approved', {
+        logger.info('Template approved and created', {
           generationId: id,
+          templateId,
           approvedBy: authReq.user?.id,
+          rolloutPercentage: rolloutPct,
         });
 
         return res.status(200).json({
           generationId: id,
+          templateId,
           status: 'approved',
-          message: 'Template approved and ready for rollout',
+          message: 'Template approved and created. Ready for production use.',
         });
       } catch (error) {
         logger.error('Approval failed', {
@@ -520,7 +613,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
     requireAdminAuth,
     async (req: Request, res: Response) => {
       try {
-        const { id } = req.params;
+        const id = req.params.id as string;
         const { reason, feedback } = req.body;
 
         await db.query(
@@ -563,19 +656,23 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.get('/list', async (req: Request, res: Response) => {
     try {
-      const { category, status = 'active', limit = 50, offset = 0 } = req.query;
-      const limitNum = Math.min(parseInt(limit as string, 10) || 50, 500);
-      const offsetNum = parseInt(offset as string, 10) || 0;
+      const { category, status: statusParam = 'active', limit = '50', offset = '0' } = req.query;
+      const statusStr = Array.isArray(statusParam) ? statusParam[0] : (statusParam || 'active') as string;
+      const limitStr = Array.isArray(limit) ? limit[0] : (limit as string);
+      const offsetStr = Array.isArray(offset) ? offset[0] : (offset as string);
+      const limitNum = Math.min(parseInt(limitStr as string, 10) || 50, 500);
+      const offsetNum = parseInt(offsetStr as string, 10) || 0;
 
       let query = `SELECT id, name, category, status, current_version, quality_score,
                           success_rate, user_satisfaction, total_uses, created_at
                   FROM question_templates
                   WHERE status = $1`;
-      const params: any[] = [status];
+      const params: any[] = [statusStr];
 
       if (category) {
+        const categoryStr = Array.isArray(category) ? category[0] : (category as string);
         query += ` AND category = $${params.length + 1}`;
-        params.push(category);
+        params.push(categoryStr);
       }
 
       query += ` ORDER BY quality_score DESC, total_uses DESC
@@ -586,10 +683,11 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
 
       // Get total count
       let countQuery = 'SELECT COUNT(*) FROM question_templates WHERE status = $1';
-      const countParams: any[] = [status];
+      const countParams: any[] = [statusStr];
       if (category) {
+        const categoryStr = Array.isArray(category) ? category[0] : (category as string);
         countQuery += ` AND category = $${countParams.length + 1}`;
-        countParams.push(category);
+        countParams.push(categoryStr);
       }
       const countResult = await db.query(countQuery, countParams);
       const total = parseInt(countResult.rows[0]?.count || '0', 10);
@@ -617,7 +715,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.get('/:id', async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       const templateResult = await db.query(
         `SELECT id, name, category, intent_keywords, prompt_template, input_schema, output_schema,
@@ -678,7 +776,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.put('/:id', requireAdminAuth, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { name, category, status, description } = req.body;
 
       const updateFields = [];
@@ -751,7 +849,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.delete('/:id', requireAdminAuth, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
 
       const result = await db.query(
         `UPDATE question_templates
@@ -876,7 +974,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.post('/:id/feedback', requireAuth, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { rating, wasHelpful, improvementSuggestion, accuracyIssue, missingInformation } =
         req.body;
       const authReq = req as AuthenticatedRequest;
@@ -935,7 +1033,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.post('/:id/rate', requireAuth, async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { rating } = req.body;
 
       if (!rating || rating < 1 || rating > 5) {
@@ -992,7 +1090,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
    */
   router.get('/:id/metrics', async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const { days = 30 } = req.query;
       const daysNum = parseInt(days as string, 10) || 30;
 
