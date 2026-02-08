@@ -24,7 +24,7 @@ export function createTemplateRoutes(db: BaseDatabase): Router {
     next: NextFunction
   ) => {
     const authReq = req as AuthenticatedRequest;
-    if (!authReq.user?.id && !authReq.headers.authorization) {
+    if (!authReq.user?.id && !req.headers.authorization) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
