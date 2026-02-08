@@ -1,13 +1,12 @@
-/**
- * Migration 027: Dynamic Template System
- *
- * Adds complete infrastructure for self-learning legal knowledge system:
- * - Template registry and versioning
- * - Question classification and deduplication
- * - Template matching and recommendations
- * - Usage analytics and feedback
- * - Quality scoring and metrics
- */
+-- ============================================================================
+-- Migration 027: Dynamic Template System
+-- ============================================================================
+-- Adds complete infrastructure for self-learning legal knowledge system:
+-- - Template registry and versioning
+-- - Question classification and deduplication
+-- - Template matching and recommendations
+-- - Usage analytics and feedback
+-- - Quality scoring and metrics
 
 -- ============================================================================
 -- Core Tables
