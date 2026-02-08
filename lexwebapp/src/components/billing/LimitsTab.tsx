@@ -338,7 +338,7 @@ export function LimitsTab() {
           ].map((option) => (
             <label
               key={option.value}
-              className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+              className={`w-full p-4 rounded-lg border-2 cursor-pointer transition-all ${
                 limits.limit_behavior === option.value
                   ? 'border-claude-accent bg-claude-accent/5'
                   : 'border-claude-border hover:border-claude-accent'
@@ -355,7 +355,7 @@ export function LimitsTab() {
                       limit_behavior: e.target.value as any,
                     })
                   }
-                  className="mt-1"
+                  className="w-6 h-6 mt-0.5 cursor-pointer accent-claude-accent flex-shrink-0"
                 />
                 <div className="flex-1">
                   <p className="font-medium text-claude-text">{option.label}</p>
