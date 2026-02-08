@@ -406,7 +406,7 @@ program
   .name('batch-process-documents')
   .description('Batch process documents (PDF, images, DOCX) using SecondLayer MCP')
   .requiredOption('-i, --input <dir>', 'Input directory with documents')
-  .option('-o, --output <dir>', 'Output directory for results', './batch-results')
+  .option('-o, --output <dir>', 'Output directory for results', './tests/batch-results')
   .option('--operations <ops>', 'Operations: parse,extract_clauses,summarize', 'parse,summarize')
   .option('--summarize-level <level>', 'Summarization level: quick|standard|deep', 'standard')
   .option('--concurrency <num>', 'Parallel processing (1-20)', '5')

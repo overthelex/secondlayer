@@ -105,7 +105,7 @@ services:
   migrate-local:
     build:
       context: ..
-      dockerfile: Dockerfile.mono-backend
+      dockerfile: deployment/Dockerfile.mono-backend
     image: secondlayer-app:latest
     container_name: secondlayer-migrate-local
     depends_on:
@@ -251,7 +251,7 @@ services:
   rada-migrate-local:
     build:
       context: ..
-      dockerfile: Dockerfile.mono-rada
+      dockerfile: deployment/Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-local
     depends_on:
@@ -321,7 +321,7 @@ services:
   document-service-local:
     build:
       context: ..
-      dockerfile: mcp_backend/Dockerfile.document-service
+      dockerfile: deployment/Dockerfile.document-service
     image: document-service:latest
     container_name: document-service-local
     depends_on:
@@ -452,7 +452,7 @@ services:
   migrate-openreyestr-local:
     build:
       context: ..
-      dockerfile: Dockerfile.mono-openreyestr
+      dockerfile: deployment/Dockerfile.mono-openreyestr
     image: openreyestr-app:latest
     container_name: openreyestr-migrate-local
     depends_on:

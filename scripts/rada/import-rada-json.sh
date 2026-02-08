@@ -9,8 +9,8 @@ if [ -z "$1" ]; then
     echo "Usage: $0 <path-to-json-file>"
     echo ""
     echo "Examples:"
-    echo "  $0 /home/vovkes/SecondLayer/RADA/mps_skl9.json"
-    echo "  $0 /home/vovkes/SecondLayer/RADA/deputies.json"
+    echo "  $0 /home/vovkes/SecondLayer/mcp_rada/data/RADA/mps_skl9.json"
+    echo "  $0 /home/vovkes/SecondLayer/mcp_rada/data/RADA/deputies.json"
     exit 1
 fi
 

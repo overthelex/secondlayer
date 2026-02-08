@@ -60,7 +60,7 @@ echo ""
 
 # Create test files
 echo "5️⃣  Creating test files..."
-TEST_DIR="./test-batch-docs"
+TEST_DIR="./tests/test-batch-docs"
 mkdir -p "$TEST_DIR"
 
 # Create 5 simple text files (mock PDFs)

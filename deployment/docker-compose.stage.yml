@@ -162,7 +162,7 @@ services:
   rada-migrate-stage:
     build:
       context: ..
-      dockerfile: Dockerfile.mono-rada
+      dockerfile: deployment/Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-stage
     depends_on:
@@ -240,7 +240,7 @@ services:
     image: openreyestr-app:latest
     build:
       context: ..
-      dockerfile: Dockerfile.mono-openreyestr
+      dockerfile: deployment/Dockerfile.mono-openreyestr
     container_name: openreyestr-migrate-stage
     depends_on:
       postgres-openreyestr-stage:
@@ -311,7 +311,7 @@ services:
   app-stage:
     build:
       context: ..
-      dockerfile: Dockerfile.mono-backend
+      dockerfile: deployment/Dockerfile.mono-backend
     image: secondlayer-app:latest
     container_name: secondlayer-app-stage
     command:
@@ -409,7 +409,7 @@ services:
   document-service-stage:
     build:
       context: ..
-      dockerfile: mcp_backend/Dockerfile.document-service
+      dockerfile: deployment/Dockerfile.document-service
     image: document-service:latest
     container_name: document-service-stage
     depends_on:

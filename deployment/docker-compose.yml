@@ -49,7 +49,7 @@ services:
   document-service:
     build:
       context: .
-      dockerfile: mcp_backend/Dockerfile.document-service
+      dockerfile: deployment/Dockerfile.document-service
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - DOCUMENT_SERVICE_PORT=3001
