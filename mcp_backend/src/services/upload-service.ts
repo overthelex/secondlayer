@@ -18,6 +18,7 @@ export interface UploadSession {
   docType: string;
   relativePath?: string;
   metadata?: any;
+  matterId?: string;
   documentId?: string;
   errorMessage?: string;
   expiresAt: string;
@@ -61,7 +62,7 @@ export class UploadService {
     fileName: string,
     fileSize: number,
     mimeType: string,
-    opts: { docType?: string; relativePath?: string; metadata?: any } = {}
+    opts: { docType?: string; relativePath?: string; metadata?: any; matterId?: string } = {}
   ): Promise<UploadSession> {
     if (fileSize > MAX_FILE_SIZE) {
       throw new Error(`File size ${fileSize} exceeds maximum ${MAX_FILE_SIZE}`);
@@ -73,8 +74,8 @@ export class UploadService {
     const result = await this.pool.query(
       `INSERT INTO upload_sessions
         (id, user_id, file_name, file_size, mime_type, total_chunks, chunk_size,
-         doc_type, relative_path, metadata, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+         doc_type, relative_path, metadata, matter_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending')
        RETURNING *`,
       [
         id,
@@ -87,6 +88,7 @@ export class UploadService {
         opts.docType || 'other',
         opts.relativePath || null,
         JSON.stringify(opts.metadata || {}),
+        opts.matterId || null,
       ]
     );
 
@@ -305,6 +307,7 @@ export class UploadService {
       docType: row.doc_type,
       relativePath: row.relative_path,
       metadata: row.metadata,
+      matterId: row.matter_id,
       documentId: row.document_id,
       errorMessage: row.error_message,
       expiresAt: row.expires_at,

@@ -19,6 +19,10 @@ export interface Document {
   full_text_html?: string;
   metadata?: any;
   user_id?: string;
+  matter_id?: string;
+  client_id?: string;
+  document_class?: string;
+  privilege_status?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -38,8 +42,9 @@ export class DocumentService {
         INSERT INTO documents (
           id, zakononline_id, type, title, date,
           case_number, court, chamber, dispute_category, outcome, deviation_flag,
-          full_text, full_text_html, metadata, user_id, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+          full_text, full_text_html, metadata, user_id,
+          matter_id, client_id, document_class, privilege_status, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
         ON CONFLICT (zakononline_id)
         DO UPDATE SET
           title = EXCLUDED.title,
@@ -54,6 +59,10 @@ export class DocumentService {
           full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
           metadata = documents.metadata || EXCLUDED.metadata,
           user_id = COALESCE(EXCLUDED.user_id, documents.user_id),
+          matter_id = COALESCE(EXCLUDED.matter_id, documents.matter_id),
+          client_id = COALESCE(EXCLUDED.client_id, documents.client_id),
+          document_class = COALESCE(EXCLUDED.document_class, documents.document_class),
+          privilege_status = COALESCE(EXCLUDED.privilege_status, documents.privilege_status),
           updated_at = NOW()
         RETURNING id
       `;
@@ -74,6 +83,10 @@ export class DocumentService {
         doc.full_text_html || null,
         JSON.stringify(doc.metadata || {}),
         doc.user_id || null,
+        doc.matter_id || null,
+        doc.client_id || null,
+        doc.document_class || null,
+        doc.privilege_status || null,
       ]);
 
       const savedId = result.rows[0].id;
@@ -109,8 +122,9 @@ export class DocumentService {
           INSERT INTO documents (
             id, zakononline_id, type, title, date,
             case_number, court, chamber, dispute_category, outcome, deviation_flag,
-            full_text, full_text_html, metadata, user_id, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+            full_text, full_text_html, metadata, user_id,
+            matter_id, client_id, document_class, privilege_status, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
           ON CONFLICT (zakononline_id)
           DO UPDATE SET
             title = EXCLUDED.title,
@@ -125,6 +139,10 @@ export class DocumentService {
             full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
             metadata = documents.metadata || EXCLUDED.metadata,
             user_id = COALESCE(EXCLUDED.user_id, documents.user_id),
+            matter_id = COALESCE(EXCLUDED.matter_id, documents.matter_id),
+            client_id = COALESCE(EXCLUDED.client_id, documents.client_id),
+            document_class = COALESCE(EXCLUDED.document_class, documents.document_class),
+            privilege_status = COALESCE(EXCLUDED.privilege_status, documents.privilege_status),
             updated_at = NOW()
           RETURNING id
         `;
@@ -145,6 +163,10 @@ export class DocumentService {
           doc.full_text_html || null,
           JSON.stringify(doc.metadata || {}),
           doc.user_id || null,
+          doc.matter_id || null,
+          doc.client_id || null,
+          doc.document_class || null,
+          doc.privilege_status || null,
         ]);
 
         ids.push(result.rows[0].id);
@@ -285,7 +307,7 @@ export class DocumentService {
    */
   async listDocumentsForUser(
     userId: string,
-    options: { limit?: number; offset?: number; type?: string } = {}
+    options: { limit?: number; offset?: number; type?: string; matterId?: string } = {}
   ): Promise<{ documents: Document[]; total: number }> {
     const limit = options.limit || 20;
     const offset = options.offset || 0;
@@ -296,6 +318,12 @@ export class DocumentService {
     if (options.type) {
       conditions.push(`type = $${paramIndex}`);
       params.push(options.type);
+      paramIndex++;
+    }
+
+    if (options.matterId) {
+      conditions.push(`matter_id = $${paramIndex}`);
+      params.push(options.matterId);
       paramIndex++;
     }
 

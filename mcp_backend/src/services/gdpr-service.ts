@@ -161,8 +161,31 @@ export class GdprService {
       );
       const docIds = docsResult.rows.map((r: any) => r.id);
 
-      // 2. Delete Qdrant vectors for user documents
+      // 2. Check legal holds before deletion — separate held vs deletable docs
+      const heldDocIds: string[] = [];
+      const deletableDocIds: string[] = [];
+
       for (const docId of docIds) {
+        try {
+          const holdCheck = await this.db.query(
+            `SELECT * FROM can_delete_document($1)`,
+            [docId]
+          );
+          const row = holdCheck.rows[0];
+          if (row && row.can_delete) {
+            deletableDocIds.push(docId);
+          } else {
+            heldDocIds.push(docId);
+          }
+        } catch (err: any) {
+          // If check fails, treat as held (fail safe)
+          logger.warn('[GDPR] Hold check failed for doc, treating as held', { docId, error: err.message });
+          heldDocIds.push(docId);
+        }
+      }
+
+      // 3. Delete Qdrant vectors for deletable documents only
+      for (const docId of deletableDocIds) {
         try {
           await this.embeddingService.deleteByDocId(docId);
         } catch (err: any) {
@@ -170,39 +193,65 @@ export class GdprService {
         }
       }
 
-      // 3. Delete MinIO bucket
-      try {
-        await this.minioService.deleteBucket(`user-${userId}`);
-      } catch (err: any) {
-        logger.warn('[GDPR] Failed to delete MinIO bucket', { userId, error: err.message });
+      // 4. Anonymize held documents (user_id → NULL but keep data)
+      if (heldDocIds.length > 0) {
+        await this.db.query(
+          `UPDATE documents SET user_id = NULL WHERE id = ANY($1)`,
+          [heldDocIds]
+        );
+        logger.info('[GDPR] Held documents anonymized (not deleted)', {
+          userId, heldCount: heldDocIds.length,
+        });
       }
 
-      // 4. Anonymize cost_tracking (keep for aggregate analytics)
+      // 5. Delete MinIO bucket only if no held documents
+      if (heldDocIds.length === 0) {
+        try {
+          await this.minioService.deleteBucket(`user-${userId}`);
+        } catch (err: any) {
+          logger.warn('[GDPR] Failed to delete MinIO bucket', { userId, error: err.message });
+        }
+      } else {
+        logger.info('[GDPR] MinIO bucket preserved (documents under legal hold)', { userId });
+      }
+
+      // 6. Anonymize cost_tracking (keep for aggregate analytics)
       await this.db.query(
         `UPDATE cost_tracking SET user_id = NULL, user_query = NULL WHERE user_id = $1`,
         [userId]
       );
 
-      // 5. Anonymize documents (set user_id to NULL, keep public docs intact)
-      await this.db.query(
-        `UPDATE documents SET user_id = NULL WHERE user_id = $1`,
-        [userId]
-      );
+      // 7. Anonymize deletable documents (set user_id to NULL)
+      if (deletableDocIds.length > 0) {
+        await this.db.query(
+          `UPDATE documents SET user_id = NULL WHERE id = ANY($1)`,
+          [deletableDocIds]
+        );
+      }
 
-      // 6. Conversations + messages cascade-delete via FK
-      // 7. Upload sessions, API keys, billing all cascade from users table
-      // 8. Delete the user record itself
+      // 8. Conversations + messages cascade-delete via FK
+      // 9. Upload sessions, API keys, billing all cascade from users table
+      // 10. Delete the user record itself
       await this.db.query(`DELETE FROM users WHERE id = $1`, [userId]);
 
       await this.db.query(
-        `UPDATE gdpr_requests SET status = 'completed', completed_at = NOW() WHERE id = $1`,
-        [requestId]
+        `UPDATE gdpr_requests SET status = 'completed', completed_at = NOW(),
+         metadata = $1 WHERE id = $2`,
+        [
+          JSON.stringify({
+            documentsDeleted: deletableDocIds.length,
+            documentsHeld: heldDocIds.length,
+            heldDocumentIds: heldDocIds,
+          }),
+          requestId,
+        ]
       );
 
       logger.info('[GDPR] Deletion completed', {
         requestId,
         userId,
-        documentsAnonymized: docIds.length,
+        documentsDeleted: deletableDocIds.length,
+        documentsHeld: heldDocIds.length,
       });
     } catch (error: any) {
       await this.db.query(
