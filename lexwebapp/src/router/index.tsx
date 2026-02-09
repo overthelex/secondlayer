@@ -36,6 +36,7 @@ import { LegislationStatisticsPage } from '../components/LegislationStatisticsPa
 import { VotingAnalysisPage } from '../components/VotingAnalysisPage';
 import { LegalCodesLibraryPage } from '../components/LegalCodesLibraryPage';
 import { HistoricalAnalysisPage } from '../components/HistoricalAnalysisPage';
+import { DocumentsPage } from '../pages/DocumentsPage';
 
 export const router = createBrowserRouter([
   {
@@ -103,6 +104,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.CLIENT_MESSAGING,
             element: <ClientMessagingPage />,
+          },
+          {
+            path: ROUTES.DOCUMENTS,
+            element: <DocumentsPage />,
           },
           {
             path: ROUTES.CASES,
