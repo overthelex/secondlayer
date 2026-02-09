@@ -1,22 +1,38 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'fs'
+import path from 'path'
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  plugins: [react()],
-  define: {
-    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(new Date().toISOString()),
-  },
-  build: {
-    outDir: mode === 'staging' ? 'dist-staging' : 'dist',
-    sourcemap: mode === 'staging' || mode === 'development',
-  },
-  server: {
-    proxy: mode === 'development' ? {
-      '/api': {
-        target: 'https://stage.legal.org.ua',
-        changeOrigin: true,
-      },
-    } : undefined,
-  },
-}))
+export default defineConfig(({ mode }) => {
+  const certsDir = path.resolve(__dirname, 'certs')
+  const certFile = path.join(certsDir, 'localdev.legal.org.ua+2.pem')
+  const keyFile = path.join(certsDir, 'localdev.legal.org.ua+2-key.pem')
+  const hasLocalCerts = fs.existsSync(certFile) && fs.existsSync(keyFile)
+
+  return {
+    plugins: [react()],
+    define: {
+      'import.meta.env.VITE_BUILD_TIME': JSON.stringify(new Date().toISOString()),
+    },
+    build: {
+      outDir: mode === 'staging' ? 'dist-staging' : 'dist',
+      sourcemap: mode === 'staging' || mode === 'development',
+    },
+    server: {
+      host: 'localdev.legal.org.ua',
+      ...(hasLocalCerts && {
+        https: {
+          cert: fs.readFileSync(certFile),
+          key: fs.readFileSync(keyFile),
+        },
+      }),
+      proxy: mode === 'development' ? {
+        '/api': {
+          target: 'https://stage.legal.org.ua',
+          changeOrigin: true,
+        },
+      } : undefined,
+    },
+  }
+})
