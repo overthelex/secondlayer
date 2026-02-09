@@ -12,6 +12,7 @@ dist
 dist-staging
 dist-ssr
 *.local
+certs/
 
 # Editor directories and files
 .vscode/*
