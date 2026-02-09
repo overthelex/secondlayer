@@ -6,16 +6,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   clientService,
-  CreateClientRequest,
-  UpdateClientRequest,
-  SearchClientsRequest,
+  SearchClientsParams,
 } from '../../services/api/ClientService';
+import { CreateClientRequest, UpdateClientRequest } from '../../types/models/Client';
 import { queryKeys } from '../../lib/react-query';
 
 /**
  * Get clients list
  */
-export function useClients(params?: SearchClientsRequest) {
+export function useClients(params?: SearchClientsParams) {
   return useQuery({
     queryKey: queryKeys.clients.list(params),
     queryFn: () => clientService.getClients(params),
@@ -44,7 +43,6 @@ export function useCreateClient() {
   return useMutation({
     mutationFn: (data: CreateClientRequest) => clientService.createClient(data),
     onSuccess: () => {
-      // Invalidate clients list
       queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
     },
   });
@@ -60,7 +58,6 @@ export function useUpdateClient() {
     mutationFn: ({ id, data }: { id: string; data: UpdateClientRequest }) =>
       clientService.updateClient(id, data),
     onSuccess: (_, variables) => {
-      // Invalidate specific client and list
       queryClient.invalidateQueries({
         queryKey: queryKeys.clients.detail(variables.id),
       });
@@ -70,31 +67,18 @@ export function useUpdateClient() {
 }
 
 /**
- * Delete client
+ * Run conflict check for a client
  */
-export function useDeleteClient() {
+export function useConflictCheck() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (clientId: string) => clientService.deleteClient(clientId),
-    onSuccess: () => {
-      // Invalidate clients list
+    mutationFn: (clientId: string) => clientService.runConflictCheck(clientId),
+    onSuccess: (_, clientId) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.clients.detail(clientId),
+      });
       queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
     },
-  });
-}
-
-/**
- * Send message to clients
- */
-export function useSendClientMessage() {
-  return useMutation({
-    mutationFn: ({
-      clientIds,
-      message,
-    }: {
-      clientIds: string[];
-      message: string;
-    }) => clientService.sendMessage(clientIds, message),
   });
 }

@@ -70,14 +70,17 @@ interface SelectedPerson {
 }
 interface Client {
   id: string;
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  activeCases: number;
-  status: 'active' | 'inactive';
-  lastContact: string;
-  type: 'individual' | 'corporate';
+  organization_id: string;
+  client_name: string;
+  client_type: 'individual' | 'business' | 'government';
+  contact_email: string | null;
+  tax_id: string | null;
+  status: 'active' | 'inactive' | 'archived';
+  conflict_check_date: string | null;
+  conflict_status: 'unchecked' | 'clear' | 'flagged' | 'conflicted';
+  metadata: Record<string, any>;
+  created_at: string;
+  created_by: string;
 }
 export function ChatLayout() {
   const { logout } = useAuth();
@@ -191,7 +194,7 @@ export function ChatLayout() {
     if (currentView === 'legal-codes-library') return 'Бібліотека кодексів';
     if (currentView === 'historical-analysis') return 'Історичний аналіз';
     if (selectedPerson) return selectedPerson.data.name;
-    if (selectedClient) return selectedClient.name;
+    if (selectedClient) return selectedClient.client_name;
     return 'Чат';
   };
   const renderContent = () => {
@@ -277,10 +280,6 @@ export function ChatLayout() {
             onSelectClient={(client) => {
               setSelectedClient(client);
               setCurrentView('client-detail');
-            }}
-            onSendMessage={(clientIds) => {
-              setMessagingClientIds(clientIds);
-              setCurrentView('client-messaging');
             }} />
 
         </div>);
@@ -368,7 +367,7 @@ export function ChatLayout() {
     if (currentView === 'client-detail' && selectedClient) {
       return (
         <ClientDetailPage
-          client={selectedClient}
+          client={selectedClient as any}
           onBack={() => {
             setCurrentView('clients');
             setSelectedClient(null);

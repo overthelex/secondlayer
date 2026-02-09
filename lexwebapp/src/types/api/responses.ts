@@ -2,7 +2,7 @@
  * API Response Types
  */
 
-import { Message, User, Balance, Transaction, Client, Person } from '../models';
+import { Message, User, Balance, Transaction, Person } from '../models';
 
 // Common response wrapper
 export interface ApiResponse<T = any> {

@@ -1,41 +1,25 @@
 /**
  * Client Service
- * Handles client management operations
+ * Handles client management operations via /api/matters/clients
  */
 
 import { BaseService } from '../base/BaseService';
-import { Client, ClientDetail } from '../../types/models';
-import { ListResponse } from '../../types/api';
+import { Client, CreateClientRequest, UpdateClientRequest, ClientsListResponse } from '../../types/models';
 
-export interface CreateClientRequest {
-  name: string;
-  company: string;
-  email: string;
-  phone: string;
-  type: 'individual' | 'corporate';
-  address?: string;
-  notes?: string;
-}
-
-export interface UpdateClientRequest extends Partial<CreateClientRequest> {
-  status?: 'active' | 'inactive';
-}
-
-export interface SearchClientsRequest {
-  query?: string;
-  type?: 'individual' | 'corporate' | 'all';
-  status?: 'active' | 'inactive' | 'all';
+export interface SearchClientsParams {
+  search?: string;
+  status?: string;
   limit?: number;
   offset?: number;
 }
 
 export class ClientService extends BaseService {
   /**
-   * Get all clients
+   * List clients with optional filters
    */
-  async getClients(params?: SearchClientsRequest): Promise<ListResponse<Client>> {
+  async getClients(params?: SearchClientsParams): Promise<ClientsListResponse> {
     try {
-      const response = await this.client.get<ListResponse<Client>>('/api/clients', {
+      const response = await this.client.get<ClientsListResponse>('/api/matters/clients', {
         params,
       });
       return response.data;
@@ -47,12 +31,10 @@ export class ClientService extends BaseService {
   /**
    * Get client by ID
    */
-  async getClientById(id: string): Promise<ClientDetail> {
+  async getClientById(id: string): Promise<Client> {
     try {
-      const response = await this.client.get<{ client: ClientDetail }>(
-        `/api/clients/${id}`
-      );
-      return response.data.client;
+      const response = await this.client.get<Client>(`/api/matters/clients/${id}`);
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
@@ -63,8 +45,8 @@ export class ClientService extends BaseService {
    */
   async createClient(data: CreateClientRequest): Promise<Client> {
     try {
-      const response = await this.client.post<{ client: Client }>('/api/clients', data);
-      return response.data.client;
+      const response = await this.client.post<Client>('/api/matters/clients', data);
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
@@ -75,36 +57,23 @@ export class ClientService extends BaseService {
    */
   async updateClient(id: string, data: UpdateClientRequest): Promise<Client> {
     try {
-      const response = await this.client.put<{ client: Client }>(
-        `/api/clients/${id}`,
+      const response = await this.client.put<Client>(
+        `/api/matters/clients/${id}`,
         data
       );
-      return response.data.client;
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
   }
 
   /**
-   * Delete client
+   * Run conflict check for a client
    */
-  async deleteClient(id: string): Promise<void> {
+  async runConflictCheck(id: string): Promise<any> {
     try {
-      await this.client.delete(`/api/clients/${id}`);
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  /**
-   * Send message to clients
-   */
-  async sendMessage(clientIds: string[], message: string): Promise<void> {
-    try {
-      await this.client.post('/api/clients/message', {
-        client_ids: clientIds,
-        message,
-      });
+      const response = await this.client.post(`/api/matters/clients/${id}/conflict-check`);
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
