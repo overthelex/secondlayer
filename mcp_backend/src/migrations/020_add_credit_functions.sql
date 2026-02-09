@@ -72,6 +72,10 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION check_user_balance IS 'Check if user has sufficient credits for operation';
 
+-- Drop any existing deduct_credits overloads to avoid ambiguity
+DROP FUNCTION IF EXISTS deduct_credits(UUID, DECIMAL, VARCHAR, UUID, TEXT);
+DROP FUNCTION IF EXISTS deduct_credits(UUID, DECIMAL, VARCHAR, VARCHAR, TEXT);
+
 -- Function: Deduct credits from user balance
 CREATE OR REPLACE FUNCTION deduct_credits(
   p_user_id UUID,
@@ -151,7 +155,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION deduct_credits IS 'Deduct credits from user balance with transaction logging';
+COMMENT ON FUNCTION deduct_credits(UUID, DECIMAL, VARCHAR, VARCHAR, TEXT) IS 'Deduct credits from user balance with transaction logging';
 
 -- Function: Add credits to user balance
 CREATE OR REPLACE FUNCTION add_credits(
