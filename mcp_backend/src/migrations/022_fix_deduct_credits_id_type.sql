@@ -2,8 +2,9 @@
 -- Change p_cost_tracking_id from UUID to VARCHAR to support string request IDs
 -- Date: 2026-02-06
 
--- Drop existing function
+-- Drop both existing overloads (UUID and VARCHAR versions)
 DROP FUNCTION IF EXISTS deduct_credits(UUID, DECIMAL, VARCHAR, UUID, TEXT);
+DROP FUNCTION IF EXISTS deduct_credits(UUID, DECIMAL, VARCHAR, VARCHAR, TEXT);
 
 -- Recreate with VARCHAR parameter
 CREATE OR REPLACE FUNCTION deduct_credits(
@@ -84,4 +85,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION deduct_credits IS 'Deduct credits from user balance with transaction logging (accepts string request IDs)';
+COMMENT ON FUNCTION deduct_credits(UUID, DECIMAL, VARCHAR, VARCHAR, TEXT) IS 'Deduct credits from user balance with transaction logging (accepts string request IDs)';
