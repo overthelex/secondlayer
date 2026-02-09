@@ -320,8 +320,9 @@ async function processUpload(
       await pool.query(
         `INSERT INTO documents
           (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type)
-         VALUES ($1, $1, $2, $3, $4, 'minio', $5, $6, $7)`,
+         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8)`,
         [
+          documentId,
           documentId,
           session.docType || 'other',
           session.fileName.replace(/\.[^/.]+$/, ''),
