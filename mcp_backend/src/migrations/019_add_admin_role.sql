@@ -1,15 +1,18 @@
--- Migration 015: Add Admin Role Support
+-- Migration 019: Add Admin Role Support
 -- Purpose: Add is_admin column to users table for admin access control
 -- Date: 2026-02-01
 
 BEGIN;
 
--- Add is_admin column to users table
-ALTER TABLE users
-ADD COLUMN is_admin BOOLEAN DEFAULT false NOT NULL;
+-- Add is_admin column to users table (idempotent)
+DO $$ BEGIN
+  ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT false NOT NULL;
+EXCEPTION WHEN duplicate_column THEN
+  NULL;
+END $$;
 
 -- Create index for faster admin checks
-CREATE INDEX idx_users_admin ON users(id) WHERE is_admin = true;
+CREATE INDEX IF NOT EXISTS idx_users_admin ON users(id) WHERE is_admin = true;
 
 -- Add admin audit log table
 CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -25,10 +28,10 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 
 -- Create indexes for audit log
-CREATE INDEX idx_audit_admin ON admin_audit_log(admin_id, created_at DESC);
-CREATE INDEX idx_audit_target ON admin_audit_log(target_user_id, created_at DESC);
-CREATE INDEX idx_audit_action ON admin_audit_log(action, created_at DESC);
-CREATE INDEX idx_audit_created ON admin_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_log(admin_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON admin_audit_log(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_log(action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
 
 -- Add comments
 COMMENT ON TABLE admin_audit_log IS 'Audit log for all admin actions';
