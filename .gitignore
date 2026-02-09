@@ -99,3 +99,4 @@ redis_data/
 vulnerability-fix-backup/
 .cursor/
 pip
+deployment/nginx/certs/
