@@ -3,10 +3,9 @@
  * Wrapper for ClientsPage component with routing logic
  */
 
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClientsPage as ClientsPageComponent } from '../../components/ClientsPage';
-import { generateRoute, ROUTES } from '../../router/routes';
+import { generateRoute } from '../../router/routes';
 
 export function ClientsPage() {
   const navigate = useNavigate();
@@ -17,16 +16,9 @@ export function ClientsPage() {
     });
   };
 
-  const handleSendMessage = (clientIds: string[]) => {
-    navigate(ROUTES.CLIENT_MESSAGING, {
-      state: { clientIds },
-    });
-  };
-
   return (
     <ClientsPageComponent
       onSelectClient={handleSelectClient}
-      onSendMessage={handleSendMessage}
     />
   );
 }
