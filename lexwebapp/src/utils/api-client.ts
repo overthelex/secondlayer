@@ -179,4 +179,33 @@ export const api = {
     execute: (toolName: string, params: any) =>
       apiClient.post(`/api/tools/${toolName}`, params),
   },
+
+  // Conversations
+  conversations: {
+    create: (title?: string) => apiClient.post('/api/conversations', { title }),
+    list: (params?: { limit?: number; offset?: number }) =>
+      apiClient.get('/api/conversations', { params }),
+    get: (id: string) => apiClient.get(`/api/conversations/${id}`),
+    rename: (id: string, title: string) =>
+      apiClient.put(`/api/conversations/${id}`, { title }),
+    delete: (id: string) => apiClient.delete(`/api/conversations/${id}`),
+    addMessage: (conversationId: string, message: {
+      role: 'user' | 'assistant';
+      content: string;
+      thinking_steps?: any[];
+      decisions?: any[];
+      citations?: any[];
+    }) => apiClient.post(`/api/conversations/${conversationId}/messages`, message),
+    getMessages: (conversationId: string, params?: { limit?: number; offset?: number }) =>
+      apiClient.get(`/api/conversations/${conversationId}/messages`, { params }),
+  },
+
+  // GDPR
+  gdpr: {
+    requestExport: () => apiClient.post('/api/gdpr/export'),
+    getExport: (id: string) => apiClient.get(`/api/gdpr/export/${id}`),
+    requestDeletion: (confirmation: string) =>
+      apiClient.post('/api/gdpr/delete', { confirmation }),
+    listRequests: () => apiClient.get('/api/gdpr/requests'),
+  },
 };

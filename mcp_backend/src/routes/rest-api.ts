@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.js';
+import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 
@@ -8,26 +9,36 @@ export function createRestAPIRouter(db: Database): Router {
 
   // ==================== DOCUMENTS ====================
 
-  // List documents with pagination
-  router.get('/documents', async (req: AuthenticatedRequest, res: Response) => {
+  // List documents with pagination (user sees own + public)
+  router.get('/documents', (async (req: DualAuthRequest, res: Response) => {
     try {
+      const userId = req.user?.id;
       const start = parseInt(req.query._start as string) || 0;
       const end = parseInt(req.query._end as string) || 10;
       const limit = end - start;
       const offset = start;
 
-      const countResult = await db.query('SELECT COUNT(*) FROM documents');
+      const userFilter = userId
+        ? { where: 'WHERE (user_id = $1 OR user_id IS NULL)', params: [userId] }
+        : { where: '', params: [] };
+
+      const countResult = await db.query(
+        `SELECT COUNT(*) FROM documents ${userFilter.where}`,
+        userFilter.params
+      );
       const total = parseInt(countResult.rows[0].count);
 
+      const paramOffset = userFilter.params.length;
       const result = await db.query(
-        `SELECT id, zakononline_id, type, title, date,
+        `SELECT id, zakononline_id, type, title, date, user_id,
                 CASE WHEN full_text IS NOT NULL THEN true ELSE false END as has_full_text,
                 CASE WHEN full_text_html IS NOT NULL THEN true ELSE false END as has_html,
                 metadata, created_at, updated_at
          FROM documents
+         ${userFilter.where}
          ORDER BY date DESC
-         LIMIT $1 OFFSET $2`,
-        [limit, offset]
+         LIMIT $${paramOffset + 1} OFFSET $${paramOffset + 2}`,
+        [...userFilter.params, limit, offset]
       );
 
       res.setHeader('X-Total-Count', total.toString());
@@ -37,16 +48,20 @@ export function createRestAPIRouter(db: Database): Router {
       logger.error('Error listing documents:', error);
       res.status(500).json({ error: 'Failed to list documents', message: error.message });
     }
-  });
+  }) as any);
 
-  // Get single document
-  router.get('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  // Get single document (user sees own + public)
+  router.get('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const result = await db.query(
-        'SELECT * FROM documents WHERE id = $1',
-        [id]
-      );
+      const userId = req.user?.id;
+
+      const result = userId
+        ? await db.query(
+            'SELECT * FROM documents WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)',
+            [id, userId]
+          )
+        : await db.query('SELECT * FROM documents WHERE id = $1', [id]);
 
       if (result.rows.length === 0) {
         res.status(404).json({ error: 'Document not found' });
@@ -58,18 +73,19 @@ export function createRestAPIRouter(db: Database): Router {
       logger.error('Error getting document:', error);
       res.status(500).json({ error: 'Failed to get document', message: error.message });
     }
-  });
+  }) as any);
 
-  // Create document
-  router.post('/documents', async (req: AuthenticatedRequest, res: Response) => {
+  // Create document (assign to current user)
+  router.post('/documents', (async (req: DualAuthRequest, res: Response) => {
     try {
+      const userId = req.user?.id;
       const { zakononline_id, type, title, date, full_text, full_text_html, metadata } = req.body;
 
       const result = await db.query(
-        `INSERT INTO documents (zakononline_id, type, title, date, full_text, full_text_html, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO documents (zakononline_id, type, title, date, full_text, full_text_html, metadata, user_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [zakononline_id, type, title, date, full_text, full_text_html, metadata || {}]
+        [zakononline_id, type, title, date, full_text, full_text_html, metadata || {}, userId || null]
       );
 
       res.status(201).json(result.rows[0]);
@@ -77,15 +93,16 @@ export function createRestAPIRouter(db: Database): Router {
       logger.error('Error creating document:', error);
       res.status(500).json({ error: 'Failed to create document', message: error.message });
     }
-  });
+  }) as any);
 
-  // Update document
-  router.patch('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  // Update document (only own documents)
+  router.patch('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+      const userId = req.user?.id;
       const updates = req.body;
 
-      const fields = Object.keys(updates).filter(k => k !== 'id');
+      const fields = Object.keys(updates).filter(k => k !== 'id' && k !== 'user_id');
       const setClause = fields.map((field, idx) => `${field} = $${idx + 2}`).join(', ');
       const values = [id, ...fields.map(f => updates[f])];
 
@@ -94,8 +111,10 @@ export function createRestAPIRouter(db: Database): Router {
         return;
       }
 
+      // Only allow updating own documents (or public if no userId)
+      const ownerCheck = userId ? ` AND (user_id = '${userId}' OR user_id IS NULL)` : '';
       const result = await db.query(
-        `UPDATE documents SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        `UPDATE documents SET ${setClause}, updated_at = NOW() WHERE id = $1${ownerCheck} RETURNING *`,
         values
       );
 
@@ -109,16 +128,18 @@ export function createRestAPIRouter(db: Database): Router {
       logger.error('Error updating document:', error);
       res.status(500).json({ error: 'Failed to update document', message: error.message });
     }
-  });
+  }) as any);
 
-  // Delete document
-  router.delete('/documents/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  // Delete document (only own documents)
+  router.delete('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const result = await db.query(
-        'DELETE FROM documents WHERE id = $1 RETURNING id',
-        [id]
-      );
+      const userId = req.user?.id;
+
+      // Only allow deleting own documents
+      const result = userId
+        ? await db.query('DELETE FROM documents WHERE id = $1 AND user_id = $2 RETURNING id', [id, userId])
+        : await db.query('DELETE FROM documents WHERE id = $1 RETURNING id', [id]);
 
       if (result.rows.length === 0) {
         res.status(404).json({ error: 'Document not found' });
@@ -130,7 +151,7 @@ export function createRestAPIRouter(db: Database): Router {
       logger.error('Error deleting document:', error);
       res.status(500).json({ error: 'Failed to delete document', message: error.message });
     }
-  });
+  }) as any);
 
   // ==================== LEGAL PATTERNS ====================
 

@@ -316,6 +316,22 @@ export class EmbeddingService {
     }
   }
 
+  async deleteByDocId(docId: string): Promise<void> {
+    await this.initialize();
+
+    try {
+      await this.qdrant.delete(this.collectionName, {
+        filter: {
+          must: [{ key: 'doc_id', match: { value: docId } }],
+        },
+      });
+      logger.info('Deleted vectors for document', { docId });
+    } catch (error) {
+      logger.error('Failed to delete vectors for document:', { docId, error });
+      throw error;
+    }
+  }
+
   async searchVectors(
     queryEmbedding: number[],
     limit: number = 10,

@@ -4,6 +4,7 @@ import { User, Mail, Shield, CreditCard, Settings, Camera, BarChart3, Zap, Clock
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services';
 import showToast from '../utils/toast';
+import { GdprPrivacySection } from './GdprPrivacySection';
 
 export function ProfilePage() {
   const { user, isLoading, updateUser } = useAuth();
@@ -414,6 +415,11 @@ export function ProfilePage() {
                 </section>
               ))}
             </div>
+
+            {/* GDPR Privacy Section */}
+            <section className="bg-white rounded-2xl p-6 border border-claude-border shadow-sm">
+              <GdprPrivacySection />
+            </section>
           </motion.div>
 
           {/* Right Column - Stats & Info */}

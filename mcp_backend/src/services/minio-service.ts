@@ -144,6 +144,32 @@ export class MinioService {
     });
   }
 
+  async deleteBucket(bucketName: string): Promise<void> {
+    try {
+      const exists = await this.client.bucketExists(bucketName);
+      if (!exists) return;
+
+      // Remove all objects first
+      const objects: string[] = [];
+      await new Promise<void>((resolve, reject) => {
+        const stream = this.client.listObjects(bucketName, '', true);
+        stream.on('data', (obj) => { if (obj.name) objects.push(obj.name); });
+        stream.on('error', reject);
+        stream.on('end', () => resolve());
+      });
+
+      if (objects.length > 0) {
+        await this.client.removeObjects(bucketName, objects);
+      }
+
+      await this.client.removeBucket(bucketName);
+      logger.info('[MinIO] Bucket deleted', { bucket: bucketName });
+    } catch (error: any) {
+      logger.error('[MinIO] Delete bucket failed', { bucket: bucketName, error: error.message });
+      throw error;
+    }
+  }
+
   /**
    * Generate object key for a file
    * Format: YYYY/MM/original-filename

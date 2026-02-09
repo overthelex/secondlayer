@@ -18,6 +18,7 @@ export interface Document {
   full_text?: string;
   full_text_html?: string;
   metadata?: any;
+  user_id?: string;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -37,9 +38,9 @@ export class DocumentService {
         INSERT INTO documents (
           id, zakononline_id, type, title, date,
           case_number, court, chamber, dispute_category, outcome, deviation_flag,
-          full_text, full_text_html, metadata, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-        ON CONFLICT (zakononline_id) 
+          full_text, full_text_html, metadata, user_id, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+        ON CONFLICT (zakononline_id)
         DO UPDATE SET
           title = EXCLUDED.title,
           date = EXCLUDED.date,
@@ -52,6 +53,7 @@ export class DocumentService {
           full_text = COALESCE(EXCLUDED.full_text, documents.full_text),
           full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
           metadata = documents.metadata || EXCLUDED.metadata,
+          user_id = COALESCE(EXCLUDED.user_id, documents.user_id),
           updated_at = NOW()
         RETURNING id
       `;
@@ -71,6 +73,7 @@ export class DocumentService {
         doc.full_text || null,
         doc.full_text_html || null,
         JSON.stringify(doc.metadata || {}),
+        doc.user_id || null,
       ]);
 
       const savedId = result.rows[0].id;
@@ -106,9 +109,9 @@ export class DocumentService {
           INSERT INTO documents (
             id, zakononline_id, type, title, date,
             case_number, court, chamber, dispute_category, outcome, deviation_flag,
-            full_text, full_text_html, metadata, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-          ON CONFLICT (zakononline_id) 
+            full_text, full_text_html, metadata, user_id, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+          ON CONFLICT (zakononline_id)
           DO UPDATE SET
             title = EXCLUDED.title,
             date = EXCLUDED.date,
@@ -121,6 +124,7 @@ export class DocumentService {
             full_text = COALESCE(EXCLUDED.full_text, documents.full_text),
             full_text_html = COALESCE(EXCLUDED.full_text_html, documents.full_text_html),
             metadata = documents.metadata || EXCLUDED.metadata,
+            user_id = COALESCE(EXCLUDED.user_id, documents.user_id),
             updated_at = NOW()
           RETURNING id
         `;
@@ -140,6 +144,7 @@ export class DocumentService {
           doc.full_text || null,
           doc.full_text_html || null,
           JSON.stringify(doc.metadata || {}),
+          doc.user_id || null,
         ]);
 
         ids.push(result.rows[0].id);
@@ -273,6 +278,55 @@ export class DocumentService {
       logger.error('Failed to get document stats:', error);
       return null;
     }
+  }
+
+  /**
+   * List documents visible to a user (own + public)
+   */
+  async listDocumentsForUser(
+    userId: string,
+    options: { limit?: number; offset?: number; type?: string } = {}
+  ): Promise<{ documents: Document[]; total: number }> {
+    const limit = options.limit || 20;
+    const offset = options.offset || 0;
+    const conditions = ['(user_id = $1 OR user_id IS NULL)'];
+    const params: any[] = [userId];
+    let paramIndex = 2;
+
+    if (options.type) {
+      conditions.push(`type = $${paramIndex}`);
+      params.push(options.type);
+      paramIndex++;
+    }
+
+    const where = conditions.join(' AND ');
+
+    const [result, countResult] = await Promise.all([
+      this.db.query(
+        `SELECT id, zakononline_id, type, title, date, user_id, metadata, created_at, updated_at
+         FROM documents WHERE ${where}
+         ORDER BY created_at DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        [...params, limit, offset]
+      ),
+      this.db.query(`SELECT COUNT(*) FROM documents WHERE ${where}`, params),
+    ]);
+
+    return {
+      documents: result.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+    };
+  }
+
+  /**
+   * Get a document only if user has access (own or public)
+   */
+  async getDocumentForUser(id: string, userId: string): Promise<Document | null> {
+    const result = await this.db.query(
+      `SELECT * FROM documents WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)`,
+      [id, userId]
+    );
+    return result.rows[0] || null;
   }
 
   /**
