@@ -213,6 +213,16 @@ services:
       FRONTEND_URL: https://dev.legal.org.ua
       ALLOWED_ORIGINS: https://dev.legal.org.ua
 
+      # MinIO (S3-compatible object storage)
+      MINIO_ENDPOINT: minio-dev
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_USE_SSL: "false"
+
+      # Upload temp directory
+      UPLOAD_TEMP_DIR: /app/data/uploads
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-debug}
 
@@ -256,6 +266,28 @@ services:
         reservations:
           cpus: '0.5'
           memory: 1G
+
+  # MinIO - S3-compatible object storage for media/large files
+  minio-dev:
+    image: minio/minio:latest
+    container_name: minio-dev
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9002:9000"   # S3 API
+      - "9003:9001"   # Web console
+    volumes:
+      - minio_dev_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
 
   lexwebapp-dev:
     image: lexwebapp-lexwebapp:latest
@@ -515,6 +547,8 @@ volumes:
   redis_dev_data:
     driver: local
   app_dev_data:
+    driver: local
+  minio_dev_data:
     driver: local
   postgres_openreyestr_dev_data:
     driver: local

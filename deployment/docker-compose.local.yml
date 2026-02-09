@@ -199,6 +199,16 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
 
+      # MinIO (S3-compatible object storage)
+      MINIO_ENDPOINT: minio-local
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_USE_SSL: "false"
+
+      # Upload temp directory
+      UPLOAD_TEMP_DIR: /app/data/uploads
+
       # Logging (verbose for development)
       LOG_LEVEL: ${LOG_LEVEL:-debug}
 
@@ -543,6 +553,28 @@ services:
           cpus: '0.25'
           memory: 256M
 
+  # MinIO - S3-compatible object storage for media/large files
+  minio-local:
+    image: minio/minio:latest
+    container_name: minio-local
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio_local_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+
   # Frontend - typically run with npm run dev outside Docker for hot reload
   # Uncomment if you want to run frontend in Docker
   # lexwebapp-local:
@@ -567,6 +599,8 @@ volumes:
   app_local_data:
     driver: local
   document_service_credentials:
+    driver: local
+  minio_local_data:
     driver: local
   postgres_openreyestr_local_data:
     driver: local

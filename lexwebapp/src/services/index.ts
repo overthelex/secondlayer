@@ -17,6 +17,12 @@ export { ClientService } from './api/ClientService';
 export { MCPService } from './api/MCPService';
 export { SSEClient } from './api/SSEClient';
 
+// Upload service
+export { UploadService, uploadService } from './api/UploadService';
+
+// Upload manager
+export { UploadManager, uploadManager } from './upload/UploadManager';
+
 // Export base service
 export { BaseService } from './base/BaseService';
 export type { ServiceError } from './base/BaseService';
