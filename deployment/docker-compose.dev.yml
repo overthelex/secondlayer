@@ -129,8 +129,8 @@ services:
   migrate-dev:
     image: secondlayer-app:latest
     build:
-      context: .
-      dockerfile: mcp_backend/Dockerfile
+      context: ..
+      dockerfile: deployment/Dockerfile.mono-backend
     container_name: secondlayer-migrate-dev
     depends_on:
       postgres-dev:
@@ -154,9 +154,6 @@ services:
 
   app-dev:
     image: secondlayer-app:latest
-    build:
-      context: .
-      dockerfile: mcp_backend/Dockerfile
     container_name: secondlayer-app-dev
     command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
     environment:
@@ -263,7 +260,7 @@ services:
   lexwebapp-dev:
     image: lexwebapp-lexwebapp:latest
     build:
-      context: .
+      context: ..
       dockerfile: lexwebapp/Dockerfile
       args:
         VITE_API_URL: https://dev.legal.org.ua/api
@@ -288,7 +285,7 @@ services:
   migrate-openreyestr-dev:
     image: openreyestr-app:latest
     build:
-      context: .
+      context: ..
       dockerfile: deployment/Dockerfile.mono-openreyestr
     container_name: openreyestr-migrate-dev
     depends_on:
@@ -310,9 +307,6 @@ services:
 
   app-openreyestr-dev:
     image: openreyestr-app:latest
-    build:
-      context: .
-      dockerfile: deployment/Dockerfile.mono-openreyestr
     container_name: openreyestr-app-dev
     command: ["node", "dist/http-server.js"]
     environment:
@@ -379,7 +373,7 @@ services:
   # RADA MCP Migrations
   rada-migrate-dev:
     build:
-      context: .
+      context: ..
       dockerfile: deployment/Dockerfile.mono-rada
     image: rada-mcp:latest
     container_name: rada-mcp-migrate-dev
@@ -446,6 +440,72 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+  document-service-dev:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.document-service
+    image: document-service:latest
+    container_name: document-service-dev
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      qdrant-dev:
+        condition: service_started
+      redis-dev:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DOCUMENT_SERVICE_PORT: 3002
+      PORT: 3002
+      HTTP_PORT: 3002
+      HTTP_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-dev:5432/${POSTGRES_DB:-secondlayer_dev}
+      POSTGRES_HOST: postgres-dev
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
+      QDRANT_URL: http://qdrant-dev:6333
+      REDIS_URL: redis://redis-dev:6379
+      REDIS_HOST: redis-dev
+      REDIS_PORT: 6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
+      JWT_SECRET: ${JWT_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ALLOWED_ORIGINS: https://dev.legal.org.ua
+    ports:
+      - "3006:3002"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3002/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - secondlayer-dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
 volumes:
   postgres_dev_data:
