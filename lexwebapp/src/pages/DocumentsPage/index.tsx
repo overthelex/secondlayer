@@ -11,12 +11,20 @@ import {
   Loader2,
   MoreVertical,
   ChevronDown,
-  File,
   Tag,
   LayoutGrid,
   List,
+  Pause,
+  Play,
+  RotateCcw,
+  Image,
+  Film,
+  FileSpreadsheet,
+  XCircle,
 } from 'lucide-react';
 import { mcpService } from '../../services';
+import { useUploadStore } from '../../stores/uploadStore';
+import type { UploadItem } from '../../services/upload/UploadManager';
 import toast from 'react-hot-toast';
 
 // Types
@@ -34,20 +42,6 @@ interface VaultDocument {
     mimeType?: string;
     folderPath?: string;
   };
-}
-
-interface UploadItem {
-  id: string;
-  file: File;
-  name: string;
-  size: number;
-  type: string;
-  relativePath: string;
-  docType: DocType;
-  status: 'pending' | 'uploading' | 'processing' | 'done' | 'error';
-  progress: number;
-  error?: string;
-  documentId?: string;
 }
 
 type DocType = 'contract' | 'legislation' | 'court_decision' | 'internal' | 'other';
@@ -69,26 +63,26 @@ const DOC_TYPE_COLORS: Record<DocType, string> = {
   other: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
-const ACCEPTED_TYPES = '.pdf,.docx,.doc,.html,.htm,.txt,.rtf';
+const ACCEPTED_TYPES =
+  '.pdf,.docx,.doc,.html,.htm,.txt,.rtf,.jpg,.jpeg,.png,.bmp,.gif,.xlsx,.xls,.csv,.mp4,.mov,.avi,.mkv,.webm';
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Strip data URL prefix to get pure base64
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+const STATUS_LABELS: Record<string, string> = {
+  queued: 'В черзі',
+  initializing: 'Ініціалізація...',
+  uploading: 'Завантаження...',
+  assembling: 'Збирання файлу...',
+  processing: 'Обробка...',
+  completed: 'Готово',
+  failed: 'Помилка',
+  cancelled: 'Скасовано',
+  paused: 'Пауза',
+};
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 function formatDate(iso: string): string {
@@ -116,8 +110,33 @@ function guessMimeType(file: File): string {
     htm: 'text/html',
     txt: 'text/plain',
     rtf: 'application/rtf',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    bmp: 'image/bmp',
+    gif: 'image/gif',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xls: 'application/vnd.ms-excel',
+    csv: 'text/csv',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+    webm: 'video/webm',
   };
   return map[ext || ''] || 'application/octet-stream';
+}
+
+function getFileIcon(mimeType: string) {
+  if (mimeType.startsWith('image/')) return Image;
+  if (mimeType.startsWith('video/')) return Film;
+  if (
+    mimeType.includes('spreadsheet') ||
+    mimeType.includes('excel') ||
+    mimeType === 'text/csv'
+  )
+    return FileSpreadsheet;
+  return FileText;
 }
 
 export function DocumentsPage() {
@@ -129,9 +148,31 @@ export function DocumentsPage() {
   const [filterType, setFilterType] = useState<DocType | ''>('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
-  // Upload state
-  const [uploadQueue, setUploadQueue] = useState<UploadItem[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  // Upload state from Zustand store
+  const {
+    items: uploadItems,
+    isUploading,
+    isPaused,
+    totalFiles,
+    completedFiles,
+    failedFiles,
+    totalBytes,
+    uploadedBytes,
+    addFiles,
+    startUpload,
+    pauseUpload,
+    resumeUpload,
+    cancelFile,
+    cancelAll,
+    retryFile,
+    retryAllFailed,
+    removeFile,
+    clearFinished,
+    updateDocType,
+    updateAllDocTypes,
+  } = useUploadStore();
+
+  // Local UI state
   const [isDragOver, setIsDragOver] = useState(false);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [defaultDocType, setDefaultDocType] = useState<DocType>('other');
@@ -145,6 +186,20 @@ export function DocumentsPage() {
   useEffect(() => {
     loadDocuments();
   }, [filterType]);
+
+  // Show upload panel when items are added
+  useEffect(() => {
+    if (uploadItems.length > 0) {
+      setShowUploadPanel(true);
+    }
+  }, [uploadItems.length]);
+
+  // Reload docs when uploads complete
+  useEffect(() => {
+    if (completedFiles > 0 && !isUploading) {
+      loadDocuments();
+    }
+  }, [completedFiles, isUploading]);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -166,36 +221,28 @@ export function DocumentsPage() {
       setTotalDocs(parsed.total || 0);
     } catch (err: any) {
       console.error('Failed to load documents:', err);
-      // Don't toast on initial load failure - backend may not have vault yet
     } finally {
       setLoading(false);
     }
   };
 
   // File selection handlers
-  const addFilesToQueue = useCallback(
+  const handleFilesSelected = useCallback(
     (files: FileList | File[]) => {
-      const newItems: UploadItem[] = Array.from(files)
-        .filter((f) => f.size > 0) // skip empty/directory entries
+      const newItems = Array.from(files)
+        .filter((f) => f.size > 0)
         .map((file) => ({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           file,
-          name: file.name,
-          size: file.size,
-          type: guessMimeType(file),
-          relativePath:
-            (file as any).webkitRelativePath || file.name,
+          mimeType: guessMimeType(file),
+          relativePath: (file as any).webkitRelativePath || file.name,
           docType: defaultDocType,
-          status: 'pending' as const,
-          progress: 0,
         }));
 
       if (newItems.length === 0) return;
-
-      setUploadQueue((prev) => [...prev, ...newItems]);
+      addFiles(newItems);
       setShowUploadPanel(true);
     },
-    [defaultDocType]
+    [defaultDocType, addFiles]
   );
 
   const handleFileSelect = () => fileInputRef.current?.click();
@@ -203,8 +250,8 @@ export function DocumentsPage() {
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
-      addFilesToQueue(e.target.files);
-      e.target.value = ''; // reset so same files can be re-selected
+      handleFilesSelected(e.target.files);
+      e.target.value = '';
     }
   };
 
@@ -229,7 +276,6 @@ export function DocumentsPage() {
     const items = e.dataTransfer.items;
     if (items) {
       const files: File[] = [];
-      // Try to use webkitGetAsEntry for folder support
       const entries: any[] = [];
       for (let i = 0; i < items.length; i++) {
         const entry = (items[i] as any).webkitGetAsEntry?.();
@@ -242,98 +288,21 @@ export function DocumentsPage() {
       }
 
       if (entries.length > 0) {
-        // Recursively read directory entries
         readEntries(entries).then((allFiles) => {
-          addFilesToQueue(allFiles);
+          handleFilesSelected(allFiles);
         });
       } else if (files.length > 0) {
-        addFilesToQueue(files);
+        handleFilesSelected(files);
       }
     } else if (e.dataTransfer.files.length) {
-      addFilesToQueue(e.dataTransfer.files);
+      handleFilesSelected(e.dataTransfer.files);
     }
   };
 
-  // Upload execution
-  const startUpload = async () => {
-    const pending = uploadQueue.filter((i) => i.status === 'pending');
-    if (pending.length === 0) return;
-
-    setIsUploading(true);
-
-    for (const item of pending) {
-      setUploadQueue((prev) =>
-        prev.map((i) =>
-          i.id === item.id ? { ...i, status: 'uploading', progress: 10 } : i
-        )
-      );
-
-      try {
-        const base64 = await fileToBase64(item.file);
-        setUploadQueue((prev) =>
-          prev.map((i) =>
-            i.id === item.id ? { ...i, status: 'processing', progress: 50 } : i
-          )
-        );
-
-        const result = await mcpService.callTool('store_document', {
-          fileBase64: base64,
-          mimeType: item.type,
-          title: item.name.replace(/\.[^/.]+$/, ''),
-          type: item.docType,
-          metadata: {
-            tags: [],
-            category: '',
-            originalFilename: item.name,
-            fileSize: item.size,
-            mimeType: item.type,
-            folderPath: item.relativePath.includes('/')
-              ? item.relativePath.substring(0, item.relativePath.lastIndexOf('/'))
-              : undefined,
-          },
-        });
-
-        const parsed = result?.result?.content?.[0]?.text
-          ? JSON.parse(result.result.content[0].text)
-          : result?.result || result;
-
-        setUploadQueue((prev) =>
-          prev.map((i) =>
-            i.id === item.id
-              ? { ...i, status: 'done', progress: 100, documentId: parsed.id }
-              : i
-          )
-        );
-      } catch (err: any) {
-        setUploadQueue((prev) =>
-          prev.map((i) =>
-            i.id === item.id
-              ? { ...i, status: 'error', error: err.message || 'Upload failed' }
-              : i
-          )
-        );
-      }
-    }
-
-    setIsUploading(false);
-    toast.success(
-      `Завантажено ${pending.filter(() => uploadQueue.find((u) => u.status === 'done')).length} документів`
-    );
-    loadDocuments();
-  };
-
-  const removeFromQueue = (id: string) => {
-    setUploadQueue((prev) => prev.filter((i) => i.id !== id));
-  };
-
-  const clearCompleted = () => {
-    setUploadQueue((prev) => prev.filter((i) => i.status !== 'done'));
-  };
-
-  const updateItemDocType = (id: string, docType: DocType) => {
-    setUploadQueue((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, docType } : i))
-    );
+  // Upload actions
+  const handleStartUpload = () => {
+    startUpload();
+    toast.success(`Завантаження ${uploadItems.filter((i) => i.status === 'queued').length} файлів розпочато`);
   };
 
   // Search
@@ -354,7 +323,6 @@ export function DocumentsPage() {
         ? JSON.parse(result.result.content[0].text)
         : result?.result || result;
 
-      // Semantic search returns different format
       const docs = (parsed.results || []).map((r: any) => ({
         id: r.documentId || r.id,
         title: r.title,
@@ -371,9 +339,13 @@ export function DocumentsPage() {
     }
   };
 
-  const pendingCount = uploadQueue.filter((i) => i.status === 'pending').length;
-  const doneCount = uploadQueue.filter((i) => i.status === 'done').length;
-  const errorCount = uploadQueue.filter((i) => i.status === 'error').length;
+  const queuedCount = uploadItems.filter((i) => i.status === 'queued').length;
+  const activeCount = uploadItems.filter((i) =>
+    ['initializing', 'uploading', 'assembling', 'processing'].includes(i.status)
+  ).length;
+  const doneCount = completedFiles;
+  const errorCount = failedFiles;
+  const globalProgress = totalBytes > 0 ? uploadedBytes / totalBytes : 0;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -428,7 +400,7 @@ export function DocumentsPage() {
                 </button>
               </div>
               <p className="text-sm text-claude-subtext/70 font-sans">
-                Перетягніть файли або папку сюди &middot; PDF, DOCX, HTML, TXT &middot; до 50 МБ
+                Перетягніть файли або папку сюди &middot; PDF, DOCX, HTML, TXT, зображення, відео &middot; до 2 ГБ
               </p>
             </div>
 
@@ -451,7 +423,7 @@ export function DocumentsPage() {
 
           {/* Upload Queue Panel */}
           <AnimatePresence>
-            {showUploadPanel && uploadQueue.length > 0 && (
+            {showUploadPanel && uploadItems.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
@@ -465,9 +437,10 @@ export function DocumentsPage() {
                       Черга завантаження
                     </h3>
                     <span className="text-xs text-claude-subtext/60 font-sans">
-                      {uploadQueue.length} файлів
+                      {totalFiles} файлів
                       {doneCount > 0 && ` · ${doneCount} готово`}
                       {errorCount > 0 && ` · ${errorCount} помилок`}
+                      {activeCount > 0 && ` · ${activeCount} активних`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -494,12 +467,7 @@ export function DocumentsPage() {
                                 key={t}
                                 onClick={() => {
                                   setDefaultDocType(t);
-                                  // Apply to all pending items
-                                  setUploadQueue((prev) =>
-                                    prev.map((i) =>
-                                      i.status === 'pending' ? { ...i, docType: t } : i
-                                    )
-                                  );
+                                  updateAllDocTypes(t);
                                   setShowTypeDropdown(false);
                                 }}
                                 className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-claude-bg transition-colors font-sans ${
@@ -514,18 +482,53 @@ export function DocumentsPage() {
                       </AnimatePresence>
                     </div>
 
+                    {/* Pause/Resume */}
+                    {isUploading && (
+                      <button
+                        onClick={isPaused ? resumeUpload : pauseUpload}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-claude-border rounded-lg hover:bg-claude-bg transition-colors font-sans"
+                        title={isPaused ? 'Продовжити' : 'Пауза'}
+                      >
+                        {isPaused ? <Play size={12} /> : <Pause size={12} />}
+                        {isPaused ? 'Продовжити' : 'Пауза'}
+                      </button>
+                    )}
+
+                    {/* Retry all failed */}
+                    {errorCount > 0 && !isUploading && (
+                      <button
+                        onClick={retryAllFailed}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-50 transition-colors font-sans"
+                      >
+                        <RotateCcw size={12} />
+                        Повторити ({errorCount})
+                      </button>
+                    )}
+
                     {doneCount > 0 && (
                       <button
-                        onClick={clearCompleted}
+                        onClick={clearFinished}
                         className="text-xs text-claude-subtext hover:text-claude-text transition-colors font-sans"
                       >
                         Очистити готові
                       </button>
                     )}
+
+                    {/* Cancel all */}
+                    {isUploading && (
+                      <button
+                        onClick={cancelAll}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors font-sans"
+                      >
+                        <XCircle size={12} />
+                        Скасувати все
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         if (!isUploading) {
-                          setUploadQueue([]);
+                          clearFinished();
                           setShowUploadPanel(false);
                         }
                       }}
@@ -537,100 +540,54 @@ export function DocumentsPage() {
                   </div>
                 </div>
 
+                {/* Global progress bar */}
+                {(isUploading || doneCount > 0) && (
+                  <div className="px-5 py-2 border-b border-claude-border/30">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-claude-subtext/60 font-sans">
+                        {formatFileSize(uploadedBytes)} / {formatFileSize(totalBytes)}
+                      </span>
+                      <span className="text-[10px] text-claude-subtext/60 font-sans">
+                        {Math.round(globalProgress * 100)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-claude-border/30 rounded-full overflow-hidden">
+                      <motion.div
+                        className={`h-full rounded-full ${isPaused ? 'bg-amber-400' : 'bg-claude-accent'}`}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${globalProgress * 100}%` }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Queue items */}
                 <div className="max-h-[300px] overflow-y-auto divide-y divide-claude-border/30">
-                  {uploadQueue.map((item) => (
-                    <div
+                  {uploadItems.map((item) => (
+                    <UploadItemRow
                       key={item.id}
-                      className="flex items-center gap-3 px-5 py-2.5 hover:bg-claude-bg/50 transition-colors"
-                    >
-                      <div className="flex-shrink-0">
-                        {item.status === 'done' ? (
-                          <CheckCircle size={16} className="text-green-500" />
-                        ) : item.status === 'error' ? (
-                          <AlertCircle size={16} className="text-red-500" />
-                        ) : item.status === 'uploading' || item.status === 'processing' ? (
-                          <Loader2 size={16} className="text-claude-accent animate-spin" />
-                        ) : (
-                          <File size={16} className="text-claude-subtext/50" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-claude-text truncate font-sans">
-                            {item.relativePath || item.name}
-                          </span>
-                          <span className="text-[10px] text-claude-subtext/50 flex-shrink-0 font-sans">
-                            {formatFileSize(item.size)}
-                          </span>
-                        </div>
-                        {(item.status === 'uploading' || item.status === 'processing') && (
-                          <div className="mt-1 h-1 bg-claude-border/30 rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-claude-accent rounded-full"
-                              initial={{ width: 0 }}
-                              animate={{ width: `${item.progress}%` }}
-                              transition={{ duration: 0.3 }}
-                            />
-                          </div>
-                        )}
-                        {item.error && (
-                          <span className="text-[10px] text-red-500 font-sans">{item.error}</span>
-                        )}
-                      </div>
-
-                      {/* Per-item type selector (only for pending) */}
-                      {item.status === 'pending' && (
-                        <select
-                          value={item.docType}
-                          onChange={(e) =>
-                            updateItemDocType(item.id, e.target.value as DocType)
-                          }
-                          className="text-[10px] border border-claude-border rounded-md px-1.5 py-0.5 bg-white text-claude-text font-sans"
-                        >
-                          {(Object.keys(DOC_TYPE_LABELS) as DocType[]).map((t) => (
-                            <option key={t} value={t}>
-                              {DOC_TYPE_LABELS[t]}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {item.status !== 'uploading' && item.status !== 'processing' && (
-                        <button
-                          onClick={() => removeFromQueue(item.id)}
-                          className="p-1 text-claude-subtext/40 hover:text-red-500 transition-colors"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
+                      item={item}
+                      onRemove={removeFile}
+                      onCancel={cancelFile}
+                      onRetry={retryFile}
+                      onDocTypeChange={updateDocType}
+                    />
                   ))}
                 </div>
 
                 {/* Queue footer */}
-                {pendingCount > 0 && (
+                {queuedCount > 0 && !isUploading && (
                   <div className="px-5 py-3 border-t border-claude-border/50 flex items-center justify-between">
                     <span className="text-xs text-claude-subtext/60 font-sans">
-                      {pendingCount} файлів готові до завантаження
+                      {queuedCount} файлів готові до завантаження
                     </span>
                     <button
-                      onClick={startUpload}
-                      disabled={isUploading}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-claude-text text-white rounded-xl text-sm font-medium hover:bg-claude-text/90 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-sans"
+                      onClick={handleStartUpload}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-claude-text text-white rounded-xl text-sm font-medium hover:bg-claude-text/90 transition-all active:scale-[0.98] shadow-sm font-sans"
                     >
-                      {isUploading ? (
-                        <>
-                          <Loader2 size={14} className="animate-spin" />
-                          Завантаження...
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={14} />
-                          Завантажити все ({pendingCount})
-                        </>
-                      )}
+                      <Upload size={14} />
+                      Завантажити ({queuedCount})
                     </button>
                   </div>
                 )}
@@ -837,6 +794,123 @@ export function DocumentsPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Individual upload item row component
+ */
+function UploadItemRow({
+  item,
+  onRemove,
+  onCancel,
+  onRetry,
+  onDocTypeChange,
+}: {
+  item: UploadItem;
+  onRemove: (id: string) => void;
+  onCancel: (id: string) => void;
+  onRetry: (id: string) => void;
+  onDocTypeChange: (id: string, docType: string) => void;
+}) {
+  const Icon = getFileIcon(item.mimeType);
+  const isActive = ['initializing', 'uploading', 'assembling', 'processing'].includes(
+    item.status
+  );
+
+  return (
+    <div className="flex items-center gap-3 px-5 py-2.5 hover:bg-claude-bg/50 transition-colors">
+      <div className="flex-shrink-0">
+        {item.status === 'completed' ? (
+          <CheckCircle size={16} className="text-green-500" />
+        ) : item.status === 'failed' ? (
+          <AlertCircle size={16} className="text-red-500" />
+        ) : item.status === 'cancelled' ? (
+          <XCircle size={16} className="text-gray-400" />
+        ) : isActive ? (
+          <Loader2 size={16} className="text-claude-accent animate-spin" />
+        ) : item.status === 'paused' ? (
+          <Pause size={16} className="text-amber-500" />
+        ) : (
+          <Icon size={16} className="text-claude-subtext/50" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-claude-text truncate font-sans">
+            {item.relativePath || item.fileName}
+          </span>
+          <span className="text-[10px] text-claude-subtext/50 flex-shrink-0 font-sans">
+            {formatFileSize(item.fileSize)}
+          </span>
+          {isActive && (
+            <span className="text-[10px] text-claude-accent font-sans">
+              {STATUS_LABELS[item.status] || item.status}
+            </span>
+          )}
+        </div>
+        {(isActive || item.status === 'paused') && (
+          <div className="mt-1 h-1 bg-claude-border/30 rounded-full overflow-hidden">
+            <motion.div
+              className={`h-full rounded-full ${
+                item.status === 'paused' ? 'bg-amber-400' : 'bg-claude-accent'
+              }`}
+              initial={{ width: 0 }}
+              animate={{ width: `${item.progress * 100}%` }}
+              transition={{ duration: 0.3 }}
+            />
+          </div>
+        )}
+        {item.error && (
+          <span className="text-[10px] text-red-500 font-sans">{item.error}</span>
+        )}
+      </div>
+
+      {/* Per-item doc type selector (only for queued) */}
+      {item.status === 'queued' && (
+        <select
+          value={item.docType}
+          onChange={(e) => onDocTypeChange(item.id, e.target.value)}
+          className="text-[10px] border border-claude-border rounded-md px-1.5 py-0.5 bg-white text-claude-text font-sans"
+        >
+          {(Object.keys(DOC_TYPE_LABELS) as DocType[]).map((t) => (
+            <option key={t} value={t}>
+              {DOC_TYPE_LABELS[t]}
+            </option>
+          ))}
+        </select>
+      )}
+
+      {/* Action buttons */}
+      {item.status === 'failed' && (
+        <button
+          onClick={() => onRetry(item.id)}
+          className="p-1 text-amber-500 hover:text-amber-700 transition-colors"
+          title="Повторити"
+        >
+          <RotateCcw size={14} />
+        </button>
+      )}
+      {isActive && (
+        <button
+          onClick={() => onCancel(item.id)}
+          className="p-1 text-claude-subtext/40 hover:text-red-500 transition-colors"
+          title="Скасувати"
+        >
+          <XCircle size={14} />
+        </button>
+      )}
+      {['queued', 'completed', 'failed', 'cancelled'].includes(item.status) && (
+        <button
+          onClick={() => onRemove(item.id)}
+          className="p-1 text-claude-subtext/40 hover:text-red-500 transition-colors"
+          title="Видалити"
+        >
+          <X size={14} />
+        </button>
+      )}
     </div>
   );
 }

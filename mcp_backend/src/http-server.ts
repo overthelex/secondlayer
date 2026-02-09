@@ -47,6 +47,10 @@ import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from '.
 import { ToolRegistry } from './api/tool-registry.js';
 import { ServiceProxy } from './services/service-proxy.js';
 import { ServiceType } from './types/gateway.js';
+import { UploadService } from './services/upload-service.js';
+import { MinioService } from './services/minio-service.js';
+import { createUploadRouter } from './routes/upload-routes.js';
+import { VaultTools } from './api/vault-tools.js';
 
 dotenv.config();
 
@@ -68,6 +72,9 @@ class HTTPMCPServer {
   private oauthService: OAuthService;
   private toolRegistry: ToolRegistry;
   private serviceProxy: ServiceProxy;
+  private uploadService: UploadService;
+  private minioService: MinioService;
+  private vaultTools: VaultTools;
 
   constructor() {
     this.app = express();
@@ -116,6 +123,18 @@ class HTTPMCPServer {
     this.toolRegistry = new ToolRegistry();
     this.serviceProxy = new ServiceProxy(this.costTracker);
     logger.info('Unified Gateway initialized (Tool Registry + Service Proxy)');
+
+    // Initialize upload and storage services
+    this.uploadService = new UploadService(this.services.db.getPool());
+    this.minioService = new MinioService();
+    this.vaultTools = new VaultTools(
+      this.documentParser,
+      this.services.sectionizer,
+      this.services.patternStore,
+      this.services.embeddingService,
+      this.services.documentService
+    );
+    logger.info('Upload and MinIO services initialized');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -1142,6 +1161,21 @@ class HTTPMCPServer {
     const teamService = createTeamService(this.services.db);
     this.app.use('/api/team', requireJWT as any, createTeamRoutes(teamService));
 
+    // Upload routes - chunked file upload with MinIO storage
+    // POST /api/upload/init - Create upload session
+    // POST /api/upload/:uploadId/chunk - Upload chunk
+    // POST /api/upload/:uploadId/complete - Assemble and process
+    // GET /api/upload/:uploadId/status - Check status
+    // DELETE /api/upload/:uploadId - Cancel
+    // GET /api/upload/active - List active sessions
+    this.app.use('/api/upload', requireJWT as any, createUploadRouter(
+      this.uploadService,
+      this.minioService,
+      this.vaultTools,
+      this.services.db.getPool()
+    ));
+    logger.info('Upload routes registered at /api/upload');
+
     // Admin routes - require JWT + admin privileges
     // GET /api/admin/stats/overview - Dashboard statistics
     // GET /api/admin/stats/revenue-chart - Revenue chart data
@@ -1727,6 +1761,13 @@ class HTTPMCPServer {
       } else {
         logger.info('Redis not available - AI legislation classification will work without caching');
       }
+
+      // Cleanup expired upload sessions every hour
+      setInterval(() => {
+        this.uploadService.cleanupExpired().catch((err) => {
+          logger.error('Upload cleanup failed', { error: err.message });
+        });
+      }, 60 * 60 * 1000);
 
       logger.info('HTTP MCP Server services initialized');
     } catch (error) {

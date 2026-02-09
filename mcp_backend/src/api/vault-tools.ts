@@ -6,6 +6,7 @@ import { DocumentService, Document } from '../services/document-service.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentSection } from '../types/index.js';
+import fs from 'fs/promises';
 
 /**
  * Vault Tools API - Stage 4 Implementation
@@ -242,6 +243,29 @@ Pipeline:
         },
       },
     ];
+  }
+
+  /**
+   * Store document from file path (used by chunked upload)
+   * Same pipeline as storeDocument but reads from disk instead of Base64
+   */
+  async storeDocumentFromPath(args: {
+    filePath: string;
+    mimeType?: string;
+    title: string;
+    type: 'contract' | 'legislation' | 'court_decision' | 'internal' | 'other';
+    metadata?: any;
+  }): Promise<VaultDocument> {
+    const fileBuffer = await fs.readFile(args.filePath);
+    const fileBase64 = fileBuffer.toString('base64');
+
+    return this.storeDocument({
+      fileBase64,
+      mimeType: args.mimeType,
+      title: args.title,
+      type: args.type,
+      metadata: args.metadata,
+    });
   }
 
   /**
