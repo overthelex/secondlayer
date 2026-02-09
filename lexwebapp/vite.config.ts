@@ -27,6 +27,11 @@ export default defineConfig(({ mode }) => {
           key: fs.readFileSync(keyFile),
         },
       }),
+      hmr: {
+        host: 'localdev.legal.org.ua',
+        port: 5173,
+        protocol: 'wss',
+      },
       proxy: mode === 'development' ? {
         '/api': {
           target: 'https://stage.legal.org.ua',
