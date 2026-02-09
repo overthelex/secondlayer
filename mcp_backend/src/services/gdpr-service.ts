@@ -1,0 +1,226 @@
+import { Database } from '../database/database.js';
+import { logger } from '../utils/logger.js';
+import { v4 as uuidv4 } from 'uuid';
+import { MinioService } from './minio-service.js';
+import { EmbeddingService } from './embedding-service.js';
+
+export interface GdprRequest {
+  id: string;
+  user_id: string;
+  request_type: 'export' | 'deletion' | 'access';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  requested_at: Date;
+  completed_at?: Date;
+  download_url?: string;
+  download_expires_at?: Date;
+  metadata?: any;
+}
+
+export class GdprService {
+  constructor(
+    private db: Database,
+    private minioService: MinioService,
+    private embeddingService: EmbeddingService
+  ) {}
+
+  async requestExport(userId: string): Promise<GdprRequest> {
+    const id = uuidv4();
+
+    // Create request record
+    const result = await this.db.query(
+      `INSERT INTO gdpr_requests (id, user_id, request_type, status)
+       VALUES ($1, $2, 'export', 'processing')
+       RETURNING *`,
+      [id, userId]
+    );
+
+    // Gather data in background
+    this.gatherExportData(id, userId).catch((err) => {
+      logger.error('[GDPR] Export failed', { requestId: id, error: err.message });
+    });
+
+    return result.rows[0];
+  }
+
+  private async gatherExportData(requestId: string, userId: string): Promise<void> {
+    try {
+      // Gather all user data
+      const [profile, conversations, documents, uploads, costTracking, billing, apiKeys] =
+        await Promise.all([
+          this.db.query(`SELECT id, email, name, picture, role, created_at FROM users WHERE id = $1`, [userId]),
+          this.db.query(
+            `SELECT c.*, json_agg(
+               json_build_object('id', m.id, 'role', m.role, 'content', m.content, 'created_at', m.created_at)
+               ORDER BY m.created_at
+             ) FILTER (WHERE m.id IS NOT NULL) as messages
+             FROM conversations c
+             LEFT JOIN conversation_messages m ON m.conversation_id = c.id
+             WHERE c.user_id = $1
+             GROUP BY c.id
+             ORDER BY c.updated_at DESC`,
+            [userId]
+          ),
+          this.db.query(
+            `SELECT id, type, title, metadata, created_at FROM documents WHERE user_id = $1`,
+            [userId]
+          ),
+          this.db.query(
+            `SELECT id, file_name, file_size, mime_type, status, created_at
+             FROM upload_sessions WHERE user_id = $1`,
+            [userId]
+          ),
+          this.db.query(
+            `SELECT id, tool_name, user_query, status, total_cost_usd, created_at
+             FROM cost_tracking WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1000`,
+            [userId]
+          ),
+          this.db.query(
+            `SELECT ub.*, json_agg(
+               json_build_object('id', bt.id, 'type', bt.type, 'amount_usd', bt.amount_usd, 'created_at', bt.created_at)
+               ORDER BY bt.created_at DESC
+             ) FILTER (WHERE bt.id IS NOT NULL) as transactions
+             FROM user_billing ub
+             LEFT JOIN billing_transactions bt ON bt.user_id = ub.user_id
+             WHERE ub.user_id = $1
+             GROUP BY ub.user_id, ub.balance_usd, ub.balance_uah, ub.pricing_tier,
+                      ub.is_active, ub.created_at, ub.updated_at`,
+            [userId]
+          ),
+          this.db.query(
+            `SELECT id, name, prefix, created_at, last_used_at FROM api_keys WHERE user_id = $1`,
+            [userId]
+          ),
+        ]);
+
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        profile: profile.rows[0] || null,
+        conversations: conversations.rows,
+        documents: documents.rows,
+        uploads: uploads.rows,
+        usage_history: costTracking.rows,
+        billing: billing.rows[0] || null,
+        api_keys: apiKeys.rows,
+      };
+
+      // Store as JSON string in metadata
+      const exportJson = JSON.stringify(exportData, null, 2);
+
+      await this.db.query(
+        `UPDATE gdpr_requests
+         SET status = 'completed',
+             completed_at = NOW(),
+             metadata = $1,
+             download_expires_at = NOW() + INTERVAL '7 days'
+         WHERE id = $2`,
+        [JSON.stringify({ size_bytes: exportJson.length, data: exportData }), requestId]
+      );
+
+      logger.info('[GDPR] Export completed', { requestId, userId, sizeBytes: exportJson.length });
+    } catch (error: any) {
+      await this.db.query(
+        `UPDATE gdpr_requests SET status = 'failed', metadata = $1 WHERE id = $2`,
+        [JSON.stringify({ error: error.message }), requestId]
+      );
+      throw error;
+    }
+  }
+
+  async getExportData(requestId: string, userId: string): Promise<GdprRequest | null> {
+    const result = await this.db.query(
+      `SELECT * FROM gdpr_requests WHERE id = $1 AND user_id = $2`,
+      [requestId, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async requestDeletion(userId: string): Promise<GdprRequest> {
+    const id = uuidv4();
+
+    const result = await this.db.query(
+      `INSERT INTO gdpr_requests (id, user_id, request_type, status)
+       VALUES ($1, $2, 'deletion', 'processing')
+       RETURNING *`,
+      [id, userId]
+    );
+
+    // Process deletion in background
+    this.processDeletion(id, userId).catch((err) => {
+      logger.error('[GDPR] Deletion failed', { requestId: id, error: err.message });
+    });
+
+    return result.rows[0];
+  }
+
+  private async processDeletion(requestId: string, userId: string): Promise<void> {
+    try {
+      // 1. Get user document IDs for Qdrant cleanup
+      const docsResult = await this.db.query(
+        `SELECT id FROM documents WHERE user_id = $1`,
+        [userId]
+      );
+      const docIds = docsResult.rows.map((r: any) => r.id);
+
+      // 2. Delete Qdrant vectors for user documents
+      for (const docId of docIds) {
+        try {
+          await this.embeddingService.deleteByDocId(docId);
+        } catch (err: any) {
+          logger.warn('[GDPR] Failed to delete vectors for doc', { docId, error: err.message });
+        }
+      }
+
+      // 3. Delete MinIO bucket
+      try {
+        await this.minioService.deleteBucket(`user-${userId}`);
+      } catch (err: any) {
+        logger.warn('[GDPR] Failed to delete MinIO bucket', { userId, error: err.message });
+      }
+
+      // 4. Anonymize cost_tracking (keep for aggregate analytics)
+      await this.db.query(
+        `UPDATE cost_tracking SET user_id = NULL, user_query = NULL WHERE user_id = $1`,
+        [userId]
+      );
+
+      // 5. Anonymize documents (set user_id to NULL, keep public docs intact)
+      await this.db.query(
+        `UPDATE documents SET user_id = NULL WHERE user_id = $1`,
+        [userId]
+      );
+
+      // 6. Conversations + messages cascade-delete via FK
+      // 7. Upload sessions, API keys, billing all cascade from users table
+      // 8. Delete the user record itself
+      await this.db.query(`DELETE FROM users WHERE id = $1`, [userId]);
+
+      await this.db.query(
+        `UPDATE gdpr_requests SET status = 'completed', completed_at = NOW() WHERE id = $1`,
+        [requestId]
+      );
+
+      logger.info('[GDPR] Deletion completed', {
+        requestId,
+        userId,
+        documentsAnonymized: docIds.length,
+      });
+    } catch (error: any) {
+      await this.db.query(
+        `UPDATE gdpr_requests SET status = 'failed', metadata = $1 WHERE id = $2`,
+        [JSON.stringify({ error: error.message }), requestId]
+      );
+      throw error;
+    }
+  }
+
+  async listRequests(userId: string): Promise<GdprRequest[]> {
+    const result = await this.db.query(
+      `SELECT id, user_id, request_type, status, requested_at, completed_at, download_expires_at
+       FROM gdpr_requests
+       WHERE user_id = $1
+       ORDER BY requested_at DESC`,
+      [userId]
+    );
+    return result.rows;
+  }
+}

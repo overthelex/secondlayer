@@ -51,6 +51,10 @@ import { UploadService } from './services/upload-service.js';
 import { MinioService } from './services/minio-service.js';
 import { createUploadRouter } from './routes/upload-routes.js';
 import { VaultTools } from './api/vault-tools.js';
+import { ConversationService } from './services/conversation-service.js';
+import { GdprService } from './services/gdpr-service.js';
+import { createConversationRouter } from './routes/conversation-routes.js';
+import { createGdprRouter } from './routes/gdpr-routes.js';
 
 dotenv.config();
 
@@ -75,6 +79,8 @@ class HTTPMCPServer {
   private uploadService: UploadService;
   private minioService: MinioService;
   private vaultTools: VaultTools;
+  private conversationService: ConversationService;
+  private gdprService: GdprService;
 
   constructor() {
     this.app = express();
@@ -134,7 +140,10 @@ class HTTPMCPServer {
       this.services.embeddingService,
       this.services.documentService
     );
+    this.conversationService = new ConversationService(this.services.db);
+    this.gdprService = new GdprService(this.services.db, this.minioService, this.services.embeddingService);
     logger.info('Upload and MinIO services initialized');
+    logger.info('Conversation and GDPR services initialized');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -1161,6 +1170,14 @@ class HTTPMCPServer {
     const teamService = createTeamService(this.services.db);
     this.app.use('/api/team', requireJWT as any, createTeamRoutes(teamService));
 
+    // Conversation routes - server-side chat persistence
+    this.app.use('/api/conversations', requireJWT as any, createConversationRouter(this.conversationService));
+    logger.info('Conversation routes registered at /api/conversations');
+
+    // GDPR routes - data export and deletion
+    this.app.use('/api/gdpr', requireJWT as any, createGdprRouter(this.gdprService));
+    logger.info('GDPR routes registered at /api/gdpr');
+
     // Upload routes - chunked file upload with MinIO storage
     // POST /api/upload/init - Create upload session
     // POST /api/upload/:uploadId/chunk - Upload chunk
@@ -1234,10 +1251,11 @@ class HTTPMCPServer {
     // Query history endpoint - require JWT (user login)
     this.app.get('/api/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
       try {
+        const userId = req.user!.id;
         const limit = parseInt(req.query.limit as string) || 50;
         const offset = parseInt(req.query.offset as string) || 0;
 
-        // Get user's query history from cost_tracking
+        // Get user's query history from cost_tracking (filtered by user_id)
         const result = await this.services.db.query(
           `SELECT
             id,
@@ -1251,21 +1269,24 @@ class HTTPMCPServer {
             execution_time_ms,
             total_cost_usd
           FROM cost_tracking
-          WHERE status IN ('completed', 'failed')
+          WHERE user_id = $1
+            AND status IN ('completed', 'failed')
             AND user_query IS NOT NULL
             AND user_query != ''
           ORDER BY created_at DESC
-          LIMIT $1 OFFSET $2`,
-          [limit, offset]
+          LIMIT $2 OFFSET $3`,
+          [userId, limit, offset]
         );
 
         // Get total count
         const countResult = await this.services.db.query(
           `SELECT COUNT(*)
           FROM cost_tracking
-          WHERE status IN ('completed', 'failed')
+          WHERE user_id = $1
+            AND status IN ('completed', 'failed')
             AND user_query IS NOT NULL
-            AND user_query != ''`
+            AND user_query != ''`,
+          [userId]
         );
 
         res.json({

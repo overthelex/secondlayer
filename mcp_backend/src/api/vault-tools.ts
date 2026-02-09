@@ -255,6 +255,7 @@ Pipeline:
     title: string;
     type: 'contract' | 'legislation' | 'court_decision' | 'internal' | 'other';
     metadata?: any;
+    userId?: string;
   }): Promise<VaultDocument> {
     const fileBuffer = await fs.readFile(args.filePath);
     const fileBase64 = fileBuffer.toString('base64');
@@ -265,6 +266,7 @@ Pipeline:
       title: args.title,
       type: args.type,
       metadata: args.metadata,
+      userId: args.userId,
     });
   }
 
@@ -284,6 +286,7 @@ Pipeline:
     title: string;
     type: 'contract' | 'legislation' | 'court_decision' | 'internal' | 'other';
     metadata?: any;
+    userId?: string;
   }): Promise<VaultDocument> {
     const startTime = Date.now();
     const documentId = uuidv4();
@@ -419,6 +422,7 @@ Pipeline:
         type: args.type,
         title: args.title,
         full_text: parsed.text,
+        user_id: args.userId,
         metadata: {
           ...parsed.metadata,
           ...args.metadata,
@@ -475,6 +479,7 @@ Pipeline:
     documentId: string;
     includeSections?: boolean;
     includePatterns?: boolean;
+    userId?: string;
   }): Promise<VaultDocument | null> {
     try {
       logger.info('[Vault] get_document started', {
@@ -483,7 +488,9 @@ Pipeline:
         includePatterns: args.includePatterns,
       });
 
-      const doc = await this.documentService.getDocumentById(args.documentId);
+      const doc = args.userId
+        ? await this.documentService.getDocumentForUser(args.documentId, args.userId)
+        : await this.documentService.getDocumentById(args.documentId);
       if (!doc) {
         logger.warn('[Vault] Document not found', { documentId: args.documentId });
         return null;
@@ -536,6 +543,7 @@ Pipeline:
     offset?: number;
     sortBy?: 'uploadedAt' | 'title' | 'riskLevel';
     sortOrder?: 'asc' | 'desc';
+    userId?: string;
   }): Promise<{ documents: VaultDocument[]; total: number }> {
     try {
       logger.info('[Vault] list_documents started', args);
@@ -549,6 +557,13 @@ Pipeline:
       const conditions: string[] = ['1=1'];
       const params: any[] = [];
       let paramIndex = 1;
+
+      // User isolation: show own + public documents
+      if (args.userId) {
+        conditions.push(`(user_id = $${paramIndex} OR user_id IS NULL)`);
+        params.push(args.userId);
+        paramIndex++;
+      }
 
       if (args.type) {
         conditions.push(`type = $${paramIndex}`);

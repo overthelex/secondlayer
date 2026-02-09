@@ -21,10 +21,13 @@ import {
   FileCode,
   DollarSign,
   CreditCard,
-  UsersRound } from
+  UsersRound,
+  Trash2,
+  Edit3 } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
+import { useChatStore } from '../stores/chatStore';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -73,7 +76,22 @@ export function Sidebar({
 }: SidebarProps) {
   const { user } = useAuth();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const {
+    conversations,
+    conversationId: activeConversationId,
+    loadConversations,
+    switchConversation,
+    deleteConversation,
+    renameConversation,
+    newConversation,
+  } = useChatStore();
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -256,6 +274,7 @@ export function Sidebar({
         <div className="p-4 pb-3">
           <button
             onClick={() => {
+              newConversation();
               onNewChat();
               if (window.innerWidth < 1024) onClose();
             }}
@@ -272,6 +291,79 @@ export function Sidebar({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-3 py-1">
+          {/* Conversation History */}
+          {conversations.length > 0 && (
+            <div className="mb-4">
+              <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Розмови
+              </h3>
+              <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                {conversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    className={`group flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-all duration-200 ${
+                      activeConversationId === conv.id
+                        ? 'bg-claude-accent/10 text-claude-accent'
+                        : 'text-claude-text hover:bg-claude-subtext/8'
+                    }`}
+                    onClick={() => {
+                      switchConversation(conv.id);
+                      if (window.innerWidth < 1024) onClose();
+                    }}
+                  >
+                    <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
+                    {editingId === conv.id ? (
+                      <input
+                        className="flex-1 min-w-0 bg-white border border-claude-border rounded px-1 py-0.5 text-[13px] outline-none"
+                        value={editTitle}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            renameConversation(conv.id, editTitle);
+                            setEditingId(null);
+                          } else if (e.key === 'Escape') {
+                            setEditingId(null);
+                          }
+                        }}
+                        onBlur={() => {
+                          renameConversation(conv.id, editTitle);
+                          setEditingId(null);
+                        }}
+                        autoFocus
+                      />
+                    ) : (
+                      <span className="flex-1 truncate font-medium tracking-tight font-sans">
+                        {conv.title}
+                      </span>
+                    )}
+                    <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(conv.id);
+                          setEditTitle(conv.title);
+                        }}
+                        className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(conv.id);
+                        }}
+                        className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Context Section */}
           <div className="mb-6">
             <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">

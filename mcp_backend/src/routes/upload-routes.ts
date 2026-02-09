@@ -285,6 +285,7 @@ async function processUpload(
         mimeType: session.mimeType,
         title: session.fileName.replace(/\.[^/.]+$/, ''),
         type: (session.docType || 'other') as any,
+        userId: session.userId,
         metadata: {
           ...session.metadata,
           originalFilename: session.fileName,
@@ -316,11 +317,11 @@ async function processUpload(
       storagePath = `${minioResult.bucket}/${minioResult.key}`;
       documentId = uuidv4();
 
-      // Save metadata record in documents table
+      // Save metadata record in documents table (with user_id for isolation)
       await pool.query(
         `INSERT INTO documents
-          (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type)
-         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8)`,
+          (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type, user_id)
+         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8, $9)`,
         [
           documentId,
           documentId,
@@ -341,6 +342,7 @@ async function processUpload(
           storagePath,
           session.fileSize,
           session.mimeType,
+          session.userId,
         ]
       );
 
