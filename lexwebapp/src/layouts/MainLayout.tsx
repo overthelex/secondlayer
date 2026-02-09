@@ -20,6 +20,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.JUDGES]: 'Судді',
   [ROUTES.LAWYERS]: 'Адвокати',
   [ROUTES.CLIENTS]: 'Клієнти',
+  [ROUTES.DOCUMENTS]: 'Документи',
   [ROUTES.CASES]: 'Справи',
   [ROUTES.HISTORY]: 'Історія запитів',
   [ROUTES.DECISIONS_SEARCH]: 'Пошук судових рішень',
@@ -94,6 +95,7 @@ export function MainLayout() {
           onJudgesClick={() => navigate(ROUTES.JUDGES)}
           onLawyersClick={() => navigate(ROUTES.LAWYERS)}
           onClientsClick={() => navigate(ROUTES.CLIENTS)}
+          onDocumentsClick={() => navigate(ROUTES.DOCUMENTS)}
           onCasesClick={() => navigate(ROUTES.CASES)}
           onHistoryClick={() => navigate(ROUTES.HISTORY)}
           onDecisionsClick={() => navigate(ROUTES.DECISIONS_SEARCH)}

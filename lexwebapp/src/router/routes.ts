@@ -25,6 +25,9 @@ export const ROUTES = {
   CLIENT_DETAIL: '/clients/:id',
   CLIENT_MESSAGING: '/clients/messaging',
 
+  // Documents
+  DOCUMENTS: '/documents',
+
   // Cases & Decisions
   CASES: '/cases',
   CASE_ANALYSIS: '/case-analysis',

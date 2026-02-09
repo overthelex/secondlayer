@@ -34,6 +34,7 @@ interface SidebarProps {
   onLawyersClick?: () => void;
   onClientsClick?: () => void;
   onCasesClick?: () => void;
+  onDocumentsClick?: () => void;
   onHistoryClick?: () => void;
   onDecisionsClick?: () => void;
   onBillingClick?: () => void;
@@ -56,6 +57,7 @@ export function Sidebar({
   onLawyersClick,
   onClientsClick,
   onCasesClick,
+  onDocumentsClick,
   onHistoryClick,
   onDecisionsClick,
   onBillingClick,
@@ -107,7 +109,8 @@ export function Sidebar({
     id: 'documents',
     label: 'Документи',
     icon: FileText,
-    count: 45
+    count: null,
+    onClick: onDocumentsClick
   },
   {
     id: 'legal-sources',
