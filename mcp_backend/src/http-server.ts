@@ -55,6 +55,12 @@ import { ConversationService } from './services/conversation-service.js';
 import { GdprService } from './services/gdpr-service.js';
 import { createConversationRouter } from './routes/conversation-routes.js';
 import { createGdprRouter } from './routes/gdpr-routes.js';
+import { AuditService } from './services/audit-service.js';
+import { MatterService } from './services/matter-service.js';
+import { ConflictCheckService } from './services/conflict-check-service.js';
+import { LegalHoldService } from './services/legal-hold-service.js';
+import { initializeMatterAccess } from './middleware/matter-access.js';
+import { createMatterRoutes } from './routes/matter-routes.js';
 
 dotenv.config();
 
@@ -81,6 +87,10 @@ class HTTPMCPServer {
   private vaultTools: VaultTools;
   private conversationService: ConversationService;
   private gdprService: GdprService;
+  private auditService: AuditService;
+  private matterService: MatterService;
+  private conflictCheckService: ConflictCheckService;
+  private legalHoldService: LegalHoldService;
 
   constructor() {
     this.app = express();
@@ -144,6 +154,14 @@ class HTTPMCPServer {
     this.gdprService = new GdprService(this.services.db, this.minioService, this.services.embeddingService);
     logger.info('Upload and MinIO services initialized');
     logger.info('Conversation and GDPR services initialized');
+
+    // Initialize Client-Matter segregation services
+    this.auditService = new AuditService(this.services.db);
+    this.matterService = new MatterService(this.services.db, this.auditService);
+    this.conflictCheckService = new ConflictCheckService(this.services.db, this.auditService);
+    this.legalHoldService = new LegalHoldService(this.services.db, this.auditService);
+    initializeMatterAccess(this.matterService);
+    logger.info('Client-Matter segregation and legal hold services initialized');
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -1192,6 +1210,12 @@ class HTTPMCPServer {
       this.services.db.getPool()
     ));
     logger.info('Upload routes registered at /api/upload');
+
+    // Client-Matter segregation routes (matters, clients, legal holds, audit)
+    this.app.use('/api/matters', requireJWT as any, createMatterRoutes(
+      this.matterService, this.conflictCheckService, this.legalHoldService, this.auditService
+    ));
+    logger.info('Matter routes registered at /api/matters');
 
     // Admin routes - require JWT + admin privileges
     // GET /api/admin/stats/overview - Dashboard statistics

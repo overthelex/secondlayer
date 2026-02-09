@@ -6,6 +6,8 @@ export interface Conversation {
   id: string;
   user_id: string;
   title: string;
+  client_id?: string;
+  matter_id?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -26,35 +28,50 @@ export interface ConversationMessage {
 export class ConversationService {
   constructor(private db: Database) {}
 
-  async createConversation(userId: string, title?: string): Promise<Conversation> {
+  async createConversation(
+    userId: string,
+    title?: string,
+    options?: { clientId?: string; matterId?: string }
+  ): Promise<Conversation> {
     const id = uuidv4();
     const result = await this.db.query(
-      `INSERT INTO conversations (id, user_id, title)
-       VALUES ($1, $2, $3)
+      `INSERT INTO conversations (id, user_id, title, client_id, matter_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [id, userId, title || 'New conversation']
+      [id, userId, title || 'New conversation', options?.clientId || null, options?.matterId || null]
     );
     return result.rows[0];
   }
 
   async listConversations(
     userId: string,
-    options: { limit?: number; offset?: number } = {}
+    options: { limit?: number; offset?: number; matterId?: string } = {}
   ): Promise<{ conversations: Conversation[]; total: number }> {
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
+    const conditions = ['user_id = $1'];
+    const params: any[] = [userId];
+    let paramIndex = 2;
+
+    if (options.matterId) {
+      conditions.push(`matter_id = $${paramIndex++}`);
+      params.push(options.matterId);
+    }
+
+    const where = conditions.join(' AND ');
+
     const [result, countResult] = await Promise.all([
       this.db.query(
         `SELECT * FROM conversations
-         WHERE user_id = $1
+         WHERE ${where}
          ORDER BY updated_at DESC
-         LIMIT $2 OFFSET $3`,
-        [userId, limit, offset]
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        [...params, limit, offset]
       ),
       this.db.query(
-        `SELECT COUNT(*) FROM conversations WHERE user_id = $1`,
-        [userId]
+        `SELECT COUNT(*) FROM conversations WHERE ${where}`,
+        params
       ),
     ]);
 

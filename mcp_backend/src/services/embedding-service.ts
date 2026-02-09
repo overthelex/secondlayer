@@ -121,26 +121,33 @@ export class EmbeddingService {
     const vectorId = chunk.id || uuidv4();
     
     try {
+      const payload: Record<string, any> = {
+        doc_id: chunk.doc_id,
+        section_type: chunk.section_type,
+        text: chunk.text,
+        date: chunk.metadata.date,
+        court: chunk.metadata.court || null,
+        case_number: chunk.metadata.case_number || null,
+        chamber: chunk.metadata.chamber || null,
+        dispute_category: chunk.metadata.dispute_category || null,
+        outcome: chunk.metadata.outcome || null,
+        deviation_flag: chunk.metadata.deviation_flag ?? null,
+        precedent_status: chunk.metadata.precedent_status || null,
+        law_articles: chunk.metadata.law_articles || [],
+      };
+
+      // Include matter_id in payload if present (for matter-level filtering)
+      if ((chunk.metadata as any).matter_id) {
+        payload.matter_id = (chunk.metadata as any).matter_id;
+      }
+
       await this.qdrant.upsert(this.collectionName, {
         wait: true,
         points: [
           {
             id: vectorId,
             vector: chunk.embedding,
-            payload: {
-              doc_id: chunk.doc_id,
-              section_type: chunk.section_type,
-              text: chunk.text,
-              date: chunk.metadata.date,
-              court: chunk.metadata.court || null,
-              case_number: chunk.metadata.case_number || null,
-              chamber: chunk.metadata.chamber || null,
-              dispute_category: chunk.metadata.dispute_category || null,
-              outcome: chunk.metadata.outcome || null,
-              deviation_flag: chunk.metadata.deviation_flag ?? null,
-              precedent_status: chunk.metadata.precedent_status || null,
-              law_articles: chunk.metadata.law_articles || [],
-            },
+            payload,
           },
         ],
       });
@@ -165,6 +172,7 @@ export class EmbeddingService {
       deviation_flag?: boolean | null;
       precedent_status?: PrecedentStatusType;
       case_number?: string;
+      matter_id?: string;
     },
     limit: number = 10
   ): Promise<any[]> {
@@ -249,6 +257,13 @@ export class EmbeddingService {
           must.push({
             key: 'case_number',
             match: { value: filters.case_number },
+          });
+        }
+
+        if (filters.matter_id) {
+          must.push({
+            key: 'matter_id',
+            match: { value: filters.matter_id },
           });
         }
 

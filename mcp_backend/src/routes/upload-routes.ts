@@ -36,7 +36,7 @@ export function createUploadRouter(
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const { fileName, fileSize, mimeType, docType, relativePath, metadata } = req.body;
+      const { fileName, fileSize, mimeType, docType, relativePath, metadata, matterId } = req.body;
 
       if (!fileName || !fileSize || !mimeType) {
         return res.status(400).json({
@@ -48,6 +48,7 @@ export function createUploadRouter(
         docType,
         relativePath,
         metadata,
+        matterId,
       });
 
       res.status(201).json({
@@ -320,8 +321,8 @@ async function processUpload(
       // Save metadata record in documents table (with user_id for isolation)
       await pool.query(
         `INSERT INTO documents
-          (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type, user_id)
-         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8, $9)`,
+          (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type, user_id, matter_id)
+         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8, $9, $10)`,
         [
           documentId,
           documentId,
@@ -343,6 +344,7 @@ async function processUpload(
           session.fileSize,
           session.mimeType,
           session.userId,
+          session.matterId || null,
         ]
       );
 
