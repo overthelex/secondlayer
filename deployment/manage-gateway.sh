@@ -436,7 +436,7 @@ deploy_local() {
 
         # Step 4: Start infrastructure services only
         print_msg "$BLUE" "🚀 Starting infrastructure services..."
-        $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local
+        $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local minio-local
 
         # Step 5: Wait for databases to be ready, then run init
         print_msg "$BLUE" "⏳ Waiting for databases..."
