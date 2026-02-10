@@ -73,8 +73,7 @@ export class UploadManager {
   }
 
   setConcurrency(n: number) {
-    this.maxConcurrentFiles = Math.max(1, Math.min(10, n));
-    if (!this.isPaused) this.processQueue();
+    this.maxConcurrentFiles = Math.max(1, Math.min(100, n));
   }
 
   getConcurrency(): number {

@@ -454,7 +454,7 @@ export function DocumentsPage() {
                         onChange={(e) => setConcurrency(Number(e.target.value))}
                         className="text-xs border border-claude-border rounded-lg px-2 py-1.5 bg-white text-claude-text font-sans focus:outline-none focus:border-claude-subtext/40"
                       >
-                        {[1, 2, 3, 5, 8, 10].map((n) => (
+                        {[1, 2, 3, 5, 8, 10, 15, 20, 30, 50, 100].map((n) => (
                           <option key={n} value={n}>{n}</option>
                         ))}
                       </select>
