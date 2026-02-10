@@ -31,6 +31,10 @@ interface UploadState {
   uploadedBytes: number;
   concurrency: number;
 
+  // Server backpressure state
+  serverQueueDepth: number;
+  isThrottled: boolean;
+
   // Recovery state
   recoveredSessions: RecoveredSession[];
   isRecovering: boolean;
@@ -80,6 +84,12 @@ export const useUploadStore = create<UploadState>((set) => {
     const sync = syncFromManager(uploadManager);
     if (event.type === 'all-completed') {
       set({ ...sync, isUploading: false });
+    } else if (event.type === 'throttle-changed') {
+      set({
+        ...sync,
+        isThrottled: event.isThrottled ?? false,
+        serverQueueDepth: event.serverQueueDepth ?? 0,
+      });
     } else {
       set(sync);
     }
@@ -96,6 +106,8 @@ export const useUploadStore = create<UploadState>((set) => {
     totalBytes: 0,
     uploadedBytes: 0,
     concurrency: uploadManager.getConcurrency(),
+    serverQueueDepth: 0,
+    isThrottled: false,
     recoveredSessions: [],
     isRecovering: false,
 

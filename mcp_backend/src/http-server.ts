@@ -62,6 +62,8 @@ import { LegalHoldService } from './services/legal-hold-service.js';
 import { initializeMatterAccess } from './middleware/matter-access.js';
 import { createMatterRoutes } from './routes/matter-routes.js';
 import { UploadRecoveryService } from './services/upload-recovery-service.js';
+import { UploadQueueService } from './services/upload-queue-service.js';
+import { getUploadProcessingMetrics } from './routes/upload-routes.js';
 
 dotenv.config();
 
@@ -93,6 +95,7 @@ class HTTPMCPServer {
   private conflictCheckService: ConflictCheckService;
   private legalHoldService: LegalHoldService;
   private uploadRecoveryService: UploadRecoveryService;
+  private uploadQueueService: UploadQueueService;
 
   constructor() {
     this.app = express();
@@ -165,13 +168,24 @@ class HTTPMCPServer {
     initializeMatterAccess(this.matterService);
     logger.info('Client-Matter segregation and legal hold services initialized');
 
-    // Initialize upload recovery service
+    // Initialize BullMQ upload queue service
+    this.uploadQueueService = new UploadQueueService(
+      this.uploadService,
+      this.minioService,
+      this.vaultTools,
+      this.services.db.getPool()
+    );
+    this.uploadQueueService.startWorker();
+    logger.info('BullMQ upload queue service initialized');
+
+    // Initialize upload recovery service (uses BullMQ for re-enqueuing)
     this.uploadRecoveryService = new UploadRecoveryService(
       this.uploadService,
       this.minioService,
       this.vaultTools,
       this.services.db.getPool()
     );
+    this.uploadRecoveryService.setQueueService(this.uploadQueueService);
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -1236,7 +1250,8 @@ class HTTPMCPServer {
       this.uploadService,
       this.minioService,
       this.vaultTools,
-      this.services.db.getPool()
+      this.services.db.getPool(),
+      this.uploadQueueService
     ));
     logger.info('Upload routes registered at /api/upload');
 
@@ -1262,6 +1277,21 @@ class HTTPMCPServer {
     // GET /api/admin/api-keys - List API keys
     // GET /api/admin/settings - Get system settings
     this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db));
+
+    // Upload metrics endpoint (admin)
+    this.app.get('/api/admin/upload-metrics', requireJWT as any, (async (_req: DualAuthRequest, res: express.Response) => {
+      try {
+        const queueMetrics = await this.uploadQueueService.getMetrics();
+        const processingMetrics = getUploadProcessingMetrics();
+        res.json({
+          queue: queueMetrics,
+          processing: processingMetrics,
+        });
+      } catch (error: any) {
+        logger.error('[Admin] Upload metrics failed', { error: error.message });
+        res.status(500).json({ error: error.message });
+      }
+    }) as any);
 
     // Template system routes - Dynamic template classification, matching, generation, and analytics
     // POST /api/templates/classify-question - Classify question intent

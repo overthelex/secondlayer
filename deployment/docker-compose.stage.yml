@@ -2,6 +2,12 @@ services:
   postgres-stage:
     image: postgres:15-alpine
     container_name: secondlayer-postgres-stage
+    command: >-
+      postgres
+      -c max_connections=500
+      -c shared_buffers=256MB
+      -c work_mem=4MB
+      -c wal_buffers=16MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -117,7 +123,7 @@ services:
     - 6381:6379
     volumes:
     - redis_stage_data:/data
-    command: redis-server --appendonly yes --maxmemory 1536mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 2048mb --maxmemory-policy allkeys-lru
     healthcheck:
       test:
       - CMD
@@ -341,7 +347,7 @@ services:
     container_name: secondlayer-app-stage
     command:
     - node
-    - --max-old-space-size=4096
+    - --max-old-space-size=6144
     - dist/http-server.js
     environment:
       NODE_ENV: staging
@@ -435,8 +441,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.5'
-          memory: 3G
+          cpus: '2.0'
+          memory: 4G
         reservations:
           cpus: '0.75'
           memory: 1.5G

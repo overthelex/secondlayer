@@ -6,6 +6,9 @@
  * - Exponential backoff retry (3 attempts per chunk)
  * - Pause/Resume/Cancel per-file and global
  * - Byte-level progress tracking
+ * - Adaptive concurrency based on server backpressure
+ * - 429 handling with Retry-After
+ * - Batch init for 100+ files
  */
 
 import { uploadService, InitUploadResponse, UploadStatusResponse } from '../api/UploadService';
@@ -43,13 +46,16 @@ export type UploadEventType =
   | 'item-updated'
   | 'global-progress'
   | 'all-completed'
-  | 'error';
+  | 'error'
+  | 'throttle-changed';
 
 export interface UploadEvent {
   type: UploadEventType;
   item?: UploadItem;
   globalProgress?: number;
   error?: string;
+  isThrottled?: boolean;
+  serverQueueDepth?: number;
 }
 
 type UploadListener = (event: UploadEvent) => void;
@@ -58,14 +64,21 @@ const DEFAULT_CONCURRENT_FILES = 3;
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000]; // ms
 const POLL_INTERVAL = 2000; // ms
+const BATCH_INIT_THRESHOLD = 10; // Use batch init for 10+ files
 
 export class UploadManager {
   private items: Map<string, UploadItem> = new Map();
   private activeUploads = 0;
   private maxConcurrentFiles = DEFAULT_CONCURRENT_FILES;
+  private userRequestedConcurrency = DEFAULT_CONCURRENT_FILES;
   private isPaused = false;
   private listeners: Set<UploadListener> = new Set();
   private abortControllers: Map<string, AbortController> = new Map();
+
+  // Adaptive throttling state
+  private _isThrottled = false;
+  private _serverQueueDepth = 0;
+  private interChunkDelay = 0; // ms, added when throttled
 
   subscribe(listener: UploadListener): () => void {
     this.listeners.add(listener);
@@ -73,11 +86,20 @@ export class UploadManager {
   }
 
   setConcurrency(n: number) {
-    this.maxConcurrentFiles = Math.max(1, Math.min(100, n));
+    this.userRequestedConcurrency = Math.max(1, Math.min(100, n));
+    this.maxConcurrentFiles = this.userRequestedConcurrency;
   }
 
   getConcurrency(): number {
     return this.maxConcurrentFiles;
+  }
+
+  get isThrottled(): boolean {
+    return this._isThrottled;
+  }
+
+  get serverQueueDepth(): number {
+    return this._serverQueueDepth;
   }
 
   private emit(event: UploadEvent) {
@@ -98,6 +120,40 @@ export class UploadManager {
       type: 'global-progress',
       globalProgress: totalBytes > 0 ? uploadedBytes / totalBytes : 0,
     });
+  }
+
+  /**
+   * Process backpressure headers from server response
+   */
+  private handleBackpressureHeaders(headers: Record<string, string> | null): void {
+    if (!headers) return;
+
+    const queueDepth = parseInt(headers['x-upload-queue-depth'] || '0', 10);
+    const throttle = headers['x-upload-throttle'] === '1';
+
+    this._serverQueueDepth = queueDepth;
+
+    if (throttle && !this._isThrottled) {
+      // Server is under load — reduce concurrency
+      this._isThrottled = true;
+      this.maxConcurrentFiles = Math.max(1, Math.floor(this.userRequestedConcurrency / 2));
+      this.interChunkDelay = 500;
+      this.emit({
+        type: 'throttle-changed',
+        isThrottled: true,
+        serverQueueDepth: queueDepth,
+      });
+    } else if (!throttle && this._isThrottled && queueDepth < 100) {
+      // Server recovered — gradually restore concurrency
+      this._isThrottled = false;
+      this.interChunkDelay = 0;
+      this.maxConcurrentFiles = this.userRequestedConcurrency;
+      this.emit({
+        type: 'throttle-changed',
+        isThrottled: false,
+        serverQueueDepth: queueDepth,
+      });
+    }
   }
 
   /**
@@ -138,8 +194,13 @@ export class UploadManager {
   /**
    * Start uploading all queued files
    */
-  start() {
+  async start() {
     this.isPaused = false;
+    // Batch-init sessions for large file sets (reduces 100 requests to 1)
+    const queued = Array.from(this.items.values()).filter((i) => i.status === 'queued');
+    if (queued.length >= BATCH_INIT_THRESHOLD) {
+      await this.batchInitSessions(queued);
+    }
     this.processQueue();
   }
 
@@ -343,6 +404,37 @@ export class UploadManager {
     }
   }
 
+  /**
+   * Batch initialize sessions for queued items that don't have uploadIds yet
+   */
+  private async batchInitSessions(items: UploadItem[]): Promise<void> {
+    const needInit = items.filter((i) => !i.uploadId);
+    if (needInit.length < BATCH_INIT_THRESHOLD) return; // Not worth batching
+
+    try {
+      const files = needInit.map((i) => ({
+        fileName: i.fileName,
+        fileSize: i.fileSize,
+        mimeType: i.mimeType,
+        docType: i.docType,
+        relativePath: i.relativePath,
+      }));
+
+      const response = await uploadService.initBatch(files);
+      if (response?.sessions) {
+        for (let idx = 0; idx < response.sessions.length; idx++) {
+          const session = response.sessions[idx];
+          const item = needInit[idx];
+          if (item && session && !('error' in session)) {
+            item.uploadId = session.uploadId;
+          }
+        }
+      }
+    } catch {
+      // Batch init failed — will fall back to individual init per file
+    }
+  }
+
   private async uploadFile(item: UploadItem): Promise<void> {
     try {
       // Step 1: Init session
@@ -395,11 +487,16 @@ export class UploadManager {
         const end = Math.min(start + chunkSize, item.fileSize);
         const chunk = item.file.slice(start, end);
 
+        // Inter-chunk delay when server is throttled
+        if (this.interChunkDelay > 0) {
+          await new Promise((r) => setTimeout(r, this.interChunkDelay));
+        }
+
         // Upload with retries
         let lastError: Error | null = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
-            await uploadService.uploadChunk(
+            const response = await uploadService.uploadChunk(
               item.uploadId!,
               i,
               chunk,
@@ -415,9 +512,28 @@ export class UploadManager {
                 this.emitItemUpdate(item);
               }
             );
+
+            // Process backpressure headers from chunk response
+            if (response && typeof response === 'object' && '_headers' in response) {
+              this.handleBackpressureHeaders((response as any)._headers);
+            }
+
             lastError = null;
             break;
           } catch (err: any) {
+            // Handle 429 — wait for Retry-After, don't count as retry attempt
+            if (err.status === 429 || err.message?.includes('429')) {
+              const retryAfter = parseInt(err.retryAfter || '5', 10);
+              this.emit({
+                type: 'error',
+                error: `Server busy, uploads paused for ${retryAfter}s`,
+              });
+              await new Promise((r) => setTimeout(r, retryAfter * 1000));
+              // Don't increment attempt counter for 429
+              attempt--;
+              continue;
+            }
+
             lastError = err;
             if (attempt < MAX_RETRIES) {
               const delay = RETRY_DELAYS[attempt] || 4000;

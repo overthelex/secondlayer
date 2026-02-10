@@ -64,6 +64,25 @@ export class UploadService extends BaseService {
   }
 
   /**
+   * Batch initialize multiple upload sessions (for 10+ files)
+   */
+  async initBatch(files: Array<{
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    docType?: string;
+    relativePath?: string;
+    metadata?: any;
+  }>): Promise<{ sessions: Array<InitUploadResponse | { error: string; fileName: string }> }> {
+    try {
+      const response = await this.client.post('/upload/init-batch', { files });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
    * Upload a single chunk using XMLHttpRequest for progress tracking
    */
   uploadChunk(
@@ -94,7 +113,20 @@ export class UploadService extends BaseService {
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText));
+          const result = JSON.parse(xhr.responseText);
+          // Attach response headers for backpressure detection
+          result._headers = {
+            'x-upload-queue-depth': xhr.getResponseHeader('X-Upload-Queue-Depth') || '0',
+            'x-upload-throttle': xhr.getResponseHeader('X-Upload-Throttle') || '0',
+            'retry-after': xhr.getResponseHeader('Retry-After') || '',
+          };
+          resolve(result);
+        } else if (xhr.status === 429) {
+          const retryAfter = xhr.getResponseHeader('Retry-After') || '5';
+          const err: any = new Error(`HTTP 429 - Rate limited`);
+          err.status = 429;
+          err.retryAfter = retryAfter;
+          reject(err);
         } else {
           try {
             const err = JSON.parse(xhr.responseText);
