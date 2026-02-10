@@ -4,6 +4,7 @@ import { UploadService, UploadSession } from './upload-service.js';
 import { MinioService } from './minio-service.js';
 import { VaultTools } from '../api/vault-tools.js';
 import { processUploadFile, ProcessorDeps } from './upload-processor.js';
+import { UploadQueueService } from './upload-queue-service.js';
 import { Pool } from 'pg';
 
 const MAX_RETRIES = 3;
@@ -16,6 +17,7 @@ export class UploadRecoveryService {
   private startupTimeout: ReturnType<typeof setTimeout> | null = null;
   private deps: ProcessorDeps;
   private running = false;
+  private uploadQueueService: UploadQueueService | null = null;
 
   constructor(
     private uploadService: UploadService,
@@ -24,6 +26,13 @@ export class UploadRecoveryService {
     pool: Pool
   ) {
     this.deps = { uploadService, minioService, vaultTools, pool };
+  }
+
+  /**
+   * Set BullMQ queue service for persistent job enqueuing
+   */
+  setQueueService(queueService: UploadQueueService): void {
+    this.uploadQueueService = queueService;
   }
 
   start(): void {
@@ -73,6 +82,14 @@ export class UploadRecoveryService {
         sessionIds: sessions.map(s => s.id),
       });
 
+      // If BullMQ is available, re-enqueue stuck sessions (BullMQ handles retries natively)
+      if (this.uploadQueueService) {
+        const enqueued = await this.uploadQueueService.enqueueRecovery(sessions);
+        logger.info(`[UploadRecovery] ${trigger} pass: enqueued ${enqueued} sessions to BullMQ`);
+        return;
+      }
+
+      // Fallback: in-memory recovery (original behavior)
       for (const session of sessions) {
         try {
           await this.recoverSession(session, trigger);

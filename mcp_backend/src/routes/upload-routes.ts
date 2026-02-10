@@ -8,37 +8,107 @@ import { MinioService } from '../services/minio-service.js';
 import { VaultTools } from '../api/vault-tools.js';
 import { processUploadFile, ProcessorDeps } from '../services/upload-processor.js';
 import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
+import { uploadInitRateLimit, uploadChunkRateLimit } from '../middleware/upload-rate-limit.js';
+import { UploadQueueService } from '../services/upload-queue-service.js';
 import { Pool } from 'pg';
 
-// Multer configured for disk storage of chunks
+// Multer configured for disk storage — avoids holding 6MB buffers in memory per chunk
+const UPLOAD_TEMP_DIR = process.env.UPLOAD_TEMP_DIR || '/tmp/uploads';
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      // Use a shared multer-tmp dir to avoid conflicts with session dirs
+      const multerDir = path.join(UPLOAD_TEMP_DIR, 'multer-tmp');
+      fs.mkdir(multerDir, { recursive: true }).then(() => cb(null, multerDir)).catch(cb as any);
+    },
+    filename: (_req, _file, cb) => {
+      cb(null, `chunk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    },
+  }),
   limits: {
     fileSize: 6 * 1024 * 1024, // 6MB per chunk (slightly over 5MB chunk size for overhead)
   },
 });
 
-// Semaphore to limit concurrent file processing (DB pool, OpenAI rate limits)
-const MAX_CONCURRENT_PROCESSING = 30;
-let activeProcessing = 0;
-const processingQueue: Array<() => void> = [];
+// Per-user concurrent session quota
+const MAX_USER_SESSIONS = parseInt(process.env.MAX_USER_SESSIONS || '50', 10);
 
-function acquireProcessingSlot(): Promise<void> {
+// Semaphore to limit concurrent file processing (DB pool, OpenAI rate limits)
+const MAX_CONCURRENT_PROCESSING = parseInt(process.env.MAX_CONCURRENT_PROCESSING || '50', 10);
+let activeProcessing = 0;
+
+// Fair processing queue: round-robin per user instead of global FIFO
+const userQueues: Map<string, Array<{ resolve: () => void; userId: string }>> = new Map();
+let userQueueOrder: string[] = []; // Round-robin rotation order
+let currentUserIndex = 0;
+
+function getQueueDepth(): number {
+  let total = 0;
+  for (const q of userQueues.values()) {
+    total += q.length;
+  }
+  return total;
+}
+
+function getProcessingUtilization(): number {
+  return MAX_CONCURRENT_PROCESSING > 0 ? activeProcessing / MAX_CONCURRENT_PROCESSING : 0;
+}
+
+function acquireProcessingSlot(userId: string): Promise<void> {
   if (activeProcessing < MAX_CONCURRENT_PROCESSING) {
     activeProcessing++;
     return Promise.resolve();
   }
   return new Promise((resolve) => {
-    processingQueue.push(resolve);
+    if (!userQueues.has(userId)) {
+      userQueues.set(userId, []);
+      userQueueOrder.push(userId);
+    }
+    userQueues.get(userId)!.push({ resolve, userId });
   });
 }
 
 function releaseProcessingSlot(): void {
-  if (processingQueue.length > 0) {
-    const next = processingQueue.shift()!;
-    next();
-  } else {
+  // Find the next user with pending work (round-robin)
+  if (userQueueOrder.length === 0) {
     activeProcessing--;
+    return;
+  }
+
+  // Try each user in round-robin order
+  for (let i = 0; i < userQueueOrder.length; i++) {
+    const idx = (currentUserIndex + i) % userQueueOrder.length;
+    const userId = userQueueOrder[idx];
+    const queue = userQueues.get(userId);
+
+    if (queue && queue.length > 0) {
+      const next = queue.shift()!;
+      currentUserIndex = (idx + 1) % userQueueOrder.length;
+      // Clean up empty queues
+      if (queue.length === 0) {
+        userQueues.delete(userId);
+        userQueueOrder = userQueueOrder.filter((u) => u !== userId);
+        if (currentUserIndex >= userQueueOrder.length) {
+          currentUserIndex = 0;
+        }
+      }
+      next.resolve();
+      return;
+    }
+  }
+
+  // No pending work found
+  activeProcessing--;
+}
+
+/** Add backpressure headers to a response */
+function addBackpressureHeaders(res: Response): void {
+  const utilization = getProcessingUtilization();
+  const queueDepth = getQueueDepth();
+  res.setHeader('X-Upload-Queue-Depth', queueDepth.toString());
+  res.setHeader('X-Upload-Throttle', utilization >= 0.9 ? '1' : '0');
+  if (utilization >= 0.9) {
+    res.setHeader('Retry-After', '5');
   }
 }
 
@@ -46,18 +116,33 @@ export function createUploadRouter(
   uploadService: UploadService,
   minioService: MinioService,
   vaultTools: VaultTools,
-  pool: Pool
+  pool: Pool,
+  uploadQueueService?: UploadQueueService
 ): Router {
   const router = Router();
 
   /**
    * POST /init - Create a new upload session
    */
-  router.post('/init', (async (req: DualAuthRequest, res: Response): Promise<any> => {
+  router.post('/init', uploadInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Per-user concurrent session quota
+      const activeCount = await uploadService.getActiveSessionCount(userId);
+      if (activeCount >= MAX_USER_SESSIONS) {
+        res.setHeader('Retry-After', '30');
+        return res.status(429).json({
+          error: 'Too many active upload sessions',
+          message: `You have ${activeCount} active sessions (limit: ${MAX_USER_SESSIONS}). Wait for existing uploads to complete.`,
+          code: 'SESSION_QUOTA_EXCEEDED',
+          retryAfter: 30,
+          activeCount,
+          maxSessions: MAX_USER_SESSIONS,
+        });
       }
 
       const { fileName, fileSize, mimeType, docType, relativePath, metadata, matterId } = req.body;
@@ -75,6 +160,7 @@ export function createUploadRouter(
         matterId,
       });
 
+      addBackpressureHeaders(res);
       res.status(201).json({
         uploadId: session.id,
         chunkSize: session.chunkSize,
@@ -89,9 +175,75 @@ export function createUploadRouter(
   }) as any);
 
   /**
+   * POST /init-batch - Create multiple upload sessions at once
+   */
+  router.post('/init-batch', uploadInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { files } = req.body;
+      if (!Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: 'Missing or empty files array' });
+      }
+
+      if (files.length > 500) {
+        return res.status(400).json({ error: 'Maximum 500 files per batch init' });
+      }
+
+      // Check session quota for the entire batch
+      const activeCount = await uploadService.getActiveSessionCount(userId);
+      if (activeCount + files.length > MAX_USER_SESSIONS) {
+        res.setHeader('Retry-After', '30');
+        return res.status(429).json({
+          error: 'Too many active upload sessions',
+          message: `You have ${activeCount} active sessions and requested ${files.length} new ones (limit: ${MAX_USER_SESSIONS}).`,
+          code: 'SESSION_QUOTA_EXCEEDED',
+          retryAfter: 30,
+          activeCount,
+          maxSessions: MAX_USER_SESSIONS,
+        });
+      }
+
+      const sessions = [];
+      for (const f of files) {
+        if (!f.fileName || !f.fileSize || !f.mimeType) {
+          sessions.push({ error: 'Missing required fields: fileName, fileSize, mimeType', fileName: f.fileName });
+          continue;
+        }
+        try {
+          const session = await uploadService.createSession(userId, f.fileName, f.fileSize, f.mimeType, {
+            docType: f.docType,
+            relativePath: f.relativePath,
+            metadata: f.metadata,
+            matterId: f.matterId,
+          });
+          sessions.push({
+            uploadId: session.id,
+            chunkSize: session.chunkSize,
+            totalChunks: session.totalChunks,
+            uploadedChunks: session.uploadedChunks,
+            expiresAt: session.expiresAt,
+          });
+        } catch (err: any) {
+          sessions.push({ error: err.message, fileName: f.fileName });
+        }
+      }
+
+      addBackpressureHeaders(res);
+      res.status(201).json({ sessions });
+    } catch (error: any) {
+      logger.error('[Upload] Batch init failed', { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  }) as any);
+
+  /**
    * POST /:uploadId/chunk - Upload a chunk
    */
-  router.post('/:uploadId/chunk', upload.single('chunk'), (async (req: DualAuthRequest, res: Response): Promise<any> => {
+  router.post('/:uploadId/chunk', uploadChunkRateLimit as any, upload.single('chunk'), (async (req: DualAuthRequest, res: Response): Promise<any> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -118,14 +270,23 @@ export function createUploadRouter(
         return res.status(403).json({ error: 'Not authorized for this session' });
       }
 
+      // Read chunk from disk (multer diskStorage) and clean up temp file
+      const chunkBuffer = await fs.readFile(req.file.path);
       const result = await uploadService.saveChunk(
         uploadId as string,
         chunkIndex,
-        req.file.buffer
+        chunkBuffer
       );
+      // Remove multer temp file after saving to session dir
+      await fs.unlink(req.file.path).catch(() => {});
 
+      addBackpressureHeaders(res);
       res.json(result);
     } catch (error: any) {
+      // Clean up multer temp file on error
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
       logger.error('[Upload] Chunk upload failed', {
         uploadId: req.params.uploadId,
         error: error.message,
@@ -160,18 +321,35 @@ export function createUploadRouter(
       }
 
       // Respond immediately - processing happens async
+      addBackpressureHeaders(res);
       res.status(202).json({
         uploadId: session.id,
         status: 'processing',
       });
 
-      // Process in background
-      processUpload(session, uploadService, minioService, vaultTools, pool).catch((error) => {
-        logger.error('[Upload] Background processing failed', {
-          uploadId: session.id,
-          error: error.message,
+      // Enqueue to BullMQ if available, otherwise fall back to in-memory processing
+      if (uploadQueueService) {
+        uploadQueueService.enqueueProcessing(session).catch((error) => {
+          logger.error('[Upload] Failed to enqueue processing', {
+            uploadId: session.id,
+            error: error.message,
+          });
+          // Fallback to in-memory processing
+          processUpload(session, uploadService, minioService, vaultTools, pool).catch((err) => {
+            logger.error('[Upload] Fallback processing failed', {
+              uploadId: session.id,
+              error: err.message,
+            });
+          });
         });
-      });
+      } else {
+        processUpload(session, uploadService, minioService, vaultTools, pool).catch((error) => {
+          logger.error('[Upload] Background processing failed', {
+            uploadId: session.id,
+            error: error.message,
+          });
+        });
+      }
     } catch (error: any) {
       logger.error('[Upload] Complete failed', {
         uploadId: req.params.uploadId,
@@ -203,6 +381,7 @@ export function createUploadRouter(
         return res.status(403).json({ error: 'Not authorized for this session' });
       }
 
+      addBackpressureHeaders(res);
       res.json({
         uploadId: session.id,
         status: session.status,
@@ -277,13 +456,22 @@ export function createUploadRouter(
 
       res.status(202).json({ uploadId: session.id, status: 'retrying' });
 
-      // Process in background
-      processUpload(session, uploadService, minioService, vaultTools, pool, { manualRetry: true }).catch((error) => {
-        logger.error('[Upload] Manual retry failed', {
-          uploadId: session.id,
-          error: error.message,
+      // Enqueue to BullMQ if available, otherwise fall back to in-memory processing
+      if (uploadQueueService) {
+        uploadQueueService.enqueueProcessing(session, { manualRetry: true }).catch((error) => {
+          logger.error('[Upload] Failed to enqueue retry', {
+            uploadId: session.id,
+            error: error.message,
+          });
         });
-      });
+      } else {
+        processUpload(session, uploadService, minioService, vaultTools, pool, { manualRetry: true }).catch((error) => {
+          logger.error('[Upload] Manual retry failed', {
+            uploadId: session.id,
+            error: error.message,
+          });
+        });
+      }
     } catch (error: any) {
       logger.error('[Upload] Retry failed', { error: error.message });
       res.status(500).json({ error: error.message });
@@ -337,7 +525,7 @@ async function processUpload(
 ): Promise<void> {
   const deps: ProcessorDeps = { uploadService, minioService, vaultTools, pool };
 
-  await acquireProcessingSlot();
+  await acquireProcessingSlot(session.userId);
   try {
     // Check if document was already created (crash between DB write and status update)
     const existingDocId = await uploadService.findDocumentBySessionId(session.id);
@@ -384,4 +572,15 @@ async function processUpload(
   } finally {
     releaseProcessingSlot();
   }
+}
+
+// Export for metrics endpoint
+export function getUploadProcessingMetrics() {
+  return {
+    activeProcessing,
+    maxConcurrentProcessing: MAX_CONCURRENT_PROCESSING,
+    queueDepth: getQueueDepth(),
+    utilization: getProcessingUtilization(),
+    uniqueUsersInQueue: userQueueOrder.length,
+  };
 }

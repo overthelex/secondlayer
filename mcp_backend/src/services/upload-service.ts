@@ -246,6 +246,15 @@ export class UploadService {
     return this.rowToSession(result.rows[0]);
   }
 
+  async getActiveSessionCount(userId: string): Promise<number> {
+    const result = await this.pool.query(
+      `SELECT COUNT(*) as cnt FROM upload_sessions
+       WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')`,
+      [userId]
+    );
+    return parseInt(result.rows[0].cnt, 10);
+  }
+
   async getActiveSessions(userId: string): Promise<UploadSession[]> {
     const result = await this.pool.query(
       `SELECT * FROM upload_sessions
