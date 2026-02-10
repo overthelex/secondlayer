@@ -2,11 +2,11 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
 import { UploadService } from '../services/upload-service.js';
 import { MinioService } from '../services/minio-service.js';
 import { VaultTools } from '../api/vault-tools.js';
+import { processUploadFile, ProcessorDeps } from '../services/upload-processor.js';
 import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { Pool } from 'pg';
 
@@ -224,6 +224,49 @@ export function createUploadRouter(
   }) as any);
 
   /**
+   * POST /:uploadId/retry - Manually retry a stuck/failed session
+   */
+  router.post('/:uploadId/retry', (async (req: DualAuthRequest, res: Response): Promise<any> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const { uploadId } = req.params;
+      const session = await uploadService.getSession(uploadId as string);
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      if (session.userId !== userId) {
+        return res.status(403).json({ error: 'Not authorized for this session' });
+      }
+      if (!['failed', 'assembling', 'processing'].includes(session.status)) {
+        return res.status(400).json({
+          error: `Session is in status ${session.status}, cannot retry`,
+        });
+      }
+      if (session.retryCount >= 3) {
+        return res.status(400).json({ error: 'Maximum retry count (3) reached' });
+      }
+
+      res.status(202).json({ uploadId: session.id, status: 'retrying' });
+
+      // Process in background
+      processUpload(session, uploadService, minioService, vaultTools, pool, { manualRetry: true }).catch((error) => {
+        logger.error('[Upload] Manual retry failed', {
+          uploadId: session.id,
+          error: error.message,
+        });
+      });
+    } catch (error: any) {
+      logger.error('[Upload] Retry failed', { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  }) as any);
+
+  /**
    * GET /active - List user's active sessions
    */
   router.get('/active', (async (req: DualAuthRequest, res: Response): Promise<any> => {
@@ -265,96 +308,34 @@ async function processUpload(
   uploadService: UploadService,
   minioService: MinioService,
   vaultTools: VaultTools,
-  pool: Pool
+  pool: Pool,
+  extraMetadata?: Record<string, any>
 ): Promise<void> {
+  const deps: ProcessorDeps = { uploadService, minioService, vaultTools, pool };
+
   try {
+    // Check if document was already created (crash between DB write and status update)
+    const existingDocId = await uploadService.findDocumentBySessionId(session.id);
+    if (existingDocId) {
+      logger.info('[Upload] Document already exists, linking session', {
+        sessionId: session.id,
+        documentId: existingDocId,
+      });
+      await uploadService.setDocumentId(session.id, existingDocId);
+      await uploadService.cleanupAssembledFile(session.id);
+      return;
+    }
+
+    if (extraMetadata) {
+      await uploadService.incrementRetryCount(session.id);
+    }
+
     await uploadService.updateStatus(session.id, 'processing');
 
     // Assemble file
     const assembledPath = await uploadService.assembleFile(session.id);
 
-    let documentId: string;
-    let storageType: string;
-    let storagePath: string | null = null;
-
-    if (UploadService.isDocumentType(session.mimeType)) {
-      // Route to VaultTools for parsing, embedding, etc.
-      storageType = 'vault';
-
-      const result = await vaultTools.storeDocumentFromPath({
-        filePath: assembledPath,
-        mimeType: session.mimeType,
-        title: session.fileName.replace(/\.[^/.]+$/, ''),
-        type: (session.docType || 'other') as any,
-        userId: session.userId,
-        metadata: {
-          ...session.metadata,
-          originalFilename: session.fileName,
-          fileSize: session.fileSize,
-          mimeType: session.mimeType,
-          folderPath: session.relativePath,
-          uploadSessionId: session.id,
-        },
-      });
-
-      documentId = result.id;
-
-      logger.info('[Upload] Document processed via VaultTools', {
-        sessionId: session.id,
-        documentId,
-      });
-    } else {
-      // Route to MinIO for binary storage
-      storageType = 'minio';
-      const objectKey = MinioService.generateObjectKey(session.fileName);
-
-      const minioResult = await minioService.uploadFile(
-        session.userId,
-        objectKey,
-        assembledPath,
-        session.mimeType
-      );
-
-      storagePath = `${minioResult.bucket}/${minioResult.key}`;
-      documentId = uuidv4();
-
-      // Save metadata record in documents table (with user_id for isolation)
-      await pool.query(
-        `INSERT INTO documents
-          (id, zakononline_id, type, title, metadata, storage_type, storage_path, file_size, mime_type, user_id, matter_id)
-         VALUES ($1, $2, $3, $4, $5, 'minio', $6, $7, $8, $9, $10)`,
-        [
-          documentId,
-          documentId,
-          session.docType || 'other',
-          session.fileName.replace(/\.[^/.]+$/, ''),
-          JSON.stringify({
-            ...session.metadata,
-            originalFilename: session.fileName,
-            fileSize: session.fileSize,
-            mimeType: session.mimeType,
-            folderPath: session.relativePath,
-            uploadedAt: new Date().toISOString(),
-            minioEtag: minioResult.etag,
-            minioBucket: minioResult.bucket,
-            minioKey: minioResult.key,
-            uploadSessionId: session.id,
-          }),
-          storagePath,
-          session.fileSize,
-          session.mimeType,
-          session.userId,
-          session.matterId || null,
-        ]
-      );
-
-      logger.info('[Upload] File stored in MinIO', {
-        sessionId: session.id,
-        documentId,
-        bucket: minioResult.bucket,
-        key: minioResult.key,
-      });
-    }
+    const documentId = await processUploadFile(session, assembledPath, deps, extraMetadata);
 
     // Mark session as completed
     await uploadService.setDocumentId(session.id, documentId);
@@ -365,7 +346,6 @@ async function processUpload(
     logger.info('[Upload] Processing complete', {
       sessionId: session.id,
       documentId,
-      storageType,
     });
   } catch (error: any) {
     logger.error('[Upload] Processing failed', {
