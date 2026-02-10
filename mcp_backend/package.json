@@ -44,7 +44,7 @@
     "npm": ">=9.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.72.1",
+    "@anthropic-ai/sdk": "^0.74.0",
     "@google-cloud/vision": "^5.3.4",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@qdrant/js-client-rest": "^1.9.0",
@@ -54,7 +54,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
-    "axios": "^1.6.5",
+    "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
@@ -92,7 +92,7 @@
     "@types/pdfkit": "^0.17.4",
     "@types/pg": "^8.10.9",
     "@types/uuid": "^9.0.7",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.54.0",
     "eslint": "^9.39.2",
     "eventsource": "^4.1.0",
