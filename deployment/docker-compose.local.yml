@@ -305,6 +305,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
       POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
       DATABASE_URL: postgresql://${RADA_POSTGRES_USER:-rada_mcp}:${RADA_POSTGRES_PASSWORD:-rada_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      REDIS_URL: redis://redis-local:6379
       REDIS_HOST: redis-local
       REDIS_PORT: 6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}

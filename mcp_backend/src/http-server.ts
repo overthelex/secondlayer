@@ -669,6 +669,25 @@ class HTTPMCPServer {
                   }
                 } else if (toolName === 'batch_process_documents') {
                   return await this.batchDocumentTools.processBatch(args as any);
+                } else if (['store_document', 'get_document', 'list_documents', 'semantic_search'].includes(toolName)) {
+                  let routed;
+                  switch (toolName) {
+                    case 'store_document':
+                      routed = await this.vaultTools.storeDocument(args as any);
+                      break;
+                    case 'get_document':
+                      routed = await this.vaultTools.getDocument(args as any);
+                      break;
+                    case 'list_documents':
+                      routed = await this.vaultTools.listDocuments({ ...args as any, userId });
+                      break;
+                    case 'semantic_search':
+                      routed = await this.vaultTools.semanticSearch(args as any);
+                      break;
+                  }
+                  return {
+                    content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
+                  };
                 } else {
                   return await this.services.mcpAPI.handleToolCall(toolName, args);
                 }
@@ -1591,6 +1610,33 @@ class HTTPMCPServer {
               // Route batch document tools
               if (toolName === 'batch_process_documents') {
                 const routed = await this.batchDocumentTools.processBatch(args as any);
+                return {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify(routed, null, 2),
+                    },
+                  ],
+                };
+              }
+
+              // Route vault tools
+              if (['store_document', 'get_document', 'list_documents', 'semantic_search'].includes(toolName)) {
+                let routed;
+                switch (toolName) {
+                  case 'store_document':
+                    routed = await this.vaultTools.storeDocument(args as any);
+                    break;
+                  case 'get_document':
+                    routed = await this.vaultTools.getDocument(args as any);
+                    break;
+                  case 'list_documents':
+                    routed = await this.vaultTools.listDocuments({ ...args as any, userId: req.user?.id });
+                    break;
+                  case 'semantic_search':
+                    routed = await this.vaultTools.semanticSearch(args as any);
+                    break;
+                }
                 return {
                   content: [
                     {

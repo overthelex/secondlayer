@@ -59,7 +59,7 @@ FROM node:20-alpine
 
 WORKDIR /app/mcp_backend
 
-# Install runtime dependencies for Playwright
+# Install runtime dependencies for Playwright + PDF tools
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -67,7 +67,8 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    tzdata
+    tzdata \
+    poppler-utils
 
 # Set timezone to EET (Europe/Kiev)
 ENV TZ=Europe/Kiev

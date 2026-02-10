@@ -421,6 +421,7 @@ services:
       POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
       POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_URL: redis://redis-dev:6379
       REDIS_HOST: redis-dev
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -449,6 +450,7 @@ services:
       POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_dev}
       POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
+      REDIS_URL: redis://redis-dev:6379
       REDIS_HOST: redis-dev
       REDIS_PORT: 6379
       LOG_LEVEL: ${LOG_LEVEL:-debug}

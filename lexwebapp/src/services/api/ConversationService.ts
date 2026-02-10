@@ -32,7 +32,7 @@ export interface ConversationWithMessages extends Conversation {
 export class ConversationService extends BaseService {
   async create(title?: string): Promise<Conversation> {
     try {
-      const response = await this.client.post<Conversation>('/api/conversations', { title });
+      const response = await this.client.post<Conversation>('/conversations', { title });
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -44,7 +44,7 @@ export class ConversationService extends BaseService {
     total: number;
   }> {
     try {
-      const response = await this.client.get('/api/conversations', { params });
+      const response = await this.client.get('/conversations', { params });
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -53,7 +53,7 @@ export class ConversationService extends BaseService {
 
   async get(id: string): Promise<ConversationWithMessages> {
     try {
-      const response = await this.client.get<ConversationWithMessages>(`/api/conversations/${id}`);
+      const response = await this.client.get<ConversationWithMessages>(`/conversations/${id}`);
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -62,7 +62,7 @@ export class ConversationService extends BaseService {
 
   async rename(id: string, title: string): Promise<void> {
     try {
-      await this.client.put(`/api/conversations/${id}`, { title });
+      await this.client.put(`/conversations/${id}`, { title });
     } catch (error) {
       return this.handleError(error);
     }
@@ -70,7 +70,7 @@ export class ConversationService extends BaseService {
 
   async delete(id: string): Promise<void> {
     try {
-      await this.client.delete(`/api/conversations/${id}`);
+      await this.client.delete(`/conversations/${id}`);
     } catch (error) {
       return this.handleError(error);
     }
@@ -90,7 +90,7 @@ export class ConversationService extends BaseService {
   ): Promise<ConversationMessage> {
     try {
       const response = await this.client.post<ConversationMessage>(
-        `/api/conversations/${conversationId}/messages`,
+        `/conversations/${conversationId}/messages`,
         message
       );
       return response.data;
@@ -104,7 +104,7 @@ export class ConversationService extends BaseService {
     params?: { limit?: number; offset?: number }
   ): Promise<{ messages: ConversationMessage[] }> {
     try {
-      const response = await this.client.get(`/api/conversations/${conversationId}/messages`, {
+      const response = await this.client.get(`/conversations/${conversationId}/messages`, {
         params,
       });
       return response.data;

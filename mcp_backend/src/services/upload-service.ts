@@ -180,17 +180,36 @@ export class UploadService {
     const sessionDir = path.join(this.tempDir, sessionId);
     const assembledPath = path.join(sessionDir, session.fileName);
 
-    // Assemble chunks in order
+    // Ensure session directory exists (may be lost after container restart)
+    await fs.mkdir(sessionDir, { recursive: true });
+
+    // Verify all chunk files exist before starting assembly
+    for (let i = 0; i < session.totalChunks; i++) {
+      const chunkPath = path.join(sessionDir, `chunk_${i}`);
+      try {
+        await fs.access(chunkPath);
+      } catch {
+        throw new Error(
+          `Chunk ${i} missing at ${chunkPath}. Upload session data may have been lost after a restart.`
+        );
+      }
+    }
+
+    // Assemble chunks in order — attach error handler immediately
     const writeStream = fsSync.createWriteStream(assembledPath);
+    let streamError: Error | null = null;
+    writeStream.on('error', (err) => { streamError = err; });
 
     try {
       for (let i = 0; i < session.totalChunks; i++) {
+        if (streamError) throw streamError;
         const chunkPath = path.join(sessionDir, `chunk_${i}`);
         const chunkData = await fs.readFile(chunkPath);
         writeStream.write(chunkData);
       }
 
       await new Promise<void>((resolve, reject) => {
+        if (streamError) return reject(streamError);
         writeStream.end(() => resolve());
         writeStream.on('error', reject);
       });
