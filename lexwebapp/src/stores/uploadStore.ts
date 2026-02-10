@@ -53,14 +53,18 @@ function syncFromManager(manager: UploadManager) {
     failedFiles: stats.failed,
     totalBytes: stats.totalBytes,
     uploadedBytes: stats.uploadedBytes,
-    isUploading: stats.uploading > 0 || stats.queued > 0,
   };
 }
 
 export const useUploadStore = create<UploadState>((set) => {
   // Subscribe to upload manager events
-  uploadManager.subscribe((_event: UploadEvent) => {
-    set(syncFromManager(uploadManager));
+  uploadManager.subscribe((event: UploadEvent) => {
+    const sync = syncFromManager(uploadManager);
+    if (event.type === 'all-completed') {
+      set({ ...sync, isUploading: false });
+    } else {
+      set(sync);
+    }
   });
 
   return {
@@ -81,7 +85,7 @@ export const useUploadStore = create<UploadState>((set) => {
 
     startUpload: () => {
       uploadManager.start();
-      set({ isPaused: false, ...syncFromManager(uploadManager) });
+      set({ isUploading: true, isPaused: false, ...syncFromManager(uploadManager) });
     },
 
     pauseUpload: () => {
@@ -101,7 +105,7 @@ export const useUploadStore = create<UploadState>((set) => {
 
     cancelAll: async () => {
       await uploadManager.cancelAll();
-      set({ isPaused: true, ...syncFromManager(uploadManager) });
+      set({ isUploading: false, isPaused: false, ...syncFromManager(uploadManager) });
     },
 
     retryFile: (itemId) => {

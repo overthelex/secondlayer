@@ -139,6 +139,36 @@ start_env() {
             else
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d --build
             fi
+
+            # Start nginx for local reverse proxy (localdev.legal.org.ua)
+            if command -v nginx &> /dev/null; then
+                print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
+                if sudo nginx -t 2>/dev/null; then
+                    sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
+                    print_msg "$GREEN" "✅ Nginx started (ports 4434/8080)"
+                else
+                    print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
+                fi
+            fi
+
+            # Start Vite dev server for frontend
+            if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
+                if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
+                    print_msg "$BLUE" "⚡ Starting Vite dev server..."
+                    cd "$REPO_ROOT/lexwebapp"
+                    nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
+                    local vite_pid=$!
+                    cd "$SCRIPT_DIR"
+                    sleep 3
+                    if ss -tlnp 2>/dev/null | grep -q ':5173'; then
+                        print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
+                    else
+                        print_msg "$YELLOW" "⚠️  Vite may still be starting (pid $vite_pid, check /tmp/vite-localdev.log)"
+                    fi
+                else
+                    print_msg "$GREEN" "✅ Vite already running on port 5173"
+                fi
+            fi
             ;;
         all)
             start_env stage
@@ -170,6 +200,22 @@ stop_env() {
             $compose_cmd -f docker-compose.dev.yml --env-file .env.dev down
             ;;
         local)
+            # Stop Vite dev server
+            local vite_pid
+            vite_pid=$(ss -tlnp 2>/dev/null | grep ':5173' | grep -oP 'pid=\K[0-9]+' | head -1)
+            if [ -n "$vite_pid" ]; then
+                print_msg "$BLUE" "⚡ Stopping Vite dev server (pid $vite_pid)..."
+                kill "$vite_pid" 2>/dev/null || true
+                print_msg "$GREEN" "✅ Vite stopped"
+            fi
+
+            # Stop nginx
+            if systemctl is-active nginx &>/dev/null; then
+                print_msg "$BLUE" "🌐 Stopping nginx..."
+                sudo systemctl stop nginx 2>/dev/null || true
+                print_msg "$GREEN" "✅ Nginx stopped"
+            fi
+
             if [ -f ".env.local" ]; then
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local down
             else
@@ -337,7 +383,9 @@ check_health() {
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
     curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf http://localhost:8080 > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
+    systemctl is-active nginx &>/dev/null && print_msg "$GREEN" "✅ Nginx: running (4434/8080)" || print_msg "$RED" "❌ Nginx: stopped"
+    ss -tlnp 2>/dev/null | grep -q ':5173' && print_msg "$GREEN" "✅ Vite: running (5173)" || print_msg "$RED" "❌ Vite: stopped"
+    curl -skf https://localdev.legal.org.ua:4434/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
 
     echo ""
 }

@@ -329,21 +329,22 @@ Pipeline:
       );
 
       // Store full document embedding
-      embeddingTasks.push(
-        this.embeddingService.storeChunk({
-          id: documentId,
-          source: 'zakononline',
-          doc_id: documentId,
-          section_type: 'FACTS' as any, // Default section type for full doc
-          text: parsed.text.slice(0, 1000), // Preview only
-          embedding: fullTextEmbedding,
-          metadata: {
-            date: new Date().toISOString(),
-            ...args.metadata,
-          },
-          created_at: new Date().toISOString(),
-        })
-      );
+      const fullTextTask = this.embeddingService.storeChunk({
+        id: documentId,
+        source: 'zakononline',
+        doc_id: documentId,
+        section_type: 'FACTS' as any, // Default section type for full doc
+        text: parsed.text.slice(0, 1000), // Preview only
+        embedding: fullTextEmbedding,
+        metadata: {
+          date: new Date().toISOString(),
+          ...args.metadata,
+        },
+        created_at: new Date().toISOString(),
+      });
+      // Prevent unhandled rejection while awaiting other embeddings
+      fullTextTask.catch(() => {});
+      embeddingTasks.push(fullTextTask);
 
       // Generate and store embeddings for each section
       for (const section of sections) {
@@ -351,21 +352,21 @@ Pipeline:
           section.text.slice(0, 8000)
         );
 
-        embeddingTasks.push(
-          this.embeddingService.storeChunk({
-            id: `${documentId}:${section.type}`,
-            source: 'zakononline',
-            doc_id: documentId,
-            section_type: section.type,
-            text: section.text.slice(0, 1000),
-            embedding: sectionEmbedding,
-            metadata: {
-              date: new Date().toISOString(),
-              ...args.metadata,
-            },
-            created_at: new Date().toISOString(),
-          })
-        );
+        const sectionTask = this.embeddingService.storeChunk({
+          id: uuidv4(), // Must be a valid UUID for Qdrant
+          source: 'zakononline',
+          doc_id: documentId,
+          section_type: section.type,
+          text: section.text.slice(0, 1000),
+          embedding: sectionEmbedding,
+          metadata: {
+            date: new Date().toISOString(),
+            ...args.metadata,
+          },
+          created_at: new Date().toISOString(),
+        });
+        sectionTask.catch(() => {});
+        embeddingTasks.push(sectionTask);
       }
 
       const embeddingResults = await Promise.allSettled(embeddingTasks);

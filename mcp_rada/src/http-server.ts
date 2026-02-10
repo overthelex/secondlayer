@@ -12,6 +12,7 @@ import { requireAPIKey } from './middleware/dual-auth';
 import { healthCheckRateLimit } from './middleware/rate-limit';
 import { createRadaCoreServices, RadaCoreServices } from './factories/rada-services';
 import { requestContext } from './utils/openai-client';
+import { initRedisClient } from './utils/redis-client';
 
 dotenv.config();
 
@@ -232,6 +233,7 @@ class HTTPRadaServer {
   async initialize() {
     try {
       await this.services.db.connect();
+      await initRedisClient();
       logger.info('HTTP RADA Server services initialized');
     } catch (error) {
       logger.error('Failed to initialize server:', error);

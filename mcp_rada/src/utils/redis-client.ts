@@ -12,7 +12,9 @@ export async function initRedisClient(): Promise<void> {
   initialized = true;
 
   try {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6380';
+    const redisHost = process.env.REDIS_HOST || 'localhost';
+    const redisPort = process.env.REDIS_PORT || '6379';
+    const redisUrl = process.env.REDIS_URL || `redis://${redisHost}:${redisPort}`;
     redisClient = createClient({ url: redisUrl });
 
     redisClient.on('error', (err) => {

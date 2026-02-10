@@ -63,6 +63,10 @@ export class ToolRegistry {
       'batch_process_documents',
       'get_judge_statistics',
       'analyze_court_trends',
+      'store_document',
+      'get_document',
+      'list_documents',
+      'semantic_search',
     ];
 
     for (const tool of backendTools) {
