@@ -172,6 +172,10 @@ export function DocumentsPage() {
     updateDocType,
     updateAllDocTypes,
     setConcurrency,
+    recoveredSessions,
+    recoverSessions,
+    dismissRecoveredSession,
+    clearRecoveredSessions,
   } = useUploadStore();
 
   // Local UI state
@@ -188,6 +192,19 @@ export function DocumentsPage() {
   useEffect(() => {
     loadDocuments();
   }, [filterType]);
+
+  // Check for stuck upload sessions on mount
+  useEffect(() => {
+    recoverSessions();
+  }, []);
+
+  // Reload docs when a recovered session completes
+  useEffect(() => {
+    const hasNewlyCompleted = recoveredSessions.some((s) => s.status === 'completed');
+    if (hasNewlyCompleted) {
+      loadDocuments();
+    }
+  }, [recoveredSessions]);
 
   // Show upload panel when items are added
   useEffect(() => {
@@ -372,6 +389,61 @@ export function DocumentsPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+          {/* Recovery Banner */}
+          <AnimatePresence>
+            {recoveredSessions.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-amber-800 font-sans">
+                    Відновлення завантажень
+                  </h4>
+                  {recoveredSessions.every((s) => s.status !== 'recovering') && (
+                    <button
+                      onClick={clearRecoveredSessions}
+                      className="text-xs text-amber-600 hover:text-amber-800 transition-colors font-sans"
+                    >
+                      Закрити
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {recoveredSessions.map((s) => (
+                    <div key={s.uploadId} className="flex items-center gap-2 text-xs font-sans">
+                      {s.status === 'recovering' ? (
+                        <Loader2 size={12} className="text-amber-500 animate-spin flex-shrink-0" />
+                      ) : s.status === 'completed' ? (
+                        <CheckCircle size={12} className="text-green-500 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle size={12} className="text-red-500 flex-shrink-0" />
+                      )}
+                      <span className="text-amber-900 truncate flex-1">{s.fileName}</span>
+                      <span className={`flex-shrink-0 ${
+                        s.status === 'recovering' ? 'text-amber-600' :
+                        s.status === 'completed' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {s.status === 'recovering' ? 'Обробка...' :
+                         s.status === 'completed' ? 'Готово' : s.error || 'Помилка'}
+                      </span>
+                      {s.status !== 'recovering' && (
+                        <button
+                          onClick={() => dismissRecoveredSession(s.uploadId)}
+                          className="text-amber-400 hover:text-amber-700 transition-colors"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Upload Zone */}
           <div
             ref={dropZoneRef}

@@ -61,6 +61,7 @@ import { ConflictCheckService } from './services/conflict-check-service.js';
 import { LegalHoldService } from './services/legal-hold-service.js';
 import { initializeMatterAccess } from './middleware/matter-access.js';
 import { createMatterRoutes } from './routes/matter-routes.js';
+import { UploadRecoveryService } from './services/upload-recovery-service.js';
 
 dotenv.config();
 
@@ -91,6 +92,7 @@ class HTTPMCPServer {
   private matterService: MatterService;
   private conflictCheckService: ConflictCheckService;
   private legalHoldService: LegalHoldService;
+  private uploadRecoveryService: UploadRecoveryService;
 
   constructor() {
     this.app = express();
@@ -162,6 +164,14 @@ class HTTPMCPServer {
     this.legalHoldService = new LegalHoldService(this.services.db, this.auditService);
     initializeMatterAccess(this.matterService);
     logger.info('Client-Matter segregation and legal hold services initialized');
+
+    // Initialize upload recovery service
+    this.uploadRecoveryService = new UploadRecoveryService(
+      this.uploadService,
+      this.minioService,
+      this.vaultTools,
+      this.services.db.getPool()
+    );
 
     // Initialize payment services
     this.emailService = new EmailService();
@@ -1859,6 +1869,10 @@ class HTTPMCPServer {
           logger.error('Upload cleanup failed', { error: err.message });
         });
       }, 60 * 60 * 1000);
+
+      // Start upload recovery service (30s delay, then every 5 min)
+      this.uploadRecoveryService.start();
+      logger.info('Upload recovery service started');
 
       logger.info('HTTP MCP Server services initialized');
     } catch (error) {

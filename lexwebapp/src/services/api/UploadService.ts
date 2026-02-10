@@ -159,6 +159,18 @@ export class UploadService extends BaseService {
       this.handleError(error);
     }
   }
+
+  /**
+   * Retry a stuck/failed upload session
+   */
+  async retrySession(uploadId: string): Promise<{ uploadId: string; status: string }> {
+    try {
+      const response = await this.client.post(`/upload/${uploadId}/retry`);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
 }
 
 export const uploadService = new UploadService();

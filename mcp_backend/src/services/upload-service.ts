@@ -21,6 +21,9 @@ export interface UploadSession {
   matterId?: string;
   documentId?: string;
   errorMessage?: string;
+  retryCount: number;
+  processingStartedAt?: string;
+  lastRetryAt?: string;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
@@ -254,11 +257,15 @@ export class UploadService {
   }
 
   async updateStatus(sessionId: string, status: string, errorMessage?: string): Promise<void> {
+    const setProcessingStarted = (status === 'assembling' || status === 'processing');
     await this.pool.query(
       `UPDATE upload_sessions
-       SET status = $2, error_message = $3, updated_at = CURRENT_TIMESTAMP
+       SET status = $2,
+           error_message = $3,
+           processing_started_at = CASE WHEN $4::boolean THEN CURRENT_TIMESTAMP ELSE processing_started_at END,
+           updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
-      [sessionId, status, errorMessage || null]
+      [sessionId, status, errorMessage || null, setProcessingStarted]
     );
   }
 
@@ -312,6 +319,99 @@ export class UploadService {
     await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
   }
 
+  /**
+   * Find sessions stuck in assembling/processing for longer than thresholdMinutes
+   * Uses FOR UPDATE SKIP LOCKED to prevent concurrent recovery
+   */
+  async getStuckSessions(thresholdMinutes: number = 10): Promise<UploadSession[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM upload_sessions
+       WHERE status IN ('assembling', 'processing')
+         AND updated_at < CURRENT_TIMESTAMP - ($1 || ' minutes')::interval
+         AND retry_count < 3
+       ORDER BY updated_at ASC
+       FOR UPDATE SKIP LOCKED`,
+      [thresholdMinutes]
+    );
+    return result.rows.map((row: any) => this.rowToSession(row));
+  }
+
+  /**
+   * Find ALL sessions in assembling/processing (for startup recovery, no time threshold)
+   */
+  async getRecoverableOnStartup(): Promise<UploadSession[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM upload_sessions
+       WHERE status IN ('assembling', 'processing')
+         AND retry_count < 3
+       ORDER BY updated_at ASC
+       FOR UPDATE SKIP LOCKED`
+    );
+    return result.rows.map((row: any) => this.rowToSession(row));
+  }
+
+  /**
+   * Increment retry count and set last_retry_at
+   */
+  async incrementRetryCount(sessionId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE upload_sessions
+       SET retry_count = retry_count + 1,
+           last_retry_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [sessionId]
+    );
+  }
+
+  /**
+   * Check what files exist on disk for a session
+   */
+  async checkFilesOnDisk(sessionId: string): Promise<{
+    hasChunks: boolean;
+    hasAssembled: boolean;
+    chunkCount: number;
+    assembledFileName: string | null;
+  }> {
+    const sessionDir = path.join(this.tempDir, sessionId);
+    let hasChunks = false;
+    let hasAssembled = false;
+    let chunkCount = 0;
+    let assembledFileName: string | null = null;
+
+    try {
+      const files = await fs.readdir(sessionDir);
+      for (const file of files) {
+        if (file.startsWith('chunk_')) {
+          hasChunks = true;
+          chunkCount++;
+        } else {
+          hasAssembled = true;
+          assembledFileName = file;
+        }
+      }
+    } catch {
+      // Directory doesn't exist
+    }
+
+    return { hasChunks, hasAssembled, chunkCount, assembledFileName };
+  }
+
+  /**
+   * Check if a document already exists for this upload session
+   */
+  async findDocumentBySessionId(sessionId: string): Promise<string | null> {
+    const result = await this.pool.query(
+      `SELECT id FROM documents WHERE metadata->>'uploadSessionId' = $1 LIMIT 1`,
+      [sessionId]
+    );
+    return result.rows.length > 0 ? result.rows[0].id : null;
+  }
+
+  get tempDirectory(): string {
+    return this.tempDir;
+  }
+
   private rowToSession(row: any): UploadSession {
     return {
       id: row.id,
@@ -329,6 +429,9 @@ export class UploadService {
       matterId: row.matter_id,
       documentId: row.document_id,
       errorMessage: row.error_message,
+      retryCount: row.retry_count || 0,
+      processingStartedAt: row.processing_started_at,
+      lastRetryAt: row.last_retry_at,
       expiresAt: row.expires_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

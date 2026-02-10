@@ -9,6 +9,15 @@ import {
   UploadItem,
   UploadEvent,
 } from '../services/upload/UploadManager';
+import { uploadService, ActiveSession } from '../services/api/UploadService';
+
+export interface RecoveredSession {
+  uploadId: string;
+  fileName: string;
+  status: 'recovering' | 'completed' | 'failed';
+  documentId?: string;
+  error?: string;
+}
 
 interface UploadState {
   items: UploadItem[];
@@ -21,6 +30,10 @@ interface UploadState {
   totalBytes: number;
   uploadedBytes: number;
   concurrency: number;
+
+  // Recovery state
+  recoveredSessions: RecoveredSession[];
+  isRecovering: boolean;
 
   // Actions
   addFiles: (
@@ -43,6 +56,9 @@ interface UploadState {
   updateDocType: (itemId: string, docType: string) => void;
   updateAllDocTypes: (docType: string) => void;
   setConcurrency: (n: number) => void;
+  recoverSessions: () => Promise<void>;
+  dismissRecoveredSession: (uploadId: string) => void;
+  clearRecoveredSessions: () => void;
 }
 
 function syncFromManager(manager: UploadManager) {
@@ -80,6 +96,8 @@ export const useUploadStore = create<UploadState>((set) => {
     totalBytes: 0,
     uploadedBytes: 0,
     concurrency: uploadManager.getConcurrency(),
+    recoveredSessions: [],
+    isRecovering: false,
 
     addFiles: (files) => {
       uploadManager.addFiles(files);
@@ -145,5 +163,98 @@ export const useUploadStore = create<UploadState>((set) => {
       uploadManager.setConcurrency(n);
       set({ concurrency: uploadManager.getConcurrency() });
     },
+
+    recoverSessions: async () => {
+      try {
+        set({ isRecovering: true });
+        const sessions = await uploadService.getActiveSessions();
+        const stuck = sessions.filter(
+          (s: ActiveSession) => s.status === 'assembling' || s.status === 'processing'
+        );
+
+        if (stuck.length === 0) {
+          set({ isRecovering: false });
+          return;
+        }
+
+        const recovered: RecoveredSession[] = stuck.map((s: ActiveSession) => ({
+          uploadId: s.uploadId,
+          fileName: s.fileName,
+          status: 'recovering' as const,
+        }));
+        set({ recoveredSessions: recovered });
+
+        // Poll each session until it resolves
+        for (const s of stuck) {
+          pollRecovery(s.uploadId, set);
+        }
+      } catch (err) {
+        console.error('[UploadStore] Recovery check failed:', err);
+        set({ isRecovering: false });
+      }
+    },
+
+    dismissRecoveredSession: (uploadId) => {
+      set((state) => ({
+        recoveredSessions: state.recoveredSessions.filter((s) => s.uploadId !== uploadId),
+      }));
+    },
+
+    clearRecoveredSessions: () => {
+      set({ recoveredSessions: [], isRecovering: false });
+    },
   };
 });
+
+async function pollRecovery(
+  uploadId: string,
+  set: (fn: (state: UploadState) => Partial<UploadState>) => void
+) {
+  const maxPolls = 60; // 5 minutes at 5s intervals
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    try {
+      const status = await uploadService.getStatus(uploadId);
+      if (status.status === 'completed') {
+        set((state) => ({
+          recoveredSessions: state.recoveredSessions.map((s) =>
+            s.uploadId === uploadId
+              ? { ...s, status: 'completed' as const, documentId: status.documentId }
+              : s
+          ),
+          isRecovering: state.recoveredSessions.some(
+            (s) => s.uploadId !== uploadId && s.status === 'recovering'
+          ),
+        }));
+        return;
+      }
+      if (status.status === 'failed') {
+        set((state) => ({
+          recoveredSessions: state.recoveredSessions.map((s) =>
+            s.uploadId === uploadId
+              ? { ...s, status: 'failed' as const, error: status.errorMessage }
+              : s
+          ),
+          isRecovering: state.recoveredSessions.some(
+            (s) => s.uploadId !== uploadId && s.status === 'recovering'
+          ),
+        }));
+        return;
+      }
+      // Still processing — continue polling
+    } catch {
+      // Network error — continue polling
+    }
+  }
+  // Timed out
+  set((state) => ({
+    recoveredSessions: state.recoveredSessions.map((s) =>
+      s.uploadId === uploadId
+        ? { ...s, status: 'failed' as const, error: 'Recovery poll timed out' }
+        : s
+    ),
+    isRecovering: state.recoveredSessions.some(
+      (s) => s.uploadId !== uploadId && s.status === 'recovering'
+    ),
+  }));
+}
