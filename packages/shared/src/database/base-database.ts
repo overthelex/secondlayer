@@ -23,7 +23,7 @@ export class BaseDatabase {
       user: config.user,
       password: config.password,
       database: config.database,
-      max: config.max ?? 50,
+      max: config.max ?? 100,
       idleTimeoutMillis: config.idleTimeoutMillis ?? 30000,
       connectionTimeoutMillis: config.connectionTimeoutMillis ?? 2000,
     };

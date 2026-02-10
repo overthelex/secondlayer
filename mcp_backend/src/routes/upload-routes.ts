@@ -19,7 +19,7 @@ const upload = multer({
 });
 
 // Semaphore to limit concurrent file processing (DB pool, OpenAI rate limits)
-const MAX_CONCURRENT_PROCESSING = 10;
+const MAX_CONCURRENT_PROCESSING = 30;
 let activeProcessing = 0;
 const processingQueue: Array<() => void> = [];
 
