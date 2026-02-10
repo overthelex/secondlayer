@@ -158,6 +158,7 @@ export function DocumentsPage() {
     failedFiles,
     totalBytes,
     uploadedBytes,
+    concurrency,
     addFiles,
     startUpload,
     pauseUpload,
@@ -170,6 +171,7 @@ export function DocumentsPage() {
     clearFinished,
     updateDocType,
     updateAllDocTypes,
+    setConcurrency,
   } = useUploadStore();
 
   // Local UI state
@@ -444,6 +446,20 @@ export function DocumentsPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Concurrent uploads selector */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-claude-subtext/50 font-sans">Потоки:</span>
+                      <select
+                        value={concurrency}
+                        onChange={(e) => setConcurrency(Number(e.target.value))}
+                        className="text-xs border border-claude-border rounded-lg px-2 py-1.5 bg-white text-claude-text font-sans focus:outline-none focus:border-claude-subtext/40"
+                      >
+                        {[1, 2, 3, 5, 8, 10].map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* Default doc type selector */}
                     <div className="relative">
                       <button

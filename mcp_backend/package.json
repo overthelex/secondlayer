@@ -78,7 +78,8 @@
     "redis": "^4.6.12",
     "stripe": "^20.3.0",
     "uuid": "^9.0.1",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "word-extractor": "^1.0.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

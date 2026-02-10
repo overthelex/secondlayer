@@ -20,6 +20,7 @@ interface UploadState {
   failedFiles: number;
   totalBytes: number;
   uploadedBytes: number;
+  concurrency: number;
 
   // Actions
   addFiles: (
@@ -41,6 +42,7 @@ interface UploadState {
   clearFinished: () => void;
   updateDocType: (itemId: string, docType: string) => void;
   updateAllDocTypes: (docType: string) => void;
+  setConcurrency: (n: number) => void;
 }
 
 function syncFromManager(manager: UploadManager) {
@@ -77,6 +79,7 @@ export const useUploadStore = create<UploadState>((set) => {
     failedFiles: 0,
     totalBytes: 0,
     uploadedBytes: 0,
+    concurrency: uploadManager.getConcurrency(),
 
     addFiles: (files) => {
       uploadManager.addFiles(files);
@@ -136,6 +139,11 @@ export const useUploadStore = create<UploadState>((set) => {
     updateAllDocTypes: (docType) => {
       uploadManager.updateAllDocTypes(docType);
       set({ items: [...uploadManager.getItems()] });
+    },
+
+    setConcurrency: (n) => {
+      uploadManager.setConcurrency(n);
+      set({ concurrency: uploadManager.getConcurrency() });
     },
   };
 });

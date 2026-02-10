@@ -2,6 +2,8 @@ import { chromium, Browser } from 'playwright';
 import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
+// @ts-ignore — no type declarations available
+import WordExtractor from 'word-extractor';
 import { logger } from '../utils/logger.js';
 import { getLLMManager } from '../utils/llm-client-manager.js';
 import fs from 'fs/promises';
@@ -232,6 +234,43 @@ export class DocumentParser {
     } catch (error: any) {
       logger.error('DOCX parsing failed', { error: error.message });
       throw new Error(`Failed to parse DOCX: ${error.message}`);
+    }
+  }
+
+  /**
+   * Parse legacy .doc (OLE Compound Document) using word-extractor
+   */
+  async parseDOC(fileBuffer: Buffer): Promise<ParsedDocument> {
+    try {
+      logger.info('Attempting legacy .doc parsing with word-extractor');
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(fileBuffer);
+      const text = doc.getBody()?.trim() || '';
+
+      if (text.length > 50) {
+        logger.info('.doc parsed successfully with word-extractor', { textLength: text.length });
+        return {
+          text,
+          metadata: {
+            source: 'native',
+            mimeType: 'application/msword',
+          },
+        };
+      }
+
+      // Fallback to OCR if available
+      if (this.ocrAvailable) {
+        logger.warn('.doc has no extractable text, falling back to OCR');
+        return await this.parseDOCXWithOCR(fileBuffer);
+      }
+
+      return {
+        text: text || '[DOC could not be parsed — no text and OCR not configured]',
+        metadata: { source: 'native', mimeType: 'application/msword' },
+      };
+    } catch (error: any) {
+      logger.error('.doc parsing failed', { error: error.message });
+      throw new Error(`Failed to parse DOC: ${error.message}`);
     }
   }
 
@@ -621,8 +660,17 @@ export class DocumentParser {
         return await this.parsePDF(fileBuffer);
 
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-      case 'application/msword':
         return await this.parseDOCX(fileBuffer);
+
+      case 'application/msword': {
+        // Detect actual format by magic bytes: OLE = D0CF11E0, ZIP/DOCX = 504B0304
+        const header = fileBuffer.slice(0, 4).toString('hex');
+        if (header === '504b0304') {
+          // Actually a .docx with wrong MIME type
+          return await this.parseDOCX(fileBuffer);
+        }
+        return await this.parseDOC(fileBuffer);
+      }
 
       case 'text/html':
         return await this.parseHTML(fileBuffer);
@@ -652,9 +700,14 @@ export class DocumentParser {
       return 'application/pdf';
     }
 
-    // DOCX: PK (ZIP format) + check for word/ inside
+    // DOCX: PK (ZIP format)
     if (header.startsWith('504b0304')) {
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    // DOC: OLE Compound Document (D0 CF 11 E0)
+    if (header.startsWith('d0cf11e0')) {
+      return 'application/msword';
     }
 
     // RTF: {\rtf

@@ -54,7 +54,7 @@ export interface UploadEvent {
 
 type UploadListener = (event: UploadEvent) => void;
 
-const MAX_CONCURRENT_FILES = 3;
+const DEFAULT_CONCURRENT_FILES = 3;
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1000, 2000, 4000]; // ms
 const POLL_INTERVAL = 2000; // ms
@@ -62,6 +62,7 @@ const POLL_INTERVAL = 2000; // ms
 export class UploadManager {
   private items: Map<string, UploadItem> = new Map();
   private activeUploads = 0;
+  private maxConcurrentFiles = DEFAULT_CONCURRENT_FILES;
   private isPaused = false;
   private listeners: Set<UploadListener> = new Set();
   private abortControllers: Map<string, AbortController> = new Map();
@@ -69,6 +70,15 @@ export class UploadManager {
   subscribe(listener: UploadListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  setConcurrency(n: number) {
+    this.maxConcurrentFiles = Math.max(1, Math.min(10, n));
+    if (!this.isPaused) this.processQueue();
+  }
+
+  getConcurrency(): number {
+    return this.maxConcurrentFiles;
   }
 
   private emit(event: UploadEvent) {
@@ -318,7 +328,7 @@ export class UploadManager {
       (i) => i.status === 'queued'
     );
 
-    while (this.activeUploads < MAX_CONCURRENT_FILES && queued.length > 0) {
+    while (this.activeUploads < this.maxConcurrentFiles && queued.length > 0) {
       const item = queued.shift()!;
       this.activeUploads++;
       this.uploadFile(item).finally(() => {
