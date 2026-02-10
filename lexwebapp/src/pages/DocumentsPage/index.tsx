@@ -187,6 +187,7 @@ export function DocumentsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const uploadQueueRef = useRef<HTMLDivElement>(null);
 
   // Load documents on mount and filter change
   useEffect(() => {
@@ -219,6 +220,15 @@ export function DocumentsPage() {
       loadDocuments();
     }
   }, [completedFiles, isUploading]);
+
+  // Auto-scroll upload queue to the first active item
+  useEffect(() => {
+    if (!isUploading || !uploadQueueRef.current) return;
+    const activeEl = uploadQueueRef.current.querySelector('[data-upload-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [uploadItems, isUploading]);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -651,7 +661,7 @@ export function DocumentsPage() {
                 )}
 
                 {/* Queue items */}
-                <div className="max-h-[300px] overflow-y-auto divide-y divide-claude-border/30">
+                <div ref={uploadQueueRef} className="max-h-[300px] overflow-y-auto divide-y divide-claude-border/30">
                   {uploadItems.map((item) => (
                     <UploadItemRow
                       key={item.id}
@@ -908,7 +918,10 @@ function UploadItemRow({
   );
 
   return (
-    <div className="flex items-center gap-3 px-5 py-2.5 hover:bg-claude-bg/50 transition-colors">
+    <div
+      data-upload-active={isActive || undefined}
+      className="flex items-center gap-3 px-5 py-2.5 hover:bg-claude-bg/50 transition-colors"
+    >
       <div className="flex-shrink-0">
         {item.status === 'completed' ? (
           <CheckCircle size={16} className="text-green-500" />
