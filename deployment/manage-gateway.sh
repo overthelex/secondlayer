@@ -476,7 +476,36 @@ deploy_local() {
         exit 1
     fi
 
-    # Phase 5: Report
+    # Phase 5: Start nginx + Vite (stopped by stop_env)
+    if command -v nginx &> /dev/null; then
+        print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
+        if sudo nginx -t 2>/dev/null; then
+            sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
+            print_msg "$GREEN" "✅ Nginx started (ports 4434/8080)"
+        else
+            print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
+        fi
+    fi
+
+    if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
+        if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
+            print_msg "$BLUE" "⚡ Starting Vite dev server..."
+            cd "$REPO_ROOT/lexwebapp"
+            nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
+            local vite_pid=$!
+            cd "$SCRIPT_DIR"
+            sleep 3
+            if ss -tlnp 2>/dev/null | grep -q ':5173'; then
+                print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
+            else
+                print_msg "$YELLOW" "⚠️  Vite may still be starting (pid $vite_pid, check /tmp/vite-localdev.log)"
+            fi
+        else
+            print_msg "$GREEN" "✅ Vite already running on port 5173"
+        fi
+    fi
+
+    # Phase 6: Report
     generate_deploy_report "local" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
     print_msg "$GREEN" "✅ Local deployment complete"
     $compose_cmd $compose_args ps
