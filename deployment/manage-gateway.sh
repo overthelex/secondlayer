@@ -434,27 +434,27 @@ deploy_local() {
         print_msg "$BLUE" "🗑️  Removing dangling images..."
         docker image prune -f
 
-        # Step 4: Start infrastructure services only
+        # Step 4: Rebuild ALL images without cache (migrate services build the app images)
+        print_msg "$BLUE" "🔨 Building all images without cache..."
+        $compose_cmd $compose_args build --no-cache migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
+
+        # Step 5: Start infrastructure services only
         print_msg "$BLUE" "🚀 Starting infrastructure services..."
         $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local minio-local
 
-        # Step 5: Wait for databases to be ready, then run init
+        # Step 6: Wait for databases to be ready, then run init
         print_msg "$BLUE" "⏳ Waiting for databases..."
         sleep 15
         print_msg "$BLUE" "🔧 Running RADA DB init..."
         $compose_cmd $compose_args up rada-db-init-local
 
-        # Step 6: Run migrations sequentially
+        # Step 7: Run migrations sequentially (using freshly built images)
         print_msg "$BLUE" "🔄 Running backend migrations..."
         $compose_cmd $compose_args up migrate-local
         print_msg "$BLUE" "🔄 Running RADA migrations..."
         $compose_cmd $compose_args up rada-migrate-local
         print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
         $compose_cmd $compose_args up migrate-openreyestr-local
-
-        # Step 7: Rebuild app images without cache
-        print_msg "$BLUE" "🔨 Building application images without cache..."
-        $compose_cmd $compose_args build --no-cache app-local rada-mcp-app-local app-openreyestr-local document-service-local
 
         # Step 8: Start app services
         print_msg "$BLUE" "▶️  Starting application services..."
