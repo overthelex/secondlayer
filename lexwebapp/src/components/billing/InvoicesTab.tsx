@@ -242,12 +242,12 @@ export function InvoicesTab() {
                       <DollarSign size={14} className="text-claude-subtext" />
                       <span className="text-sm font-semibold text-claude-text">
                         {invoice.currency === 'USD' ? '$' : '₴'}
-                        {invoice.total.toFixed(2)}
+                        {(Number(invoice.total) || 0).toFixed(2)}
                       </span>
                     </div>
                     {invoice.currency === 'UAH' && (
                       <div className="text-xs text-claude-subtext">
-                        +₴{invoice.tax?.toFixed(2)} VAT
+                        +₴{(Number(invoice.tax) || 0).toFixed(2)} VAT
                       </div>
                     )}
                   </td>

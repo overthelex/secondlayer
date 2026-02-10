@@ -72,9 +72,9 @@ export function TransactionsTab() {
       format(new Date(t.created_at), 'yyyy-MM-dd HH:mm:ss'),
       t.type,
       t.description,
-      t.amount_usd.toFixed(2),
-      t.amount_uah.toFixed(2),
-      t.balance_after_usd.toFixed(2),
+      Number(t.amount_usd || 0).toFixed(2),
+      Number(t.amount_uah || 0).toFixed(2),
+      Number(t.balance_after_usd || 0).toFixed(2),
       t.payment_provider || 'N/A',
     ]);
 
@@ -259,17 +259,17 @@ export function TransactionsTab() {
                           transaction.type === 'charge' ? 'text-red-600' : 'text-green-600'
                         }`}>
                         {transaction.type === 'charge' ? '-' : '+'}$
-                        {Math.abs(transaction.amount_usd).toFixed(2)}
+                        {Math.abs(Number(transaction.amount_usd) || 0).toFixed(2)}
                       </div>
-                      {transaction.amount_uah > 0 && (
+                      {Number(transaction.amount_uah) > 0 && (
                         <div className="text-xs text-claude-subtext">
-                          ₴{Math.abs(transaction.amount_uah).toFixed(2)}
+                          ₴{Math.abs(Number(transaction.amount_uah) || 0).toFixed(2)}
                         </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <div className="text-sm text-claude-text font-medium">
-                        ${transaction.balance_after_usd.toFixed(2)}
+                        ${(Number(transaction.balance_after_usd) || 0).toFixed(2)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

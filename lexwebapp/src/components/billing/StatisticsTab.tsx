@@ -172,7 +172,7 @@ export function StatisticsTab() {
             className={`text-xs ${
               totalCostTrend > 0 ? 'text-red-600' : 'text-green-600'
             }`}>
-            {totalCostTrend > 0 ? '+' : ''}{totalCostTrend.toFixed(1)}% from first day
+            {totalCostTrend > 0 ? '+' : ''}{(Number(totalCostTrend) || 0).toFixed(1)}% from first day
           </p>
         </motion.div>
 
@@ -183,7 +183,7 @@ export function StatisticsTab() {
           className="bg-white border border-claude-border rounded-lg p-4">
           <p className="text-sm text-claude-subtext mb-2">OpenAI Tokens</p>
           <p className="text-3xl font-bold text-claude-text mb-1">
-            {(data.openaiTokens / 1000).toFixed(0)}K
+            {((Number(data.openaiTokens) || 0) / 1000).toFixed(0)}K
           </p>
           <p className="text-xs text-blue-600">API usage tracked</p>
         </motion.div>
@@ -194,7 +194,7 @@ export function StatisticsTab() {
           transition={{ delay: 0.4 }}
           className="bg-white border border-claude-border rounded-lg p-4">
           <p className="text-sm text-claude-subtext mb-2">Avg Cost/Request</p>
-          <p className="text-3xl font-bold text-claude-text mb-1">₴{data.avgCostPerRequest.toFixed(2)}</p>
+          <p className="text-3xl font-bold text-claude-text mb-1">₴{(Number(data.avgCostPerRequest) || 0).toFixed(2)}</p>
           <p className="text-xs text-purple-600">Per request average</p>
         </motion.div>
       </div>
