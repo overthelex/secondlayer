@@ -18,6 +18,30 @@ const upload = multer({
   },
 });
 
+// Semaphore to limit concurrent file processing (DB pool, OpenAI rate limits)
+const MAX_CONCURRENT_PROCESSING = 10;
+let activeProcessing = 0;
+const processingQueue: Array<() => void> = [];
+
+function acquireProcessingSlot(): Promise<void> {
+  if (activeProcessing < MAX_CONCURRENT_PROCESSING) {
+    activeProcessing++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    processingQueue.push(resolve);
+  });
+}
+
+function releaseProcessingSlot(): void {
+  if (processingQueue.length > 0) {
+    const next = processingQueue.shift()!;
+    next();
+  } else {
+    activeProcessing--;
+  }
+}
+
 export function createUploadRouter(
   uploadService: UploadService,
   minioService: MinioService,
@@ -313,6 +337,7 @@ async function processUpload(
 ): Promise<void> {
   const deps: ProcessorDeps = { uploadService, minioService, vaultTools, pool };
 
+  await acquireProcessingSlot();
   try {
     // Check if document was already created (crash between DB write and status update)
     const existingDocId = await uploadService.findDocumentBySessionId(session.id);
@@ -356,5 +381,7 @@ async function processUpload(
     await uploadService.updateStatus(session.id, 'failed', error.message);
     // Cleanup temp files even on failure
     await uploadService.cleanupAssembledFile(session.id).catch(() => {});
+  } finally {
+    releaseProcessingSlot();
   }
 }

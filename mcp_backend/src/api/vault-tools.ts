@@ -320,15 +320,19 @@ Pipeline:
         sectionCount: sections.length,
       });
 
-      // Step 3: Generate embeddings for full text + sections
-      const embeddingTasks = [];
+      // Step 3: Generate embeddings for full text + sections in batch
+      const textsToEmbed = [
+        parsed.text.slice(0, 8000), // Full document text
+        ...sections.map((s) => s.text.slice(0, 8000)),
+      ];
 
-      // Generate embedding for full document
-      const fullTextEmbedding = await this.embeddingService.generateEmbedding(
-        parsed.text.slice(0, 8000) // Limit to prevent token overflow
-      );
+      // Single batch API call instead of N sequential calls
+      const allEmbeddings = await this.embeddingService.generateEmbeddingsBatch(textsToEmbed);
+      const fullTextEmbedding = allEmbeddings[0];
+      const sectionEmbeddings = allEmbeddings.slice(1);
 
       // Store full document embedding
+      const embeddingTasks = [];
       const fullTextTask = this.embeddingService.storeChunk({
         id: documentId,
         source: 'zakononline',
@@ -342,23 +346,18 @@ Pipeline:
         },
         created_at: new Date().toISOString(),
       });
-      // Prevent unhandled rejection while awaiting other embeddings
       fullTextTask.catch(() => {});
       embeddingTasks.push(fullTextTask);
 
-      // Generate and store embeddings for each section
-      for (const section of sections) {
-        const sectionEmbedding = await this.embeddingService.generateEmbedding(
-          section.text.slice(0, 8000)
-        );
-
+      // Store section embeddings (all generated above in batch)
+      for (let i = 0; i < sections.length; i++) {
         const sectionTask = this.embeddingService.storeChunk({
           id: uuidv4(), // Must be a valid UUID for Qdrant
           source: 'zakononline',
           doc_id: documentId,
-          section_type: section.type,
-          text: section.text.slice(0, 1000),
-          embedding: sectionEmbedding,
+          section_type: sections[i].type,
+          text: sections[i].text.slice(0, 1000),
+          embedding: sectionEmbeddings[i],
           metadata: {
             date: new Date().toISOString(),
             ...args.metadata,

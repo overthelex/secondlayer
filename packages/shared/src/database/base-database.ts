@@ -23,7 +23,7 @@ export class BaseDatabase {
       user: config.user,
       password: config.password,
       database: config.database,
-      max: config.max ?? 20,
+      max: config.max ?? 50,
       idleTimeoutMillis: config.idleTimeoutMillis ?? 30000,
       connectionTimeoutMillis: config.connectionTimeoutMillis ?? 2000,
     };
@@ -103,6 +103,7 @@ export function createDatabaseFromEnv(defaults: {
     password: process.env.POSTGRES_PASSWORD || defaults.password || 'password',
     database: process.env.POSTGRES_DB || defaults.database || 'postgres',
     schema: (process.env.POSTGRES_SCHEMA || defaults.schema || '').trim() || undefined,
+    max: process.env.POSTGRES_POOL_MAX ? parseInt(process.env.POSTGRES_POOL_MAX) : undefined,
   };
 
   return new BaseDatabase(config);
