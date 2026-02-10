@@ -137,7 +137,7 @@ export class DueDiligenceService {
     }
   ): Promise<{ findings: DDFinding[]; riskScores: DocumentRiskScore[] }> {
     const startTime = Date.now();
-    const maxConcurrency = options?.maxConcurrency || 5;
+    const maxConcurrency = options?.maxConcurrency || 20;
 
     logger.info('[DD] Starting bulk review', {
       documentCount: documentIds.length,

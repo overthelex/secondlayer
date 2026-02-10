@@ -135,9 +135,9 @@ export class BatchDocumentTools {
             },
             concurrency: {
               type: 'number',
-              description: 'Кількість паралельних обробок (за замовчуванням: 5)',
+              description: 'Кількість паралельних обробок (за замовчуванням: 20)',
               minimum: 1,
-              maximum: 20,
+              maximum: 50,
             },
             retryAttempts: {
               type: 'number',
@@ -170,7 +170,7 @@ export class BatchDocumentTools {
     progressCallback?: (event: BatchProgressEvent) => void
   ): Promise<BatchResult> {
     const startTime = Date.now();
-    const concurrency = args.concurrency || 5;
+    const concurrency = args.concurrency || 20;
     const retryAttempts = args.retryAttempts || 2;
     const skipErrors = args.skipErrors !== false;
 
