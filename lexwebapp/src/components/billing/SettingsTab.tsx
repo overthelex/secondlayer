@@ -48,8 +48,8 @@ export function SettingsTab() {
         ]);
 
         const balanceData = balanceRes.data;
-        setDailyLimit(balanceData.daily_limit_usd?.toFixed(2) || '10.00');
-        setMonthlyLimit(balanceData.monthly_limit_usd?.toFixed(2) || '100.00');
+        setDailyLimit((Number(balanceData.daily_limit_usd) || 10).toFixed(2));
+        setMonthlyLimit((Number(balanceData.monthly_limit_usd) || 100).toFixed(2));
 
         const prefs = prefsRes.data;
         setEmailNotifications({

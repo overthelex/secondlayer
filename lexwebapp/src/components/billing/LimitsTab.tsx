@@ -121,9 +121,10 @@ export function LimitsTab() {
     );
   }
 
-  const dailyPercentage = (usage.daily_spent / usage.daily_limit) * 100;
-  const monthlyPercentage = (usage.monthly_spent / usage.monthly_limit) * 100;
-  const openaiPercentage = (usage.openai_spent / usage.openai_limit) * 100;
+  const n = (v: any) => Number(v) || 0;
+  const dailyPercentage = (n(usage.daily_spent) / n(usage.daily_limit)) * 100;
+  const monthlyPercentage = (n(usage.monthly_spent) / n(usage.monthly_limit)) * 100;
+  const openaiPercentage = (n(usage.openai_spent) / n(usage.openai_limit)) * 100;
 
   const getPercentageColor = (percentage: number) => {
     if (percentage >= 100) return 'from-red-600 to-red-500';
@@ -149,8 +150,8 @@ export function LimitsTab() {
           <p className="text-sm text-claude-subtext mb-3">Daily Usage</p>
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
-              <p className="text-2xl font-bold text-claude-text">${usage.daily_spent.toFixed(2)}</p>
-              <p className="text-xs text-claude-subtext">/ ${usage.daily_limit.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-claude-text">${n(usage.daily_spent).toFixed(2)}</p>
+              <p className="text-xs text-claude-subtext">/ ${n(usage.daily_limit).toFixed(2)}</p>
             </div>
             <div className="w-full bg-claude-bg rounded-full h-3 overflow-hidden">
               <motion.div
@@ -175,8 +176,8 @@ export function LimitsTab() {
           <p className="text-sm text-claude-subtext mb-3">Monthly Usage</p>
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
-              <p className="text-2xl font-bold text-claude-text">${usage.monthly_spent.toFixed(2)}</p>
-              <p className="text-xs text-claude-subtext">/ ${usage.monthly_limit.toFixed(2)}</p>
+              <p className="text-2xl font-bold text-claude-text">${n(usage.monthly_spent).toFixed(2)}</p>
+              <p className="text-xs text-claude-subtext">/ ${n(usage.monthly_limit).toFixed(2)}</p>
             </div>
             <div className="w-full bg-claude-bg rounded-full h-3 overflow-hidden">
               <motion.div
@@ -202,7 +203,7 @@ export function LimitsTab() {
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
               <p className="text-2xl font-bold text-claude-text">
-                ${usage.projected_monthly.toFixed(2)}
+                ${n(usage.projected_monthly).toFixed(2)}
               </p>
               <p className="text-xs text-claude-subtext">est.</p>
             </div>
@@ -281,7 +282,7 @@ export function LimitsTab() {
                 className="flex-1 px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
             </div>
-            <p className="text-xs text-claude-subtext mt-1">Currently: ${usage.openai_spent.toFixed(2)}</p>
+            <p className="text-xs text-claude-subtext mt-1">Currently: ${n(usage.openai_spent).toFixed(2)}</p>
           </div>
 
           <div>
@@ -466,7 +467,7 @@ export function LimitsTab() {
         <div className="space-y-2 text-sm text-blue-800">
           <p>
             Based on your current usage pattern, you'll reach your monthly limit of{' '}
-            <strong>${limits.monthly_limit_usd.toFixed(2)}</strong> in approximately{' '}
+            <strong>${n(limits.monthly_limit_usd).toFixed(2)}</strong> in approximately{' '}
             <strong>25 days</strong>.
           </p>
           <p>

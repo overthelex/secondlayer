@@ -78,8 +78,9 @@ export function OverviewTab() {
     );
   }
 
-  const dailyPercentage = (data.today_spending_usd / data.daily_limit_usd) * 100;
-  const monthlyPercentage = (data.monthly_spending_usd / data.monthly_limit_usd) * 100;
+  const n = (v: any) => Number(v) || 0;
+  const dailyPercentage = (n(data.today_spending_usd) / n(data.daily_limit_usd)) * 100;
+  const monthlyPercentage = (n(data.monthly_spending_usd) / n(data.monthly_limit_usd)) * 100;
 
   return (
     <div className="space-y-6">
@@ -94,7 +95,7 @@ export function OverviewTab() {
             <h3 className="text-sm font-medium opacity-90">USD Balance</h3>
             <DollarSign size={24} />
           </div>
-          <p className="text-4xl font-bold mb-2">${data.balance_usd.toFixed(2)}</p>
+          <p className="text-4xl font-bold mb-2">${n(data.balance_usd).toFixed(2)}</p>
           <p className="text-sm opacity-75">Available for use</p>
         </motion.div>
 
@@ -109,7 +110,7 @@ export function OverviewTab() {
             <DollarSign size={24} className="text-claude-accent" />
           </div>
           <p className="text-4xl font-bold text-claude-text mb-2">
-            ₴{data.balance_uah.toFixed(2)}
+            ₴{n(data.balance_uah).toFixed(2)}
           </p>
           <p className="text-sm text-claude-subtext">Ukrainian Hryvnia</p>
         </motion.div>
@@ -145,7 +146,7 @@ export function OverviewTab() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-claude-text">Daily Limit</span>
             <span className="text-sm text-claude-subtext">
-              ${data.today_spending_usd.toFixed(2)} / ${data.daily_limit_usd.toFixed(2)}
+              ${n(data.today_spending_usd).toFixed(2)} / ${n(data.daily_limit_usd).toFixed(2)}
             </span>
           </div>
           <div className="w-full bg-claude-bg rounded-full h-3 overflow-hidden">
@@ -172,7 +173,7 @@ export function OverviewTab() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-claude-text">Monthly Limit</span>
             <span className="text-sm text-claude-subtext">
-              ${data.monthly_spending_usd.toFixed(2)} / ${data.monthly_limit_usd.toFixed(2)}
+              ${n(data.monthly_spending_usd).toFixed(2)} / ${n(data.monthly_limit_usd).toFixed(2)}
             </span>
           </div>
           <div className="w-full bg-claude-bg rounded-full h-3 overflow-hidden">
