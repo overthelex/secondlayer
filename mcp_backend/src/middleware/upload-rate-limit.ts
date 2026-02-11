@@ -66,10 +66,10 @@ function createUserRateLimiter(options: UserRateLimitOptions) {
   };
 }
 
-// 20 init requests per minute per user (prevent session spam)
+// 200 init requests per minute per user (generous — session quota is the real abuse protection)
 export const uploadInitRateLimit = createUserRateLimiter({
   windowMs: 60 * 1000,
-  maxRequests: 20,
+  maxRequests: 200,
   keyPrefix: 'ratelimit:upload-init',
 });
 

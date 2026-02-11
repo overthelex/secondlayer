@@ -247,9 +247,12 @@ export class UploadService {
   }
 
   async getActiveSessionCount(userId: string): Promise<number> {
+    // Exclude clearly stale sessions (pending/uploading with no update in 30+ min)
     const result = await this.pool.query(
       `SELECT COUNT(*) as cnt FROM upload_sessions
-       WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')`,
+       WHERE user_id = $1
+         AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
+         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')`,
       [userId]
     );
     return parseInt(result.rows[0].cnt, 10);
@@ -318,6 +321,32 @@ export class UploadService {
 
     if (result.rows.length > 0) {
       logger.info('[Upload] Expired sessions cleaned', { count: result.rows.length });
+    }
+
+    return result.rows.length;
+  }
+
+  /**
+   * Cancel sessions stuck in pending/uploading for longer than staleMinutes.
+   * These are abandoned uploads where the browser closed or network dropped.
+   */
+  async cleanupStale(staleMinutes: number = 30): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE upload_sessions
+       SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+       WHERE status IN ('pending', 'uploading')
+         AND updated_at < CURRENT_TIMESTAMP - ($1 || ' minutes')::interval
+       RETURNING id`
+      , [staleMinutes]
+    );
+
+    for (const row of result.rows) {
+      const sessionDir = path.join(this.tempDir, row.id);
+      await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
+    }
+
+    if (result.rows.length > 0) {
+      logger.info('[Upload] Stale sessions cleaned', { count: result.rows.length, staleMinutes });
     }
 
     return result.rows.length;

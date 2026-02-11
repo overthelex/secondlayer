@@ -1900,6 +1900,17 @@ class HTTPMCPServer {
         });
       }, 60 * 60 * 1000);
 
+      // Cleanup stale pending/uploading sessions every 5 minutes
+      setInterval(() => {
+        this.uploadService.cleanupStale(30).catch((err) => {
+          logger.error('Upload stale cleanup failed', { error: err.message });
+        });
+      }, 5 * 60 * 1000);
+      // Run once on startup too
+      this.uploadService.cleanupStale(30).catch((err) => {
+        logger.error('Upload stale cleanup on startup failed', { error: err.message });
+      });
+
       // Start upload recovery service (30s delay, then every 5 min)
       this.uploadRecoveryService.start();
       logger.info('Upload recovery service started');
