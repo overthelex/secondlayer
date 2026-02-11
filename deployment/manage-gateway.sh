@@ -154,16 +154,24 @@ start_env() {
             # Start Vite dev server for frontend
             if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
                 if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
-                    print_msg "$BLUE" "⚡ Starting Vite dev server..."
+                    print_msg "$BLUE" "📦 Installing frontend dependencies..."
                     cd "$REPO_ROOT/lexwebapp"
+                    npm install --prefer-offline 2>&1 | tail -3
+                    print_msg "$BLUE" "⚡ Starting Vite dev server..."
                     nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
                     local vite_pid=$!
                     cd "$SCRIPT_DIR"
-                    sleep 3
+                    # Wait up to 15s for Vite to start
+                    local wait_count=0
+                    while [ $wait_count -lt 15 ] && ! ss -tlnp 2>/dev/null | grep -q ':5173'; do
+                        sleep 1
+                        wait_count=$((wait_count + 1))
+                    done
                     if ss -tlnp 2>/dev/null | grep -q ':5173'; then
                         print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
                     else
-                        print_msg "$YELLOW" "⚠️  Vite may still be starting (pid $vite_pid, check /tmp/vite-localdev.log)"
+                        print_msg "$RED" "❌ Vite failed to start. Check /tmp/vite-localdev.log"
+                        tail -10 /tmp/vite-localdev.log 2>/dev/null || true
                     fi
                 else
                     print_msg "$GREEN" "✅ Vite already running on port 5173"
@@ -489,16 +497,24 @@ deploy_local() {
 
     if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
         if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
-            print_msg "$BLUE" "⚡ Starting Vite dev server..."
+            print_msg "$BLUE" "📦 Installing frontend dependencies..."
             cd "$REPO_ROOT/lexwebapp"
+            npm install --prefer-offline 2>&1 | tail -3
+            print_msg "$BLUE" "⚡ Starting Vite dev server..."
             nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
             local vite_pid=$!
             cd "$SCRIPT_DIR"
-            sleep 3
+            # Wait up to 15s for Vite to start
+            local wait_count=0
+            while [ $wait_count -lt 15 ] && ! ss -tlnp 2>/dev/null | grep -q ':5173'; do
+                sleep 1
+                wait_count=$((wait_count + 1))
+            done
             if ss -tlnp 2>/dev/null | grep -q ':5173'; then
                 print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
             else
-                print_msg "$YELLOW" "⚠️  Vite may still be starting (pid $vite_pid, check /tmp/vite-localdev.log)"
+                print_msg "$RED" "❌ Vite failed to start. Check /tmp/vite-localdev.log"
+                tail -10 /tmp/vite-localdev.log 2>/dev/null || true
             fi
         else
             print_msg "$GREEN" "✅ Vite already running on port 5173"
