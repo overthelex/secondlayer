@@ -63,7 +63,7 @@ Commands:
 Environments:
   stage             Staging (stage.legal.org.ua) → mail.lexapp.co.ua
   dev               Development (dev.legal.org.ua) → gate.lexapp.co.ua
-  local             Local development (localhost:3000) → localhost
+  local             Local development (localdev.legal.org.ua) → localhost
   all               All remote environments (stage+dev)
 
 Deployment Targets:
@@ -398,9 +398,9 @@ check_health() {
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
     curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    systemctl is-active nginx &>/dev/null && print_msg "$GREEN" "✅ Nginx: running (4434/8080)" || print_msg "$RED" "❌ Nginx: stopped"
+    systemctl is-active nginx &>/dev/null && print_msg "$GREEN" "✅ Nginx: running (443/80)" || print_msg "$RED" "❌ Nginx: stopped"
     ss -tlnp 2>/dev/null | grep -q ':5173' && print_msg "$GREEN" "✅ Vite: running (5173)" || print_msg "$RED" "❌ Vite: stopped"
-    curl -skf https://localdev.legal.org.ua:4434/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
+    curl -skf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
 
     echo ""
 }

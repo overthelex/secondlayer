@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: mode === 'staging' || mode === 'development',
     },
     server: {
-      host: 'localdev.legal.org.ua',
+      host: true,
       ...(hasLocalCerts && {
         https: {
           cert: fs.readFileSync(certFile),

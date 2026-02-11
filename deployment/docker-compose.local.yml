@@ -217,9 +217,9 @@ services:
       # OAuth (optional for local - can use API keys instead)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/auth/google/callback}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://localdev.legal.org.ua/auth/google/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-https://localdev.legal.org.ua}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localdev.legal.org.ua,http://localhost:5173,http://localhost:3000}
 
       # MinIO (S3-compatible object storage)
       MINIO_ENDPOINT: minio-local
@@ -610,6 +610,59 @@ services:
   #     - secondlayer-local
   #   restart: unless-stopped
 
+  # ===== Monitoring Stack =====
+
+  prometheus-local:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus-local
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_local_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - secondlayer-local
+    restart: unless-stopped
+
+  grafana-local:
+    image: grafana/grafana:10.2.3
+    container_name: grafana-local
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana_local_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3100:3000"
+    networks:
+      - secondlayer-local
+    restart: unless-stopped
+    depends_on:
+      - prometheus-local
+
+  redis-exporter-local:
+    image: oliver006/redis_exporter:v1.56.0
+    container_name: redis-exporter-local
+    environment:
+      REDIS_ADDR: "redis://redis-local:6379"
+    ports:
+      - "9121:9121"
+    networks:
+      - secondlayer-local
+    restart: unless-stopped
+    depends_on:
+      - redis-local
+
 volumes:
   postgres_local_data:
     driver: local
@@ -624,6 +677,10 @@ volumes:
   minio_local_data:
     driver: local
   postgres_openreyestr_local_data:
+    driver: local
+  prometheus_local_data:
+    driver: local
+  grafana_local_data:
     driver: local
 
 networks:
