@@ -54,7 +54,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
-    "axios": "^1.6.5",
+    "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.67.3",
     "cheerio": "^1.1.2",
