@@ -62,6 +62,7 @@ type UploadListener = (event: UploadEvent) => void;
 
 const DEFAULT_CONCURRENT_FILES = 3;
 const MAX_RETRIES = 3;
+const MAX_429_RETRIES = 30; // Cap 429 retries to prevent infinite loops
 const RETRY_DELAYS = [1000, 2000, 4000]; // ms
 const POLL_INTERVAL = 2000; // ms
 const BATCH_INIT_THRESHOLD = 10; // Use batch init for 10+ files
@@ -419,6 +420,7 @@ export class UploadManager {
       relativePath: i.relativePath,
     }));
 
+    let throttleRetries = 0;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         const response = await uploadService.initBatch(files);
@@ -433,12 +435,17 @@ export class UploadManager {
         }
         return; // Success
       } catch (err: any) {
-        // 429 — wait for Retry-After, don't count as attempt
+        // 429 — wait for Retry-After, don't count as attempt (but cap retries)
         if (err.status === 429) {
+          throttleRetries++;
+          if (throttleRetries > MAX_429_RETRIES) {
+            this.emit({ type: 'error', error: 'Server busy too long, batch init failed' });
+            break; // Fall through to individual init
+          }
           const retryAfter = parseInt(err.details?.retryAfter || '60', 10);
           this.emit({
             type: 'error',
-            error: `Server busy, batch init paused for ${retryAfter}s`,
+            error: `Server busy, batch init paused for ${retryAfter}s (${throttleRetries}/${MAX_429_RETRIES})`,
           });
           await new Promise((r) => setTimeout(r, retryAfter * 1000));
           attempt--; // Don't count 429 as an attempt
@@ -482,6 +489,7 @@ export class UploadManager {
       } else {
         // Init with retry (same pattern as chunk upload 429 handling)
         let initError: Error | null = null;
+        let initThrottleRetries = 0;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             initResponse = await uploadService.initUpload({
@@ -495,12 +503,17 @@ export class UploadManager {
             initError = null;
             break;
           } catch (err: any) {
-            // 429 — wait for Retry-After, don't count as attempt
+            // 429 — wait for Retry-After, don't count as attempt (but cap retries)
             if (err.status === 429) {
+              initThrottleRetries++;
+              if (initThrottleRetries > MAX_429_RETRIES) {
+                initError = new Error('Server busy too long, upload init failed');
+                break;
+              }
               const retryAfter = parseInt(err.details?.retryAfter || '60', 10);
               this.emit({
                 type: 'error',
-                error: `Server busy, init paused for ${retryAfter}s`,
+                error: `Server busy, init paused for ${retryAfter}s (${initThrottleRetries}/${MAX_429_RETRIES})`,
               });
               await new Promise((r) => setTimeout(r, retryAfter * 1000));
               attempt--;
@@ -546,6 +559,7 @@ export class UploadManager {
 
         // Upload with retries
         let lastError: Error | null = null;
+        let chunkThrottleRetries = 0;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             const response = await uploadService.uploadChunk(
@@ -573,12 +587,17 @@ export class UploadManager {
             lastError = null;
             break;
           } catch (err: any) {
-            // Handle 429 — wait for Retry-After, don't count as retry attempt
+            // Handle 429 — wait for Retry-After, don't count as retry attempt (but cap retries)
             if (err.status === 429 || err.message?.includes('429')) {
+              chunkThrottleRetries++;
+              if (chunkThrottleRetries > MAX_429_RETRIES) {
+                lastError = new Error('Server busy too long, chunk upload failed');
+                break;
+              }
               const retryAfter = parseInt(err.retryAfter || '5', 10);
               this.emit({
                 type: 'error',
-                error: `Server busy, uploads paused for ${retryAfter}s`,
+                error: `Server busy, uploads paused for ${retryAfter}s (${chunkThrottleRetries}/${MAX_429_RETRIES})`,
               });
               await new Promise((r) => setTimeout(r, retryAfter * 1000));
               // Don't increment attempt counter for 429
