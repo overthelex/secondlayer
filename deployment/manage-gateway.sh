@@ -140,44 +140,7 @@ start_env() {
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d --build
             fi
 
-            # Start nginx for local reverse proxy (localdev.legal.org.ua)
-            if command -v nginx &> /dev/null; then
-                print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
-                if sudo nginx -t 2>/dev/null; then
-                    sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
-                    print_msg "$GREEN" "✅ Nginx started (ports 443/80)"
-                else
-                    print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
-                fi
-            fi
-
-            # Start Vite dev server for frontend
-            if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
-                if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
-                    print_msg "$BLUE" "📦 Installing frontend dependencies..."
-                    cd "$REPO_ROOT/lexwebapp"
-                    npm install --prefer-offline 2>&1 | tail -3
-                    print_msg "$BLUE" "⚡ Starting Vite dev server..."
-                    nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
-                    local vite_pid=$!
-                    cd "$SCRIPT_DIR"
-                    # Wait up to 15s for Vite to start
-                    local wait_count=0
-                    while [ $wait_count -lt 15 ] && ! ss -tlnp 2>/dev/null | grep -q ':5173'; do
-                        sleep 1
-                        wait_count=$((wait_count + 1))
-                    done
-                    if ss -tlnp 2>/dev/null | grep -q ':5173'; then
-                        print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
-                    else
-                        print_msg "$RED" "❌ Vite failed to start. Check /tmp/vite-localdev.log"
-                        tail -10 /tmp/vite-localdev.log 2>/dev/null || true
-                    fi
-                else
-                    print_msg "$GREEN" "✅ Vite already running on port 5173"
-                fi
-            fi
-            # Open browser
+            # Open browser (nginx + Vite run inside Docker now)
             print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
             if command -v xdg-open &> /dev/null; then
                 xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
@@ -215,22 +178,6 @@ stop_env() {
             $compose_cmd -f docker-compose.dev.yml --env-file .env.dev down
             ;;
         local)
-            # Stop Vite dev server
-            local vite_pid
-            vite_pid=$(ss -tlnp 2>/dev/null | grep ':5173' | grep -oP 'pid=\K[0-9]+' | head -1)
-            if [ -n "$vite_pid" ]; then
-                print_msg "$BLUE" "⚡ Stopping Vite dev server (pid $vite_pid)..."
-                kill "$vite_pid" 2>/dev/null || true
-                print_msg "$GREEN" "✅ Vite stopped"
-            fi
-
-            # Stop nginx
-            if systemctl is-active nginx &>/dev/null; then
-                print_msg "$BLUE" "🌐 Stopping nginx..."
-                sudo systemctl stop nginx 2>/dev/null || true
-                print_msg "$GREEN" "✅ Nginx stopped"
-            fi
-
             if [ -f ".env.local" ]; then
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local down
             else
@@ -398,8 +345,8 @@ check_health() {
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
     curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    systemctl is-active nginx &>/dev/null && print_msg "$GREEN" "✅ Nginx: running (443/80)" || print_msg "$RED" "❌ Nginx: stopped"
-    ss -tlnp 2>/dev/null | grep -q ':5173' && print_msg "$GREEN" "✅ Vite: running (5173)" || print_msg "$RED" "❌ Vite: stopped"
+    docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Nginx: running (443/80)" || print_msg "$RED" "❌ Nginx: stopped"
+    docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Vite: running (Docker)" || print_msg "$RED" "❌ Vite: stopped"
     curl -skf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
 
     echo ""
@@ -471,9 +418,9 @@ deploy_local() {
         print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
         $compose_cmd $compose_args up migrate-openreyestr-local
 
-        # Step 8: Start app services
+        # Step 8: Start app services (including nginx + frontend in Docker)
         print_msg "$BLUE" "▶️  Starting application services..."
-        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local
+        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local nginx-local lexwebapp-local
     )
 
     if [ $? -ne 0 ]; then
@@ -491,44 +438,7 @@ deploy_local() {
         exit 1
     fi
 
-    # Phase 5: Start nginx + Vite (stopped by stop_env)
-    if command -v nginx &> /dev/null; then
-        print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
-        if sudo nginx -t 2>/dev/null; then
-            sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
-            print_msg "$GREEN" "✅ Nginx started (ports 443/80)"
-        else
-            print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
-        fi
-    fi
-
-    if [ -f "$REPO_ROOT/lexwebapp/package.json" ]; then
-        if ! ss -tlnp 2>/dev/null | grep -q ':5173'; then
-            print_msg "$BLUE" "📦 Installing frontend dependencies..."
-            cd "$REPO_ROOT/lexwebapp"
-            npm install --prefer-offline 2>&1 | tail -3
-            print_msg "$BLUE" "⚡ Starting Vite dev server..."
-            nohup npm run dev > /tmp/vite-localdev.log 2>&1 &
-            local vite_pid=$!
-            cd "$SCRIPT_DIR"
-            # Wait up to 15s for Vite to start
-            local wait_count=0
-            while [ $wait_count -lt 15 ] && ! ss -tlnp 2>/dev/null | grep -q ':5173'; do
-                sleep 1
-                wait_count=$((wait_count + 1))
-            done
-            if ss -tlnp 2>/dev/null | grep -q ':5173'; then
-                print_msg "$GREEN" "✅ Vite started (port 5173, pid $vite_pid, log: /tmp/vite-localdev.log)"
-            else
-                print_msg "$RED" "❌ Vite failed to start. Check /tmp/vite-localdev.log"
-                tail -10 /tmp/vite-localdev.log 2>/dev/null || true
-            fi
-        else
-            print_msg "$GREEN" "✅ Vite already running on port 5173"
-        fi
-    fi
-
-    # Phase 6: Open browser
+    # Phase 5: Open browser (nginx + Vite run inside Docker now)
     print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
     if command -v xdg-open &> /dev/null; then
         xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
@@ -536,7 +446,7 @@ deploy_local() {
         open "https://localdev.legal.org.ua" 2>/dev/null &
     fi
 
-    # Phase 7: Report
+    # Phase 6: Report
     generate_deploy_report "local" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
     print_msg "$GREEN" "✅ Local deployment complete"
     $compose_cmd $compose_args ps

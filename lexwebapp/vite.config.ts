@@ -5,10 +5,11 @@ import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const isDocker = !!process.env.DOCKER_ENV
   const certsDir = path.resolve(__dirname, 'certs')
   const certFile = path.join(certsDir, 'localdev.legal.org.ua+2.pem')
   const keyFile = path.join(certsDir, 'localdev.legal.org.ua+2-key.pem')
-  const hasLocalCerts = fs.existsSync(certFile) && fs.existsSync(keyFile)
+  const hasLocalCerts = !isDocker && fs.existsSync(certFile) && fs.existsSync(keyFile)
 
   return {
     plugins: [react()],
@@ -29,8 +30,7 @@ export default defineConfig(({ mode }) => {
       }),
       hmr: {
         host: 'localdev.legal.org.ua',
-        port: 5173,
-        protocol: 'wss',
+        ...(isDocker ? { clientPort: 443, protocol: 'wss' } : { port: 5173, protocol: 'wss' }),
       },
       proxy: mode === 'development' ? {
         '/api': {

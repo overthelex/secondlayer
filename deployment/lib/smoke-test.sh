@@ -135,7 +135,7 @@ check_frontend_health() {
     local url
     case $env in
         local)
-            url="http://localhost:8080"
+            url="https://localhost"
             ;;
         dev|development)
             url="https://dev.legal.org.ua"
@@ -145,7 +145,7 @@ check_frontend_health() {
             ;;
     esac
 
-    if curl -sf --max-time 10 "$url" > /dev/null 2>&1; then
+    if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
         smoke_record "Frontend ($url)" "pass" ""
     else
         smoke_record "Frontend ($url)" "warn" "Not responding (may need gateway)"

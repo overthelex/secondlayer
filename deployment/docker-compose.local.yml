@@ -596,19 +596,85 @@ services:
     networks:
       - secondlayer-local
 
-  # Frontend - typically run with npm run dev outside Docker for hot reload
-  # Uncomment if you want to run frontend in Docker
-  # lexwebapp-local:
-  #   image: lexwebapp-lexwebapp:latest
-  #   container_name: lexwebapp-local
-  #   ports:
-  #     - "8080:80"
-  #   environment:
-  #     - NODE_ENV=development
-  #     - VITE_API_URL=http://localhost:3000/api
-  #   networks:
-  #     - secondlayer-local
-  #   restart: unless-stopped
+  # ===== Frontend (Vite dev server in Docker) =====
+
+  lexwebapp-deps-local:
+    image: node:20-alpine
+    container_name: lexwebapp-deps-local
+    working_dir: /app
+    command: ["npm", "install"]
+    volumes:
+      - ../lexwebapp:/app
+      - lexwebapp_node_modules:/app/node_modules
+    restart: "no"
+    networks:
+      - secondlayer-local
+
+  lexwebapp-local:
+    image: node:20-alpine
+    container_name: lexwebapp-local
+    working_dir: /app
+    command: ["npx", "vite", "--host", "0.0.0.0"]
+    environment:
+      NODE_ENV: development
+      DOCKER_ENV: "true"
+      VITE_API_URL: ${VITE_API_URL:-https://localdev.legal.org.ua/api}
+    volumes:
+      - ../lexwebapp:/app
+      - lexwebapp_node_modules:/app/node_modules
+    depends_on:
+      lexwebapp-deps-local:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # ===== Nginx Reverse Proxy =====
+
+  nginx-local:
+    image: nginx:alpine
+    container_name: nginx-local
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/localdev-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      app-local:
+        condition: service_healthy
+      lexwebapp-local:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
 
   # ===== Monitoring Stack =====
 
@@ -638,6 +704,9 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-grafana@legal.org.ua}
+      - GF_SERVER_ROOT_URL=https://localdev.legal.org.ua/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
     volumes:
       - grafana_local_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -647,8 +716,6 @@ services:
     networks:
       - secondlayer-local
     restart: unless-stopped
-    depends_on:
-      - prometheus-local
 
   redis-exporter-local:
     image: oliver006/redis_exporter:v1.56.0
@@ -675,6 +742,8 @@ volumes:
   document_service_credentials:
     driver: local
   minio_local_data:
+    driver: local
+  lexwebapp_node_modules:
     driver: local
   postgres_openreyestr_local_data:
     driver: local
