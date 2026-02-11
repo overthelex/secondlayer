@@ -13,6 +13,7 @@ import { Database } from './database/database';
 import { OpenReyestrTools } from './api/openreyestr-tools';
 import { CostTracker } from './services/cost-tracker';
 import { MCPOpenReyestrAPI } from './api/mcp-openreyestr-api';
+import { MetricsService } from './services/metrics-service';
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ class HTTPOpenReyestrServer {
   private tools: OpenReyestrTools;
   private costTracker: CostTracker;
   private mcpAPI: MCPOpenReyestrAPI;
+  private metricsService: MetricsService;
 
   constructor() {
     this.app = express();
@@ -40,6 +42,11 @@ class HTTPOpenReyestrServer {
 
     logger.info('Cost tracking initialized for OpenReyestr server');
 
+    // Initialize Prometheus metrics
+    this.metricsService = new MetricsService();
+    this.db.setMetricsCollector((stats) => this.metricsService.updatePgPool(stats));
+    logger.info('Prometheus metrics service initialized');
+
     // Setup middleware and routes AFTER services are initialized
     this.setupMiddleware();
     this.setupRoutes();
@@ -55,6 +62,20 @@ class HTTPOpenReyestrServer {
     // JSON parsing
     this.app.use(express.json({ limit: '10mb' }));
 
+    // Prometheus HTTP metrics middleware
+    this.app.use((req, res, next) => {
+      const start = process.hrtime.bigint();
+      res.on('finish', () => {
+        const durationNs = Number(process.hrtime.bigint() - start);
+        const durationSec = durationNs / 1e9;
+        const route = this.metricsService.normalizeRoute(req.route?.path || req.path);
+        const labels = { method: req.method, route, status_code: String(res.statusCode) };
+        this.metricsService.httpRequestDuration.observe(labels, durationSec);
+        this.metricsService.httpRequestsTotal.inc(labels);
+      });
+      next();
+    });
+
     // Request logging
     this.app.use((req, _res, next) => {
       logger.info('HTTP request', {
@@ -67,13 +88,51 @@ class HTTPOpenReyestrServer {
   }
 
   private setupRoutes() {
+    // Prometheus metrics endpoint (no auth - internal Docker network only)
+    this.app.get('/metrics', async (_req, res) => {
+      try {
+        const metrics = await this.metricsService.getMetrics();
+        res.set('Content-Type', this.metricsService.getContentType());
+        res.end(metrics);
+      } catch (err: any) {
+        res.status(500).end(err.message);
+      }
+    });
 
-    // Health check (public - no auth)
-    this.app.get('/health', (_req, res) => {
-      res.json({
-        status: 'ok',
+    // Liveness probe
+    this.app.get('/health/live', (_req, res) => {
+      res.json({ status: 'ok' });
+    });
+
+    // Readiness probe
+    this.app.get('/health/ready', async (_req, res) => {
+      try {
+        await this.db.query('SELECT 1');
+        res.json({ status: 'ok' });
+      } catch (err: any) {
+        res.status(503).json({ status: 'unavailable', error: err.message });
+      }
+    });
+
+    // Full health check with dependency status
+    this.app.get('/health', async (_req, res) => {
+      const checks: Record<string, { ok: boolean; error?: string }> = {};
+      let degraded = false;
+
+      try {
+        await this.db.query('SELECT 1');
+        checks.postgres = { ok: true };
+      } catch (err: any) {
+        checks.postgres = { ok: false, error: err.message };
+        degraded = true;
+      }
+
+      const status = degraded ? 'degraded' : 'ok';
+      res.status(degraded ? 503 : 200).json({
+        status,
         service: 'openreyestr-mcp-http',
         version: '1.0.0',
+        checks,
       });
     });
 

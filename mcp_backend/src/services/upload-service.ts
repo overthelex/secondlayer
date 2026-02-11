@@ -343,6 +343,7 @@ export class UploadService {
        SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
        WHERE status IN ('pending', 'uploading')
          AND updated_at < CURRENT_TIMESTAMP - ($1 || ' minutes')::interval
+         AND NOT (status = 'uploading' AND array_length(uploaded_chunks, 1) = total_chunks)
        RETURNING id`
       , [staleMinutes]
     );
@@ -423,6 +424,23 @@ export class UploadService {
        WHERE status IN ('assembling', 'processing')
        ORDER BY updated_at ASC
        FOR UPDATE SKIP LOCKED`
+    );
+    return result.rows.map((row: any) => this.rowToSession(row));
+  }
+
+  /**
+   * Find sessions in 'uploading' status where all chunks are present but /complete was never called.
+   * Uses FOR UPDATE SKIP LOCKED to prevent concurrent recovery.
+   */
+  async getFullyUploadedStale(staleMinutes: number = 5): Promise<UploadSession[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM upload_sessions
+       WHERE status = 'uploading'
+         AND array_length(uploaded_chunks, 1) = total_chunks
+         AND updated_at < CURRENT_TIMESTAMP - ($1 || ' minutes')::interval
+       ORDER BY updated_at ASC
+       FOR UPDATE SKIP LOCKED`,
+      [staleMinutes]
     );
     return result.rows.map((row: any) => this.rowToSession(row));
   }

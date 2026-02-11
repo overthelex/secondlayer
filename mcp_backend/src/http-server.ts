@@ -64,6 +64,7 @@ import { createMatterRoutes } from './routes/matter-routes.js';
 import { UploadRecoveryService } from './services/upload-recovery-service.js';
 import { UploadQueueService } from './services/upload-queue-service.js';
 import { getUploadProcessingMetrics } from './routes/upload-routes.js';
+import { MetricsService } from './services/metrics-service.js';
 
 dotenv.config();
 
@@ -96,6 +97,7 @@ class HTTPMCPServer {
   private legalHoldService: LegalHoldService;
   private uploadRecoveryService: UploadRecoveryService;
   private uploadQueueService: UploadQueueService;
+  private metricsService: MetricsService;
 
   constructor() {
     this.app = express();
@@ -178,6 +180,22 @@ class HTTPMCPServer {
     this.uploadQueueService.startWorker();
     logger.info('BullMQ upload queue service initialized');
 
+    // Initialize Prometheus metrics service
+    this.metricsService = new MetricsService();
+
+    // Bind PG pool metrics collector
+    this.services.db.setMetricsCollector((stats) => this.metricsService.updatePgPool(stats));
+
+    // Bind upload queue metrics collector (every 10s)
+    this.uploadQueueService.setMetricsCollector((metrics) => this.metricsService.updateUploadQueue(metrics));
+
+    // Wire cost tracker to Prometheus counter
+    this.costTracker.setMetricsCallback((toolName, costUsd) => {
+      this.metricsService.costTrackingTotalUsd.inc({ tool_name: toolName }, costUsd);
+    });
+
+    logger.info('Prometheus metrics service initialized');
+
     // Initialize upload recovery service (uses BullMQ for re-enqueuing)
     this.uploadRecoveryService = new UploadRecoveryService(
       this.uploadService,
@@ -230,6 +248,8 @@ class HTTPMCPServer {
     openaiManager.setCostTracker(this.costTracker);
     this.services.zoAdapter.setCostTracker(this.costTracker);
     this.services.zoPracticeAdapter.setCostTracker(this.costTracker);
+
+    // Wire cost metrics to Prometheus (callback set after metricsService init below)
     logger.info('Cost tracking and billing initialized');
 
     // Initialize MCP SSE Server for ChatGPT integration
@@ -286,6 +306,20 @@ class HTTPMCPServer {
     // Initialize Passport middleware
     this.app.use(passport.initialize() as any);
 
+    // Prometheus HTTP metrics middleware
+    this.app.use((req, res, next) => {
+      const start = process.hrtime.bigint();
+      res.on('finish', () => {
+        const durationNs = Number(process.hrtime.bigint() - start);
+        const durationSec = durationNs / 1e9;
+        const route = this.metricsService.normalizeRoute(req.route?.path || req.path);
+        const labels = { method: req.method, route, status_code: String(res.statusCode) };
+        this.metricsService.httpRequestDuration.observe(labels, durationSec);
+        this.metricsService.httpRequestsTotal.inc(labels);
+      });
+      next();
+    });
+
     // Request logging
     this.app.use((req, _res, next) => {
       logger.info('HTTP request', {
@@ -298,12 +332,77 @@ class HTTPMCPServer {
   }
 
   private setupRoutes() {
-    // Health check (public - no auth, rate limited)
-    this.app.get('/health', healthCheckRateLimit as any, (_req, res) => {
-      res.json({
-        status: 'ok',
+    // Prometheus metrics endpoint (no auth - internal Docker network only)
+    this.app.get('/metrics', async (_req, res) => {
+      try {
+        const metrics = await this.metricsService.getMetrics();
+        res.set('Content-Type', this.metricsService.getContentType());
+        res.end(metrics);
+      } catch (err: any) {
+        res.status(500).end(err.message);
+      }
+    });
+
+    // Liveness probe — process is alive (always 200)
+    this.app.get('/health/live', (_req, res) => {
+      res.json({ status: 'ok' });
+    });
+
+    // Readiness probe — DB is accessible (200/503)
+    this.app.get('/health/ready', healthCheckRateLimit as any, async (_req, res) => {
+      try {
+        await this.services.db.query('SELECT 1');
+        res.json({ status: 'ok' });
+      } catch (err: any) {
+        res.status(503).json({ status: 'unavailable', error: err.message });
+      }
+    });
+
+    // Full health check with dependency status (public - no auth, rate limited)
+    this.app.get('/health', healthCheckRateLimit as any, async (_req, res) => {
+      const checks: Record<string, { ok: boolean; error?: string }> = {};
+      let degraded = false;
+
+      // PostgreSQL
+      try {
+        await this.services.db.query('SELECT 1');
+        checks.postgres = { ok: true };
+      } catch (err: any) {
+        checks.postgres = { ok: false, error: err.message };
+        degraded = true;
+      }
+
+      // Redis
+      try {
+        const redis = await getRedisClient();
+        if (redis) {
+          await redis.ping();
+          checks.redis = { ok: true };
+        } else {
+          checks.redis = { ok: false, error: 'not connected' };
+          degraded = true;
+        }
+      } catch (err: any) {
+        checks.redis = { ok: false, error: err.message };
+        degraded = true;
+      }
+
+      // Qdrant
+      const qdrantResult = await this.services.embeddingService.healthCheck();
+      checks.qdrant = qdrantResult;
+      if (!qdrantResult.ok) degraded = true;
+
+      // MinIO
+      const minioResult = await this.minioService.healthCheck();
+      checks.minio = minioResult;
+      if (!minioResult.ok) degraded = true;
+
+      const status = degraded ? 'degraded' : 'ok';
+      res.status(degraded ? 503 : 200).json({
+        status,
         service: 'secondlayer-mcp-http',
         version: '1.0.0',
+        checks,
       });
     });
 

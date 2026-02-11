@@ -1,0 +1,51 @@
+groups:
+  - name: http_aggregations
+    interval: 15s
+    rules:
+      # Request rate per service
+      - record: service:http_requests:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job)
+
+      # Error rate per service (5xx)
+      - record: service:http_errors:rate5m
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+
+      # Error rate percentage
+      - record: service:http_error_rate:ratio5m
+        expr: >
+          sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_requests_total[5m])) by (job)
+
+      # P50 latency
+      - record: service:http_request_duration:p50
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # P95 latency
+      - record: service:http_request_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # P99 latency
+      - record: service:http_request_duration:p99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+  - name: cost_aggregations
+    interval: 60s
+    rules:
+      # Cost per hour
+      - record: cost:total_usd:rate1h
+        expr: sum(rate(cost_tracking_total_usd[1h])) * 3600
+
+      # Cost per tool per hour
+      - record: cost:per_tool_usd:rate1h
+        expr: sum(rate(cost_tracking_total_usd[1h])) by (tool_name) * 3600
+
+  - name: pg_pool_aggregations
+    interval: 15s
+    rules:
+      # Pool utilization ratio
+      - record: pg:pool_utilization:ratio
+        expr: >
+          pg_pool_connections{state="active"}
+          /
+          (pg_pool_connections{state="active"} + pg_pool_connections{state="idle"})

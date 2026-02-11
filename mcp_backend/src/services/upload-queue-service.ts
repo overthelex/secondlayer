@@ -42,6 +42,7 @@ export class UploadQueueService {
   private worker: Worker | null = null;
   private queueEvents: QueueEvents | null = null;
   private deps: ProcessorDeps;
+  private metricsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private uploadService: UploadService,
@@ -230,9 +231,30 @@ export class UploadQueueService {
   }
 
   /**
+   * Register a callback that receives queue metrics every 10 seconds.
+   */
+  setMetricsCollector(callback: (metrics: UploadQueueMetrics) => void): void {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+    }
+    this.metricsInterval = setInterval(async () => {
+      try {
+        const metrics = await this.getMetrics();
+        callback(metrics);
+      } catch (err: any) {
+        logger.error('[UploadQueue] Metrics collection failed', { error: err.message });
+      }
+    }, 10000);
+  }
+
+  /**
    * Stop the worker and close connections
    */
   async stop(): Promise<void> {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
     if (this.worker) {
       await this.worker.close();
       this.worker = null;

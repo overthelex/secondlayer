@@ -391,4 +391,16 @@ export class EmbeddingService {
       throw error;
     }
   }
+
+  /**
+   * Health check — verifies Qdrant connectivity.
+   */
+  async healthCheck(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await this.qdrant.getCollections();
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  }
 }

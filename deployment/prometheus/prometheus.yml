@@ -1,0 +1,65 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Node.js application services
+  - job_name: mcp_backend
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['app-stage:3000']
+        labels:
+          service: mcp_backend
+          environment: stage
+
+  - job_name: mcp_rada
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['rada-mcp-app-stage:3001']
+        labels:
+          service: mcp_rada
+          environment: stage
+
+  - job_name: mcp_openreyestr
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['app-openreyestr-stage:3005']
+        labels:
+          service: mcp_openreyestr
+          environment: stage
+
+  # PostgreSQL exporters
+  - job_name: postgres_backend
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['postgres-exporter-backend:9187']
+        labels:
+          database: secondlayer_stage
+
+  - job_name: postgres_openreyestr
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['postgres-exporter-openreyestr:9187']
+        labels:
+          database: openreyestr_stage
+
+  # Redis exporter
+  - job_name: redis
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Node exporter (host metrics)
+  - job_name: node
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9090']

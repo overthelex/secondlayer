@@ -69,59 +69,102 @@ export class UploadRecoveryService {
 
     this.running = true;
     try {
+      // First pass: recover stuck assembling/processing sessions
       const sessions = trigger === 'startup'
         ? await this.uploadService.getRecoverableOnStartup()
         : await this.uploadService.getStuckSessions(STUCK_THRESHOLD_MINUTES);
 
-      if (sessions.length === 0) {
-        logger.debug(`[UploadRecovery] ${trigger} pass: no stuck sessions found`);
-        return;
-      }
+      if (sessions.length > 0) {
+        logger.info(`[UploadRecovery] ${trigger} pass: found ${sessions.length} stuck session(s)`, {
+          sessionIds: sessions.map(s => s.id),
+        });
 
-      logger.info(`[UploadRecovery] ${trigger} pass: found ${sessions.length} stuck session(s)`, {
-        sessionIds: sessions.map(s => s.id),
-      });
+        // Partition: force-fail sessions that exceeded max retries, recover the rest
+        const recoverable: typeof sessions = [];
+        for (const session of sessions) {
+          if (session.retryCount >= MAX_RETRIES) {
+            await this.uploadService.updateStatus(
+              session.id, 'failed', `Max retries (${MAX_RETRIES}) exceeded during recovery`
+            );
+            logger.info('[UploadRecovery] Force-failed max-retry session', {
+              sessionId: session.id,
+              retryCount: session.retryCount,
+            });
+          } else {
+            recoverable.push(session);
+          }
+        }
 
-      // Partition: force-fail sessions that exceeded max retries, recover the rest
-      const recoverable: typeof sessions = [];
-      for (const session of sessions) {
-        if (session.retryCount >= MAX_RETRIES) {
-          await this.uploadService.updateStatus(
-            session.id, 'failed', `Max retries (${MAX_RETRIES}) exceeded during recovery`
-          );
-          logger.info('[UploadRecovery] Force-failed max-retry session', {
-            sessionId: session.id,
-            retryCount: session.retryCount,
-          });
+        // If BullMQ is available, re-enqueue recoverable sessions
+        if (this.uploadQueueService) {
+          if (recoverable.length > 0) {
+            const enqueued = await this.uploadQueueService.enqueueRecovery(recoverable);
+            logger.info(`[UploadRecovery] ${trigger} pass: enqueued ${enqueued} sessions to BullMQ`);
+          }
         } else {
-          recoverable.push(session);
+          // Fallback: in-memory recovery (original behavior)
+          for (const session of recoverable) {
+            try {
+              await this.recoverSession(session, trigger);
+            } catch (error: any) {
+              logger.error('[UploadRecovery] Session recovery failed', {
+                sessionId: session.id,
+                error: error.message,
+              });
+            }
+          }
         }
+      } else {
+        logger.debug(`[UploadRecovery] ${trigger} pass: no stuck sessions found`);
       }
 
-      // If BullMQ is available, re-enqueue recoverable sessions
-      if (this.uploadQueueService) {
-        if (recoverable.length > 0) {
-          const enqueued = await this.uploadQueueService.enqueueRecovery(recoverable);
-          logger.info(`[UploadRecovery] ${trigger} pass: enqueued ${enqueued} sessions to BullMQ`);
-        }
-        return;
-      }
-
-      // Fallback: in-memory recovery (original behavior)
-      for (const session of recoverable) {
-        try {
-          await this.recoverSession(session, trigger);
-        } catch (error: any) {
-          logger.error('[UploadRecovery] Session recovery failed', {
-            sessionId: session.id,
-            error: error.message,
-          });
-        }
-      }
+      // Second pass: auto-complete fully-uploaded sessions that never got /complete called
+      await this.recoverFullyUploadedSessions(trigger);
     } catch (error: any) {
       logger.error(`[UploadRecovery] ${trigger} pass failed`, { error: error.message });
     } finally {
       this.running = false;
+    }
+  }
+
+  private async recoverFullyUploadedSessions(trigger: string): Promise<void> {
+    const staleSessions = await this.uploadService.getFullyUploadedStale(STUCK_THRESHOLD_MINUTES);
+
+    if (staleSessions.length === 0) {
+      return;
+    }
+
+    logger.info(`[UploadRecovery] Auto-completing ${staleSessions.length} fully-uploaded session(s)`, {
+      sessionIds: staleSessions.map(s => s.id),
+      trigger,
+    });
+
+    // Transition to 'assembling' so cleanupStale() won't cancel them
+    for (const session of staleSessions) {
+      await this.uploadService.updateStatus(session.id, 'assembling');
+    }
+
+    if (this.uploadQueueService) {
+      const enqueued = await this.uploadQueueService.enqueueRecovery(staleSessions);
+      logger.info(`[UploadRecovery] Auto-complete: enqueued ${enqueued} fully-uploaded sessions to BullMQ`);
+      return;
+    }
+
+    // Fallback: in-memory recovery
+    for (const session of staleSessions) {
+      try {
+        logger.info('[UploadRecovery] Auto-completing fully-uploaded session', {
+          sessionId: session.id,
+          fileName: session.fileName,
+          totalChunks: session.totalChunks,
+        });
+        await this.recoverSession(session, trigger);
+      } catch (error: any) {
+        logger.error('[UploadRecovery] Auto-complete failed for fully-uploaded session', {
+          sessionId: session.id,
+          error: error.message,
+        });
+      }
     }
   }
 

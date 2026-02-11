@@ -182,4 +182,17 @@ export class MinioService {
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     return `${year}/${month}/${safeName}`;
   }
+
+  /**
+   * Health check — verifies MinIO connectivity.
+   */
+  async healthCheck(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      // listBuckets is the lightest admin-level check
+      await this.client.listBuckets();
+      return { ok: true };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  }
 }

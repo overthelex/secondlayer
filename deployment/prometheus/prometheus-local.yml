@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: mcp_backend
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['app-local:3000']
+        labels:
+          service: mcp_backend
+          environment: local
+
+  - job_name: mcp_rada
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['rada-mcp-app-local:3001']
+        labels:
+          service: mcp_rada
+          environment: local
+
+  - job_name: mcp_openreyestr
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['app-openreyestr-local:3005']
+        labels:
+          service: mcp_openreyestr
+          environment: local
+
+  - job_name: redis
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['redis-exporter-local:9121']
+
+  - job_name: prometheus
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9090']

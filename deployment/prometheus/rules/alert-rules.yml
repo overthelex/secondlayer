@@ -1,0 +1,77 @@
+groups:
+  - name: critical_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 1 minute."
+
+      - alert: PgPoolExhausted
+        expr: pg_pool_connections{state="waiting"} > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PG pool exhausted on {{ $labels.job }}"
+          description: "{{ $labels.job }} has {{ $value }} waiting connections for 2+ minutes."
+
+      - alert: RedisMemoryCritical
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory > 95%"
+          description: "Redis memory usage is at {{ $value | humanizePercentage }}."
+
+  - name: warning_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: service:http_error_rate:ratio5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "5xx error rate is {{ $value | humanizePercentage }} for 5+ minutes."
+
+      - alert: HighLatency
+        expr: service:http_request_duration:p95 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on {{ $labels.job }}"
+          description: "P95 latency is {{ $value }}s for 5+ minutes."
+
+      - alert: PgPoolHigh
+        expr: pg:pool_utilization:ratio > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PG pool utilization > 80% on {{ $labels.job }}"
+          description: "Pool utilization is {{ $value | humanizePercentage }}."
+
+      - alert: UploadQueueHigh
+        expr: upload_queue_depth > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Upload queue depth > 100"
+          description: "Upload queue has {{ $value }} pending jobs for 10+ minutes."
+
+      - alert: CostSpike
+        expr: >
+          cost:total_usd:rate1h > 3 * avg_over_time(cost:total_usd:rate1h[24h])
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cost spike detected"
+          description: "Hourly cost rate is 3x above 24h average."

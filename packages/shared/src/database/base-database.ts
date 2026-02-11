@@ -15,6 +15,7 @@ export interface DatabaseConfig {
 
 export class BaseDatabase {
   protected pool: Pool;
+  private metricsInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: DatabaseConfig) {
     const poolConfig: PoolConfig = {
@@ -83,7 +84,28 @@ export class BaseDatabase {
     }
   }
 
+  /**
+   * Register a callback that receives pool stats every 5 seconds.
+   * The callback pattern decouples from prom-client.
+   */
+  setMetricsCollector(callback: (stats: { total: number; idle: number; waiting: number }) => void): void {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+    }
+    this.metricsInterval = setInterval(() => {
+      callback({
+        total: this.pool.totalCount,
+        idle: this.pool.idleCount,
+        waiting: this.pool.waitingCount,
+      });
+    }, 5000);
+  }
+
   async close(): Promise<void> {
+    if (this.metricsInterval) {
+      clearInterval(this.metricsInterval);
+      this.metricsInterval = null;
+    }
     await this.pool.end();
   }
 }

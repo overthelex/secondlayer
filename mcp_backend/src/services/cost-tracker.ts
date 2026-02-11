@@ -6,6 +6,7 @@ import { BillingService } from './billing-service.js';
 
 export class CostTracker extends BaseCostTracker {
   private billingService?: BillingService;
+  private metricsCallback?: (toolName: string, costUsd: number) => void;
 
   constructor(db: Database) {
     super(db, {
@@ -18,6 +19,13 @@ export class CostTracker extends BaseCostTracker {
   setBillingService(billingService: BillingService): void {
     this.billingService = billingService;
     logger.info('BillingService connected to CostTracker');
+  }
+
+  /**
+   * Register a callback to increment Prometheus cost counter on tracking completion.
+   */
+  setMetricsCallback(callback: (toolName: string, costUsd: number) => void): void {
+    this.metricsCallback = callback;
   }
 
   private calculateZOCostPerCall(monthlyTotal: number): number {
@@ -282,6 +290,11 @@ export class CostTracker extends BaseCostTracker {
     totalCostUsd: number,
     status: 'completed' | 'failed'
   ): Promise<void> {
+    // Increment Prometheus cost counter
+    if (this.metricsCallback && totalCostUsd > 0) {
+      this.metricsCallback(record.tool_name || 'unknown', totalCostUsd);
+    }
+
     if (this.billingService && record.user_id && status === 'completed' && totalCostUsd > 0) {
       try {
         await this.billingService.chargeUser({
