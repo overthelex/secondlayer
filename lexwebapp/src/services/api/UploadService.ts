@@ -193,6 +193,18 @@ export class UploadService extends BaseService {
   }
 
   /**
+   * Clear stale sessions (stuck pending/uploading >30min, assembling/processing >60min)
+   */
+  async clearStaleSessions(): Promise<{ cancelled: number; activeCount: number; maxSessions: number }> {
+    try {
+      const response = await this.client.post('/upload/clear-stale');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  /**
    * Retry a stuck/failed upload session
    */
   async retrySession(uploadId: string): Promise<{ uploadId: string; status: string }> {

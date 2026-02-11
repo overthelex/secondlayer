@@ -247,24 +247,28 @@ export class UploadService {
   }
 
   async getActiveSessionCount(userId: string): Promise<number> {
-    // Exclude clearly stale sessions (pending/uploading with no update in 30+ min)
+    // Exclude clearly stale sessions:
+    // - pending/uploading with no update in 30+ min (abandoned uploads)
+    // - assembling/processing with no update in 60+ min (hung processing)
     const result = await this.pool.query(
       `SELECT COUNT(*) as cnt FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
-         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')`,
+         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')`,
       [userId]
     );
     return parseInt(result.rows[0].cnt, 10);
   }
 
   async getActiveSessions(userId: string): Promise<UploadSession[]> {
-    // Exclude stale sessions (pending/uploading with no update in 30+ min) — same filter as getActiveSessionCount()
+    // Exclude stale sessions — same filter as getActiveSessionCount()
     const result = await this.pool.query(
       `SELECT * FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
          AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')
        ORDER BY created_at DESC`,
       [userId]
     );
@@ -355,6 +359,38 @@ export class UploadService {
     return result.rows.length;
   }
 
+  /**
+   * Cancel stale sessions for a specific user.
+   * - pending/uploading older than 30 min
+   * - assembling/processing older than 60 min
+   * Returns count of cancelled sessions.
+   */
+  async cancelUserStaleSessions(userId: string): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE upload_sessions
+       SET status = 'cancelled', error_message = 'Auto-cleared: stale session', updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+         AND (
+           (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+           OR
+           (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')
+         )
+       RETURNING id`,
+      [userId]
+    );
+
+    for (const row of result.rows) {
+      const sessionDir = path.join(this.tempDir, row.id);
+      await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
+    }
+
+    if (result.rows.length > 0) {
+      logger.info('[Upload] Stale sessions cleared for user', { userId, count: result.rows.length });
+    }
+
+    return result.rows.length;
+  }
+
   async cleanupAssembledFile(sessionId: string): Promise<void> {
     const sessionDir = path.join(this.tempDir, sessionId);
     await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
@@ -365,11 +401,11 @@ export class UploadService {
    * Uses FOR UPDATE SKIP LOCKED to prevent concurrent recovery
    */
   async getStuckSessions(thresholdMinutes: number = 10): Promise<UploadSession[]> {
+    // Returns all stuck sessions regardless of retry_count — caller decides what to do
     const result = await this.pool.query(
       `SELECT * FROM upload_sessions
        WHERE status IN ('assembling', 'processing')
          AND updated_at < CURRENT_TIMESTAMP - ($1 || ' minutes')::interval
-         AND retry_count < 3
        ORDER BY updated_at ASC
        FOR UPDATE SKIP LOCKED`,
       [thresholdMinutes]
@@ -381,10 +417,10 @@ export class UploadService {
    * Find ALL sessions in assembling/processing (for startup recovery, no time threshold)
    */
   async getRecoverableOnStartup(): Promise<UploadSession[]> {
+    // Returns all sessions in assembling/processing — caller decides recovery vs force-fail
     const result = await this.pool.query(
       `SELECT * FROM upload_sessions
        WHERE status IN ('assembling', 'processing')
-         AND retry_count < 3
        ORDER BY updated_at ASC
        FOR UPDATE SKIP LOCKED`
     );

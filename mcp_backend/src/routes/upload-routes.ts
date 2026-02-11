@@ -530,6 +530,30 @@ export function createUploadRouter(
     }
   }) as any);
 
+  /**
+   * POST /clear-stale - Cancel stale sessions for the current user
+   */
+  router.post('/clear-stale', (async (req: DualAuthRequest, res: Response): Promise<any> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      const cancelled = await uploadService.cancelUserStaleSessions(userId);
+      const activeCount = await uploadService.getActiveSessionCount(userId);
+
+      res.json({
+        cancelled,
+        activeCount,
+        maxSessions: MAX_USER_SESSIONS,
+      });
+    } catch (error: any) {
+      logger.error('[Upload] Clear stale failed', { error: error.message });
+      res.status(500).json({ error: error.message });
+    }
+  }) as any);
+
   return router;
 }
 
