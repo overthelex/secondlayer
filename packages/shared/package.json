@@ -35,7 +35,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
-    "@types/node": "^25.2.0",
+    "@types/node": "^25.2.3",
     "@types/pg": "^8.10.9",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^9.0.7",
