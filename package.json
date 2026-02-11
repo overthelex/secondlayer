@@ -46,7 +46,7 @@
     "postcss": "^8.4.49",
     "esbuild": ">=0.25.0",
     "minio": {
-      "fast-xml-parser": "5.3.4"
+      "fast-xml-parser": ">=5.3.4"
     }
   }
 }
