@@ -73,6 +73,14 @@ export const uploadInitRateLimit = createUserRateLimiter({
   keyPrefix: 'ratelimit:upload-init',
 });
 
+// 5 batch-init requests per minute per user (each batch handles up to 500 files)
+// Session quota (MAX_USER_SESSIONS) provides the real abuse protection
+export const uploadBatchInitRateLimit = createUserRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 5,
+  keyPrefix: 'ratelimit:upload-init-batch',
+});
+
 // 200 chunk uploads per minute per user
 export const uploadChunkRateLimit = createUserRateLimiter({
   windowMs: 60 * 1000,

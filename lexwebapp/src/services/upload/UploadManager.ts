@@ -411,27 +411,53 @@ export class UploadManager {
     const needInit = items.filter((i) => !i.uploadId);
     if (needInit.length < BATCH_INIT_THRESHOLD) return; // Not worth batching
 
-    try {
-      const files = needInit.map((i) => ({
-        fileName: i.fileName,
-        fileSize: i.fileSize,
-        mimeType: i.mimeType,
-        docType: i.docType,
-        relativePath: i.relativePath,
-      }));
+    const files = needInit.map((i) => ({
+      fileName: i.fileName,
+      fileSize: i.fileSize,
+      mimeType: i.mimeType,
+      docType: i.docType,
+      relativePath: i.relativePath,
+    }));
 
-      const response = await uploadService.initBatch(files);
-      if (response?.sessions) {
-        for (let idx = 0; idx < response.sessions.length; idx++) {
-          const session = response.sessions[idx];
-          const item = needInit[idx];
-          if (item && session && !('error' in session)) {
-            item.uploadId = session.uploadId;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await uploadService.initBatch(files);
+        if (response?.sessions) {
+          for (let idx = 0; idx < response.sessions.length; idx++) {
+            const session = response.sessions[idx];
+            const item = needInit[idx];
+            if (item && session && !('error' in session)) {
+              item.uploadId = session.uploadId;
+            }
           }
         }
+        return; // Success
+      } catch (err: any) {
+        // 429 — wait for Retry-After, don't count as attempt
+        if (err.status === 429) {
+          const retryAfter = parseInt(err.details?.retryAfter || '60', 10);
+          this.emit({
+            type: 'error',
+            error: `Server busy, batch init paused for ${retryAfter}s`,
+          });
+          await new Promise((r) => setTimeout(r, retryAfter * 1000));
+          attempt--; // Don't count 429 as an attempt
+          continue;
+        }
+
+        // Other errors — backoff then fall through to individual init
+        if (attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAYS[attempt] || 4000;
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        // All retries exhausted — fall back to individual init per file
+        this.emit({
+          type: 'error',
+          error: 'Batch init failed, falling back to individual init',
+        });
       }
-    } catch {
-      // Batch init failed — will fall back to individual init per file
     }
   }
 
@@ -441,7 +467,7 @@ export class UploadManager {
       item.status = 'initializing';
       this.emitItemUpdate(item);
 
-      let initResponse: InitUploadResponse;
+      let initResponse: InitUploadResponse = undefined!;
 
       if (item.uploadId) {
         // Resuming - check existing session
@@ -454,14 +480,40 @@ export class UploadManager {
           expiresAt: '',
         };
       } else {
-        initResponse = await uploadService.initUpload({
-          fileName: item.fileName,
-          fileSize: item.fileSize,
-          mimeType: item.mimeType,
-          docType: item.docType,
-          relativePath: item.relativePath,
-        });
-        item.uploadId = initResponse.uploadId;
+        // Init with retry (same pattern as chunk upload 429 handling)
+        let initError: Error | null = null;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            initResponse = await uploadService.initUpload({
+              fileName: item.fileName,
+              fileSize: item.fileSize,
+              mimeType: item.mimeType,
+              docType: item.docType,
+              relativePath: item.relativePath,
+            });
+            item.uploadId = initResponse.uploadId;
+            initError = null;
+            break;
+          } catch (err: any) {
+            // 429 — wait for Retry-After, don't count as attempt
+            if (err.status === 429) {
+              const retryAfter = parseInt(err.details?.retryAfter || '60', 10);
+              this.emit({
+                type: 'error',
+                error: `Server busy, init paused for ${retryAfter}s`,
+              });
+              await new Promise((r) => setTimeout(r, retryAfter * 1000));
+              attempt--;
+              continue;
+            }
+            initError = err;
+            if (attempt < MAX_RETRIES) {
+              const delay = RETRY_DELAYS[attempt] || 4000;
+              await new Promise((r) => setTimeout(r, delay));
+            }
+          }
+        }
+        if (initError) throw initError;
       }
 
       // Step 2: Upload chunks

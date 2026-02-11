@@ -74,8 +74,12 @@ apiClient.interceptors.response.use(
 
     // 429 Too Many Requests - rate limit exceeded
     if (status === 429) {
-      const message = data?.message || 'Rate limit exceeded. Please try again later.';
-      toast.error(message);
+      // Skip toast for upload endpoints — UploadManager handles 429 retry internally
+      const url = error.config?.url || '';
+      if (!url.includes('/upload/')) {
+        const message = data?.message || 'Rate limit exceeded. Please try again later.';
+        toast.error(message);
+      }
       return Promise.reject(error);
     }
 
