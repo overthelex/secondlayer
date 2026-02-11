@@ -28,6 +28,14 @@ services:
     restart: unless-stopped
     networks:
       - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   rada-db-init-local:
     image: postgres:15-alpine
@@ -89,6 +97,14 @@ services:
     restart: unless-stopped
     networks:
       - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   redis-local:
     image: redis:7-alpine
@@ -254,15 +270,14 @@ services:
     networks:
       - secondlayer-local
 
-    # Minimal resource limits for local development
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 3G
+          cpus: '4.0'
+          memory: 4G
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 1G
 
   rada-migrate-local:
     build:
@@ -434,15 +449,14 @@ services:
     networks:
       - secondlayer-local
 
-    # Resource limits
     deploy:
       resources:
         limits:
-          cpus: '2.0'
+          cpus: '4.0'
           memory: 4G
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'
+          memory: 1G
 
   # OpenReyestr MCP Server - Ukrainian State Register
   postgres-openreyestr-local:

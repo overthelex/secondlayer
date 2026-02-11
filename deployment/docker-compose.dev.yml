@@ -28,6 +28,14 @@ services:
     restart: unless-stopped
     networks:
       - secondlayer-dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   qdrant-dev:
     image: qdrant/qdrant:latest
@@ -42,6 +50,14 @@ services:
     restart: unless-stopped
     networks:
       - secondlayer-dev-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   redis-dev:
     image: redis:7-alpine
@@ -263,12 +279,11 @@ services:
     networks:
       - secondlayer-dev-network
 
-    # Lower resource limits for dev
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 2G
+          cpus: '2.0'
+          memory: 3G
         reservations:
           cpus: '0.5'
           memory: 1G
@@ -541,11 +556,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 2G
+          cpus: '2.0'
+          memory: 3G
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.5'
+          memory: 1G
 
 volumes:
   postgres_dev_data:
