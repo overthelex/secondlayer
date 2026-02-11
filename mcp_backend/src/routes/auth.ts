@@ -49,25 +49,32 @@ router.post('/reset-password', authRateLimit as any, authController.resetPasswor
  * @route   GET /auth/google
  * @desc    Initiate Google OAuth flow
  * @access  Public
- */
-router.get('/google', authController.googleOAuthInit);
-
-/**
+ *
  * @route   GET /auth/google/callback
  * @desc    Google OAuth callback URL
  * @access  Public
  *
- * This is where Google redirects after user authentication.
- * Passport handles the OAuth exchange, then we generate a JWT.
+ * Only registered when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set.
  */
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: process.env.FRONTEND_URL + '/login?error=oauth_failed',
-  }),
-  (authController.googleOAuthCallback as any)
-);
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  router.get('/google', authController.googleOAuthInit);
+
+  router.get(
+    '/google/callback',
+    passport.authenticate('google', {
+      session: false,
+      failureRedirect: process.env.FRONTEND_URL + '/login?error=oauth_failed',
+    }),
+    (authController.googleOAuthCallback as any)
+  );
+} else {
+  router.get('/google', (_req, res) => {
+    res.status(501).json({ error: 'Google OAuth is not configured' });
+  });
+  router.get('/google/callback', (_req, res) => {
+    res.status(501).json({ error: 'Google OAuth is not configured' });
+  });
+}
 
 /**
  * @route   GET /auth/me

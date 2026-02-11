@@ -584,24 +584,25 @@ export class MCPQueryAPI {
     const caseVariations = this.generateCaseNumberVariations(caseNumber);
     logger.info('Generated case number variations', { variations: caseVariations });
 
-    // Strategy: Multiple searches to maximize document discovery
-    // 1. Search by title (exact case number in title field)
-    // 2. Search by text (finds documents that reference the case in body)
+    // Strategy: Title search only — case number is preserved across instances,
+    // so title search finds all documents in the chain. Text search is avoided
+    // because it pulls in documents from other cases that merely mention this number.
     const allDocs: any[] = [];
     const seenDocIds = new Set<string>();
+    const variationsSet = new Set(caseVariations.map(v => v.toLowerCase()));
     const searchStats = {
       byTitle: 0,
-      byText: 0,
       duplicates: 0,
+      filteredOut: 0,
     };
 
-    // Search 1: By title (most precise)
+    // Search by title (precise — case number appears in document title)
     for (const variation of caseVariations) {
       try {
         const titleSearchResult = await this.zoAdapter.searchCourtDecisions({
           meta: { search: variation },
           target: 'title',
-          limit: Math.ceil(maxDocs / 2), // Split limit between searches
+          limit: maxDocs,
           fulldata: 1,
           orderBy: {
             field: 'adjudication_date',
@@ -614,58 +615,30 @@ export class MCPQueryAPI {
 
         for (const doc of docs) {
           const docId = doc?.doc_id || doc?.zakononline_id;
-          if (docId && !seenDocIds.has(String(docId))) {
-            seenDocIds.add(String(docId));
-            allDocs.push(doc);
-            searchStats.byTitle++;
-          } else if (docId) {
-            searchStats.duplicates++;
+          if (!docId || seenDocIds.has(String(docId))) {
+            if (docId) searchStats.duplicates++;
+            continue;
           }
+          seenDocIds.add(String(docId));
+
+          // Post-filter: only keep documents whose cause_num matches our case number
+          const docCaseNum = (doc?.cause_num || doc?.case_number || '').trim().toLowerCase();
+          if (docCaseNum && !variationsSet.has(docCaseNum)) {
+            searchStats.filteredOut++;
+            logger.debug(`Filtered out doc ${docId} with cause_num "${docCaseNum}" (expected one of: ${caseVariations.join(', ')})`);
+            continue;
+          }
+
+          allDocs.push(doc);
+          searchStats.byTitle++;
         }
 
-        logger.info(`Title search for variation "${variation}"`, { found: docs.length });
+        logger.info(`Title search for variation "${variation}"`, { found: docs.length, kept: searchStats.byTitle });
 
         // If we found many documents with first variation, skip others
         if (searchStats.byTitle > 10) break;
       } catch (err) {
         logger.warn(`Title search failed for variation "${variation}"`, { error: err });
-      }
-    }
-
-    // Search 2: By text (catches higher instance documents that reference the case)
-    for (const variation of caseVariations) {
-      try {
-        const textSearchResult = await this.zoAdapter.searchCourtDecisions({
-          meta: { search: variation },
-          target: 'text', // Search in full document text
-          limit: Math.ceil(maxDocs / 2),
-          fulldata: 1,
-          orderBy: {
-            field: 'adjudication_date',
-            direction: 'asc',
-          },
-        });
-
-        const normalized = await this.zoAdapter.normalizeResponse(textSearchResult);
-        const docs = normalized.data || [];
-
-        for (const doc of docs) {
-          const docId = doc?.doc_id || doc?.zakononline_id;
-          if (docId && !seenDocIds.has(String(docId))) {
-            seenDocIds.add(String(docId));
-            allDocs.push(doc);
-            searchStats.byText++;
-          } else if (docId) {
-            searchStats.duplicates++;
-          }
-        }
-
-        logger.info(`Text search for variation "${variation}"`, { found: docs.length });
-
-        // If we found many documents with first variation, skip others
-        if (searchStats.byText > 10) break;
-      } catch (err) {
-        logger.warn(`Text search failed for variation "${variation}"`, { error: err });
       }
     }
 
@@ -681,7 +654,7 @@ export class MCPQueryAPI {
       variations: caseVariations,
       totalFound: allDocs.length,
       byTitle: searchStats.byTitle,
-      byText: searchStats.byText,
+      filteredOut: searchStats.filteredOut,
       duplicatesSkipped: searchStats.duplicates,
       docIds: allDocs.map(d => d?.doc_id || d?.zakononline_id).slice(0, 10), // First 10 IDs for debugging
     });
@@ -854,10 +827,10 @@ export class MCPQueryAPI {
         variations_tried: caseVariations,
         sources: {
           by_title: searchStats.byTitle,
-          by_text: searchStats.byText,
+          filtered_out: searchStats.filteredOut,
           duplicates_removed: searchStats.duplicates,
         },
-        note: 'Multiple search strategies used to find all related documents across all court instances',
+        note: 'Title search with exact case number post-filtering to ensure only documents belonging to this case are returned',
       },
       summary: {
         instances: {
