@@ -90,7 +90,7 @@ class HTTPRadaServer {
       const startTime = Date.now();
 
       try {
-        const { toolName } = req.params;
+        const toolName = Array.isArray(req.params.toolName) ? req.params.toolName[0] : req.params.toolName;
         const args = req.body.arguments || req.body;
         const acceptHeader = req.headers.accept || '';
 
@@ -191,7 +191,7 @@ class HTTPRadaServer {
     // Dedicated SSE streaming endpoint
     this.app.post('/api/tools/:toolName/stream', requireAPIKey as any, (async (req: AuthenticatedRequest, res: Response) => {
       try {
-        const { toolName } = req.params;
+        const toolName = Array.isArray(req.params.toolName) ? req.params.toolName[0] : req.params.toolName;
         const args = req.body.arguments || req.body;
 
         logger.info('Streaming tool call request', {
