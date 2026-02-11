@@ -204,6 +204,12 @@ export const api = {
       apiClient.get(`/conversations/${conversationId}/messages`, { params }),
   },
 
+  // Documents
+  documents: {
+    getFolders: (prefix?: string) =>
+      apiClient.get('/api/documents/folders', { params: { prefix } }),
+  },
+
   // GDPR
   gdpr: {
     requestExport: () => apiClient.post('/gdpr/export'),

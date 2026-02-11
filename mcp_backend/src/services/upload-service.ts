@@ -248,14 +248,16 @@ export class UploadService {
 
   async getActiveSessionCount(userId: string): Promise<number> {
     // Exclude clearly stale sessions:
-    // - pending/uploading with no update in 30+ min (abandoned uploads)
-    // - assembling/processing with no update in 60+ min (hung processing)
+    // - pending with 0 chunks and no update in 2+ min (abandoned before first chunk)
+    // - pending/uploading with no update in 10+ min (abandoned uploads)
+    // - assembling/processing with no update in 30+ min (hung processing)
     const result = await this.pool.query(
       `SELECT COUNT(*) as cnt FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
-         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
-         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')`,
+         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
+         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')`,
       [userId]
     );
     return parseInt(result.rows[0].cnt, 10);
@@ -267,8 +269,9 @@ export class UploadService {
       `SELECT * FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
-         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
-         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')
+         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
+         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+         AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
        ORDER BY created_at DESC`,
       [userId]
     );
@@ -362,8 +365,9 @@ export class UploadService {
 
   /**
    * Cancel stale sessions for a specific user.
-   * - pending/uploading older than 30 min
-   * - assembling/processing older than 60 min
+   * - pending with 0 chunks older than 2 min (abandoned before uploading)
+   * - pending/uploading older than 10 min
+   * - assembling/processing older than 30 min
    * Returns count of cancelled sessions.
    */
   async cancelUserStaleSessions(userId: string): Promise<number> {
@@ -372,9 +376,11 @@ export class UploadService {
        SET status = 'cancelled', error_message = 'Auto-cleared: stale session', updated_at = CURRENT_TIMESTAMP
        WHERE user_id = $1
          AND (
-           (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
+           (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
            OR
-           (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '60 minutes')
+           (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
+           OR
+           (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
          )
        RETURNING id`,
       [userId]

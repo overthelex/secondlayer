@@ -7,7 +7,7 @@ contactPoints:
       - uid: email-admin-uid
         type: email
         settings:
-          addresses: ${ADMIN_EMAIL}
+          addresses: grafana@legal.org.ua
           singleEmail: true
         disableResolveMessage: false
 

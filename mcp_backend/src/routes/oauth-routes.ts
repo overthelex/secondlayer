@@ -651,8 +651,10 @@ export function createOAuthRouter(db: Database): Router {
    *
    * This endpoint provides discovery metadata for OAuth clients
    */
-  router.get('/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
-    const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+  router.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
     res.json({
       issuer: baseUrl,
@@ -673,8 +675,10 @@ export function createOAuthRouter(db: Database): Router {
    *
    * Some OAuth clients also check this endpoint
    */
-  router.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
-    const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+  router.get('/.well-known/openid-configuration', (req: Request, res: Response) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
     res.json({
       issuer: baseUrl,

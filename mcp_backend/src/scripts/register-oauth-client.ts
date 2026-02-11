@@ -23,6 +23,8 @@ async function registerOAuthClient() {
     const client = await oauthService.registerClient({
       name: 'ChatGPT MCP Client',
       redirect_uris: [
+        'https://chatgpt.com/connector_platform_oauth_redirect',
+        'https://chatgpt.com/aip/g-callback',
         'https://chatgpt.com/aip/callback',
         'https://chat.openai.com/aip/callback',
         'http://localhost:3000/callback', // For testing

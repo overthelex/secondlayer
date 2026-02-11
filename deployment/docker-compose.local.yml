@@ -654,6 +654,7 @@ services:
     volumes:
       - ./nginx/localdev-docker.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
+      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       app-local:
         condition: service_healthy
@@ -748,6 +749,8 @@ volumes:
   postgres_openreyestr_local_data:
     driver: local
   prometheus_local_data:
+    driver: local
+  certbot_webroot:
     driver: local
   grafana_local_data:
     driver: local

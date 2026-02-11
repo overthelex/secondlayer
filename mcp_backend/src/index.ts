@@ -10,6 +10,7 @@ import { createBackendCoreServices, BackendCoreServices } from './factories/core
 import { VaultTools } from './api/vault-tools.js';
 import { DocumentServiceClient } from './clients/document-service-client.js';
 import { DocumentParser } from './services/document-parser.js';
+import { MetadataExtractor } from './services/metadata-extractor.js';
 import { DueDiligenceService } from './services/due-diligence-service.js';
 import { DueDiligenceTools } from './api/due-diligence-tools.js';
 import { getRedisClient } from './utils/redis-client.js';
@@ -47,12 +48,14 @@ class SecondLayerMCPServer {
       const visionKeyPath = process.env.VISION_CREDENTIALS_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS || '';
       if (visionKeyPath) {
         this.documentParser = new DocumentParser(visionKeyPath);
+        const metadataExtractor = new MetadataExtractor();
         this.vaultTools = new VaultTools(
           this.documentParser,
           this.services.sectionizer,
           this.services.patternStore,
           this.services.embeddingService,
-          this.services.documentService
+          this.services.documentService,
+          metadataExtractor
         );
         logger.info('VaultTools initialized successfully');
       } else {

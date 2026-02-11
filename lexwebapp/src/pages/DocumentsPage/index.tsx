@@ -26,6 +26,8 @@ import { mcpService } from '../../services';
 import { useUploadStore } from '../../stores/uploadStore';
 import type { UploadItem } from '../../services/upload/UploadManager';
 import toast from 'react-hot-toast';
+import { api } from '../../utils/api-client';
+import { FolderNavigator } from './FolderNavigator';
 
 // Types
 interface VaultDocument {
@@ -41,6 +43,10 @@ interface VaultDocument {
     fileSize?: number;
     mimeType?: string;
     folderPath?: string;
+    documentDate?: string;
+    parties?: string[];
+    documentSubtype?: string;
+    jurisdiction?: string;
   };
 }
 
@@ -148,6 +154,11 @@ export function DocumentsPage() {
   const [filterType, setFilterType] = useState<DocType | ''>('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
+  // Folder navigation state
+  const [currentFolderPath, setCurrentFolderPath] = useState('');
+  const [folders, setFolders] = useState<string[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+
   // Upload state from Zustand store
   const {
     items: uploadItems,
@@ -189,10 +200,11 @@ export function DocumentsPage() {
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const uploadQueueRef = useRef<HTMLDivElement>(null);
 
-  // Load documents on mount and filter change
+  // Load documents and folders on mount and filter/folder change
   useEffect(() => {
     loadDocuments();
-  }, [filterType]);
+    loadFolders(currentFolderPath);
+  }, [filterType, currentFolderPath]);
 
   // Check for stuck upload sessions on mount
   useEffect(() => {
@@ -214,10 +226,11 @@ export function DocumentsPage() {
     }
   }, [uploadItems.length]);
 
-  // Reload docs when uploads complete
+  // Reload docs and folders when uploads complete
   useEffect(() => {
     if (completedFiles > 0 && !isUploading) {
       loadDocuments();
+      loadFolders(currentFolderPath);
     }
   }, [completedFiles, isUploading]);
 
@@ -240,6 +253,7 @@ export function DocumentsPage() {
         sortOrder: 'desc',
       };
       if (filterType) params.type = filterType;
+      if (currentFolderPath) params.folderPath = currentFolderPath;
 
       const result = await mcpService.callTool('list_documents', params);
       const parsed = result?.result?.content?.[0]?.text
@@ -252,6 +266,19 @@ export function DocumentsPage() {
       console.error('Failed to load documents:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFolders = async (prefix: string) => {
+    setFoldersLoading(true);
+    try {
+      const resp = await api.documents.getFolders(prefix || undefined);
+      setFolders(resp.data.folders || []);
+    } catch (err: any) {
+      console.error('Failed to load folders:', err);
+      setFolders([]);
+    } finally {
+      setFoldersLoading(false);
     }
   };
 
@@ -749,6 +776,27 @@ export function DocumentsPage() {
             </div>
           </div>
 
+          {/* Folder Navigator */}
+          {(currentFolderPath || folders.length > 0) && (
+            <FolderNavigator
+              currentPath={currentFolderPath}
+              folders={folders}
+              onNavigate={(folderName) => {
+                const newPath = currentFolderPath
+                  ? `${currentFolderPath}${folderName}/`
+                  : `${folderName}/`;
+                setCurrentFolderPath(newPath);
+              }}
+              onReset={() => setCurrentFolderPath('')}
+              onBreadcrumbClick={(depth) => {
+                const segments = currentFolderPath.split('/').filter(Boolean);
+                const newPath = segments.slice(0, depth).join('/') + '/';
+                setCurrentFolderPath(newPath);
+              }}
+              loading={foldersLoading}
+            />
+          )}
+
           {/* Document List */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
@@ -811,7 +859,9 @@ export function DocumentsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-xs text-claude-subtext/60 font-sans">
-                        {doc.metadata?.uploadedAt
+                        {doc.metadata?.documentDate
+                          ? formatDate(doc.metadata.documentDate)
+                          : doc.metadata?.uploadedAt
                           ? formatDate(doc.metadata.uploadedAt)
                           : '—'}
                       </td>
@@ -861,7 +911,9 @@ export function DocumentsPage() {
                     {doc.title}
                   </h4>
                   <p className="text-xs text-claude-subtext/50 font-sans">
-                    {doc.metadata?.uploadedAt
+                    {doc.metadata?.documentDate
+                      ? formatDate(doc.metadata.documentDate)
+                      : doc.metadata?.uploadedAt
                       ? formatDate(doc.metadata.uploadedAt)
                       : ''}
                   </p>

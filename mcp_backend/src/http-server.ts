@@ -11,6 +11,7 @@ import { DocumentAnalysisTools } from './api/document-analysis-tools.js';
 import { BatchDocumentTools } from './api/batch-document-tools.js';
 import { DocumentParser } from './services/document-parser.js';
 import { createRestAPIRouter } from './routes/rest-api.js';
+import { MetadataExtractor } from './services/metadata-extractor.js';
 import path from 'path';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
@@ -150,12 +151,14 @@ class HTTPMCPServer {
     // Initialize upload and storage services
     this.uploadService = new UploadService(this.services.db.getPool());
     this.minioService = new MinioService();
+    const metadataExtractor = new MetadataExtractor();
     this.vaultTools = new VaultTools(
       this.documentParser,
       this.services.sectionizer,
       this.services.patternStore,
       this.services.embeddingService,
-      this.services.documentService
+      this.services.documentService,
+      metadataExtractor
     );
     this.conversationService = new ConversationService(this.services.db);
     this.gdprService = new GdprService(this.services.db, this.minioService, this.services.embeddingService);
@@ -409,7 +412,9 @@ class HTTPMCPServer {
     // OPTIONS handler for /sse - returns OAuth configuration
     // This allows ChatGPT to discover OAuth endpoints
     this.app.options('/sse', (req: Request, res: Response) => {
-      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
       res.setHeader('MCP-Auth-Type', 'oauth2');
       res.setHeader('MCP-Auth-Authorization-Endpoint', `${baseUrl}/oauth/authorize`);
@@ -422,7 +427,9 @@ class HTTPMCPServer {
     // GET handler for /sse - returns OAuth configuration as JSON
     // ChatGPT may use this for discovery
     this.app.get('/sse', (req: Request, res: Response) => {
-      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
       res.json({
         protocol: 'mcp',
@@ -441,8 +448,10 @@ class HTTPMCPServer {
 
     // OAuth 2.0 Authorization Server Metadata (RFC 8414)
     // ChatGPT checks this for OAuth discovery
-    this.app.get('/sse/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
-      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+    this.app.get('/sse/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
       res.json({
         issuer: baseUrl,
@@ -451,15 +460,17 @@ class HTTPMCPServer {
         revocation_endpoint: `${baseUrl}/oauth/revoke`,
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code'],
-        token_endpoint_auth_methods_supported: ['client_secret_post'],
-        scopes_supported: ['mcp'],
-        code_challenge_methods_supported: [],
+        token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+        scopes_supported: ['mcp', 'claudeai'],
+        code_challenge_methods_supported: ['S256', 'plain'],
       });
     });
 
     // OpenID Connect Discovery (for compatibility)
-    this.app.get('/sse/.well-known/openid-configuration', (_req: Request, res: Response) => {
-      const baseUrl = process.env.FRONTEND_URL || 'https://stage.legal.org.ua';
+    this.app.get('/sse/.well-known/openid-configuration', (req: Request, res: Response) => {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
 
       res.json({
         issuer: baseUrl,
@@ -468,8 +479,9 @@ class HTTPMCPServer {
         revocation_endpoint: `${baseUrl}/oauth/revoke`,
         response_types_supported: ['code'],
         grant_types_supported: ['authorization_code'],
-        token_endpoint_auth_methods_supported: ['client_secret_post'],
-        scopes_supported: ['mcp'],
+        token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+        scopes_supported: ['mcp', 'claudeai'],
+        code_challenge_methods_supported: ['S256', 'plain'],
       });
     });
 
@@ -961,8 +973,10 @@ class HTTPMCPServer {
     });
 
     // Root-level .well-known endpoints for OAuth discovery (Claude.ai compatibility)
-    this.app.get('/.well-known/oauth-authorization-server', (_req: Request, res: Response) => {
-      const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+    this.app.get('/.well-known/oauth-authorization-server', (req: Request, res: Response) => {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
       res.json({
         issuer: baseUrl,
         authorization_endpoint: `${baseUrl}/oauth/authorize`,
@@ -976,8 +990,10 @@ class HTTPMCPServer {
       });
     });
 
-    this.app.get('/.well-known/openid-configuration', (_req: Request, res: Response) => {
-      const baseUrl = process.env.PUBLIC_URL || 'https://stage.legal.org.ua';
+    this.app.get('/.well-known/openid-configuration', (req: Request, res: Response) => {
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const baseUrl = process.env.PUBLIC_URL || `${proto}://${host}`;
       res.json({
         issuer: baseUrl,
         authorization_endpoint: `${baseUrl}/oauth/authorize`,
@@ -994,6 +1010,19 @@ class HTTPMCPServer {
     // OAuth 2.0 routes for ChatGPT integration (public)
     this.app.use('/oauth', createOAuthRouter(this.services.db));
     logger.info('OAuth 2.0 routes registered at /oauth');
+
+    // Document folders endpoint - must come before /api/documents generic REST route
+    this.app.get('/api/documents/folders', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const prefix = (req.query.prefix as string) || '';
+        const result = await this.vaultTools.listFolders({ prefix, userId });
+        res.json(result);
+      } catch (error: any) {
+        logger.error('Failed to list folders', { error: error.message });
+        res.status(500).json({ error: 'Failed to list folders', message: error.message });
+      }
+    }) as any);
 
     // REST API for admin panel (CRUD operations) - require JWT (user login)
     this.app.use('/api/documents', requireJWT as any, createRestAPIRouter(this.services.db));

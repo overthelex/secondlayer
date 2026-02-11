@@ -36,6 +36,10 @@ CREATE INDEX IF NOT EXISTS idx_oauth_codes_client_id ON oauth_authorization_code
 CREATE INDEX IF NOT EXISTS idx_oauth_codes_user_id ON oauth_authorization_codes(user_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires_at ON oauth_authorization_codes(expires_at);
 
+-- PKCE support columns (RFC 7636)
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS code_challenge VARCHAR(255);
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS code_challenge_method VARCHAR(10);
+
 COMMENT ON TABLE oauth_authorization_codes IS 'Temporary authorization codes for OAuth flow';
 COMMENT ON COLUMN oauth_authorization_codes.code IS 'Authorization code (short-lived)';
 COMMENT ON COLUMN oauth_authorization_codes.expires_at IS 'Code expiration time (typically 10 minutes)';
@@ -68,16 +72,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
 
 COMMENT ON COLUMN users.password_hash IS 'Hashed password for OAuth authentication (optional, can use Google OAuth instead)';
 
--- 5. Create default ChatGPT OAuth client
--- This client is pre-registered for ChatGPT integration
-INSERT INTO oauth_clients (client_id, client_secret, redirect_uris, name)
-VALUES (
-  'chatgpt_mcp_client',
-  'REDACTED_OAUTH_CLIENT_SECRET',
-  '["https://chatgpt.com/aip/callback", "http://localhost:3000/callback"]',
-  'ChatGPT MCP Client'
-)
-ON CONFLICT (client_id) DO NOTHING;
+-- 5. Default ChatGPT OAuth client is registered via register-oauth-client.ts script
+-- Run: npx tsx src/scripts/register-oauth-client.ts
 
 -- 6. Create cleanup function for expired data
 CREATE OR REPLACE FUNCTION cleanup_expired_oauth_data()

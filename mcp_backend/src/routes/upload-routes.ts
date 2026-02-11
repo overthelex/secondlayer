@@ -30,8 +30,8 @@ const upload = multer({
   },
 });
 
-// Per-user concurrent session quota
-const MAX_USER_SESSIONS = parseInt(process.env.MAX_USER_SESSIONS || '50', 10);
+// Per-user concurrent session quota (raised from 50: folders can have 1000+ files)
+const MAX_USER_SESSIONS = parseInt(process.env.MAX_USER_SESSIONS || '500', 10);
 
 // Semaphore to limit concurrent file processing (DB pool, OpenAI rate limits)
 const MAX_CONCURRENT_PROCESSING = parseInt(process.env.MAX_CONCURRENT_PROCESSING || '50', 10);
@@ -210,8 +210,13 @@ export function createUploadRouter(
         return res.status(400).json({ error: 'Missing or empty files array. Ensure Content-Type is application/json.' });
       }
 
-      if (files.length > 500) {
-        return res.status(400).json({ error: 'Maximum 500 files per batch init' });
+      const maxBatchFiles = parseInt(process.env.MAX_BATCH_INIT_FILES || '2000', 10);
+      if (files.length > maxBatchFiles) {
+        logger.warn('[Upload] Batch init: too many files', {
+          requested: files.length,
+          max: maxBatchFiles,
+        });
+        return res.status(400).json({ error: `Maximum ${maxBatchFiles} files per batch init` });
       }
 
       // Check session quota for the entire batch

@@ -66,6 +66,7 @@ const MAX_429_RETRIES = 30; // Cap 429 retries to prevent infinite loops
 const RETRY_DELAYS = [1000, 2000, 4000]; // ms
 const POLL_INTERVAL = 2000; // ms
 const BATCH_INIT_THRESHOLD = 10; // Use batch init for 10+ files
+const BATCH_CHUNK_SIZE = 500; // Server limit per batch-init request
 
 export class UploadManager {
   private items: Map<string, UploadItem> = new Map();
@@ -200,6 +201,12 @@ export class UploadManager {
     // Batch-init sessions for large file sets (reduces 100 requests to 1)
     const queued = Array.from(this.items.values()).filter((i) => i.status === 'queued');
     if (queued.length >= BATCH_INIT_THRESHOLD) {
+      // Proactively clear stale sessions to free quota before batch init
+      try {
+        await uploadService.clearStaleSessions();
+      } catch {
+        // Best effort — proceed even if cleanup fails
+      }
       await this.batchInitSessions(queued);
     }
     this.processQueue();
@@ -406,12 +413,22 @@ export class UploadManager {
   }
 
   /**
-   * Batch initialize sessions for queued items that don't have uploadIds yet
+   * Batch initialize sessions for queued items that don't have uploadIds yet.
+   * Splits into chunks of BATCH_CHUNK_SIZE to stay within server limit.
    */
   private async batchInitSessions(items: UploadItem[]): Promise<void> {
     const needInit = items.filter((i) => !i.uploadId);
     if (needInit.length < BATCH_INIT_THRESHOLD) return; // Not worth batching
 
+    // Split into chunks of BATCH_CHUNK_SIZE to stay within server limit
+    for (let offset = 0; offset < needInit.length; offset += BATCH_CHUNK_SIZE) {
+      const chunk = needInit.slice(offset, offset + BATCH_CHUNK_SIZE);
+      await this.batchInitChunk(chunk);
+    }
+  }
+
+  /** Send a single batch-init request for up to BATCH_CHUNK_SIZE items */
+  private async batchInitChunk(needInit: UploadItem[]): Promise<void> {
     const files = needInit.map((i) => ({
       fileName: i.fileName,
       fileSize: i.fileSize,

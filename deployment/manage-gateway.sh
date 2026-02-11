@@ -132,13 +132,18 @@ start_env() {
             $compose_cmd -f docker-compose.dev.yml --env-file .env.dev up -d
             ;;
         local)
-            if [ ! -f ".env.local" ]; then
+            ensure_local_dns
+
+            local local_compose_args="-f docker-compose.local.yml"
+            if [ -f ".env.local" ]; then
+                local_compose_args="$local_compose_args --env-file .env.local"
+            else
                 print_msg "$YELLOW" "⚠️  .env.local not found. Using defaults from docker-compose.local.yml"
                 print_msg "$YELLOW" "    Copy .env.local.example to .env.local for custom configuration"
-                $compose_cmd -f docker-compose.local.yml up -d --build
-            else
-                $compose_cmd -f docker-compose.local.yml --env-file .env.local up -d --build
             fi
+
+            ensure_letsencrypt_certs "$local_compose_args"
+            $compose_cmd $local_compose_args up -d --build
 
             # Open browser (nginx + Vite run inside Docker now)
             print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
@@ -347,9 +352,71 @@ check_health() {
     curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
     docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Nginx: running (443/80)" || print_msg "$RED" "❌ Nginx: stopped"
     docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Vite: running (Docker)" || print_msg "$RED" "❌ Vite: stopped"
-    curl -skf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
+    curl -sf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
+    curl -sf https://localdev.mcp.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ MCP SSE (localdev.mcp HTTPS): healthy" || print_msg "$RED" "❌ MCP SSE (localdev.mcp HTTPS): unhealthy"
 
     echo ""
+}
+
+# Ensure /etc/hosts has entries for localdev domains
+ensure_local_dns() {
+    local domains=("localdev.legal.org.ua" "localdev.mcp.legal.org.ua")
+    local resolved_ip
+    resolved_ip=$(dig +short localdev.legal.org.ua @8.8.8.8 2>/dev/null | head -1)
+
+    if [ -z "$resolved_ip" ]; then
+        print_msg "$YELLOW" "⚠️  Could not resolve localdev.legal.org.ua via Google DNS"
+        return 0
+    fi
+
+    for domain in "${domains[@]}"; do
+        if ! grep -q "$domain" /etc/hosts 2>/dev/null; then
+            print_msg "$BLUE" "📝 Adding $domain → $resolved_ip to /etc/hosts"
+            echo "$resolved_ip $domain" | sudo tee -a /etc/hosts > /dev/null
+        fi
+    done
+}
+
+# Manage Let's Encrypt certificates for local environment
+ensure_letsencrypt_certs() {
+    local certs_dir="$SCRIPT_DIR/nginx/certs"
+    local le_dir="/etc/letsencrypt/live/localdev.legal.org.ua"
+    local domains="-d localdev.legal.org.ua -d localdev.mcp.legal.org.ua"
+    local compose_cmd=$(get_compose_cmd)
+    local compose_args="$1"
+
+    # Check if LE cert exists and is still valid (>7 days)
+    if sudo test -f "$le_dir/fullchain.pem" && \
+       sudo openssl x509 -in "$le_dir/fullchain.pem" -noout -checkend 604800 2>/dev/null; then
+        print_msg "$GREEN" "✅ Let's Encrypt certificate is valid"
+        # Ensure latest certs are copied
+        sudo cp "$le_dir/fullchain.pem" "$certs_dir/fullchain.pem"
+        sudo cp "$le_dir/privkey.pem" "$certs_dir/privkey.pem"
+        sudo chown $(id -u):$(id -g) "$certs_dir/fullchain.pem" "$certs_dir/privkey.pem"
+        return 0
+    fi
+
+    print_msg "$BLUE" "🔐 Obtaining/renewing Let's Encrypt certificate..."
+
+    # Ensure certbot is installed
+    if ! command -v certbot &> /dev/null; then
+        print_msg "$BLUE" "📦 Installing certbot..."
+        sudo apt-get install -y certbot > /dev/null 2>&1
+    fi
+
+    # Stop nginx if running (to free port 80 for standalone mode)
+    $compose_cmd $compose_args stop nginx-local 2>/dev/null || true
+
+    # Obtain/renew certificate
+    if sudo certbot certonly --standalone $domains \
+        --non-interactive --agree-tos --email admin@legal.org.ua 2>&1; then
+        print_msg "$GREEN" "✅ Certificate obtained successfully"
+        sudo cp "$le_dir/fullchain.pem" "$certs_dir/fullchain.pem"
+        sudo cp "$le_dir/privkey.pem" "$certs_dir/privkey.pem"
+        sudo chown $(id -u):$(id -g) "$certs_dir/fullchain.pem" "$certs_dir/privkey.pem"
+    else
+        print_msg "$YELLOW" "⚠️  Let's Encrypt failed — falling back to existing certs"
+    fi
 }
 
 # Deploy local environment (full rebuild without cache)
@@ -366,6 +433,10 @@ deploy_local() {
     deploy_start=$(date +%s)
 
     print_msg "$BLUE" "🚀 Deploying local environment (full rebuild)..."
+
+    # Phase 0: Ensure DNS and TLS
+    ensure_local_dns
+    ensure_letsencrypt_certs "$compose_args"
 
     # Phase 1: Pre-flight checks
     if ! preflight_check "local" "localhost" "$env_file" "$compose_file" "$REPO_ROOT"; then

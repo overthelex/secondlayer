@@ -3,6 +3,7 @@ import { SemanticSectionizer } from '../services/semantic-sectionizer.js';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
 import { EmbeddingService } from '../services/embedding-service.js';
 import { DocumentService, Document } from '../services/document-service.js';
+import { MetadataExtractor } from '../services/metadata-extractor.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentSection } from '../types/index.js';
@@ -61,7 +62,8 @@ export class VaultTools {
     private sectionizer: SemanticSectionizer,
     private patternStore: LegalPatternStore,
     private embeddingService: EmbeddingService,
-    private documentService: DocumentService
+    private documentService: DocumentService,
+    private metadataExtractor: MetadataExtractor
   ) {}
 
   getToolDefinitions() {
@@ -194,6 +196,10 @@ Pipeline:
               enum: ['asc', 'desc'],
               description: 'Порядок сортировки',
             },
+            folderPath: {
+              type: 'string',
+              description: 'Фільтр по шляху папки (prefix match)',
+            },
           },
         },
       },
@@ -312,6 +318,20 @@ Pipeline:
         pageCount: parsed.metadata.pageCount,
       });
 
+      // Step 1.5: Extract metadata via LLM (date, tags, parties, etc.)
+      const extractedMeta = await this.metadataExtractor.extract(
+        parsed.text,
+        args.type,
+        args.title
+      );
+
+      logger.info('[Vault] Metadata extracted', {
+        documentId,
+        documentDate: extractedMeta.documentDate,
+        tags: extractedMeta.tags.length,
+        parties: extractedMeta.parties.length,
+      });
+
       // Step 2: Extract sections
       const sections = await this.sectionizer.extractSections(parsed.text, false);
 
@@ -415,13 +435,17 @@ Pipeline:
         });
       }
 
-      // Step 5: Save to database
+      // Step 5: Save to database (merge extracted metadata)
+      const userTags: string[] = args.metadata?.tags || [];
+      const mergedTags = [...new Set([...userTags, ...extractedMeta.tags])];
+
       const document: Document = {
         id: documentId,
         zakononline_id: documentId, // Use same ID for vault documents
         type: args.type,
         title: args.title,
         full_text: parsed.text,
+        date: extractedMeta.documentDate || undefined,
         user_id: args.userId,
         metadata: {
           ...parsed.metadata,
@@ -432,6 +456,11 @@ Pipeline:
           sectionCount: sections.length,
           embeddingCount: embeddingSuccesses,
           patterns,
+          documentDate: extractedMeta.documentDate,
+          tags: mergedTags,
+          parties: extractedMeta.parties,
+          jurisdiction: extractedMeta.jurisdiction,
+          documentSubtype: extractedMeta.documentSubtype,
         },
       };
 
@@ -544,6 +573,7 @@ Pipeline:
     sortBy?: 'uploadedAt' | 'title' | 'riskLevel';
     sortOrder?: 'asc' | 'desc';
     userId?: string;
+    folderPath?: string;
   }): Promise<{ documents: VaultDocument[]; total: number }> {
     try {
       logger.info('[Vault] list_documents started', args);
@@ -597,6 +627,13 @@ Pipeline:
         paramIndex++;
       }
 
+      // Folder path prefix filter
+      if (args.folderPath) {
+        conditions.push(`metadata::jsonb ->> 'folderPath' LIKE $${paramIndex}`);
+        params.push(args.folderPath + '%');
+        paramIndex++;
+      }
+
       const whereClause = conditions.join(' AND ');
 
       // Sort mapping
@@ -644,6 +681,90 @@ Pipeline:
       logger.error('[Vault] list_documents failed', {
         error: error.message,
       });
+      throw error;
+    }
+  }
+
+  /**
+   * List unique folder paths (next-level subfolders under prefix)
+   */
+  async listFolders(args: {
+    prefix?: string;
+    userId?: string;
+  }): Promise<{ folders: string[]; fileCount: number }> {
+    try {
+      const prefix = args.prefix || '';
+      const conditions: string[] = ["metadata::jsonb ->> 'folderPath' IS NOT NULL"];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (args.userId) {
+        conditions.push(`(user_id = $${paramIndex} OR user_id IS NULL)`);
+        params.push(args.userId);
+        paramIndex++;
+      }
+
+      if (prefix) {
+        conditions.push(`metadata::jsonb ->> 'folderPath' LIKE $${paramIndex}`);
+        params.push(prefix + '%');
+        paramIndex++;
+      }
+
+      const whereClause = conditions.join(' AND ');
+
+      const query = `
+        SELECT DISTINCT metadata::jsonb ->> 'folderPath' as folder_path
+        FROM documents
+        WHERE ${whereClause}
+        ORDER BY folder_path
+      `;
+
+      const result = await this.documentService['db'].query(query, params);
+
+      // Extract unique next-level subfolder names
+      const allPaths: string[] = result.rows.map((r: any) => r.folder_path);
+      const prefixDepth = prefix ? prefix.split('/').filter(Boolean).length : 0;
+      const folderSet = new Set<string>();
+      let fileCount = 0;
+
+      for (const p of allPaths) {
+        const segments = p.split('/').filter(Boolean);
+        if (segments.length > prefixDepth) {
+          folderSet.add(segments[prefixDepth]);
+        }
+        // Count files at exactly the current prefix level
+        if (segments.length === prefixDepth || (prefix && p === prefix)) {
+          fileCount++;
+        }
+      }
+
+      // Also count files that have this exact prefix path
+      if (prefix) {
+        const countQuery = `
+          SELECT COUNT(*) as cnt FROM documents
+          WHERE ${whereClause}
+          AND metadata::jsonb ->> 'folderPath' = $${paramIndex}
+        `;
+        const countResult = await this.documentService['db'].query(countQuery, [...params, prefix]);
+        fileCount = parseInt(countResult.rows[0].cnt, 10);
+      } else {
+        // Count all files
+        const countQuery = `SELECT COUNT(*) as cnt FROM documents WHERE ${whereClause}`;
+        const countResult = await this.documentService['db'].query(countQuery, params);
+        fileCount = parseInt(countResult.rows[0].cnt, 10);
+      }
+
+      const folders = Array.from(folderSet).sort();
+
+      logger.info('[Vault] listFolders completed', {
+        prefix,
+        folderCount: folders.length,
+        fileCount,
+      });
+
+      return { folders, fileCount };
+    } catch (error: any) {
+      logger.error('[Vault] listFolders failed', { error: error.message });
       throw error;
     }
   }
