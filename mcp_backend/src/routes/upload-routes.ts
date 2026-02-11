@@ -179,13 +179,30 @@ export function createUploadRouter(
    */
   router.post('/init-batch', uploadBatchInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
     try {
+      // Debug: log raw body info for every batch-init request
+      logger.info('[Upload] Batch init request received', {
+        contentType: req.headers['content-type'],
+        bodyType: typeof req.body,
+        bodyIsNull: req.body === null,
+        bodyIsUndefined: req.body === undefined,
+        hasRawBody: !!(req as any).rawBody,
+        rawBodyLength: ((req as any).rawBody || '').length,
+        rawBodyPreview: ((req as any).rawBody || '').slice(0, 200),
+      });
+
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const { files } = req.body;
+      const { files } = req.body || {};
       if (!Array.isArray(files) || files.length === 0) {
+        logger.warn('[Upload] Batch init invalid body', {
+          bodyKeys: Object.keys(req.body || {}),
+          filesType: typeof files,
+          bodyLength: JSON.stringify(req.body || {}).length,
+          contentType: req.headers['content-type'],
+        });
         return res.status(400).json({ error: 'Missing or empty files array' });
       }
 
