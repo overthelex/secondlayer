@@ -8,7 +8,7 @@ import { MinioService } from '../services/minio-service.js';
 import { VaultTools } from '../api/vault-tools.js';
 import { processUploadFile, ProcessorDeps } from '../services/upload-processor.js';
 import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
-import { uploadInitRateLimit, uploadChunkRateLimit } from '../middleware/upload-rate-limit.js';
+import { uploadInitRateLimit, uploadBatchInitRateLimit, uploadChunkRateLimit } from '../middleware/upload-rate-limit.js';
 import { UploadQueueService } from '../services/upload-queue-service.js';
 import { Pool } from 'pg';
 
@@ -177,7 +177,7 @@ export function createUploadRouter(
   /**
    * POST /init-batch - Create multiple upload sessions at once
    */
-  router.post('/init-batch', uploadInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
+  router.post('/init-batch', uploadBatchInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
