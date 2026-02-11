@@ -82,15 +82,33 @@ export class UploadRecoveryService {
         sessionIds: sessions.map(s => s.id),
       });
 
-      // If BullMQ is available, re-enqueue stuck sessions (BullMQ handles retries natively)
+      // Partition: force-fail sessions that exceeded max retries, recover the rest
+      const recoverable: typeof sessions = [];
+      for (const session of sessions) {
+        if (session.retryCount >= MAX_RETRIES) {
+          await this.uploadService.updateStatus(
+            session.id, 'failed', `Max retries (${MAX_RETRIES}) exceeded during recovery`
+          );
+          logger.info('[UploadRecovery] Force-failed max-retry session', {
+            sessionId: session.id,
+            retryCount: session.retryCount,
+          });
+        } else {
+          recoverable.push(session);
+        }
+      }
+
+      // If BullMQ is available, re-enqueue recoverable sessions
       if (this.uploadQueueService) {
-        const enqueued = await this.uploadQueueService.enqueueRecovery(sessions);
-        logger.info(`[UploadRecovery] ${trigger} pass: enqueued ${enqueued} sessions to BullMQ`);
+        if (recoverable.length > 0) {
+          const enqueued = await this.uploadQueueService.enqueueRecovery(recoverable);
+          logger.info(`[UploadRecovery] ${trigger} pass: enqueued ${enqueued} sessions to BullMQ`);
+        }
         return;
       }
 
       // Fallback: in-memory recovery (original behavior)
-      for (const session of sessions) {
+      for (const session of recoverable) {
         try {
           await this.recoverSession(session, trigger);
         } catch (error: any) {

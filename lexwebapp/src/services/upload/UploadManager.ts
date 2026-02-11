@@ -421,6 +421,7 @@ export class UploadManager {
     }));
 
     let throttleRetries = 0;
+    let staleClearAttempted = false;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
         const response = await uploadService.initBatch(files);
@@ -437,6 +438,24 @@ export class UploadManager {
       } catch (err: any) {
         // 429 — wait for Retry-After, don't count as attempt (but cap retries)
         if (err.status === 429) {
+          // Auto-clear stale sessions on SESSION_QUOTA_EXCEEDED (once per batch)
+          if (err.details?.code === 'SESSION_QUOTA_EXCEEDED' && !staleClearAttempted) {
+            staleClearAttempted = true;
+            try {
+              const clearResult = await uploadService.clearStaleSessions();
+              if (clearResult.cancelled > 0) {
+                this.emit({
+                  type: 'error',
+                  error: `Cleared ${clearResult.cancelled} stale session(s), retrying...`,
+                });
+                attempt--; // Retry immediately
+                continue;
+              }
+            } catch {
+              // Best effort — fall through to normal 429 handling
+            }
+          }
+
           throttleRetries++;
           if (throttleRetries > MAX_429_RETRIES) {
             this.emit({ type: 'error', error: 'Server busy too long, batch init failed' });
@@ -490,6 +509,7 @@ export class UploadManager {
         // Init with retry (same pattern as chunk upload 429 handling)
         let initError: Error | null = null;
         let initThrottleRetries = 0;
+        let initStaleClearAttempted = false;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
             initResponse = await uploadService.initUpload({
@@ -505,6 +525,24 @@ export class UploadManager {
           } catch (err: any) {
             // 429 — wait for Retry-After, don't count as attempt (but cap retries)
             if (err.status === 429) {
+              // Auto-clear stale sessions on SESSION_QUOTA_EXCEEDED (once per file)
+              if (err.details?.code === 'SESSION_QUOTA_EXCEEDED' && !initStaleClearAttempted) {
+                initStaleClearAttempted = true;
+                try {
+                  const clearResult = await uploadService.clearStaleSessions();
+                  if (clearResult.cancelled > 0) {
+                    this.emit({
+                      type: 'error',
+                      error: `Cleared ${clearResult.cancelled} stale session(s), retrying...`,
+                    });
+                    attempt--; // Retry immediately
+                    continue;
+                  }
+                } catch {
+                  // Best effort — fall through to normal 429 handling
+                }
+              }
+
               initThrottleRetries++;
               if (initThrottleRetries > MAX_429_RETRIES) {
                 initError = new Error('Server busy too long, upload init failed');

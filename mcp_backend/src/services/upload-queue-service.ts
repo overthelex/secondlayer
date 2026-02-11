@@ -6,6 +6,16 @@ import { VaultTools } from '../api/vault-tools.js';
 import { processUploadFile, ProcessorDeps } from './upload-processor.js';
 import { Pool } from 'pg';
 
+const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer!));
+}
+
 export interface UploadJobData {
   sessionId: string;
   userId: string;
@@ -144,27 +154,62 @@ export class UploadQueueService {
   }
 
   /**
-   * Re-enqueue stuck sessions (for startup recovery)
+   * Re-enqueue stuck sessions (for startup recovery).
+   * Removes stale BullMQ jobs before re-adding to prevent "already exists" errors.
    */
   async enqueueRecovery(sessions: UploadSession[]): Promise<number> {
     let enqueued = 0;
     for (const session of sessions) {
       try {
+        const jobId = `upload-${session.id}`;
+
+        // Check if a job already exists for this session
+        const existingJob = await this.queue.getJob(jobId);
+        if (existingJob) {
+          const state = await existingJob.getState();
+          logger.info('[UploadQueue] Found existing job for recovery session', {
+            sessionId: session.id,
+            jobId,
+            state,
+          });
+
+          if (state === 'active' || state === 'waiting' || state === 'delayed') {
+            // Force-move active job to failed so we can remove and re-add
+            try {
+              await existingJob.moveToFailed(
+                new Error('Force-failed for recovery re-enqueue'),
+                '0',
+                true // ignoreLock
+              );
+            } catch (moveErr: any) {
+              logger.warn('[UploadQueue] Could not move job to failed', {
+                jobId,
+                error: moveErr.message,
+              });
+            }
+          }
+
+          // Remove the old job
+          try {
+            await existingJob.remove();
+          } catch (removeErr: any) {
+            logger.warn('[UploadQueue] Could not remove old job', {
+              jobId,
+              error: removeErr.message,
+            });
+          }
+        }
+
         await this.enqueueProcessing(session, {
           recoveredAt: new Date().toISOString(),
           recoveryTrigger: 'startup',
         });
         enqueued++;
       } catch (err: any) {
-        // Job already exists for this session — skip
-        if (err.message?.includes('already exists')) {
-          logger.debug('[UploadQueue] Job already exists for session', { sessionId: session.id });
-        } else {
-          logger.error('[UploadQueue] Failed to enqueue recovery', {
-            sessionId: session.id,
-            error: err.message,
-          });
-        }
+        logger.error('[UploadQueue] Failed to enqueue recovery', {
+          sessionId: session.id,
+          error: err.message,
+        });
       }
     }
     return enqueued;
@@ -230,10 +275,18 @@ export class UploadQueueService {
     await this.uploadService.updateStatus(session.id, 'processing');
 
     try {
-      // Assemble file
-      const assembledPath = await this.uploadService.assembleFile(session.id);
+      // Assemble file (with timeout to prevent indefinite hangs)
+      const assembledPath = await withTimeout(
+        this.uploadService.assembleFile(session.id),
+        PROCESSING_TIMEOUT_MS,
+        `assembleFile(${session.id})`
+      );
 
-      const documentId = await processUploadFile(session, assembledPath, this.deps, extraMetadata);
+      const documentId = await withTimeout(
+        processUploadFile(session, assembledPath, this.deps, extraMetadata),
+        PROCESSING_TIMEOUT_MS,
+        `processUploadFile(${session.id})`
+      );
 
       // Mark session as completed
       await this.uploadService.setDocumentId(session.id, documentId);
