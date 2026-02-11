@@ -55,7 +55,7 @@
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.17",
     "axios": "^1.13.5",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.68.0",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
