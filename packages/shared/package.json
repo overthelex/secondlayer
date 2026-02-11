@@ -28,7 +28,7 @@
     "express": "^5.2.1",
     "openai": "^6.19.0",
     "pg": "^8.18.0",
-    "uuid": "^9.0.1",
+    "uuid": "^13.0.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {

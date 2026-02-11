@@ -53,7 +53,7 @@
     "passport-google-oauth20": "^2.0.0",
     "pg": "^8.11.3",
     "redis": "^4.6.12",
-    "uuid": "^9.0.1",
+    "uuid": "^13.0.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {
