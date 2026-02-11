@@ -259,9 +259,12 @@ export class UploadService {
   }
 
   async getActiveSessions(userId: string): Promise<UploadSession[]> {
+    // Exclude stale sessions (pending/uploading with no update in 30+ min) — same filter as getActiveSessionCount()
     const result = await this.pool.query(
       `SELECT * FROM upload_sessions
-       WHERE user_id = $1 AND status NOT IN ('completed', 'cancelled', 'expired')
+       WHERE user_id = $1
+         AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
+         AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
        ORDER BY created_at DESC`,
       [userId]
     );

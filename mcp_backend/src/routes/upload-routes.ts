@@ -179,31 +179,35 @@ export function createUploadRouter(
    */
   router.post('/init-batch', uploadBatchInitRateLimit as any, (async (req: DualAuthRequest, res: Response): Promise<any> => {
     try {
-      // Debug: log raw body info for every batch-init request
-      logger.info('[Upload] Batch init request received', {
-        contentType: req.headers['content-type'],
-        bodyType: typeof req.body,
-        bodyIsNull: req.body === null,
-        bodyIsUndefined: req.body === undefined,
-        hasRawBody: !!(req as any).rawBody,
-        rawBodyLength: ((req as any).rawBody || '').length,
-        rawBodyPreview: ((req as any).rawBody || '').slice(0, 200),
-      });
-
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'User not authenticated' });
       }
 
-      const { files } = req.body || {};
+      // Robust body parsing: if Express JSON parser didn't populate req.body, try raw body fallback
+      let body = req.body;
+      if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
+        const rawBody = (req as any).rawBody;
+        if (rawBody && typeof rawBody === 'string') {
+          try {
+            body = JSON.parse(rawBody);
+          } catch {
+            logger.warn('[Upload] Batch init: failed to parse rawBody', {
+              contentType: req.headers['content-type'],
+              rawBodyLength: rawBody.length,
+            });
+          }
+        }
+      }
+
+      const files = body?.files;
       if (!Array.isArray(files) || files.length === 0) {
-        logger.warn('[Upload] Batch init invalid body', {
-          bodyKeys: Object.keys(req.body || {}),
-          filesType: typeof files,
-          bodyLength: JSON.stringify(req.body || {}).length,
+        logger.warn('[Upload] Batch init: missing or empty files array', {
           contentType: req.headers['content-type'],
+          bodyType: typeof body,
+          bodyKeys: Object.keys(body || {}),
         });
-        return res.status(400).json({ error: 'Missing or empty files array' });
+        return res.status(400).json({ error: 'Missing or empty files array. Ensure Content-Type is application/json.' });
       }
 
       if (files.length > 500) {
