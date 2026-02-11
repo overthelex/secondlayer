@@ -145,7 +145,7 @@ start_env() {
                 print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
                 if sudo nginx -t 2>/dev/null; then
                     sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
-                    print_msg "$GREEN" "✅ Nginx started (ports 4434/8080)"
+                    print_msg "$GREEN" "✅ Nginx started (ports 443/80)"
                 else
                     print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
                 fi
@@ -176,6 +176,13 @@ start_env() {
                 else
                     print_msg "$GREEN" "✅ Vite already running on port 5173"
                 fi
+            fi
+            # Open browser
+            print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
+            if command -v xdg-open &> /dev/null; then
+                xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
+            elif command -v open &> /dev/null; then
+                open "https://localdev.legal.org.ua" 2>/dev/null &
             fi
             ;;
         all)
@@ -489,7 +496,7 @@ deploy_local() {
         print_msg "$BLUE" "🌐 Starting nginx (localdev proxy)..."
         if sudo nginx -t 2>/dev/null; then
             sudo systemctl start nginx 2>/dev/null || sudo nginx 2>/dev/null
-            print_msg "$GREEN" "✅ Nginx started (ports 4434/8080)"
+            print_msg "$GREEN" "✅ Nginx started (ports 443/80)"
         else
             print_msg "$YELLOW" "⚠️  Nginx config test failed, skipping"
         fi
@@ -521,7 +528,15 @@ deploy_local() {
         fi
     fi
 
-    # Phase 6: Report
+    # Phase 6: Open browser
+    print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
+    if command -v xdg-open &> /dev/null; then
+        xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
+    elif command -v open &> /dev/null; then
+        open "https://localdev.legal.org.ua" 2>/dev/null &
+    fi
+
+    # Phase 7: Report
     generate_deploy_report "local" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
     print_msg "$GREEN" "✅ Local deployment complete"
     $compose_cmd $compose_args ps
