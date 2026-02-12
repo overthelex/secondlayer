@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Send, Plus, Square, X, FileText, Loader2 } from 'lucide-react';
+import { Send, Plus, Square, X, FileText, Loader2, ChevronDown, Sparkles } from 'lucide-react';
 import { uploadService } from '../services/api/UploadService';
 import showToast from '../utils/toast';
 
+const AI_CHAT_MODE = 'ai_chat';
+
 const TOOL_OPTIONS = [
-  { name: 'get_legal_advice', label: 'Юридична порада' },
   { name: 'search_court_cases', label: 'Пошук справ' },
+  { name: 'search_supreme_court_practice', label: 'Практика ВС' },
   { name: 'search_legislation', label: 'Законодавство' },
   { name: 'search_deputies', label: 'Депутати' },
   { name: 'search_entities', label: 'Реєстр' },
@@ -155,14 +157,46 @@ export function ChatInput({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const activeTool = selectedTool || 'get_legal_advice';
+  const [showManualTools, setShowManualTools] = useState(false);
+  const activeTool = selectedTool || AI_CHAT_MODE;
+  const isAIChat = activeTool === AI_CHAT_MODE;
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-6 pb-2">
-      {/* Tool Selection Pills */}
+      {/* Mode Selection: AI Chat + expandable manual tools */}
       {onToolChange && (
-        <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
-          {TOOL_OPTIONS.map((tool) => (
+        <div className="flex flex-wrap gap-2 mb-3 pb-1">
+          {/* AI Chat pill (default) */}
+          <button
+            onClick={() => {
+              onToolChange(AI_CHAT_MODE);
+              setShowManualTools(false);
+            }}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1.5 ${
+              isAIChat
+                ? 'bg-claude-text text-white border-claude-text shadow-sm'
+                : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
+            }`}
+          >
+            <Sparkles size={12} />
+            AI Чат
+          </button>
+
+          {/* Manual tools toggle */}
+          <button
+            onClick={() => setShowManualTools(!showManualTools)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1 ${
+              !isAIChat
+                ? 'bg-claude-text/10 text-claude-text border-claude-text/30'
+                : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
+            }`}
+          >
+            Інструменти
+            <ChevronDown size={12} className={`transition-transform ${showManualTools ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Manual tool pills (expandable) */}
+          {showManualTools && TOOL_OPTIONS.map((tool) => (
             <button
               key={tool.name}
               onClick={() => onToolChange(tool.name)}

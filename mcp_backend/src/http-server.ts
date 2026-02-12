@@ -76,6 +76,7 @@ import { TimeEntryService } from './services/time-entry-service.js';
 import { MatterInvoiceService } from './services/matter-invoice-service.js';
 import { createTimeEntryRoutes } from './routes/time-entry-routes.js';
 import { createInvoiceRoutes } from './routes/invoice-routes.js';
+import { ChatService, ChatEvent } from './services/chat-service.js';
 
 dotenv.config();
 
@@ -111,6 +112,7 @@ class HTTPMCPServer {
   private metricsService: MetricsService;
   private timeEntryService: TimeEntryService;
   private matterInvoiceService: MatterInvoiceService;
+  private chatService: ChatService;
 
   constructor() {
     this.app = express();
@@ -194,9 +196,7 @@ class HTTPMCPServer {
       this.services.sectionizer,
       this.services.embeddingService,
       this.services.patternStore,
-      this.services.citationValidator,
-      this.services.hallucinationGuard,
-      this.services.legislationTools
+      this.services.citationValidator
     ));
     logger.info('Core tool handlers registered with ToolRegistry');
 
@@ -230,6 +230,14 @@ class HTTPMCPServer {
     this.timeEntryService = new TimeEntryService(this.services.db, this.auditService);
     this.matterInvoiceService = new MatterInvoiceService(this.services.db, this.auditService);
     logger.info('Time tracking and billing services initialized');
+
+    // Initialize ChatService (agentic LLM loop)
+    this.chatService = new ChatService(
+      this.toolRegistry,
+      this.services.queryPlanner,
+      this.costTracker
+    );
+    logger.info('ChatService initialized');
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
@@ -1455,6 +1463,57 @@ class HTTPMCPServer {
     // POST /api/templates/metrics/aggregate - Aggregate metrics (admin)
     this.app.use('/api/templates', requireJWT as any, createTemplateRoutes(this.services.db));
 
+    // ============ AI Chat endpoint (agentic LLM loop with SSE) ============
+    // POST /api/chat - Streams thinking steps, tool results, and final answer
+    this.app.post('/api/chat', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const { query, history, budget } = req.body;
+
+        if (!query || typeof query !== 'string') {
+          return res.status(400).json({ error: 'query is required' });
+        }
+
+        // Set SSE headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        // Handle client disconnect
+        let clientDisconnected = false;
+        req.on('close', () => {
+          clientDisconnected = true;
+        });
+
+        // Run the agentic loop
+        for await (const event of this.chatService.chat({
+          query,
+          history,
+          budget: budget || 'standard',
+          userId: req.user?.id,
+        })) {
+          if (clientDisconnected) break;
+
+          res.write(`event: ${event.type}\n`);
+          res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+        }
+
+        if (!clientDisconnected) {
+          res.end();
+        }
+      } catch (error: any) {
+        logger.error('[ChatService] Endpoint error', { error: error.message });
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Chat failed', message: error.message });
+        } else {
+          res.write(`event: error\n`);
+          res.write(`data: ${JSON.stringify({ message: error.message })}\n\n`);
+          res.end();
+        }
+      }
+    }) as any);
+    logger.info('AI Chat endpoint registered at POST /api/chat');
+
     // Webhook routes - public (signature verified by services, rate limited)
     // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
     // POST /webhooks/fondy - mount here with JSON body
@@ -2130,7 +2189,7 @@ class HTTPMCPServer {
       logger.info('SSE Streaming:');
       logger.info('  - Add Accept: text/event-stream header for streaming');
       logger.info('  - Or use /api/tools/:toolName/stream endpoint');
-      logger.info('  - Currently supported: get_legal_advice');
+      logger.info('  - Tools with streaming support are auto-detected');
       logger.info('');
       logger.info('Authentication: Use Authorization header with Bearer token');
       logger.info('  Example: Authorization: Bearer <SECONDARY_LAYER_KEY>');

@@ -257,6 +257,155 @@ export function useMCPTool(
   return { executeTool };
 }
 
+/**
+ * useAIChat Hook
+ * Calls the agentic /api/chat endpoint with SSE streaming.
+ * The LLM automatically selects and calls tools, then generates a synthesized answer.
+ */
+export function useAIChat(options: UseMCPToolOptions = {}) {
+  const {
+    addMessage,
+    updateMessage,
+    addThinkingStep,
+    setStreaming,
+    setStreamController,
+    setCurrentTool,
+  } = useChatStore();
+
+  const { onSuccess, onError } = options;
+
+  const executeChat = useCallback(
+    async (query: string, documentIds?: string[]) => {
+      // 1. Add user message
+      const userMessage = {
+        id: Date.now().toString(),
+        role: 'user' as const,
+        content: query,
+      };
+      addMessage(userMessage);
+
+      // 2. Auto-create conversation if needed
+      const state = useChatStore.getState();
+      if (!state.conversationId && localStorage.getItem('auth_token')) {
+        await state.createConversation();
+      }
+      useChatStore.getState().syncMessage(userMessage);
+
+      // 3. Build history from prior messages
+      const currentMessages = useChatStore.getState().messages;
+      const history = currentMessages
+        .slice(0, -1) // exclude the just-added user message
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .slice(-6) // last 3 exchanges
+        .map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content.slice(0, 1000),
+        }));
+
+      // 4. Create placeholder assistant message
+      const assistantMessageId = (Date.now() + 1).toString();
+      addMessage({
+        id: assistantMessageId,
+        role: 'assistant' as const,
+        content: '',
+        isStreaming: true,
+        thinkingSteps: [],
+      });
+      setStreaming(true);
+      setCurrentTool('ai_chat');
+
+      try {
+        const controller = await mcpService.streamChat(query, history, {
+          onThinking: (data) => {
+            addThinkingStep(assistantMessageId, {
+              id: `step-${data.step}`,
+              title: `Інструмент: ${data.tool}`,
+              content: JSON.stringify(data.params, null, 2),
+              isComplete: false,
+            });
+          },
+
+          onToolResult: (data) => {
+            // Update the last thinking step as complete and add result preview
+            const toolPreview = typeof data.result === 'string'
+              ? data.result.slice(0, 500)
+              : JSON.stringify(data.result, null, 2).slice(0, 500);
+
+            addThinkingStep(assistantMessageId, {
+              id: `result-${data.tool}`,
+              title: `Результат: ${data.tool}`,
+              content: toolPreview,
+              isComplete: true,
+            });
+          },
+
+          onAnswer: (data) => {
+            updateMessage(assistantMessageId, {
+              content: data.text,
+              isStreaming: false,
+            });
+
+            setStreaming(false);
+            setStreamController(null);
+            setCurrentTool(null);
+
+            // Sync assistant message to server
+            const completedState = useChatStore.getState();
+            const completedMsg = completedState.messages.find(
+              (m) => m.id === assistantMessageId
+            );
+            if (completedMsg) {
+              completedState.syncMessage(completedMsg);
+            }
+
+            // Auto-title on first exchange
+            if (completedState.conversationId && completedState.messages.length <= 3) {
+              const firstUserMsg = completedState.messages.find((m) => m.role === 'user');
+              if (firstUserMsg) {
+                const title = firstUserMsg.content.slice(0, 60).trim();
+                completedState.renameConversation(completedState.conversationId, title);
+              }
+            }
+
+            onSuccess?.(data);
+          },
+
+          onError: (error) => {
+            updateMessage(assistantMessageId, {
+              content: `Помилка: ${error.message}`,
+              isStreaming: false,
+            });
+            setStreaming(false);
+            setStreamController(null);
+            setCurrentTool(null);
+            showToast.error(error.message);
+            onError?.(new Error(error.message));
+          },
+
+          onComplete: (data) => {
+            // Completion event — streaming is already finished in onAnswer
+            console.log('[AIChat] Complete', data);
+          },
+        });
+
+        setStreamController(controller);
+      } catch (error: any) {
+        updateMessage(assistantMessageId, {
+          content: `Помилка: ${error.message || 'Невідома помилка'}`,
+          isStreaming: false,
+        });
+        setStreaming(false);
+        setCurrentTool(null);
+        showToast.error(error.message || 'Невідома помилка');
+        onError?.(error);
+      }
+    },
+    [addMessage, updateMessage, addThinkingStep, setStreaming, setStreamController, setCurrentTool, onSuccess, onError]
+  );
+
+  return { executeChat };
+}
+
 // Specialized hooks for popular tools
 export function useGetLegalAdvice(options?: UseMCPToolOptions) {
   return useMCPTool('get_legal_advice', options);

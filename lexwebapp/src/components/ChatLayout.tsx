@@ -6,7 +6,7 @@ import { MessageThread } from './MessageThread';
 import { EmptyState } from './EmptyState';
 import { ProfilePage } from './ProfilePage';
 import { useChatStore } from '../stores';
-import { useMCPTool } from '../hooks/useMCPTool';
+import { useMCPTool, useAIChat } from '../hooks/useMCPTool';
 import showToast from '../utils/toast';
 import { JudgesPage } from './JudgesPage';
 import { LawyersPage } from './LawyersPage';
@@ -82,7 +82,7 @@ export function ChatLayout() {
   const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const [selectedTool, setSelectedTool] = useState('get_legal_advice');
+  const [selectedTool, setSelectedTool] = useState('ai_chat');
   const [currentView, setCurrentView] = useState<ViewState>('chat');
   const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(
     null
@@ -104,10 +104,13 @@ export function ChatLayout() {
     }
   }, [hasSearchResults, currentView]);
 
-  // MCP Tool hook with streaming support
-  const { executeTool } = useMCPTool(selectedTool, {
+  // MCP Tool hook (for manual tool mode)
+  const { executeTool } = useMCPTool(selectedTool === 'ai_chat' ? 'search_court_cases' : selectedTool, {
     enableStreaming: import.meta.env.VITE_ENABLE_SSE_STREAMING !== 'false',
   });
+
+  // AI Chat hook (agentic mode)
+  const { executeChat } = useAIChat();
   /**
    * Parse content to tool-specific parameters
    */
@@ -118,15 +121,6 @@ export function ChatLayout() {
     }
 
     switch (toolName) {
-      case 'get_legal_advice':
-      case 'packaged_lawyer_answer':
-        return {
-          ...base,
-          query: content,
-          max_precedents: 5,
-          include_reasoning: true,
-        };
-
       case 'search_court_cases':
         return {
           ...base,
@@ -149,10 +143,16 @@ export function ChatLayout() {
 
   const handleSend = async (content: string, toolName?: string, documentIds?: string[]) => {
     const tool = toolName || selectedTool;
-    const params = parseContentToToolParams(tool, content, documentIds);
 
     try {
-      await executeTool(params);
+      if (tool === 'ai_chat') {
+        // AI Chat mode — agentic LLM loop
+        await executeChat(content, documentIds);
+      } else {
+        // Manual tool mode — direct tool call
+        const params = parseContentToToolParams(tool, content, documentIds);
+        await executeTool(params);
+      }
     } catch (error: any) {
       console.error('MCP tool execution error:', error);
       showToast.error(

@@ -28,6 +28,8 @@ export class ModelSelector {
 
   private static readonly SINGLE_MODEL = process.env.OPENAI_MODEL;
 
+  private static roundRobinCounter = 0;
+
   static getEmbeddingModel(): string {
     const model = process.env.OPENAI_EMBEDDING_MODEL || this.DEFAULT_EMBEDDING_MODEL;
     return model;
@@ -60,12 +62,28 @@ export class ModelSelector {
 
   private static selectProvider(): LLMProvider {
     switch (this.PROVIDER_STRATEGY) {
+      case 'round-robin':
+        return this.getNextProvider();
       case 'anthropic-first':
         return 'anthropic';
       case 'openai-first':
       default:
         return 'openai';
     }
+  }
+
+  /**
+   * Round-robin provider selection — alternates between available providers.
+   * Falls back to single provider if only one is configured.
+   */
+  static getNextProvider(): LLMProvider {
+    const available = this.getAvailableProviders();
+    if (available.length === 0) return 'openai'; // fallback
+    if (available.length === 1) return available[0];
+
+    const provider = available[this.roundRobinCounter % available.length];
+    this.roundRobinCounter++;
+    return provider;
   }
 
   private static getModelForProvider(provider: LLMProvider, budget: BudgetLevel): string {

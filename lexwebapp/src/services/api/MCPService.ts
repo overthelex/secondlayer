@@ -13,7 +13,6 @@ import {
   Citation,
 } from '../../types/models';
 import {
-  GetLegalAdviceParams,
   SearchCourtCasesParams,
   SearchLegislationParams,
   MCPToolParams,
@@ -21,6 +20,14 @@ import {
   Tool,
 } from '../../types/api/mcp-tools';
 import { StreamingCallbacks } from '../../types/api/sse';
+
+export interface ChatStreamCallbacks {
+  onThinking?: (data: { step: number; tool: string; params: any }) => void;
+  onToolResult?: (data: { tool: string; result: any }) => void;
+  onAnswer?: (data: { text: string; provider: string; model: string }) => void;
+  onComplete?: (data: { iterations: number; elapsed_ms: number }) => void;
+  onError?: (data: { message: string }) => void;
+}
 
 export class MCPService extends BaseService {
   private readonly API_URL: string;
@@ -99,6 +106,110 @@ export class MCPService extends BaseService {
     }
 
     return this.sseClient.streamToolWithRetry(toolName, params, callbacks, this.getAuthToken());
+  }
+
+  /**
+   * Stream AI chat (agentic LLM loop with tool calling)
+   * POST /api/chat → SSE events: thinking, tool_result, answer, complete
+   */
+  async streamChat(
+    query: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    callbacks: ChatStreamCallbacks,
+    budget: string = 'standard'
+  ): Promise<AbortController> {
+    const controller = new AbortController();
+
+    try {
+      const response = await fetch(`${this.API_URL.replace('/api', '')}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.getAuthToken()}`,
+        },
+        body: JSON.stringify({ query, history, budget }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        callbacks.onError?.({ message: `API Error: ${response.status} - ${errorText}` });
+        return controller;
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        callbacks.onError?.({ message: 'No response body' });
+        return controller;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      const processEvents = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse SSE events from buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // keep incomplete line in buffer
+
+            let currentEvent = '';
+            let currentData = '';
+
+            for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim();
+              } else if (line.startsWith('data: ')) {
+                currentData = line.slice(6);
+              } else if (line === '' && currentEvent && currentData) {
+                // End of event — dispatch
+                try {
+                  const data = JSON.parse(currentData);
+                  switch (currentEvent) {
+                    case 'thinking':
+                      callbacks.onThinking?.(data);
+                      break;
+                    case 'tool_result':
+                      callbacks.onToolResult?.(data);
+                      break;
+                    case 'answer':
+                      callbacks.onAnswer?.(data);
+                      break;
+                    case 'complete':
+                      callbacks.onComplete?.(data);
+                      break;
+                    case 'error':
+                      callbacks.onError?.(data);
+                      break;
+                  }
+                } catch {
+                  // skip malformed JSON
+                }
+                currentEvent = '';
+                currentData = '';
+              }
+            }
+          }
+        } catch (err: any) {
+          if (err.name !== 'AbortError') {
+            callbacks.onError?.({ message: err.message });
+          }
+        }
+      };
+
+      processEvents();
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        callbacks.onError?.({ message: err.message });
+      }
+    }
+
+    return controller;
   }
 
   /**
