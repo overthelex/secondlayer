@@ -25,6 +25,15 @@ export const ROUTES = {
   CLIENT_DETAIL: '/clients/:id',
   CLIENT_MESSAGING: '/clients/messaging',
 
+  // Matters
+  MATTERS: '/matters',
+  MATTER_DETAIL: '/matters/:id',
+
+  // Time Tracking & Billing
+  TIME_ENTRIES: '/time-entries',
+  INVOICES: '/invoices',
+  CALENDAR: '/calendar',
+
   // Documents
   DOCUMENTS: '/documents',
 
@@ -51,4 +60,5 @@ export const generateRoute = {
   judgeDetail: (id: string) => `/judges/${id}`,
   lawyerDetail: (id: string) => `/lawyers/${id}`,
   clientDetail: (id: string) => `/clients/${id}`,
+  matterDetail: (id: string) => `/matters/${id}`,
 };

@@ -1,22 +1,22 @@
 /**
- * Client Detail Page
- * Fetches client by URL param, no longer depends on location.state
+ * Matter Detail Page
+ * Fetches matter by URL param
  */
 
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ClientDetailPage as ClientDetailPageComponent } from '../../components/ClientDetailPage';
-import { useClient } from '../../hooks/queries/useClients';
+import { MatterDetailPage as MatterDetailPageComponent } from '../../components/MatterDetailPage';
+import { useMatter } from '../../hooks/queries/useMatters';
 import { Spinner } from '../../components/ui/Spinner';
 import { ROUTES } from '../../router/routes';
 
-export function ClientDetailPage() {
+export function MatterDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: client, isLoading, error } = useClient(id || '');
+  const { data: matter, isLoading, error } = useMatter(id || '');
 
   const handleBack = () => {
-    navigate(ROUTES.CLIENTS);
+    navigate(ROUTES.MATTERS);
   };
 
   if (isLoading) {
@@ -27,11 +27,11 @@ export function ClientDetailPage() {
     );
   }
 
-  if (error || !client) {
+  if (error || !matter) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-claude-subtext font-sans">Клієнта не знайдено</p>
+          <p className="text-claude-subtext font-sans">Справу не знайдено</p>
           <button
             onClick={handleBack}
             className="mt-4 px-4 py-2 bg-claude-accent text-white rounded-lg font-sans text-sm"
@@ -43,5 +43,5 @@ export function ClientDetailPage() {
     );
   }
 
-  return <ClientDetailPageComponent client={client} onBack={handleBack} />;
+  return <MatterDetailPageComponent matter={matter} onBack={handleBack} />;
 }

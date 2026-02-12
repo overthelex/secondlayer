@@ -36,6 +36,9 @@ interface SidebarProps {
   onJudgesClick?: () => void;
   onLawyersClick?: () => void;
   onClientsClick?: () => void;
+  onMattersClick?: () => void;
+  onTimeEntriesClick?: () => void;
+  onInvoicesClick?: () => void;
   onCasesClick?: () => void;
   onDocumentsClick?: () => void;
   onHistoryClick?: () => void;
@@ -59,6 +62,9 @@ export function Sidebar({
   onJudgesClick,
   onLawyersClick,
   onClientsClick,
+  onMattersClick,
+  onTimeEntriesClick,
+  onInvoicesClick,
   onCasesClick,
   onDocumentsClick,
   onHistoryClick,
@@ -117,10 +123,31 @@ export function Sidebar({
     onClick: onClientsClick
   },
   {
-    id: 'cases',
-    label: 'Справи',
+    id: 'matters',
+    label: 'Справи (юр.)',
     icon: Briefcase,
-    count: 8,
+    count: null,
+    onClick: onMattersClick
+  },
+  {
+    id: 'time-entries',
+    label: 'Time Entries',
+    icon: Clock,
+    count: null,
+    onClick: onTimeEntriesClick
+  },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: FileText,
+    count: null,
+    onClick: onInvoicesClick
+  },
+  {
+    id: 'cases',
+    label: 'Аналіз справ',
+    icon: Briefcase,
+    count: null,
     onClick: onCasesClick
   },
   {

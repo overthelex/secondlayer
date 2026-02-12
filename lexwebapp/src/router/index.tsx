@@ -28,6 +28,8 @@ import { DecisionsSearchPage } from '../components/DecisionsSearchPage';
 import { PersonDetailPage } from '../pages/PersonDetailPage';
 import { ClientDetailPage } from '../pages/ClientDetailPage';
 import { ClientMessagingPage } from '../pages/ClientMessagingPage';
+import { MattersPage } from '../pages/MattersPage';
+import { MatterDetailPage } from '../pages/MatterDetailPage';
 import { CaseAnalysisPage } from '../components/CaseAnalysisPage';
 import { LegislationMonitoringPage } from '../components/LegislationMonitoringPage';
 import { CourtPracticeAnalysisPage } from '../components/CourtPracticeAnalysisPage';
@@ -37,6 +39,8 @@ import { VotingAnalysisPage } from '../components/VotingAnalysisPage';
 import { LegalCodesLibraryPage } from '../components/LegalCodesLibraryPage';
 import { HistoricalAnalysisPage } from '../components/HistoricalAnalysisPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
+import { TimeEntriesPage } from '../pages/TimeEntriesPage';
+import { InvoicesPage } from '../pages/InvoicesPage';
 
 export const router = createBrowserRouter([
   {
@@ -104,6 +108,22 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.CLIENT_MESSAGING,
             element: <ClientMessagingPage />,
+          },
+          {
+            path: ROUTES.MATTERS,
+            element: <MattersPage />,
+          },
+          {
+            path: ROUTES.MATTER_DETAIL,
+            element: <MatterDetailPage />,
+          },
+          {
+            path: ROUTES.TIME_ENTRIES,
+            element: <TimeEntriesPage />,
+          },
+          {
+            path: ROUTES.INVOICES,
+            element: <InvoicesPage />,
           },
           {
             path: ROUTES.DOCUMENTS,

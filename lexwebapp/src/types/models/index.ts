@@ -6,5 +6,7 @@
 export * from './Message';
 export * from './User';
 export * from './Client';
+export * from './Matter';
 export * from './Person';
 export * from './Billing';
+export * from './TimeEntry';

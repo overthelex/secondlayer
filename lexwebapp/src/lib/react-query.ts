@@ -73,4 +73,37 @@ export const queryKeys = {
       ['clients', 'list', filters] as const,
     detail: (clientId: string) => ['clients', 'detail', clientId] as const,
   },
+
+  // Matters
+  matters: {
+    all: ['matters'] as const,
+    list: (filters?: Record<string, any>) =>
+      ['matters', 'list', filters] as const,
+    detail: (matterId: string) => ['matters', 'detail', matterId] as const,
+    team: (matterId: string) => ['matters', 'team', matterId] as const,
+    holds: (matterId: string) => ['matters', 'holds', matterId] as const,
+  },
+
+  // Audit
+  audit: {
+    all: ['audit'] as const,
+    list: (filters?: Record<string, any>) =>
+      ['audit', 'list', filters] as const,
+  },
+
+  // Time Entries
+  timeEntries: {
+    all: ['timeEntries'] as const,
+    list: (filters?: Record<string, any>) =>
+      ['timeEntries', 'list', filters] as const,
+    timers: ['timeEntries', 'timers'] as const,
+  },
+
+  // Invoices
+  invoices: {
+    all: ['invoices'] as const,
+    list: (filters?: Record<string, any>) =>
+      ['invoices', 'list', filters] as const,
+    detail: (invoiceId: string) => ['invoices', 'detail', invoiceId] as const,
+  },
 } as const;

@@ -66,6 +66,10 @@ import { UploadRecoveryService } from './services/upload-recovery-service.js';
 import { UploadQueueService } from './services/upload-queue-service.js';
 import { getUploadProcessingMetrics } from './routes/upload-routes.js';
 import { MetricsService } from './services/metrics-service.js';
+import { TimeEntryService } from './services/time-entry-service.js';
+import { MatterInvoiceService } from './services/matter-invoice-service.js';
+import { createTimeEntryRoutes } from './routes/time-entry-routes.js';
+import { createInvoiceRoutes } from './routes/invoice-routes.js';
 
 dotenv.config();
 
@@ -99,6 +103,8 @@ class HTTPMCPServer {
   private uploadRecoveryService: UploadRecoveryService;
   private uploadQueueService: UploadQueueService;
   private metricsService: MetricsService;
+  private timeEntryService: TimeEntryService;
+  private matterInvoiceService: MatterInvoiceService;
 
   constructor() {
     this.app = express();
@@ -172,6 +178,11 @@ class HTTPMCPServer {
     this.legalHoldService = new LegalHoldService(this.services.db, this.auditService);
     initializeMatterAccess(this.matterService);
     logger.info('Client-Matter segregation and legal hold services initialized');
+
+    // Initialize Time Tracking and Billing services
+    this.timeEntryService = new TimeEntryService(this.services.db, this.auditService);
+    this.matterInvoiceService = new MatterInvoiceService(this.services.db, this.auditService);
+    logger.info('Time tracking and billing services initialized');
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
@@ -1388,6 +1399,13 @@ class HTTPMCPServer {
       this.matterService, this.conflictCheckService, this.legalHoldService, this.auditService
     ));
     logger.info('Matter routes registered at /api/matters');
+
+    // Time tracking and billing routes
+    this.app.use('/api/time', requireJWT as any, createTimeEntryRoutes(this.timeEntryService));
+    logger.info('Time tracking routes registered at /api/time');
+
+    this.app.use('/api/invoicing', requireJWT as any, createInvoiceRoutes(this.matterInvoiceService));
+    logger.info('Invoicing routes registered at /api/invoicing');
 
     // Admin routes - require JWT + admin privileges
     // GET /api/admin/stats/overview - Dashboard statistics

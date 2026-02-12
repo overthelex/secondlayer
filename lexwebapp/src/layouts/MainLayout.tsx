@@ -8,6 +8,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { X, Menu, PanelRightOpen } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
 import { RightPanel } from '../components/RightPanel';
+import { TimeTrackerWidget } from '../components/time/TimeTrackerWidget';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIStore } from '../stores';
 import { ROUTES } from '../router/routes';
@@ -21,6 +22,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.LAWYERS]: 'Адвокати',
   [ROUTES.CLIENTS]: 'Клієнти',
   [ROUTES.DOCUMENTS]: 'Документи',
+  [ROUTES.MATTERS]: 'Справи (юридичні)',
   [ROUTES.CASES]: 'Справи',
   [ROUTES.HISTORY]: 'Історія запитів',
   [ROUTES.DECISIONS_SEARCH]: 'Пошук судових рішень',
@@ -33,6 +35,9 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.LEGAL_CODES_LIBRARY]: 'Бібліотека кодексів',
   [ROUTES.HISTORICAL_ANALYSIS]: 'Історичний аналіз',
   [ROUTES.CLIENT_MESSAGING]: 'Відправити повідомлення',
+  [ROUTES.TIME_ENTRIES]: 'Time Entries',
+  [ROUTES.INVOICES]: 'Invoices',
+  [ROUTES.CALENDAR]: 'Calendar',
 };
 
 export function MainLayout() {
@@ -77,6 +82,9 @@ export function MainLayout() {
       }
       return 'Деталі клієнта';
     }
+    if (location.pathname.startsWith('/matters/')) {
+      return 'Деталі справи';
+    }
 
     return 'SecondLayer';
   };
@@ -95,6 +103,9 @@ export function MainLayout() {
           onJudgesClick={() => navigate(ROUTES.JUDGES)}
           onLawyersClick={() => navigate(ROUTES.LAWYERS)}
           onClientsClick={() => navigate(ROUTES.CLIENTS)}
+          onMattersClick={() => navigate(ROUTES.MATTERS)}
+          onTimeEntriesClick={() => navigate(ROUTES.TIME_ENTRIES)}
+          onInvoicesClick={() => navigate(ROUTES.INVOICES)}
           onDocumentsClick={() => navigate(ROUTES.DOCUMENTS)}
           onCasesClick={() => navigate(ROUTES.CASES)}
           onHistoryClick={() => navigate(ROUTES.HISTORY)}
@@ -199,6 +210,9 @@ export function MainLayout() {
           onClose={() => useUIStore.getState().setRightPanelOpen(false)}
         />
       </div>
+
+      {/* Time Tracker Widget */}
+      <TimeTrackerWidget />
     </div>
   );
 }
