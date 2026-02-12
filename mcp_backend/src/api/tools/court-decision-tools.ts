@@ -2,7 +2,7 @@
  * Court Decision Tools - Handlers for court decision retrieval and analysis
  *
  * 7 tools:
- * - get_court_decision / get_case_text (alias)
+ * - get_court_decision
  * - get_case_documents_chain
  * - extract_document_sections
  * - load_full_texts
@@ -39,23 +39,6 @@ export class CourtDecisionTools extends BaseToolHandler {
 
 💰 Примерная стоимость: $0.01-$0.04 USD
 Стоимость зависит от глубины анализа (depth). Включает Zakononline API (поиск + HTML парсинг) и опционально OpenAI API для извлечения секций.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            doc_id: { type: ['string', 'number'] },
-            case_number: { type: 'string' },
-            depth: { type: 'number', default: 2 },
-            reasoning_budget: { type: 'string', enum: ['quick', 'standard', 'deep'], default: 'standard' },
-          },
-          required: [],
-        },
-      },
-      {
-        name: 'get_case_text',
-        description: `Получение полного текста судебного решения (alias для get_court_decision)
-
-💰 Примерная стоимость: $0.01-$0.04 USD
-Загружает текст решения из Zakononline, извлекает ключевые секции (факты, обоснование, решение). Стоимость зависит от параметра depth.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -267,7 +250,6 @@ export class CourtDecisionTools extends BaseToolHandler {
   async executeTool(name: string, args: any): Promise<ToolResult | null> {
     switch (name) {
       case 'get_court_decision':
-      case 'get_case_text':
         return await this.getCourtDecision(args);
       case 'get_case_documents_chain':
         return await this.getCaseDocumentsChain(args);

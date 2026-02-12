@@ -131,7 +131,7 @@ export function ChatLayout() {
   }, [hasSearchResults, currentView]);
 
   // MCP Tool hook (for manual tool mode)
-  const { executeTool } = useMCPTool(selectedTool === 'ai_chat' ? 'search_court_cases' : selectedTool, {
+  const { executeTool } = useMCPTool(selectedTool === 'ai_chat' ? 'search_legal_precedents' : selectedTool, {
     enableStreaming: import.meta.env.VITE_ENABLE_SSE_STREAMING !== 'false',
   });
 
@@ -147,7 +147,7 @@ export function ChatLayout() {
     }
 
     switch (toolName) {
-      case 'search_court_cases':
+      case 'search_legal_precedents':
         return {
           ...base,
           query: content,
@@ -155,7 +155,6 @@ export function ChatLayout() {
         };
 
       case 'search_legislation':
-      case 'search_legal_precedents':
         return {
           ...base,
           query: content,

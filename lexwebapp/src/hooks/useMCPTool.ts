@@ -46,17 +46,12 @@ function extractEvidenceFromToolResult(
 
   // ---- Court case tools ----
   const courtTools = [
-    'search_court_cases',
     'search_legal_precedents',
     'search_supreme_court_practice',
     'get_case_documents_chain',
-    'find_similar_cases',
     'find_similar_fact_pattern_cases',
     'compare_practice_pro_contra',
     'get_court_decision',
-    'get_case_text',
-    'get_document_text',
-    'get_legal_advice',
     'count_cases_by_party',
   ];
   if (courtTools.some((t) => toolName.includes(t) || toolName === t)) {
@@ -148,7 +143,6 @@ function extractEvidenceFromToolResult(
     'search_legislation',
     'get_legislation_article',
     'get_legislation_section',
-    'search_legislation_semantic',
   ];
   if (legislationTools.some((t) => toolName.includes(t) || toolName === t)) {
     // Single article result
@@ -185,7 +179,6 @@ function extractEvidenceFromToolResult(
   // ---- Vault / document tools ----
   const vaultTools = [
     'list_documents',
-    'search_documents',
     'semantic_search',
     'semantic_search_vault',
     'get_document',
@@ -674,12 +667,8 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
 }
 
 // Specialized hooks for popular tools
-export function useGetLegalAdvice(options?: UseMCPToolOptions) {
-  return useMCPTool('get_legal_advice', options);
-}
-
-export function useSearchCourtCases(options?: UseMCPToolOptions) {
-  return useMCPTool('search_court_cases', options);
+export function useSearchLegalPrecedents(options?: UseMCPToolOptions) {
+  return useMCPTool('search_legal_precedents', options);
 }
 
 export function useSearchLegislation(options?: UseMCPToolOptions) {
@@ -687,9 +676,9 @@ export function useSearchLegislation(options?: UseMCPToolOptions) {
 }
 
 export function useSearchDeputies(options?: UseMCPToolOptions) {
-  return useMCPTool('search_deputies', options);
+  return useMCPTool('rada_get_deputy_info', options);
 }
 
 export function useSearchEntities(options?: UseMCPToolOptions) {
-  return useMCPTool('search_entities', options);
+  return useMCPTool('openreyestr_search_entities', options);
 }

@@ -25,7 +25,7 @@ export function ChatPage() {
   const { maxPrecedents } = useSettingsStore();
 
   // MCP Tool hook (for manual tool mode)
-  const { executeTool } = useMCPTool(selectedTool === AI_CHAT_MODE ? 'search_court_cases' : selectedTool, {
+  const { executeTool } = useMCPTool(selectedTool === AI_CHAT_MODE ? 'search_legal_precedents' : selectedTool, {
     enableStreaming: import.meta.env.VITE_ENABLE_SSE_STREAMING !== 'false',
   });
 
@@ -52,7 +52,7 @@ export function ChatPage() {
     }
 
     switch (toolName) {
-      case 'search_court_cases':
+      case 'search_legal_precedents':
         return {
           ...base,
           query: content,
@@ -60,7 +60,6 @@ export function ChatPage() {
         };
 
       case 'search_legislation':
-      case 'search_legal_precedents':
         return {
           ...base,
           query: content,
@@ -73,21 +72,14 @@ export function ChatPage() {
           query: content,
         };
 
-      case 'get_document_text':
-        return {
-          ...base,
-          document_id: content,
-          include_metadata: true,
-        };
-
-      case 'search_deputies':
+      case 'rada_get_deputy_info':
         return {
           ...base,
           query: content,
           limit: 10,
         };
 
-      case 'search_entities':
+      case 'openreyestr_search_entities':
         return {
           ...base,
           query: content,

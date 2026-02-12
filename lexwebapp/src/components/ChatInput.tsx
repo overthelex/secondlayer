@@ -6,11 +6,11 @@ import showToast from '../utils/toast';
 const AI_CHAT_MODE = 'ai_chat';
 
 const TOOL_OPTIONS = [
-  { name: 'search_court_cases', label: 'Пошук справ' },
+  { name: 'search_legal_precedents', label: 'Пошук справ' },
   { name: 'search_supreme_court_practice', label: 'Практика ВС' },
   { name: 'search_legislation', label: 'Законодавство' },
-  { name: 'search_deputies', label: 'Депутати' },
-  { name: 'search_entities', label: 'Реєстр' },
+  { name: 'rada_get_deputy_info', label: 'Депутати' },
+  { name: 'openreyestr_search_entities', label: 'Реєстр' },
 ];
 
 const ACCEPTED_FILE_TYPES = '.pdf,.docx,.doc,.txt,.rtf,.html';

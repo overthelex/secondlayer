@@ -280,7 +280,7 @@ export class MCPService extends BaseService {
    * Search court cases
    */
   async searchCourtCases(params: SearchCourtCasesParams): Promise<any> {
-    return this.callTool('search_court_cases', params);
+    return this.callTool('search_legal_precedents', params);
   }
 
   /**
@@ -290,7 +290,7 @@ export class MCPService extends BaseService {
     params: SearchCourtCasesParams,
     callbacks: StreamingCallbacks
   ): Promise<AbortController> {
-    return this.streamTool('search_court_cases', params, callbacks);
+    return this.streamTool('search_legal_precedents', params, callbacks);
   }
 
   /**

@@ -25,7 +25,6 @@ const COURT_SEARCH_TOOLS = new Set([
   'find_similar_fact_pattern_cases',
   'compare_practice_pro_contra',
   'get_case_documents_chain',
-  'search_court_cases',
   'count_cases_by_party',
 ]);
 
