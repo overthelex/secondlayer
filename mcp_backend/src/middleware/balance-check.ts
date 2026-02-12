@@ -33,10 +33,14 @@ export function createBalanceCheckMiddleware(
         return next();
       }
 
-      // Skip if no user (shouldn't happen with dual-auth)
+      // Reject if no user - all requests must be attributed to an account
       if (!req.user || !req.user.userId) {
-        logger.warn('Balance check: no user in request');
-        return next();
+        logger.warn('Balance check: no user in request, rejecting');
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: 'All requests must be authenticated and attributed to a user account',
+          code: 'NO_USER_CONTEXT',
+        });
       }
 
       const userId = req.user.userId;

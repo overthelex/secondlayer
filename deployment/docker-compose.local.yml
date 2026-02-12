@@ -231,6 +231,10 @@ services:
       # Upload temp directory
       UPLOAD_TEMP_DIR: /app/data/uploads
 
+      # Vision/OCR credentials
+      VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
+
       # Logging (verbose for development)
       LOG_LEVEL: ${LOG_LEVEL:-debug}
 
@@ -251,6 +255,8 @@ services:
       # - ../mcp_backend/dist:/app/dist:ro
       - ../mcp_backend/logs:/app/logs
       - app_local_data:/app/data
+      # Vision API credentials for OCR
+      - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
 
     healthcheck:
       test:
