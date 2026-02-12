@@ -44,7 +44,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { createOAuthRouter } from './routes/oauth-routes.js';
 import { OAuthService } from './services/oauth-service.js';
 import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
-import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
+import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit, chatRateLimit } from './middleware/rate-limit.js';
 import { ToolRegistry } from './api/tool-registry.js';
 import { BusinessRegistryTools } from './api/tools/business-registry-tools.js';
 import { CourtDecisionTools } from './api/tools/court-decision-tools.js';
@@ -241,9 +241,10 @@ class HTTPMCPServer {
       this.toolRegistry,
       this.services.queryPlanner,
       this.costTracker,
-      chatSearchCache
+      chatSearchCache,
+      this.conversationService
     );
-    logger.info('ChatService initialized with search cache');
+    logger.info('ChatService initialized with search cache and conversation persistence');
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
@@ -1523,9 +1524,9 @@ class HTTPMCPServer {
 
     // ============ AI Chat endpoint (agentic LLM loop with SSE) ============
     // POST /api/chat - Streams thinking steps, tool results, and final answer
-    this.app.post('/api/chat', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+    this.app.post('/api/chat', chatRateLimit as any, requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
       try {
-        const { query, history, budget } = req.body;
+        const { query, history, budget, conversationId } = req.body;
 
         if (!query || typeof query !== 'string') {
           return res.status(400).json({ error: 'query is required' });
@@ -1537,33 +1538,45 @@ class HTTPMCPServer {
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
 
-        // Handle client disconnect
-        let clientDisconnected = false;
+        // Abort controller for cancellation propagation
+        const abortController = new AbortController();
+
+        // SSE heartbeat to prevent proxy timeouts during long tool calls
+        const heartbeat = setInterval(() => {
+          if (!res.writableEnded) res.write(': heartbeat\n\n');
+        }, 15000);
+
         req.on('close', () => {
-          clientDisconnected = true;
+          clearInterval(heartbeat);
+          abortController.abort();
         });
 
-        // Run the agentic loop
-        for await (const event of this.chatService.chat({
-          query,
-          history,
-          budget: budget || 'standard',
-          userId: req.user?.id,
-        })) {
-          if (clientDisconnected) break;
+        try {
+          for await (const event of this.chatService.chat({
+            query,
+            history,
+            budget: budget || 'standard',
+            conversationId,
+            userId: req.user?.id,
+            signal: abortController.signal,
+          })) {
+            if (abortController.signal.aborted) break;
 
-          res.write(`event: ${event.type}\n`);
-          res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+            res.write(`event: ${event.type}\n`);
+            res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+          }
+        } finally {
+          clearInterval(heartbeat);
         }
 
-        if (!clientDisconnected) {
+        if (!res.writableEnded) {
           res.end();
         }
       } catch (error: any) {
         logger.error('[ChatService] Endpoint error', { error: error.message });
         if (!res.headersSent) {
           res.status(500).json({ error: 'Chat failed', message: error.message });
-        } else {
+        } else if (!res.writableEnded) {
           res.write(`event: error\n`);
           res.write(`data: ${JSON.stringify({ message: error.message })}\n\n`);
           res.end();

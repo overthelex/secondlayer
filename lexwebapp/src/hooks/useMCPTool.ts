@@ -493,6 +493,8 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
   const accumulatedDecisions = useRef<Decision[]>([]);
   const accumulatedCitations = useRef<Citation[]>([]);
   const accumulatedDocuments = useRef<VaultDocument[]>([]);
+  // Ref to accumulate streaming answer text without stale closure issues
+  const contentRef = useRef('');
 
   const executeChat = useCallback(
     async (query: string, documentIds?: string[]) => {
@@ -500,6 +502,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
       accumulatedDecisions.current = [];
       accumulatedCitations.current = [];
       accumulatedDocuments.current = [];
+      contentRef.current = '';
       // 1. Add user message
       const userMessage = {
         id: Date.now().toString(),
@@ -539,8 +542,11 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
       setCurrentTool('ai_chat');
 
       try {
+        const chatConversationId = useChatStore.getState().conversationId || undefined;
         const controller = await mcpService.streamChat(query, history, {
           onThinking: (data) => {
+            // Clear partial streamed text when entering a tool-calling iteration
+            contentRef.current = '';
             addThinkingStep(assistantMessageId, {
               id: `step-${data.step}`,
               title: `Інструмент: ${data.tool}`,
@@ -590,7 +596,14 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
             }
           },
 
+          onAnswerDelta: (data) => {
+            contentRef.current += data.text;
+            updateMessage(assistantMessageId, { content: contentRef.current });
+          },
+
           onAnswer: (data) => {
+            // Reconcile with final answer text from server
+            contentRef.current = data.text;
             updateMessage(assistantMessageId, {
               content: data.text,
               isStreaming: false,
@@ -646,7 +659,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
             // Completion event — streaming is already finished in onAnswer
             console.log('[AIChat] Complete', data);
           },
-        });
+        }, 'standard', chatConversationId);
 
         setStreamController(controller);
       } catch (error: any) {

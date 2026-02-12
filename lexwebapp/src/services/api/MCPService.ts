@@ -24,6 +24,7 @@ import { StreamingCallbacks } from '../../types/api/sse';
 export interface ChatStreamCallbacks {
   onThinking?: (data: { step: number; tool: string; params: any }) => void;
   onToolResult?: (data: { tool: string; result: any }) => void;
+  onAnswerDelta?: (data: { text: string }) => void;
   onAnswer?: (data: { text: string; provider: string; model: string }) => void;
   onComplete?: (data: { iterations: number; elapsed_ms: number }) => void;
   onError?: (data: { message: string }) => void;
@@ -116,7 +117,8 @@ export class MCPService extends BaseService {
     query: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     callbacks: ChatStreamCallbacks,
-    budget: string = 'standard'
+    budget: string = 'standard',
+    conversationId?: string
   ): Promise<AbortController> {
     const controller = new AbortController();
 
@@ -127,7 +129,7 @@ export class MCPService extends BaseService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.getAuthToken()}`,
         },
-        body: JSON.stringify({ query, history, budget }),
+        body: JSON.stringify({ query, history, budget, conversationId }),
         signal: controller.signal,
       });
 
@@ -162,6 +164,9 @@ export class MCPService extends BaseService {
             let currentData = '';
 
             for (const line of lines) {
+              // Skip SSE heartbeat comments
+              if (line.startsWith(':')) continue;
+
               if (line.startsWith('event: ')) {
                 currentEvent = line.slice(7).trim();
               } else if (line.startsWith('data: ')) {
@@ -176,6 +181,9 @@ export class MCPService extends BaseService {
                       break;
                     case 'tool_result':
                       callbacks.onToolResult?.(data);
+                      break;
+                    case 'answer_delta':
+                      callbacks.onAnswerDelta?.(data);
                       break;
                     case 'answer':
                       callbacks.onAnswer?.(data);

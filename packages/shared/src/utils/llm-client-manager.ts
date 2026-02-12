@@ -46,6 +46,17 @@ export interface UnifiedChatResponse {
   finish_reason: 'stop' | 'tool_calls';
 }
 
+export interface UnifiedStreamChunk {
+  type: 'text_delta' | 'tool_call_delta' | 'usage' | 'done';
+  text?: string;
+  tool_call?: Partial<ToolCall> & { index?: number };
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  finish_reason?: 'stop' | 'tool_calls';
+  tool_calls?: ToolCall[];
+  model?: string;
+  provider?: LLMProvider;
+}
+
 export class LLMClientManager {
   private openaiManager: OpenAIClientManager;
   private anthropicManager: AnthropicClientManager;
@@ -304,6 +315,339 @@ export class LLMClientManager {
       },
       tool_calls: toolCalls,
       finish_reason: hasToolCalls ? 'tool_calls' : 'stop',
+    };
+  }
+
+  /**
+   * Streaming chat completion — yields UnifiedStreamChunk tokens.
+   * Fallback only on connection error (not mid-stream).
+   */
+  async *chatCompletionStream(
+    request: UnifiedChatRequest,
+    budget: BudgetLevel = 'standard',
+    preferredProvider?: LLMProvider,
+    signal?: AbortSignal
+  ): AsyncGenerator<UnifiedStreamChunk> {
+    const selection = ModelSelector.getModelSelection(budget, preferredProvider);
+
+    logger.debug('Executing streaming chat completion', {
+      budget,
+      provider: selection.provider,
+      model: selection.model,
+    });
+
+    try {
+      if (selection.provider === 'anthropic') {
+        yield* this.executeAnthropicStreamCompletion(request, selection.model, signal);
+      } else {
+        yield* this.executeOpenAIStreamCompletion(request, selection.model, signal);
+      }
+    } catch (primaryError: any) {
+      logger.warn(`Primary streaming provider ${selection.provider} failed: ${primaryError.message}`);
+
+      const fallbackProvider = this.getFallbackProvider(selection.provider);
+      if (fallbackProvider) {
+        logger.info(`Streaming fallback to ${fallbackProvider}`);
+        const fallbackSelection = ModelSelector.getModelSelection(budget, fallbackProvider);
+        if (fallbackSelection.provider === 'anthropic') {
+          yield* this.executeAnthropicStreamCompletion(request, fallbackSelection.model, signal);
+        } else {
+          yield* this.executeOpenAIStreamCompletion(request, fallbackSelection.model, signal);
+        }
+      } else {
+        throw primaryError;
+      }
+    }
+  }
+
+  private async *executeOpenAIStreamCompletion(
+    request: UnifiedChatRequest,
+    model: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<UnifiedStreamChunk> {
+    const client = this.openaiManager.getClient();
+
+    const messages = request.messages.map((m) => {
+      if (m.role === 'tool') {
+        return {
+          role: 'tool' as const,
+          content: m.content,
+          tool_call_id: m.tool_call_id!,
+        };
+      }
+      if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+        return {
+          role: 'assistant' as const,
+          content: m.content || null,
+          tool_calls: m.tool_calls.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.name,
+              arguments: JSON.stringify(tc.arguments),
+            },
+          })),
+        };
+      }
+      return { role: m.role as 'system' | 'user' | 'assistant', content: m.content };
+    });
+
+    const params: any = {
+      model,
+      messages,
+      temperature: request.temperature ?? 0.3,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+
+    if (request.max_tokens) {
+      params.max_tokens = request.max_tokens;
+    }
+
+    if (request.response_format?.type === 'json_object' && ModelSelector.supportsJsonMode(model)) {
+      params.response_format = { type: 'json_object' };
+    }
+
+    if (request.tools && request.tools.length > 0) {
+      params.tools = request.tools.map((t) => ({
+        type: 'function' as const,
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters,
+        },
+      }));
+      if (request.tool_choice) {
+        params.tool_choice = request.tool_choice;
+      }
+    }
+
+    const stream = await client.chat.completions.create(params, { signal });
+
+    const toolCallBuffers = new Map<number, { id: string; name: string; args: string }>();
+    let finishReason: 'stop' | 'tool_calls' = 'stop';
+
+    for await (const chunk of stream as any) {
+      if (signal?.aborted) break;
+
+      const choice = chunk.choices?.[0];
+      if (choice) {
+        // Text delta
+        if (choice.delta?.content) {
+          yield { type: 'text_delta', text: choice.delta.content };
+        }
+
+        // Tool call deltas
+        if (choice.delta?.tool_calls) {
+          for (const tc of choice.delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            if (!toolCallBuffers.has(idx)) {
+              toolCallBuffers.set(idx, { id: tc.id || '', name: tc.function?.name || '', args: '' });
+            }
+            const buf = toolCallBuffers.get(idx)!;
+            if (tc.id) buf.id = tc.id;
+            if (tc.function?.name) buf.name = tc.function.name;
+            if (tc.function?.arguments) buf.args += tc.function.arguments;
+
+            yield {
+              type: 'tool_call_delta',
+              tool_call: { index: idx, id: buf.id, name: buf.name },
+            };
+          }
+        }
+
+        // Finish reason
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop';
+        }
+      }
+
+      // Usage info (final chunk)
+      if (chunk.usage) {
+        yield {
+          type: 'usage',
+          usage: {
+            prompt_tokens: chunk.usage.prompt_tokens || 0,
+            completion_tokens: chunk.usage.completion_tokens || 0,
+            total_tokens: chunk.usage.total_tokens || 0,
+          },
+        };
+      }
+    }
+
+    // Assemble completed tool calls
+    const completedToolCalls: ToolCall[] = [];
+    for (const [, buf] of toolCallBuffers) {
+      completedToolCalls.push({
+        id: buf.id,
+        name: buf.name,
+        arguments: buf.args ? JSON.parse(buf.args) : {},
+      });
+    }
+
+    yield {
+      type: 'done',
+      finish_reason: finishReason,
+      tool_calls: completedToolCalls.length > 0 ? completedToolCalls : undefined,
+      model,
+      provider: 'openai',
+    };
+  }
+
+  private async *executeAnthropicStreamCompletion(
+    request: UnifiedChatRequest,
+    model: string,
+    signal?: AbortSignal
+  ): AsyncGenerator<UnifiedStreamChunk> {
+    const client = this.anthropicManager.getClient();
+    const systemMessage = request.messages.find((m) => m.role === 'system');
+
+    const conversationMessages: Anthropic.MessageParam[] = [];
+    for (const m of request.messages) {
+      if (m.role === 'system') continue;
+
+      if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+        const content: Anthropic.ContentBlockParam[] = [];
+        if (m.content) {
+          content.push({ type: 'text', text: m.content });
+        }
+        for (const tc of m.tool_calls) {
+          content.push({
+            type: 'tool_use',
+            id: tc.id,
+            name: tc.name,
+            input: tc.arguments,
+          });
+        }
+        conversationMessages.push({ role: 'assistant', content });
+      } else if (m.role === 'tool') {
+        const lastMsg = conversationMessages[conversationMessages.length - 1];
+        const toolResultBlock: Anthropic.ToolResultBlockParam = {
+          type: 'tool_result',
+          tool_use_id: m.tool_call_id!,
+          content: m.content,
+        };
+        if (lastMsg && lastMsg.role === 'user' && Array.isArray(lastMsg.content)) {
+          (lastMsg.content as Anthropic.ContentBlockParam[]).push(toolResultBlock);
+        } else {
+          conversationMessages.push({
+            role: 'user',
+            content: [toolResultBlock],
+          });
+        }
+      } else {
+        conversationMessages.push({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        });
+      }
+    }
+
+    const params: any = {
+      model,
+      messages: conversationMessages,
+      max_tokens: request.max_tokens || 4096,
+      temperature: request.temperature ?? 0.3,
+      stream: true,
+    };
+
+    if (systemMessage) {
+      params.system = systemMessage.content;
+    }
+
+    if (request.tools && request.tools.length > 0) {
+      params.tools = request.tools.map((t: ToolDefinitionParam) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.parameters as Anthropic.Tool.InputSchema,
+      }));
+      if (request.tool_choice === 'auto') {
+        params.tool_choice = { type: 'auto' };
+      } else if (request.tool_choice === 'none') {
+        delete params.tools;
+      }
+    }
+
+    const stream = client.messages.stream(params, { signal });
+    const toolCallBuffers = new Map<number, { id: string; name: string; args: string }>();
+    let blockIndex = 0;
+    let finishReason: 'stop' | 'tool_calls' = 'stop';
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    for await (const event of stream as any) {
+      if (signal?.aborted) break;
+
+      switch (event.type) {
+        case 'message_start':
+          if (event.message?.usage) {
+            inputTokens = event.message.usage.input_tokens || 0;
+          }
+          break;
+
+        case 'content_block_start':
+          if (event.content_block?.type === 'tool_use') {
+            toolCallBuffers.set(event.index ?? blockIndex, {
+              id: event.content_block.id || '',
+              name: event.content_block.name || '',
+              args: '',
+            });
+          }
+          blockIndex = event.index ?? blockIndex;
+          break;
+
+        case 'content_block_delta':
+          if (event.delta?.type === 'text_delta') {
+            yield { type: 'text_delta', text: event.delta.text };
+          } else if (event.delta?.type === 'input_json_delta') {
+            const idx = event.index ?? blockIndex;
+            const buf = toolCallBuffers.get(idx);
+            if (buf) {
+              buf.args += event.delta.partial_json || '';
+              yield {
+                type: 'tool_call_delta',
+                tool_call: { index: idx, id: buf.id, name: buf.name },
+              };
+            }
+          }
+          break;
+
+        case 'message_delta':
+          if (event.usage) {
+            outputTokens = event.usage.output_tokens || 0;
+          }
+          if (event.delta?.stop_reason) {
+            finishReason = event.delta.stop_reason === 'tool_use' ? 'tool_calls' : 'stop';
+          }
+          break;
+      }
+    }
+
+    // Assemble completed tool calls
+    const completedToolCalls: ToolCall[] = [];
+    for (const [, buf] of toolCallBuffers) {
+      completedToolCalls.push({
+        id: buf.id,
+        name: buf.name,
+        arguments: buf.args ? JSON.parse(buf.args) : {},
+      });
+    }
+
+    yield {
+      type: 'usage',
+      usage: {
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+      },
+    };
+
+    yield {
+      type: 'done',
+      finish_reason: finishReason,
+      tool_calls: completedToolCalls.length > 0 ? completedToolCalls : undefined,
+      model,
+      provider: 'anthropic',
     };
   }
 

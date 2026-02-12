@@ -4,21 +4,22 @@
  * Flow:
  * 1. Classify user intent → filter tools to relevant subset
  * 2. Pick LLM provider (round-robin OpenAI ↔ Anthropic)
- * 3. LLM call with function calling / tool_use
+ * 3. Stream LLM response with function calling / tool_use
  * 4. Execute tool calls via ToolRegistry
  * 5. Feed results back → loop until LLM produces final answer
- * 6. Stream events to client via SSE
+ * 6. Stream token-level events to client via SSE
  */
 
 import { logger } from '../utils/logger.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { QueryPlanner } from './query-planner.js';
 import { CostTracker } from './cost-tracker.js';
+import { ConversationService } from './conversation-service.js';
 import {
   getLLMManager,
   UnifiedMessage,
   ToolDefinitionParam,
-  UnifiedChatResponse,
+  ToolCall,
 } from '@secondlayer/shared';
 import { ModelSelector } from '@secondlayer/shared';
 import {
@@ -33,7 +34,7 @@ import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-s
 // ============================
 
 export interface ChatEvent {
-  type: 'thinking' | 'tool_result' | 'answer' | 'complete' | 'error';
+  type: 'thinking' | 'tool_result' | 'answer_delta' | 'answer' | 'complete' | 'error';
   data: any;
 }
 
@@ -43,6 +44,7 @@ export interface ChatRequest {
   budget?: 'quick' | 'standard' | 'deep';
   conversationId?: string;
   userId?: string;
+  signal?: AbortSignal;
 }
 
 // ============================
@@ -51,20 +53,22 @@ export interface ChatRequest {
 
 const MAX_TOOL_CALLS = parseInt(process.env.MAX_CHAT_TOOL_CALLS || '5', 10);
 const MAX_RESULT_LENGTH = 8000; // chars per tool result before summarization
+const MAX_CONTEXT_CHARS = parseInt(process.env.MAX_CONTEXT_CHARS || '48000', 10); // ~12K tokens
 
 export class ChatService {
   constructor(
     private toolRegistry: ToolRegistry,
     private queryPlanner: QueryPlanner,
     private costTracker: CostTracker,
-    private searchCache?: ChatSearchCacheService
+    private searchCache?: ChatSearchCacheService,
+    private conversationService?: ConversationService
   ) {}
 
   /**
    * Run the agentic chat loop. Yields ChatEvents for SSE streaming.
    */
   async *chat(request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const { query, history = [], budget = 'standard' } = request;
+    const { query, history = [], budget = 'standard', signal } = request;
     const startTime = Date.now();
 
     try {
@@ -88,28 +92,29 @@ export class ChatService {
         model: selection.model,
       });
 
-      // 3. Build messages
-      const messages: UnifiedMessage[] = [
-        { role: 'system', content: CHAT_SYSTEM_PROMPT },
-      ];
-
-      // Add conversation history
-      for (const h of history.slice(-6)) {
-        messages.push({ role: h.role, content: h.content });
-      }
-
-      // Add current query
-      messages.push({ role: 'user', content: query });
+      // 3. Build messages with token-aware context window
+      const messages = this.buildContextMessages(history, query);
 
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
 
-      // 5. Agentic loop
+      // 5. Agentic loop with streaming
       const llm = getLLMManager();
       let iteration = 0;
+      let fullAnswerText = '';
+      const collectedToolCalls: ToolCall[] = [];
+      const collectedThinkingSteps: Array<{ tool: string; params: any; result: any }> = [];
 
       while (iteration < MAX_TOOL_CALLS) {
-        const response: UnifiedChatResponse = await llm.chatCompletion(
+        if (signal?.aborted) break;
+
+        // Stream LLM response
+        let fullContent = '';
+        let toolCalls: ToolCall[] = [];
+        let finishReason: 'stop' | 'tool_calls' = 'stop';
+        let hasToolCallDelta = false;
+
+        for await (const chunk of llm.chatCompletionStream(
           {
             messages,
             tools: llmTools.length > 0 ? llmTools : undefined,
@@ -118,20 +123,46 @@ export class ChatService {
             temperature: 0.3,
           },
           budget,
-          selection.provider
-        );
+          selection.provider,
+          signal
+        )) {
+          if (signal?.aborted) break;
 
-        // If the LLM wants to stop, yield the final answer
-        if (response.finish_reason === 'stop' || !response.tool_calls || response.tool_calls.length === 0) {
+          if (chunk.type === 'text_delta' && chunk.text) {
+            fullContent += chunk.text;
+            // Always stream text deltas — if tool calls follow, the frontend
+            // clears partial text when it receives the next 'thinking' event
+            yield { type: 'answer_delta', data: { text: chunk.text } };
+          }
+
+          if (chunk.type === 'tool_call_delta') {
+            hasToolCallDelta = true;
+          }
+
+          if (chunk.type === 'done') {
+            finishReason = chunk.finish_reason || 'stop';
+            if (chunk.tool_calls) {
+              toolCalls = chunk.tool_calls;
+            }
+          }
+        }
+
+        if (signal?.aborted) break;
+
+        // Final answer — no tool calls
+        if (finishReason === 'stop' || toolCalls.length === 0) {
+          fullAnswerText = fullContent;
           yield {
             type: 'answer',
-            data: { text: response.content, provider: response.provider, model: response.model },
+            data: { text: fullContent, provider: selection.provider, model: selection.model },
           };
           break;
         }
 
-        // Execute each tool call
-        for (const call of response.tool_calls) {
+        // Tool-calling iteration — execute each tool call
+        for (const call of toolCalls) {
+          collectedToolCalls.push(call);
+
           yield {
             type: 'thinking',
             data: {
@@ -171,6 +202,8 @@ export class ChatService {
             }
           }
 
+          collectedThinkingSteps.push({ tool: call.name, params: call.arguments, result: toolResult });
+
           const summarized = this.summarizeResult(toolResult);
 
           // Send the FULL result to the frontend for evidence extraction (decisions, citations).
@@ -187,7 +220,7 @@ export class ChatService {
           // Append assistant tool_calls + tool result to messages (summarized for LLM)
           messages.push({
             role: 'assistant',
-            content: response.content || '',
+            content: fullContent || '',
             tool_calls: [call],
           });
           messages.push({
@@ -209,6 +242,24 @@ export class ChatService {
           elapsed_ms: elapsed,
         },
       };
+
+      // Server-side message persistence
+      if (this.conversationService && request.conversationId && request.userId) {
+        try {
+          await this.conversationService.addMessage(request.conversationId, request.userId, {
+            role: 'user',
+            content: request.query,
+          });
+          await this.conversationService.addMessage(request.conversationId, request.userId, {
+            role: 'assistant',
+            content: fullAnswerText,
+            tool_calls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+            thinking_steps: collectedThinkingSteps.length > 0 ? collectedThinkingSteps : undefined,
+          });
+        } catch (e) {
+          logger.warn('[ChatService] Failed to persist messages', { error: (e as Error).message });
+        }
+      }
     } catch (err: any) {
       logger.error('[ChatService] Error in agentic loop', { error: err.message, stack: err.stack });
       yield {
@@ -216,6 +267,36 @@ export class ChatService {
         data: { message: err.message },
       };
     }
+  }
+
+  /**
+   * Token-aware sliding window: include as much history as fits within MAX_CONTEXT_CHARS.
+   * Uses chars/4 heuristic for token estimation.
+   */
+  private buildContextMessages(
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    query: string
+  ): UnifiedMessage[] {
+    const messages: UnifiedMessage[] = [
+      { role: 'system', content: CHAT_SYSTEM_PROMPT },
+    ];
+
+    const systemChars = CHAT_SYSTEM_PROMPT.length;
+    const queryChars = query.length;
+    let availableChars = MAX_CONTEXT_CHARS - systemChars - queryChars;
+
+    // Add history from most recent backwards until budget exhausted
+    const historyMessages: UnifiedMessage[] = [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const msgChars = history[i].content.length + 20; // overhead for role/framing
+      if (availableChars - msgChars < 0) break;
+      availableChars -= msgChars;
+      historyMessages.unshift({ role: history[i].role, content: history[i].content });
+    }
+
+    messages.push(...historyMessages);
+    messages.push({ role: 'user', content: query });
+    return messages;
   }
 
   /**
