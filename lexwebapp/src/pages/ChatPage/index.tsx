@@ -4,7 +4,7 @@
  * Now using MCP streaming with all 43 tools support
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ChatInput } from '../../components/ChatInput';
 import { MessageThread } from '../../components/MessageThread';
@@ -12,7 +12,6 @@ import { EmptyState } from '../../components/EmptyState';
 import { useChatStore } from '../../stores';
 import { useSettingsStore } from '../../stores';
 import { useMCPTool } from '../../hooks/useMCPTool';
-import { Message } from '../../types/models';
 import showToast from '../../utils/toast';
 
 export function ChatPage() {
@@ -20,7 +19,7 @@ export function ChatPage() {
   const [selectedTool, setSelectedTool] = useState('get_legal_advice');
 
   // Zustand stores
-  const { messages, isStreaming, clearMessages, setStreaming } = useChatStore();
+  const { messages, isStreaming, clearMessages, setStreaming, cancelStream, removeMessage } = useChatStore();
   const { maxPrecedents } = useSettingsStore();
 
   // MCP Tool hook with streaming support
@@ -41,11 +40,17 @@ export function ChatPage() {
   /**
    * Parse content to tool-specific parameters
    */
-  const parseContentToToolParams = (toolName: string, content: string): any => {
+  const parseContentToToolParams = (toolName: string, content: string, documentIds?: string[]): any => {
+    const base: any = {};
+    if (documentIds && documentIds.length > 0) {
+      base.document_ids = documentIds;
+    }
+
     switch (toolName) {
       case 'get_legal_advice':
       case 'packaged_lawyer_answer':
         return {
+          ...base,
           query: content,
           max_precedents: maxPrecedents,
           include_reasoning: true,
@@ -53,6 +58,7 @@ export function ChatPage() {
 
       case 'search_court_cases':
         return {
+          ...base,
           query: content,
           limit: 10,
         };
@@ -60,29 +66,34 @@ export function ChatPage() {
       case 'search_legislation':
       case 'search_legal_precedents':
         return {
+          ...base,
           query: content,
           limit: 5,
         };
 
       case 'classify_intent':
         return {
+          ...base,
           query: content,
         };
 
       case 'get_document_text':
         return {
+          ...base,
           document_id: content,
           include_metadata: true,
         };
 
       case 'search_deputies':
         return {
+          ...base,
           query: content,
           limit: 10,
         };
 
       case 'search_entities':
         return {
+          ...base,
           query: content,
           entity_type: 'all',
           limit: 10,
@@ -90,13 +101,13 @@ export function ChatPage() {
 
       default:
         // Generic fallback
-        return { query: content };
+        return { ...base, query: content };
     }
   };
 
-  const handleSend = async (content: string, toolName?: string) => {
+  const handleSend = async (content: string, toolName?: string, documentIds?: string[]) => {
     const tool = toolName || selectedTool;
-    const params = parseContentToToolParams(tool, content);
+    const params = parseContentToToolParams(tool, content, documentIds);
 
     try {
       await executeTool(params);
@@ -108,15 +119,38 @@ export function ChatPage() {
     }
   };
 
+  const handleRegenerate = useCallback((userQuery: string) => {
+    // Find the last assistant message and remove it
+    const msgs = useChatStore.getState().messages;
+    const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistant) {
+      removeMessage(lastAssistant.id);
+    }
+    // Also remove the user message that triggered it
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
+    if (lastUser) {
+      removeMessage(lastUser.id);
+    }
+    // Re-send the query
+    handleSend(userQuery);
+  }, [selectedTool, removeMessage]);
+
   return (
     <>
       {messages.length === 0 ? (
         <EmptyState onSelectPrompt={handleSend} />
       ) : (
-        <MessageThread messages={messages} />
+        <MessageThread messages={messages} onRegenerate={handleRegenerate} />
       )}
       <div className="w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-4 z-20 border-t border-claude-border/30">
-        <ChatInput onSend={handleSend} disabled={isStreaming} />
+        <ChatInput
+          onSend={handleSend}
+          disabled={isStreaming}
+          isStreaming={isStreaming}
+          onCancel={cancelStream}
+          selectedTool={selectedTool}
+          onToolChange={setSelectedTool}
+        />
       </div>
     </>
   );

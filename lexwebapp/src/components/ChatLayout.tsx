@@ -4,7 +4,6 @@ import { RightPanel } from './RightPanel';
 import { ChatInput } from './ChatInput';
 import { MessageThread } from './MessageThread';
 import { EmptyState } from './EmptyState';
-import { MessageProps } from './Message';
 import { ProfilePage } from './ProfilePage';
 import { useChatStore } from '../stores';
 import { useMCPTool } from '../hooks/useMCPTool';
@@ -30,9 +29,6 @@ import { BillingDashboard } from './BillingDashboard';
 import { useAuth } from '../contexts/AuthContext';
 import {
   PanelRightOpen,
-  PanelLeftOpen,
-  FileText,
-  Share2,
   X,
   Menu } from
 'lucide-react';
@@ -95,11 +91,11 @@ export function ChatLayout() {
   const [messagingClientIds, setMessagingClientIds] = useState<string[]>([]);
 
   // Use Zustand store for messages and streaming state
-  const { messages, isStreaming } = useChatStore();
+  const { messages, isStreaming, cancelStream, removeMessage } = useChatStore();
 
   // Get last message for RightPanel data
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.regulations?.length);
+  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.citations?.length);
 
   // Auto-open RightPanel when search results arrive
   React.useEffect(() => {
@@ -115,11 +111,17 @@ export function ChatLayout() {
   /**
    * Parse content to tool-specific parameters
    */
-  const parseContentToToolParams = (toolName: string, content: string): any => {
+  const parseContentToToolParams = (toolName: string, content: string, documentIds?: string[]): any => {
+    const base: any = {};
+    if (documentIds && documentIds.length > 0) {
+      base.document_ids = documentIds;
+    }
+
     switch (toolName) {
       case 'get_legal_advice':
       case 'packaged_lawyer_answer':
         return {
+          ...base,
           query: content,
           max_precedents: 5,
           include_reasoning: true,
@@ -127,6 +129,7 @@ export function ChatLayout() {
 
       case 'search_court_cases':
         return {
+          ...base,
           query: content,
           limit: 10,
         };
@@ -134,18 +137,19 @@ export function ChatLayout() {
       case 'search_legislation':
       case 'search_legal_precedents':
         return {
+          ...base,
           query: content,
           limit: 5,
         };
 
       default:
-        return { query: content };
+        return { ...base, query: content };
     }
   };
 
-  const handleSend = async (content: string, toolName?: string) => {
+  const handleSend = async (content: string, toolName?: string, documentIds?: string[]) => {
     const tool = toolName || selectedTool;
-    const params = parseContentToToolParams(tool, content);
+    const params = parseContentToToolParams(tool, content, documentIds);
 
     try {
       await executeTool(params);
@@ -156,6 +160,15 @@ export function ChatLayout() {
       );
     }
   };
+
+  const handleRegenerate = React.useCallback((userQuery: string) => {
+    const msgs = useChatStore.getState().messages;
+    const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistant) removeMessage(lastAssistant.id);
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user');
+    if (lastUser) removeMessage(lastUser.id);
+    handleSend(userQuery);
+  }, [selectedTool, removeMessage]);
   const handleNewChat = () => {
     useChatStore.getState().clearMessages();
     setCurrentView('chat');
@@ -391,10 +404,17 @@ export function ChatLayout() {
         {messages.length === 0 ?
         <EmptyState onSelectPrompt={handleSend} /> :
 
-        <MessageThread messages={messages} />
+        <MessageThread messages={messages} onRegenerate={handleRegenerate} />
         }
         <div className="w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-4 z-20 border-t border-claude-border/30">
-          <ChatInput onSend={handleSend} disabled={isStreaming} />
+          <ChatInput
+            onSend={handleSend}
+            disabled={isStreaming}
+            isStreaming={isStreaming}
+            onCancel={cancelStream}
+            selectedTool={selectedTool}
+            onToolChange={setSelectedTool}
+          />
         </div>
       </>);
 
@@ -557,8 +577,7 @@ export function ChatLayout() {
           isOpen={isRightPanelOpen}
           onClose={() => setIsRightPanelOpen(false)}
           decisions={lastMessage?.decisions}
-          regulations={lastMessage?.regulations}
-          commentary={lastMessage?.commentary}
+          citations={lastMessage?.citations}
         />
       </div>
     </div>);

@@ -38,7 +38,7 @@ export function DecisionCard({
           </span>
         </div>
         <span className={`text-[9px] px-2 py-1 rounded-full font-semibold uppercase tracking-wide ${decision.status === 'active' ? 'bg-claude-bg text-claude-text border border-claude-border' : decision.status === 'overturned' ? 'bg-claude-subtext/10 text-claude-subtext border border-claude-border' : 'bg-claude-bg text-claude-subtext border border-claude-border'}`}>
-          {decision.status === 'active' ? 'В силе' : decision.status === 'overturned' ? 'Отменено' : 'Изменено'}
+          {decision.status === 'active' ? 'Чинне' : decision.status === 'overturned' ? 'Скасовано' : 'Змінено'}
         </span>
       </div>
 

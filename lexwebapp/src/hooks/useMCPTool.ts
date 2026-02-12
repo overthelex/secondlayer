@@ -16,6 +16,39 @@ export interface UseMCPToolOptions {
   onError?: (error: Error) => void;
 }
 
+/**
+ * Build a contextual query that includes prior conversation history.
+ * Prepends last N user-assistant exchanges so the LLM has conversational memory.
+ */
+function buildContextualQuery(
+  query: string,
+  messages: Array<{ role: string; content: string }>,
+  maxTurns = 3
+): string {
+  // Collect prior user-assistant pairs (exclude the just-added messages)
+  const pairs: Array<{ user: string; assistant: string }> = [];
+  for (let i = 0; i < messages.length - 1; i++) {
+    const msg = messages[i];
+    const next = messages[i + 1];
+    if (msg.role === 'user' && next?.role === 'assistant' && next.content) {
+      pairs.push({
+        user: msg.content.slice(0, 500),
+        assistant: next.content.slice(0, 500),
+      });
+      i++; // skip the assistant message
+    }
+  }
+
+  if (pairs.length === 0) return query;
+
+  const recentPairs = pairs.slice(-maxTurns);
+  const context = recentPairs
+    .map((p) => `\u041a\u043e\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447: ${p.user}\n\u0410\u0441\u0438\u0441\u0442\u0435\u043d\u0442: ${p.assistant}`)
+    .join('\n\n');
+
+  return `\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442 \u043f\u043e\u043f\u0435\u0440\u0435\u0434\u043d\u044c\u043e\u0457 \u0440\u043e\u0437\u043c\u043e\u0432\u0438:\n${context}\n\n\u041f\u043e\u0442\u043e\u0447\u043d\u0435 \u0437\u0430\u043f\u0438\u0442\u0430\u043d\u043d\u044f: ${query}`;
+}
+
 export function useMCPTool(
   toolName: string,
   options: UseMCPToolOptions = {}
@@ -46,7 +79,24 @@ export function useMCPTool(
       };
       addMessage(userMessage);
 
-      // 2. Create placeholder for assistant message
+      // 2. Auto-create conversation if needed (for persistence)
+      const state = useChatStore.getState();
+      if (!state.conversationId && localStorage.getItem('auth_token')) {
+        await state.createConversation();
+      }
+      // Sync user message to server
+      useChatStore.getState().syncMessage(userMessage);
+
+      // 3. Build contextual query from prior messages
+      const currentMessages = useChatStore.getState().messages;
+      // Messages before the just-added user message (all except the last one)
+      const priorMessages = currentMessages.slice(0, -1);
+      let toolParams = typeof params === 'string' ? { query: params } : { ...params };
+      if (priorMessages.length >= 2 && typeof toolParams.query === 'string') {
+        toolParams.query = buildContextualQuery(toolParams.query, priorMessages);
+      }
+
+      // 4. Create placeholder for assistant message
       const assistantMessageId = (Date.now() + 1).toString();
       const assistantMessage = {
         id: assistantMessageId,
@@ -62,7 +112,7 @@ export function useMCPTool(
       try {
         if (enableStreaming) {
           // Streaming mode
-          const controller = await mcpService.streamTool(toolName, params, {
+          const controller = await mcpService.streamTool(toolName, toolParams, {
             onConnected: (data) => {
               console.log('SSE connected:', data);
             },
@@ -100,12 +150,30 @@ export function useMCPTool(
               setStreamController(null);
               setCurrentTool(null);
 
+              // Sync assistant message to server
+              const completedState = useChatStore.getState();
+              const completedMsg = completedState.messages.find(
+                (m) => m.id === assistantMessageId
+              );
+              if (completedMsg) {
+                completedState.syncMessage(completedMsg);
+              }
+
+              // Auto-title on first exchange
+              if (completedState.conversationId && completedState.messages.length <= 3) {
+                const firstUserMsg = completedState.messages.find((m) => m.role === 'user');
+                if (firstUserMsg) {
+                  const title = firstUserMsg.content.slice(0, 60).trim();
+                  completedState.renameConversation(completedState.conversationId, title);
+                }
+              }
+
               onSuccess?.(data);
             },
 
             onError: (error) => {
               updateMessage(assistantMessageId, {
-                content: `Помилка: ${error.message}`,
+                content: `\u041f\u043e\u043c\u0438\u043b\u043a\u0430: ${error.message}`,
                 isStreaming: false,
               });
               setStreaming(false);
@@ -124,7 +192,7 @@ export function useMCPTool(
           setStreamController(controller);
         } else {
           // Synchronous mode (fallback)
-          const result = await mcpService.callTool(toolName, params);
+          const result = await mcpService.callTool(toolName, toolParams);
           const finalMessage = mcpService.transformToolResultToMessage(
             toolName,
             result
@@ -139,16 +207,34 @@ export function useMCPTool(
           setStreaming(false);
           setCurrentTool(null);
 
+          // Sync assistant message to server
+          const completedState = useChatStore.getState();
+          const completedMsg = completedState.messages.find(
+            (m) => m.id === assistantMessageId
+          );
+          if (completedMsg) {
+            completedState.syncMessage(completedMsg);
+          }
+
+          // Auto-title on first exchange
+          if (completedState.conversationId && completedState.messages.length <= 3) {
+            const firstUserMsg = completedState.messages.find((m) => m.role === 'user');
+            if (firstUserMsg) {
+              const title = firstUserMsg.content.slice(0, 60).trim();
+              completedState.renameConversation(completedState.conversationId, title);
+            }
+          }
+
           onSuccess?.(result);
         }
       } catch (error: any) {
         updateMessage(assistantMessageId, {
-          content: `Помилка: ${error.message || 'Невідома помилка'}`,
+          content: `\u041f\u043e\u043c\u0438\u043b\u043a\u0430: ${error.message || '\u041d\u0435\u0432\u0456\u0434\u043e\u043c\u0430 \u043f\u043e\u043c\u0438\u043b\u043a\u0430'}`,
           isStreaming: false,
         });
         setStreaming(false);
         setCurrentTool(null);
-        showToast.error(error.message || 'Невідома помилка');
+        showToast.error(error.message || '\u041d\u0435\u0432\u0456\u0434\u043e\u043c\u0430 \u043f\u043e\u043c\u0438\u043b\u043a\u0430');
 
         onError?.(error);
       }

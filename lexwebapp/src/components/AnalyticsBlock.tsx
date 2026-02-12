@@ -33,7 +33,7 @@ export function AnalyticsBlock({
           <BarChart3 size={20} className="text-claude-text" strokeWidth={2} />
         </div>
         <h4 className="font-sans text-[16px] font-bold text-claude-text tracking-tight">
-          Аналитика по найденной практике
+          Аналітика за знайденою практикою
         </h4>
       </div>
 
@@ -50,13 +50,13 @@ export function AnalyticsBlock({
         delay: 0.1
       }} className="bg-white/90 backdrop-blur-sm rounded-xl p-3.5 border border-claude-border shadow-sm">
           <div className="text-[11px] text-claude-subtext font-semibold mb-1.5 uppercase tracking-wide">
-            Удовлетворено
+            Задоволено
           </div>
           <div className="text-3xl font-bold text-claude-text mb-1">
             {satisfiedPercent}%
           </div>
           <div className="text-[10px] text-claude-subtext font-medium">
-            {data.satisfied} дел
+            {data.satisfied} справ
           </div>
         </motion.div>
         <motion.div initial={{
@@ -70,13 +70,13 @@ export function AnalyticsBlock({
         delay: 0.2
       }} className="bg-white/90 backdrop-blur-sm rounded-xl p-3.5 border border-claude-border shadow-sm">
           <div className="text-[11px] text-claude-subtext font-semibold mb-1.5 uppercase tracking-wide">
-            Отказано
+            Відмовлено
           </div>
           <div className="text-3xl font-bold text-claude-text mb-1">
             {rejectedPercent}%
           </div>
           <div className="text-[10px] text-claude-subtext font-medium">
-            {data.rejected} дел
+            {data.rejected} справ
           </div>
         </motion.div>
         <motion.div initial={{
@@ -90,13 +90,13 @@ export function AnalyticsBlock({
         delay: 0.3
       }} className="bg-white/90 backdrop-blur-sm rounded-xl p-3.5 border border-claude-border shadow-sm">
           <div className="text-[11px] text-claude-subtext font-semibold mb-1.5 uppercase tracking-wide">
-            Частично
+            Частково
           </div>
           <div className="text-3xl font-bold text-claude-text mb-1">
             {partialPercent}%
           </div>
           <div className="text-[10px] text-claude-subtext font-medium">
-            {data.partial} дел
+            {data.partial} справ
           </div>
         </motion.div>
       </div>
