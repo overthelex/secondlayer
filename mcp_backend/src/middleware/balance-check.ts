@@ -7,16 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { BillingService } from '../services/billing-service.js';
 import { CostTracker } from '../services/cost-tracker.js';
 import { logger } from '../utils/logger.js';
-
-export interface DualAuthRequest extends Request {
-  user?: {
-    userId: string;
-    email: string;
-    name: string;
-  };
-  clientKey?: string;
-  authType?: 'jwt' | 'apikey';
-}
+import { AuthenticatedRequest as DualAuthRequest } from './dual-auth.js';
 
 /**
  * Create balance check middleware
@@ -34,7 +25,7 @@ export function createBalanceCheckMiddleware(
       }
 
       // Reject if no user - all requests must be attributed to an account
-      if (!req.user || !req.user.userId) {
+      if (!req.user || !req.user.id) {
         logger.warn('Balance check: no user in request, rejecting');
         return res.status(401).json({
           error: 'Authentication required',
@@ -43,7 +34,7 @@ export function createBalanceCheckMiddleware(
         });
       }
 
-      const userId = req.user.userId;
+      const userId = req.user.id;
 
       // Get or create billing account
       const billing = await billingService.getOrCreateUserBilling(userId);
@@ -130,7 +121,7 @@ export function createBalanceCheckMiddleware(
     } catch (error: any) {
       logger.error('Balance check middleware error', {
         error: error.message,
-        userId: req.user?.userId,
+        userId: req.user?.id,
       });
 
       // Don't block request on middleware errors - log and continue

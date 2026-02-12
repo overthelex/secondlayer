@@ -174,14 +174,29 @@ export class UploadService {
       );
     }
 
+    const sessionDir = path.join(this.tempDir, sessionId);
+    const assembledPath = path.join(sessionDir, session.fileName);
+
+    // If the assembled file already exists (e.g. retry after chunks were cleaned up), skip reassembly
+    try {
+      const stat = await fs.stat(assembledPath);
+      if (stat.size > 0) {
+        logger.info('[Upload] Assembled file already exists, skipping reassembly', {
+          sessionId,
+          path: assembledPath,
+          size: stat.size,
+        });
+        return assembledPath;
+      }
+    } catch {
+      // File doesn't exist, proceed with assembly
+    }
+
     // Update status
     await this.pool.query(
       `UPDATE upload_sessions SET status = 'assembling', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [sessionId]
     );
-
-    const sessionDir = path.join(this.tempDir, sessionId);
-    const assembledPath = path.join(sessionDir, session.fileName);
 
     // Ensure session directory exists (may be lost after container restart)
     await fs.mkdir(sessionDir, { recursive: true });

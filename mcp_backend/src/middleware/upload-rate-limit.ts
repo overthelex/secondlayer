@@ -73,11 +73,11 @@ export const uploadInitRateLimit = createUserRateLimiter({
   keyPrefix: 'ratelimit:upload-init',
 });
 
-// 100 batch-init requests per minute per user (each batch handles up to 500 files;
+// 500 batch-init requests per minute per user (each batch handles up to 500 files;
 // retries on failure consume this budget quickly). Session quota provides the real abuse protection.
 export const uploadBatchInitRateLimit = createUserRateLimiter({
   windowMs: 60 * 1000,
-  maxRequests: 100,
+  maxRequests: 500,
   keyPrefix: 'ratelimit:upload-init-batch',
 });
 
