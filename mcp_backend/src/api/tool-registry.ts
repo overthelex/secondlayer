@@ -111,65 +111,8 @@ export class ToolRegistry {
   // ========================= Route Management =========================
 
   private initializeRoutes(): void {
-    // ========== Backend Tools - No prefix, local execution ==========
-    const backendTools = [
-      'classify_intent',
-      'retrieve_legal_sources',
-      'search_legal_precedents',
-      'get_court_decision',
-      'get_case_text',
-      'get_case_documents_chain',
-      'check_precedent_status',
-      'count_cases_by_party',
-      'load_full_texts',
-      'bulk_ingest_court_decisions',
-      'analyze_legal_patterns',
-      'analyze_case_pattern',
-      'get_similar_reasoning',
-      'extract_document_sections',
-      'compare_practice_pro_contra',
-      'get_citation_graph',
-      'search_procedural_norms',
-      'search_supreme_court_practice',
-      'find_similar_fact_pattern_cases',
-      'find_relevant_law_articles',
-      'calculate_procedural_deadlines',
-      'build_procedural_checklist',
-      'calculate_monetary_claims',
-      'validate_response',
-      'format_answer_pack',
-      'get_legal_advice',
-      'search_business_entities',
-      'get_business_entity_details',
-      'search_entity_beneficiaries',
-      'lookup_by_edrpou',
-      'search_legislation',
-      'get_legislation_article',
-      'get_legislation_section',
-      'get_legislation_articles',
-      'get_legislation_structure',
-      'parse_document',
-      'extract_key_clauses',
-      'summarize_document',
-      'compare_documents',
-      'batch_process_documents',
-      'store_document',
-      'get_document',
-      'list_documents',
-      'semantic_search',
-      'bulk_review_runner',
-      'risk_scoring',
-      'generate_dd_report',
-    ];
-
-    for (const tool of backendTools) {
-      this.routes.set(tool, {
-        toolName: tool,
-        serviceName: tool,
-        service: 'backend',
-        local: true,
-      });
-    }
+    // Backend tool routes are created dynamically by registerHandler().
+    // Only remote (proxy) tools need hardcoded routes.
 
     // ========== RADA Tools (4 tools) - Prefix 'rada_', HTTP proxy ==========
     const radaTools = [
@@ -206,9 +149,7 @@ export class ToolRegistry {
       });
     }
 
-    logger.info('Tool Registry initialized', {
-      totalTools: this.routes.size,
-      backend: backendTools.length,
+    logger.info('Tool Registry remote routes initialized', {
       rada: radaTools.length,
       openreyestr: openreyestrTools.length,
     });

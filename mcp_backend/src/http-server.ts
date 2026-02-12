@@ -47,6 +47,9 @@ import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
 import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
 import { ToolRegistry } from './api/tool-registry.js';
 import { BusinessRegistryTools } from './api/tools/business-registry-tools.js';
+import { CourtDecisionTools } from './api/tools/court-decision-tools.js';
+import { ProceduralTools } from './api/tools/procedural-tools.js';
+import { LegalAdviceTools } from './api/tools/legal-advice-tools.js';
 import { DueDiligenceTools } from './api/due-diligence-tools.js';
 import { DueDiligenceService } from './services/due-diligence-service.js';
 import { ServiceProxy } from './services/service-proxy.js';
@@ -170,6 +173,31 @@ class HTTPMCPServer {
     );
     this.toolRegistry.registerHandler(new DueDiligenceTools(ddService));
     this.toolRegistry.registerHandler(this.services.mcpAPI);
+    this.toolRegistry.registerHandler(new CourtDecisionTools(
+      this.services.zoAdapter,
+      this.services.zoPracticeAdapter,
+      this.services.sectionizer,
+      this.services.embeddingService,
+      this.services.patternStore
+    ));
+    this.toolRegistry.registerHandler(new ProceduralTools(
+      this.services.zoAdapter,
+      this.services.zoPracticeAdapter,
+      this.services.sectionizer,
+      this.services.embeddingService,
+      this.services.patternStore
+    ));
+    this.toolRegistry.registerHandler(new LegalAdviceTools(
+      this.services.queryPlanner,
+      this.services.zoAdapter,
+      this.services.zoPracticeAdapter,
+      this.services.sectionizer,
+      this.services.embeddingService,
+      this.services.patternStore,
+      this.services.citationValidator,
+      this.services.hallucinationGuard,
+      this.services.legislationTools
+    ));
     logger.info('Core tool handlers registered with ToolRegistry');
 
     // Initialize upload and storage services
@@ -1508,15 +1536,8 @@ class HTTPMCPServer {
 
         if (gatewayEnabled) {
           // Unified gateway mode - fetch from all services
-          const backendTools = [
-            ...this.services.mcpAPI.getTools(),
-            ...this.services.legislationTools.getToolDefinitions(),
-            ...this.documentAnalysisTools.getToolDefinitions(),
-            ...this.batchDocumentTools.getToolDefinitions(),
-          ];
-
           const allTools = await this.toolRegistry.getAllTools(
-            backendTools,
+            this.toolRegistry.getLocalToolDefinitions(),
             process.env.RADA_MCP_URL,
             process.env.RADA_API_KEY,
             process.env.OPENREYESTR_MCP_URL,
@@ -1535,12 +1556,7 @@ class HTTPMCPServer {
           });
         } else {
           // Legacy mode - only backend tools
-          const tools = [
-            ...this.services.mcpAPI.getTools(),
-            ...this.services.legislationTools.getToolDefinitions(),
-            ...this.documentAnalysisTools.getToolDefinitions(),
-            ...this.batchDocumentTools.getToolDefinitions(),
-          ];
+          const tools = this.toolRegistry.getLocalToolDefinitions();
 
           res.json({
             tools,
@@ -1706,11 +1722,7 @@ class HTTPMCPServer {
               // Route to appropriate tool handler via centralized registry
               // Special case: list_documents needs userId injection
               const httpToolArgs = toolName === 'list_documents' ? { ...args, userId: req.user?.id } : args;
-              const httpRegistryResult = await this.toolRegistry.executeTool(toolName, httpToolArgs);
-              if (httpRegistryResult) {
-                return httpRegistryResult;
-              }
-              return await this.services.mcpAPI.handleToolCall(toolName, args);
+              return await this.toolRegistry.executeTool(toolName, httpToolArgs);
             }
           );
         }
@@ -1851,7 +1863,7 @@ class HTTPMCPServer {
         const results = await Promise.all(
           calls.map(async (call: { name: string; arguments?: any }) => {
             try {
-              const result = await this.services.mcpAPI.handleToolCall(
+              const result = await this.toolRegistry.executeTool(
                 call.name,
                 call.arguments || {}
               );
@@ -2034,8 +2046,8 @@ class HTTPMCPServer {
 
     try {
       // Streaming support for different tools
-      if (toolName === 'get_legal_advice') {
-        await this.services.mcpAPI.getLegalAdviceStream(args, (event: any) => {
+      if (this.toolRegistry.supportsStreaming(toolName)) {
+        await this.toolRegistry.executeToolStream(toolName, args, (event: any) => {
           this.sendSSEEvent(res, event);
         });
       } else if (toolName === 'batch_process_documents') {
@@ -2045,7 +2057,7 @@ class HTTPMCPServer {
         });
       } else {
         // For other tools, stream the regular result
-        const result = await this.services.mcpAPI.handleToolCall(toolName, args);
+        const result = await this.toolRegistry.executeTool(toolName, args);
         this.sendSSEEvent(res, {
           type: 'progress',
           data: { message: 'Processing...', progress: 0.5 },

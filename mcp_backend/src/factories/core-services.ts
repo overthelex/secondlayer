@@ -42,7 +42,6 @@ export function createBackendCoreServices(): BackendCoreServices {
     queryPlanner,
     zoAdapter,
     zoPracticeAdapter,
-    sectionizer,
     embeddingService,
     patternStore,
     citationValidator,
