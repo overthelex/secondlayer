@@ -23,7 +23,9 @@ import {
   CreditCard,
   UsersRound,
   Trash2,
-  Edit3 } from
+  Edit3,
+  ChevronDown,
+  ChevronsUpDown } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -84,6 +86,30 @@ export function Sidebar({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const allSectionIds = ['conversations', 'context', 'evidence', 'legislation', 'finance', 'participants'] as const;
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllSections = () => {
+    if (collapsedSections.size === allSectionIds.length) {
+      setCollapsedSections(new Set());
+    } else {
+      setCollapsedSections(new Set(allSectionIds));
+    }
+  };
+
+  const allCollapsed = collapsedSections.size === allSectionIds.length;
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const {
     conversations,
@@ -318,97 +344,179 @@ export function Sidebar({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-3 py-1">
+          {/* Collapse/Expand All Button */}
+          <div className="flex justify-end px-1 py-1">
+            <button
+              onClick={toggleAllSections}
+              title={allCollapsed ? 'Розгорнути все' : 'Згорнути все'}
+              className="p-1.5 text-claude-subtext/50 hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200"
+            >
+              <ChevronsUpDown size={14} strokeWidth={2} />
+            </button>
+          </div>
+
           {/* Conversation History */}
           {conversations.length > 0 && (
             <div className="mb-4">
-              <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Розмови
-              </h3>
-              <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`group flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-all duration-200 ${
-                      activeConversationId === conv.id
-                        ? 'bg-claude-accent/10 text-claude-accent'
-                        : 'text-claude-text hover:bg-claude-subtext/8'
-                    }`}
-                    onClick={() => {
-                      switchConversation(conv.id);
-                      if (window.innerWidth < 1024) onClose();
-                    }}
-                  >
-                    <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
-                    {editingId === conv.id ? (
-                      <input
-                        className="flex-1 min-w-0 bg-white border border-claude-border rounded px-1 py-0.5 text-[13px] outline-none"
-                        value={editTitle}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+              <button
+                onClick={() => toggleSection('conversations')}
+                className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+              >
+                <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                  Розмови
+                </h3>
+                <ChevronDown
+                  size={12}
+                  strokeWidth={2.5}
+                  className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('conversations') ? '-rotate-90' : ''}`}
+                />
+              </button>
+              {!collapsedSections.has('conversations') && (
+                <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                  {conversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      className={`group flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-all duration-200 ${
+                        activeConversationId === conv.id
+                          ? 'bg-claude-accent/10 text-claude-accent'
+                          : 'text-claude-text hover:bg-claude-subtext/8'
+                      }`}
+                      onClick={() => {
+                        switchConversation(conv.id);
+                        if (window.innerWidth < 1024) onClose();
+                      }}
+                    >
+                      <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
+                      {editingId === conv.id ? (
+                        <input
+                          className="flex-1 min-w-0 bg-white border border-claude-border rounded px-1 py-0.5 text-[13px] outline-none"
+                          value={editTitle}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              renameConversation(conv.id, editTitle);
+                              setEditingId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingId(null);
+                            }
+                          }}
+                          onBlur={() => {
                             renameConversation(conv.id, editTitle);
                             setEditingId(null);
-                          } else if (e.key === 'Escape') {
-                            setEditingId(null);
-                          }
-                        }}
-                        onBlur={() => {
-                          renameConversation(conv.id, editTitle);
-                          setEditingId(null);
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <span className="flex-1 truncate font-medium tracking-tight font-sans">
-                        {conv.title}
-                      </span>
-                    )}
-                    <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingId(conv.id);
-                          setEditTitle(conv.title);
-                        }}
-                        className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
-                      >
-                        <Edit3 size={12} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteConversation(conv.id);
-                        }}
-                        className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="flex-1 truncate font-medium tracking-tight font-sans">
+                          {conv.title}
+                        </span>
+                      )}
+                      <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(conv.id);
+                            setEditTitle(conv.title);
+                          }}
+                          className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                          }}
+                          className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {/* Context Section */}
           <div className="mb-6">
-            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-              Контекст роботи
-            </h3>
-            <div className="space-y-0.5">
-              {contextSections.map((section) =>
-              <button
-                key={section.id}
-                onClick={() => {
-                  if (section.onClick) {
-                    section.onClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center justify-between group">
+            <button
+              onClick={() => toggleSection('context')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Контекст роботи
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('context') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('context') && (
+              <div className="space-y-0.5">
+                {contextSections.map((section) =>
+                <button
+                  key={section.id}
+                  onClick={() => {
+                    if (section.onClick) {
+                      section.onClick();
+                      if (window.innerWidth < 1024) onClose();
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center justify-between group">
 
-                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <section.icon
+                      size={15}
+                      strokeWidth={2}
+                      className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+
+                      <span className="truncate font-medium tracking-tight font-sans">
+                        {section.label}
+                      </span>
+                    </div>
+                    {section.count !== null &&
+                  <span className="text-[11px] text-claude-subtext/50 font-medium px-1.5 py-0.5 bg-claude-subtext/5 rounded flex-shrink-0 font-sans">
+                        {section.count}
+                      </span>
+                  }
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Evidence Section */}
+          <div className="mb-6">
+            <button
+              onClick={() => toggleSection('evidence')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Доказова база
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('evidence') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('evidence') && (
+              <div className="space-y-0.5">
+                {evidenceSections.map((section) =>
+                <button
+                  key={section.id}
+                  onClick={() => {
+                    if (section.onClick) {
+                      section.onClick();
+                      if (window.innerWidth < 1024) onClose();
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+
                     <section.icon
                     size={15}
                     strokeWidth={2}
@@ -417,157 +525,158 @@ export function Sidebar({
                     <span className="truncate font-medium tracking-tight font-sans">
                       {section.label}
                     </span>
-                  </div>
-                  {section.count !== null &&
-                <span className="text-[11px] text-claude-subtext/50 font-medium px-1.5 py-0.5 bg-claude-subtext/5 rounded flex-shrink-0 font-sans">
-                      {section.count}
-                    </span>
-                }
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Evidence Section */}
-          <div className="mb-6">
-            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-              Доказова база
-            </h3>
-            <div className="space-y-0.5">
-              {evidenceSections.map((section) =>
-              <button
-                key={section.id}
-                onClick={() => {
-                  if (section.onClick) {
-                    section.onClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
-                  <section.icon
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    {section.label}
-                  </span>
-                </button>
-              )}
-            </div>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Legislative Monitoring Section */}
           <div className="mb-6">
-            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-              Законодавство
-            </h3>
-            <div className="space-y-0.5">
-              {legislativeSections.map((section) =>
-              <button
-                key={section.id}
-                onClick={() => {
-                  if (section.onClick) {
-                    section.onClick();
-                  }
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+            <button
+              onClick={() => toggleSection('legislation')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Законодавство
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('legislation') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('legislation') && (
+              <div className="space-y-0.5">
+                {legislativeSections.map((section) =>
+                <button
+                  key={section.id}
+                  onClick={() => {
+                    if (section.onClick) {
+                      section.onClick();
+                    }
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
 
-                  <section.icon
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+                    <section.icon
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
 
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    {section.label}
-                  </span>
-                </button>
-              )}
-            </div>
+                    <span className="truncate font-medium tracking-tight font-sans">
+                      {section.label}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Finance Section */}
           <div className="mb-6">
-            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-              Фінанси
-            </h3>
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  if (onBillingClick) onBillingClick();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+            <button
+              onClick={() => toggleSection('finance')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Фінанси
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('finance') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('finance') && (
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => {
+                    if (onBillingClick) onBillingClick();
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
 
-                <CreditCard
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+                  <CreditCard
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
 
-                <span className="truncate font-medium tracking-tight font-sans">
-                  Біллінг
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  if (onTeamClick) onTeamClick();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  <span className="truncate font-medium tracking-tight font-sans">
+                    Біллінг
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (onTeamClick) onTeamClick();
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
 
-                <UsersRound
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+                  <UsersRound
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
 
-                <span className="truncate font-medium tracking-tight font-sans">
-                  Команда
-                </span>
-              </button>
-            </div>
+                  <span className="truncate font-medium tracking-tight font-sans">
+                    Команда
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Judges and Lawyers Section */}
           <div className="mb-6">
-            <h3 className="px-3 py-2 text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-              Учасники процесу
-            </h3>
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  if (onJudgesClick) onJudgesClick();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+            <button
+              onClick={() => toggleSection('participants')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Учасники процесу
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('participants') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('participants') && (
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => {
+                    if (onJudgesClick) onJudgesClick();
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
 
-                <Scale
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+                  <Scale
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
 
-                <span className="truncate font-medium tracking-tight font-sans">
-                  Судді
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  if (onLawyersClick) onLawyersClick();
-                  if (window.innerWidth < 1024) onClose();
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  <span className="truncate font-medium tracking-tight font-sans">
+                    Судді
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (onLawyersClick) onLawyersClick();
+                    if (window.innerWidth < 1024) onClose();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
 
-                <Briefcase
-                  size={15}
-                  strokeWidth={2}
-                  className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+                  <Briefcase
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
 
-                <span className="truncate font-medium tracking-tight font-sans">
-                  Адвокати
-                </span>
-              </button>
-            </div>
+                  <span className="truncate font-medium tracking-tight font-sans">
+                    Адвокати
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Upgrade Card */}
