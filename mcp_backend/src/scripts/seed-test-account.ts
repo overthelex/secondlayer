@@ -1,6 +1,14 @@
 /**
  * Test Account Seed Script
  * Creates a test user with balance and transactions for development/demo
+ *
+ * Usage:
+ *   npm run seed:test-account       # Create test data
+ *   npm run seed:test-account:clean # Remove test data
+ *
+ * Or with ts-node:
+ *   npx ts-node src/scripts/seed-test-account.ts
+ *   npx ts-node src/scripts/seed-test-account.ts --cleanup
  */
 
 import { Database } from '../database/database.js';
@@ -14,12 +22,92 @@ const TEST_USER = {
   balance: parseFloat(process.env.TEST_ACCOUNT_BALANCE || '100.00'),
 };
 
+async function cleanupTestAccount() {
+  const db = new Database();
+
+  try {
+    await db.connect();
+    logger.info('Cleaning up test account data...');
+
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE email = $1',
+      [TEST_USER.email]
+    );
+
+    if (existingUser.rows.length === 0) {
+      logger.info('No test user found, nothing to clean up');
+      return;
+    }
+
+    const userId = existingUser.rows[0].id;
+    logger.info(`Found test user: ${TEST_USER.email} (ID: ${userId})`);
+
+    // Must drop immutability rules to allow FK cascade
+    await db.query(`
+      DROP RULE IF EXISTS no_delete_custody_chain ON document_custody_chain;
+      DROP RULE IF EXISTS no_update_custody_chain ON document_custody_chain;
+      DROP RULE IF EXISTS no_delete_audit_log ON audit_log;
+      DROP RULE IF EXISTS no_update_audit_log ON audit_log;
+    `);
+
+    // Delete all data in FK-safe order
+    await db.query('DELETE FROM invoice_payments WHERE invoice_id IN (SELECT id FROM matter_invoices WHERE created_by = $1)', [userId]);
+    await db.query('DELETE FROM invoice_line_items WHERE invoice_id IN (SELECT id FROM matter_invoices WHERE created_by = $1)', [userId]);
+    await db.query('UPDATE time_entries SET invoice_id = NULL WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM matter_invoices WHERE created_by = $1', [userId]);
+    await db.query('DELETE FROM active_timers WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM time_entries WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM user_billing_rates WHERE user_id = $1 OR created_by = $1', [userId]);
+    await db.query('DELETE FROM billing_transactions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM payment_intents WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM credit_transactions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM audit_log WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM cost_tracking WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM conversations WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM documents WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM upload_sessions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM user_request_preferences WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM user_sessions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM eula_acceptances WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM matter_team WHERE user_id = $1 OR added_by = $1', [userId]);
+    await db.query('DELETE FROM matters WHERE created_by = $1', [userId]);
+    await db.query('DELETE FROM clients WHERE created_by = $1', [userId]);
+    await db.query('DELETE FROM user_billing WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM user_credits WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    // Restore immutability rules
+    await db.query(`
+      CREATE RULE no_update_custody_chain AS ON UPDATE TO document_custody_chain DO INSTEAD NOTHING;
+      CREATE RULE no_delete_custody_chain AS ON DELETE TO document_custody_chain DO INSTEAD NOTHING;
+      CREATE RULE no_update_audit_log AS ON UPDATE TO audit_log DO INSTEAD NOTHING;
+      CREATE RULE no_delete_audit_log AS ON DELETE TO audit_log DO INSTEAD NOTHING;
+    `);
+
+    logger.info('Test account and all related data deleted successfully');
+  } catch (error: any) {
+    logger.error('Error cleaning up test account:', error);
+    // Try to restore rules even on error
+    try {
+      await db.query(`
+        CREATE RULE IF NOT EXISTS no_update_custody_chain AS ON UPDATE TO document_custody_chain DO INSTEAD NOTHING;
+        CREATE RULE IF NOT EXISTS no_delete_custody_chain AS ON DELETE TO document_custody_chain DO INSTEAD NOTHING;
+        CREATE RULE IF NOT EXISTS no_update_audit_log AS ON UPDATE TO audit_log DO INSTEAD NOTHING;
+        CREATE RULE IF NOT EXISTS no_delete_audit_log AS ON DELETE TO audit_log DO INSTEAD NOTHING;
+      `);
+    } catch { /* ignore */ }
+    throw error;
+  } finally {
+    await db.close();
+  }
+}
+
 async function seedTestAccount() {
   const db = new Database();
 
   try {
     await db.connect();
-    logger.info('🌱 Starting test account seed...');
+    logger.info('Starting test account seed...');
 
     // 1. Check if test user already exists
     const existingUser = await db.query(
@@ -31,7 +119,7 @@ async function seedTestAccount() {
 
     if (existingUser.rows.length > 0) {
       userId = existingUser.rows[0].id;
-      logger.info(`✓ Test user already exists: ${TEST_USER.email} (ID: ${userId})`);
+      logger.info(`Test user already exists: ${TEST_USER.email} (ID: ${userId})`);
     } else {
       // Create test user
       const userResult = await db.query(
@@ -42,7 +130,7 @@ async function seedTestAccount() {
       );
 
       userId = userResult.rows[0].id;
-      logger.info(`✓ Created test user: ${TEST_USER.email} (ID: ${userId})`);
+      logger.info(`Created test user: ${TEST_USER.email} (ID: ${userId})`);
     }
 
     // 2. Check if billing record exists
@@ -52,7 +140,6 @@ async function seedTestAccount() {
     );
 
     if (existingBilling.rows.length > 0) {
-      // Update existing billing
       await db.query(
         `UPDATE user_billing
          SET balance_usd = $1,
@@ -62,9 +149,8 @@ async function seedTestAccount() {
          WHERE user_id = $2`,
         [TEST_USER.balance, userId]
       );
-      logger.info(`✓ Updated test user billing: $${TEST_USER.balance}`);
+      logger.info(`Updated test user billing: $${TEST_USER.balance}`);
     } else {
-      // Create billing record
       await db.query(
         `INSERT INTO user_billing (
           user_id, balance_usd, balance_uah,
@@ -74,7 +160,7 @@ async function seedTestAccount() {
         VALUES ($1, $2, 0, 10.00, 100.00, 0, 0, true, true)`,
         [userId, TEST_USER.balance]
       );
-      logger.info(`✓ Created billing record: $${TEST_USER.balance}`);
+      logger.info(`Created billing record: $${TEST_USER.balance}`);
     }
 
     // 3. Create mock transactions
@@ -117,7 +203,7 @@ async function seedTestAccount() {
       );
     }
 
-    logger.info(`✓ Created ${transactions.length} mock transactions`);
+    logger.info(`Created ${transactions.length} mock transactions`);
 
     // 4. Create mock payment intents
     const paymentIntents = [
@@ -161,7 +247,7 @@ async function seedTestAccount() {
       );
     }
 
-    logger.info(`✓ Created ${paymentIntents.length} mock payment intents`);
+    logger.info(`Created ${paymentIntents.length} mock payment intents`);
 
     // 5. Verify final state
     const finalBilling = await db.query(
@@ -172,31 +258,25 @@ async function seedTestAccount() {
     );
 
     const billing = finalBilling.rows[0];
-    logger.info('\n📊 Test Account Summary:');
+    logger.info('\nTest Account Summary:');
     logger.info(`   Email: ${TEST_USER.email}`);
     logger.info(`   User ID: ${userId}`);
-    logger.info(`   Balance: $${billing.balance_usd} USD, ₴${billing.balance_uah} UAH`);
-    logger.info(`   Total Requests: ${billing.total_requests}`);
-    logger.info(`   Active: ${billing.is_active}`);
+    logger.info(`   Balance: $${billing.balance_usd} USD`);
     logger.info(`   Transactions: ${transactions.length}`);
     logger.info(`   Payment Intents: ${paymentIntents.length}`);
-    logger.info('\n✅ Test account seed completed successfully!');
-    logger.info('\n🔑 Login credentials:');
-    logger.info(`   Email: ${TEST_USER.email}`);
-    logger.info(`   Google OAuth: Use Google Sign-In with this email`);
-    logger.info(`   Note: This is a test account for development purposes only\n`);
+    logger.info('\nTest account seed completed successfully!');
   } catch (error: any) {
-    logger.error('❌ Error seeding test account:', error);
+    logger.error('Error seeding test account:', error);
     throw error;
   } finally {
     await db.close();
   }
 }
 
-// Run if executed directly (when using ts-node or node directly)
-// Note: This check is disabled for TypeScript compilation
-// Use npm run seed:test-account:dev to run with ts-node
-seedTestAccount()
+// CLI: --cleanup flag triggers cleanup instead of seed
+const isCleanup = process.argv.includes('--cleanup');
+
+(isCleanup ? cleanupTestAccount() : seedTestAccount())
   .then(() => {
     process.exit(0);
   })
@@ -205,4 +285,4 @@ seedTestAccount()
     process.exit(1);
   });
 
-export { seedTestAccount };
+export { seedTestAccount, cleanupTestAccount };

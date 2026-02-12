@@ -75,6 +75,7 @@ export interface GenerateInvoiceFromTimeParams {
 }
 
 export interface ListInvoicesParams {
+    user_id?: string;
     matter_id?: string;
     status?: string;
     date_from?: string;
@@ -285,6 +286,10 @@ export class MatterInvoiceService {
         const values: any[] = [];
         let paramIndex = 1;
 
+        if (params.user_id) {
+            conditions.push(`i.created_by = $${paramIndex++}`);
+            values.push(params.user_id);
+        }
         if (params.matter_id) {
             conditions.push(`i.matter_id = $${paramIndex++}`);
             values.push(params.matter_id);

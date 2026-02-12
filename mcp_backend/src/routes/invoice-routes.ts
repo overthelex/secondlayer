@@ -43,6 +43,7 @@ export function createInvoiceRoutes(invoiceService: MatterInvoiceService): Route
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
       const result = await invoiceService.listInvoices({
+        user_id: userId,
         matter_id: req.query.matter_id as string,
         status: req.query.status as string,
         date_from: req.query.date_from as string,
