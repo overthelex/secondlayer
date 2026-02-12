@@ -316,13 +316,13 @@ services:
       context: ..
       dockerfile: lexwebapp/Dockerfile
       args:
-        VITE_API_URL: https://dev.legal.org.ua/api
+        VITE_API_URL: https://dev.legal.org.ua
     container_name: lexwebapp-dev
     ports:
       - "8091:80"
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=https://dev.legal.org.ua/api
+      - VITE_API_URL=https://dev.legal.org.ua
     networks:
       - secondlayer-dev-network
     restart: unless-stopped

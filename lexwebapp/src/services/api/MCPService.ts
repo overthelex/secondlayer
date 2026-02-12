@@ -30,7 +30,8 @@ export class MCPService extends BaseService {
 
   constructor() {
     super();
-    this.API_URL = import.meta.env.VITE_API_URL || 'https://stage.legal.org.ua/api';
+    const baseUrl = import.meta.env.VITE_API_URL || 'https://stage.legal.org.ua';
+    this.API_URL = `${baseUrl}/api`;
     this.API_KEY =
       import.meta.env.VITE_API_KEY ||
       'REDACTED_SL_KEY_STAGE';

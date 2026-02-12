@@ -555,7 +555,7 @@ services:
       dockerfile: lexwebapp/Dockerfile
       args:
         - BUILD_ENV=staging
-        - VITE_API_URL=https://stage.legal.org.ua/api
+        - VITE_API_URL=https://stage.legal.org.ua
         - VITE_API_KEY=${VITE_API_KEY_STAGE:-REDACTED_SL_KEY_STAGE}
         - VITE_ENABLE_SSE_STREAMING=true
         - VITE_ENABLE_ALL_MCP_TOOLS=true
