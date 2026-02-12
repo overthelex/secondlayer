@@ -581,7 +581,7 @@ deploy_to_gate() {
     # Phase 3: Deploy
     local deploy_failed=false
 
-    # Pull latest code on the server via git
+    # Step 1: Pull latest code on the server via git
     print_msg "$BLUE" "📥 Pulling latest code on $server_name..."
     if ! ssh ${DEPLOY_USER}@${target_server} "git -C ${REMOTE_REPO} fetch origin main && git -C ${REMOTE_REPO} reset --hard origin/main"; then
         print_msg "$RED" "Git sync failed, rolling back..."
@@ -590,14 +590,13 @@ deploy_to_gate() {
         exit 1
     fi
 
-    # Copy env file (not tracked in git)
+    # Step 2: Copy env file (not tracked in git)
     print_msg "$BLUE" "📤 Copying env file to $server_name..."
     scp $env_file ${DEPLOY_USER}@${target_server}:${REMOTE_REPO}/deployment/
 
-    # Stop and remove old containers, then start new ones
+    # Step 3: Build, migrate, and start services (mirrors deploy_local flow)
     print_msg "$BLUE" "🔄 Updating containers on $server_name..."
 
-    # Pass environment to SSH session
     if ! ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
         set -e
         cd "$REMOTE_REPO/deployment"
@@ -616,78 +615,83 @@ deploy_to_gate() {
                 ;;
         esac
 
-        # Stop and remove containers
-        echo "Stopping old containers..."
-        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE down
+        DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
-        # Remove any stopped containers for this environment
-        echo "Cleaning up stopped containers..."
-        docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=exited" -q | xargs -r docker rm -f
-        docker ps -a --filter "name=secondlayer-.*-$ENV_SHORT" --filter "status=dead" -q | xargs -r docker rm -f
+        # Step 1: Stop existing containers
+        echo "🛑 Stopping existing containers..."
+        $DC down
 
-        # Remove old/dangling images to free space
-        echo "Removing old images..."
+        # Step 2: Cleanup exited/dead containers and dangling images
+        echo "🧹 Cleaning up stopped containers..."
+        docker ps -a --filter "name=-$ENV_SHORT" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=-$ENV_SHORT" --filter "status=dead" -q | xargs -r docker rm -f
+        echo "🗑️  Removing dangling images..."
         docker image prune -f
 
-        # Start infrastructure services first
-        echo "Starting infrastructure services..."
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT postgres-openreyestr-$ENV_SHORT
-        else
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d postgres-$ENV_SHORT redis-$ENV_SHORT qdrant-$ENV_SHORT
-        fi
+        # Step 3: Pre-build shared + backend dist (needed by Dockerfile.document-service)
+        echo "📦 Building shared package and backend dist..."
+        cd "$REMOTE_REPO"
+        npm --prefix packages/shared install && npm --prefix packages/shared run build
+        npm --prefix mcp_backend install && npm --prefix mcp_backend run build
+        cd "$REMOTE_REPO/deployment"
 
-        # Wait for database to be ready
-        echo "Waiting for database..."
+        # Step 4: Build ALL images without cache
+        # app-$ENV_SHORT produces secondlayer-app:latest (used by migrate-$ENV_SHORT)
+        # rada-migrate-$ENV_SHORT produces rada-mcp:latest (used by rada-mcp-app-$ENV_SHORT)
+        # migrate-openreyestr-$ENV_SHORT produces openreyestr-app:latest (used by app-openreyestr-$ENV_SHORT)
+        echo "🔨 Building all images without cache..."
+        $DC build --no-cache \
+            app-$ENV_SHORT \
+            rada-migrate-$ENV_SHORT \
+            migrate-openreyestr-$ENV_SHORT \
+            document-service-$ENV_SHORT \
+            lexwebapp-$ENV_SHORT
+
+        # Step 5: Start infrastructure services
+        echo "🚀 Starting infrastructure services..."
+        $DC up -d \
+            postgres-$ENV_SHORT \
+            redis-$ENV_SHORT \
+            qdrant-$ENV_SHORT \
+            postgres-openreyestr-$ENV_SHORT \
+            minio-$ENV_SHORT
+
+        # Step 6: Wait for databases to be ready, then run RADA DB init
+        echo "⏳ Waiting for databases..."
         sleep 15
+        echo "🔧 Running RADA DB init..."
+        $DC up rada-db-init-$ENV_SHORT
 
-        # Run RADA DB init
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "Running RADA DB init..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-db-init-$ENV_SHORT
-        fi
+        # Step 7: Run migrations sequentially (using freshly built images)
+        echo "🔄 Running backend migrations..."
+        $DC up migrate-$ENV_SHORT
+        echo "🔄 Running RADA migrations..."
+        $DC up rada-migrate-$ENV_SHORT
+        echo "🔄 Running OpenReyestr migrations..."
+        $DC up migrate-openreyestr-$ENV_SHORT
 
-        # Run migrations
-        echo "Running database migrations..."
-        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-$ENV_SHORT
+        # Step 8: Start application services
+        echo "▶️  Starting application services..."
+        $DC up -d \
+            app-$ENV_SHORT \
+            rada-mcp-app-$ENV_SHORT \
+            app-openreyestr-$ENV_SHORT \
+            document-service-$ENV_SHORT \
+            lexwebapp-$ENV_SHORT
 
-        # Run RADA and OpenReyestr migrations
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "Running RADA migrations..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up rada-migrate-$ENV_SHORT
-            echo "Running OpenReyestr migrations..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up migrate-openreyestr-$ENV_SHORT
-        fi
+        # Step 9: Start monitoring services
+        echo "📊 Starting monitoring services..."
+        $DC up -d \
+            prometheus-$ENV_SHORT \
+            grafana-$ENV_SHORT \
+            postgres-exporter-backend \
+            postgres-exporter-openreyestr \
+            redis-exporter \
+            node-exporter \
+            2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
 
-        # Pre-build shared and backend dist (needed by document-service Dockerfile)
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "Building shared package and backend dist..."
-            cd "$REMOTE_REPO"
-            npm --prefix packages/shared install && npm --prefix packages/shared run build
-            npm --prefix mcp_backend install && npm --prefix mcp_backend run build
-            cd "$REMOTE_REPO/deployment"
-        fi
-
-        # Rebuild application services without cache
-        echo "Building application images without cache..."
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
-        else
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE build --no-cache app-$ENV_SHORT lexwebapp-$ENV_SHORT
-        fi
-
-        # Start application services
-        echo "Starting application..."
-        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d app-$ENV_SHORT lexwebapp-$ENV_SHORT
-
-        # Start RADA, OpenReyestr, and document-service
-        if [ "$ENV_SHORT" = "dev" ] || [ "$ENV_SHORT" = "stage" ]; then
-            echo "Starting RADA, OpenReyestr, and document service..."
-            docker compose -f $COMPOSE_FILE --env-file $ENV_FILE up -d rada-mcp-app-$ENV_SHORT app-openreyestr-$ENV_SHORT document-service-$ENV_SHORT
-        fi
-
-        echo "Container deployment complete"
-        docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps
+        echo "✅ Container deployment complete"
+        $DC ps
 EOF
     then
         deploy_failed=true

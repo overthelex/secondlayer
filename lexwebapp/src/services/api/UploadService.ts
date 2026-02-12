@@ -56,7 +56,7 @@ export class UploadService extends BaseService {
     metadata?: any;
   }): Promise<InitUploadResponse> {
     try {
-      const response = await this.client.post('/upload/init', params);
+      const response = await this.client.post('/api/upload/init', params);
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -75,7 +75,7 @@ export class UploadService extends BaseService {
     metadata?: any;
   }>): Promise<{ sessions: Array<InitUploadResponse | { error: string; fileName: string }> }> {
     try {
-      const response = await this.client.post('/upload/init-batch', { files });
+      const response = await this.client.post('/api/upload/init-batch', { files });
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -97,7 +97,7 @@ export class UploadService extends BaseService {
       formData.append('chunk', chunk);
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${this.client.defaults.baseURL}/upload/${uploadId}/chunk`);
+      xhr.open('POST', `${this.client.defaults.baseURL}/api/upload/${uploadId}/chunk`);
 
       // Add auth header
       const token = localStorage.getItem('auth_token');
@@ -150,7 +150,7 @@ export class UploadService extends BaseService {
    */
   async completeUpload(uploadId: string): Promise<{ uploadId: string; status: string }> {
     try {
-      const response = await this.client.post(`/upload/${uploadId}/complete`);
+      const response = await this.client.post(`/api/upload/${uploadId}/complete`);
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -162,7 +162,7 @@ export class UploadService extends BaseService {
    */
   async getStatus(uploadId: string): Promise<UploadStatusResponse> {
     try {
-      const response = await this.client.get(`/upload/${uploadId}/status`);
+      const response = await this.client.get(`/api/upload/${uploadId}/status`);
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -174,7 +174,7 @@ export class UploadService extends BaseService {
    */
   async cancelUpload(uploadId: string): Promise<void> {
     try {
-      await this.client.delete(`/upload/${uploadId}`);
+      await this.client.delete(`/api/upload/${uploadId}`);
     } catch (error) {
       this.handleError(error);
     }
@@ -185,7 +185,7 @@ export class UploadService extends BaseService {
    */
   async getActiveSessions(): Promise<ActiveSession[]> {
     try {
-      const response = await this.client.get('/upload/active');
+      const response = await this.client.get('/api/upload/active');
       return response.data.sessions;
     } catch (error) {
       this.handleError(error);
@@ -197,7 +197,7 @@ export class UploadService extends BaseService {
    */
   async clearStaleSessions(): Promise<{ cancelled: number; activeCount: number; maxSessions: number }> {
     try {
-      const response = await this.client.post('/upload/clear-stale');
+      const response = await this.client.post('/api/upload/clear-stale');
       return response.data;
     } catch (error) {
       this.handleError(error);
@@ -209,7 +209,7 @@ export class UploadService extends BaseService {
    */
   async retrySession(uploadId: string): Promise<{ uploadId: string; status: string }> {
     try {
-      const response = await this.client.post(`/upload/${uploadId}/retry`);
+      const response = await this.client.post(`/api/upload/${uploadId}/retry`);
       return response.data;
     } catch (error) {
       this.handleError(error);

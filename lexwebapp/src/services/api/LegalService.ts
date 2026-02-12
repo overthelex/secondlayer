@@ -161,7 +161,7 @@ export class LegalService extends BaseService {
    */
   async searchCourtCases(request: SearchCourtCasesRequest): Promise<any> {
     try {
-      const response = await this.client.post('/tools/search_court_cases', request);
+      const response = await this.client.post('/api/tools/search_court_cases', request);
       return response.data;
     } catch (error) {
       return this.handleError(error);
@@ -173,7 +173,7 @@ export class LegalService extends BaseService {
    */
   async getDocumentText(documentId: string): Promise<any> {
     try {
-      const response = await this.client.post('/tools/get_document_text', {
+      const response = await this.client.post('/api/tools/get_document_text', {
         document_id: documentId,
       });
       return response.data;

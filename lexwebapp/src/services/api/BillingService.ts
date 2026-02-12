@@ -20,7 +20,7 @@ export class BillingService extends BaseService {
    */
   async getBalance(): Promise<Balance> {
     try {
-      const response = await this.client.get<GetBalanceResponse>('/billing/balance');
+      const response = await this.client.get<GetBalanceResponse>('/api/billing/balance');
       return response.data.balance;
     } catch (error) {
       return this.handleError(error);
@@ -35,7 +35,7 @@ export class BillingService extends BaseService {
   ): Promise<GetTransactionHistoryResponse> {
     try {
       const response = await this.client.get<GetTransactionHistoryResponse>(
-        '/billing/history',
+        '/api/billing/history',
         { params }
       );
       return response.data;
@@ -50,7 +50,7 @@ export class BillingService extends BaseService {
   async updateSettings(data: UpdateBillingSettingsRequest): Promise<BillingSettings> {
     try {
       const response = await this.client.put<{ settings: BillingSettings }>(
-        '/billing/settings',
+        '/api/billing/settings',
         data
       );
       return response.data.settings;
@@ -65,7 +65,7 @@ export class BillingService extends BaseService {
   async createStripePayment(amount_usd: number, metadata?: any): Promise<PaymentIntent> {
     try {
       const response = await this.client.post<CreatePaymentResponse>(
-        '/billing/payment/stripe/create',
+        '/api/billing/payment/stripe/create',
         { amount_usd, metadata }
       );
 
@@ -88,7 +88,7 @@ export class BillingService extends BaseService {
   async createFondyPayment(amount_uah: number): Promise<PaymentIntent> {
     try {
       const response = await this.client.post<CreatePaymentResponse>(
-        '/billing/payment/fondy/create',
+        '/api/billing/payment/fondy/create',
         { amount_uah }
       );
 
@@ -114,7 +114,7 @@ export class BillingService extends BaseService {
   ): Promise<any> {
     try {
       const response = await this.client.get(
-        `/billing/payment/${provider}/${paymentId}/status`
+        `/api/billing/payment/${provider}/${paymentId}/status`
       );
       return response.data;
     } catch (error) {
@@ -127,7 +127,7 @@ export class BillingService extends BaseService {
    */
   async sendTestEmail(): Promise<void> {
     try {
-      await this.client.post('/billing/test-email');
+      await this.client.post('/api/billing/test-email');
     } catch (error) {
       return this.handleError(error);
     }

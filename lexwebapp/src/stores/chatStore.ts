@@ -110,14 +110,17 @@ export const useChatStore = create<ChatState>()(
         // Add thinking step to message
         addThinkingStep: (messageId, step) =>
           set((state) => ({
-            messages: state.messages.map((msg) =>
-              msg.id === messageId
-                ? {
-                    ...msg,
-                    thinkingSteps: [...(msg.thinkingSteps || []), step],
-                  }
-                : msg
-            ),
+            messages: state.messages.map((msg) => {
+              if (msg.id !== messageId) return msg;
+              const existing = (msg.thinkingSteps || []);
+              const idx = existing.findIndex((s) => s.id === step.id);
+              return {
+                ...msg,
+                thinkingSteps: idx >= 0
+                  ? existing.map((s, i) => (i === idx ? step : s))
+                  : [...existing, step],
+              };
+            }),
           })),
 
         // Set stream controller for cancellation
@@ -147,7 +150,7 @@ export const useChatStore = create<ChatState>()(
           try {
             const response = await api.conversations.list({ limit: 50 });
             set({
-              conversations: response.data.conversations,
+              conversations: response.data.conversations ?? [],
               conversationsLoading: false,
             });
           } catch {

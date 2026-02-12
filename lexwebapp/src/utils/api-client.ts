@@ -118,10 +118,10 @@ export const api = {
 
   // Billing
   billing: {
-    getBalance: () => apiClient.get('/billing/balance'),
-    getSettings: () => apiClient.get('/billing/settings'),
+    getBalance: () => apiClient.get('/api/billing/balance'),
+    getSettings: () => apiClient.get('/api/billing/settings'),
     getHistory: (params?: { limit?: number; offset?: number; type?: string }) =>
-      apiClient.get('/billing/history', { params }),
+      apiClient.get('/api/billing/history', { params }),
     updateSettings: (data: {
       daily_limit_usd?: number;
       monthly_limit_usd?: number;
@@ -131,77 +131,77 @@ export const api = {
       notify_payment_failure?: boolean;
       notify_monthly_report?: boolean;
       low_balance_threshold_usd?: number;
-    }) => apiClient.put('/billing/settings', data),
-    getEmailPreferences: () => apiClient.get('/billing/email-preferences'),
+    }) => apiClient.put('/api/billing/settings', data),
+    getEmailPreferences: () => apiClient.get('/api/billing/email-preferences'),
     getInvoices: (params?: { limit?: number; offset?: number }) =>
-      apiClient.get('/billing/invoices', { params }),
+      apiClient.get('/api/billing/invoices', { params }),
     downloadInvoicePDF: (invoiceNumber: string) =>
-      apiClient.get(`/billing/invoices/${invoiceNumber}/pdf`, { responseType: 'blob' }),
-    testEmail: () => apiClient.post('/billing/test-email'),
+      apiClient.get(`/api/billing/invoices/${invoiceNumber}/pdf`, { responseType: 'blob' }),
+    testEmail: () => apiClient.post('/api/billing/test-email'),
     getStatistics: (period: string = '30d') =>
-      apiClient.get(`/billing/statistics?period=${period}`),
+      apiClient.get(`/api/billing/statistics?period=${period}`),
     getUsageChart: (days: number = 30) =>
-      apiClient.get(`/billing/usage-chart?days=${days}`),
-    getPaymentMethods: () => apiClient.get('/billing/payment-methods'),
+      apiClient.get(`/api/billing/usage-chart?days=${days}`),
+    getPaymentMethods: () => apiClient.get('/api/billing/payment-methods'),
     addPaymentMethod: (data: any) =>
-      apiClient.post('/billing/payment-methods', data),
+      apiClient.post('/api/billing/payment-methods', data),
     removePaymentMethod: (id: string) =>
-      apiClient.delete(`/billing/payment-methods/${id}`),
+      apiClient.delete(`/api/billing/payment-methods/${id}`),
     setPrimaryPaymentMethod: (id: string) =>
-      apiClient.put(`/billing/payment-methods/${id}/primary`, {}),
+      apiClient.put(`/api/billing/payment-methods/${id}/primary`, {}),
     upgradePlan: (planId: string) =>
-      apiClient.post('/billing/upgrade', { planId }),
-    getPricingInfo: () => apiClient.get('/billing/pricing-info'),
+      apiClient.post('/api/billing/upgrade', { planId }),
+    getPricingInfo: () => apiClient.get('/api/billing/pricing-info'),
   },
 
   // Payments
   payment: {
     createStripe: (data: { amount_usd: number; metadata?: any }) =>
-      apiClient.post('/billing/payment/stripe/create', data),
+      apiClient.post('/api/billing/payment/stripe/create', data),
     createFondy: (data: { amount_uah: number }) =>
-      apiClient.post('/billing/payment/fondy/create', data),
+      apiClient.post('/api/billing/payment/fondy/create', data),
     getStatus: (provider: string, paymentId: string) =>
-      apiClient.get(`/billing/payment/${provider}/${paymentId}/status`),
+      apiClient.get(`/api/billing/payment/${provider}/${paymentId}/status`),
   },
 
   // Team Management
   team: {
-    getMembers: () => apiClient.get('/team/members'),
-    getStats: () => apiClient.get('/team/stats'),
+    getMembers: () => apiClient.get('/api/team/members'),
+    getStats: () => apiClient.get('/api/team/stats'),
     inviteMember: (email: string, role: string) =>
-      apiClient.post('/team/invite', { email, role }),
+      apiClient.post('/api/team/invite', { email, role }),
     updateMember: (memberId: string, data: any) =>
-      apiClient.put(`/team/members/${memberId}`, data),
+      apiClient.put(`/api/team/members/${memberId}`, data),
     removeMember: (memberId: string) =>
-      apiClient.delete(`/team/members/${memberId}`),
+      apiClient.delete(`/api/team/members/${memberId}`),
     resendInvite: (memberId: string) =>
-      apiClient.post(`/team/members/${memberId}/resend-invite`, {}),
+      apiClient.post(`/api/team/members/${memberId}/resend-invite`, {}),
   },
 
   // Tools
   tools: {
     execute: (toolName: string, params: any) =>
-      apiClient.post(`/tools/${toolName}`, params),
+      apiClient.post(`/api/tools/${toolName}`, params),
   },
 
   // Conversations
   conversations: {
-    create: (title?: string) => apiClient.post('/conversations', { title }),
+    create: (title?: string) => apiClient.post('/api/conversations', { title }),
     list: (params?: { limit?: number; offset?: number }) =>
-      apiClient.get('/conversations', { params }),
-    get: (id: string) => apiClient.get(`/conversations/${id}`),
+      apiClient.get('/api/conversations', { params }),
+    get: (id: string) => apiClient.get(`/api/conversations/${id}`),
     rename: (id: string, title: string) =>
-      apiClient.put(`/conversations/${id}`, { title }),
-    delete: (id: string) => apiClient.delete(`/conversations/${id}`),
+      apiClient.put(`/api/conversations/${id}`, { title }),
+    delete: (id: string) => apiClient.delete(`/api/conversations/${id}`),
     addMessage: (conversationId: string, message: {
       role: 'user' | 'assistant';
       content: string;
       thinking_steps?: any[];
       decisions?: any[];
       citations?: any[];
-    }) => apiClient.post(`/conversations/${conversationId}/messages`, message),
+    }) => apiClient.post(`/api/conversations/${conversationId}/messages`, message),
     getMessages: (conversationId: string, params?: { limit?: number; offset?: number }) =>
-      apiClient.get(`/conversations/${conversationId}/messages`, { params }),
+      apiClient.get(`/api/conversations/${conversationId}/messages`, { params }),
   },
 
   // Documents
@@ -212,10 +212,10 @@ export const api = {
 
   // GDPR
   gdpr: {
-    requestExport: () => apiClient.post('/gdpr/export'),
-    getExport: (id: string) => apiClient.get(`/gdpr/export/${id}`),
+    requestExport: () => apiClient.post('/api/gdpr/export'),
+    getExport: (id: string) => apiClient.get(`/api/gdpr/export/${id}`),
     requestDeletion: (confirmation: string) =>
-      apiClient.post('/gdpr/delete', { confirmation }),
-    listRequests: () => apiClient.get('/gdpr/requests'),
+      apiClient.post('/api/gdpr/delete', { confirmation }),
+    listRequests: () => apiClient.get('/api/gdpr/requests'),
   },
 };
