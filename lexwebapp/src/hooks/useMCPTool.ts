@@ -42,7 +42,7 @@ function extractEvidenceFromToolResult(
   const documents: VaultDocument[] = [];
 
   const parsed = parseToolResultContent(rawResult);
-  if (!parsed) return { decisions, citations };
+  if (!parsed) return { decisions, citations, documents };
 
   // ---- Court case tools ----
   const courtTools = [
@@ -54,6 +54,9 @@ function extractEvidenceFromToolResult(
     'find_similar_fact_pattern_cases',
     'compare_practice_pro_contra',
     'get_court_decision',
+    'get_document_text',
+    'get_legal_advice',
+    'count_cases_by_party',
   ];
   if (courtTools.some((t) => toolName.includes(t) || toolName === t)) {
     // source_case (single)
@@ -78,7 +81,8 @@ function extractEvidenceFromToolResult(
         number: c.cause_num || c.case_number || c.number || 'N/A',
         court: c.court_code || c.court || '',
         date: c.adjudication_date || c.date || '',
-        summary: c.title || c.resolution || c.summary || c.similarity_reason || '',
+        summary: c.title || c.resolution || c.summary || c.similarity_reason
+          || (Array.isArray(c.snippets) ? c.snippets.join(' ') : '') || '',
         relevance: c.similarity
           ? Math.round(c.similarity * 100)
           : c.relevance
@@ -143,6 +147,7 @@ function extractEvidenceFromToolResult(
     'search_legislation',
     'get_legislation_article',
     'get_legislation_section',
+    'search_legislation_semantic',
   ];
   if (legislationTools.some((t) => toolName.includes(t) || toolName === t)) {
     // Single article result
@@ -565,6 +570,12 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
 
             // Extract decisions & citations from tool results
             const evidence = extractEvidenceFromToolResult(data.tool, data.result);
+            console.log('[AIChat] Evidence extraction', {
+              tool: data.tool,
+              decisions: evidence.decisions.length,
+              citations: evidence.citations.length,
+              documents: evidence.documents.length,
+            });
             if (evidence.decisions.length > 0) {
               accumulatedDecisions.current.push(...evidence.decisions);
             }

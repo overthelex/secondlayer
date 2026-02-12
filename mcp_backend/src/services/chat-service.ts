@@ -173,16 +173,18 @@ export class ChatService {
 
           const summarized = this.summarizeResult(toolResult);
 
+          // Send the FULL result to the frontend for evidence extraction (decisions, citations).
+          // The summarized version is only used for the LLM conversation to save tokens.
           yield {
             type: 'tool_result',
             data: {
               tool: call.name,
-              result: summarized,
+              result: toolResult,
               cached,
             },
           };
 
-          // Append assistant tool_calls + tool result to messages
+          // Append assistant tool_calls + tool result to messages (summarized for LLM)
           messages.push({
             role: 'assistant',
             content: response.content || '',
