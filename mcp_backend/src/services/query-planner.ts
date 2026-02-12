@@ -350,6 +350,44 @@ export class QueryPlanner {
       intent = 'two_sided_practice';
       domains.push('court');
       sections = [SectionType.COURT_REASONING, SectionType.DECISION];
+    } else if (
+      lowerQuery.includes('депутат') ||
+      lowerQuery.includes('народн') ||
+      lowerQuery.includes('парламент') ||
+      lowerQuery.includes('верховна рада') ||
+      lowerQuery.includes('верховної ради') ||
+      lowerQuery.includes('верховну раду') ||
+      lowerQuery.includes('верховная рада') ||
+      lowerQuery.includes('голосуванн') ||
+      lowerQuery.includes('голосован') ||
+      lowerQuery.includes('законопроект') ||
+      lowerQuery.includes('законопроєкт') ||
+      lowerQuery.includes('фракці') ||
+      lowerQuery.includes('фракци') ||
+      lowerQuery.includes('комітет') ||
+      lowerQuery.includes('комитет')
+    ) {
+      intent = 'parliament_search';
+      domains.push('parliament');
+    } else if (
+      lowerQuery.includes('єдрпоу') ||
+      lowerQuery.includes('едрпоу') ||
+      lowerQuery.includes('эдрпоу') ||
+      lowerQuery.includes('бенефіціар') ||
+      lowerQuery.includes('бенефициар') ||
+      lowerQuery.includes('реєстр підприємств') ||
+      lowerQuery.includes('реестр предприятий') ||
+      (lowerQuery.includes('юридичн') && lowerQuery.includes('особ')) ||
+      (lowerQuery.includes('юридическ') && lowerQuery.includes('лиц')) ||
+      lowerQuery.includes('підприємств') ||
+      lowerQuery.includes('предприяти') ||
+      lowerQuery.includes('засновник') ||
+      lowerQuery.includes('учредител') ||
+      lowerQuery.includes('боржник') ||
+      lowerQuery.includes('должник')
+    ) {
+      intent = 'registry_search';
+      domains.push('registry');
     } else if (lowerQuery.includes('споживач') || lowerQuery.includes('затримка') || lowerQuery.includes('доставка')) {
       intent = 'consumer_penalty_delay';
       domains.push('court', 'npa');
