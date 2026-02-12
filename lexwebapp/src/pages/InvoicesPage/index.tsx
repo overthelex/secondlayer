@@ -17,21 +17,20 @@ import {
   AlertCircle,
   Plus,
   Eye,
+  Loader2,
 } from 'lucide-react';
 import { useInvoices, useDownloadInvoicePDF, useSendInvoice } from '../../hooks/queries';
-import { Modal } from '../../components/ui/Modal';
-import { Spinner } from '../../components/ui/Spinner';
 import { GenerateInvoiceModal } from '../../components/invoices/GenerateInvoiceModal';
 import { InvoiceDetailModal } from '../../components/invoices/InvoiceDetailModal';
 import { Invoice } from '../../types/models';
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-700',
-  sent: 'bg-blue-100 text-blue-700',
-  paid: 'bg-green-100 text-green-700',
-  overdue: 'bg-red-100 text-red-700',
-  cancelled: 'bg-gray-100 text-gray-500',
-  void: 'bg-gray-100 text-gray-500',
+  draft: 'bg-claude-sidebar text-claude-subtext border border-claude-border',
+  sent: 'bg-blue-50 text-blue-700 border border-blue-200',
+  paid: 'bg-green-50 text-green-700 border border-green-200',
+  overdue: 'bg-red-50 text-red-700 border border-red-200',
+  cancelled: 'bg-claude-sidebar text-claude-subtext/60 border border-claude-border',
+  void: 'bg-claude-sidebar text-claude-subtext/60 border border-claude-border',
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -44,12 +43,12 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  sent: 'Sent',
-  paid: 'Paid',
-  overdue: 'Overdue',
-  cancelled: 'Cancelled',
-  void: 'Void',
+  draft: 'Чернетка',
+  sent: 'Надіслано',
+  paid: 'Оплачено',
+  overdue: 'Прострочено',
+  cancelled: 'Скасовано',
+  void: 'Анульовано',
 };
 
 export function InvoicesPage() {
@@ -59,7 +58,6 @@ export function InvoicesPage() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
-  // Build filters
   const filters = {
     status: statusFilter !== 'all' ? statusFilter : undefined,
     date_from: dateFrom || undefined,
@@ -87,8 +85,7 @@ export function InvoicesPage() {
 
   const handleSend = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Send this invoice to the client?')) return;
-
+    if (!confirm('Надіслати цей рахунок клієнту?')) return;
     try {
       await sendInvoice.mutateAsync(id);
     } catch (err) {
@@ -100,250 +97,269 @@ export function InvoicesPage() {
     setSelectedInvoice(invoice);
   };
 
-  // Stats
   const stats = {
     total,
     draft: invoices.filter((i) => i.status === 'draft').length,
     sent: invoices.filter((i) => i.status === 'sent').length,
     paid: invoices.filter((i) => i.status === 'paid').length,
-    totalAmount: invoices.reduce((sum, i) => sum + i.total_usd, 0),
+    totalAmount: invoices.reduce((sum, i) => sum + Number(i.total_usd || 0), 0),
     paidAmount: invoices
       .filter((i) => i.status === 'paid')
-      .reduce((sum, i) => sum + i.total_usd, 0),
+      .reduce((sum, i) => sum + Number(i.total_usd || 0), 0),
     outstanding: invoices
       .filter((i) => ['sent', 'overdue'].includes(i.status))
-      .reduce((sum, i) => sum + (i.total_usd - i.amount_paid_usd), 0),
+      .reduce((sum, i) => sum + (Number(i.total_usd || 0) - Number(i.amount_paid_usd || 0)), 0),
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+    <div className="flex-1 h-full overflow-y-auto bg-claude-bg p-4 md:p-8 lg:p-12 pb-32">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="space-y-6"
+        >
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
-              <p className="mt-1 text-sm text-gray-600">
-                Generate and manage client invoices
+              <h1 className="text-3xl md:text-4xl font-serif text-claude-text font-medium tracking-tight mb-2">
+                Рахунки
+              </h1>
+              <p className="text-claude-subtext font-sans text-sm">
+                Створення та управління рахунками клієнтів
               </p>
             </div>
             <button
               onClick={() => setShowGenerateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-xl hover:bg-claude-accent/90 transition-colors font-sans text-sm shadow-sm"
             >
-              <Plus size={20} />
-              Generate Invoice
+              <Plus size={18} />
+              Створити рахунок
             </button>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-blue-700 mb-1">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white rounded-xl border border-claude-border p-4">
+              <div className="flex items-center gap-2 text-claude-subtext mb-2">
                 <FileText size={16} />
-                <span className="text-sm font-medium">Total Invoices</span>
+                <span className="text-xs font-sans font-medium uppercase tracking-wide">Усього</span>
               </div>
-              <p className="text-2xl font-bold text-blue-900">{stats.total}</p>
+              <p className="text-2xl font-serif font-medium text-claude-text">{stats.total}</p>
             </div>
 
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-green-700 mb-1">
+            <div className="bg-white rounded-xl border border-claude-border p-4">
+              <div className="flex items-center gap-2 text-claude-subtext mb-2">
                 <DollarSign size={16} />
-                <span className="text-sm font-medium">Total Billed</span>
+                <span className="text-xs font-sans font-medium uppercase tracking-wide">Виставлено</span>
               </div>
-              <p className="text-2xl font-bold text-green-900">
+              <p className="text-2xl font-serif font-medium text-claude-text">
                 ${stats.totalAmount.toFixed(2)}
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-purple-700 mb-1">
+            <div className="bg-white rounded-xl border border-claude-border p-4">
+              <div className="flex items-center gap-2 text-green-600 mb-2">
                 <CheckCircle size={16} />
-                <span className="text-sm font-medium">Paid</span>
+                <span className="text-xs font-sans font-medium uppercase tracking-wide">Оплачено</span>
               </div>
-              <p className="text-2xl font-bold text-purple-900">
+              <p className="text-2xl font-serif font-medium text-green-700">
                 ${stats.paidAmount.toFixed(2)}
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-amber-700 mb-1">
+            <div className="bg-white rounded-xl border border-claude-border p-4">
+              <div className="flex items-center gap-2 text-amber-600 mb-2">
                 <Clock size={16} />
-                <span className="text-sm font-medium">Outstanding</span>
+                <span className="text-xs font-sans font-medium uppercase tracking-wide">Очікується</span>
               </div>
-              <p className="text-2xl font-bold text-amber-900">
+              <p className="text-2xl font-serif font-medium text-amber-700">
                 ${stats.outstanding.toFixed(2)}
               </p>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Status Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
+          {/* Filters */}
+          <div className="bg-white rounded-xl border border-claude-border p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-sans font-medium text-claude-subtext mb-1.5 uppercase tracking-wide">
+                  Статус
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-claude-bg border border-claude-border rounded-lg text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent"
+                >
+                  <option value="all">Усі статуси</option>
+                  <option value="draft">Чернетка</option>
+                  <option value="sent">Надіслано</option>
+                  <option value="paid">Оплачено</option>
+                  <option value="overdue">Прострочено</option>
+                  <option value="cancelled">Скасовано</option>
+                </select>
+              </div>
 
-            {/* Date From */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                From Date
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
+              <div>
+                <label className="block text-xs font-sans font-medium text-claude-subtext mb-1.5 uppercase tracking-wide">
+                  Дата від
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 bg-claude-bg border border-claude-border rounded-lg text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent"
+                />
+              </div>
 
-            {/* Date To */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                To Date
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
+              <div>
+                <label className="block text-xs font-sans font-medium text-claude-subtext mb-1.5 uppercase tracking-wide">
+                  Дата до
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 bg-claude-bg border border-claude-border rounded-lg text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent"
+                />
+              </div>
 
-            {/* Clear Filters */}
-            <div className="flex items-end">
-              <button
-                onClick={() => {
-                  setStatusFilter('all');
-                  setDateFrom('');
-                  setDateTo('');
-                }}
-                className="w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Clear Filters
-              </button>
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  className="w-full px-4 py-2 text-claude-subtext bg-claude-bg border border-claude-border rounded-lg hover:text-claude-text hover:bg-claude-sidebar transition-colors text-sm font-sans"
+                >
+                  Скинути
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* Invoices List */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
+        {/* Loading */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-claude-accent animate-spin" />
           </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700">
-            <AlertCircle size={20} />
-            <span>{(error as any).message || 'Failed to load invoices'}</span>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-2 text-red-700 text-sm font-sans">
+            <AlertCircle size={18} />
+            <span>{(error as any).message || 'Не вдалося завантажити рахунки'}</span>
           </div>
-        ) : invoices.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No invoices found
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && invoices.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-16"
+          >
+            <div className="w-16 h-16 bg-claude-sidebar rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText size={24} className="text-claude-subtext" />
+            </div>
+            <h3 className="text-lg font-serif text-claude-text mb-2">
+              Рахунків не знайдено
             </h3>
-            <p className="text-gray-600 mb-4">
-              Generate your first invoice from time entries
+            <p className="text-claude-subtext font-sans text-sm max-w-md mx-auto mb-4">
+              Створіть перший рахунок на основі записів часу
             </p>
             <button
               onClick={() => setShowGenerateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-xl hover:bg-claude-accent/90 transition-colors text-sm font-sans"
             >
-              <Plus size={20} />
-              Generate Invoice
+              <Plus size={18} />
+              Створити рахунок
             </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          </motion.div>
+        )}
+
+        {/* Invoices Table */}
+        {!isLoading && !error && invoices.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="bg-white rounded-xl border border-claude-border overflow-hidden shadow-sm"
+          >
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-claude-sidebar border-b border-claude-border">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Invoice #
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Рахунок №
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Client / Matter
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Клієнт / Справа
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Issue Date
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Дата
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Due Date
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Термін оплати
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Сума
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Paid
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Оплачено
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                    <th className="px-5 py-3 text-left text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Статус
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                    <th className="px-5 py-3 text-right text-xs font-sans font-medium text-claude-subtext uppercase tracking-wide">
+                      Дії
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {invoices.map((invoice) => (
+                <tbody className="divide-y divide-claude-border">
+                  {invoices.map((invoice, index) => (
                     <motion.tr
                       key={invoice.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      transition={{ delay: index * 0.03 }}
+                      className="hover:bg-claude-bg/50 transition-colors cursor-pointer group"
                       onClick={() => handleViewDetails(invoice)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="font-sans font-medium text-claude-text text-sm">
                           {invoice.invoice_number}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="text-sm font-sans">
+                          <div className="font-medium text-claude-text">
+                            {invoice.client_name || 'Невідомо'}
+                          </div>
+                          <div className="text-claude-subtext text-xs">
+                            {invoice.matter_name || 'Невідомо'}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm">
-                          <div className="font-medium text-gray-900">
-                            {invoice.client_name || 'Unknown'}
-                          </div>
-                          <div className="text-gray-500">
-                            {invoice.matter_name || 'Unknown'}
-                          </div>
-                        </div>
+                      <td className="px-5 py-4 whitespace-nowrap text-sm text-claude-subtext font-sans">
+                        {new Date(invoice.issue_date).toLocaleDateString('uk-UA')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {new Date(invoice.issue_date).toLocaleDateString()}
+                      <td className="px-5 py-4 whitespace-nowrap text-sm text-claude-subtext font-sans">
+                        {new Date(invoice.due_date).toLocaleDateString('uk-UA')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {new Date(invoice.due_date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                      <td className="px-5 py-4 whitespace-nowrap text-sm font-sans font-medium text-claude-text">
                         ${invoice.total_usd.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      <td className="px-5 py-4 whitespace-nowrap text-sm font-sans text-claude-subtext">
                         ${invoice.amount_paid_usd.toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-4 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-sans font-medium ${
                             STATUS_COLORS[invoice.status]
                           }`}
                         >
@@ -351,30 +367,30 @@ export function InvoicesPage() {
                           {STATUS_LABELS[invoice.status]}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-5 py-4 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleViewDetails(invoice);
                             }}
-                            className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded"
-                            title="View details"
+                            className="p-1.5 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
+                            title="Деталі"
                           >
                             <Eye size={16} />
                           </button>
                           <button
                             onClick={(e) => handleDownloadPDF(invoice, e)}
-                            className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
-                            title="Download PDF"
+                            className="p-1.5 text-claude-subtext hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Завантажити PDF"
                           >
                             <Download size={16} />
                           </button>
                           {invoice.status === 'draft' && (
                             <button
                               onClick={(e) => handleSend(invoice.id, e)}
-                              className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
-                              title="Send to client"
+                              className="p-1.5 text-claude-subtext hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Надіслати клієнту"
                             >
                               <Send size={16} />
                             </button>
@@ -386,7 +402,7 @@ export function InvoicesPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
 

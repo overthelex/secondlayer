@@ -2,198 +2,165 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
-  Filter,
   ChevronDown,
   ChevronUp,
-  Download,
-  Save,
   LayoutGrid,
   List,
   ExternalLink,
   Gavel,
-  X } from
-'lucide-react';
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+import { mcpService } from '../services';
+import showToast from '../utils/toast';
+
 interface SearchFilters {
+  query: string;
   caseNumber: string;
   court: string;
-  judge: string;
   dateFrom: string;
   dateTo: string;
-  category: string;
-  parties: string;
-  keywords: string;
-  decisionType: string;
-  instance: string;
-  legalBasis: string;
+  procedureCode: string;
+  courtLevel: string;
 }
-interface Decision {
-  id: string;
-  caseNumber: string;
+
+interface CourtDecision {
+  doc_id: number;
   court: string;
-  judge: string;
+  chamber: string;
   date: string;
-  category: string;
-  parties: string;
-  summary: string;
-  decisionType: string;
-  instance: string;
-  relevance: number;
+  case_number: string;
+  url: string;
+  snippets: string[];
 }
-const mockDecisions: Decision[] = [
-{
-  id: '1',
-  caseNumber: '910/12345/23',
-  court: 'Верховний Суд КГС',
-  judge: 'Іванов П.С.',
-  date: '2023-05-15',
-  category: 'Господарські спори',
-  parties: 'ТОВ "Альфа" vs ТОВ "Бета"',
-  summary:
-  'Постанова щодо застосування строків позовної давності у спорах про стягнення неустойки за договорами поставки.',
-  decisionType: 'Постанова',
-  instance: 'Касаційна',
-  relevance: 95
-},
-{
-  id: '2',
-  caseNumber: '910/23456/23',
-  court: 'Верховний Суд КГС',
-  judge: 'Петрова А.В.',
-  date: '2023-06-20',
-  category: 'Податкові спори',
-  parties: 'ТОВ "Гамма" vs ДПС',
-  summary:
-  'Постанова про визнання недійсним податкового повідомлення-рішення щодо донарахування податку на прибуток.',
-  decisionType: 'Постанова',
-  instance: 'Касаційна',
-  relevance: 88
-},
-{
-  id: '3',
-  caseNumber: '910/34567/23',
-  court: 'Київський апеляційний господарський суд',
-  judge: 'Сидоров М.О.',
-  date: '2023-07-10',
-  category: 'Корпоративні спори',
-  parties: 'Акціонер Іванов І.І. vs ПАТ "Дельта"',
-  summary:
-  'Постанова про визнання недійсним рішення загальних зборів акціонерів щодо реорганізації товариства.',
-  decisionType: 'Постанова',
-  instance: 'Апеляційна',
-  relevance: 82
-},
-{
-  id: '4',
-  caseNumber: '910/45678/23',
-  court: 'Господарський суд м. Києва',
-  judge: 'Кузнецова О.Д.',
-  date: '2023-08-05',
-  category: 'Договірні спори',
-  parties: 'ТОВ "Епсілон" vs ТОВ "Дзета"',
-  summary:
-  "Рішення про стягнення заборгованості за договором підряду та пені за прострочення виконання зобов'язань.",
-  decisionType: 'Рішення',
-  instance: 'Перша',
-  relevance: 76
-},
-{
-  id: '5',
-  caseNumber: '910/56789/23',
-  court: 'Верховний Суд КГС',
-  judge: 'Іванов П.С.',
-  date: '2023-09-12',
-  category: 'Банкрутство',
-  parties: 'Кредитор ПАТ "Банк" vs Боржник ТОВ "Ета"',
-  summary:
-  'Постанова про визнання недійсним правочину щодо відчуження майна боржника в процедурі банкрутства.',
-  decisionType: 'Постанова',
-  instance: 'Касаційна',
-  relevance: 91
-}];
 
-const categories = [
-'Всі категорії',
-'Господарські спори',
-'Податкові спори',
-'Корпоративні спори',
-'Договірні спори',
-'Банкрутство',
-'Інтелектуальна власність',
-'Земельні спори'];
+const procedureCodes = [
+  { value: 'gpc', label: 'Господарський (ГПК)' },
+  { value: 'cpc', label: 'Цивільний (ЦПК)' },
+  { value: 'cac', label: 'Адміністративний (КАС)' },
+  { value: 'crpc', label: 'Кримінальний (КПК)' },
+];
 
-const decisionTypes = [
-'Всі типи',
-'Постанова',
-'Рішення',
-'Ухвала',
-'Окрема думка'];
+const courtLevels = [
+  { value: '', label: 'Всі рівні' },
+  { value: 'SC', label: 'Верховний Суд' },
+  { value: 'AC', label: 'Апеляційні суди' },
+  { value: 'FC', label: 'Суди першої інстанції' },
+];
 
-const instances = ['Всі інстанції', 'Перша', 'Апеляційна', 'Касаційна'];
 export function DecisionsSearchPage() {
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [viewMode, setViewMode] = useState<'comfortable' | 'compact'>(
-    'comfortable'
-  );
+  const [viewMode, setViewMode] = useState<'comfortable' | 'compact'>('comfortable');
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [results, setResults] = useState<CourtDecision[]>([]);
+  const [totalResults, setTotalResults] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
   const [filters, setFilters] = useState<SearchFilters>({
+    query: '',
     caseNumber: '',
     court: '',
-    judge: '',
     dateFrom: '',
     dateTo: '',
-    category: 'Всі категорії',
-    parties: '',
-    keywords: '',
-    decisionType: 'Всі типи',
-    instance: 'Всі інстанції',
-    legalBasis: ''
+    procedureCode: 'gpc',
+    courtLevel: '',
   });
-  const [results, setResults] = useState<Decision[]>(mockDecisions);
-  const handleSearch = () => {
-    console.log('Searching with filters:', filters);
+
+  const handleSearch = async () => {
+    if (!filters.query.trim() && !filters.caseNumber.trim()) {
+      showToast.error('Введіть пошуковий запит або номер справи');
+      return;
+    }
+
+    setIsSearching(true);
+    setError(null);
+    setHasSearched(true);
+
+    try {
+      const params: any = {
+        procedure_code: filters.procedureCode,
+        query: filters.query || filters.caseNumber,
+        limit: 20,
+      };
+
+      if (filters.courtLevel) {
+        params.court_level = filters.courtLevel;
+      }
+
+      if (filters.dateFrom || filters.dateTo) {
+        params.time_range = {};
+        if (filters.dateFrom) params.time_range.from = filters.dateFrom;
+        if (filters.dateTo) params.time_range.to = filters.dateTo;
+      }
+
+      const response = await mcpService.callTool('search_supreme_court_practice', params);
+
+      // Parse response — result is in content[0].text as JSON string
+      let parsed: any = null;
+      if (response?.result?.content?.[0]?.text) {
+        parsed = JSON.parse(response.result.content[0].text);
+      }
+
+      if (parsed?.results) {
+        setResults(parsed.results);
+        setTotalResults(parsed.total_returned || parsed.results.length);
+      } else {
+        setResults([]);
+        setTotalResults(0);
+      }
+    } catch (err: any) {
+      console.error('Search failed:', err);
+      setError(err.message || 'Помилка пошуку');
+      setResults([]);
+      setTotalResults(0);
+    } finally {
+      setIsSearching(false);
+    }
   };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isSearching) {
+      handleSearch();
+    }
+  };
+
   const updateFilter = (key: keyof SearchFilters, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value
-    }));
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
+
+  const resetFilters = () => {
+    setFilters({
+      query: '',
+      caseNumber: '',
+      court: '',
+      dateFrom: '',
+      dateTo: '',
+      procedureCode: 'gpc',
+      courtLevel: '',
+    });
+    setResults([]);
+    setHasSearched(false);
+    setError(null);
+  };
+
   return (
     <div className="flex-1 h-full overflow-y-auto bg-claude-bg p-4 md:p-8 lg:p-12 pb-32">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <motion.div
-          initial={{
-            opacity: 0,
-            y: 20
-          }}
-          animate={{
-            opacity: 1,
-            y: 0
-          }}
-          transition={{
-            duration: 0.5,
-            ease: [0.22, 1, 0.36, 1]
-          }}>
-
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
             <div>
               <h1 className="text-3xl md:text-4xl font-serif text-claude-text font-medium tracking-tight mb-2">
                 Пошук судових рішень
               </h1>
               <p className="text-claude-subtext font-sans text-sm">
-                Розширений пошук в базі судових рішень України
+                Пошук в базі судових рішень України через ZakonOnline
               </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-3 py-2 text-sm font-sans font-medium text-claude-text bg-white border border-claude-border rounded-xl hover:bg-claude-bg transition-colors shadow-sm">
-                <Save size={16} />
-                Зберегти
-              </button>
-              <button className="flex items-center gap-2 px-3 py-2 text-sm font-sans font-medium text-claude-text bg-white border border-claude-border rounded-xl hover:bg-claude-bg transition-colors shadow-sm">
-                <Download size={16} />
-                Експорт
-              </button>
             </div>
           </div>
 
@@ -201,7 +168,38 @@ export function DecisionsSearchPage() {
           <div className="bg-white rounded-2xl border border-claude-border shadow-sm p-6 space-y-4">
             {/* Main Search */}
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-claude-text font-sans mb-2">
+                  Пошуковий запит
+                </label>
+                <input
+                  type="text"
+                  value={filters.query}
+                  onChange={(e) => updateFilter('query', e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="позовна давність, неустойка, відшкодування збитків..."
+                  className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-claude-text font-sans mb-2">
+                    Процесуальний кодекс
+                  </label>
+                  <select
+                    value={filters.procedureCode}
+                    onChange={(e) => updateFilter('procedureCode', e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                  >
+                    {procedureCodes.map((pc) => (
+                      <option key={pc.value} value={pc.value}>
+                        {pc.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-claude-text font-sans mb-2">
                     Номер справи
@@ -210,100 +208,49 @@ export function DecisionsSearchPage() {
                     type="text"
                     value={filters.caseNumber}
                     onChange={(e) => updateFilter('caseNumber', e.target.value)}
+                    onKeyDown={handleKeyDown}
                     placeholder="910/12345/23"
-                    className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
+                    className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                  />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                    Суд
-                  </label>
-                  <input
-                    type="text"
-                    value={filters.court}
-                    onChange={(e) => updateFilter('court', e.target.value)}
-                    placeholder="Верховний Суд"
-                    className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                  Ключові слова
-                </label>
-                <input
-                  type="text"
-                  value={filters.keywords}
-                  onChange={(e) => updateFilter('keywords', e.target.value)}
-                  placeholder="позовна давність, неустойка, договір..."
-                  className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
               </div>
             </div>
 
             {/* Advanced Filters Toggle */}
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2 text-sm font-medium text-claude-accent hover:text-[#C66345] transition-colors font-sans">
-
-              {showAdvanced ?
-              <ChevronUp size={16} /> :
-
-              <ChevronDown size={16} />
-              }
+              className="flex items-center gap-2 text-sm font-medium text-claude-accent hover:text-[#C66345] transition-colors font-sans"
+            >
+              {showAdvanced ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               Розширені фільтри
             </button>
 
             {/* Advanced Filters */}
             <AnimatePresence>
-              {showAdvanced &&
-              <motion.div
-                initial={{
-                  height: 0,
-                  opacity: 0
-                }}
-                animate={{
-                  height: 'auto',
-                  opacity: 1
-                }}
-                exit={{
-                  height: 0,
-                  opacity: 0
-                }}
-                transition={{
-                  duration: 0.3
-                }}
-                className="overflow-hidden space-y-4 pt-4 border-t border-claude-border">
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {showAdvanced && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden space-y-4 pt-4 border-t border-claude-border"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Суддя
+                        Рівень суду
                       </label>
-                      <input
-                      type="text"
-                      value={filters.judge}
-                      onChange={(e) => updateFilter('judge', e.target.value)}
-                      placeholder="Прізвище судді"
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Сторони
-                      </label>
-                      <input
-                      type="text"
-                      value={filters.parties}
-                      onChange={(e) =>
-                      updateFilter('parties', e.target.value)
-                      }
-                      placeholder="Назва організації або ПІБ"
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
+                      <select
+                        value={filters.courtLevel}
+                        onChange={(e) => updateFilter('courtLevel', e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                      >
+                        {courtLevels.map((cl) => (
+                          <option key={cl.value} value={cl.value}>
+                            {cl.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
@@ -311,13 +258,11 @@ export function DecisionsSearchPage() {
                         Дата від
                       </label>
                       <input
-                      type="date"
-                      value={filters.dateFrom}
-                      onChange={(e) =>
-                      updateFilter('dateFrom', e.target.value)
-                      }
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
+                        type="date"
+                        value={filters.dateFrom}
+                        onChange={(e) => updateFilter('dateFrom', e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                      />
                     </div>
 
                     <div>
@@ -325,238 +270,173 @@ export function DecisionsSearchPage() {
                         Дата до
                       </label>
                       <input
-                      type="date"
-                      value={filters.dateTo}
-                      onChange={(e) => updateFilter('dateTo', e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Категорія справи
-                      </label>
-                      <select
-                      value={filters.category}
-                      onChange={(e) =>
-                      updateFilter('category', e.target.value)
-                      }
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
-
-                        {categories.map((cat) =>
-                      <option key={cat} value={cat}>
-                            {cat}
-                          </option>
-                      )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Тип рішення
-                      </label>
-                      <select
-                      value={filters.decisionType}
-                      onChange={(e) =>
-                      updateFilter('decisionType', e.target.value)
-                      }
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
-
-                        {decisionTypes.map((type) =>
-                      <option key={type} value={type}>
-                            {type}
-                          </option>
-                      )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Інстанція
-                      </label>
-                      <select
-                      value={filters.instance}
-                      onChange={(e) =>
-                      updateFilter('instance', e.target.value)
-                      }
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
-
-                        {instances.map((inst) =>
-                      <option key={inst} value={inst}>
-                            {inst}
-                          </option>
-                      )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-claude-text font-sans mb-2">
-                        Правова основа
-                      </label>
-                      <input
-                      type="text"
-                      value={filters.legalBasis}
-                      onChange={(e) =>
-                      updateFilter('legalBasis', e.target.value)
-                      }
-                      placeholder="ст. 617 ЦКУ"
-                      className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans" />
-
+                        type="date"
+                        value={filters.dateTo}
+                        onChange={(e) => updateFilter('dateTo', e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                      />
                     </div>
                   </div>
                 </motion.div>
-              }
+              )}
             </AnimatePresence>
 
             {/* Search Button */}
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleSearch}
-                className="flex items-center gap-2 px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
-
-                <Search size={18} />
-                Знайти рішення
+                disabled={isSearching}
+                className="flex items-center gap-2 px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSearching ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Search size={18} />
+                )}
+                {isSearching ? 'Пошук...' : 'Знайти рішення'}
               </button>
               <button
-                onClick={() =>
-                setFilters({
-                  caseNumber: '',
-                  court: '',
-                  judge: '',
-                  dateFrom: '',
-                  dateTo: '',
-                  category: 'Всі категорії',
-                  parties: '',
-                  keywords: '',
-                  decisionType: 'Всі типи',
-                  instance: 'Всі інстанції',
-                  legalBasis: ''
-                })
-                }
-                className="px-4 py-3 text-claude-text hover:bg-claude-bg rounded-xl transition-colors font-sans font-medium">
-
+                onClick={resetFilters}
+                className="px-4 py-3 text-claude-text hover:bg-claude-bg rounded-xl transition-colors font-sans font-medium"
+              >
                 Скинути
               </button>
             </div>
           </div>
         </motion.div>
 
+        {/* Error */}
+        {error && (
+          <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-sans">
+            <AlertCircle size={18} />
+            {error}
+          </div>
+        )}
+
         {/* Results Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-serif text-claude-text font-medium">
-              Результати пошуку
-            </h2>
-            <span className="text-sm text-claude-subtext font-sans">
-              {results.length} рішень знайдено
-            </span>
+        {hasSearched && !error && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-serif text-claude-text font-medium">
+                Результати пошуку
+              </h2>
+              <span className="text-sm text-claude-subtext font-sans">
+                {isSearching ? 'Пошук...' : `${totalResults} рішень знайдено`}
+              </span>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex bg-white border border-claude-border rounded-xl p-1">
+              <button
+                onClick={() => setViewMode('comfortable')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'comfortable' ? 'bg-claude-accent text-white' : 'text-claude-subtext hover:text-claude-text'}`}
+                title="Комфортний вигляд"
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('compact')}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'compact' ? 'bg-claude-accent text-white' : 'text-claude-subtext hover:text-claude-text'}`}
+                title="Компактний вигляд"
+              >
+                <List size={18} />
+              </button>
+            </div>
           </div>
+        )}
 
-          {/* View Mode Toggle */}
-          <div className="flex bg-white border border-claude-border rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('comfortable')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'comfortable' ? 'bg-claude-accent text-white' : 'text-claude-subtext hover:text-claude-text'}`}
-              title="Комфортний вигляд">
-
-              <LayoutGrid size={18} />
-            </button>
-            <button
-              onClick={() => setViewMode('compact')}
-              className={`p-2 rounded-lg transition-colors ${viewMode === 'compact' ? 'bg-claude-accent text-white' : 'text-claude-subtext hover:text-claude-text'}`}
-              title="Компактний вигляд">
-
-              <List size={18} />
-            </button>
+        {/* Loading */}
+        {isSearching && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 size={40} className="text-claude-accent animate-spin mb-4" />
+            <p className="text-claude-subtext font-sans text-sm">Шукаємо судові рішення...</p>
           </div>
-        </div>
+        )}
+
+        {/* Empty State */}
+        {hasSearched && !isSearching && results.length === 0 && !error && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Gavel size={48} className="text-claude-border mb-4" />
+            <h3 className="text-lg font-serif text-claude-text mb-2">Нічого не знайдено</h3>
+            <p className="text-claude-subtext font-sans text-sm max-w-md">
+              Спробуйте змінити пошуковий запит або розширити фільтри
+            </p>
+          </div>
+        )}
 
         {/* Results */}
-        <div className={viewMode === 'compact' ? 'space-y-2' : 'space-y-3'}>
-          {results.map((decision, index) =>
-          <motion.div
-            key={decision.id}
-            initial={{
-              opacity: 0,
-              y: 20
-            }}
-            animate={{
-              opacity: 1,
-              y: 0
-            }}
-            transition={{
-              duration: 0.4,
-              delay: index * 0.05
-            }}
-            className={`group bg-white rounded-2xl border border-claude-border shadow-sm hover:shadow-md hover:border-claude-subtext/30 transition-all cursor-pointer ${viewMode === 'compact' ? 'p-3' : 'p-5'}`}>
+        {!isSearching && results.length > 0 && (
+          <div className={viewMode === 'compact' ? 'space-y-2' : 'space-y-3'}>
+            {results.map((decision, index) => (
+              <motion.a
+                key={decision.doc_id}
+                href={decision.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: index * 0.05 }}
+                className={`group block bg-white rounded-2xl border border-claude-border shadow-sm hover:shadow-md hover:border-claude-subtext/30 transition-all ${viewMode === 'compact' ? 'p-3' : 'p-5'}`}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  {viewMode === 'comfortable' && (
+                    <div className="w-12 h-12 rounded-xl bg-claude-sidebar border-2 border-white shadow-sm flex items-center justify-center flex-shrink-0">
+                      <Gavel size={20} className="text-claude-subtext" />
+                    </div>
+                  )}
 
-              <div className="flex items-start gap-4">
-                {/* Icon */}
-                {viewMode === 'comfortable' &&
-              <div className="w-12 h-12 rounded-xl bg-claude-sidebar border-2 border-white shadow-sm flex items-center justify-center flex-shrink-0">
-                    <Gavel size={20} className="text-claude-subtext" />
-                  </div>
-              }
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3
-                        className={`font-serif font-medium text-claude-text group-hover:text-claude-accent transition-colors ${viewMode === 'compact' ? 'text-base' : 'text-lg'}`}>
-
-                          {decision.caseNumber}
-                        </h3>
-                        <span className="px-2 py-0.5 rounded text-xs font-medium font-sans bg-blue-50 text-blue-700 border border-blue-200">
-                          {decision.decisionType}
-                        </span>
-                      </div>
-                      <p
-                      className={`text-claude-text font-sans ${viewMode === 'compact' ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2'}`}>
-
-                        {decision.summary}
-                      </p>
-                      {viewMode === 'comfortable' &&
-                    <p className="text-xs text-claude-subtext font-sans mt-1">
-                          {decision.court} • {decision.judge}
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3
+                            className={`font-serif font-medium text-claude-text group-hover:text-claude-accent transition-colors ${viewMode === 'compact' ? 'text-base' : 'text-lg'}`}
+                          >
+                            {decision.case_number}
+                          </h3>
+                        </div>
+                        <p className={`text-claude-text font-sans ${viewMode === 'compact' ? 'text-xs' : 'text-sm'}`}>
+                          {decision.court}
+                          {decision.chamber && decision.chamber !== decision.court && ` • ${decision.chamber}`}
                         </p>
-                    }
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div
-                      className={`px-2 py-1 rounded ${decision.relevance >= 90 ? 'bg-green-50 text-green-700' : decision.relevance >= 80 ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-700'} text-xs font-medium font-sans`}>
-
-                        {decision.relevance}%
+                        {decision.snippets?.length > 0 && viewMode === 'comfortable' && (
+                          <p className="text-sm text-claude-subtext font-sans mt-1 line-clamp-2">
+                            {decision.snippets[0]}
+                          </p>
+                        )}
                       </div>
-                      <button className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                        <ExternalLink size={16} />
-                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <button className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                          <ExternalLink size={16} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div
-                  className={`flex items-center gap-3 ${viewMode === 'compact' ? 'text-xs' : 'text-sm'}`}>
-
-                    <span className="text-claude-subtext font-sans">
-                      {new Date(decision.date).toLocaleDateString('uk-UA')}
-                    </span>
-                    <span className="text-claude-border">•</span>
-                    <span className="text-claude-subtext font-sans">
-                      {decision.category}
-                    </span>
-                    <span className="text-claude-border">•</span>
-                    <span className="text-claude-subtext font-sans">
-                      {decision.instance}
-                    </span>
+                    <div className={`flex items-center gap-3 ${viewMode === 'compact' ? 'text-xs' : 'text-sm'}`}>
+                      <span className="text-claude-subtext font-sans">
+                        {decision.date
+                          ? new Date(decision.date).toLocaleDateString('uk-UA', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                            })
+                          : '—'}
+                      </span>
+                      <span className="text-claude-border">•</span>
+                      <span className="text-claude-subtext font-sans text-xs">
+                        ID: {decision.doc_id}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
-        </div>
+              </motion.a>
+            ))}
+          </div>
+        )}
       </div>
-    </div>);
-
+    </div>
+  );
 }

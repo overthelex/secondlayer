@@ -32,6 +32,10 @@ export default defineConfig(({ mode }) => {
         host: 'localdev.legal.org.ua',
         ...(isDocker ? { clientPort: 443, protocol: 'wss' } : { port: 5173, protocol: 'wss' }),
       },
+      watch: isDocker ? {
+        usePolling: true,
+        interval: 1000,
+      } : undefined,
       proxy: mode === 'development' ? {
         '/api': {
           target: 'https://stage.legal.org.ua',

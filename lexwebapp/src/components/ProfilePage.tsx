@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Shield, CreditCard, Settings, Camera, BarChart3, Zap, Clock, ChevronRight, Edit2, Loader2, X, Phone, Save, Upload } from 'lucide-react';
+import { User, Mail, Shield, CreditCard, Settings, Camera, Zap, ChevronRight, Edit2, Loader2, X, Phone, Save, Upload, DollarSign, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { authService } from '../services';
+import { authService, billingService } from '../services';
+import { BillingBalance } from '../types/models';
 import showToast from '../utils/toast';
 import { GdprPrivacySection } from './GdprPrivacySection';
 
@@ -11,6 +12,7 @@ export function ProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [billing, setBilling] = useState<BillingBalance | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
@@ -20,11 +22,14 @@ export function ProfilePage() {
     picture: ''
   });
 
-  // Debug: log user data
+  // Fetch billing data
   useEffect(() => {
-    console.log('ProfilePage - user data:', user);
-    console.log('ProfilePage - isLoading:', isLoading);
-  }, [user, isLoading]);
+    if (user) {
+      billingService.getBillingSummary()
+        .then(data => setBilling(data))
+        .catch(err => console.error('Failed to load billing:', err));
+    }
+  }, [user]);
 
   // Initialize form when user data loads
   useEffect(() => {
@@ -190,17 +195,17 @@ export function ProfilePage() {
   };
 
   const stats = [{
-    label: 'Messages Sent',
-    value: '1,248',
-    icon: MessageIcon
+    label: 'Balance',
+    value: billing ? `$${Number(billing.balance_usd).toFixed(2)}` : '—',
+    icon: DollarSign
   }, {
-    label: 'Words Generated',
-    value: '842k',
+    label: 'Total Requests',
+    value: billing ? String(billing.total_requests) : '—',
+    icon: Activity
+  }, {
+    label: 'Total Spent',
+    value: billing ? `$${Number(billing.total_spent_usd).toFixed(2)}` : '—',
     icon: Zap
-  }, {
-    label: 'Time Saved',
-    value: '124h',
-    icon: Clock
   }];
 
   const settingsGroups = [{
@@ -227,7 +232,7 @@ export function ProfilePage() {
     }, {
       icon: CreditCard,
       label: 'Billing',
-      value: 'Not configured',
+      value: billing ? `$${Number(billing.balance_usd).toFixed(2)} • ${billing.pricing_tier}` : 'Loading...',
       onClick: () => window.location.href = '/billing'
     }]
   }];
@@ -452,20 +457,27 @@ export function ProfilePage() {
                 ))}
               </div>
 
-              <div className="mt-6 pt-6 border-t border-claude-border/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-claude-text">
-                    Monthly Usage
-                  </span>
-                  <span className="text-sm text-claude-subtext">78%</span>
+              {billing && (
+                <div className="mt-6 pt-6 border-t border-claude-border/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-claude-text">
+                      Monthly Spend
+                    </span>
+                    <span className="text-sm text-claude-subtext">
+                      ${Number(billing.month_spent_usd).toFixed(2)} / ${Number(billing.monthly_limit_usd).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-claude-bg rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-claude-accent rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (Number(billing.month_spent_usd) / Number(billing.monthly_limit_usd)) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-claude-subtext mt-2">
+                    Daily limit: ${Number(billing.daily_limit_usd).toFixed(2)} • Today: ${Number(billing.today_spent_usd).toFixed(2)}
+                  </p>
                 </div>
-                <div className="h-2 w-full bg-claude-bg rounded-full overflow-hidden">
-                  <div className="h-full bg-claude-accent w-[78%] rounded-full" />
-                </div>
-                <p className="text-xs text-claude-subtext mt-2">
-                  Resets in 12 days
-                </p>
-              </div>
+              )}
             </section>
 
             {/* Pro Card */}
@@ -634,10 +646,3 @@ export function ProfilePage() {
   );
 }
 
-function MessageIcon(props: any) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}

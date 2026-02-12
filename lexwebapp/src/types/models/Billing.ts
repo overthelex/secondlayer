@@ -8,6 +8,20 @@ export interface Balance {
   lastUpdated: string;
 }
 
+export interface BillingBalance {
+  user_id: string;
+  balance_usd: number;
+  balance_uah: number;
+  total_spent_usd: number;
+  total_requests: number;
+  daily_limit_usd: number;
+  monthly_limit_usd: number;
+  pricing_tier: string;
+  today_spent_usd: number;
+  month_spent_usd: number;
+  last_request_at?: string;
+}
+
 export interface Transaction {
   id: string;
   type: 'deposit' | 'withdrawal' | 'usage';

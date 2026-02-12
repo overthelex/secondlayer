@@ -4,7 +4,7 @@
  */
 
 import { BaseService } from '../base/BaseService';
-import { Balance, Transaction, BillingSettings, PaymentIntent } from '../../types/models';
+import { Balance, BillingBalance, Transaction, BillingSettings, PaymentIntent } from '../../types/models';
 import {
   UpdateBillingSettingsRequest,
   CreatePaymentRequest,
@@ -22,6 +22,18 @@ export class BillingService extends BaseService {
     try {
       const response = await this.client.get<GetBalanceResponse>('/api/billing/balance');
       return response.data.balance;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Get full billing summary from backend
+   */
+  async getBillingSummary(): Promise<BillingBalance> {
+    try {
+      const response = await this.client.get<BillingBalance>('/api/billing/balance');
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }
