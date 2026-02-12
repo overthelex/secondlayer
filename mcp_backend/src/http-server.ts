@@ -1844,6 +1844,16 @@ class HTTPMCPServer {
           );
         }
 
+        // 4.5. Guard: if executeTool returned null, the tool doesn't exist
+        if (result === null || result === undefined) {
+          res.status(404).json({
+            success: false,
+            error: 'Tool not found',
+            message: `No handler registered for tool: ${toolName}`,
+          });
+          return;
+        }
+
         // 5. Complete tracking and get breakdown
         const executionTime = Date.now() - startTime;
         const breakdown = await this.costTracker.completeTrackingRecord({
@@ -1984,6 +1994,13 @@ class HTTPMCPServer {
                 call.name,
                 call.arguments || {}
               );
+              if (result === null || result === undefined) {
+                return {
+                  tool: call.name,
+                  success: false,
+                  error: `No handler registered for tool: ${call.name}`,
+                };
+              }
               return {
                 tool: call.name,
                 success: true,
@@ -2175,16 +2192,24 @@ class HTTPMCPServer {
       } else {
         // For other tools, stream the regular result
         const result = await this.toolRegistry.executeTool(toolName, args);
-        this.sendSSEEvent(res, {
-          type: 'progress',
-          data: { message: 'Processing...', progress: 0.5 },
-          id: 'processing',
-        });
-        this.sendSSEEvent(res, {
-          type: 'complete',
-          data: result,
-          id: 'final',
-        });
+        if (result === null || result === undefined) {
+          this.sendSSEEvent(res, {
+            type: 'error',
+            data: { message: `No handler registered for tool: ${toolName}` },
+            id: 'error',
+          });
+        } else {
+          this.sendSSEEvent(res, {
+            type: 'progress',
+            data: { message: 'Processing...', progress: 0.5 },
+            id: 'processing',
+          });
+          this.sendSSEEvent(res, {
+            type: 'complete',
+            data: result,
+            id: 'final',
+          });
+        }
       }
     } catch (error: any) {
       this.sendSSEEvent(res, {
