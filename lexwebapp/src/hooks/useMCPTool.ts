@@ -9,7 +9,7 @@ import { useChatStore } from '../stores';
 import { useSettingsStore } from '../stores';
 import { mcpService } from '../services';
 import showToast from '../utils/toast';
-import type { Decision, Citation } from '../types/models/Message';
+import type { Decision, Citation, VaultDocument } from '../types/models/Message';
 
 /**
  * Parse raw tool result content — handles MCP content array and plain objects.
@@ -36,9 +36,10 @@ function parseToolResultContent(result: any): any {
 function extractEvidenceFromToolResult(
   toolName: string,
   rawResult: any
-): { decisions: Decision[]; citations: Citation[] } {
+): { decisions: Decision[]; citations: Citation[]; documents: VaultDocument[] } {
   const decisions: Decision[] = [];
   const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
 
   const parsed = parseToolResultContent(rawResult);
   if (!parsed) return { decisions, citations };
@@ -175,7 +176,54 @@ function extractEvidenceFromToolResult(
     }
   }
 
-  return { decisions, citations };
+  // ---- Vault / document tools ----
+  const vaultTools = [
+    'list_documents',
+    'search_documents',
+    'semantic_search',
+    'semantic_search_vault',
+    'get_document',
+    'store_document',
+  ];
+  if (vaultTools.some((t) => toolName.includes(t) || toolName === t)) {
+    // list_documents returns { documents: [...], total }
+    if (parsed.documents && Array.isArray(parsed.documents)) {
+      for (const doc of parsed.documents) {
+        documents.push({
+          id: doc.id || `vd-${Math.random().toString(36).slice(2, 8)}`,
+          title: doc.title || doc.name || 'Без назви',
+          type: doc.type || 'other',
+          uploadedAt: doc.created_at || doc.uploadedAt || doc.uploaded_at || '',
+          metadata: doc.metadata || {},
+        });
+      }
+    }
+
+    // semantic_search returns array of results directly
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].documentId) {
+      for (const r of parsed) {
+        documents.push({
+          id: r.documentId || `vd-${Math.random().toString(36).slice(2, 8)}`,
+          title: r.title || r.sectionTitle || 'Без назви',
+          type: r.type || 'other',
+          metadata: { relevance: r.relevance, snippet: r.text?.slice(0, 200) },
+        });
+      }
+    }
+
+    // get_document / store_document — single document
+    if (parsed.id && parsed.title && !parsed.documents) {
+      documents.push({
+        id: parsed.id,
+        title: parsed.title,
+        type: parsed.type || 'other',
+        uploadedAt: parsed.created_at || parsed.uploadedAt || '',
+        metadata: parsed.metadata || {},
+      });
+    }
+  }
+
+  return { decisions, citations, documents };
 }
 
 export interface UseMCPToolOptions {
@@ -445,12 +493,14 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
   // Accumulate evidence across multiple tool calls in one chat session
   const accumulatedDecisions = useRef<Decision[]>([]);
   const accumulatedCitations = useRef<Citation[]>([]);
+  const accumulatedDocuments = useRef<VaultDocument[]>([]);
 
   const executeChat = useCallback(
     async (query: string, documentIds?: string[]) => {
       // Reset accumulators for new chat request
       accumulatedDecisions.current = [];
       accumulatedCitations.current = [];
+      accumulatedDocuments.current = [];
       // 1. Add user message
       const userMessage = {
         id: Date.now().toString(),
@@ -521,12 +571,16 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
             if (evidence.citations.length > 0) {
               accumulatedCitations.current.push(...evidence.citations);
             }
+            if (evidence.documents.length > 0) {
+              accumulatedDocuments.current.push(...evidence.documents);
+            }
 
             // Update message with accumulated evidence so far (for live RightPanel updates)
-            if (accumulatedDecisions.current.length > 0 || accumulatedCitations.current.length > 0) {
+            if (accumulatedDecisions.current.length > 0 || accumulatedCitations.current.length > 0 || accumulatedDocuments.current.length > 0) {
               updateMessage(assistantMessageId, {
                 decisions: [...accumulatedDecisions.current],
                 citations: [...accumulatedCitations.current],
+                documents: [...accumulatedDocuments.current],
               });
             }
           },
@@ -540,6 +594,9 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
                 : undefined,
               citations: accumulatedCitations.current.length > 0
                 ? [...accumulatedCitations.current]
+                : undefined,
+              documents: accumulatedDocuments.current.length > 0
+                ? [...accumulatedDocuments.current]
                 : undefined,
             });
 

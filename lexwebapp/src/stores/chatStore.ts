@@ -190,6 +190,7 @@ export const useChatStore = create<ChatState>()(
               thinkingSteps: m.thinking_steps,
               decisions: m.decisions,
               citations: m.citations,
+              documents: m.documents,
             }));
             set({
               conversationId,
@@ -255,6 +256,7 @@ export const useChatStore = create<ChatState>()(
               thinking_steps: message.thinkingSteps,
               decisions: message.decisions,
               citations: message.citations,
+              documents: message.documents,
             })
             .catch(() => {
               // Silent fail - localStorage backup remains

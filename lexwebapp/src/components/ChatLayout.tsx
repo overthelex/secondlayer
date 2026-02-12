@@ -95,7 +95,7 @@ export function ChatLayout() {
 
   // Get last message for RightPanel data
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.citations?.length);
+  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.citations?.length || lastMessage?.documents?.length);
 
   // Auto-open RightPanel when search results arrive
   React.useEffect(() => {
@@ -578,6 +578,7 @@ export function ChatLayout() {
           onClose={() => setIsRightPanelOpen(false)}
           decisions={lastMessage?.decisions}
           citations={lastMessage?.citations}
+          documents={lastMessage?.documents}
         />
       </div>
     </div>);

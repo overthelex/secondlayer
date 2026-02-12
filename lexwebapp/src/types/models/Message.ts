@@ -10,6 +10,7 @@ export interface Message {
   thinkingSteps?: ThinkingStep[];
   decisions?: Decision[];
   citations?: Citation[];
+  documents?: VaultDocument[];
 }
 
 export interface ThinkingStep {
@@ -32,4 +33,12 @@ export interface Decision {
 export interface Citation {
   text: string;
   source: string;
+}
+
+export interface VaultDocument {
+  id: string;
+  title: string;
+  type: string;
+  uploadedAt?: string;
+  metadata?: Record<string, any>;
 }

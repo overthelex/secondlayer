@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Gavel, BookOpen, MessageSquare, CheckCircle, X, ExternalLink } from 'lucide-react';
+import { Gavel, BookOpen, FileText, CheckCircle, X, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Decision } from './DecisionCard';
 
@@ -8,20 +8,38 @@ interface Citation {
   source: string;
 }
 
+interface VaultDocument {
+  id: string;
+  title: string;
+  type: string;
+  uploadedAt?: string;
+  metadata?: Record<string, any>;
+}
+
 interface RightPanelProps {
   isOpen: boolean;
   onClose: () => void;
   decisions?: Decision[];
   citations?: Citation[];
+  documents?: VaultDocument[];
 }
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  contract: 'Договір',
+  legislation: 'Законодавство',
+  court_decision: 'Судове рішення',
+  internal: 'Внутрішній',
+  other: 'Інше',
+};
 
 export function RightPanel({
   isOpen,
   onClose,
   decisions = [],
   citations = [],
+  documents = [],
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<'decisions' | 'regulations' | 'commentary' | 'verification'>('decisions');
+  const [activeTab, setActiveTab] = useState<'decisions' | 'regulations' | 'documents' | 'verification'>('decisions');
   const tabs = [{
     id: 'decisions' as const,
     label: 'Судові рішення',
@@ -31,9 +49,9 @@ export function RightPanel({
     label: 'Нормативні акти',
     icon: BookOpen
   }, {
-    id: 'commentary' as const,
-    label: 'Коментарі',
-    icon: MessageSquare
+    id: 'documents' as const,
+    label: 'Документи',
+    icon: FileText
   }, {
     id: 'verification' as const,
     label: 'Актуальність',
@@ -190,18 +208,66 @@ export function RightPanel({
               )}
             </div>}
 
-          {activeTab === 'commentary' && <div className="space-y-3">
-              <div className="mb-4">
+          {activeTab === 'documents' && <div className="space-y-3">
+              <div className="flex items-center justify-between mb-4">
                 <span className="text-[11px] font-semibold text-claude-subtext uppercase tracking-wider">
-                  Коментарі та практика
+                  Завантажені документи: {documents.length}
                 </span>
               </div>
-              <div className="text-center py-12 text-claude-subtext/50">
-                <MessageSquare size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
-                <p className="text-[12px]">
-                  Коментарі з'являться після аналізу
-                </p>
-              </div>
+
+              {documents.length === 0 ? (
+                <div className="text-center py-12 text-claude-subtext/50">
+                  <FileText size={32} className="mx-auto mb-3 opacity-30" strokeWidth={1.5} />
+                  <p className="text-[12px]">
+                    Документи з'являться після пошуку
+                  </p>
+                </div>
+              ) : (
+                documents.map((doc) => <motion.div key={doc.id} initial={{
+              opacity: 0,
+              y: 10
+            }} animate={{
+              opacity: 1,
+              y: 0
+            }} className="bg-white border border-claude-border rounded-lg p-3 hover:border-claude-subtext/30 hover:shadow-sm transition-all duration-200 cursor-pointer group">
+                    <div className="flex items-start gap-2 mb-2">
+                      <FileText size={14} className="text-claude-text flex-shrink-0 mt-0.5" strokeWidth={2} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[13px] text-claude-text mb-1 truncate">
+                          {doc.title}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-claude-subtext">
+                          <span className="bg-claude-bg px-1.5 py-0.5 rounded text-[10px] font-medium border border-claude-border">
+                            {DOC_TYPE_LABELS[doc.type] || doc.type}
+                          </span>
+                          {doc.uploadedAt && (
+                            <span>{new Date(doc.uploadedAt).toLocaleDateString('uk-UA')}</span>
+                          )}
+                        </div>
+                        {doc.metadata?.snippet && (
+                          <p className="text-[11px] text-claude-subtext leading-relaxed mt-1 line-clamp-2">
+                            {doc.metadata.snippet}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-claude-border/30">
+                      {doc.metadata?.relevance != null && (
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-1 bg-claude-bg rounded-full overflow-hidden">
+                            <div className="h-full bg-claude-text/60 rounded-full" style={{
+                        width: `${Math.round(doc.metadata.relevance * 100)}%`
+                      }} />
+                          </div>
+                          <span className="text-[10px] text-claude-subtext font-medium">
+                            {Math.round(doc.metadata.relevance * 100)}%
+                          </span>
+                        </div>
+                      )}
+                      <ExternalLink size={12} className="text-claude-subtext/50 group-hover:text-claude-text transition-colors ml-auto" strokeWidth={2} />
+                    </div>
+                  </motion.div>)
+              )}
             </div>}
 
           {activeTab === 'verification' && <div className="space-y-3">
@@ -215,7 +281,7 @@ export function RightPanel({
                   <CheckCircle size={18} className="text-claude-text flex-shrink-0" strokeWidth={2} />
                   <div>
                     <div className="font-medium text-[13px] text-claude-text mb-1">
-                      {decisions.length > 0 || citations.length > 0
+                      {decisions.length > 0 || citations.length > 0 || documents.length > 0
                         ? 'Всі джерела актуальні'
                         : 'Немає джерел для перевірки'}
                     </div>
@@ -239,9 +305,9 @@ export function RightPanel({
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] py-2">
-                  <span className="text-claude-subtext">Коментарі</span>
+                  <span className="text-claude-subtext">Документи</span>
                   <span className="text-claude-text font-medium">
-                    — Немає
+                    {documents.length > 0 ? `✓ ${documents.length} знайдено` : '— Немає'}
                   </span>
                 </div>
               </div>
