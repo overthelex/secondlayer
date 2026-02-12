@@ -4,11 +4,142 @@
  * Used by both ChatPage and ChatLayout
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useChatStore } from '../stores';
 import { useSettingsStore } from '../stores';
 import { mcpService } from '../services';
 import showToast from '../utils/toast';
+import type { Decision, Citation } from '../types/models/Message';
+
+/**
+ * Parse raw tool result content — handles MCP content array and plain objects.
+ */
+function parseToolResultContent(result: any): any {
+  if (!result) return null;
+  try {
+    if (result.content && Array.isArray(result.content)) {
+      const textBlock = result.content.find((b: any) => b.type === 'text');
+      if (textBlock?.text) {
+        return JSON.parse(textBlock.text);
+      }
+    }
+    return typeof result === 'string' ? JSON.parse(result) : result;
+  } catch {
+    return result;
+  }
+}
+
+/**
+ * Extract Decision[] and Citation[] from a tool_result SSE event.
+ * Handles all court-case and legislation tools returned by the agentic loop.
+ */
+function extractEvidenceFromToolResult(
+  toolName: string,
+  rawResult: any
+): { decisions: Decision[]; citations: Citation[] } {
+  const decisions: Decision[] = [];
+  const citations: Citation[] = [];
+
+  const parsed = parseToolResultContent(rawResult);
+  if (!parsed) return { decisions, citations };
+
+  // ---- Court case tools ----
+  const courtTools = [
+    'search_court_cases',
+    'search_legal_precedents',
+    'search_supreme_court_practice',
+    'get_case_documents_chain',
+    'find_similar_cases',
+  ];
+  if (courtTools.some((t) => toolName.includes(t) || toolName === t)) {
+    // source_case (single)
+    if (parsed.source_case) {
+      const sc = parsed.source_case;
+      decisions.push({
+        id: `sc-${sc.doc_id || Date.now()}`,
+        number: sc.cause_num || sc.case_number || 'N/A',
+        court: sc.court_code || sc.court || '',
+        date: sc.adjudication_date || sc.date || '',
+        summary: sc.title || sc.resolution || '',
+        relevance: 100,
+        status: 'active',
+      });
+    }
+
+    // similar_cases array
+    const cases = parsed.similar_cases || parsed.cases || parsed.precedents || [];
+    for (const c of cases) {
+      decisions.push({
+        id: `d-${c.doc_id || c.id || Math.random().toString(36).slice(2, 8)}`,
+        number: c.cause_num || c.case_number || c.number || 'N/A',
+        court: c.court_code || c.court || '',
+        date: c.adjudication_date || c.date || '',
+        summary: c.title || c.resolution || c.summary || c.similarity_reason || '',
+        relevance: c.similarity
+          ? Math.round(c.similarity * 100)
+          : c.relevance
+            ? Math.round(c.relevance * 100)
+            : 70,
+        status: 'active',
+      });
+    }
+
+    // get_case_documents_chain format
+    if (parsed.documents && Array.isArray(parsed.documents)) {
+      for (const doc of parsed.documents) {
+        decisions.push({
+          id: `chain-${doc.doc_id || Math.random().toString(36).slice(2, 8)}`,
+          number: parsed.case_number || doc.title || 'N/A',
+          court: doc.instance || '',
+          date: doc.date || '',
+          summary: doc.title || doc.resolution || '',
+          relevance: 80,
+          status: 'active',
+        });
+      }
+    }
+  }
+
+  // ---- Legislation tools ----
+  const legislationTools = [
+    'search_legislation',
+    'get_legislation_article',
+    'get_legislation_section',
+  ];
+  if (legislationTools.some((t) => toolName.includes(t) || toolName === t)) {
+    // Single article result
+    if (parsed.full_text || parsed.text || parsed.content) {
+      const articleNum = parsed.article_number || parsed.section_name || '';
+      const title = parsed.title || parsed.rada_id || parsed.legislation_id || '';
+      citations.push({
+        text: (parsed.full_text || parsed.text || parsed.content || '').slice(0, 500),
+        source: articleNum ? `${title}, ст. ${articleNum}` : title,
+      });
+    }
+
+    // Array of legislation results
+    if (parsed.legislation && Array.isArray(parsed.legislation)) {
+      for (const l of parsed.legislation) {
+        citations.push({
+          text: l.snippet || l.text || l.title || '',
+          source: l.title || l.type || 'Нормативний акт',
+        });
+      }
+    }
+
+    // Array of articles
+    if (parsed.articles && Array.isArray(parsed.articles)) {
+      for (const a of parsed.articles) {
+        citations.push({
+          text: (a.text || a.content || '').slice(0, 500),
+          source: `Стаття ${a.article_number || ''}`,
+        });
+      }
+    }
+  }
+
+  return { decisions, citations };
+}
 
 export interface UseMCPToolOptions {
   enableStreaming?: boolean;
@@ -274,8 +405,15 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
 
   const { onSuccess, onError } = options;
 
+  // Accumulate evidence across multiple tool calls in one chat session
+  const accumulatedDecisions = useRef<Decision[]>([]);
+  const accumulatedCitations = useRef<Citation[]>([]);
+
   const executeChat = useCallback(
     async (query: string, documentIds?: string[]) => {
+      // Reset accumulators for new chat request
+      accumulatedDecisions.current = [];
+      accumulatedCitations.current = [];
       // 1. Add user message
       const userMessage = {
         id: Date.now().toString(),
@@ -337,12 +475,35 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
               content: toolPreview,
               isComplete: true,
             });
+
+            // Extract decisions & citations from tool results
+            const evidence = extractEvidenceFromToolResult(data.tool, data.result);
+            if (evidence.decisions.length > 0) {
+              accumulatedDecisions.current.push(...evidence.decisions);
+            }
+            if (evidence.citations.length > 0) {
+              accumulatedCitations.current.push(...evidence.citations);
+            }
+
+            // Update message with accumulated evidence so far (for live RightPanel updates)
+            if (accumulatedDecisions.current.length > 0 || accumulatedCitations.current.length > 0) {
+              updateMessage(assistantMessageId, {
+                decisions: [...accumulatedDecisions.current],
+                citations: [...accumulatedCitations.current],
+              });
+            }
           },
 
           onAnswer: (data) => {
             updateMessage(assistantMessageId, {
               content: data.text,
               isStreaming: false,
+              decisions: accumulatedDecisions.current.length > 0
+                ? [...accumulatedDecisions.current]
+                : undefined,
+              citations: accumulatedCitations.current.length > 0
+                ? [...accumulatedCitations.current]
+                : undefined,
             });
 
             setStreaming(false);
