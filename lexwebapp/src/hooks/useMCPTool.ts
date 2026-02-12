@@ -54,6 +54,7 @@ function extractEvidenceFromToolResult(
     'find_similar_fact_pattern_cases',
     'compare_practice_pro_contra',
     'get_court_decision',
+    'get_case_text',
     'get_document_text',
     'get_legal_advice',
     'count_cases_by_party',
