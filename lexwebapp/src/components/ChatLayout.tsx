@@ -93,9 +93,36 @@ export function ChatLayout() {
   // Use Zustand store for messages and streaming state
   const { messages, isStreaming, cancelStream, removeMessage } = useChatStore();
 
-  // Get last message for RightPanel data
-  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  const hasSearchResults = lastMessage?.role === 'assistant' && (lastMessage?.decisions?.length || lastMessage?.citations?.length || lastMessage?.documents?.length);
+  // Aggregate evidence from ALL messages in the current chat (deduplicated)
+  const allDecisions = React.useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(m => m.decisions || []).filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  }, [messages]);
+
+  const allCitations = React.useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(m => m.citations || []).filter(c => {
+      const key = `${c.source}::${c.text.slice(0, 50)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [messages]);
+
+  const allDocuments = React.useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(m => m.documents || []).filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  }, [messages]);
+
+  const hasSearchResults = allDecisions.length > 0 || allCitations.length > 0 || allDocuments.length > 0;
 
   // Auto-open RightPanel when search results arrive
   React.useEffect(() => {
@@ -576,9 +603,9 @@ export function ChatLayout() {
         <RightPanel
           isOpen={isRightPanelOpen}
           onClose={() => setIsRightPanelOpen(false)}
-          decisions={lastMessage?.decisions}
-          citations={lastMessage?.citations}
-          documents={lastMessage?.documents}
+          decisions={allDecisions}
+          citations={allCitations}
+          documents={allDocuments}
         />
       </div>
     </div>);
