@@ -352,10 +352,10 @@ export function InvoicesPage() {
                         {new Date(invoice.due_date).toLocaleDateString('uk-UA')}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-sm font-sans font-medium text-claude-text">
-                        ${invoice.total_usd.toFixed(2)}
+                        ${Number(invoice.total_usd || 0).toFixed(2)}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-sm font-sans text-claude-subtext">
-                        ${invoice.amount_paid_usd.toFixed(2)}
+                        ${Number(invoice.amount_paid_usd || 0).toFixed(2)}
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap">
                         <span
