@@ -3,10 +3,11 @@
  * Used from both MattersPage and ClientDetailPage
  */
 
-import React, { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { Modal } from '../ui/Modal';
 import { useCreateMatter } from '../../hooks/queries/useMatters';
+import { useClients } from '../../hooks/queries/useClients';
 import type { MatterType } from '../../types/models/Matter';
 
 interface CreateMatterModalProps {
@@ -25,9 +26,17 @@ const MATTER_TYPES: { value: MatterType; label: string }[] = [
   { value: 'other', label: 'Інше' },
 ];
 
-export function CreateMatterModal({ isOpen, onClose, clientId, clientName }: CreateMatterModalProps) {
+export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClientId, clientName }: CreateMatterModalProps) {
   const createMatter = useCreateMatter();
+  const { data: clientsData, isLoading: clientsLoading } = useClients({ limit: 200 });
 
+  const clients = clientsData?.clients || [];
+  const hasClients = clients.length > 0;
+
+  // If clientId is pre-selected (from ClientDetailPage), lock it; otherwise allow selection
+  const isClientLocked = !!preselectedClientId && !!clientName;
+
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [name, setName] = useState('');
   const [type, setType] = useState<MatterType>('litigation');
   const [attorney, setAttorney] = useState('');
@@ -35,13 +44,26 @@ export function CreateMatterModal({ isOpen, onClose, clientId, clientName }: Cre
   const [courtNumber, setCourtNumber] = useState('');
   const [courtName, setCourtName] = useState('');
 
+  // Sync pre-selected clientId when modal opens or prop changes
+  useEffect(() => {
+    if (isOpen) {
+      if (preselectedClientId) {
+        setSelectedClientId(preselectedClientId);
+      } else if (clients.length > 0 && !selectedClientId) {
+        setSelectedClientId(clients[0].id);
+      }
+    }
+  }, [isOpen, preselectedClientId, clients]);
+
+  const effectiveClientId = isClientLocked ? preselectedClientId : selectedClientId;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !clientId) return;
+    if (!name.trim() || !effectiveClientId) return;
 
     try {
       await createMatter.mutateAsync({
-        clientId,
+        clientId: effectiveClientId,
         matterName: name.trim(),
         matterType: type,
         responsibleAttorney: attorney.trim() || undefined,
@@ -62,17 +84,54 @@ export function CreateMatterModal({ isOpen, onClose, clientId, clientName }: Cre
     setOpposingParty('');
     setCourtNumber('');
     setCourtName('');
+    if (!isClientLocked) setSelectedClientId('');
     onClose();
   };
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Нова справа" size="lg">
       <form onSubmit={handleSubmit} className="space-y-4 p-1">
-        {/* Client */}
-        {clientName && (
+        {/* No clients warning */}
+        {!clientsLoading && !hasClients && (
+          <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-sans">
+            <AlertCircle size={18} className="flex-shrink-0" />
+            <div>
+              <span className="font-medium">Немає клієнтів.</span>{' '}
+              Спочатку створіть клієнта на сторінці{' '}
+              <a href="/clients" className="underline font-medium hover:no-underline">Клієнти</a>.
+            </div>
+          </div>
+        )}
+
+        {/* Client selector */}
+        {isClientLocked ? (
           <div className="p-3 bg-claude-bg rounded-xl text-sm font-sans">
             <span className="text-claude-subtext">Клієнт:</span>{' '}
             <span className="font-medium text-claude-text">{clientName}</span>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-sm font-medium text-claude-text font-sans mb-1">
+              Клієнт <span className="text-red-500">*</span>
+            </label>
+            {clientsLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-claude-subtext">
+                <Loader2 size={14} className="animate-spin" />
+                Завантаження...
+              </div>
+            ) : (
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                disabled={!hasClients}
+                className="w-full px-3 py-2.5 bg-white border border-claude-border rounded-xl text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!hasClients && <option value="">— Клієнтів не знайдено —</option>}
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>{c.client_name}</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
@@ -181,7 +240,7 @@ export function CreateMatterModal({ isOpen, onClose, clientId, clientName }: Cre
           </button>
           <button
             type="submit"
-            disabled={createMatter.isPending || !name.trim()}
+            disabled={createMatter.isPending || !name.trim() || !effectiveClientId}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-xl font-medium text-sm font-sans hover:bg-[#C66345] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {createMatter.isPending && <Loader2 size={16} className="animate-spin" />}

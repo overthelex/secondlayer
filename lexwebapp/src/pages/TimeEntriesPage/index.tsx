@@ -8,7 +8,6 @@ import { motion } from 'framer-motion';
 import {
   Clock,
   Search,
-  Filter,
   Calendar,
   DollarSign,
   CheckCircle,
@@ -23,7 +22,6 @@ import {
 } from 'lucide-react';
 import { useTimeEntries, useDeleteTimeEntry, useSubmitTimeEntry } from '../../hooks/queries';
 import { useTimerStore } from '../../stores';
-import { Modal } from '../../components/ui/Modal';
 import { Spinner } from '../../components/ui/Spinner';
 import { CreateTimeEntryModal } from '../../components/time/CreateTimeEntryModal';
 import { TimeEntry } from '../../types/models';
@@ -45,25 +43,22 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  submitted: 'Submitted',
-  approved: 'Approved',
-  invoiced: 'Invoiced',
-  rejected: 'Rejected',
+  draft: 'Чернетка',
+  submitted: 'Надіслано',
+  approved: 'Затверджено',
+  invoiced: 'Рахунок',
+  rejected: 'Відхилено',
 };
 
 export function TimeEntriesPage() {
-  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [billableFilter, setBillableFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
 
   const { startTimer } = useTimerStore();
 
-  // Build filters
   const filters = {
     status: statusFilter !== 'all' ? statusFilter : undefined,
     billable: billableFilter === 'billable' ? true : billableFilter === 'non-billable' ? false : undefined,
@@ -81,10 +76,8 @@ export function TimeEntriesPage() {
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}h ${mins}m`;
-    }
-    return `${mins}m`;
+    if (hours > 0) return `${hours}г ${mins}хв`;
+    return `${mins}хв`;
   };
 
   const calculateAmount = (entry: TimeEntry): number => {
@@ -94,8 +87,7 @@ export function TimeEntriesPage() {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this time entry?')) return;
-
+    if (!confirm('Видалити цей запис часу?')) return;
     try {
       await deleteEntry.mutateAsync(id);
     } catch (err) {
@@ -121,298 +113,268 @@ export function TimeEntriesPage() {
     }
   };
 
-  // Stats
   const stats = {
     total,
     draft: entries.filter((e) => e.status === 'draft').length,
-    submitted: entries.filter((e) => e.status === 'submitted').length,
     approved: entries.filter((e) => e.status === 'approved').length,
     totalHours: entries.reduce((sum, e) => sum + e.duration_minutes, 0) / 60,
     totalAmount: entries.reduce((sum, e) => sum + calculateAmount(e), 0),
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+    <div className="flex-1 h-full overflow-y-auto bg-claude-bg p-4 md:p-8 lg:p-12 pb-32">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="space-y-4"
+        >
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Time Entries</h1>
-              <p className="mt-1 text-sm text-gray-600">
-                Track and manage your billable time
+              <h1 className="text-3xl md:text-4xl font-serif text-claude-text font-medium tracking-tight mb-2">
+                Облік часу
+              </h1>
+              <p className="text-claude-subtext font-sans text-sm">
+                Відстеження та управління робочим часом
               </p>
             </div>
+
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-xl font-medium text-sm font-sans hover:bg-[#C66345] transition-colors shadow-sm active:scale-[0.98]"
             >
-              <Plus size={20} />
-              New Entry
+              <Plus size={18} />
+              Новий запис
             </button>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-blue-700 mb-1">
-                <Clock size={16} />
-                <span className="text-sm font-medium">Total Hours</span>
-              </div>
-              <p className="text-2xl font-bold text-blue-900">
-                {stats.totalHours.toFixed(1)}h
-              </p>
+          {/* Stats */}
+          <div className="flex flex-wrap gap-3 text-sm font-sans">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-claude-border shadow-sm">
+              <Clock size={14} className="text-claude-subtext" />
+              <span className="text-claude-subtext">Годин:</span>
+              <span className="font-serif font-medium text-claude-text">{stats.totalHours.toFixed(1)}</span>
             </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-green-700 mb-1">
-                <DollarSign size={16} />
-                <span className="text-sm font-medium">Total Value</span>
-              </div>
-              <p className="text-2xl font-bold text-green-900">
-                ${stats.totalAmount.toFixed(2)}
-              </p>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-claude-border shadow-sm">
+              <DollarSign size={14} className="text-claude-subtext" />
+              <span className="text-claude-subtext">Сума:</span>
+              <span className="font-serif font-medium text-claude-text">${stats.totalAmount.toFixed(2)}</span>
             </div>
-
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-amber-700 mb-1">
-                <Edit3 size={16} />
-                <span className="text-sm font-medium">Draft</span>
-              </div>
-              <p className="text-2xl font-bold text-amber-900">{stats.draft}</p>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-claude-border shadow-sm">
+              <Edit3 size={14} className="text-claude-subtext" />
+              <span className="text-claude-subtext">Чернетки:</span>
+              <span className="font-serif font-medium text-claude-text">{stats.draft}</span>
             </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-purple-700 mb-1">
-                <CheckCircle size={16} />
-                <span className="text-sm font-medium">Approved</span>
-              </div>
-              <p className="text-2xl font-bold text-purple-900">{stats.approved}</p>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-claude-border shadow-sm">
+              <CheckCircle size={14} className="text-claude-subtext" />
+              <span className="text-claude-subtext">Затверджено:</span>
+              <span className="font-serif font-medium text-claude-text">{stats.approved}</span>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Status Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="draft">Draft</option>
-                <option value="submitted">Submitted</option>
-                <option value="approved">Approved</option>
-                <option value="invoiced">Invoiced</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </div>
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-claude-border rounded-xl text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all"
+            >
+              <option value="all">Всі статуси</option>
+              <option value="draft">Чернетка</option>
+              <option value="submitted">Надіслано</option>
+              <option value="approved">Затверджено</option>
+              <option value="invoiced">Рахунок</option>
+              <option value="rejected">Відхилено</option>
+            </select>
 
-            {/* Billable Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Type
-              </label>
-              <select
-                value={billableFilter}
-                onChange={(e) => setBillableFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              >
-                <option value="all">All</option>
-                <option value="billable">Billable Only</option>
-                <option value="non-billable">Non-Billable</option>
-              </select>
-            </div>
+            <select
+              value={billableFilter}
+              onChange={(e) => setBillableFilter(e.target.value)}
+              className="px-3 py-2.5 bg-white border border-claude-border rounded-xl text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all"
+            >
+              <option value="all">Всі типи</option>
+              <option value="billable">Оплачуваний</option>
+              <option value="non-billable">Неоплачуваний</option>
+            </select>
 
-            {/* Date From */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                From Date
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              placeholder="Від"
+              className="px-3 py-2.5 bg-white border border-claude-border rounded-xl text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all"
+            />
 
-            {/* Date To */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                To Date
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              placeholder="До"
+              className="px-3 py-2.5 bg-white border border-claude-border rounded-xl text-claude-text text-sm font-sans focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all"
+            />
 
-            {/* Clear Filters */}
-            <div className="flex items-end">
+            {(statusFilter !== 'all' || billableFilter !== 'all' || dateFrom || dateTo) && (
               <button
-                onClick={() => {
-                  setStatusFilter('all');
-                  setBillableFilter('all');
-                  setDateFrom('');
-                  setDateTo('');
-                }}
-                className="w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                onClick={() => { setStatusFilter('all'); setBillableFilter('all'); setDateFrom(''); setDateTo(''); }}
+                className="px-4 py-2.5 bg-white border border-claude-border text-claude-subtext rounded-xl text-sm font-sans font-medium hover:bg-claude-bg transition-colors"
               >
-                Clear Filters
+                Скинути
               </button>
-            </div>
+            )}
           </div>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* Entries List */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-        {isLoading ? (
-          <div className="flex justify-center py-12">
+        {/* Loading */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
             <Spinner size="lg" />
           </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700">
+        )}
+
+        {/* Error */}
+        {error && !isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700"
+          >
             <AlertCircle size={20} />
-            <span>{(error as any).message || 'Failed to load time entries'}</span>
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-            <Clock size={48} className="mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No time entries found
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Start tracking your time or adjust your filters
-            </p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus size={20} />
-              Create Time Entry
+            <span className="font-sans text-sm">Не вдалося завантажити записи часу</span>
+            <button onClick={() => refetch()} className="ml-auto text-sm font-medium underline hover:no-underline">
+              Спробувати знову
             </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Matter
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Duration
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rate
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Amount
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {entries.map((entry) => (
-                    <motion.tr
-                      key={entry.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(entry.entry_date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="font-medium">{entry.matter_name || 'Unknown'}</div>
-                        {entry.user_name && (
-                          <div className="text-xs text-gray-500">{entry.user_name}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
-                        {entry.description}
-                        {!entry.billable && (
-                          <span className="ml-2 text-xs text-gray-500">(non-billable)</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {formatDuration(entry.duration_minutes)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        ${entry.hourly_rate_usd}/hr
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ${calculateAmount(entry).toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            STATUS_COLORS[entry.status]
-                          }`}
-                        >
-                          {STATUS_ICONS[entry.status]}
-                          {STATUS_LABELS[entry.status]}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          {entry.status === 'draft' && (
-                            <>
-                              <button
-                                onClick={(e) => handleStartTimer(entry.matter_id, entry.description, e)}
-                                className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded"
-                                title="Continue as timer"
-                              >
-                                <Play size={16} />
-                              </button>
-                              <button
-                                onClick={(e) => handleSubmit(entry.id, e)}
-                                className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
-                                title="Submit for approval"
-                              >
-                                <Send size={16} />
-                              </button>
-                              <button
-                                onClick={(e) => handleDelete(entry.id, e)}
-                                className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          )}
+          </motion.div>
+        )}
+
+        {/* Entries List — card-based layout */}
+        {!isLoading && !error && (
+          <div className="space-y-3">
+            {entries.map((entry, index) => {
+              const statusColor = STATUS_COLORS[entry.status] || STATUS_COLORS.draft;
+              return (
+                <motion.div
+                  key={entry.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.03 + 0.2 }}
+                  className="group bg-white rounded-2xl p-5 border border-claude-border shadow-sm hover:shadow-md hover:border-claude-subtext/30 transition-all"
+                >
+                  <div className="flex items-start gap-4">
+                    {/* Icon */}
+                    <div className="w-10 h-10 rounded-lg bg-claude-bg flex items-center justify-center text-claude-subtext flex-shrink-0">
+                      <Clock size={18} />
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono text-claude-subtext">
+                              {new Date(entry.entry_date).toLocaleDateString('uk-UA')}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}`}>
+                              {STATUS_ICONS[entry.status]}
+                              {STATUS_LABELS[entry.status]}
+                            </span>
+                            {!entry.billable && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                                неоплачуваний
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-lg font-serif font-medium text-claude-text">
+                            {entry.matter_name || 'Без справи'}
+                          </h3>
                         </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-sm text-claude-subtext font-sans mb-3 line-clamp-2">
+                        {entry.description}
+                      </p>
+
+                      {/* Details row */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="flex items-center gap-2 text-sm text-claude-subtext font-sans">
+                          <Clock size={14} className="flex-shrink-0" />
+                          <span className="font-medium text-claude-text">{formatDuration(entry.duration_minutes)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-claude-subtext font-sans">
+                          <DollarSign size={14} className="flex-shrink-0" />
+                          <span>${entry.hourly_rate_usd}/год</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-sans">
+                          <span className="text-claude-subtext">Сума:</span>
+                          <span className="font-serif font-medium text-claude-text">${calculateAmount(entry).toFixed(2)}</span>
+                        </div>
+                        {entry.user_name && (
+                          <div className="flex items-center gap-2 text-sm text-claude-subtext font-sans truncate">
+                            {entry.user_name}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      {entry.status === 'draft' && (
+                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-claude-border/50">
+                          <div className="flex items-center gap-1 ml-auto">
+                            <button
+                              onClick={(e) => handleStartTimer(entry.matter_id, entry.description, e)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium font-sans text-claude-accent hover:bg-claude-accent/10 rounded-lg transition-colors"
+                              title="Продовжити як таймер"
+                            >
+                              <Play size={14} />
+                              Таймер
+                            </button>
+                            <button
+                              onClick={(e) => handleSubmit(entry.id, e)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium font-sans text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Надіслати на затвердження"
+                            >
+                              <Send size={14} />
+                              Надіслати
+                            </button>
+                            <button
+                              onClick={(e) => handleDelete(entry.id, e)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium font-sans text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Видалити"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !error && entries.length === 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
+            <div className="w-16 h-16 bg-claude-bg rounded-full flex items-center justify-center mx-auto mb-4 text-claude-subtext">
+              <Clock size={24} />
+            </div>
+            <h3 className="text-lg font-serif text-claude-text mb-2">Записів часу не знайдено</h3>
+            <p className="text-claude-subtext font-sans max-w-md mx-auto text-sm">
+              {total === 0 ? 'Створіть перший запис для обліку робочого часу' : 'Спробуйте змінити фільтри'}
+            </p>
+            {total === 0 && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-xl font-medium text-sm font-sans hover:bg-[#C66345] transition-colors"
+              >
+                <Plus size={18} />
+                Новий запис
+              </button>
+            )}
+          </motion.div>
         )}
       </div>
 
