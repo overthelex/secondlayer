@@ -68,8 +68,7 @@ Thumbs.db
 coverage/
 .nyc_output/
 test-results/
-tests/test-results/
-tests/tests/
+tests/
 test_data/
 
 # Temp files
