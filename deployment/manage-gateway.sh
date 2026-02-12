@@ -227,7 +227,7 @@ show_status() {
     echo ""
 
     print_msg "$YELLOW" "=== Local ==="
-    docker ps --filter "name=secondlayer-.*-local" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    docker ps --filter "name=-local" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
 
     print_msg "$YELLOW" "=== Gateway ==="
@@ -306,15 +306,15 @@ build_images() {
 
     # Build backend (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building backend image..."
-    docker build -f Dockerfile.mono-backend -t secondlayer-app:latest .
+    docker build -f deployment/Dockerfile.mono-backend -t secondlayer-app:latest .
 
     # Build RADA MCP (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building RADA MCP image..."
-    docker build -f Dockerfile.mono-rada -t rada-mcp:latest .
+    docker build -f deployment/Dockerfile.mono-rada -t rada-mcp:latest .
 
     # Build OpenReyestr MCP (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building OpenReyestr MCP image..."
-    docker build -f Dockerfile.mono-openreyestr -t openreyestr-app:latest .
+    docker build -f deployment/Dockerfile.mono-openreyestr -t openreyestr-app:latest .
 
     # Build frontend
     print_msg "$BLUE" "Building frontend image..."
@@ -462,8 +462,8 @@ deploy_local() {
 
         # Step 3: Cleanup exited/dead containers and dangling images
         print_msg "$BLUE" "🧹 Cleaning up stopped containers..."
-        docker ps -a --filter "name=secondlayer-.*-local" --filter "status=exited" -q | xargs -r docker rm -f
-        docker ps -a --filter "name=secondlayer-.*-local" --filter "status=dead" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=-local" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=-local" --filter "status=dead" -q | xargs -r docker rm -f
         print_msg "$BLUE" "🗑️  Removing dangling images..."
         docker image prune -f
 

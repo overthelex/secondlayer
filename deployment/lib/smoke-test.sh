@@ -59,7 +59,7 @@ check_containers_running() {
         local) env_short="local" ;;
     esac
 
-    local ps_cmd="docker ps --filter 'name=secondlayer-.*-${env_short}' --format '{{.Names}}\t{{.Status}}'"
+    local ps_cmd="docker ps --filter 'name=-${env_short}' --format '{{.Names}}\t{{.Status}}'"
 
     local output
     if [ "$target_server" = "localhost" ]; then
@@ -135,7 +135,7 @@ check_frontend_health() {
     local url
     case $env in
         local)
-            url="https://localhost"
+            url="https://localdev.legal.org.ua"
             ;;
         dev|development)
             url="https://dev.legal.org.ua"
@@ -164,7 +164,12 @@ check_db_connectivity() {
         local) env_short="local" ;;
     esac
 
-    local db_cmd="docker exec secondlayer-postgres-${env_short} psql -U secondlayer -d secondlayer -c 'SELECT 1' > /dev/null 2>&1"
+    local db_name="secondlayer"
+    if [ "$env_short" = "local" ]; then
+        db_name="secondlayer_local"
+    fi
+
+    local db_cmd="docker exec secondlayer-postgres-${env_short} psql -U secondlayer -d ${db_name} -c 'SELECT 1' > /dev/null 2>&1"
 
     local result
     if [ "$target_server" = "localhost" ]; then
@@ -192,7 +197,7 @@ check_restart_loops() {
         local) env_short="local" ;;
     esac
 
-    local restart_cmd="docker ps --filter 'name=secondlayer-.*-${env_short}' --format '{{.Names}} {{.Status}}' | grep -i 'restarting' || true"
+    local restart_cmd="docker ps --filter 'name=-${env_short}' --format '{{.Names}} {{.Status}}' | grep -i 'restarting' || true"
 
     local output
     if [ "$target_server" = "localhost" ]; then
