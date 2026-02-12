@@ -85,7 +85,8 @@ export function createTimeEntryRoutes(timeEntryService: TimeEntryService): Route
       res.json(entry);
     } catch (error: any) {
       logger.error('[TimeEntryRoutes] Update entry failed', { error: error.message });
-      res.status(500).json({ error: error.message });
+      const status = error.message.includes('Cannot update') || error.message.includes('not found') ? 400 : 500;
+      res.status(status).json({ error: error.message });
     }
   }) as any);
 
@@ -100,7 +101,8 @@ export function createTimeEntryRoutes(timeEntryService: TimeEntryService): Route
       res.status(204).send();
     } catch (error: any) {
       logger.error('[TimeEntryRoutes] Delete entry failed', { error: error.message });
-      res.status(500).json({ error: error.message });
+      const status = error.message.includes('Cannot delete') || error.message.includes('not found') ? 400 : 500;
+      res.status(status).json({ error: error.message });
     }
   }) as any);
 

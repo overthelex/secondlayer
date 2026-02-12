@@ -302,7 +302,7 @@ export class TimeEntryService {
         const result = await this.db.query(
             `SELECT
                 te.*,
-                m.name as matter_name,
+                m.matter_name as matter_name,
                 u.name as user_name,
                 u.email as user_email
             FROM time_entries te
@@ -549,7 +549,7 @@ export class TimeEntryService {
             `SELECT
                 at.*,
                 EXTRACT(EPOCH FROM (NOW() - at.started_at))::INTEGER as elapsed_seconds,
-                m.name as matter_name
+                m.matter_name as matter_name
             FROM active_timers at
             LEFT JOIN matters m ON at.matter_id = m.id
             WHERE at.user_id = $1

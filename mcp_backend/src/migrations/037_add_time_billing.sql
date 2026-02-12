@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS active_timers (
 
 CREATE INDEX idx_active_timers_user ON active_timers(user_id);
 CREATE INDEX idx_active_timers_matter ON active_timers(matter_id);
-CREATE INDEX idx_active_timers_stale ON active_timers(last_ping_at) WHERE last_ping_at < NOW() - INTERVAL '5 minutes';
+CREATE INDEX idx_active_timers_stale ON active_timers(last_ping_at);
 
 -- ============================================================================
 -- User Billing Rates Table

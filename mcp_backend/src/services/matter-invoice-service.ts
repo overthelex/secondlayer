@@ -239,7 +239,7 @@ export class MatterInvoiceService {
         const invoiceResult = await this.db.query(
             `SELECT
                 i.*,
-                m.name as matter_name,
+                m.matter_name as matter_name,
                 c.client_name
             FROM matter_invoices i
             LEFT JOIN matters m ON i.matter_id = m.id
@@ -318,7 +318,7 @@ export class MatterInvoiceService {
         const result = await this.db.query(
             `SELECT
                 i.*,
-                m.name as matter_name,
+                m.matter_name as matter_name,
                 c.client_name
             FROM matter_invoices i
             LEFT JOIN matters m ON i.matter_id = m.id
@@ -459,6 +459,20 @@ export class MatterInvoiceService {
      */
     async generatePDF(invoiceId: string): Promise<Buffer> {
         const invoice = await this.getInvoiceWithDetails(invoiceId);
+
+        // PostgreSQL returns DECIMAL as string — coerce to number for PDF rendering
+        invoice.subtotal_usd = Number(invoice.subtotal_usd) || 0;
+        invoice.tax_rate = Number(invoice.tax_rate) || 0;
+        invoice.tax_amount_usd = Number(invoice.tax_amount_usd) || 0;
+        invoice.total_usd = Number(invoice.total_usd) || 0;
+        invoice.amount_paid_usd = Number(invoice.amount_paid_usd) || 0;
+        if (invoice.line_items) {
+            for (const item of invoice.line_items) {
+                item.quantity = Number(item.quantity) || 0;
+                item.unit_price_usd = Number(item.unit_price_usd) || 0;
+                item.amount_usd = Number(item.amount_usd) || 0;
+            }
+        }
 
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument({ size: 'A4', margin: 50 });
