@@ -11,7 +11,6 @@ import showToast from '../utils/toast';
 import { JudgesPage } from './JudgesPage';
 import { LawyersPage } from './LawyersPage';
 import { ClientsPage } from './ClientsPage';
-import { CasesPage } from './CasesPage';
 import { HistoryPage } from './HistoryPage';
 import { DecisionsSearchPage } from './DecisionsSearchPage';
 import { PersonDetailPage } from './PersonDetailPage';
@@ -322,19 +321,6 @@ export function ChatLayout() {
               setCurrentView('client-detail');
             }} />
 
-        </div>);
-
-    }
-    if (currentView === 'cases') {
-      return (
-        <div className="flex-1 overflow-hidden relative">
-          <button
-            onClick={() => setCurrentView('chat')}
-            className="absolute top-4 right-4 z-10 p-2 bg-white rounded-full shadow-sm border border-claude-border text-claude-subtext hover:text-claude-text transition-colors">
-
-            <X size={20} />
-          </button>
-          <CasesPage />
         </div>);
 
     }

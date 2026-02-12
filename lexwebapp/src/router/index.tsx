@@ -22,7 +22,6 @@ import { TeamPage } from '../components/team/TeamPage';
 import { JudgesPage } from '../pages/JudgesPage';
 import { LawyersPage } from '../pages/LawyersPage';
 import { ClientsPage } from '../pages/ClientsPage';
-import { CasesPage } from '../components/CasesPage';
 import { HistoryPage } from '../components/HistoryPage';
 import { DecisionsSearchPage } from '../components/DecisionsSearchPage';
 import { PersonDetailPage } from '../pages/PersonDetailPage';
@@ -128,10 +127,6 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.DOCUMENTS,
             element: <DocumentsPage />,
-          },
-          {
-            path: ROUTES.CASES,
-            element: <CasesPage />,
           },
           {
             path: ROUTES.CASE_ANALYSIS,

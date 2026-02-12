@@ -38,7 +38,6 @@ export const ROUTES = {
   DOCUMENTS: '/documents',
 
   // Cases & Decisions
-  CASES: '/cases',
   CASE_ANALYSIS: '/case-analysis',
   DECISIONS_SEARCH: '/decisions',
 
