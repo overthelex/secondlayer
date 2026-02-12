@@ -29,12 +29,12 @@ CREATE TABLE IF NOT EXISTS time_entries (
     CONSTRAINT time_entries_valid_rate CHECK (hourly_rate_usd >= 0)
 );
 
-CREATE INDEX idx_time_entries_matter ON time_entries(matter_id);
-CREATE INDEX idx_time_entries_user ON time_entries(user_id);
-CREATE INDEX idx_time_entries_status ON time_entries(status);
-CREATE INDEX idx_time_entries_date ON time_entries(entry_date);
-CREATE INDEX idx_time_entries_billable ON time_entries(billable) WHERE billable = true;
-CREATE INDEX idx_time_entries_invoice ON time_entries(invoice_id) WHERE invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_time_entries_matter ON time_entries(matter_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_user ON time_entries(user_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_status ON time_entries(status);
+CREATE INDEX IF NOT EXISTS idx_time_entries_date ON time_entries(entry_date);
+CREATE INDEX IF NOT EXISTS idx_time_entries_billable ON time_entries(billable) WHERE billable = true;
+CREATE INDEX IF NOT EXISTS idx_time_entries_invoice ON time_entries(invoice_id) WHERE invoice_id IS NOT NULL;
 
 -- ============================================================================
 -- Active Timers Table
@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS active_timers (
     UNIQUE(user_id, matter_id)
 );
 
-CREATE INDEX idx_active_timers_user ON active_timers(user_id);
-CREATE INDEX idx_active_timers_matter ON active_timers(matter_id);
-CREATE INDEX idx_active_timers_stale ON active_timers(last_ping_at);
+CREATE INDEX IF NOT EXISTS idx_active_timers_user ON active_timers(user_id);
+CREATE INDEX IF NOT EXISTS idx_active_timers_matter ON active_timers(matter_id);
+CREATE INDEX IF NOT EXISTS idx_active_timers_stale ON active_timers(last_ping_at);
 
 -- ============================================================================
 -- User Billing Rates Table
@@ -73,9 +73,9 @@ CREATE TABLE IF NOT EXISTS user_billing_rates (
     CONSTRAINT valid_rate_period CHECK (effective_to IS NULL OR effective_to > effective_from)
 );
 
-CREATE INDEX idx_user_billing_rates_user ON user_billing_rates(user_id);
-CREATE INDEX idx_user_billing_rates_effective ON user_billing_rates(effective_from, effective_to);
-CREATE UNIQUE INDEX idx_user_billing_rates_default ON user_billing_rates(user_id) WHERE is_default = true;
+CREATE INDEX IF NOT EXISTS idx_user_billing_rates_user ON user_billing_rates(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_billing_rates_effective ON user_billing_rates(effective_from, effective_to);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_billing_rates_default ON user_billing_rates(user_id) WHERE is_default = true;
 
 -- ============================================================================
 -- Matter Invoices Table
@@ -104,10 +104,10 @@ CREATE TABLE IF NOT EXISTS matter_invoices (
     CONSTRAINT valid_total CHECK (total_usd = subtotal_usd + tax_amount_usd)
 );
 
-CREATE INDEX idx_matter_invoices_matter ON matter_invoices(matter_id);
-CREATE INDEX idx_matter_invoices_status ON matter_invoices(status);
-CREATE INDEX idx_matter_invoices_number ON matter_invoices(invoice_number);
-CREATE INDEX idx_matter_invoices_dates ON matter_invoices(issue_date, due_date);
+CREATE INDEX IF NOT EXISTS idx_matter_invoices_matter ON matter_invoices(matter_id);
+CREATE INDEX IF NOT EXISTS idx_matter_invoices_status ON matter_invoices(status);
+CREATE INDEX IF NOT EXISTS idx_matter_invoices_number ON matter_invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_matter_invoices_dates ON matter_invoices(issue_date, due_date);
 
 -- ============================================================================
 -- Invoice Line Items Table
@@ -126,9 +126,9 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
     CONSTRAINT valid_line_amount CHECK (amount_usd = quantity * unit_price_usd)
 );
 
-CREATE INDEX idx_invoice_line_items_invoice ON invoice_line_items(invoice_id);
-CREATE INDEX idx_invoice_line_items_time_entry ON invoice_line_items(time_entry_id) WHERE time_entry_id IS NOT NULL;
-CREATE INDEX idx_invoice_line_items_order ON invoice_line_items(invoice_id, line_order);
+CREATE INDEX IF NOT EXISTS idx_invoice_line_items_invoice ON invoice_line_items(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_line_items_time_entry ON invoice_line_items(time_entry_id) WHERE time_entry_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invoice_line_items_order ON invoice_line_items(invoice_id, line_order);
 
 -- ============================================================================
 -- Invoice Payments Table
@@ -146,8 +146,8 @@ CREATE TABLE IF NOT EXISTS invoice_payments (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_invoice_payments_invoice ON invoice_payments(invoice_id);
-CREATE INDEX idx_invoice_payments_date ON invoice_payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON invoice_payments(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_date ON invoice_payments(payment_date);
 
 -- ============================================================================
 -- Triggers for updated_at timestamps
@@ -160,21 +160,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS time_entries_updated_at ON time_entries;
 CREATE TRIGGER time_entries_updated_at
     BEFORE UPDATE ON time_entries
     FOR EACH ROW
     EXECUTE FUNCTION update_time_billing_updated_at();
 
+DROP TRIGGER IF EXISTS user_billing_rates_updated_at ON user_billing_rates;
 CREATE TRIGGER user_billing_rates_updated_at
     BEFORE UPDATE ON user_billing_rates
     FOR EACH ROW
     EXECUTE FUNCTION update_time_billing_updated_at();
 
+DROP TRIGGER IF EXISTS matter_invoices_updated_at ON matter_invoices;
 CREATE TRIGGER matter_invoices_updated_at
     BEFORE UPDATE ON matter_invoices
     FOR EACH ROW
     EXECUTE FUNCTION update_time_billing_updated_at();
 
+DROP TRIGGER IF EXISTS invoice_payments_updated_at ON invoice_payments;
 CREATE TRIGGER invoice_payments_updated_at
     BEFORE UPDATE ON invoice_payments
     FOR EACH ROW
@@ -306,6 +310,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS invoice_line_items_totals ON invoice_line_items;
 CREATE TRIGGER invoice_line_items_totals
     AFTER INSERT OR UPDATE OR DELETE ON invoice_line_items
     FOR EACH ROW
@@ -349,6 +354,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS invoice_payments_status ON invoice_payments;
 CREATE TRIGGER invoice_payments_status
     AFTER INSERT ON invoice_payments
     FOR EACH ROW

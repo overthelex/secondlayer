@@ -39,6 +39,18 @@ export class CitationValidator {
   }
 
   async validatePrecedentStatus(caseId: string): Promise<PrecedentStatus> {
+    if (!caseId) {
+      return {
+        case_id: '',
+        status: 'unknown',
+        reversed_by: [],
+        overruled_by: [],
+        distinguished_in: [],
+        last_checked: new Date().toISOString(),
+        confidence: 0,
+      };
+    }
+
     // Check if status already exists
     const existing = await this.db.query(
       'SELECT * FROM precedent_status WHERE case_id = $1',

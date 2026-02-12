@@ -70,9 +70,14 @@ END $$;
 ALTER TABLE legislation_articles DROP CONSTRAINT IF EXISTS legislation_articles_legislation_id_article_number_key;
 
 -- Add unique constraint for (legislation_id, article_number, version_date)
-ALTER TABLE legislation_articles
-  ADD CONSTRAINT legislation_articles_legislation_id_article_number_version_date_key
-  UNIQUE (legislation_id, article_number, version_date);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'legislation_articles_legislation_id_article_number_version_date_key') THEN
+    ALTER TABLE legislation_articles
+      ADD CONSTRAINT legislation_articles_legislation_id_article_number_version_date_key
+      UNIQUE (legislation_id, article_number, version_date);
+  END IF;
+END $$;
 
 -- Add indexes for new columns
 CREATE INDEX IF NOT EXISTS idx_legislation_short_title ON legislation(short_title);

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS legislation (
 CREATE INDEX IF NOT EXISTS idx_legislation_rada_id ON legislation(rada_id);
 CREATE INDEX IF NOT EXISTS idx_legislation_type ON legislation(type);
 CREATE INDEX IF NOT EXISTS idx_legislation_status ON legislation(status);
-CREATE INDEX IF NOT EXISTS idx_legislation_title ON legislation USING gin(to_tsvector('ukrainian', title));
+CREATE INDEX IF NOT EXISTS idx_legislation_title ON legislation USING gin(to_tsvector('simple', title));
 
 -- Articles table (granular storage)
 CREATE TABLE IF NOT EXISTS legislation_articles (
@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_articles_legislation ON legislation_articles(legi
 CREATE INDEX IF NOT EXISTS idx_articles_number ON legislation_articles(article_number);
 CREATE INDEX IF NOT EXISTS idx_articles_current ON legislation_articles(legislation_id, is_current) WHERE is_current = true;
 CREATE INDEX IF NOT EXISTS idx_articles_section ON legislation_articles(section_number);
-CREATE INDEX IF NOT EXISTS idx_articles_fulltext ON legislation_articles USING gin(to_tsvector('ukrainian', full_text));
+CREATE INDEX IF NOT EXISTS idx_articles_fulltext ON legislation_articles USING gin(to_tsvector('simple', full_text));
 
 -- Legislation chunks for vector search (smaller than articles for better retrieval)
 CREATE TABLE IF NOT EXISTS legislation_chunks (

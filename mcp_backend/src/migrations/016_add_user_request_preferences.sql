@@ -55,30 +55,45 @@ CREATE TABLE IF NOT EXISTS user_request_preferences (
 CREATE INDEX IF NOT EXISTS idx_user_request_preferences_user_id
   ON user_request_preferences(user_id);
 
--- Add constraints for valid values
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_reasoning_budget
-  CHECK (default_reasoning_budget IN ('quick', 'standard', 'deep'));
+-- Add constraints for valid values (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_reasoning_budget') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_reasoning_budget
+      CHECK (default_reasoning_budget IN ('quick', 'standard', 'deep'));
+  END IF;
 
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_quality_preference
-  CHECK (quality_preference IN ('economy', 'balanced', 'quality'));
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_quality_preference') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_quality_preference
+      CHECK (quality_preference IN ('economy', 'balanced', 'quality'));
+  END IF;
 
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_max_search_results
-  CHECK (max_search_results >= 1 AND max_search_results <= 50);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_max_search_results') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_max_search_results
+      CHECK (max_search_results >= 1 AND max_search_results <= 50);
+  END IF;
 
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_max_analysis_depth
-  CHECK (max_analysis_depth >= 1 AND max_analysis_depth <= 5);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_max_analysis_depth') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_max_analysis_depth
+      CHECK (max_analysis_depth >= 1 AND max_analysis_depth <= 5);
+  END IF;
 
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_max_practice_cases
-  CHECK (max_practice_cases >= 3 AND max_practice_cases <= 25);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_max_practice_cases') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_max_practice_cases
+      CHECK (max_practice_cases >= 3 AND max_practice_cases <= 25);
+  END IF;
 
-ALTER TABLE user_request_preferences
-ADD CONSTRAINT check_max_practice_depth
-  CHECK (max_practice_depth >= 1 AND max_practice_depth <= 5);
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_max_practice_depth') THEN
+    ALTER TABLE user_request_preferences
+    ADD CONSTRAINT check_max_practice_depth
+      CHECK (max_practice_depth >= 1 AND max_practice_depth <= 5);
+  END IF;
+END $$;
 
 -- Add comments for documentation
 COMMENT ON TABLE user_request_preferences IS 'User-configurable request parameters for cost and quality control';

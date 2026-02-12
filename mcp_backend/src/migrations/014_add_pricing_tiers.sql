@@ -8,9 +8,14 @@ ALTER TABLE user_billing
 ADD COLUMN IF NOT EXISTS pricing_tier VARCHAR(20) DEFAULT 'startup';
 
 -- Add check constraint for valid tier values
-ALTER TABLE user_billing
-ADD CONSTRAINT check_pricing_tier
-  CHECK (pricing_tier IN ('free', 'startup', 'business', 'enterprise', 'internal'));
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'check_pricing_tier') THEN
+    ALTER TABLE user_billing
+    ADD CONSTRAINT check_pricing_tier
+      CHECK (pricing_tier IN ('free', 'startup', 'business', 'enterprise', 'internal'));
+  END IF;
+END $$;
 
 -- Create index for pricing tier queries
 CREATE INDEX IF NOT EXISTS idx_user_billing_pricing_tier

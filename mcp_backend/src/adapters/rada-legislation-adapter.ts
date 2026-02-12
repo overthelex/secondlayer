@@ -409,7 +409,7 @@ export class RadaLegislationAdapter {
       JOIN legislation l ON la.legislation_id = l.id
       WHERE la.is_current = true
         AND (
-          to_tsvector('ukrainian', la.full_text) @@ plainto_tsquery('ukrainian', $1)
+          to_tsvector('simple', la.full_text) @@ plainto_tsquery('simple', $1)
           OR la.article_number ILIKE $2
         )
     `;
@@ -421,7 +421,7 @@ export class RadaLegislationAdapter {
       params.push(radaId);
     }
 
-    sql += ` ORDER BY ts_rank(to_tsvector('ukrainian', la.full_text), plainto_tsquery('ukrainian', $1)) DESC LIMIT $${params.length + 1}`;
+    sql += ` ORDER BY ts_rank(to_tsvector('simple', la.full_text), plainto_tsquery('simple', $1)) DESC LIMIT $${params.length + 1}`;
     params.push(limit);
 
     const result = await this.db.query(sql, params);
