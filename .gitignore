@@ -91,6 +91,9 @@ postgres_data/
 qdrant_data/
 redis_data/
 
+# Scratch/temp notes with credentials
+1
+
 # Claude Code
 .claude/
 
