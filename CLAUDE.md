@@ -2,6 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Stack
+
+- Monorepo with shared/backend/frontend packages
+- Language: TypeScript (primary), YAML for configs, Shell for deploy scripts
+- Infrastructure: Docker Compose for local dev, MinIO for storage, Nginx as reverse proxy
+- Auth: Google OAuth
+- Architecture: MCP tools pattern with LLM orchestration
+
+## Session Scope
+
+When the user asks for a specific task (e.g., 'commit frontend changes'), do exactly that. Do not expand scope to investigate related issues, refactor adjacent code, or explore the codebase unless explicitly asked. If you see something worth investigating, mention it briefly and ask before proceeding.
+
+## Git & Deployment Workflow
+
+After completing code changes, always: 1) Build and verify no errors, 2) Commit with a descriptive message, 3) Push to remote, 4) Deploy locally if requested. Do NOT over-scope commits — only stage files relevant to the current task.
+
+## Local Dev Environment
+
+- Backend services run in Docker containers, NOT as local processes. Do not attempt to restart backend services outside Docker.
+- Always run `docker compose build` after code changes before testing — do not test against stale images.
+- Run commands from the correct workspace directory (check with `pwd` before executing).
+- Use the correct env passwords from `.env` files, not defaults.
+
 ## Project Defaults
 
 Primary stack: JavaScript, Shell, HTML, YAML, Markdown. When creating new files, default to JavaScript (not TypeScript) unless the project already uses TypeScript.
@@ -314,6 +337,18 @@ Express app with:
 ## Firewall / Network
 
 - When working with iptables/firewall rules, always test grep patterns against actual rule output format before writing scripts. Use `iptables -S` or `iptables -L -n` to verify exact syntax before pattern matching.
+
+## Development Practices
+
+### Change Impact Analysis
+
+Before modifying shared configuration values (env vars like VITE_API_URL, API base paths, port numbers, OAuth redirect URIs), trace ALL downstream usages across frontend, backend, and deploy scripts. Never change these without verifying the full impact chain.
+
+## Frontend Conventions
+
+### UI Display Rules
+
+Search results, documents, and evidence MUST render in the right side panel — never in the chat window. When implementing features that return structured data, always verify the rendering target matches the design intent.
 
 ## Code Patterns
 
