@@ -205,17 +205,41 @@ export function formatBusinessEntitiesResponse(data: any, args: any): string {
 
 /**
  * Build Supreme Court search hints string based on intent.
+ *
+ * NOTE: ZakonOnline sph04 search mode treats all terms as AND conditions.
+ * Appending chamber names (КЦС, КГС, etc.) to the search text causes 0 results
+ * because documents rarely contain ALL chamber names simultaneously.
+ * Use `buildSupremeCourtWhereFilter()` for API-level court filtering instead.
  */
-export function buildSupremeCourtHints(intent?: any): string {
-  const base = ' Верховн КЦС КГС КАС ККС "Велика палата" "ВП ВС"';
-  const slots = intent?.slots || {};
-  if (slots?.court_level === 'GrandChamber') {
-    return ' "Велика палата" "ВП ВС"';
-  }
-  if (slots?.court_level === 'SC' || intent?.intent === 'supreme_court_position') {
-    return base;
-  }
+export function buildSupremeCourtHints(_intent?: any): string {
+  // Disabled: text-based hints break sph04 AND-mode search.
+  // SC filtering now uses where[instance_code] API filter.
   return '';
+}
+
+/**
+ * Map procedure code to ZakonOnline justice_kind filter value.
+ * justice_kind: 1=цивільне, 2=кримінальне, 3=господарське, 4=адміністративне
+ */
+export function mapProcedureCodeToJusticeKind(code: string | null): number | null {
+  const map: Record<string, number> = {
+    cpc: 1,   // цивільне судочинство
+    crpc: 2,  // кримінальне судочинство
+    gpc: 3,   // господарське судочинство
+    cac: 4,   // адміністративне судочинство
+  };
+  return code ? (map[code] ?? null) : null;
+}
+
+/**
+ * Build where-filter conditions for Supreme Court instance filtering.
+ * instance_code=1 corresponds to cassation courts (Верховний Суд).
+ */
+export function buildSupremeCourtWhereFilter(courtLevel: string): any[] {
+  if (courtLevel === 'SC' || courtLevel === 'GrandChamber') {
+    return [{ field: 'instance_code', operator: '=', value: 1 }];
+  }
+  return [];
 }
 
 /**

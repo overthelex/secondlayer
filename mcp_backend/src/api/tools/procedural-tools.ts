@@ -26,10 +26,24 @@ import {
   addDaysYMD,
   extractSnippets,
   buildSupremeCourtHints,
+  buildSupremeCourtWhereFilter,
+  mapProcedureCodeToJusticeKind,
   extractCaseNumberFromText,
   safeParseJsonFromToolResult,
   resolveCourtDecisionDocIdByCaseNumber,
 } from '../tool-utils.js';
+
+/**
+ * Extract court name from ZakonOnline title.
+ * Example: "Постанова від 26.09.2024 по справі № 927/995/21 Касаційний господарський суд"
+ *       -> "Касаційний господарський суд"
+ */
+function extractCourtFromTitle(title?: string): string {
+  if (!title) return '';
+  // Court name is typically the last part of the title after the case number
+  const match = title.match(/(?:Касаційний \S+ суд|Велика палата Верховного Суду|Верховний Суд)/i);
+  return match ? match[0] : '';
+}
 
 export class ProceduralTools extends BaseToolHandler {
   constructor(
@@ -306,12 +320,20 @@ export class ProceduralTools extends BaseToolHandler {
     if (!query) throw new Error('query parameter is required');
 
     const timeRangeParsed = parseTimeRangeToDates(args.time_range);
-    const scHints = buildSupremeCourtHints({ intent: 'supreme_court_position', slots: { court_level: courtLevel } });
-    const searchQuery = `${query}${scHints}`.trim();
+
+    // Build where-filters for SC instance and justice_kind (procedure type)
+    const whereFilters: any[] = [
+      ...buildSupremeCourtWhereFilter(courtLevel),
+    ];
+    const justiceKind = mapProcedureCodeToJusticeKind(procedureCode);
+    if (justiceKind !== null) {
+      whereFilters.push({ field: 'justice_kind', operator: '=', value: justiceKind });
+    }
 
     const searchParams: any = {
-      meta: { search: searchQuery },
-      limit,
+      meta: { search: query },
+      where: whereFilters.length > 0 ? whereFilters : undefined,
+      limit: Math.max(limit, 20), // fetch more to allow post-filtering
       offset: 0,
       ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
       ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
@@ -320,23 +342,29 @@ export class ProceduralTools extends BaseToolHandler {
     const response = await this.zoAdapter.searchCourtDecisions(searchParams);
     const normalized = await this.zoAdapter.normalizeResponse(response);
 
-    const allowedChambers = new Set(['ВП ВС', 'КЦС', 'КГС', 'КАС', 'ККС']);
+    // SC court codes: 99xx pattern (9901=ВП ВС, 9911=КГС, 9921=КАС, 9931=КЦС, 9941=ККС)
+    const scCourtCodePrefix = '99';
     const filtered = normalized.data.filter((d: any) => {
       if (courtLevel !== 'SC' && courtLevel !== 'GrandChamber') return true;
-      const ch = String(d?.chamber || '').trim();
-      if (courtLevel === 'GrandChamber') return ch === 'ВП ВС';
-      return ch ? allowedChambers.has(ch) : true;
+      const code = String(d?.court_code || '');
+      if (!code.startsWith(scCourtCodePrefix)) return false;
+      if (courtLevel === 'GrandChamber') {
+        // ВП ВС court_code = 9901
+        return code === '9901';
+      }
+      return true;
     });
 
     const results = filtered.slice(0, limit).map((d: any) => {
       const fullText = typeof d.full_text === 'string' ? d.full_text : '';
+      const courtName = extractCourtFromTitle(d?.title);
       return {
         doc_id: d?._raw?.doc_id ?? d?.doc_id ?? d?.zakononline_id,
-        court: d?.court,
-        chamber: d?.chamber,
-        date: d?.date,
-        case_number: d?.case_number,
-        url: d?._raw?.url,
+        court: d?.court || courtName,
+        chamber: courtName,
+        date: d?.date || d?.adjudication_date,
+        case_number: d?.case_number || d?.cause_num,
+        url: d?._raw?.url || d?.url,
         section_focus: sectionFocus,
         snippets: extractSnippets(fullText, query, 2),
       };
@@ -367,10 +395,19 @@ export class ProceduralTools extends BaseToolHandler {
     if (!query) throw new Error('query parameter is required');
 
     const timeRangeParsed = parseTimeRangeToDates(args.time_range);
-    const scHints = buildSupremeCourtHints({ intent: 'supreme_court_position', slots: { court_level: 'SC' } });
+
+    // Build where-filters for SC instance and justice_kind
+    const whereFilters: any[] = [
+      ...buildSupremeCourtWhereFilter('SC'),
+    ];
+    const justiceKind = mapProcedureCodeToJusticeKind(procedureCode);
+    if (justiceKind !== null) {
+      whereFilters.push({ field: 'justice_kind', operator: '=', value: justiceKind });
+    }
 
     const mk = (q: string) => ({
-      meta: { search: `${q}${scHints}`.trim() },
+      meta: { search: q },
+      where: whereFilters.length > 0 ? whereFilters : undefined,
       limit,
       offset: 0,
       ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
@@ -385,17 +422,20 @@ export class ProceduralTools extends BaseToolHandler {
     const proNorm = await this.zoAdapter.normalizeResponse(proResp);
     const contraNorm = await this.zoAdapter.normalizeResponse(contraResp);
 
-    const mapCase = (d: any) => ({
-      doc_id: d?._raw?.doc_id ?? d?.doc_id ?? d?.zakononline_id,
-      court: d?.court,
-      chamber: d?.chamber,
-      date: d?.date,
-      case_number: d?.case_number,
-      url: d?._raw?.url,
-      snippet: (typeof d?.full_text === 'string' && d.full_text.length > 0)
-        ? extractSnippets(d.full_text, query, 1)[0]
-        : undefined,
-    });
+    const mapCase = (d: any) => {
+      const courtName = extractCourtFromTitle(d?.title);
+      return {
+        doc_id: d?._raw?.doc_id ?? d?.doc_id ?? d?.zakononline_id,
+        court: d?.court || courtName,
+        chamber: courtName,
+        date: d?.date || d?.adjudication_date,
+        case_number: d?.case_number || d?.cause_num,
+        url: d?._raw?.url || d?.url,
+        snippet: (typeof d?.full_text === 'string' && d.full_text.length > 0)
+          ? extractSnippets(d.full_text, query, 1)[0]
+          : undefined,
+      };
+    };
 
     const payload: any = {
       procedure_code: procedureCode,
@@ -425,15 +465,24 @@ export class ProceduralTools extends BaseToolHandler {
     if (!factsText) throw new Error('facts_text parameter is required');
 
     const timeRangeParsed = parseTimeRangeToDates(args.time_range);
-    const scHints = buildSupremeCourtHints({ intent: 'supreme_court_position', slots: { court_level: 'SC' } });
     const extracted = await extractSearchTermsWithAI(factsText);
     const extractedTerms = Array.isArray(extracted?.keywords) ? extracted.keywords : [];
     const query = typeof extracted?.searchQuery === 'string' && extracted.searchQuery.trim().length > 0
       ? extracted.searchQuery.trim()
       : (extractedTerms.length > 0 ? extractedTerms.join(' ') : factsText.slice(0, 180));
 
+    // Build where-filters for SC instance and justice_kind
+    const whereFilters: any[] = [
+      ...buildSupremeCourtWhereFilter('SC'),
+    ];
+    const justiceKind = mapProcedureCodeToJusticeKind(procedureCode);
+    if (justiceKind !== null) {
+      whereFilters.push({ field: 'justice_kind', operator: '=', value: justiceKind });
+    }
+
     const searchParams: any = {
-      meta: { search: `${query}${scHints}`.trim() },
+      meta: { search: query },
+      where: whereFilters.length > 0 ? whereFilters : undefined,
       limit,
       offset: 0,
       ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
@@ -445,13 +494,14 @@ export class ProceduralTools extends BaseToolHandler {
 
     const results = norm.data.slice(0, limit).map((d: any) => {
       const fullText = typeof d?.full_text === 'string' ? d.full_text : '';
+      const courtName = extractCourtFromTitle(d?.title);
       return {
         doc_id: d?._raw?.doc_id ?? d?.doc_id ?? d?.zakononline_id,
-        court: d?.court,
-        chamber: d?.chamber,
-        date: d?.date,
-        case_number: d?.case_number,
-        url: d?._raw?.url,
+        court: d?.court || courtName,
+        chamber: courtName,
+        date: d?.date || d?.adjudication_date,
+        case_number: d?.case_number || d?.cause_num,
+        url: d?._raw?.url || d?.url,
         why_similar: extractSnippets(fullText, query.split(' ')[0] || query, 2),
       };
     });
