@@ -38,7 +38,7 @@ export class TeamService {
   constructor(private db: BaseDatabase) {}
 
   /**
-   * Get user's organization
+   * Get user's organization (as owner)
    */
   async getOrganization(userId: string): Promise<Organization | null> {
     const result = await this.db.query(
@@ -49,6 +49,59 @@ export class TeamService {
     );
 
     return result.rows[0] || null;
+  }
+
+  /**
+   * Get user's organization — checks both owner and member relationships
+   */
+  async getUserOrganization(userId: string): Promise<Organization | null> {
+    // First check if user owns an organization
+    const owned = await this.getOrganization(userId);
+    if (owned) return owned;
+
+    // Then check if user is a member of any organization
+    const memberResult = await this.db.query(
+      `SELECT o.id, o.name, o.owner_id as "ownerId", o.plan, o.max_members as "maxMembers", o.created_at as "createdAt"
+       FROM organizations o
+       JOIN organization_members om ON o.id = om.organization_id
+       WHERE om.user_id = $1 AND om.status = 'active'
+       LIMIT 1`,
+      [userId]
+    );
+
+    return memberResult.rows[0] || null;
+  }
+
+  /**
+   * Create organization with user as owner member
+   */
+  async createUserOrganization(userId: string, userEmail: string, data: {
+    name: string;
+    taxId?: string;
+    contactEmail?: string;
+    description?: string;
+  }): Promise<Organization> {
+    // Create the organization
+    const orgResult = await this.db.query(
+      `INSERT INTO organizations (name, owner_id, plan, max_members)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, owner_id as "ownerId", plan, max_members as "maxMembers", created_at as "createdAt"`,
+      [data.name, userId, 'free', 10]
+    );
+    const org = orgResult.rows[0] as Organization;
+
+    // Add user as owner member in organization_members
+    const memberEmail = data.contactEmail || userEmail;
+    await this.db.query(
+      `INSERT INTO organization_members (organization_id, user_id, email, role, status, joined_at)
+       VALUES ($1, $2, $3, 'owner', 'active', NOW())
+       ON CONFLICT (organization_id, email) DO UPDATE SET role = 'owner', status = 'active', user_id = $2`,
+      [org.id, userId, memberEmail]
+    );
+
+    logger.info(`Created organization "${data.name}" for user ${userId}`);
+
+    return org;
   }
 
   /**
@@ -90,13 +143,13 @@ export class TeamService {
         om.last_active as "lastActive",
         u.name,
         COALESCE(ct.request_count, 0) as "requests",
-        COALESCE(ct.total_cost, '₴0') as "cost"
+        COALESCE(ct.total_cost, '$0') as "cost"
        FROM organization_members om
        LEFT JOIN users u ON om.user_id = u.id
        LEFT JOIN LATERAL (
          SELECT
            COUNT(*) as request_count,
-           '₴' || ROUND(SUM(COALESCE(estimated_cost, 0))::numeric, 2)::text as total_cost
+           '$' || ROUND(SUM(COALESCE(total_cost_usd, 0))::numeric, 2)::text as total_cost
          FROM cost_tracking
          WHERE user_id = om.user_id
          AND DATE(created_at) >= CURRENT_DATE - INTERVAL '30 days'
@@ -306,7 +359,7 @@ export class TeamService {
     const statsResult = await this.db.query(
       `SELECT
         COUNT(*) as request_count,
-        COALESCE(SUM(estimated_cost), 0) as total_cost
+        COALESCE(SUM(total_cost_usd), 0) as total_cost
        FROM cost_tracking ct
        JOIN organization_members om ON ct.user_id = om.user_id
        WHERE om.organization_id = $1

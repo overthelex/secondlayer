@@ -211,11 +211,7 @@ export class CostTracker extends BaseCostTracker {
 
     estimatedTokens += Math.floor(params.queryLength / 4);
 
-    if (params.toolName === 'get_legal_advice') {
-      estimatedZOCalls += 3;
-      estimatedTokens += 2000;
-      notes.push('Full legal analysis includes multiple sub-queries');
-    } else if (params.toolName === 'search_legal_precedents') {
+    if (params.toolName === 'search_legal_precedents') {
       estimatedZOCalls += 1;
       notes.push('Basic precedent search');
     } else if (params.toolName.includes('search')) {
@@ -230,8 +226,6 @@ export class CostTracker extends BaseCostTracker {
     let estimatedSecondLayerCalls = 0;
     if (params.toolName === 'search_legal_precedents' || params.toolName.includes('search')) {
       estimatedSecondLayerCalls = 5;
-    } else if (params.toolName === 'get_legal_advice') {
-      estimatedSecondLayerCalls = 10;
     }
 
     const monthlySecondLayerTotal = await this.getMonthlySecondLayerCallCount();
