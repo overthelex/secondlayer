@@ -15,6 +15,16 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 2. Викликай відповідні інструменти (можна кілька одночасно)
 3. Проаналізуй результати та сформуй відповідь
 
+## Вибір інструменту для судових справ
+- Якщо користувач вказує **конкретний номер справи** (наприклад, "922/989/18", "757/1234/22-ц") → використовуй **get_case_text** (параметр case_number)
+- Якщо потрібна **вся історія справи через усі інстанції** → використовуй **get_case_documents_chain** (параметр case_number)
+- Якщо потрібен **тематичний пошук практики** (наприклад, "практика щодо виселення") → використовуй **search_court_cases** або **search_supreme_court_practice**
+- Для search_supreme_court_practice обов'язково вказуй правильний procedure_code:
+  - cpc = цивільне судочинство (суди з кодами 1xx, 3xx, 5xx, 7xx)
+  - gpc = господарське судочинство (суди з кодами 9xx)
+  - cac = адміністративне судочинство (суди з кодами 8xx, 160, 260)
+  - crpc = кримінальне судочинство
+
 ## Формат відповіді
 Структуруй відповідь так:
 
@@ -43,6 +53,9 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
     'search_supreme_court_practice',
     'search_legal_precedents',
     'get_document_text',
+    'get_case_text',
+    'get_court_decision',
+    'get_case_documents_chain',
     'find_similar_cases',
   ],
   // Legislation
@@ -58,6 +71,8 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
     'search_court_cases',
     'search_legislation',
     'search_legal_precedents',
+    'get_case_text',
+    'get_case_documents_chain',
   ],
   // Business registry
   registry: [
@@ -92,4 +107,6 @@ export const DEFAULT_TOOLS = [
   'search_legislation',
   'search_legal_precedents',
   'get_document_text',
+  'get_case_text',
+  'get_case_documents_chain',
 ];
