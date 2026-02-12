@@ -46,6 +46,9 @@ import { OAuthService } from './services/oauth-service.js';
 import { createHybridAuthMiddleware } from './middleware/oauth-auth.js';
 import { mcpDiscoveryRateLimit, healthCheckRateLimit, webhookRateLimit } from './middleware/rate-limit.js';
 import { ToolRegistry } from './api/tool-registry.js';
+import { BusinessRegistryTools } from './api/tools/business-registry-tools.js';
+import { DueDiligenceTools } from './api/due-diligence-tools.js';
+import { DueDiligenceService } from './services/due-diligence-service.js';
 import { ServiceProxy } from './services/service-proxy.js';
 import { ServiceType } from './types/gateway.js';
 import { UploadService } from './services/upload-service.js';
@@ -154,6 +157,21 @@ class HTTPMCPServer {
     this.serviceProxy = new ServiceProxy(this.costTracker);
     logger.info('Unified Gateway initialized (Tool Registry + Service Proxy)');
 
+    // Register all tool handlers with the central registry
+    this.toolRegistry.registerHandler(this.services.legislationTools);
+    this.toolRegistry.registerHandler(this.documentAnalysisTools);
+    this.toolRegistry.registerHandler(this.batchDocumentTools);
+    this.toolRegistry.registerHandler(new BusinessRegistryTools());
+    const ddService = new DueDiligenceService(
+      this.services.sectionizer,
+      this.services.patternStore,
+      this.services.citationValidator,
+      this.services.documentService
+    );
+    this.toolRegistry.registerHandler(new DueDiligenceTools(ddService));
+    this.toolRegistry.registerHandler(this.services.mcpAPI);
+    logger.info('Core tool handlers registered with ToolRegistry');
+
     // Initialize upload and storage services
     this.uploadService = new UploadService(this.services.db.getPool());
     this.minioService = new MinioService();
@@ -166,6 +184,7 @@ class HTTPMCPServer {
       this.services.documentService,
       metadataExtractor
     );
+    this.toolRegistry.registerHandler(this.vaultTools);
     this.conversationService = new ConversationService(this.services.db);
     this.gdprService = new GdprService(this.services.db, this.minioService, this.services.embeddingService);
     logger.info('Upload and MinIO services initialized');
@@ -268,10 +287,7 @@ class HTTPMCPServer {
 
     // Initialize MCP SSE Server for ChatGPT integration
     this.mcpSSEServer = new MCPSSEServer(
-      this.services.mcpAPI,
-      this.services.legislationTools,
-      this.documentAnalysisTools,
-      this.batchDocumentTools,
+      this.toolRegistry,
       this.costTracker,
       this.creditService
     );
@@ -721,12 +737,7 @@ class HTTPMCPServer {
         // Setup tools/list handler
         mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
           return {
-            tools: [
-              ...this.services.mcpAPI.getTools(),
-              ...this.services.legislationTools.getToolDefinitions(),
-              ...this.documentAnalysisTools.getToolDefinitions(),
-              ...this.batchDocumentTools.getToolDefinitions(),
-            ],
+            tools: this.toolRegistry.getLocalToolDefinitions(),
           };
         });
 
@@ -784,59 +795,14 @@ class HTTPMCPServer {
             const result = await requestContext.run(
               { requestId, task: toolName },
               async () => {
-                // Route to appropriate tool handler
-                if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
-                  switch (toolName) {
-                    case 'get_legislation_article':
-                      return await this.services.legislationTools.getLegislationArticle(args as any);
-                    case 'get_legislation_section':
-                      return await this.services.legislationTools.getLegislationSection(args as any);
-                    case 'get_legislation_articles':
-                      return await this.services.legislationTools.getLegislationArticles(args as any);
-                    case 'search_legislation':
-                      return await this.services.legislationTools.searchLegislation(args as any);
-                    case 'get_legislation_structure':
-                      return await this.services.legislationTools.getLegislationStructure(args as any);
-                    default:
-                      throw new Error(`Unknown legislation tool: ${toolName}`);
-                  }
-                } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
-                  switch (toolName) {
-                    case 'parse_document':
-                      return await this.documentAnalysisTools.parseDocument(args as any);
-                    case 'extract_key_clauses':
-                      return await this.documentAnalysisTools.extractKeyClauses(args as any);
-                    case 'summarize_document':
-                      return await this.documentAnalysisTools.summarizeDocument(args as any);
-                    case 'compare_documents':
-                      return await this.documentAnalysisTools.compareDocuments(args as any);
-                    default:
-                      throw new Error(`Unknown document tool: ${toolName}`);
-                  }
-                } else if (toolName === 'batch_process_documents') {
-                  return await this.batchDocumentTools.processBatch(args as any);
-                } else if (['store_document', 'get_document', 'list_documents', 'semantic_search'].includes(toolName)) {
-                  let routed;
-                  switch (toolName) {
-                    case 'store_document':
-                      routed = await this.vaultTools.storeDocument(args as any);
-                      break;
-                    case 'get_document':
-                      routed = await this.vaultTools.getDocument(args as any);
-                      break;
-                    case 'list_documents':
-                      routed = await this.vaultTools.listDocuments({ ...args as any, userId });
-                      break;
-                    case 'semantic_search':
-                      routed = await this.vaultTools.semanticSearch(args as any);
-                      break;
-                  }
-                  return {
-                    content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
-                  };
-                } else {
-                  return await this.services.mcpAPI.handleToolCall(toolName, args);
+                // Route to appropriate tool handler via centralized registry
+                // Special case: list_documents needs userId injection
+                const toolArgs = toolName === 'list_documents' ? { ...args, userId } : args;
+                const registryResult = await this.toolRegistry.executeTool(toolName, toolArgs);
+                if (registryResult) {
+                  return registryResult;
                 }
+                throw new Error(`Unknown tool: ${toolName}`);
               }
             );
 
@@ -1737,102 +1703,13 @@ class HTTPMCPServer {
           result = await requestContext.run(
             { requestId, task: toolName },
             async () => {
-              // Route legislation tools
-              if (toolName.startsWith('get_legislation_') || toolName === 'search_legislation') {
-                let routed;
-                switch (toolName) {
-                  case 'get_legislation_article':
-                    routed = await this.services.legislationTools.getLegislationArticle(args as any);
-                    break;
-                  case 'get_legislation_section':
-                    routed = await this.services.legislationTools.getLegislationSection(args as any);
-                    break;
-                  case 'get_legislation_articles':
-                    routed = await this.services.legislationTools.getLegislationArticles(args as any);
-                    break;
-                  case 'search_legislation':
-                    routed = await this.services.legislationTools.searchLegislation(args as any);
-                    break;
-                  case 'get_legislation_structure':
-                    routed = await this.services.legislationTools.getLegislationStructure(args as any);
-                    break;
-                  default:
-                    throw new Error(`Unknown legislation tool: ${toolName}`);
-                }
-                return {
-                  content: [{ type: 'text', text: JSON.stringify(routed, null, 2) }],
-                };
+              // Route to appropriate tool handler via centralized registry
+              // Special case: list_documents needs userId injection
+              const httpToolArgs = toolName === 'list_documents' ? { ...args, userId: req.user?.id } : args;
+              const httpRegistryResult = await this.toolRegistry.executeTool(toolName, httpToolArgs);
+              if (httpRegistryResult) {
+                return httpRegistryResult;
               }
-
-              // Route document analysis tools
-              if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(toolName)) {
-                let routed;
-                switch (toolName) {
-                  case 'parse_document':
-                    routed = await this.documentAnalysisTools.parseDocument(args as any);
-                    break;
-                  case 'extract_key_clauses':
-                    routed = await this.documentAnalysisTools.extractKeyClauses(args as any);
-                    break;
-                  case 'summarize_document':
-                    routed = await this.documentAnalysisTools.summarizeDocument(args as any);
-                    break;
-                  case 'compare_documents':
-                    routed = await this.documentAnalysisTools.compareDocuments(args as any);
-                    break;
-                  default:
-                    throw new Error(`Unknown document analysis tool: ${toolName}`);
-                }
-                return {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify(routed, null, 2),
-                    },
-                  ],
-                };
-              }
-
-              // Route batch document tools
-              if (toolName === 'batch_process_documents') {
-                const routed = await this.batchDocumentTools.processBatch(args as any);
-                return {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify(routed, null, 2),
-                    },
-                  ],
-                };
-              }
-
-              // Route vault tools
-              if (['store_document', 'get_document', 'list_documents', 'semantic_search'].includes(toolName)) {
-                let routed;
-                switch (toolName) {
-                  case 'store_document':
-                    routed = await this.vaultTools.storeDocument(args as any);
-                    break;
-                  case 'get_document':
-                    routed = await this.vaultTools.getDocument(args as any);
-                    break;
-                  case 'list_documents':
-                    routed = await this.vaultTools.listDocuments({ ...args as any, userId: req.user?.id });
-                    break;
-                  case 'semantic_search':
-                    routed = await this.vaultTools.semanticSearch(args as any);
-                    break;
-                }
-                return {
-                  content: [
-                    {
-                      type: 'text',
-                      text: JSON.stringify(routed, null, 2),
-                    },
-                  ],
-                };
-              }
-
               return await this.services.mcpAPI.handleToolCall(toolName, args);
             }
           );

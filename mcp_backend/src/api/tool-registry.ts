@@ -1,10 +1,17 @@
 /**
- * Tool Registry - Central mapping of all 44 MCP tools to their respective services
+ * Tool Registry - Central mapping and dispatch for all MCP tools
+ *
+ * Manages:
+ * - Local tool handlers (BaseToolHandler instances)
+ * - Remote tool routes (RADA, OpenReyestr)
+ * - Unified tool execution dispatch
+ * - Tool definition aggregation
  */
 
 import { ToolRoute, ServiceType } from '../types/gateway.js';
 import { logger } from '../utils/logger.js';
 import axios, { AxiosInstance } from 'axios';
+import { BaseToolHandler, ToolResult, ToolDefinition as BaseToolDefinition, StreamEventCallback } from './base-tool-handler.js';
 
 export interface ToolDefinition {
   name: string;
@@ -15,6 +22,8 @@ export interface ToolDefinition {
 export class ToolRegistry {
   private routes: Map<string, ToolRoute>;
   private axiosClient: AxiosInstance;
+  private handlers: BaseToolHandler[] = [];
+  private handlerMap: Map<string, BaseToolHandler> = new Map();
 
   constructor() {
     this.routes = new Map();
@@ -24,33 +33,116 @@ export class ToolRegistry {
     this.initializeRoutes();
   }
 
+  // ========================= Handler Registration =========================
+
+  /**
+   * Register a BaseToolHandler. Its tool definitions are indexed for fast lookup.
+   */
+  registerHandler(handler: BaseToolHandler): void {
+    this.handlers.push(handler);
+    for (const def of handler.getToolDefinitions()) {
+      this.handlerMap.set(def.name, handler);
+      // Ensure route exists for local tools
+      if (!this.routes.has(def.name)) {
+        this.routes.set(def.name, {
+          toolName: def.name,
+          serviceName: def.name,
+          service: 'backend',
+          local: true,
+        });
+      }
+    }
+    logger.debug('Registered tool handler', {
+      tools: handler.getToolDefinitions().map(t => t.name),
+    });
+  }
+
+  /**
+   * Execute a local tool by name via the registered handler.
+   * Returns null if no handler is registered for the tool.
+   */
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    const handler = this.handlerMap.get(name);
+    if (!handler) return null;
+    return await handler.executeTool(name, args);
+  }
+
+  /**
+   * Execute a streaming tool by name. Returns null if not supported.
+   */
+  async executeToolStream(name: string, args: any, callback: StreamEventCallback): Promise<ToolResult | null> {
+    const handler = this.handlerMap.get(name);
+    if (!handler || !handler.executeToolStream) return null;
+    return await handler.executeToolStream(name, args, callback);
+  }
+
+  /**
+   * Check if a handler supports streaming for a given tool.
+   */
+  supportsStreaming(name: string): boolean {
+    const handler = this.handlerMap.get(name);
+    return !!handler && typeof handler.executeToolStream === 'function';
+  }
+
+  /**
+   * Get the handler for a given tool name.
+   */
+  getHandler(name: string): BaseToolHandler | undefined {
+    return this.handlerMap.get(name);
+  }
+
+  /**
+   * Get all local tool definitions from registered handlers.
+   */
+  getLocalToolDefinitions(): ToolDefinition[] {
+    const seen = new Set<string>();
+    const defs: ToolDefinition[] = [];
+    for (const handler of this.handlers) {
+      for (const def of handler.getToolDefinitions()) {
+        if (!seen.has(def.name)) {
+          seen.add(def.name);
+          defs.push(def);
+        }
+      }
+    }
+    return defs;
+  }
+
+  // ========================= Route Management =========================
+
   private initializeRoutes(): void {
-    // ========== Backend Tools (36 tools) - No prefix, local execution ==========
+    // ========== Backend Tools - No prefix, local execution ==========
     const backendTools = [
       'classify_intent',
+      'retrieve_legal_sources',
       'search_legal_precedents',
       'get_court_decision',
-      'get_document_text',
-      'semantic_search',
-      'find_legal_patterns',
-      'validate_citations',
-      'packaged_lawyer_answer',
-      'get_legal_advice',
-      'search_by_category',
-      'search_by_court',
-      'search_by_judge',
-      'search_by_date_range',
-      'get_case_metadata',
-      'get_related_cases',
-      'analyze_judicial_reasoning',
-      'extract_legal_principles',
-      'compare_decisions',
-      'track_precedent_evolution',
-      'get_citation_network',
-      'search_court_practice',
-      'get_practice_document',
-      'analyze_practice_patterns',
+      'get_case_text',
       'get_case_documents_chain',
+      'check_precedent_status',
+      'count_cases_by_party',
+      'load_full_texts',
+      'bulk_ingest_court_decisions',
+      'analyze_legal_patterns',
+      'analyze_case_pattern',
+      'get_similar_reasoning',
+      'extract_document_sections',
+      'compare_practice_pro_contra',
+      'get_citation_graph',
+      'search_procedural_norms',
+      'search_supreme_court_practice',
+      'find_similar_fact_pattern_cases',
+      'find_relevant_law_articles',
+      'calculate_procedural_deadlines',
+      'build_procedural_checklist',
+      'calculate_monetary_claims',
+      'validate_response',
+      'format_answer_pack',
+      'get_legal_advice',
+      'search_business_entities',
+      'get_business_entity_details',
+      'search_entity_beneficiaries',
+      'lookup_by_edrpou',
       'search_legislation',
       'get_legislation_article',
       'get_legislation_section',
@@ -61,12 +153,13 @@ export class ToolRegistry {
       'summarize_document',
       'compare_documents',
       'batch_process_documents',
-      'get_judge_statistics',
-      'analyze_court_trends',
       'store_document',
       'get_document',
       'list_documents',
       'semantic_search',
+      'bulk_review_runner',
+      'risk_scoring',
+      'generate_dd_report',
     ];
 
     for (const tool of backendTools) {
@@ -166,7 +259,6 @@ export class ToolRegistry {
           error: error.message,
           baseUrl: radaBaseUrl,
         });
-        // Continue without RADA tools
       }
     }
 
@@ -196,7 +288,6 @@ export class ToolRegistry {
           error: error.message,
           baseUrl: openreyestrBaseUrl,
         });
-        // Continue without OpenReyestr tools
       }
     }
 

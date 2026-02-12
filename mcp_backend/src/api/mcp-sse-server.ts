@@ -12,10 +12,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
-import { MCPQueryAPI } from './mcp-query-api.js';
-import { LegislationTools } from './legislation-tools.js';
-import { DocumentAnalysisTools } from './document-analysis-tools.js';
-import { BatchDocumentTools } from './batch-document-tools.js';
+import { ToolRegistry } from './tool-registry.js';
 import { CostTracker } from '../services/cost-tracker.js';
 import { CreditService } from '../services/credit-service.js';
 import { requestContext } from '../utils/openai-client.js';
@@ -63,10 +60,7 @@ export class MCPSSEServer {
   private sessions: Map<string, SessionContext> = new Map();
 
   constructor(
-    private mcpAPI: MCPQueryAPI,
-    private legislationTools: LegislationTools,
-    private documentAnalysisTools: DocumentAnalysisTools,
-    private batchDocumentTools: BatchDocumentTools,
+    private toolRegistry: ToolRegistry,
     private costTracker: CostTracker,
     private creditService?: CreditService
   ) {}
@@ -75,17 +69,7 @@ export class MCPSSEServer {
    * Get all available tools in MCP format
    */
   getAllTools(): MCPToolDefinition[] {
-    const mcpTools = this.mcpAPI.getTools();
-    const legislationToolsList = this.legislationTools.getToolDefinitions();
-    const documentToolsList = this.documentAnalysisTools.getToolDefinitions();
-    const batchToolsList = this.batchDocumentTools.getToolDefinitions();
-
-    const allTools = [
-      ...mcpTools,
-      ...legislationToolsList,
-      ...documentToolsList,
-      ...batchToolsList,
-    ];
+    const allTools = this.toolRegistry.getLocalToolDefinitions();
 
     // Convert to MCP format
     return allTools.map((tool: any) => ({
@@ -435,16 +419,9 @@ export class MCPSSEServer {
       const result = await requestContext.run(
         { requestId, task: name },
         async () => {
-          // Route to appropriate tool handler
-          if (name.startsWith('get_legislation_') || name === 'search_legislation') {
-            return await this.executeLegislationTool(name, args);
-          } else if (['parse_document', 'extract_key_clauses', 'summarize_document', 'compare_documents'].includes(name)) {
-            return await this.executeDocumentTool(name, args);
-          } else if (name === 'batch_process_documents') {
-            return await this.batchDocumentTools.processBatch(args);
-          } else {
-            return await this.mcpAPI.handleToolCall(name, args);
-          }
+          const registryResult = await this.toolRegistry.executeTool(name, args);
+          if (registryResult) return registryResult;
+          throw new Error(`Unknown tool: ${name}`);
         }
       );
 
@@ -568,44 +545,6 @@ export class MCPSSEServer {
           },
         },
       });
-    }
-  }
-
-  /**
-   * Execute legislation tool
-   */
-  private async executeLegislationTool(name: string, args: any): Promise<any> {
-    switch (name) {
-      case 'get_legislation_article':
-        return await this.legislationTools.getLegislationArticle(args);
-      case 'get_legislation_section':
-        return await this.legislationTools.getLegislationSection(args);
-      case 'get_legislation_articles':
-        return await this.legislationTools.getLegislationArticles(args);
-      case 'search_legislation':
-        return await this.legislationTools.searchLegislation(args);
-      case 'get_legislation_structure':
-        return await this.legislationTools.getLegislationStructure(args);
-      default:
-        throw new Error(`Unknown legislation tool: ${name}`);
-    }
-  }
-
-  /**
-   * Execute document analysis tool
-   */
-  private async executeDocumentTool(name: string, args: any): Promise<any> {
-    switch (name) {
-      case 'parse_document':
-        return await this.documentAnalysisTools.parseDocument(args);
-      case 'extract_key_clauses':
-        return await this.documentAnalysisTools.extractKeyClauses(args);
-      case 'summarize_document':
-        return await this.documentAnalysisTools.summarizeDocument(args);
-      case 'compare_documents':
-        return await this.documentAnalysisTools.compareDocuments(args);
-      default:
-        throw new Error(`Unknown document tool: ${name}`);
     }
   }
 

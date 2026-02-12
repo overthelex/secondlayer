@@ -21,6 +21,7 @@ import {
 } from '../services/due-diligence-service.js';
 import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 
 /**
  * MCP Tool Response Envelope (v1)
@@ -62,8 +63,10 @@ interface DDTableRow {
   anchor: string;
 }
 
-export class DueDiligenceTools {
-  constructor(private ddService: DueDiligenceService) {}
+export class DueDiligenceTools extends BaseToolHandler {
+  constructor(private ddService: DueDiligenceService) {
+    super();
+  }
 
   getToolDefinitions() {
     return [
@@ -614,5 +617,18 @@ Acceptance criteria:
 </html>`;
 
     return html;
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    switch (name) {
+      case 'bulk_review_runner':
+        return this.wrapResponse(await this.bulkReviewRunner(args));
+      case 'risk_scoring':
+        return this.wrapResponse(await this.riskScoring(args));
+      case 'generate_dd_report':
+        return this.wrapResponse(await this.generateDDReport(args));
+      default:
+        return null;
+    }
   }
 }

@@ -2,6 +2,7 @@ import { DocumentParser, ParsedDocument } from '../services/document-parser.js';
 import { DocumentAnalysisTools, ExtractedClause, DocumentSummary } from './document-analysis-tools.js';
 import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 
 export interface BatchFile {
   id: string;
@@ -54,11 +55,13 @@ export interface BatchResult {
  * Batch document processing with SSE progress streaming
  * Optimized for processing thousands of documents with real-time progress updates
  */
-export class BatchDocumentTools {
+export class BatchDocumentTools extends BaseToolHandler {
   constructor(
     private documentParser: DocumentParser,
     private documentAnalysisTools: DocumentAnalysisTools
-  ) {}
+  ) {
+    super();
+  }
 
   getToolDefinitions() {
     return [
@@ -502,6 +505,15 @@ export class BatchDocumentTools {
       } catch (error) {
         logger.error('[BatchDocumentTools] Error in progress callback', { error });
       }
+    }
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    switch (name) {
+      case 'batch_process_documents':
+        return this.wrapResponse(await this.processBatch(args));
+      default:
+        return null;
     }
   }
 }

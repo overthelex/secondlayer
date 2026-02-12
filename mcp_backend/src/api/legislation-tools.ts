@@ -4,6 +4,7 @@ import { LegislationRenderer } from '../services/legislation-renderer';
 import { EmbeddingService } from '../services/embedding-service';
 import { logger } from '../utils/logger';
 import { createClient } from 'redis';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 
 export interface LegislationToolArgs {
   rada_id?: string;
@@ -15,11 +16,12 @@ export interface LegislationToolArgs {
   theme?: 'light' | 'dark';
 }
 
-export class LegislationTools {
+export class LegislationTools extends BaseToolHandler {
   private service: LegislationService;
   private renderer: LegislationRenderer;
 
   constructor(db: Pool, embeddingService: EmbeddingService, redis?: ReturnType<typeof createClient>) {
+    super();
     this.service = new LegislationService(db, embeddingService, redis);
     this.renderer = new LegislationRenderer();
   }
@@ -474,5 +476,22 @@ export class LegislationTools {
         },
       },
     ];
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    switch (name) {
+      case 'get_legislation_article':
+        return this.wrapResponse(await this.getLegislationArticle(args));
+      case 'get_legislation_section':
+        return this.wrapResponse(await this.getLegislationSection(args));
+      case 'get_legislation_articles':
+        return this.wrapResponse(await this.getLegislationArticles(args));
+      case 'search_legislation':
+        return this.wrapResponse(await this.searchLegislation(args));
+      case 'get_legislation_structure':
+        return this.wrapResponse(await this.getLegislationStructure(args));
+      default:
+        return null;
+    }
   }
 }

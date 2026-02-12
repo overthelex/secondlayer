@@ -13,6 +13,7 @@ import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../utils/html
 import { getOpenAIManager } from '../utils/openai-client.js';
 import { ModelSelector } from '../utils/model-selector.js';
 import { LegislationTools } from './legislation-tools.js';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 import axios from 'axios';
 
 export type StreamEventCallback = (event: {
@@ -21,7 +22,7 @@ export type StreamEventCallback = (event: {
   id?: string;
 }) => void;
 
-export class MCPQueryAPI {
+export class MCPQueryAPI extends BaseToolHandler {
   constructor(
     private queryPlanner: QueryPlanner,
     private zoAdapter: ZOAdapter,
@@ -32,7 +33,9 @@ export class MCPQueryAPI {
     private citationValidator: CitationValidator,
     private hallucinationGuard: HallucinationGuard,
     private legislationTools: LegislationTools
-  ) {}
+  ) {
+    super();
+  }
 
   private extractSourceStrings(sources: any): string[] {
     if (!Array.isArray(sources)) return [];
@@ -2079,7 +2082,7 @@ export class MCPQueryAPI {
     };
   }
 
-  getTools() {
+  getToolDefinitions() {
     return [
       {
         name: 'classify_intent',
@@ -2432,102 +2435,8 @@ export class MCPQueryAPI {
           required: ['code']
         }
       },
-      {
-        name: 'search_business_entities',
-        description: `Пошук суб'єктів господарювання в Єдиному державному реєстрі України
-
-💰 Примерная стоимость: $0.001-$0.005 USD
-Пошук юридичних осіб, ФОП та громадських організацій за назвою, ЄДРПОУ або іншими критеріями.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Пошуковий запит (назва або частина назви суб\'єкта)'
-            },
-            edrpou: {
-              type: 'string',
-              description: 'Код ЄДРПОУ'
-            },
-            entity_type: {
-              type: 'string',
-              enum: ['UO', 'FOP', 'FSU', 'ALL'],
-              default: 'ALL',
-              description: 'Тип суб\'єкта: UO (юридичні особи), FOP (ФОП), FSU (громадські організації), ALL (всі типи)'
-            },
-            status: {
-              type: 'string',
-              description: 'Статус діяльності (наприклад, "зареєстровано", "припинено")'
-            },
-            limit: {
-              type: 'number',
-              default: 50,
-              description: 'Максимальна кількість результатів (1-100)'
-            }
-          }
-        }
-      },
-      {
-        name: 'get_business_entity_details',
-        description: `Отримання повної інформації про суб'єкт господарювання
-
-💰 Примерная стоимость: $0.001-$0.003 USD
-Включає відомості про засновників, бенефіціарів, керівників, філії та іншу інформацію з реєстру.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            record: {
-              type: 'string',
-              description: 'Номер запису в реєстрі'
-            },
-            entity_type: {
-              type: 'string',
-              enum: ['UO', 'FOP', 'FSU'],
-              description: 'Тип суб\'єкта (необов\'язково, визначається автоматично)'
-            }
-          },
-          required: ['record']
-        }
-      },
-      {
-        name: 'search_entity_beneficiaries',
-        description: `Пошук кінцевих бенефіціарних власників (контролерів) компаній
-
-💰 Примерная стоимость: $0.002-$0.005 USD
-Пошук бенефіціарів за ім'ям у всіх суб'єктах господарювання.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: {
-              type: 'string',
-              description: 'Ім\'я або частина імені бенефіціара'
-            },
-            limit: {
-              type: 'number',
-              default: 50,
-              description: 'Максимальна кількість результатів (1-100)'
-            }
-          },
-          required: ['query']
-        }
-      },
-      {
-        name: 'lookup_by_edrpou',
-        description: `Швидкий пошук суб'єкта господарювання за кодом ЄДРПОУ
-
-💰 Примерная стоимость: $0.001 USD
-Отримання базової інформації про компанію за її ідентифікаційним кодом.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            edrpou: {
-              type: 'string',
-              description: 'Код ЄДРПОУ (8 цифр)'
-            }
-          },
-          required: ['edrpou']
-        }
-      },
+      // business registry tools (search_business_entities, get_business_entity_details,
+      // search_entity_beneficiaries, lookup_by_edrpou) moved to tools/business-registry-tools.ts
       {
         name: 'search_supreme_court_practice',
         description: `Поиск практики Верховного Суду (в т.ч. ВП/КЦС/КГС/КАС/ККС) с краткими выдержками`,
@@ -2784,6 +2693,16 @@ export class MCPQueryAPI {
     ];
   }
 
+  /** Backward-compat alias for getToolDefinitions() */
+  getTools() {
+    return this.getToolDefinitions();
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    if (!this.handles(name)) return null;
+    return await this.handleToolCall(name, args);
+  }
+
   async handleToolCall(name: string, args: any): Promise<any> {
     const startTime = Date.now();
     logger.info('[MCP] Tool call initiated', { toolName: name });
@@ -2836,18 +2755,7 @@ export class MCPQueryAPI {
         case 'search_procedural_norms':
           result = await this.searchProceduralNorms(args);
           break;
-        case 'search_business_entities':
-          result = await this.searchBusinessEntities(args);
-          break;
-        case 'get_business_entity_details':
-          result = await this.getBusinessEntityDetails(args);
-          break;
-        case 'search_entity_beneficiaries':
-          result = await this.searchEntityBeneficiaries(args);
-          break;
-        case 'lookup_by_edrpou':
-          result = await this.lookupByEdrpou(args);
-          break;
+        // business registry tools moved to tools/business-registry-tools.ts
         case 'search_supreme_court_practice':
           result = await this.searchSupremeCourtPractice(args);
           break;

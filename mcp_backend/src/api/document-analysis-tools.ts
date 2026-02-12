@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { getOpenAIManager } from '../utils/openai-client.js';
 import { ModelSelector } from '../utils/model-selector.js';
 import * as Diff from 'diff';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 
 export interface ExtractedClause {
   type: string;
@@ -38,7 +39,7 @@ export interface DocumentComparison {
   summary: string;
 }
 
-export class DocumentAnalysisTools {
+export class DocumentAnalysisTools extends BaseToolHandler {
   constructor(
     private documentParser: DocumentParser,
     _sectionizer: SemanticSectionizer,
@@ -46,7 +47,9 @@ export class DocumentAnalysisTools {
     _citationValidator: CitationValidator,
     _embeddingService: EmbeddingService,
     _documentService: DocumentService
-  ) {}
+  ) {
+    super();
+  }
 
   getToolDefinitions() {
     return [
@@ -455,5 +458,20 @@ ${changesText}
     }
 
     return 'minor';
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    switch (name) {
+      case 'parse_document':
+        return this.wrapResponse(await this.parseDocument(args));
+      case 'extract_key_clauses':
+        return this.wrapResponse(await this.extractKeyClauses(args));
+      case 'summarize_document':
+        return this.wrapResponse(await this.summarizeDocument(args));
+      case 'compare_documents':
+        return this.wrapResponse(await this.compareDocuments(args));
+      default:
+        return null;
+    }
   }
 }

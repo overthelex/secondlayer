@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { DocumentSection } from '../types/index.js';
 import fs from 'fs/promises';
+import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler.js';
 
 /**
  * Vault Tools API - Stage 4 Implementation
@@ -56,7 +57,7 @@ export interface SemanticSearchResult {
   metadata: any;
 }
 
-export class VaultTools {
+export class VaultTools extends BaseToolHandler {
   constructor(
     private documentParser: DocumentParser,
     private sectionizer: SemanticSectionizer,
@@ -64,7 +65,9 @@ export class VaultTools {
     private embeddingService: EmbeddingService,
     private documentService: DocumentService,
     private metadataExtractor: MetadataExtractor
-  ) {}
+  ) {
+    super();
+  }
 
   getToolDefinitions() {
     return [
@@ -895,6 +898,21 @@ Pipeline:
       // Return empty results instead of throwing (graceful degradation)
       logger.warn('[Vault] Returning empty results due to search failure');
       return [];
+    }
+  }
+
+  async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    switch (name) {
+      case 'store_document':
+        return this.wrapResponse(await this.storeDocument(args));
+      case 'get_document':
+        return this.wrapResponse(await this.getDocument(args));
+      case 'list_documents':
+        return this.wrapResponse(await this.listDocuments(args));
+      case 'semantic_search':
+        return this.wrapResponse(await this.semanticSearch(args));
+      default:
+        return null;
     }
   }
 }
