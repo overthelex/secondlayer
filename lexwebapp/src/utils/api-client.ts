@@ -168,6 +168,9 @@ export const api = {
   team: {
     getMembers: () => apiClient.get('/api/team/members'),
     getStats: () => apiClient.get('/api/team/stats'),
+    getOrganization: () => apiClient.get('/api/team/organization'),
+    createOrganization: (data: { name: string; taxId?: string; contactEmail?: string; description?: string }) =>
+      apiClient.post('/api/team/organization', data),
     inviteMember: (email: string, role: string) =>
       apiClient.post('/api/team/invite', { email, role }),
     updateMember: (memberId: string, data: any) =>
