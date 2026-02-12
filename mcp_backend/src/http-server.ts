@@ -1469,6 +1469,58 @@ class HTTPMCPServer {
     // POST /api/templates/metrics/aggregate - Aggregate metrics (admin)
     this.app.use('/api/templates', requireJWT as any, createTemplateRoutes(this.services.db));
 
+    // ============ Legislation listing endpoint ============
+    this.app.get('/api/legislation', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+        const offset = parseInt(req.query.offset as string) || 0;
+        const search = (req.query.search as string) || undefined;
+
+        const legislationService = this.services.legislationTools.getLegislationService();
+        const result = await legislationService.listLegislation(limit, offset, search);
+
+        res.json(result);
+      } catch (error: any) {
+        logger.error('Error listing legislation:', error.message);
+        res.status(500).json({ error: 'Failed to list legislation' });
+      }
+    }) as any);
+
+    this.app.get('/api/legislation/:radaId/structure', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const radaId = req.params.radaId as string;
+        const legislationService = this.services.legislationTools.getLegislationService();
+        const structure = await legislationService.getLegislationStructure(radaId);
+
+        if (!structure) {
+          return res.status(404).json({ error: 'Legislation not found' });
+        }
+
+        res.json(structure);
+      } catch (error: any) {
+        logger.error('Error getting legislation structure:', error.message);
+        res.status(500).json({ error: 'Failed to get legislation structure' });
+      }
+    }) as any);
+
+    this.app.get('/api/legislation/:radaId/article/:articleNumber', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const radaId = req.params.radaId as string;
+        const articleNumber = req.params.articleNumber as string;
+        const legislationService = this.services.legislationTools.getLegislationService();
+        const article = await legislationService.getArticle(radaId, articleNumber);
+
+        if (!article) {
+          return res.status(404).json({ error: 'Article not found' });
+        }
+
+        res.json(article);
+      } catch (error: any) {
+        logger.error('Error getting legislation article:', error.message);
+        res.status(500).json({ error: 'Failed to get article' });
+      }
+    }) as any);
+
     // ============ AI Chat endpoint (agentic LLM loop with SSE) ============
     // POST /api/chat - Streams thinking steps, tool results, and final answer
     this.app.post('/api/chat', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {

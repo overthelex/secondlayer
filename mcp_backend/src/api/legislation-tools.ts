@@ -26,6 +26,10 @@ export class LegislationTools extends BaseToolHandler {
     this.renderer = new LegislationRenderer();
   }
 
+  getLegislationService(): LegislationService {
+    return this.service;
+  }
+
   /**
    * Устанавливает Redis клиент для AI-классификации законодательства
    */

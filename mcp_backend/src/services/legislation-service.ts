@@ -232,6 +232,66 @@ export class LegislationService {
     }));
   }
 
+  async listLegislation(limit: number = 50, offset: number = 0, search?: string): Promise<{
+    items: Array<{
+      rada_id: string;
+      title: string;
+      short_title: string | null;
+      type: string | null;
+      status: string | null;
+      total_articles: number | null;
+      adoption_date: string | null;
+      effective_date: string | null;
+      last_amended_date: string | null;
+      url: string;
+    }>;
+    total: number;
+  }> {
+    let whereClause = '';
+    const params: any[] = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      whereClause = `WHERE title ILIKE $${params.length} OR short_title ILIKE $${params.length} OR rada_id ILIKE $${params.length}`;
+    }
+
+    const countResult = await this.db.query(
+      `SELECT COUNT(*) as total FROM legislation ${whereClause}`,
+      params
+    );
+
+    params.push(limit);
+    const limitIdx = params.length;
+    params.push(offset);
+    const offsetIdx = params.length;
+
+    const result = await this.db.query(
+      `SELECT rada_id, title, short_title, type, status, total_articles,
+              adoption_date, effective_date, last_amended_date
+       FROM legislation
+       ${whereClause}
+       ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      params
+    );
+
+    return {
+      items: result.rows.map((row: any) => ({
+        rada_id: row.rada_id,
+        title: row.title,
+        short_title: row.short_title,
+        type: row.type,
+        status: row.status,
+        total_articles: row.total_articles,
+        adoption_date: row.adoption_date,
+        effective_date: row.effective_date,
+        last_amended_date: row.last_amended_date,
+        url: `https://zakon.rada.gov.ua/laws/show/${row.rada_id}`,
+      })),
+      total: parseInt(countResult.rows[0].total, 10),
+    };
+  }
+
   async searchLegislation(query: string, radaId?: string, limit: number = 10): Promise<LegislationSearchResult[]> {
     if (radaId) {
       await this.ensureLegislationExists(radaId);
