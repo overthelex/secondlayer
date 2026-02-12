@@ -26,6 +26,7 @@ import {
   DOMAIN_TOOL_MAP,
   DEFAULT_TOOLS,
 } from '../prompts/chat-system-prompt.js';
+import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-service.js';
 
 // ============================
 // Types
@@ -55,7 +56,8 @@ export class ChatService {
   constructor(
     private toolRegistry: ToolRegistry,
     private queryPlanner: QueryPlanner,
-    private costTracker: CostTracker
+    private costTracker: CostTracker,
+    private searchCache?: ChatSearchCacheService
   ) {}
 
   /**
@@ -140,10 +142,33 @@ export class ChatService {
           };
 
           let toolResult: any;
-          try {
-            toolResult = await this.toolRegistry.executeTool(call.name, call.arguments);
-          } catch (err: any) {
-            toolResult = { error: err.message };
+          let cached = false;
+
+          // Check cache for court search tools
+          if (this.searchCache && isCourtSearchTool(call.name)) {
+            const hit = await this.searchCache.getCachedResult(call.name, call.arguments);
+            if (hit) {
+              toolResult = hit;
+              cached = true;
+              logger.info('[ChatService] Cache hit for tool', { tool: call.name });
+            }
+          }
+
+          if (!cached) {
+            try {
+              toolResult = await this.toolRegistry.executeTool(call.name, call.arguments);
+            } catch (err: any) {
+              toolResult = { error: err.message };
+            }
+
+            // Post-execution: cache result & trigger background downloads
+            if (this.searchCache && isCourtSearchTool(call.name) && !toolResult?.error) {
+              this.searchCache.cacheResult(call.name, call.arguments, toolResult);
+              const docIds = this.searchCache.extractDocIds(toolResult);
+              if (docIds.length > 0) {
+                this.searchCache.triggerBackgroundDownloads(docIds);
+              }
+            }
           }
 
           const summarized = this.summarizeResult(toolResult);
@@ -153,6 +178,7 @@ export class ChatService {
             data: {
               tool: call.name,
               result: summarized,
+              cached,
             },
           };
 

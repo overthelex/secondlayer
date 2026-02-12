@@ -50,6 +50,9 @@ function extractEvidenceFromToolResult(
     'search_supreme_court_practice',
     'get_case_documents_chain',
     'find_similar_cases',
+    'find_similar_fact_pattern_cases',
+    'compare_practice_pro_contra',
+    'get_court_decision',
   ];
   if (courtTools.some((t) => toolName.includes(t) || toolName === t)) {
     // source_case (single)
@@ -66,8 +69,8 @@ function extractEvidenceFromToolResult(
       });
     }
 
-    // similar_cases array
-    const cases = parsed.similar_cases || parsed.cases || parsed.precedents || [];
+    // similar_cases / results array (tools return different field names)
+    const cases = parsed.similar_cases || parsed.results || parsed.cases || parsed.precedents || [];
     for (const c of cases) {
       decisions.push({
         id: `d-${c.doc_id || c.id || Math.random().toString(36).slice(2, 8)}`,
@@ -84,19 +87,53 @@ function extractEvidenceFromToolResult(
       });
     }
 
-    // get_case_documents_chain format
+    // get_case_documents_chain format (flat array or grouped by instance)
+    let chainDocs: any[] = [];
     if (parsed.documents && Array.isArray(parsed.documents)) {
-      for (const doc of parsed.documents) {
-        decisions.push({
-          id: `chain-${doc.doc_id || Math.random().toString(36).slice(2, 8)}`,
-          number: parsed.case_number || doc.title || 'N/A',
-          court: doc.instance || '',
-          date: doc.date || '',
-          summary: doc.title || doc.resolution || '',
-          relevance: 80,
-          status: 'active',
-        });
-      }
+      chainDocs = parsed.documents;
+    } else if (parsed.grouped_documents && typeof parsed.grouped_documents === 'object') {
+      chainDocs = Object.values(parsed.grouped_documents).flat();
+    }
+    for (const doc of chainDocs) {
+      decisions.push({
+        id: `chain-${doc.doc_id || Math.random().toString(36).slice(2, 8)}`,
+        number: doc.case_number || parsed.case_number || doc.title || 'N/A',
+        court: doc.court || doc.instance || '',
+        date: doc.date || '',
+        summary: doc.document_type
+          ? `${doc.document_type}: ${doc.resolution || doc.title || ''}`
+          : doc.title || doc.resolution || '',
+        relevance: 80,
+        status: 'active',
+      });
+    }
+
+    // compare_practice_pro_contra format
+    const proContraCases = [...(parsed.pro || []), ...(parsed.contra || [])];
+    for (const c of proContraCases) {
+      decisions.push({
+        id: `pc-${c.doc_id || Math.random().toString(36).slice(2, 8)}`,
+        number: c.case_number || 'N/A',
+        court: c.court || c.chamber || '',
+        date: c.date || '',
+        summary: c.snippet || '',
+        relevance: 70,
+        status: 'active',
+      });
+    }
+
+    // get_court_decision — single decision with sections
+    if (parsed.sections && Array.isArray(parsed.sections) && (parsed.doc_id || parsed.case_number)) {
+      const summarySection = parsed.sections.find((s: any) => s.type === 'DECISION' || s.type === 'COURT_REASONING');
+      decisions.push({
+        id: `gcd-${parsed.doc_id || Date.now()}`,
+        number: parsed.case_number || String(parsed.doc_id) || 'N/A',
+        court: '',
+        date: '',
+        summary: summarySection?.text?.slice(0, 300) || '',
+        relevance: 100,
+        status: 'active',
+      });
     }
   }
 

@@ -77,6 +77,7 @@ import { MatterInvoiceService } from './services/matter-invoice-service.js';
 import { createTimeEntryRoutes } from './routes/time-entry-routes.js';
 import { createInvoiceRoutes } from './routes/invoice-routes.js';
 import { ChatService, ChatEvent } from './services/chat-service.js';
+import { ChatSearchCacheService } from './services/chat-search-cache-service.js';
 
 dotenv.config();
 
@@ -231,13 +232,18 @@ class HTTPMCPServer {
     this.matterInvoiceService = new MatterInvoiceService(this.services.db, this.auditService);
     logger.info('Time tracking and billing services initialized');
 
-    // Initialize ChatService (agentic LLM loop)
+    // Initialize ChatService (agentic LLM loop) with search cache
+    const chatSearchCache = new ChatSearchCacheService(
+      this.services.zoAdapter,
+      this.services.documentService
+    );
     this.chatService = new ChatService(
       this.toolRegistry,
       this.services.queryPlanner,
-      this.costTracker
+      this.costTracker,
+      chatSearchCache
     );
-    logger.info('ChatService initialized');
+    logger.info('ChatService initialized with search cache');
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
