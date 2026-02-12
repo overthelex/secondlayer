@@ -183,11 +183,38 @@ stop_env() {
             $compose_cmd -f docker-compose.dev.yml --env-file .env.dev down
             ;;
         local)
+            # Try compose down with env file first (matches how start works)
             if [ -f ".env.local" ]; then
-                $compose_cmd -f docker-compose.local.yml --env-file .env.local down
-            else
-                $compose_cmd -f docker-compose.local.yml down
+                $compose_cmd -f docker-compose.local.yml --env-file .env.local down 2>/dev/null || true
             fi
+            # Also try without env file (catches containers started without --env-file)
+            $compose_cmd -f docker-compose.local.yml down 2>/dev/null || true
+
+            # Clean up any orphaned local containers (Created/Dead/Exited state)
+            local orphaned
+            orphaned=$(docker ps -a --filter "name=-local" --format '{{.ID}} {{.Names}} {{.Status}}' 2>/dev/null | grep -v "^$" || true)
+            if [ -n "$orphaned" ]; then
+                print_msg "$YELLOW" "🧹 Cleaning up orphaned local containers..."
+                docker ps -a --filter "name=-local" -q | xargs -r docker rm -f 2>/dev/null || true
+            fi
+
+            # Kill stale docker-proxy processes holding local ports
+            local local_ports="5432 6379 3000 3001 3002 3004 6333 6334 9000 9001 9090 9121 3100"
+            for port in $local_ports; do
+                local pids
+                pids=$(sudo lsof -t -i :"$port" 2>/dev/null || true)
+                if [ -n "$pids" ]; then
+                    # Only kill docker-proxy processes, not user services
+                    for pid in $pids; do
+                        local pname
+                        pname=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+                        if [ "$pname" = "docker-proxy" ]; then
+                            print_msg "$YELLOW" "🔪 Killing stale docker-proxy on port $port (PID $pid)"
+                            sudo kill "$pid" 2>/dev/null || true
+                        fi
+                    done
+                fi
+            done
             ;;
         all)
             stop_env stage
