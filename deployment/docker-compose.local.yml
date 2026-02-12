@@ -618,7 +618,7 @@ services:
     environment:
       NODE_ENV: development
       DOCKER_ENV: "true"
-      VITE_API_URL: ${VITE_API_URL:-https://localdev.legal.org.ua/api}
+      VITE_API_URL: ${VITE_API_URL:-https://localdev.legal.org.ua}
     volumes:
       - ../lexwebapp:/app
       - lexwebapp_node_modules:/app/node_modules

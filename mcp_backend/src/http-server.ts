@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger.js';
-import { dualAuth, requireJWT, initializeDualAuth, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
+import { dualAuth, requireJWT, optionalJWT, initializeDualAuth, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
 import { configurePassport } from './config/passport.js';
 import authRouter from './routes/auth.js';
 import { createBackendCoreServices, BackendCoreServices } from './factories/core-services.js';
@@ -954,8 +954,8 @@ class HTTPMCPServer {
       });
     });
 
-    // Authentication routes (public - OAuth endpoints)
-    this.app.use('/auth', authRouter);
+    // Authentication routes (public - OAuth endpoints, optional JWT for /auth/me etc.)
+    this.app.use('/auth', optionalJWT as any, authRouter);
 
     // Redirect /authorize to /oauth/authorize (for Claude.ai compatibility)
     this.app.get('/authorize', (req: Request, res: Response) => {

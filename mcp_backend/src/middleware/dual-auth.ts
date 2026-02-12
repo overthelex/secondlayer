@@ -263,6 +263,33 @@ export async function requireJWT(
 }
 
 /**
+ * Optional JWT middleware
+ * Parses JWT if present and attaches user to request, but does NOT reject if missing.
+ * Use for routes that are public but need user context when authenticated (e.g. /auth).
+ */
+export async function optionalJWT(
+  req: AuthenticatedRequest,
+  _res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      if (token.includes('.')) {
+        await authenticateWithJWT(req, token);
+      }
+    }
+  } catch (error: any) {
+    // Silently ignore auth errors — request continues unauthenticated
+    logger.debug('Optional JWT parsing failed', { error: error.message, path: req.path });
+  }
+
+  next();
+}
+
+/**
  * Require API key authentication only (no JWTs)
  * Use this for MCP tool endpoints that require client API keys
  */
