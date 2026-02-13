@@ -263,6 +263,33 @@ export class MockFondyService {
   }
 
   /**
+   * Mock: Handle subscription callback
+   */
+  async handleSubscriptionCallback(callbackData: FondyCallbackData): Promise<void> {
+    logger.info('[MOCK] Fondy subscription callback received', {
+      orderId: callbackData.order_id,
+      status: callbackData.order_status,
+    });
+
+    if (callbackData.order_status === 'approved') {
+      await this.handlePaymentSuccess(callbackData);
+    } else if (callbackData.order_status === 'declined' || callbackData.order_status === 'reversed') {
+      await this.handlePaymentFailure(callbackData);
+    }
+  }
+
+  /**
+   * Mock: Handle chargeback callback
+   */
+  async handleChargebackCallback(callbackData: FondyCallbackData): Promise<void> {
+    const amount = parseInt(callbackData.amount, 10) / 100;
+    logger.warn('[MOCK] Fondy chargeback callback received', {
+      orderId: callbackData.order_id,
+      amount,
+    });
+  }
+
+  /**
    * Get payment status
    */
   async getPaymentStatus(orderId: string): Promise<FondyPaymentStatus> {

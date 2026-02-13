@@ -78,6 +78,9 @@ export class FondyService {
       // Convert to kopiykas (cents)
       const amountKopiykas = Math.round(amountUah * 100);
 
+      const frontendUrl = process.env.FRONTEND_URL || '';
+      const backendUrl = process.env.BACKEND_URL || '';
+
       // Prepare payment data
       const paymentData: any = {
         order_id: orderId,
@@ -85,8 +88,8 @@ export class FondyService {
         order_desc: description,
         amount: amountKopiykas.toString(),
         currency: 'UAH',
-        response_url: `${process.env.FRONTEND_URL}/payment/result`,
-        server_callback_url: `${process.env.BACKEND_URL}/webhooks/fondy`,
+        response_url: `${frontendUrl}/payment/success`,
+        server_callback_url: `${backendUrl}/webhooks/fondy`,
         sender_email: email,
         merchant_data: JSON.stringify({
           user_id: userId,
@@ -280,6 +283,88 @@ export class FondyService {
         orderId: callbackData.order_id,
         error: error.message,
       });
+    }
+  }
+
+  /**
+   * Handle Fondy subscription callback
+   */
+  async handleSubscriptionCallback(callbackData: FondyCallbackData): Promise<void> {
+    try {
+      const orderId = callbackData.order_id;
+      const status = callbackData.order_status;
+      const signature = callbackData.signature;
+
+      // Verify signature
+      const isValid = this.verifySignature(callbackData, signature);
+      if (!isValid) {
+        throw new Error('Invalid Fondy subscription callback signature');
+      }
+
+      logger.info('Fondy subscription callback received', {
+        orderId,
+        status,
+        rectoken: callbackData.rectoken || 'none',
+      });
+
+      // Handle subscription recurring payment
+      if (status === 'approved') {
+        await this.handlePaymentSuccess(callbackData);
+      } else if (status === 'declined' || status === 'reversed') {
+        await this.handlePaymentFailure(callbackData);
+      }
+    } catch (error: any) {
+      logger.error('Failed to process Fondy subscription callback', {
+        orderId: callbackData.order_id,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Handle Fondy chargeback callback
+   */
+  async handleChargebackCallback(callbackData: FondyCallbackData): Promise<void> {
+    try {
+      const orderId = callbackData.order_id;
+      const signature = callbackData.signature;
+
+      // Verify signature
+      const isValid = this.verifySignature(callbackData, signature);
+      if (!isValid) {
+        throw new Error('Invalid Fondy chargeback callback signature');
+      }
+
+      const amount = parseInt(callbackData.amount, 10) / 100;
+      const merchantData = JSON.parse(callbackData.merchant_data || '{}');
+      const userId = merchantData.user_id;
+
+      logger.warn('Fondy chargeback received', {
+        orderId,
+        amount,
+        userId,
+        reversal_amount: callbackData.reversal_amount || callbackData.amount,
+      });
+
+      // TODO: Deduct balance for chargeback, suspend account if needed
+      // For now, log the chargeback for manual review
+      if (callbackData.sender_email) {
+        await this.emailService.sendPaymentFailure({
+          email: callbackData.sender_email,
+          name: merchantData.user_name || 'User',
+          amount,
+          currency: 'UAH',
+          reason: 'Chargeback received — your balance may be adjusted.',
+          userId,
+        });
+      }
+    } catch (error: any) {
+      logger.error('Failed to process Fondy chargeback callback', {
+        orderId: callbackData.order_id,
+        error: error.message,
+      });
+      throw error;
     }
   }
 

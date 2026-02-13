@@ -183,7 +183,7 @@ export function createWebhookRouter(
 
   /**
    * @route   POST /webhooks/fondy
-   * @desc    Fondy callback endpoint
+   * @desc    Fondy server callback endpoint
    * @access  Public (signature verified)
    */
   router.post('/fondy', async (req: Request, res: Response) => {
@@ -196,6 +196,46 @@ export function createWebhookRouter(
       });
       res.status(400).json({
         error: 'Callback processing failed',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * @route   POST /webhooks/fondy/subscription
+   * @desc    Fondy subscription callback endpoint
+   * @access  Public (signature verified)
+   */
+  router.post('/fondy/subscription', async (req: Request, res: Response) => {
+    try {
+      await fondyService.handleSubscriptionCallback(req.body);
+      res.json({ received: true });
+    } catch (error: any) {
+      logger.error('Fondy subscription callback failed', {
+        error: error.message,
+      });
+      res.status(400).json({
+        error: 'Subscription callback processing failed',
+        message: error.message,
+      });
+    }
+  });
+
+  /**
+   * @route   POST /webhooks/fondy/chargeback
+   * @desc    Fondy chargeback callback endpoint
+   * @access  Public (signature verified)
+   */
+  router.post('/fondy/chargeback', async (req: Request, res: Response) => {
+    try {
+      await fondyService.handleChargebackCallback(req.body);
+      res.json({ received: true });
+    } catch (error: any) {
+      logger.error('Fondy chargeback callback failed', {
+        error: error.message,
+      });
+      res.status(400).json({
+        error: 'Chargeback callback processing failed',
         message: error.message,
       });
     }

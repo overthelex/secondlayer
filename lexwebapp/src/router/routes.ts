@@ -41,6 +41,13 @@ export const ROUTES = {
   CASE_ANALYSIS: '/case-analysis',
   DECISIONS_SEARCH: '/decisions',
 
+  // Payment Results (Fondy redirects)
+  PAYMENT_SUCCESS: '/payment/success',
+  PAYMENT_ERROR: '/payment/error',
+
+  // Public Offer (Fondy requirement)
+  OFFER: '/:lang/offer',
+
   // History
   HISTORY: '/history',
 

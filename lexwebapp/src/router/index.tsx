@@ -40,6 +40,9 @@ import { HistoricalAnalysisPage } from '../components/HistoricalAnalysisPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
+import { PaymentSuccessPage } from '../pages/PaymentSuccessPage';
+import { PaymentErrorPage } from '../pages/PaymentErrorPage';
+import { OfferPage } from '../pages/OfferPage';
 
 export const router = createBrowserRouter([
   {
@@ -53,6 +56,18 @@ export const router = createBrowserRouter([
   {
     path: '/reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    path: ROUTES.PAYMENT_SUCCESS,
+    element: <PaymentSuccessPage />,
+  },
+  {
+    path: ROUTES.PAYMENT_ERROR,
+    element: <PaymentErrorPage />,
+  },
+  {
+    path: ROUTES.OFFER,
+    element: <OfferPage />,
   },
   {
     element: <AuthGuard />,
