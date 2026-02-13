@@ -60,11 +60,12 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  stage             Staging (stage.legal.org.ua) -> gate.lexapp.co.ua
+  stage             Staging -> gate.lexapp.co.ua (Cloudflare proxy)
+                    Domains: stage.legal.org.ua, legal.org.ua, mcp.legal.org.ua
   local             Local development (localdev.legal.org.ua) -> localhost
 
 Deployment Targets:
-  - Stage: Deploys to gate.lexapp.co.ua
+  - Stage: Deploys to gate.lexapp.co.ua, serves all 3 domains via nginx + Cloudflare
   - Local: Full rebuild on localhost (pull, rebuild --no-cache, migrate)
 
 Examples:
@@ -308,17 +309,9 @@ build_images() {
     print_msg "$BLUE" "Building OpenReyestr MCP image..."
     docker build -f deployment/Dockerfile.mono-openreyestr -t openreyestr-app:latest .
 
-    # Build frontend
+    # Build frontend (Dockerfile expects context=repo root)
     print_msg "$BLUE" "Building frontend image..."
-    if [ -d "frontend" ]; then
-        cd frontend
-        docker build -t lexwebapp-lexwebapp:latest .
-        cd ..
-    elif [ -d "lexwebapp" ]; then
-        cd lexwebapp
-        docker build -t lexwebapp-lexwebapp:latest .
-        cd ..
-    fi
+    docker build -f lexwebapp/Dockerfile -t lexwebapp-lexwebapp:latest .
 
     cd deployment
     print_msg "$GREEN" "Images built successfully"
@@ -328,10 +321,12 @@ build_images() {
 check_health() {
     print_msg "$BLUE" "Checking health of all services...\n"
 
-    # Staging (gate server)
+    # Staging (gate server) — all domains
     print_msg "$YELLOW" "\n=== Staging (gate.lexapp.co.ua) ==="
-    curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "Backend: healthy" || print_msg "$RED" "Backend: unhealthy"
-    curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "Frontend: healthy" || print_msg "$RED" "Frontend: unhealthy"
+    for domain in stage.legal.org.ua legal.org.ua mcp.legal.org.ua; do
+        curl -sf "https://${domain}/health" > /dev/null 2>&1 && print_msg "$GREEN" "Backend ($domain): healthy" || print_msg "$RED" "Backend ($domain): unhealthy"
+        curl -skf "https://${domain}/" > /dev/null 2>&1 && print_msg "$GREEN" "Frontend ($domain): healthy" || print_msg "$RED" "Frontend ($domain): unhealthy"
+    done
 
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
@@ -593,11 +588,6 @@ deploy_to_server() {
         ENV_FILE=".env.stage"
         DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
-        # Step 0: Stop host nginx if running (migrating to containerized nginx)
-        echo "Stopping host nginx service if running..."
-        sudo systemctl stop nginx 2>/dev/null || true
-        sudo systemctl disable nginx 2>/dev/null || true
-
         # Step 1: Stop app containers only (keep infra: postgres, redis, qdrant, minio running)
         echo "Stopping app containers (keeping databases running)..."
         $DC stop \
@@ -688,6 +678,16 @@ deploy_to_server() {
             redis-exporter \
             node-exporter \
             2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
+
+        # Step 10: Verify all domains respond
+        echo "Verifying domain health..."
+        for domain in stage.legal.org.ua legal.org.ua mcp.legal.org.ua; do
+            if curl -skf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
+                echo "  [OK] ${domain}"
+            else
+                echo "  [WARN] ${domain} not responding (may need DNS propagation)"
+            fi
+        done
 
         echo "Container deployment complete"
         $DC ps

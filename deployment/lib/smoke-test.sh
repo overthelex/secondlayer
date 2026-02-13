@@ -98,58 +98,62 @@ check_http_health() {
     local env=$1
     local target_server=$2
 
-    local url
+    local urls=()
     case $env in
         local)
-            url="http://localhost:3000/health"
-            ;;
-        dev|development)
-            url="https://dev.legal.org.ua/health"
+            urls=("http://localhost:3000/health")
             ;;
         stage|staging)
-            url="https://stage.legal.org.ua/health"
+            urls=("https://stage.legal.org.ua/health" "https://legal.org.ua/health" "https://mcp.legal.org.ua/health")
             ;;
     esac
 
-    local attempt=1
-    while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
-        if curl -sf --max-time 10 "$url" > /dev/null 2>&1; then
-            smoke_record "HTTP health ($url)" "pass" ""
-            return 0
+    local all_passed=true
+    for url in "${urls[@]}"; do
+        local attempt=1
+        local passed=false
+        while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
+            if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
+                smoke_record "HTTP health ($url)" "pass" ""
+                passed=true
+                break
+            fi
+            if [ $attempt -lt $SMOKE_TEST_RETRIES ]; then
+                print_msg "$YELLOW" "  Health check attempt $attempt failed for $url, retrying in ${SMOKE_TEST_RETRY_DELAY}s..."
+                sleep "$SMOKE_TEST_RETRY_DELAY"
+            fi
+            attempt=$((attempt + 1))
+        done
+        if [ "$passed" = false ]; then
+            smoke_record "HTTP health ($url)" "fail" "No response after $SMOKE_TEST_RETRIES attempts"
+            all_passed=false
         fi
-        if [ $attempt -lt $SMOKE_TEST_RETRIES ]; then
-            print_msg "$YELLOW" "  Health check attempt $attempt failed, retrying in ${SMOKE_TEST_RETRY_DELAY}s..."
-            sleep "$SMOKE_TEST_RETRY_DELAY"
-        fi
-        attempt=$((attempt + 1))
     done
 
-    smoke_record "HTTP health ($url)" "fail" "No response after $SMOKE_TEST_RETRIES attempts"
-    return 1
+    $all_passed
 }
 
 # Check frontend is accessible
 check_frontend_health() {
     local env=$1
 
-    local url
+    local urls=()
     case $env in
         local)
-            url="https://localdev.legal.org.ua"
-            ;;
-        dev|development)
-            url="https://dev.legal.org.ua"
+            urls=("https://localdev.legal.org.ua")
             ;;
         stage|staging)
-            url="https://stage.legal.org.ua"
+            urls=("https://stage.legal.org.ua" "https://legal.org.ua" "https://mcp.legal.org.ua")
             ;;
     esac
 
-    if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
-        smoke_record "Frontend ($url)" "pass" ""
-    else
-        smoke_record "Frontend ($url)" "warn" "Not responding (may need gateway)"
-    fi
+    for url in "${urls[@]}"; do
+        if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
+            smoke_record "Frontend ($url)" "pass" ""
+        else
+            smoke_record "Frontend ($url)" "warn" "Not responding (may need DNS propagation)"
+        fi
+    done
 }
 
 # Check database connectivity via container exec
