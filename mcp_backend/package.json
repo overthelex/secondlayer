@@ -29,7 +29,11 @@
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
     "lint": "eslint src --ext .ts",
-    "create-api-keys": "ts-node bin/create-api-keys.ts"
+    "create-api-keys": "ts-node bin/create-api-keys.ts",
+    "sync:dictionaries": "npm run build && node dist/scripts/sync-dictionaries.js",
+    "sync:dictionaries:dev": "ts-node-dev --transpile-only src/scripts/sync-dictionaries.ts",
+    "seed:matters": "npm run build && node dist/scripts/seed-matter-data.js",
+    "seed:matters:dev": "ts-node-dev --transpile-only src/scripts/seed-matter-data.ts"
   },
   "keywords": [
     "mcp",
