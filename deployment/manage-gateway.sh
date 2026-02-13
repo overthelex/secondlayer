@@ -19,7 +19,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-MAIL_SERVER="mail.lexapp.co.ua"  # For stage environment
+STAGE_SERVER="gate.lexapp.co.ua"  # For stage environment
 DEPLOY_USER="vovkes"
 REMOTE_PATH="/home/vovkes/SecondLayer/deployment"
 
@@ -60,11 +60,11 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  stage             Staging (stage.legal.org.ua) -> mail.lexapp.co.ua
+  stage             Staging (stage.legal.org.ua) -> gate.lexapp.co.ua
   local             Local development (localdev.legal.org.ua) -> localhost
 
 Deployment Targets:
-  - Stage: Deploys to mail.lexapp.co.ua
+  - Stage: Deploys to gate.lexapp.co.ua
   - Local: Full rebuild on localhost (pull, rebuild --no-cache, migrate)
 
 Examples:
@@ -73,7 +73,7 @@ Examples:
   $0 stop stage              # Stop staging environment
   $0 restart stage           # Restart staging environment
   $0 logs local              # Show local environment logs
-  $0 deploy stage            # Deploy staging to mail server
+  $0 deploy stage            # Deploy staging to gate server
   $0 deploy local            # Full local rebuild
   $0 gateway start           # Start nginx gateway
   $0 health                  # Check health of all services
@@ -328,8 +328,8 @@ build_images() {
 check_health() {
     print_msg "$BLUE" "Checking health of all services...\n"
 
-    # Staging (mail server)
-    print_msg "$YELLOW" "\n=== Staging (mail.lexapp.co.ua) ==="
+    # Staging (gate server)
+    print_msg "$YELLOW" "\n=== Staging (gate.lexapp.co.ua) ==="
     curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "Backend: healthy" || print_msg "$RED" "Backend: unhealthy"
     curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "Frontend: healthy" || print_msg "$RED" "Frontend: unhealthy"
 
@@ -526,7 +526,7 @@ deploy_local() {
     $compose_cmd $compose_args ps
 }
 
-# Deploy to stage server (mail.lexapp.co.ua)
+# Deploy to stage server (gate.lexapp.co.ua)
 deploy_to_server() {
     local env=$1
 
@@ -543,8 +543,8 @@ deploy_to_server() {
             ;;
     esac
 
-    local target_server="${MAIL_SERVER}"
-    local server_name="mail server"
+    local target_server="${STAGE_SERVER}"
+    local server_name="gate server"
     local env_file=".env.stage"
     local compose_file="docker-compose.stage.yml"
 
@@ -593,9 +593,24 @@ deploy_to_server() {
         ENV_FILE=".env.stage"
         DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
-        # Step 1: Stop existing containers
-        echo "Stopping existing containers..."
-        $DC down
+        # Step 1: Stop app containers only (keep infra: postgres, redis, qdrant, minio running)
+        echo "Stopping app containers (keeping databases running)..."
+        $DC stop \
+            app-stage rada-mcp-app-stage app-openreyestr-stage \
+            document-service-stage lexwebapp-stage \
+            prometheus-stage grafana-stage \
+            postgres-exporter-backend postgres-exporter-openreyestr \
+            redis-exporter node-exporter \
+            2>/dev/null || true
+        $DC rm -f \
+            app-stage rada-mcp-app-stage app-openreyestr-stage \
+            document-service-stage lexwebapp-stage \
+            migrate-stage rada-migrate-stage migrate-openreyestr-stage \
+            rada-db-init-stage \
+            prometheus-stage grafana-stage \
+            postgres-exporter-backend postgres-exporter-openreyestr \
+            redis-exporter node-exporter \
+            2>/dev/null || true
 
         # Step 2: Cleanup exited/dead containers and dangling images
         echo "Cleaning up stopped containers..."
@@ -620,8 +635,8 @@ deploy_to_server() {
             document-service-stage \
             lexwebapp-stage
 
-        # Step 5: Start infrastructure services
-        echo "Starting infrastructure services..."
+        # Step 5: Ensure infrastructure services are running
+        echo "Ensuring infrastructure services are running..."
         $DC up -d \
             postgres-stage \
             redis-stage \
@@ -629,9 +644,9 @@ deploy_to_server() {
             postgres-openreyestr-stage \
             minio-stage
 
-        # Step 6: Wait for databases to be ready, then run RADA DB init
+        # Step 6: Wait for databases to be healthy, then run RADA DB init
         echo "Waiting for databases..."
-        sleep 15
+        sleep 5
         echo "Running RADA DB init..."
         $DC up rada-db-init-stage
 
