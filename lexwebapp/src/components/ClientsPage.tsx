@@ -472,6 +472,8 @@ export function ClientsPage({ onSelectClient }: ClientsPageProps) {
               Ім'я / Назва <span className="text-red-500">*</span>
             </label>
             <input
+              id="client-name"
+              name="clientName"
               type="text"
               required
               value={formName}
@@ -511,6 +513,8 @@ export function ClientsPage({ onSelectClient }: ClientsPageProps) {
               Email
             </label>
             <input
+              id="client-email"
+              name="clientEmail"
               type="email"
               value={formEmail}
               onChange={(e) => setFormEmail(e.target.value)}
@@ -525,6 +529,8 @@ export function ClientsPage({ onSelectClient }: ClientsPageProps) {
               Код ЄДРПОУ / ІПН
             </label>
             <input
+              id="client-tax-id"
+              name="taxId"
               type="text"
               value={formTaxId}
               onChange={(e) => setFormTaxId(e.target.value)}

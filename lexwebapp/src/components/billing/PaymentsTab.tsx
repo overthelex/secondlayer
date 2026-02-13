@@ -246,22 +246,26 @@ export function PaymentsTab() {
             className="mb-6 p-4 bg-claude-bg border border-claude-border rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input
+                id="payment-card-holder"
+                name="cardHolder"
                 type="text"
                 placeholder="Card Holder Name"
                 className="px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
-              <select className="px-4 py-2 border border-claude-border rounded-lg text-sm bg-white">
+              <select id="payment-provider" name="provider" className="px-4 py-2 border border-claude-border rounded-lg text-sm bg-white">
                 <option>Select Provider</option>
                 <option>Stripe</option>
                 <option>Fondy</option>
               </select>
               <input
+                id="payment-card-number"
+                name="cardNumber"
                 type="text"
                 placeholder="Card Number"
                 className="px-4 py-2 border border-claude-border rounded-lg text-sm md:col-span-2"
               />
-              <input type="text" placeholder="MM/YY" className="px-4 py-2 border border-claude-border rounded-lg text-sm" />
-              <input type="text" placeholder="CVC" className="px-4 py-2 border border-claude-border rounded-lg text-sm" />
+              <input id="payment-expiry" name="expiry" type="text" placeholder="MM/YY" className="px-4 py-2 border border-claude-border rounded-lg text-sm" />
+              <input id="payment-cvc" name="cvc" type="text" placeholder="CVC" className="px-4 py-2 border border-claude-border rounded-lg text-sm" />
             </div>
             <div className="flex gap-2 mt-4">
               <button className="flex-1 px-4 py-2 bg-claude-accent text-white rounded-lg hover:bg-opacity-90">

@@ -112,6 +112,8 @@ export function ResetPasswordPage() {
                 <Lock size={18} className="text-claude-subtext" />
               </div>
               <input
+                id="reset-password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -136,6 +138,8 @@ export function ResetPasswordPage() {
                 <Lock size={18} className="text-claude-subtext" />
               </div>
               <input
+                id="reset-confirm-password"
+                name="confirmPassword"
                 type={showPassword ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

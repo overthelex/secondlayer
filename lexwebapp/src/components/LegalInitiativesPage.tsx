@@ -543,6 +543,8 @@ export function LegalInitiativesPage({ onBack }: LegalInitiativesPageProps) {
                       Групування:
                     </span>
                     <select
+                      id="initiatives-group-by"
+                      name="groupBy"
                       value={groupBy}
                       onChange={(e) => setGroupBy(e.target.value)}
                       className="px-3 py-1.5 bg-white border border-claude-border rounded-lg text-sm text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
@@ -557,6 +559,8 @@ export function LegalInitiativesPage({ onBack }: LegalInitiativesPageProps) {
                       Сортування:
                     </span>
                     <select
+                      id="initiatives-sort-by"
+                      name="sortBy"
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
                       className="px-3 py-1.5 bg-white border border-claude-border rounded-lg text-sm text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
@@ -786,6 +790,8 @@ export function LegalInitiativesPage({ onBack }: LegalInitiativesPageProps) {
                   Період
                 </label>
                 <select
+                  id="initiatives-period"
+                  name="period"
                   value={period}
                   onChange={(e) => setPeriod(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
@@ -803,6 +809,8 @@ export function LegalInitiativesPage({ onBack }: LegalInitiativesPageProps) {
                   Статус
                 </label>
                 <select
+                  id="initiatives-status"
+                  name="status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
@@ -819,7 +827,7 @@ export function LegalInitiativesPage({ onBack }: LegalInitiativesPageProps) {
                 <label className="block text-sm font-medium text-claude-text font-sans mb-2">
                   Комітет
                 </label>
-                <select className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
+                <select id="initiatives-committee" name="committee" className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans">
                   <option>Всі комітети</option>
                   <option>Комітет з правової політики</option>
                   <option>Комітет з питань бюджету</option>

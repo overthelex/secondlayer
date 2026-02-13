@@ -141,6 +141,8 @@ export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClient
             Назва справи <span className="text-red-500">*</span>
           </label>
           <input
+            id="matter-name"
+            name="matterName"
             type="text"
             required
             value={name}
@@ -179,6 +181,8 @@ export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClient
             Відповідальний адвокат
           </label>
           <input
+            id="matter-attorney"
+            name="attorney"
             type="text"
             value={attorney}
             onChange={(e) => setAttorney(e.target.value)}
@@ -193,6 +197,8 @@ export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClient
             Протилежна сторона
           </label>
           <input
+            id="matter-opposing-party"
+            name="opposingParty"
             type="text"
             value={opposingParty}
             onChange={(e) => setOpposingParty(e.target.value)}
@@ -208,6 +214,8 @@ export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClient
               Номер справи в суді
             </label>
             <input
+              id="matter-court-number"
+              name="courtNumber"
               type="text"
               value={courtNumber}
               onChange={(e) => setCourtNumber(e.target.value)}
@@ -220,6 +228,8 @@ export function CreateMatterModal({ isOpen, onClose, clientId: preselectedClient
               Назва суду
             </label>
             <input
+              id="matter-court-name"
+              name="courtName"
               type="text"
               value={courtName}
               onChange={(e) => setCourtName(e.target.value)}

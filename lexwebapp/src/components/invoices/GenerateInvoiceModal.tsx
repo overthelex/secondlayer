@@ -199,6 +199,8 @@ export function GenerateInvoiceModal({
               Due in Days
             </label>
             <input
+              id="invoice-due-days"
+              name="dueDays"
               type="number"
               min="1"
               max="365"
@@ -213,6 +215,8 @@ export function GenerateInvoiceModal({
               Tax Rate (%)
             </label>
             <input
+              id="invoice-tax-rate"
+              name="taxRate"
               type="number"
               min="0"
               max="100"

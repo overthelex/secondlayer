@@ -110,6 +110,8 @@ export function CreateTimeEntryModal({
             Дата <span className="text-red-500">*</span>
           </label>
           <input
+            id="time-entry-date"
+            name="date"
             type="date"
             required
             value={date}
@@ -128,6 +130,8 @@ export function CreateTimeEntryModal({
             <div>
               <label className="block text-xs text-claude-subtext font-sans mb-1">Години</label>
               <input
+                id="time-entry-hours"
+                name="hours"
                 type="number"
                 min="0"
                 max="24"
@@ -140,6 +144,8 @@ export function CreateTimeEntryModal({
             <div>
               <label className="block text-xs text-claude-subtext font-sans mb-1">Хвилини</label>
               <input
+                id="time-entry-minutes"
+                name="minutes"
                 type="number"
                 min="0"
                 max="59"
@@ -164,6 +170,8 @@ export function CreateTimeEntryModal({
             Опис <span className="text-red-500">*</span>
           </label>
           <textarea
+            id="time-entry-description"
+            name="description"
             required
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -177,6 +185,8 @@ export function CreateTimeEntryModal({
         <div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
+              id="time-entry-billable"
+              name="billable"
               type="checkbox"
               checked={billable}
               onChange={(e) => setBillable(e.target.checked)}
@@ -197,6 +207,8 @@ export function CreateTimeEntryModal({
             Примітки (необов'язково)
           </label>
           <textarea
+            id="time-entry-notes"
+            name="notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Додаткові примітки або контекст"

@@ -238,6 +238,8 @@ export function LimitsTab() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
               <input
+                id="limits-daily"
+                name="dailyLimit"
                 type="number"
                 value={limits.daily_limit_usd}
                 onChange={(e) =>
@@ -256,6 +258,8 @@ export function LimitsTab() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
               <input
+                id="limits-monthly"
+                name="monthlyLimit"
                 type="number"
                 value={limits.monthly_limit_usd}
                 onChange={(e) =>
@@ -274,6 +278,8 @@ export function LimitsTab() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
               <input
+                id="limits-openai"
+                name="openaiLimit"
                 type="number"
                 value={limits.openai_api_limit_usd}
                 onChange={(e) =>
@@ -292,6 +298,8 @@ export function LimitsTab() {
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
               <input
+                id="limits-external-apis"
+                name="externalApisLimit"
                 type="number"
                 value={limits.external_apis_limit_usd}
                 onChange={(e) =>

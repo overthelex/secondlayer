@@ -62,6 +62,8 @@ export function CreateHoldModal({ isOpen, onClose, matterId }: CreateHoldModalPr
             Назва <span className="text-red-500">*</span>
           </label>
           <input
+            id="hold-name"
+            name="holdName"
             type="text"
             required
             value={name}
@@ -96,6 +98,8 @@ export function CreateHoldModal({ isOpen, onClose, matterId }: CreateHoldModalPr
             Опис обсягу
           </label>
           <textarea
+            id="hold-scope"
+            name="scopeDescription"
             value={scope}
             onChange={(e) => setScope(e.target.value)}
             placeholder="Описати документи та дані, що підлягають утриманню..."

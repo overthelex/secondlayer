@@ -173,6 +173,8 @@ export function DecisionsSearchPage() {
                   Пошуковий запит
                 </label>
                 <input
+                  id="decisions-search-query"
+                  name="query"
                   type="text"
                   value={filters.query}
                   onChange={(e) => updateFilter('query', e.target.value)}
@@ -188,6 +190,8 @@ export function DecisionsSearchPage() {
                     Процесуальний кодекс
                   </label>
                   <select
+                    id="decisions-procedure-code"
+                    name="procedureCode"
                     value={filters.procedureCode}
                     onChange={(e) => updateFilter('procedureCode', e.target.value)}
                     className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
@@ -205,6 +209,8 @@ export function DecisionsSearchPage() {
                     Номер справи
                   </label>
                   <input
+                    id="decisions-case-number"
+                    name="caseNumber"
                     type="text"
                     value={filters.caseNumber}
                     onChange={(e) => updateFilter('caseNumber', e.target.value)}
@@ -241,6 +247,8 @@ export function DecisionsSearchPage() {
                         Рівень суду
                       </label>
                       <select
+                        id="decisions-court-level"
+                        name="courtLevel"
                         value={filters.courtLevel}
                         onChange={(e) => updateFilter('courtLevel', e.target.value)}
                         className="w-full px-4 py-2.5 bg-white border border-claude-border rounded-lg text-claude-text focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
@@ -258,6 +266,8 @@ export function DecisionsSearchPage() {
                         Дата від
                       </label>
                       <input
+                        id="decisions-date-from"
+                        name="dateFrom"
                         type="date"
                         value={filters.dateFrom}
                         onChange={(e) => updateFilter('dateFrom', e.target.value)}
@@ -270,6 +280,8 @@ export function DecisionsSearchPage() {
                         Дата до
                       </label>
                       <input
+                        id="decisions-date-to"
+                        name="dateTo"
                         type="date"
                         value={filters.dateTo}
                         onChange={(e) => updateFilter('dateTo', e.target.value)}
