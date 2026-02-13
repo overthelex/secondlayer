@@ -44,44 +44,17 @@ services:
       postgres-local:
         condition: service_healthy
     environment:
-      PGPASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
       POSTGRES_HOST: postgres-local
-      POSTGRES_PORT: 5432
+      POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
       RADA_POSTGRES_USER: ${RADA_POSTGRES_USER:-rada_mcp}
       RADA_POSTGRES_PASSWORD: ${RADA_POSTGRES_PASSWORD:-rada_password}
       RADA_POSTGRES_SCHEMA: ${RADA_POSTGRES_SCHEMA:-rada}
-    command:
-      - sh
-      - -lc
-      - |
-        echo "Initializing RADA schema/user...";
-        cat <<'SQL' | psql -h "$$POSTGRES_HOST" -p "$$POSTGRES_PORT" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
-          -v rada_user="$$RADA_POSTGRES_USER" \
-          -v rada_pass="$$RADA_POSTGRES_PASSWORD" \
-          -v rada_schema="$$RADA_POSTGRES_SCHEMA" \
-          -v db_name="$$POSTGRES_DB"
-
-        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-        -- Create role if missing
-        SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'rada_user', :'rada_pass')
-        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'rada_user')\gexec
-
-        -- Always set/refresh password (idempotent)
-        SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'rada_user', :'rada_pass')\gexec
-
-        -- Create schema if missing
-        SELECT format('CREATE SCHEMA %I AUTHORIZATION %I', :'rada_schema', :'rada_user')
-        WHERE NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = :'rada_schema')\gexec
-
-        -- Ensure privileges
-        SELECT format('GRANT USAGE, CREATE ON SCHEMA %I TO %I', :'rada_schema', :'rada_user')\gexec
-
-        -- Ensure default search_path
-        SELECT format('ALTER ROLE %I IN DATABASE %I SET search_path=%I,public', :'rada_user', :'db_name', :'rada_schema')\gexec
-        SQL
+    volumes:
+      - ./scripts/rada-db-init.sh:/scripts/rada-db-init.sh:ro
+    command: ["sh", "/scripts/rada-db-init.sh"]
     restart: "no"
     networks:
       - secondlayer-local
