@@ -131,8 +131,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
   const handleGoogleAuth = () => {
     setError(null);
-    // Redirect to backend Google OAuth endpoint (auth routes are at root level)
-    window.location.href = `${BASE_URL}/auth/google`;
+    // Redirect to backend Google OAuth endpoint using current origin
+    // (so legal.org.ua stays on legal.org.ua, not stage.legal.org.ua)
+    window.location.href = `${window.location.origin}/auth/google`;
   };
 
   const handlePasswordChange = (value: string) => {
