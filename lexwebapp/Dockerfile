@@ -2,14 +2,12 @@
 # Stage 1: Build the React application
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/lexwebapp
 
-# Copy root and lexwebapp package files for monorepo
-COPY package.json package-lock.json ./
-COPY lexwebapp/package*.json ./lexwebapp/
+# Copy only lexwebapp package files (standalone install, no monorepo workspace)
+COPY lexwebapp/package.json lexwebapp/package-lock.json* ./
 
-# Install dependencies from root (includes workspaces)
-# Use npm install instead of npm ci for monorepo workspace compatibility
+# Install dependencies directly in lexwebapp
 RUN npm install --legacy-peer-deps
 
 # Accept build arguments
@@ -23,7 +21,7 @@ ARG VITE_ENABLE_THINKING_STEPS=true
 ARG VITE_AUTO_EXPAND_THINKING=true
 
 # Copy lexwebapp source code
-COPY lexwebapp ./lexwebapp
+COPY lexwebapp/ ./
 
 # Set env vars for build
 ENV VITE_API_URL=$VITE_API_URL
@@ -34,8 +32,7 @@ ENV VITE_SHOW_TOOL_SELECTOR=$VITE_SHOW_TOOL_SELECTOR
 ENV VITE_ENABLE_THINKING_STEPS=$VITE_ENABLE_THINKING_STEPS
 ENV VITE_AUTO_EXPAND_THINKING=$VITE_AUTO_EXPAND_THINKING
 
-# Build the application for staging (from lexwebapp workspace)
-WORKDIR /app/lexwebapp
+# Build the application for staging
 RUN npm run build:staging
 
 # Stage 2: Serve with nginx
