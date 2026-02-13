@@ -62,11 +62,11 @@ CREATE INDEX IF NOT EXISTS idx_notaries_status ON notaries(status);
 -- Court Experts Registry
 CREATE TABLE IF NOT EXISTS court_experts (
   id SERIAL PRIMARY KEY,
-  expert_id VARCHAR(50) UNIQUE NOT NULL,
+  expert_id VARCHAR(255) UNIQUE NOT NULL,
   full_name VARCHAR(255),
   region VARCHAR(255),
-  organization VARCHAR(500),
-  commission_name VARCHAR(500),
+  organization TEXT,
+  commission_name TEXT,
   expertise_types TEXT[],
   certificate_number VARCHAR(50),
   certificate_date DATE,
