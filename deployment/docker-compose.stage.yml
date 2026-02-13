@@ -117,7 +117,7 @@ services:
     - 6381:6379
     volumes:
     - redis_stage_data:/data
-    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy noeviction
     healthcheck:
       test:
       - CMD

@@ -643,7 +643,11 @@ deploy_to_server() {
 
         # Step 5: Ensure infrastructure services are running
         echo "Ensuring infrastructure services are running..."
-        $DC up -d \
+        INFRA_FLAGS=""
+        if [ -n "$NO_CACHE" ]; then
+            INFRA_FLAGS="--force-recreate"
+        fi
+        $DC up -d $INFRA_FLAGS \
             postgres-stage \
             redis-stage \
             qdrant-stage \
