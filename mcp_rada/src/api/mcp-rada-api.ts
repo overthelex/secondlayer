@@ -292,7 +292,17 @@ export class MCPRadaAPI {
       }
 
       if (deputies.length > 1) {
-        // Return multiple matches for user to choose
+        // For large lists (faction search), return pre-formatted text to avoid LLM hallucination
+        if (deputies.length > 10) {
+          const factionName = deputies[0].deputy.faction_name || args.faction || 'невідома';
+          const lines = deputies.map((d, i) => `${i + 1}. ${d.deputy.full_name}`);
+          const text = `Фракція: ${factionName}\nВсього депутатів: ${deputies.length}\n\n${lines.join('\n')}`;
+          return {
+            content: [{ type: 'text', text }],
+          };
+        }
+
+        // For small lists (name ambiguity), return structured data
         return {
           content: [
             {
