@@ -111,9 +111,9 @@ export class BillService {
       const queryParams: any[] = [];
       let paramIndex = 1;
 
-      // Filter by query (title search)
+      // Filter by query (search in title, initiator names, and subject area)
       if (params.query) {
-        query += ` AND title ILIKE $${paramIndex}`;
+        query += ` AND (title ILIKE $${paramIndex} OR EXISTS (SELECT 1 FROM unnest(initiator_names) AS n WHERE n ILIKE $${paramIndex}) OR subject_area ILIKE $${paramIndex})`;
         queryParams.push(`%${params.query}%`);
         paramIndex++;
       }
