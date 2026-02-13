@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ##############################################################################
-# SecondLayer Multi-Environment Management Script
-# Manages Staging, Development, and Local environments
+# SecondLayer Environment Management Script
+# Manages Staging and Local environments
 ##############################################################################
 
 set -e  # Exit on error
@@ -19,7 +19,6 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-GATE_SERVER="gate.lexapp.co.ua"  # For dev environment
 MAIL_SERVER="mail.lexapp.co.ua"  # For stage environment
 DEPLOY_USER="vovkes"
 REMOTE_PATH="/home/vovkes/SecondLayer/deployment"
@@ -40,17 +39,17 @@ print_msg() {
 # Print usage
 usage() {
     cat << EOF
-SecondLayer Multi-Environment Manager
+SecondLayer Environment Manager
 
 Usage: $0 <command> [environment] [options]
 
 Commands:
-  start <env>       Start environment (stage|dev|local|all)
-  stop <env>        Stop environment (stage|dev|local|all)
-  restart <env>     Restart environment (stage|dev|local|all)
+  start <env>       Start environment (stage|local)
+  stop <env>        Stop environment (stage|local)
+  restart <env>     Restart environment (stage|local)
   status            Show status of all environments
-  logs <env>        Show logs for environment (stage|dev|local|gateway)
-  deploy <env>      Deploy environment (stage|dev|local|all)
+  logs <env>        Show logs for environment (stage|local|gateway)
+  deploy <env>      Deploy environment (stage|local)
   build             Build Docker images
   gateway           Manage nginx gateway
     - start         Start nginx gateway
@@ -61,24 +60,21 @@ Commands:
   clean <env>       Clean environment data (USE WITH CAUTION!)
 
 Environments:
-  stage             Staging (stage.legal.org.ua) → mail.lexapp.co.ua
-  dev               Development (dev.legal.org.ua) → gate.lexapp.co.ua
-  local             Local development (localdev.legal.org.ua) → localhost
-  all               All remote environments (stage+dev)
+  stage             Staging (stage.legal.org.ua) -> mail.lexapp.co.ua
+  local             Local development (localdev.legal.org.ua) -> localhost
 
 Deployment Targets:
-  - Dev: Deploys to gate.lexapp.co.ua
   - Stage: Deploys to mail.lexapp.co.ua
   - Local: Full rebuild on localhost (pull, rebuild --no-cache, migrate)
 
 Examples:
   $0 start local             # Start local development environment
   $0 start stage             # Start staging environment
-  $0 start all               # Start all gateway environments (not local)
-  $0 stop dev                # Stop development environment
+  $0 stop stage              # Stop staging environment
   $0 restart stage           # Restart staging environment
   $0 logs local              # Show local environment logs
   $0 deploy stage            # Deploy staging to mail server
+  $0 deploy local            # Full local rebuild
   $0 gateway start           # Start nginx gateway
   $0 health                  # Check health of all services
   $0 status                  # Show status of all containers
@@ -90,12 +86,12 @@ EOF
 # Check if docker-compose is available
 check_docker() {
     if ! command -v docker &> /dev/null; then
-        print_msg "$RED" "❌ Docker is not installed or not in PATH"
+        print_msg "$RED" "Docker is not installed or not in PATH"
         exit 1
     fi
 
     if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
-        print_msg "$RED" "❌ Docker Compose is not installed or not in PATH"
+        print_msg "$RED" "Docker Compose is not installed or not in PATH"
         exit 1
     fi
 }
@@ -114,22 +110,15 @@ start_env() {
     local env=$1
     local compose_cmd=$(get_compose_cmd)
 
-    print_msg "$BLUE" "🚀 Starting $env environment..."
+    print_msg "$BLUE" "Starting $env environment..."
 
     case $env in
         stage|staging)
             if [ ! -f ".env.stage" ]; then
-                print_msg "$RED" "❌ .env.stage not found. Copy .env.stage.example and configure it."
+                print_msg "$RED" ".env.stage not found. Copy .env.stage.example and configure it."
                 exit 1
             fi
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage up -d
-            ;;
-        dev|development)
-            if [ ! -f ".env.dev" ]; then
-                print_msg "$RED" "❌ .env.dev not found. Copy .env.dev.example and configure it."
-                exit 1
-            fi
-            $compose_cmd -f docker-compose.dev.yml --env-file .env.dev up -d
             ;;
         local)
             ensure_local_dns
@@ -138,7 +127,7 @@ start_env() {
             if [ -f ".env.local" ]; then
                 local_compose_args="$local_compose_args --env-file .env.local"
             else
-                print_msg "$YELLOW" "⚠️  .env.local not found. Using defaults from docker-compose.local.yml"
+                print_msg "$YELLOW" ".env.local not found. Using defaults from docker-compose.local.yml"
                 print_msg "$YELLOW" "    Copy .env.local.example to .env.local for custom configuration"
             fi
 
@@ -146,26 +135,20 @@ start_env() {
             $compose_cmd $local_compose_args up -d --build
 
             # Open browser (nginx + Vite run inside Docker now)
-            print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
+            print_msg "$BLUE" "Opening https://localdev.legal.org.ua ..."
             if command -v xdg-open &> /dev/null; then
                 xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
             elif command -v open &> /dev/null; then
                 open "https://localdev.legal.org.ua" 2>/dev/null &
             fi
             ;;
-        all)
-            start_env stage
-            start_env dev
-            ;;
         *)
-            print_msg "$RED" "❌ Invalid environment: $env"
+            print_msg "$RED" "Invalid environment: $env (use stage or local)"
             usage
             ;;
     esac
 
-    if [ "$env" != "all" ]; then
-        print_msg "$GREEN" "✅ $env environment started"
-    fi
+    print_msg "$GREEN" "$env environment started"
 }
 
 # Stop environment
@@ -173,14 +156,11 @@ stop_env() {
     local env=$1
     local compose_cmd=$(get_compose_cmd)
 
-    print_msg "$BLUE" "🛑 Stopping $env environment..."
+    print_msg "$BLUE" "Stopping $env environment..."
 
     case $env in
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage down
-            ;;
-        dev|development)
-            $compose_cmd -f docker-compose.dev.yml --env-file .env.dev down
             ;;
         local)
             # Try compose down with env file first (matches how start works)
@@ -194,7 +174,7 @@ stop_env() {
             local orphaned
             orphaned=$(docker ps -a --filter "name=-local" --format '{{.ID}} {{.Names}} {{.Status}}' 2>/dev/null | grep -v "^$" || true)
             if [ -n "$orphaned" ]; then
-                print_msg "$YELLOW" "🧹 Cleaning up orphaned local containers..."
+                print_msg "$YELLOW" "Cleaning up orphaned local containers..."
                 docker ps -a --filter "name=-local" -q | xargs -r docker rm -f 2>/dev/null || true
             fi
 
@@ -209,26 +189,20 @@ stop_env() {
                         local pname
                         pname=$(ps -p "$pid" -o comm= 2>/dev/null || true)
                         if [ "$pname" = "docker-proxy" ]; then
-                            print_msg "$YELLOW" "🔪 Killing stale docker-proxy on port $port (PID $pid)"
+                            print_msg "$YELLOW" "Killing stale docker-proxy on port $port (PID $pid)"
                             sudo kill "$pid" 2>/dev/null || true
                         fi
                     done
                 fi
             done
             ;;
-        all)
-            stop_env stage
-            stop_env dev
-            ;;
         *)
-            print_msg "$RED" "❌ Invalid environment: $env"
+            print_msg "$RED" "Invalid environment: $env (use stage or local)"
             usage
             ;;
     esac
 
-    if [ "$env" != "all" ]; then
-        print_msg "$GREEN" "✅ $env environment stopped"
-    fi
+    print_msg "$GREEN" "$env environment stopped"
 }
 
 # Restart environment
@@ -241,16 +215,10 @@ restart_env() {
 
 # Show status
 show_status() {
-    local compose_cmd=$(get_compose_cmd)
-
-    print_msg "$BLUE" "📊 Environment Status\n"
+    print_msg "$BLUE" "Environment Status\n"
 
     print_msg "$YELLOW" "=== Staging ==="
     docker ps --filter "name=secondlayer-.*-stage" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-    echo ""
-
-    print_msg "$YELLOW" "=== Development ==="
-    docker ps --filter "name=secondlayer-.*-dev" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
 
     print_msg "$YELLOW" "=== Local ==="
@@ -271,9 +239,6 @@ show_logs() {
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage logs -f --tail=100
             ;;
-        dev|development)
-            $compose_cmd -f docker-compose.dev.yml --env-file .env.dev logs -f --tail=100
-            ;;
         local)
             if [ -f ".env.local" ]; then
                 $compose_cmd -f docker-compose.local.yml --env-file .env.local logs -f --tail=100
@@ -285,7 +250,7 @@ show_logs() {
             $compose_cmd -f docker-compose.gateway.yml logs -f --tail=100
             ;;
         *)
-            print_msg "$RED" "❌ Invalid environment: $env"
+            print_msg "$RED" "Invalid environment: $env (use stage, local, or gateway)"
             usage
             ;;
     esac
@@ -298,14 +263,14 @@ manage_gateway() {
 
     case $action in
         start)
-            print_msg "$BLUE" "🚀 Starting nginx gateway..."
+            print_msg "$BLUE" "Starting nginx gateway..."
             $compose_cmd -f docker-compose.gateway.yml up -d
-            print_msg "$GREEN" "✅ Nginx gateway started"
+            print_msg "$GREEN" "Nginx gateway started"
             ;;
         stop)
-            print_msg "$BLUE" "🛑 Stopping nginx gateway..."
+            print_msg "$BLUE" "Stopping nginx gateway..."
             $compose_cmd -f docker-compose.gateway.yml down
-            print_msg "$GREEN" "✅ Nginx gateway stopped"
+            print_msg "$GREEN" "Nginx gateway stopped"
             ;;
         restart)
             manage_gateway stop
@@ -313,12 +278,12 @@ manage_gateway() {
             manage_gateway start
             ;;
         test)
-            print_msg "$BLUE" "🔍 Testing nginx configuration..."
+            print_msg "$BLUE" "Testing nginx configuration..."
             docker exec legal-nginx-gateway nginx -t
-            print_msg "$GREEN" "✅ Nginx configuration is valid"
+            print_msg "$GREEN" "Nginx configuration is valid"
             ;;
         *)
-            print_msg "$RED" "❌ Invalid gateway action: $action"
+            print_msg "$RED" "Invalid gateway action: $action"
             echo "Valid actions: start, stop, restart, test"
             exit 1
             ;;
@@ -327,7 +292,7 @@ manage_gateway() {
 
 # Build Docker images
 build_images() {
-    print_msg "$BLUE" "🔨 Building Docker images..."
+    print_msg "$BLUE" "Building Docker images..."
 
     cd ..
 
@@ -356,31 +321,25 @@ build_images() {
     fi
 
     cd deployment
-    print_msg "$GREEN" "✅ Images built successfully"
+    print_msg "$GREEN" "Images built successfully"
 }
 
 # Check health
 check_health() {
-    print_msg "$BLUE" "🏥 Checking health of all services...\n"
+    print_msg "$BLUE" "Checking health of all services...\n"
 
     # Staging (mail server)
     print_msg "$YELLOW" "\n=== Staging (mail.lexapp.co.ua) ==="
-    curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
-
-    # Development (gate server)
-    print_msg "$YELLOW" "\n=== Development (gate.lexapp.co.ua) ==="
-    curl -sf https://dev.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    curl -sf https://dev.legal.org.ua > /dev/null && print_msg "$GREEN" "✅ Frontend: healthy" || print_msg "$RED" "❌ Frontend: unhealthy"
-    curl -sf https://dev.legal.org.ua:3005/health > /dev/null && print_msg "$GREEN" "✅ OpenReyestr: healthy" || print_msg "$RED" "❌ OpenReyestr: unhealthy"
+    curl -sf https://stage.legal.org.ua/health > /dev/null && print_msg "$GREEN" "Backend: healthy" || print_msg "$RED" "Backend: unhealthy"
+    curl -sf https://stage.legal.org.ua > /dev/null && print_msg "$GREEN" "Frontend: healthy" || print_msg "$RED" "Frontend: unhealthy"
 
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
-    curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "✅ Backend: healthy" || print_msg "$RED" "❌ Backend: unhealthy"
-    docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Nginx: running (443/80)" || print_msg "$RED" "❌ Nginx: stopped"
-    docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "✅ Vite: running (Docker)" || print_msg "$RED" "❌ Vite: stopped"
-    curl -sf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "✅ Frontend (localdev HTTPS): healthy" || print_msg "$RED" "❌ Frontend (localdev HTTPS): unhealthy"
-    curl -sf https://localdev.mcp.legal.org.ua/health > /dev/null && print_msg "$GREEN" "✅ MCP SSE (localdev.mcp HTTPS): healthy" || print_msg "$RED" "❌ MCP SSE (localdev.mcp HTTPS): unhealthy"
+    curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "Backend: healthy" || print_msg "$RED" "Backend: unhealthy"
+    docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "Nginx: running (443/80)" || print_msg "$RED" "Nginx: stopped"
+    docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "Vite: running (Docker)" || print_msg "$RED" "Vite: stopped"
+    curl -sf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "Frontend (localdev HTTPS): healthy" || print_msg "$RED" "Frontend (localdev HTTPS): unhealthy"
+    curl -sf https://localdev.mcp.legal.org.ua/health > /dev/null && print_msg "$GREEN" "MCP SSE (localdev.mcp HTTPS): healthy" || print_msg "$RED" "MCP SSE (localdev.mcp HTTPS): unhealthy"
 
     echo ""
 }
@@ -392,13 +351,13 @@ ensure_local_dns() {
     resolved_ip=$(dig +short localdev.legal.org.ua @8.8.8.8 2>/dev/null | head -1)
 
     if [ -z "$resolved_ip" ]; then
-        print_msg "$YELLOW" "⚠️  Could not resolve localdev.legal.org.ua via Google DNS"
+        print_msg "$YELLOW" "Could not resolve localdev.legal.org.ua via Google DNS"
         return 0
     fi
 
     for domain in "${domains[@]}"; do
         if ! grep -q "$domain" /etc/hosts 2>/dev/null; then
-            print_msg "$BLUE" "📝 Adding $domain → $resolved_ip to /etc/hosts"
+            print_msg "$BLUE" "Adding $domain -> $resolved_ip to /etc/hosts"
             echo "$resolved_ip $domain" | sudo tee -a /etc/hosts > /dev/null
         fi
     done
@@ -415,7 +374,7 @@ ensure_letsencrypt_certs() {
     # Check if LE cert exists and is still valid (>7 days)
     if sudo test -f "$le_dir/fullchain.pem" && \
        sudo openssl x509 -in "$le_dir/fullchain.pem" -noout -checkend 604800 2>/dev/null; then
-        print_msg "$GREEN" "✅ Let's Encrypt certificate is valid"
+        print_msg "$GREEN" "Let's Encrypt certificate is valid"
         # Ensure latest certs are copied
         sudo cp "$le_dir/fullchain.pem" "$certs_dir/fullchain.pem"
         sudo cp "$le_dir/privkey.pem" "$certs_dir/privkey.pem"
@@ -423,11 +382,11 @@ ensure_letsencrypt_certs() {
         return 0
     fi
 
-    print_msg "$BLUE" "🔐 Obtaining/renewing Let's Encrypt certificate..."
+    print_msg "$BLUE" "Obtaining/renewing Let's Encrypt certificate..."
 
     # Ensure certbot is installed
     if ! command -v certbot &> /dev/null; then
-        print_msg "$BLUE" "📦 Installing certbot..."
+        print_msg "$BLUE" "Installing certbot..."
         sudo apt-get install -y certbot > /dev/null 2>&1
     fi
 
@@ -437,12 +396,12 @@ ensure_letsencrypt_certs() {
     # Obtain/renew certificate
     if sudo certbot certonly --standalone $domains \
         --non-interactive --agree-tos --email admin@legal.org.ua 2>&1; then
-        print_msg "$GREEN" "✅ Certificate obtained successfully"
+        print_msg "$GREEN" "Certificate obtained successfully"
         sudo cp "$le_dir/fullchain.pem" "$certs_dir/fullchain.pem"
         sudo cp "$le_dir/privkey.pem" "$certs_dir/privkey.pem"
         sudo chown $(id -u):$(id -g) "$certs_dir/fullchain.pem" "$certs_dir/privkey.pem"
     else
-        print_msg "$YELLOW" "⚠️  Let's Encrypt failed — falling back to existing certs"
+        print_msg "$YELLOW" "Let's Encrypt failed -- falling back to existing certs"
     fi
 }
 
@@ -459,7 +418,7 @@ deploy_local() {
     local deploy_start
     deploy_start=$(date +%s)
 
-    print_msg "$BLUE" "🚀 Deploying local environment (full rebuild)..."
+    print_msg "$BLUE" "Deploying local environment (full rebuild)..."
 
     # Phase 0: Ensure DNS and TLS
     ensure_local_dns
@@ -480,44 +439,44 @@ deploy_local() {
         set -e
 
         # Step 1: Pull latest main
-        print_msg "$BLUE" "📥 Pulling latest main branch..."
+        print_msg "$BLUE" "Pulling latest main branch..."
         git -C "$REPO_ROOT" fetch origin main && git -C "$REPO_ROOT" checkout main && git -C "$REPO_ROOT" pull origin main
 
         # Step 2: Stop existing containers
-        print_msg "$BLUE" "🛑 Stopping existing containers..."
+        print_msg "$BLUE" "Stopping existing containers..."
         stop_env local
 
         # Step 3: Cleanup exited/dead containers and dangling images
-        print_msg "$BLUE" "🧹 Cleaning up stopped containers..."
+        print_msg "$BLUE" "Cleaning up stopped containers..."
         docker ps -a --filter "name=-local" --filter "status=exited" -q | xargs -r docker rm -f
         docker ps -a --filter "name=-local" --filter "status=dead" -q | xargs -r docker rm -f
-        print_msg "$BLUE" "🗑️  Removing dangling images..."
+        print_msg "$BLUE" "Removing dangling images..."
         docker image prune -f
 
         # Step 4: Rebuild ALL images without cache (migrate services build the app images)
-        print_msg "$BLUE" "🔨 Building all images without cache..."
+        print_msg "$BLUE" "Building all images without cache..."
         $compose_cmd $compose_args build --no-cache migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
 
         # Step 5: Start infrastructure services only
-        print_msg "$BLUE" "🚀 Starting infrastructure services..."
+        print_msg "$BLUE" "Starting infrastructure services..."
         $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local minio-local
 
         # Step 6: Wait for databases to be ready, then run init
-        print_msg "$BLUE" "⏳ Waiting for databases..."
+        print_msg "$BLUE" "Waiting for databases..."
         sleep 15
-        print_msg "$BLUE" "🔧 Running RADA DB init..."
+        print_msg "$BLUE" "Running RADA DB init..."
         $compose_cmd $compose_args up rada-db-init-local
 
         # Step 7: Run migrations sequentially (using freshly built images)
-        print_msg "$BLUE" "🔄 Running backend migrations..."
+        print_msg "$BLUE" "Running backend migrations..."
         $compose_cmd $compose_args up migrate-local
-        print_msg "$BLUE" "🔄 Running RADA migrations..."
+        print_msg "$BLUE" "Running RADA migrations..."
         $compose_cmd $compose_args up rada-migrate-local
-        print_msg "$BLUE" "🔄 Running OpenReyestr migrations..."
+        print_msg "$BLUE" "Running OpenReyestr migrations..."
         $compose_cmd $compose_args up migrate-openreyestr-local
 
         # Step 8: Start app services (including nginx + frontend in Docker)
-        print_msg "$BLUE" "▶️  Starting application services..."
+        print_msg "$BLUE" "Starting application services..."
         $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local nginx-local lexwebapp-local
     )
 
@@ -537,7 +496,7 @@ deploy_local() {
     fi
 
     # Phase 5: Open browser (nginx + Vite run inside Docker now)
-    print_msg "$BLUE" "🌐 Opening https://localdev.legal.org.ua ..."
+    print_msg "$BLUE" "Opening https://localdev.legal.org.ua ..."
     if command -v xdg-open &> /dev/null; then
         xdg-open "https://localdev.legal.org.ua" 2>/dev/null &
     elif command -v open &> /dev/null; then
@@ -546,61 +505,46 @@ deploy_local() {
 
     # Phase 6: Report
     generate_deploy_report "local" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
-    print_msg "$GREEN" "✅ Local deployment complete"
+    print_msg "$GREEN" "Local deployment complete"
     $compose_cmd $compose_args ps
 }
 
-# Deploy to server (gate or mail based on environment)
-deploy_to_gate() {
+# Deploy to stage server (mail.lexapp.co.ua)
+deploy_to_server() {
     local env=$1
 
-    # Determine target server based on environment
-    local target_server
-    local server_name
-    local env_file
-    local compose_file
     case $env in
         stage|staging)
-            target_server="${MAIL_SERVER}"
-            server_name="mail server"
-            env_file=".env.stage"
-            compose_file="docker-compose.stage.yml"
-            ;;
-        dev|development)
-            target_server="${GATE_SERVER}"
-            server_name="gate server"
-            env_file=".env.dev"
-            compose_file="docker-compose.dev.yml"
             ;;
         local)
             deploy_local
             return
             ;;
-        all)
-            deploy_to_gate stage
-            deploy_to_gate dev
-            return
-            ;;
         *)
-            print_msg "$RED" "❌ Invalid environment: $env"
+            print_msg "$RED" "Invalid environment: $env (use stage or local)"
             exit 1
             ;;
     esac
 
+    local target_server="${MAIL_SERVER}"
+    local server_name="mail server"
+    local env_file=".env.stage"
+    local compose_file="docker-compose.stage.yml"
+
     local deploy_start
     deploy_start=$(date +%s)
 
-    print_msg "$BLUE" "🚀 Deploying $env to $server_name ($target_server)..."
+    print_msg "$BLUE" "Deploying stage to $server_name ($target_server)..."
 
     # Phase 1: Pre-flight checks
-    if ! preflight_check "$env" "$target_server" "$env_file" "$compose_file" "$REPO_ROOT"; then
-        generate_deploy_report "$env" "failure" "" "$deploy_start" "$REPO_ROOT"
+    if ! preflight_check "stage" "$target_server" "$env_file" "$compose_file" "$REPO_ROOT"; then
+        generate_deploy_report "stage" "failure" "" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
 
     # Phase 2: Backup current state
     local backup_id
-    backup_id=$(create_backup "$env" "$target_server" "$REPO_ROOT")
+    backup_id=$(create_backup "stage" "$target_server" "$REPO_ROOT")
 
     # Repo root on the remote server
     local REMOTE_REPO="/home/${DEPLOY_USER}/SecondLayer"
@@ -609,115 +553,100 @@ deploy_to_gate() {
     local deploy_failed=false
 
     # Step 1: Pull latest code on the server via git
-    print_msg "$BLUE" "📥 Pulling latest code on $server_name..."
+    print_msg "$BLUE" "Pulling latest code on $server_name..."
     if ! ssh ${DEPLOY_USER}@${target_server} "git -C ${REMOTE_REPO} fetch origin main && git -C ${REMOTE_REPO} reset --hard origin/main"; then
         print_msg "$RED" "Git sync failed, rolling back..."
-        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
-        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        rollback_to_backup "stage" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "stage" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
 
     # Step 2: Copy env file (not tracked in git)
-    print_msg "$BLUE" "📤 Copying env file to $server_name..."
+    print_msg "$BLUE" "Copying env file to $server_name..."
     scp $env_file ${DEPLOY_USER}@${target_server}:${REMOTE_REPO}/deployment/
 
-    # Step 3: Build, migrate, and start services (mirrors deploy_local flow)
-    print_msg "$BLUE" "🔄 Updating containers on $server_name..."
+    # Step 3: Build, migrate, and start services
+    print_msg "$BLUE" "Updating containers on $server_name..."
 
-    if ! ssh ${DEPLOY_USER}@${target_server} "export DEPLOY_ENV='$env' REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
+    if ! ssh ${DEPLOY_USER}@${target_server} "export REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
         set -e
         cd "$REMOTE_REPO/deployment"
 
-        # Determine compose file and env file based on DEPLOY_ENV
-        case "$DEPLOY_ENV" in
-            stage|staging)
-                COMPOSE_FILE="docker-compose.stage.yml"
-                ENV_FILE=".env.stage"
-                ENV_SHORT="stage"
-                ;;
-            dev|development)
-                COMPOSE_FILE="docker-compose.dev.yml"
-                ENV_FILE=".env.dev"
-                ENV_SHORT="dev"
-                ;;
-        esac
-
+        COMPOSE_FILE="docker-compose.stage.yml"
+        ENV_FILE=".env.stage"
         DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
         # Step 1: Stop existing containers
-        echo "🛑 Stopping existing containers..."
+        echo "Stopping existing containers..."
         $DC down
 
         # Step 2: Cleanup exited/dead containers and dangling images
-        echo "🧹 Cleaning up stopped containers..."
-        docker ps -a --filter "name=-$ENV_SHORT" --filter "status=exited" -q | xargs -r docker rm -f
-        docker ps -a --filter "name=-$ENV_SHORT" --filter "status=dead" -q | xargs -r docker rm -f
-        echo "🗑️  Removing dangling images..."
+        echo "Cleaning up stopped containers..."
+        docker ps -a --filter "name=-stage" --filter "status=exited" -q | xargs -r docker rm -f
+        docker ps -a --filter "name=-stage" --filter "status=dead" -q | xargs -r docker rm -f
+        echo "Removing dangling images..."
         docker image prune -f
 
         # Step 3: Pre-build shared + backend dist (needed by Dockerfile.document-service)
-        echo "📦 Building shared package and backend dist..."
+        echo "Building shared package and backend dist..."
         cd "$REMOTE_REPO"
         npm --prefix packages/shared install && npm --prefix packages/shared run build
         npm --prefix mcp_backend install && npm --prefix mcp_backend run build
         cd "$REMOTE_REPO/deployment"
 
         # Step 4: Build ALL images without cache
-        # app-$ENV_SHORT produces secondlayer-app:latest (used by migrate-$ENV_SHORT)
-        # rada-migrate-$ENV_SHORT produces rada-mcp:latest (used by rada-mcp-app-$ENV_SHORT)
-        # migrate-openreyestr-$ENV_SHORT produces openreyestr-app:latest (used by app-openreyestr-$ENV_SHORT)
-        echo "🔨 Building all images without cache..."
+        echo "Building all images without cache..."
         $DC build --no-cache \
-            app-$ENV_SHORT \
-            rada-migrate-$ENV_SHORT \
-            migrate-openreyestr-$ENV_SHORT \
-            document-service-$ENV_SHORT \
-            lexwebapp-$ENV_SHORT
+            app-stage \
+            rada-migrate-stage \
+            migrate-openreyestr-stage \
+            document-service-stage \
+            lexwebapp-stage
 
         # Step 5: Start infrastructure services
-        echo "🚀 Starting infrastructure services..."
+        echo "Starting infrastructure services..."
         $DC up -d \
-            postgres-$ENV_SHORT \
-            redis-$ENV_SHORT \
-            qdrant-$ENV_SHORT \
-            postgres-openreyestr-$ENV_SHORT \
-            minio-$ENV_SHORT
+            postgres-stage \
+            redis-stage \
+            qdrant-stage \
+            postgres-openreyestr-stage \
+            minio-stage
 
         # Step 6: Wait for databases to be ready, then run RADA DB init
-        echo "⏳ Waiting for databases..."
+        echo "Waiting for databases..."
         sleep 15
-        echo "🔧 Running RADA DB init..."
-        $DC up rada-db-init-$ENV_SHORT
+        echo "Running RADA DB init..."
+        $DC up rada-db-init-stage
 
         # Step 7: Run migrations sequentially (using freshly built images)
-        echo "🔄 Running backend migrations..."
-        $DC up migrate-$ENV_SHORT
-        echo "🔄 Running RADA migrations..."
-        $DC up rada-migrate-$ENV_SHORT
-        echo "🔄 Running OpenReyestr migrations..."
-        $DC up migrate-openreyestr-$ENV_SHORT
+        echo "Running backend migrations..."
+        $DC up migrate-stage
+        echo "Running RADA migrations..."
+        $DC up rada-migrate-stage
+        echo "Running OpenReyestr migrations..."
+        $DC up migrate-openreyestr-stage
 
         # Step 8: Start application services
-        echo "▶️  Starting application services..."
+        echo "Starting application services..."
         $DC up -d \
-            app-$ENV_SHORT \
-            rada-mcp-app-$ENV_SHORT \
-            app-openreyestr-$ENV_SHORT \
-            document-service-$ENV_SHORT \
-            lexwebapp-$ENV_SHORT
+            app-stage \
+            rada-mcp-app-stage \
+            app-openreyestr-stage \
+            document-service-stage \
+            lexwebapp-stage
 
         # Step 9: Start monitoring services
-        echo "📊 Starting monitoring services..."
+        echo "Starting monitoring services..."
         $DC up -d \
-            prometheus-$ENV_SHORT \
-            grafana-$ENV_SHORT \
+            prometheus-stage \
+            grafana-stage \
             postgres-exporter-backend \
             postgres-exporter-openreyestr \
             redis-exporter \
             node-exporter \
             2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
 
-        echo "✅ Container deployment complete"
+        echo "Container deployment complete"
         $DC ps
 EOF
     then
@@ -726,22 +655,22 @@ EOF
 
     if [ "$deploy_failed" = true ]; then
         print_msg "$RED" "Remote deploy failed, rolling back..."
-        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
-        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        rollback_to_backup "stage" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "stage" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
 
     # Phase 4: Smoke tests
-    if ! run_smoke_tests "$env" "$target_server" "$compose_file" "$env_file"; then
+    if ! run_smoke_tests "stage" "$target_server" "$compose_file" "$env_file"; then
         print_msg "$RED" "Smoke tests failed, rolling back..."
-        rollback_to_backup "$env" "$target_server" "$compose_file" "$env_file"
-        generate_deploy_report "$env" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
+        rollback_to_backup "stage" "$target_server" "$compose_file" "$env_file"
+        generate_deploy_report "stage" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
 
     # Phase 5: Report
-    generate_deploy_report "$env" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
-    print_msg "$GREEN" "✅ $env deployed to $server_name ($target_server)"
+    generate_deploy_report "stage" "success" "$backup_id" "$deploy_start" "$REPO_ROOT"
+    print_msg "$GREEN" "Stage deployed to $server_name ($target_server)"
 }
 
 # Clean environment data
@@ -749,7 +678,7 @@ clean_env() {
     local env=$1
     local compose_cmd=$(get_compose_cmd)
 
-    print_msg "$RED" "⚠️  WARNING: This will delete all data for $env environment!"
+    print_msg "$RED" "WARNING: This will delete all data for $env environment!"
     read -p "Are you sure? Type 'yes' to confirm: " confirm
 
     if [ "$confirm" != "yes" ]; then
@@ -761,16 +690,13 @@ clean_env() {
         stage|staging)
             $compose_cmd -f docker-compose.stage.yml --env-file .env.stage down -v
             ;;
-        dev|development)
-            $compose_cmd -f docker-compose.dev.yml --env-file .env.dev down -v
-            ;;
         *)
-            print_msg "$RED" "❌ Invalid environment: $env"
+            print_msg "$RED" "Invalid environment: $env (use stage)"
             exit 1
             ;;
     esac
 
-    print_msg "$GREEN" "✅ $env environment cleaned"
+    print_msg "$GREEN" "$env environment cleaned"
 }
 
 # Main script
@@ -815,7 +741,7 @@ case $COMMAND in
         if [ $# -eq 0 ]; then
             usage
         fi
-        deploy_to_gate "$1"
+        deploy_to_server "$1"
         ;;
     build)
         build_images
@@ -836,7 +762,7 @@ case $COMMAND in
         clean_env "$1"
         ;;
     *)
-        print_msg "$RED" "❌ Unknown command: $COMMAND"
+        print_msg "$RED" "Unknown command: $COMMAND"
         usage
         ;;
 esac

@@ -199,7 +199,6 @@ npm run frontend       # Start lexwebapp dev server
 
 **Deployment environments**:
 - Local: `localhost:3000`
-- Dev: `gate.lexapp.co.ua:3003`
 - Stage: `https://stage.legal.org.ua` (Unified Gateway on port 3004, all 45 tools)
 
 ## Environment Variables
@@ -240,8 +239,6 @@ cd deployment
 
 # Remote deployment (git pull, migrate, rebuild, restart)
 ./manage-gateway.sh deploy stage    # → mail.lexapp.co.ua
-./manage-gateway.sh deploy dev      # → gate.lexapp.co.ua
-./manage-gateway.sh deploy all
 
 # Status
 ./manage-gateway.sh status
@@ -307,7 +304,7 @@ Express app with:
 - **Two ZOAdapter instances**: Different ZakonOnline endpoints (court cases vs practice)
 - **Cache TTLs**: Deputies 7d, Bills 1d, Laws 30d (RADA server)
 - **Model selection**: `ModelSelector` from shared package for budget-aware choice
-- **Gateway routing**: Nginx at port 8080 routes by path (dev/stage)
+- **Gateway routing**: Nginx at port 8080 routes to stage environment
 - **SSE streaming**: For long-running ops, use SSE endpoints (works through gateway)
 - **Dual-auth**: Bearer token (API clients) + JWT/OAuth (web users)
 
