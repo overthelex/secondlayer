@@ -94,6 +94,12 @@ services:
       - "6334:6334"  # gRPC
     volumes:
       - qdrant_local_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:6333/readyz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
     networks:
       - secondlayer-local
@@ -245,7 +251,7 @@ services:
       migrate-local:
         condition: service_completed_successfully
       qdrant-local:
-        condition: service_started
+        condition: service_healthy
       redis-local:
         condition: service_healthy
 
@@ -366,7 +372,7 @@ services:
       postgres-local:
         condition: service_healthy
       qdrant-local:
-        condition: service_started
+        condition: service_healthy
       redis-local:
         condition: service_healthy
     environment:

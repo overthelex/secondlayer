@@ -22,6 +22,7 @@ NC='\033[0m' # No Color
 STAGE_SERVER="gate.lexapp.co.ua"  # For stage environment
 DEPLOY_USER="vovkes"
 REMOTE_PATH="/home/vovkes/SecondLayer/deployment"
+NO_CACHE=""  # Set to "--no-cache" via --no-cache flag
 
 # Source orchestrator libraries
 source "$SCRIPT_DIR/lib/preflight.sh"
@@ -49,7 +50,7 @@ Commands:
   restart <env>     Restart environment (stage|local)
   status            Show status of all environments
   logs <env>        Show logs for environment (stage|local|gateway)
-  deploy <env>      Deploy environment (stage|local)
+  deploy <env>      Deploy environment (stage|local) [--no-cache]
   build             Build Docker images
   gateway           Manage nginx gateway
     - start         Start nginx gateway
@@ -74,8 +75,10 @@ Examples:
   $0 stop stage              # Stop staging environment
   $0 restart stage           # Restart staging environment
   $0 logs local              # Show local environment logs
-  $0 deploy stage            # Deploy staging to gate server
-  $0 deploy local            # Full local rebuild
+  $0 deploy stage            # Deploy staging (cached build)
+  $0 deploy stage --no-cache # Deploy staging (full rebuild)
+  $0 deploy local            # Deploy local (cached build)
+  $0 deploy local --no-cache # Deploy local (full rebuild)
   $0 gateway start           # Start nginx gateway
   $0 health                  # Check health of all services
   $0 status                  # Show status of all containers
@@ -457,9 +460,13 @@ deploy_local() {
         print_msg "$BLUE" "Removing dangling images..."
         docker image prune -f
 
-        # Step 4: Rebuild ALL images without cache (migrate services build the app images)
-        print_msg "$BLUE" "Building all images without cache..."
-        $compose_cmd $compose_args build --no-cache migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
+        # Step 4: Rebuild images (use --no-cache flag for full rebuild)
+        if [ -n "$NO_CACHE" ]; then
+            print_msg "$BLUE" "Building all images without cache..."
+        else
+            print_msg "$BLUE" "Building all images (cached)..."
+        fi
+        $compose_cmd $compose_args build $NO_CACHE migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
 
         # Step 5: Ensure infrastructure services are running
         print_msg "$BLUE" "Ensuring infrastructure services are running..."
@@ -471,13 +478,11 @@ deploy_local() {
         print_msg "$BLUE" "Running RADA DB init..."
         $compose_cmd $compose_args up rada-db-init-local
 
-        # Step 7: Run migrations sequentially (using freshly built images)
+        # Step 7: Run migrations (backend first, then rada + openreyestr in parallel)
         print_msg "$BLUE" "Running backend migrations..."
         $compose_cmd $compose_args up migrate-local
-        print_msg "$BLUE" "Running RADA migrations..."
-        $compose_cmd $compose_args up rada-migrate-local
-        print_msg "$BLUE" "Running OpenReyestr migrations..."
-        $compose_cmd $compose_args up migrate-openreyestr-local
+        print_msg "$BLUE" "Running RADA + OpenReyestr migrations in parallel..."
+        $compose_cmd $compose_args up rada-migrate-local migrate-openreyestr-local
 
         # Step 8: Start app services (including nginx + frontend in Docker)
         print_msg "$BLUE" "Starting application services..."
@@ -580,7 +585,7 @@ deploy_to_server() {
     # Step 3: Build, migrate, and start services
     print_msg "$BLUE" "Updating containers on $server_name..."
 
-    if ! ssh ${DEPLOY_USER}@${target_server} "export REMOTE_REPO='${REMOTE_REPO}'; bash -s" << 'EOF'
+    if ! ssh ${DEPLOY_USER}@${target_server} "export REMOTE_REPO='${REMOTE_REPO}'; export NO_CACHE='${NO_CACHE}'; bash -s" << 'EOF'
         set -e
         cd "$REMOTE_REPO/deployment"
 
@@ -623,9 +628,13 @@ deploy_to_server() {
         npm --prefix mcp_backend install && npm --prefix mcp_backend run build
         cd "$REMOTE_REPO/deployment"
 
-        # Step 4: Build ALL images without cache
-        echo "Building all images without cache..."
-        $DC build --no-cache \
+        # Step 4: Build images (use --no-cache flag for full rebuild)
+        if [ -n "$NO_CACHE" ]; then
+            echo "Building all images without cache..."
+        else
+            echo "Building all images (cached)..."
+        fi
+        $DC build $NO_CACHE \
             app-stage \
             rada-migrate-stage \
             migrate-openreyestr-stage \
@@ -647,13 +656,11 @@ deploy_to_server() {
         echo "Running RADA DB init..."
         $DC up rada-db-init-stage
 
-        # Step 7: Run migrations sequentially (using freshly built images)
+        # Step 7: Run migrations (backend first, then rada + openreyestr in parallel)
         echo "Running backend migrations..."
         $DC up migrate-stage
-        echo "Running RADA migrations..."
-        $DC up rada-migrate-stage
-        echo "Running OpenReyestr migrations..."
-        $DC up migrate-openreyestr-stage
+        echo "Running RADA + OpenReyestr migrations in parallel..."
+        $DC up rada-migrate-stage migrate-openreyestr-stage
 
         # Step 8: Start application services
         echo "Starting application services..."
@@ -751,6 +758,15 @@ fi
 
 COMMAND=$1
 shift
+
+# Parse global flags
+for arg in "$@"; do
+    case $arg in
+        --no-cache)
+            NO_CACHE="--no-cache"
+            ;;
+    esac
+done
 
 case $COMMAND in
     start)
