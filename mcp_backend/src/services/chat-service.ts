@@ -75,7 +75,7 @@ export class ChatService {
     try {
       // 1. Classify intent via LLM → filter tools
       const classification = await this.classifyChatIntent(query);
-      const toolDefs = await this.filterTools(classification.domains);
+      const toolDefs = await this.filterTools(classification.domains, classification.slots);
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
@@ -345,6 +345,26 @@ export class ChatService {
         ? parsed.slots
         : undefined;
 
+      // Force-include domains based on extracted slots
+      if (slots?.edrpou && !domains.includes('registry')) {
+        domains.push('registry');
+      }
+      if (slots?.case_number && !domains.includes('court')) {
+        domains.push('court');
+      }
+      if (slots?.law_reference && !domains.includes('legislation')) {
+        domains.push('legislation');
+      }
+
+      // Keyword-based safety net for registry queries
+      const lowerQuery = query.toLowerCase();
+      const registryKeywords = ['тов ', 'тов "', 'тов «', 'фоп ', 'пп ', 'ат ', 'єдрпоу', 'edrpou', 'підприємство', 'компанія', 'юридична особа'];
+      const hasRegistryKeyword = registryKeywords.some(kw => lowerQuery.includes(kw));
+      const hasEdrpouPattern = /\b\d{8}\b/.test(query);
+      if ((hasRegistryKeyword || hasEdrpouPattern) && !domains.includes('registry')) {
+        domains.push('registry');
+      }
+
       logger.info('[ChatService] LLM intent classification', { domains, keywords, slots });
 
       return { domains, keywords, slots };
@@ -366,7 +386,7 @@ export class ChatService {
   /**
    * Filter 45+ tools to a relevant subset based on intent domains.
    */
-  private async filterTools(domains: string[]): Promise<ToolDefinition[]> {
+  private async filterTools(domains: string[], slots?: Record<string, any>): Promise<ToolDefinition[]> {
     const allDefs = await this.toolRegistry.getAllToolDefinitions();
 
     // Collect tool names from matching domains
@@ -377,6 +397,14 @@ export class ChatService {
         for (const name of mapped) {
           relevantNames.add(name);
         }
+      }
+    }
+
+    // If EDRPOU is in slots, ensure all registry tools are included
+    if (slots?.edrpou) {
+      const registryTools = DOMAIN_TOOL_MAP.registry || [];
+      for (const name of registryTools) {
+        relevantNames.add(name);
       }
     }
 

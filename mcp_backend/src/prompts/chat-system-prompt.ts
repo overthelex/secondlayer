@@ -197,4 +197,6 @@ export const DEFAULT_TOOLS = [
   'get_court_decision',
   'get_case_documents_chain',
   'search_supreme_court_practice',
+  'openreyestr_get_by_edrpou',
+  'openreyestr_search_entities',
 ];
