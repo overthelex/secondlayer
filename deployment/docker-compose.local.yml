@@ -187,7 +187,7 @@ services:
 
       # Dynamic model selection (cost-optimized defaults)
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
 
       # Anthropic/Claude (optional for local dev)
@@ -338,7 +338,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
@@ -400,7 +400,7 @@ services:
 
       # Dynamic model selection
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
 
       # Anthropic (optional)
@@ -533,7 +533,7 @@ services:
       # OpenAI Configuration (optional for future AI features)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o-mini}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
 
       # SecondLayer Integration (for cross-referencing)
