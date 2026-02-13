@@ -27,6 +27,29 @@ export class DeputyService {
   }
 
   /**
+   * Resolve common faction name aliases to DB search terms.
+   */
+  private getFactionAliases(input: string): string[] {
+    const lower = input.toLowerCase();
+    const aliasMap: Record<string, string[]> = {
+      'опзж': ['Платформа за життя', 'ОПЗЖ'],
+      'опозиційна платформа': ['Платформа за життя', 'ОПЗЖ', 'Опозиційна платформа'],
+      'за життя': ['Платформа за життя', 'За життя'],
+      'слуга народу': ['СЛУГА НАРОДУ'],
+      'європейська солідарність': ['ЄВРОПЕЙСЬКА СОЛІДАРНІСТЬ'],
+      'батьківщина': ['Батьківщина'],
+      'голос': ['ГОЛОС'],
+      'довіра': ['ДОВІРА'],
+      'за майбутнє': ['За майбутнє'],
+      'відновлення': ['Відновлення'],
+    };
+    for (const [key, aliases] of Object.entries(aliasMap)) {
+      if (lower.includes(key)) return aliases;
+    }
+    return [input];
+  }
+
+  /**
    * Get deputy by RADA ID with cache-first strategy
    */
   async getDeputyByRadaId(
@@ -87,11 +110,19 @@ export class DeputyService {
         paramIndex++;
       }
 
-      // Filter by faction
+      // Filter by faction (with common aliases)
       if (params.faction) {
-        query += ` AND faction_name ILIKE $${paramIndex}`;
-        queryParams.push(`%${params.faction}%`);
-        paramIndex++;
+        const aliases = this.getFactionAliases(params.faction);
+        if (aliases.length > 1) {
+          const conditions = aliases.map((_, i) => `faction_name ILIKE $${paramIndex + i}`);
+          query += ` AND (${conditions.join(' OR ')})`;
+          aliases.forEach(a => queryParams.push(`%${a}%`));
+          paramIndex += aliases.length;
+        } else {
+          query += ` AND faction_name ILIKE $${paramIndex}`;
+          queryParams.push(`%${params.faction}%`);
+          paramIndex++;
+        }
       }
 
       // Filter by committee
