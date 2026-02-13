@@ -89,9 +89,15 @@ export class UploadService extends BaseService {
     uploadId: string,
     chunkIndex: number,
     chunk: Blob,
-    onProgress?: (loaded: number, total: number) => void
+    onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal
   ): Promise<ChunkUploadResponse> {
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Upload cancelled', 'AbortError'));
+        return;
+      }
+
       const formData = new FormData();
       formData.append('chunkIndex', String(chunkIndex));
       formData.append('chunk', chunk);
@@ -103,6 +109,13 @@ export class UploadService extends BaseService {
       const token = localStorage.getItem('auth_token');
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      // Wire up abort signal to XHR
+      if (signal) {
+        const onAbort = () => xhr.abort();
+        signal.addEventListener('abort', onAbort, { once: true });
+        xhr.onloadend = () => signal.removeEventListener('abort', onAbort);
       }
 
       xhr.upload.onprogress = (event) => {
@@ -138,6 +151,7 @@ export class UploadService extends BaseService {
       };
 
       xhr.onerror = () => reject(new Error('Network error'));
+      xhr.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
       xhr.ontimeout = () => reject(new Error('Upload timeout'));
       xhr.timeout = 60000; // 60s per chunk
 

@@ -250,8 +250,13 @@ export class UploadManager {
     const item = this.items.get(itemId);
     if (!item) return;
 
+    // Set cancelled status FIRST to stop the chunk upload loop immediately
+    item.status = 'cancelled';
+    this.emitItemUpdate(item);
+
     const controller = this.abortControllers.get(itemId);
     if (controller) controller.abort();
+    this.abortControllers.delete(itemId);
 
     if (item.uploadId) {
       try {
@@ -260,9 +265,6 @@ export class UploadManager {
         // Best effort
       }
     }
-
-    item.status = 'cancelled';
-    this.emitItemUpdate(item);
   }
 
   /**
@@ -505,6 +507,10 @@ export class UploadManager {
   }
 
   private async uploadFile(item: UploadItem): Promise<void> {
+    // Create abort controller for this file upload
+    const controller = new AbortController();
+    this.abortControllers.set(item.id, controller);
+
     try {
       // Step 1: Init session
       item.status = 'initializing';
@@ -631,7 +637,8 @@ export class UploadManager {
                   loaded;
                 item.progress = item.uploadedBytes / item.fileSize;
                 this.emitItemUpdate(item);
-              }
+              },
+              controller.signal
             );
 
             // Process backpressure headers from chunk response
@@ -660,6 +667,10 @@ export class UploadManager {
               continue;
             }
 
+            // Don't retry if cancelled/aborted
+            if (err.name === 'AbortError' || controller.signal.aborted) {
+              return;
+            }
             lastError = err;
             if (attempt < MAX_RETRIES) {
               const delay = RETRY_DELAYS[attempt] || 4000;
@@ -703,6 +714,8 @@ export class UploadManager {
       item.retries++;
       this.emitItemUpdate(item);
       this.emit({ type: 'error', error: `${item.fileName}: ${item.error}` });
+    } finally {
+      this.abortControllers.delete(item.id);
     }
   }
 
