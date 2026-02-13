@@ -18,7 +18,7 @@ export class RadaAPIAdapter {
   private client: AxiosInstance;
   private baseURL = 'https://data.rada.gov.ua';
   private lastRequestTime: number = 0;
-  private minRequestInterval: number = 500; // 500ms between requests
+  private minRequestInterval: number = 100; // 100ms between requests (10 rps)
   private _costTracker?: CostTracker;
 
   constructor() {

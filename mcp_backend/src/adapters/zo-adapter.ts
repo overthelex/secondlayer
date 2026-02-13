@@ -252,16 +252,29 @@ export class ZOAdapter {
         ? Math.max(1, Math.floor(Number(envBatch)))
         : 50;
 
-      // Drain in batches
+      // Drain in batches — up to 10 concurrent PG inserts
+      const envConcurrency = process.env.PERSIST_CONCURRENCY;
+      const PERSIST_CONCURRENCY = envConcurrency && !Number.isNaN(Number(envConcurrency))
+        ? Math.max(1, Math.floor(Number(envConcurrency)))
+        : 10;
+
+      // Split queue into batches
+      const allBatches: any[][] = [];
       while (this.persistQueue.length > 0) {
         const batch = this.persistQueue.splice(0, BATCH_SIZE);
-        // Clear seen ids for drained docs to keep memory bounded
         for (const doc of batch) {
           const identity = this.normalizeDocumentIdentity(doc);
           if (identity) this.persistSeenIds.delete(identity.zakononline_id);
         }
+        allBatches.push(batch);
+      }
 
-        await this.saveDocumentsMetadataToDatabase(batch, batch.length);
+      // Process batches with concurrency
+      for (let i = 0; i < allBatches.length; i += PERSIST_CONCURRENCY) {
+        const concurrentBatches = allBatches.slice(i, i + PERSIST_CONCURRENCY);
+        await Promise.all(
+          concurrentBatches.map(batch => this.saveDocumentsMetadataToDatabase(batch, batch.length))
+        );
       }
     } finally {
       this.persistInFlight = false;
@@ -1152,7 +1165,7 @@ export class ZOAdapter {
     const envLimit = process.env.FULLTEXT_CONCURRENCY_LIMIT;
     const CONCURRENCY_LIMIT = envLimit && !Number.isNaN(Number(envLimit))
       ? Math.max(1, Number(envLimit))
-      : 3; // Max 3 parallel requests to avoid overwhelming the server
+      : 10; // Max 10 parallel requests to ZakonOnline API
     const results: any[] = [];
 
     // Process documents in batches

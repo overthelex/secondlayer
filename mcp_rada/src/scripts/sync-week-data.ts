@@ -28,7 +28,7 @@ class WeekDataSyncer {
   private votingService: VotingService;
   private concurrency: number;
 
-  constructor(concurrency: number = 5) {
+  constructor(concurrency: number = 10) {
     this.db = new Database();
     this.radaAdapter = new RadaAPIAdapter();
     this.deputyService = new DeputyService(this.db, this.radaAdapter);
@@ -252,7 +252,7 @@ class WeekDataSyncer {
 async function main() {
   const startDate = process.env.START_DATE || '2026-01-20';
   const endDate = process.env.END_DATE || '2026-01-27';
-  const concurrency = parseInt(process.env.CONCURRENCY || '5', 10);
+  const concurrency = parseInt(process.env.CONCURRENCY || '10', 10);
 
   console.log('\n' + '='.repeat(70));
   console.log('🚀 RADA Week Data Sync');
