@@ -120,7 +120,7 @@ services:
     volumes:
     - qdrant_stage_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://localhost:6333/readyz || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
       retries: 5
