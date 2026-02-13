@@ -19,11 +19,18 @@ export interface ToolDefinition {
   inputSchema: any;
 }
 
+export interface RemoteServiceConfig {
+  baseUrl: string;
+  apiKey: string;
+}
+
 export class ToolRegistry {
   private routes: Map<string, ToolRoute>;
   private axiosClient: AxiosInstance;
   private handlers: BaseToolHandler[] = [];
   private handlerMap: Map<string, BaseToolHandler> = new Map();
+  private remoteToolDefs: ToolDefinition[] = [];
+  private remoteToolDefsLoaded = false;
 
   constructor() {
     this.routes = new Map();
@@ -58,13 +65,86 @@ export class ToolRegistry {
   }
 
   /**
-   * Execute a local tool by name via the registered handler.
-   * Returns null if no handler is registered for the tool.
+   * Execute a tool by name — local handler first, then remote proxy fallback.
+   * Returns null if no handler or route is registered for the tool.
    */
   async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    // 1. Try local handler
     const handler = this.handlerMap.get(name);
-    if (!handler) return null;
-    return await handler.executeTool(name, args);
+    if (handler) {
+      return await handler.executeTool(name, args);
+    }
+
+    // 2. Try remote proxy for RADA / OpenReyestr tools
+    const route = this.routes.get(name);
+    if (route && !route.local) {
+      return await this.executeRemoteTool(route, args);
+    }
+
+    return null;
+  }
+
+  /**
+   * Execute a tool on a remote service via HTTP proxy.
+   */
+  private async executeRemoteTool(route: ToolRoute, args: any): Promise<any> {
+    const config = this.getRemoteServiceConfig(route.service);
+    if (!config.baseUrl || !config.apiKey) {
+      throw new Error(`Remote service ${route.service} is not configured (missing URL or API key)`);
+    }
+
+    const url = `${config.baseUrl}/api/tools/${route.serviceName}`;
+    logger.info('[ToolRegistry] Proxying to remote service', {
+      tool: route.toolName,
+      service: route.service,
+      serviceName: route.serviceName,
+    });
+
+    try {
+      const response = await this.axiosClient.post(
+        url,
+        { arguments: args },
+        {
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            Accept: 'application/json',
+          },
+          timeout: 60000,
+        }
+      );
+
+      logger.info('[ToolRegistry] Remote call successful', {
+        tool: route.toolName,
+        service: route.service,
+      });
+
+      return response.data?.result || response.data;
+    } catch (error: any) {
+      logger.error('[ToolRegistry] Remote call failed', {
+        tool: route.toolName,
+        service: route.service,
+        error: error.message,
+        status: error.response?.status,
+      });
+      throw new Error(`Remote service call failed (${route.service}/${route.serviceName}): ${error.message}`);
+    }
+  }
+
+  /**
+   * Get remote service connection config from env vars.
+   */
+  private getRemoteServiceConfig(service: ServiceType): RemoteServiceConfig {
+    const configs: Record<string, RemoteServiceConfig> = {
+      rada: {
+        baseUrl: process.env.RADA_MCP_URL || '',
+        apiKey: process.env.RADA_API_KEY || '',
+      },
+      openreyestr: {
+        baseUrl: process.env.OPENREYESTR_MCP_URL || '',
+        apiKey: process.env.OPENREYESTR_API_KEY || '',
+      },
+    };
+    return configs[service] || { baseUrl: '', apiKey: '' };
   }
 
   /**
@@ -106,6 +186,74 @@ export class ToolRegistry {
       }
     }
     return defs;
+  }
+
+  /**
+   * Get all tool definitions: local + remote (fetched and cached).
+   * Remote tool defs are fetched once on first call, then cached.
+   */
+  async getAllToolDefinitions(): Promise<ToolDefinition[]> {
+    const local = this.getLocalToolDefinitions();
+
+    if (!this.remoteToolDefsLoaded) {
+      await this.fetchRemoteToolDefinitions();
+    }
+
+    return [...local, ...this.remoteToolDefs];
+  }
+
+  /**
+   * Fetch tool definitions from remote services (RADA, OpenReyestr) and cache them.
+   */
+  private async fetchRemoteToolDefinitions(): Promise<void> {
+    this.remoteToolDefsLoaded = true;
+    const defs: ToolDefinition[] = [];
+
+    // Fetch RADA tools
+    const radaConfig = this.getRemoteServiceConfig('rada');
+    if (radaConfig.baseUrl && radaConfig.apiKey) {
+      try {
+        const response = await this.axiosClient.get(`${radaConfig.baseUrl}/api/tools`, {
+          headers: { Authorization: `Bearer ${radaConfig.apiKey}` },
+          timeout: 5000,
+        });
+        const tools = response.data.tools || [];
+        for (const tool of tools) {
+          defs.push({
+            name: `rada_${tool.name}`,
+            description: `[RADA] ${tool.description}`,
+            inputSchema: tool.inputSchema,
+          });
+        }
+        logger.info('[ToolRegistry] Fetched RADA tool definitions', { count: tools.length });
+      } catch (err: any) {
+        logger.warn('[ToolRegistry] Failed to fetch RADA tools', { error: err.message });
+      }
+    }
+
+    // Fetch OpenReyestr tools
+    const orConfig = this.getRemoteServiceConfig('openreyestr');
+    if (orConfig.baseUrl && orConfig.apiKey) {
+      try {
+        const response = await this.axiosClient.get(`${orConfig.baseUrl}/api/tools`, {
+          headers: { Authorization: `Bearer ${orConfig.apiKey}` },
+          timeout: 5000,
+        });
+        const tools = response.data.tools || [];
+        for (const tool of tools) {
+          defs.push({
+            name: `openreyestr_${tool.name}`,
+            description: `[OpenReyestr] ${tool.description}`,
+            inputSchema: tool.inputSchema,
+          });
+        }
+        logger.info('[ToolRegistry] Fetched OpenReyestr tool definitions', { count: tools.length });
+      } catch (err: any) {
+        logger.warn('[ToolRegistry] Failed to fetch OpenReyestr tools', { error: err.message });
+      }
+    }
+
+    this.remoteToolDefs = defs;
   }
 
   // ========================= Route Management =========================

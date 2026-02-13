@@ -75,7 +75,7 @@ export class ChatService {
     try {
       // 1. Classify intent via LLM → filter tools
       const classification = await this.classifyChatIntent(query);
-      const toolDefs = this.filterTools(classification.domains);
+      const toolDefs = await this.filterTools(classification.domains);
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
@@ -366,8 +366,8 @@ export class ChatService {
   /**
    * Filter 45+ tools to a relevant subset based on intent domains.
    */
-  private filterTools(domains: string[]): ToolDefinition[] {
-    const allDefs = this.toolRegistry.getLocalToolDefinitions();
+  private async filterTools(domains: string[]): Promise<ToolDefinition[]> {
+    const allDefs = await this.toolRegistry.getAllToolDefinitions();
 
     // Collect tool names from matching domains
     const relevantNames = new Set<string>(DEFAULT_TOOLS);
