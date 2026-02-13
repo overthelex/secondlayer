@@ -15,7 +15,7 @@
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 import { ZOAdapter } from '../adapters/zo-adapter.js';
-import { ZAKONONLINE_DOMAINS, type ZakonOnlineDomainName } from '../types/zakononline-domains.js';
+import { type ZakonOnlineDomainName } from '../types/zakononline-domains.js';
 import { createClient } from 'redis';
 
 interface DictionaryEntry {
