@@ -98,6 +98,10 @@ export class MCPRadaAPI {
               type: 'string',
               description: 'ID депутата в системі data.rada.gov.ua',
             },
+            faction: {
+              type: 'string',
+              description: 'Назва фракції для пошуку списку депутатів (напр. "Слуга Народу")',
+            },
             include_voting_record: {
               type: 'boolean',
               default: false,
@@ -273,10 +277,12 @@ export class MCPRadaAPI {
 
       if (args.rada_id) {
         searchParams.rada_id = args.rada_id;
+      } else if (args.faction) {
+        searchParams.faction = args.faction;
       } else if (args.name) {
         searchParams.name = args.name;
       } else {
-        throw new Error('Either name or rada_id must be provided');
+        throw new Error('Either name, rada_id, or faction must be provided');
       }
 
       const deputies = await this.deputyService.searchDeputies(searchParams);

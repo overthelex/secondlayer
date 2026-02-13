@@ -124,6 +124,7 @@ export interface SearchParliamentBillsArgs {
 export interface GetDeputyInfoArgs {
   name?: string;
   rada_id?: string;
+  faction?: string;
   include_voting_record?: boolean;
   include_assistants?: boolean;
 }

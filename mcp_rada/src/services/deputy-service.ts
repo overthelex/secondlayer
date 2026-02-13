@@ -108,7 +108,8 @@ export class DeputyService {
         paramIndex++;
       }
 
-      query += ' ORDER BY full_name ASC LIMIT 100';
+      const limit = params.faction ? 500 : 100;
+      query += ` ORDER BY full_name ASC LIMIT ${limit}`;
 
       const result = await this.db.query(query, queryParams);
       const deputies = result.rows as Deputy[];
