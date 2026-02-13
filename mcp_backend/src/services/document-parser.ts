@@ -242,6 +242,7 @@ export class DocumentParser {
    * Parse legacy .doc (OLE Compound Document) using word-extractor
    */
   async parseDOC(fileBuffer: Buffer): Promise<ParsedDocument> {
+    // Strategy 1: Try word-extractor for genuine OLE .doc files
     try {
       logger.info('Attempting legacy .doc parsing with word-extractor');
       const extractor = new WordExtractor();
@@ -258,21 +259,26 @@ export class DocumentParser {
           },
         };
       }
-
-      // Fallback to OCR if available
-      if (this.ocrAvailable) {
-        logger.warn('.doc has no extractable text, falling back to OCR');
-        return await this.parseDOCXWithOCR(fileBuffer);
-      }
-
-      return {
-        text: text || '[DOC could not be parsed — no text and OCR not configured]',
-        metadata: { source: 'native', mimeType: 'application/msword' },
-      };
     } catch (error: any) {
-      logger.error('.doc parsing failed', { error: error.message });
-      throw new Error(`Failed to parse DOC: ${error.message}`);
+      logger.warn('.doc word-extractor failed, trying DOCX fallback', { error: error.message });
     }
+
+    // Strategy 2: Try parsing as DOCX (file may be mislabeled)
+    try {
+      const result = await this.parseDOCX(fileBuffer);
+      logger.info('.doc parsed successfully as DOCX (mislabeled file)');
+      return result;
+    } catch (error: any) {
+      logger.warn('.doc DOCX fallback also failed', { error: error.message });
+    }
+
+    // Strategy 3: Fallback to OCR if available
+    if (this.ocrAvailable) {
+      logger.warn('.doc has no extractable text, falling back to OCR');
+      return await this.parseDOCXWithOCR(fileBuffer);
+    }
+
+    throw new Error('Failed to parse DOC: file could not be read as .doc or .docx, and OCR is not available');
   }
 
   /**
