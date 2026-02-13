@@ -141,29 +141,39 @@ export function ChatLayout() {
    * Parse content to tool-specific parameters
    */
   const parseContentToToolParams = (toolName: string, content: string, documentIds?: string[]): any => {
-    const base: any = {};
+    const base: any = { query: content };
     if (documentIds && documentIds.length > 0) {
       base.document_ids = documentIds;
     }
 
-    switch (toolName) {
-      case 'search_legal_precedents':
-        return {
-          ...base,
-          query: content,
-          limit: 10,
-        };
+    // Tools that accept a limit parameter
+    const limitedTools: Record<string, number> = {
+      search_legal_precedents: 10,
+      search_supreme_court_practice: 10,
+      find_similar_fact_pattern_cases: 10,
+      search_legislation: 5,
+      list_documents: 20,
+      openreyestr_search_entities: 10,
+      openreyestr_search_beneficiaries: 10,
+      rada_search_parliament_bills: 10,
+    };
 
-      case 'search_legislation':
-        return {
-          ...base,
-          query: content,
-          limit: 5,
-        };
-
-      default:
-        return { ...base, query: content };
+    if (toolName in limitedTools) {
+      base.limit = limitedTools[toolName];
     }
+
+    // Tools that use different primary param names
+    if (toolName === 'get_court_decision' || toolName === 'get_case_text') {
+      return { ...base, doc_id: content };
+    }
+    if (toolName === 'openreyestr_get_by_edrpou') {
+      return { ...base, edrpou: content };
+    }
+    if (toolName === 'get_legislation_article') {
+      return { ...base, query: content };
+    }
+
+    return base;
   };
 
   const handleSend = async (content: string, toolName?: string, documentIds?: string[]) => {

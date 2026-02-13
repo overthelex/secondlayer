@@ -123,7 +123,7 @@ export class MCPService extends BaseService {
     const controller = new AbortController();
 
     try {
-      const response = await fetch(`${this.API_URL.replace('/api', '')}/api/chat`, {
+      const response = await fetch(`${this.API_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

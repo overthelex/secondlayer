@@ -5,12 +5,109 @@ import showToast from '../utils/toast';
 
 const AI_CHAT_MODE = 'ai_chat';
 
-const TOOL_OPTIONS = [
-  { name: 'search_legal_precedents', label: 'Пошук справ' },
-  { name: 'search_supreme_court_practice', label: 'Практика ВС' },
-  { name: 'search_legislation', label: 'Законодавство' },
-  { name: 'rada_get_deputy_info', label: 'Депутати' },
-  { name: 'openreyestr_search_entities', label: 'Реєстр' },
+interface ToolOption {
+  name: string;
+  label: string;
+}
+
+interface ToolCategory {
+  id: string;
+  label: string;
+  tools: ToolOption[];
+}
+
+const TOOL_CATEGORIES: ToolCategory[] = [
+  {
+    id: 'court',
+    label: 'Судові справи',
+    tools: [
+      { name: 'search_legal_precedents', label: 'Пошук справ' },
+      { name: 'search_supreme_court_practice', label: 'Практика ВС' },
+      { name: 'get_court_decision', label: 'Рішення суду' },
+      { name: 'get_case_documents_chain', label: 'Ланцюг документів' },
+      { name: 'find_similar_fact_pattern_cases', label: 'Схожі справи' },
+      { name: 'compare_practice_pro_contra', label: 'За і проти' },
+      { name: 'count_cases_by_party', label: 'Справи сторони' },
+      { name: 'get_case_text', label: 'Текст справи' },
+    ],
+  },
+  {
+    id: 'analysis',
+    label: 'Аналіз',
+    tools: [
+      { name: 'analyze_case_pattern', label: 'Аналіз патерну' },
+      { name: 'get_similar_reasoning', label: 'Схоже обґрунтування' },
+      { name: 'get_citation_graph', label: 'Граф цитувань' },
+      { name: 'check_precedent_status', label: 'Статус прецеденту' },
+    ],
+  },
+  {
+    id: 'legislation',
+    label: 'Законодавство',
+    tools: [
+      { name: 'search_legislation', label: 'Пошук законів' },
+      { name: 'get_legislation_article', label: 'Стаття закону' },
+      { name: 'get_legislation_articles', label: 'Статті закону' },
+      { name: 'get_legislation_section', label: 'Розділ закону' },
+      { name: 'get_legislation_structure', label: 'Структура закону' },
+      { name: 'search_procedural_norms', label: 'Процесуальні норми' },
+      { name: 'find_relevant_law_articles', label: 'Релевантні статті' },
+    ],
+  },
+  {
+    id: 'documents',
+    label: 'Документи',
+    tools: [
+      { name: 'store_document', label: 'Зберегти документ' },
+      { name: 'list_documents', label: 'Список документів' },
+      { name: 'semantic_search', label: 'Семантичний пошук' },
+      { name: 'get_document', label: 'Отримати документ' },
+      { name: 'parse_document', label: 'Розібрати документ' },
+      { name: 'extract_document_sections', label: 'Секції документу' },
+      { name: 'summarize_document', label: 'Резюме документу' },
+      { name: 'compare_documents', label: 'Порівняти документи' },
+      { name: 'extract_key_clauses', label: 'Ключові положення' },
+    ],
+  },
+  {
+    id: 'procedural',
+    label: 'Процесуальне',
+    tools: [
+      { name: 'calculate_procedural_deadlines', label: 'Строки' },
+      { name: 'build_procedural_checklist', label: 'Чеклист' },
+      { name: 'calculate_monetary_claims', label: 'Грошові вимоги' },
+    ],
+  },
+  {
+    id: 'dd',
+    label: 'Due Diligence',
+    tools: [
+      { name: 'generate_dd_report', label: 'DD звіт' },
+      { name: 'risk_scoring', label: 'Скоринг ризиків' },
+      { name: 'format_answer_pack', label: 'Пакет відповідей' },
+    ],
+  },
+  {
+    id: 'parliament',
+    label: 'Парламент',
+    tools: [
+      { name: 'rada_search_parliament_bills', label: 'Законопроекти' },
+      { name: 'rada_get_deputy_info', label: 'Депутати' },
+      { name: 'rada_search_legislation_text', label: 'Текст законів' },
+      { name: 'rada_analyze_voting_record', label: 'Голосування' },
+    ],
+  },
+  {
+    id: 'registry',
+    label: 'Реєстри',
+    tools: [
+      { name: 'openreyestr_search_entities', label: 'Пошук юросіб' },
+      { name: 'openreyestr_get_entity_details', label: 'Деталі юрособи' },
+      { name: 'openreyestr_search_beneficiaries', label: 'Бенефіціари' },
+      { name: 'openreyestr_get_by_edrpou', label: 'За ЄДРПОУ' },
+      { name: 'openreyestr_get_statistics', label: 'Статистика' },
+    ],
+  },
 ];
 
 const ACCEPTED_FILE_TYPES = '.pdf,.docx,.doc,.txt,.rtf,.html';
@@ -158,57 +255,102 @@ export function ChatInput({
   };
 
   const [showManualTools, setShowManualTools] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const activeTool = selectedTool || AI_CHAT_MODE;
   const isAIChat = activeTool === AI_CHAT_MODE;
+
+  // Find which category the active tool belongs to
+  const activeCategory = TOOL_CATEGORIES.find(cat =>
+    cat.tools.some(t => t.name === activeTool)
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-6 pb-2">
       {/* Mode Selection: AI Chat + expandable manual tools */}
       {onToolChange && (
-        <div className="flex flex-wrap gap-2 mb-3 pb-1">
-          {/* AI Chat pill (default) */}
-          <button
-            onClick={() => {
-              onToolChange(AI_CHAT_MODE);
-              setShowManualTools(false);
-            }}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1.5 ${
-              isAIChat
-                ? 'bg-claude-text text-white border-claude-text shadow-sm'
-                : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
-            }`}
-          >
-            <Sparkles size={12} />
-            AI Чат
-          </button>
-
-          {/* Manual tools toggle */}
-          <button
-            onClick={() => setShowManualTools(!showManualTools)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1 ${
-              !isAIChat
-                ? 'bg-claude-text/10 text-claude-text border-claude-text/30'
-                : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
-            }`}
-          >
-            Інструменти
-            <ChevronDown size={12} className={`transition-transform ${showManualTools ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Manual tool pills (expandable) */}
-          {showManualTools && TOOL_OPTIONS.map((tool) => (
+        <div className="mb-3 pb-1">
+          <div className="flex flex-wrap gap-2">
+            {/* AI Chat pill (default) */}
             <button
-              key={tool.name}
-              onClick={() => onToolChange(tool.name)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border ${
-                activeTool === tool.name
+              onClick={() => {
+                onToolChange(AI_CHAT_MODE);
+                setShowManualTools(false);
+                setExpandedCategory(null);
+              }}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1.5 ${
+                isAIChat
                   ? 'bg-claude-text text-white border-claude-text shadow-sm'
                   : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
               }`}
             >
-              {tool.label}
+              <Sparkles size={12} />
+              AI Чат
             </button>
-          ))}
+
+            {/* Manual tools toggle */}
+            <button
+              onClick={() => {
+                setShowManualTools(!showManualTools);
+                if (showManualTools) setExpandedCategory(null);
+              }}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 border flex items-center gap-1 ${
+                !isAIChat
+                  ? 'bg-claude-text/10 text-claude-text border-claude-text/30'
+                  : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
+              }`}
+            >
+              Інструменти
+              <ChevronDown size={12} className={`transition-transform ${showManualTools ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Active tool indicator (when tools panel is collapsed) */}
+            {!isAIChat && !showManualTools && activeCategory && (
+              <span className="flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium bg-claude-text text-white border border-claude-text shadow-sm">
+                {activeCategory.tools.find(t => t.name === activeTool)?.label}
+              </span>
+            )}
+          </div>
+
+          {/* Category pills */}
+          {showManualTools && (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {TOOL_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setExpandedCategory(expandedCategory === cat.id ? null : cat.id)}
+                    className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 border flex items-center gap-1 ${
+                      expandedCategory === cat.id || activeCategory?.id === cat.id
+                        ? 'bg-claude-text/10 text-claude-text border-claude-text/30'
+                        : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
+                    }`}
+                  >
+                    {cat.label}
+                    <ChevronDown size={10} className={`transition-transform ${expandedCategory === cat.id ? 'rotate-180' : ''}`} />
+                  </button>
+                ))}
+              </div>
+
+              {/* Tools in selected category */}
+              {expandedCategory && (
+                <div className="flex flex-wrap gap-1.5 pl-1">
+                  {TOOL_CATEGORIES.find(c => c.id === expandedCategory)?.tools.map((tool) => (
+                    <button
+                      key={tool.name}
+                      onClick={() => onToolChange(tool.name)}
+                      className={`flex-shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all duration-200 border ${
+                        activeTool === tool.name
+                          ? 'bg-claude-text text-white border-claude-text shadow-sm'
+                          : 'bg-white text-claude-subtext border-claude-border hover:border-claude-subtext/40 hover:text-claude-text'
+                      }`}
+                    >
+                      {tool.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

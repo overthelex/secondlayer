@@ -27,6 +27,11 @@ export interface MessageProps {
     text: string;
     source: string;
   }>;
+  documents?: Array<{
+    id: string;
+    title: string;
+    type: string;
+  }>;
   thinkingSteps?: Array<{
     id: string;
     title: string;
@@ -62,6 +67,10 @@ function isRawJsonContent(text: string): boolean {
     if (parsed?.content && Array.isArray(parsed.content)) return true;
     if (parsed?.source_case || parsed?.similar_cases || parsed?.results) return true;
     if (parsed?.legislation || parsed?.articles) return true;
+    // Registry / RADA / procedural results
+    if (parsed?.entities || parsed?.bills || parsed?.deputies) return true;
+    if (parsed?.deadlines || parsed?.checklist || parsed?.risk_score != null) return true;
+    if (parsed?.beneficiaries || parsed?.votings || parsed?.findings) return true;
     // Generic large JSON objects (>500 chars) are likely raw tool results
     if (trimmed.length > 500) return true;
     return false;
@@ -77,6 +86,7 @@ export function Message({
   decisions,
   analytics,
   citations,
+  documents,
   thinkingSteps,
   onRegenerate
 }: MessageProps) {
@@ -86,9 +96,9 @@ export function Message({
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
   // Guard: if content is raw JSON and we have extracted evidence, don't show it
-  const hasEvidence = (decisions && decisions.length > 0) || (citations && citations.length > 0);
+  const hasEvidence = (decisions && decisions.length > 0) || (citations && citations.length > 0) || (documents && documents.length > 0);
   const displayContent = (!isUser && !isStreaming && isRawJsonContent(content) && hasEvidence)
-    ? 'Результати пошуку відображені нижче та на панелі праворуч.'
+    ? 'Результати відображені на панелі праворуч.'
     : content;
 
   const handleCopy = useCallback(() => {
