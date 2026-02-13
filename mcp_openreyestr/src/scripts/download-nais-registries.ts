@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import https from 'https';
 import unzipper from 'unzipper';
+import iconv from 'iconv-lite';
 
 const REGISTRIES = {
   notaries: {
@@ -79,18 +80,18 @@ async function importNotaries(pool: Pool, xmlContent: string, sourceFile: string
   const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: true });
   const result = parser.parse(xmlContent);
 
-  // Navigate to the subjects array (NAIS XML format)
-  let subjects = result?.DATA?.SUBJECT || result?.SUBJECTS?.SUBJECT || result?.data?.subject || [];
-  if (!Array.isArray(subjects)) subjects = [subjects];
+  // Real XML: DATA > RECORD (not SUBJECT)
+  let records = result?.DATA?.RECORD || [];
+  if (!Array.isArray(records)) records = [records];
 
-  console.log(`  Parsed ${subjects.length} notary records`);
+  console.log(`  Parsed ${records.length} notary records`);
 
   let imported = 0;
   let errors = 0;
   const BATCH_SIZE = 500;
 
-  for (let i = 0; i < subjects.length; i += BATCH_SIZE) {
-    const batch = subjects.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
     const client = await pool.connect();
 
     try {
@@ -103,26 +104,39 @@ async function importNotaries(pool: Pool, xmlContent: string, sourceFile: string
         try {
           await client.query(`SAVEPOINT ${sp}`);
 
-          const certNum = s.CERTIFICATE_NUMBER || s.CERT_NUM || s.N_SVID || s.NUM || String(i * BATCH_SIZE + j + 1);
-          const fullName = s.FULL_NAME || s.NAME || s.FIO || s.PIB || '';
-          const region = s.REGION || s.OBLAST || s.RG || '';
-          const district = s.DISTRICT || s.RAION || '';
-          const organization = s.ORGANIZATION || s.ORG || s.NOTARY_OFFICE || '';
-          const address = s.ADDRESS || s.ADDR || '';
-          const phone = s.PHONE || s.TEL || '';
-          const email = s.EMAIL || '';
-          const certDate = s.CERTIFICATE_DATE || s.CERT_DATE || s.D_SVID || null;
-          const status = s.STATUS || s.STAN || '';
+          // Fields: REGION, NAME_OBJ (organization), CONTACTS (address+phone+email), FIO (name), LICENSE (cert number)
+          const certNum = String(s.LICENSE || i + j + 1);
+          const fullName = s.FIO || '';
+          const region = s.REGION || '';
+          const organization = s.NAME_OBJ || '';
+
+          // Parse CONTACTS: "region, district, city, zip, street, phone; email"
+          const contacts = String(s.CONTACTS || '');
+          let address = contacts;
+          let phone = '';
+          let email = '';
+
+          // Extract email from contacts
+          const emailMatch = contacts.match(/[\w.+-]+@[\w.-]+\.\w+/);
+          if (emailMatch) {
+            email = emailMatch[0];
+            address = contacts.replace(email, '').replace(/;\s*$/, '').trim();
+          }
+
+          // Extract phone from contacts (last part after last comma before email)
+          const phoneMatch = contacts.match(/(\(\d+\)\s*[\d-]+(?:,\s*[\d-]+)*)/);
+          if (phoneMatch) {
+            phone = phoneMatch[1];
+          }
 
           await client.query(
-            `INSERT INTO notaries (certificate_number, full_name, region, district, organization, address, phone, email, certificate_date, status, raw_data, source_file)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            `INSERT INTO notaries (certificate_number, full_name, region, district, organization, address, phone, email, status, raw_data, source_file)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (certificate_number) DO UPDATE SET
-               full_name = EXCLUDED.full_name, region = EXCLUDED.region, district = EXCLUDED.district,
+               full_name = EXCLUDED.full_name, region = EXCLUDED.region,
                organization = EXCLUDED.organization, address = EXCLUDED.address, phone = EXCLUDED.phone,
-               email = EXCLUDED.email, certificate_date = EXCLUDED.certificate_date, status = EXCLUDED.status,
-               raw_data = EXCLUDED.raw_data, updated_at = CURRENT_TIMESTAMP`,
-            [certNum, fullName, region, district, organization, address, phone, email, certDate, status, JSON.stringify(s), sourceFile]
+               email = EXCLUDED.email, raw_data = EXCLUDED.raw_data, updated_at = CURRENT_TIMESTAMP`,
+            [certNum, fullName, region, '', organization, address, phone, email, 'active', JSON.stringify(s), sourceFile]
           );
 
           await client.query(`RELEASE SAVEPOINT ${sp}`);
@@ -142,7 +156,7 @@ async function importNotaries(pool: Pool, xmlContent: string, sourceFile: string
       client.release();
     }
 
-    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, subjects.length)}/${subjects.length}\r`);
+    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, records.length)}/${records.length}\r`);
   }
 
   console.log(`\n  Imported: ${imported}, Errors: ${errors}`);
@@ -150,20 +164,26 @@ async function importNotaries(pool: Pool, xmlContent: string, sourceFile: string
 }
 
 async function importCourtExperts(pool: Pool, xmlContent: string, sourceFile: string): Promise<number> {
-  const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: true });
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: false,
+    trimValues: true,
+    isArray: (name) => name === 'DOCS' || name === 'EXP' || name === 'NAME',
+  });
   const result = parser.parse(xmlContent);
 
-  let subjects = result?.DATA?.SUBJECT || result?.SUBJECTS?.SUBJECT || result?.data?.subject || [];
-  if (!Array.isArray(subjects)) subjects = [subjects];
+  // Real XML: DATA > RECORD
+  let records = result?.DATA?.RECORD || [];
+  if (!Array.isArray(records)) records = [records];
 
-  console.log(`  Parsed ${subjects.length} court expert records`);
+  console.log(`  Parsed ${records.length} court expert records`);
 
   let imported = 0;
   let errors = 0;
   const BATCH_SIZE = 500;
 
-  for (let i = 0; i < subjects.length; i += BATCH_SIZE) {
-    const batch = subjects.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
     const client = await pool.connect();
 
     try {
@@ -176,23 +196,43 @@ async function importCourtExperts(pool: Pool, xmlContent: string, sourceFile: st
         try {
           await client.query(`SAVEPOINT ${sp}`);
 
-          const expertId = s.EXPERT_ID || s.ID || s.NUM || s.N_EXP || String(i * BATCH_SIZE + j + 1);
-          const fullName = s.FULL_NAME || s.NAME || s.FIO || s.PIB || '';
-          const region = s.REGION || s.OBLAST || s.RG || '';
-          const organization = s.ORGANIZATION || s.ORG || s.INSTITUTION || '';
-          const commissionName = s.COMMISSION_NAME || s.COMMISSION || s.ATEST_COMMISSION || '';
-          const certNumber = s.CERTIFICATE_NUMBER || s.CERT_NUM || s.N_SVID || '';
-          const certDate = s.CERTIFICATE_DATE || s.CERT_DATE || s.D_SVID || null;
-          const status = s.STATUS || s.STAN || '';
+          // Fields: SURNAME, NAME (array: [first, patronymic]), ORG_NAME, REGION_NAME, ADDRESS, PHONE_NUMB
+          // DOCS (array): AT_COMMISIONS, HIDDL_DATE, HIDDL_NUMB, LICENSE, LICENSE_DATE_TO, EXP > TYPE_TITLE/SPECIALS
+          const names = Array.isArray(s.NAME) ? s.NAME : [s.NAME || ''];
+          const surname = s.SURNAME || '';
+          const firstName = names[0] || '';
+          const patronymic = names[1] || '';
+          const fullName = `${surname} ${firstName} ${patronymic}`.trim();
 
-          // Expertise types can be in various formats
-          let expertiseTypes: string[] = [];
-          const rawTypes = s.EXPERTISE_TYPES || s.EXPERT_TYPE || s.VID_EXP || s.SPECIALITY || '';
-          if (Array.isArray(rawTypes)) {
-            expertiseTypes = rawTypes.map(String);
-          } else if (rawTypes) {
-            expertiseTypes = [String(rawTypes)];
+          const region = s.REGION_NAME || '';
+          const organization = s.ORG_NAME || '';
+
+          // Get first doc's license as expert_id; fallback to row index
+          const docs = Array.isArray(s.DOCS) ? s.DOCS : (s.DOCS ? [s.DOCS] : []);
+          const firstDoc = docs[0] || {};
+          const certNumber = String(firstDoc.LICENSE || '').trim();
+          const certDate = firstDoc.HIDDL_DATE || null;
+          const commissionName = firstDoc.AT_COMMISIONS || '';
+
+          // Use LICENSE as expert_id, or generate unique from name + row
+          const expertId = certNumber || `gen_${i + j + 1}`;
+
+          // Collect expertise types from all DOCS > EXP entries
+          const expertiseTypes: string[] = [];
+          for (const doc of docs) {
+            const exps = Array.isArray(doc.EXP) ? doc.EXP : (doc.EXP ? [doc.EXP] : []);
+            for (const exp of exps) {
+              const typeName = exp.TYPE_TITLE || '';
+              const specials = exp.SPECIALS || '';
+              if (typeName) expertiseTypes.push(String(typeName).trim());
+              if (specials) expertiseTypes.push(String(specials).trim());
+            }
           }
+          const uniqueTypes = [...new Set(expertiseTypes.filter(Boolean))];
+
+          // Determine status from license validity
+          const validDate = firstDoc.VALID_DATE || firstDoc.LICENSE_DATE_TO || '';
+          const status = validDate && new Date(validDate) > new Date() ? 'active' : 'expired';
 
           await client.query(
             `INSERT INTO court_experts (expert_id, full_name, region, organization, commission_name, expertise_types, certificate_number, certificate_date, status, raw_data, source_file)
@@ -202,7 +242,7 @@ async function importCourtExperts(pool: Pool, xmlContent: string, sourceFile: st
                commission_name = EXCLUDED.commission_name, expertise_types = EXCLUDED.expertise_types,
                certificate_number = EXCLUDED.certificate_number, certificate_date = EXCLUDED.certificate_date,
                status = EXCLUDED.status, raw_data = EXCLUDED.raw_data, updated_at = CURRENT_TIMESTAMP`,
-            [expertId, fullName, region, organization, commissionName, expertiseTypes, certNumber, certDate, status, JSON.stringify(s), sourceFile]
+            [expertId, fullName, region, organization, commissionName, uniqueTypes, certNumber, certDate, status, JSON.stringify(s), sourceFile]
           );
 
           await client.query(`RELEASE SAVEPOINT ${sp}`);
@@ -222,7 +262,7 @@ async function importCourtExperts(pool: Pool, xmlContent: string, sourceFile: st
       client.release();
     }
 
-    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, subjects.length)}/${subjects.length}\r`);
+    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, records.length)}/${records.length}\r`);
   }
 
   console.log(`\n  Imported: ${imported}, Errors: ${errors}`);
@@ -233,17 +273,18 @@ async function importArbitrationManagers(pool: Pool, xmlContent: string, sourceF
   const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, trimValues: true });
   const result = parser.parse(xmlContent);
 
-  let subjects = result?.DATA?.SUBJECT || result?.SUBJECTS?.SUBJECT || result?.data?.subject || [];
-  if (!Array.isArray(subjects)) subjects = [subjects];
+  // Real XML: DATA > RECORD with REG_NUM, REG_DATE, AK_NAME, CERT_NUMB, CERT_STATUS, CERT_DATE_ISSUE
+  let records = result?.DATA?.RECORD || [];
+  if (!Array.isArray(records)) records = [records];
 
-  console.log(`  Parsed ${subjects.length} arbitration manager records`);
+  console.log(`  Parsed ${records.length} arbitration manager records`);
 
   let imported = 0;
   let errors = 0;
   const BATCH_SIZE = 500;
 
-  for (let i = 0; i < subjects.length; i += BATCH_SIZE) {
-    const batch = subjects.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
     const client = await pool.connect();
 
     try {
@@ -256,13 +297,13 @@ async function importArbitrationManagers(pool: Pool, xmlContent: string, sourceF
         try {
           await client.query(`SAVEPOINT ${sp}`);
 
-          const regNumber = s.REGISTRATION_NUMBER || s.REG_NUM || s.N_REG || s.NUM || String(i * BATCH_SIZE + j + 1);
-          const regDate = s.REGISTRATION_DATE || s.REG_DATE || s.D_REG || null;
-          const fullName = s.FULL_NAME || s.NAME || s.FIO || s.PIB || '';
-          const certNumber = s.CERTIFICATE_NUMBER || s.CERT_NUM || s.N_SVID || '';
-          const certStatus = s.CERTIFICATE_STATUS || s.STATUS || s.STAN || '';
-          const certIssueDate = s.CERTIFICATE_ISSUE_DATE || s.CERT_DATE || s.D_SVID || null;
-          const certChangeDate = s.CERTIFICATE_CHANGE_DATE || s.CERT_CHANGE_DATE || s.D_CHANGE || null;
+          const regNumber = String(s.REG_NUM || i + j + 1);
+          const regDate = s.REG_DATE || null;
+          const fullName = s.AK_NAME || '';
+          const certNumber = s.CERT_NUMB || '';
+          const certStatus = s.CERT_STATUS || '';
+          const certIssueDate = s.CERT_DATE_ISSUE || null;
+          const certChangeDate = s.CERT_DATE_CHANGE || null;
 
           await client.query(
             `INSERT INTO arbitration_managers (registration_number, registration_date, full_name, certificate_number, certificate_status, certificate_issue_date, certificate_change_date, raw_data, source_file)
@@ -292,7 +333,7 @@ async function importArbitrationManagers(pool: Pool, xmlContent: string, sourceF
       client.release();
     }
 
-    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, subjects.length)}/${subjects.length}\r`);
+    process.stdout.write(`  Progress: ${Math.min(i + BATCH_SIZE, records.length)}/${records.length}\r`);
   }
 
   console.log(`\n  Imported: ${imported}, Errors: ${errors}`);
@@ -359,8 +400,10 @@ async function main() {
     }
 
     const xmlPath = path.join(extractDir, xmlFile);
-    const xmlContent = fs.readFileSync(xmlPath, 'utf-8');
-    console.log(`  XML size: ${(xmlContent.length / 1024 / 1024).toFixed(1)} MB`);
+    // Files are windows-1251 encoded, decode properly
+    const rawBuffer = fs.readFileSync(xmlPath);
+    const xmlContent = iconv.decode(rawBuffer, 'windows-1251');
+    console.log(`  XML size: ${(rawBuffer.length / 1024 / 1024).toFixed(1)} MB`);
 
     // 4. Import to database
     console.log(`  Importing to PostgreSQL...`);
