@@ -73,8 +73,20 @@ export class EmailService {
     // Create transporter
     if (this.config.smtp.auth.user && this.config.smtp.auth.pass) {
       this.transporter = nodemailer.createTransport(this.config.smtp);
-      logger.info('EmailService initialized with SMTP', {
+      logger.info('EmailService initialized with SMTP (authenticated)', {
         host: this.config.smtp.host,
+      });
+    } else if (process.env.SMTP_HOST) {
+      // IP-based auth (no credentials) — e.g. postfix with mynetworks
+      this.transporter = nodemailer.createTransport({
+        host: this.config.smtp.host,
+        port: this.config.smtp.port,
+        secure: this.config.smtp.secure,
+        tls: { rejectUnauthorized: false },
+      });
+      logger.info('EmailService initialized with SMTP (IP-based auth)', {
+        host: this.config.smtp.host,
+        port: this.config.smtp.port,
       });
     } else {
       // Development mode: use JSON transport (log only)
