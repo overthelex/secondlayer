@@ -111,7 +111,7 @@ export class RadaAPIAdapter {
     await this.waitForRateLimit();
 
     const convocation = filters?.convocation || 9;
-    const endpoint = `/ogd/zpr/skl${convocation}/bills-main.json`;
+    const endpoint = `/ogd/zpr/skl${convocation}/bills_main-skl${convocation}.json`;
     logger.info('Fetching bills', { convocation, filters });
 
     try {
@@ -132,8 +132,9 @@ export class RadaAPIAdapter {
       // Apply date filters if provided
       if (filters?.dateFrom || filters?.dateTo) {
         bills = bills.filter((bill) => {
-          if (!bill.reg_date) return true;
-          const billDate = new Date(bill.reg_date);
+          const dateStr = bill.registrationDate || bill.reg_date;
+          if (!dateStr) return true;
+          const billDate = new Date(dateStr);
           if (filters.dateFrom && billDate < new Date(filters.dateFrom)) return false;
           if (filters.dateTo && billDate > new Date(filters.dateTo)) return false;
           return true;

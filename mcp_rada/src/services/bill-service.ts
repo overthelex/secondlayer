@@ -399,31 +399,36 @@ export class BillService {
    * Transform raw RADA API data to Bill type
    */
   private transformRawBill(raw: any): Bill {
-    // Parse initiator names and IDs
+    // Parse initiator/subject names
+    // API field: "subject" contains initiator (e.g. "Кабінет Міністрів України")
     let initiatorNames: string[] = [];
     let initiatorIds: string[] = [];
 
-    if (raw.initiator) {
-      if (typeof raw.initiator === 'string') {
-        initiatorNames = [raw.initiator];
-      } else if (Array.isArray(raw.initiator)) {
-        initiatorNames = raw.initiator;
+    const initiatorSource = raw.subject || raw.initiator;
+    if (initiatorSource) {
+      if (typeof initiatorSource === 'string') {
+        initiatorNames = [initiatorSource];
+      } else if (Array.isArray(initiatorSource)) {
+        initiatorNames = initiatorSource;
       }
     }
+
+    // API uses "currentPhase_title" for status (e.g. "Закон підписано")
+    const status = raw.currentPhase_title || raw.status || null;
 
     return {
       id: raw.id || uuidv4(),
       bill_number: raw.number || raw.bill_number,
-      title: raw.name || raw.title,
-      registration_date: raw.reg_date || raw.registration_date || null,
-      status: raw.status || null,
+      title: raw.title || raw.name,
+      registration_date: raw.registrationDate || raw.reg_date || raw.registration_date || null,
+      status,
       stage: raw.stage || null,
-      initiator_type: raw.initiator_type || null,
+      initiator_type: raw.type || raw.initiator_type || null,
       initiator_names: initiatorNames,
       initiator_ids: initiatorIds,
       main_committee_id: raw.committee_id || raw.main_committee_id || null,
-      main_committee_name: raw.committee || raw.main_committee_name || null,
-      subject_area: raw.subject_area || null,
+      main_committee_name: raw.rubric || raw.committee || raw.main_committee_name || null,
+      subject_area: raw.rubric || raw.subject_area || null,
       law_articles: raw.law_articles || [],
       full_text: raw.full_text || null,
       explanatory_note: raw.explanatory_note || null,

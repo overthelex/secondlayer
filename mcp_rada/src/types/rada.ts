@@ -39,9 +39,19 @@ export interface RadaDeputyRawData {
 }
 
 export interface RadaBillRawData {
+  bill_id?: number;
   number: string;
-  name: string;
+  title?: string;
+  name?: string;
+  registrationDate?: string;
   reg_date?: string;
+  registrationSession?: string;
+  registrationConvocation?: string;
+  type?: string;
+  subject?: string;
+  rubric?: string;
+  currentPhase_date?: string;
+  currentPhase_title?: string;
   status?: string;
   stage?: string;
   initiator?: string;
