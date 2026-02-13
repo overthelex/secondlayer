@@ -180,7 +180,24 @@ export class OpenReyestrTools {
       results.push(...result.rows);
     }
 
-    return results.slice(0, limit);
+    const sliced = results.slice(0, limit);
+
+    if (sliced.length === 0) {
+      const registries = await this.getRegistrySummary();
+      return [{
+        found: false,
+        query: query || edrpou || record || '',
+        message: `Не знайдено суб'єктів за вашим запитом в Єдиному державному реєстрі`,
+        availableRegistries: registries,
+        suggestions: [
+          'Спробуйте скоротити або змінити пошуковий запит',
+          'Для пошуку за кодом ЄДРПОУ використовуйте openreyestr_get_by_edrpou',
+          'ФОП не мають ЄДРПОУ — шукайте за прізвищем через search_entities',
+        ],
+      }];
+    }
+
+    return sliced;
   }
 
   /**
@@ -372,7 +389,18 @@ export class OpenReyestrTools {
       return fsuResult.rows[0];
     }
 
-    return null;
+    const registries = await this.getRegistrySummary();
+    return {
+      found: false,
+      edrpou,
+      message: `Суб'єкт з ЄДРПОУ ${edrpou} не знайдено в Єдиному державному реєстрі`,
+      availableRegistries: registries,
+      suggestions: [
+        'Перевірте правильність коду ЄДРПОУ',
+        'Спробуйте пошук за назвою через openreyestr_search_entities',
+        'ФОП не мають ЄДРПОУ — використовуйте пошук за іменем',
+      ],
+    };
   }
 
   /**
@@ -416,6 +444,19 @@ export class OpenReyestrTools {
           parseInt(fsuActive.rows[0].count),
       },
     };
+  }
+
+  /**
+   * Get approximate record counts from all registry tables (fast, uses pg_stat)
+   */
+  private async getRegistrySummary(): Promise<{ registry: string; records: number }[]> {
+    const result = await this.pool.query(`
+      SELECT relname, n_live_tup as count
+      FROM pg_stat_user_tables
+      WHERE relname IN ('legal_entities', 'individual_entrepreneurs', 'public_associations')
+      ORDER BY relname
+    `);
+    return result.rows.map((r: any) => ({ registry: r.relname, records: parseInt(r.count) }));
   }
 
   private async findEntityType(record: string): Promise<'UO' | 'FOP' | 'FSU' | null> {

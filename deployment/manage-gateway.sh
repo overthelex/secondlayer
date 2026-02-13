@@ -442,9 +442,18 @@ deploy_local() {
         print_msg "$BLUE" "Pulling latest main branch..."
         git -C "$REPO_ROOT" fetch origin main && git -C "$REPO_ROOT" checkout main && git -C "$REPO_ROOT" pull origin main
 
-        # Step 2: Stop existing containers
-        print_msg "$BLUE" "Stopping existing containers..."
-        stop_env local
+        # Step 2: Stop app containers only (keep infrastructure: postgres, redis, qdrant, minio)
+        print_msg "$BLUE" "Stopping app containers (keeping databases running)..."
+        $compose_cmd $compose_args stop \
+            app-local rada-mcp-app-local app-openreyestr-local \
+            document-service-local nginx-local lexwebapp-local \
+            2>/dev/null || true
+        $compose_cmd $compose_args rm -f \
+            app-local rada-mcp-app-local app-openreyestr-local \
+            document-service-local nginx-local lexwebapp-local \
+            migrate-local rada-migrate-local migrate-openreyestr-local \
+            rada-db-init-local lexwebapp-deps-local \
+            2>/dev/null || true
 
         # Step 3: Cleanup exited/dead containers and dangling images
         print_msg "$BLUE" "Cleaning up stopped containers..."
@@ -457,13 +466,13 @@ deploy_local() {
         print_msg "$BLUE" "Building all images without cache..."
         $compose_cmd $compose_args build --no-cache migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
 
-        # Step 5: Start infrastructure services only
-        print_msg "$BLUE" "Starting infrastructure services..."
+        # Step 5: Ensure infrastructure services are running
+        print_msg "$BLUE" "Ensuring infrastructure services are running..."
         $compose_cmd $compose_args up -d postgres-local redis-local qdrant-local postgres-openreyestr-local minio-local
 
-        # Step 6: Wait for databases to be ready, then run init
+        # Step 6: Wait for databases to be healthy, then run init
         print_msg "$BLUE" "Waiting for databases..."
-        sleep 15
+        sleep 5
         print_msg "$BLUE" "Running RADA DB init..."
         $compose_cmd $compose_args up rada-db-init-local
 
@@ -478,6 +487,14 @@ deploy_local() {
         # Step 8: Start app services (including nginx + frontend in Docker)
         print_msg "$BLUE" "Starting application services..."
         $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local nginx-local lexwebapp-local
+
+        # Step 9: Start monitoring services
+        print_msg "$BLUE" "Starting monitoring services..."
+        $compose_cmd $compose_args up -d \
+            prometheus-local \
+            grafana-local \
+            redis-exporter-local \
+            2>/dev/null || echo "  (some monitoring services may not exist)"
     )
 
     if [ $? -ne 0 ]; then
