@@ -9,7 +9,8 @@ COPY package.json package-lock.json ./
 COPY lexwebapp/package*.json ./lexwebapp/
 
 # Install dependencies from root (includes workspaces)
-RUN npm ci --legacy-peer-deps
+# Use npm install instead of npm ci for monorepo workspace compatibility
+RUN npm install --legacy-peer-deps
 
 # Accept build arguments
 ARG BUILD_ENV=staging
