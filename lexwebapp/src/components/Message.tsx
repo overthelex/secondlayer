@@ -50,6 +50,26 @@ function highlightLegalCodes(text: string): React.ReactNode {
   });
 }
 
+/**
+ * Detect if content is raw JSON that the LLM echoed instead of synthesizing.
+ */
+function isRawJsonContent(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+  try {
+    const parsed = JSON.parse(trimmed);
+    // MCP content array format or tool result objects
+    if (parsed?.content && Array.isArray(parsed.content)) return true;
+    if (parsed?.source_case || parsed?.similar_cases || parsed?.results) return true;
+    if (parsed?.legislation || parsed?.articles) return true;
+    // Generic large JSON objects (>500 chars) are likely raw tool results
+    if (trimmed.length > 500) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function Message({
   role,
   content,
@@ -64,6 +84,12 @@ export function Message({
   const [showThinking, setShowThinking] = useState(false);
   const [starred, setStarred] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  // Guard: if content is raw JSON and we have extracted evidence, don't show it
+  const hasEvidence = (decisions && decisions.length > 0) || (citations && citations.length > 0);
+  const displayContent = (!isUser && !isStreaming && isRawJsonContent(content) && hasEvidence)
+    ? 'Результати пошуку відображені нижче та на панелі праворуч.'
+    : content;
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content).then(() => {
@@ -157,7 +183,7 @@ export function Message({
                     ),
                   }}
                 >
-                  {content}
+                  {displayContent}
                 </ReactMarkdown>
                 {isStreaming && <span className="inline-block w-[2px] h-[18px] ml-1 bg-claude-text/40 animate-pulse align-middle rounded-[1px]" />}
               </div>
