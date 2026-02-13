@@ -34,6 +34,7 @@ export class LegislationClassifier {
     'СК': { rada_id: '2947-14', full_name: 'Сімейний кодекс України' },
     'ЗК': { rada_id: '2768-14', full_name: 'Земельний кодекс України' },
     'КК': { rada_id: '2341-14', full_name: 'Кримінальний кодекс України' },
+    'КУ': { rada_id: '254к/96-вр', full_name: 'Конституція України' },
   };
 
   constructor(redis?: ReturnType<typeof createClient>) {

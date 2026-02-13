@@ -45,6 +45,24 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'СК': '2947-14',
     'ЗК': '2768-14',
     'КК': '2341-14',
+    'КУ': '254к/96-вр',
+    'КОНСТИТУЦІЯ': '254к/96-вр',
+  };
+
+  // Full-name aliases mapping → codeMap key
+  const fullNameAliases: Record<string, string> = {
+    'КОНСТИТУЦІЯ УКРАЇНИ': '254к/96-вр',
+    'КОНСТИТУЦIЯ УКРАЇНИ': '254к/96-вр',    // with Latin I
+    'ЦИВІЛЬНИЙ КОДЕКС': '435-15',
+    'ЦИВІЛЬНИЙ ПРОЦЕСУАЛЬНИЙ КОДЕКС': '1618-15',
+    'ГОСПОДАРСЬКИЙ КОДЕКС': '436-15',
+    'ГОСПОДАРСЬКИЙ ПРОЦЕСУАЛЬНИЙ КОДЕКС': '1798-12',
+    'КРИМІНАЛЬНИЙ КОДЕКС': '2341-14',
+    'КРИМІНАЛЬНИЙ ПРОЦЕСУАЛЬНИЙ КОДЕКС': '4651-17',
+    'КОДЕКС АДМІНІСТРАТИВНОГО СУДОЧИНСТВА': '2747-15',
+    'СІМЕЙНИЙ КОДЕКС': '2947-14',
+    'ЗЕМЕЛЬНИЙ КОДЕКС': '2768-14',
+    'КОДЕКС ЗАКОНІВ ПРО ПРАЦЮ': '322-08',
   };
 
   const normalized = input
@@ -54,9 +72,9 @@ export function parseLegislationReference(text: string): { radaId: string; artic
 
   const patterns: Array<{ regex: RegExp; codeGroupIndex: number; articleGroupIndex: number } | { regex: RegExp; radaIdIndex: number; articleIndex: number }> = [
     // Note: don't use \b for Cyrillic words (JS \b is ASCII-centric)
-    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
-    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
-    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
+    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
     { regex: /(?:^|\s)(\d{3,4}-\d{2}).*?ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, radaIdIndex: 1, articleIndex: 2 },
   ];
 
@@ -82,11 +100,29 @@ export function parseLegislationReference(text: string): { radaId: string; artic
   }
 
   const longForm = normalized.toUpperCase();
-  const longFormMatch = longForm.match(/(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu);
+  const longFormMatch = longForm.match(/(?:^|\s)(?:ст(?:атт[яі])?\.?\s*)?(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu);
   if (longFormMatch) {
     const articleNumber = longFormMatch[1];
     if (longForm.includes('ПОДАТКОВ') && codeMap['ПОДАТКОВИЙ КОДЕКС']) {
       return { radaId: codeMap['ПОДАТКОВИЙ КОДЕКС'], articleNumber };
+    }
+  }
+
+  // Try full-name aliases: "ст. 44 Конституції України" etc.
+  const articleInTextMatch = normalized.match(/(?:^|\s)(?:ст(?:атт[яіей])?\.?\s*)(\d+(?:-\d+)?)/iu);
+  if (articleInTextMatch) {
+    const articleNumber = articleInTextMatch[1];
+    const upperNorm = normalized.toUpperCase();
+    // Sort by alias length descending so "ЦИВІЛЬНИЙ ПРОЦЕСУАЛЬНИЙ КОДЕКС" matches before "ЦИВІЛЬНИЙ КОДЕКС"
+    const sortedAliases = Object.entries(fullNameAliases).sort((a, b) => b[0].length - a[0].length);
+    for (const [alias, radaId] of sortedAliases) {
+      // Build stems for each word in the alias (drop last 1-2 chars for Ukrainian declension)
+      const aliasWords = alias.split(' ');
+      const stems = aliasWords.map(w => w.substring(0, Math.max(w.length - 2, 3)).toUpperCase());
+      const allStemsMatch = stems.every(stem => upperNorm.includes(stem));
+      if (allStemsMatch) {
+        return { radaId, articleNumber };
+      }
     }
   }
 
@@ -142,6 +178,24 @@ export async function parseLegislationReferenceWithAI(
   return null;
 }
 
+/**
+ * Normalizes rada_id by fixing common Latin/Cyrillic character confusion.
+ * The Rada API uses Cyrillic characters in IDs (e.g., 254к/96-вр),
+ * but LLMs often output Latin lookalikes (254k/96-vr).
+ */
+export function normalizeRadaId(radaId: string): string {
+  // Known Latin→Cyrillic rada_id mappings
+  const knownMappings: Record<string, string> = {
+    '254k/96-vr': '254к/96-вр',
+    '254k/96-bp': '254к/96-вр',
+  };
+  const lower = radaId.toLowerCase();
+  if (knownMappings[lower]) {
+    return knownMappings[lower];
+  }
+  return radaId;
+}
+
 export class LegislationService {
   private adapter: RadaLegislationAdapter;
   private embeddingService: EmbeddingService;
@@ -168,6 +222,7 @@ export class LegislationService {
   }
 
   async ensureLegislationExists(radaId: string): Promise<boolean> {
+    radaId = normalizeRadaId(radaId);
     const result = await this.db.query(
       'SELECT id FROM legislation WHERE rada_id = $1',
       [radaId]
@@ -192,6 +247,7 @@ export class LegislationService {
   }
 
   async getArticle(radaId: string, articleNumber: string): Promise<LegislationReference | null> {
+    radaId = normalizeRadaId(radaId);
     await this.ensureLegislationExists(radaId);
 
     const article = await this.adapter.getArticleByNumber(radaId, articleNumber);

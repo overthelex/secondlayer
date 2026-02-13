@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { LegislationService, parseLegislationReference, parseLegislationReferenceWithAI } from '../services/legislation-service';
+import { LegislationService, parseLegislationReference, parseLegislationReferenceWithAI, normalizeRadaId } from '../services/legislation-service';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { EmbeddingService } from '../services/embedding-service';
 import { logger } from '../utils/logger';
@@ -85,7 +85,7 @@ export class LegislationTools extends BaseToolHandler {
 
     // Если явно переданы rada_id и article_number, используем их
     if (radaId && articleNumber) {
-      resolved = { radaId, articleNumber };
+      resolved = { radaId: normalizeRadaId(radaId), articleNumber };
     }
     // Иначе пытаемся парсить из query
     else if (query) {
@@ -393,7 +393,7 @@ export class LegislationTools extends BaseToolHandler {
             },
             rada_id: {
               type: 'string',
-              description: 'ID законодавчого акту (наприклад, "435-15" для ЦК, "436-15" для ГК, "2755-17" для ПКУ)',
+              description: 'ID законодавчого акту (наприклад, "254к/96-вр" для Конституції, "435-15" для ЦК, "436-15" для ГК, "2755-17" для ПКУ, "1618-15" для ЦПК, "2341-14" для КК)',
             },
             article_number: {
               type: 'string',
