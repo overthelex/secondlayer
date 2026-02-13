@@ -181,8 +181,8 @@ export class CourtDecisionTools extends BaseToolHandler {
             },
             supreme_court_hint: {
               type: 'boolean',
-              default: true,
-              description: 'Если true - добавляет в поисковую строку подсказку для ВС (Верховн/КЦС/КГС/КАС/ККС/Велика палата)'
+              default: false,
+              description: 'Если true - добавляет в поисковую строку подсказку для ВС (Верховн/КЦС/КГС/КАС/ККС/Велика палата). По умолчанию false для максимального охвата.'
             }
           },
           required: ['query'],
@@ -636,7 +636,7 @@ export class CourtDecisionTools extends BaseToolHandler {
     const maxDocs = Number(args.max_docs || 1000);
     const maxPages = Number(args.max_pages || 50);
     const pageSize = Math.min(1000, Math.max(1, Number(args.page_size || 1000)));
-    const supremeCourtHint = args.supreme_court_hint !== false;
+    const supremeCourtHint = args.supreme_court_hint === true;
 
     const scHints = supremeCourtHint
       ? ' Верховн КЦС КГС КАС ККС "Велика палата" "ВП ВС"'
@@ -647,6 +647,7 @@ export class CourtDecisionTools extends BaseToolHandler {
     const seenDocIds = new Set<number>();
     let pagesFetched = 0;
     let offset = 0;
+    let emptyPages = 0;
 
     while (pagesFetched < maxPages && seenDocIds.size < maxDocs) {
       const searchParams: any = {
@@ -655,12 +656,23 @@ export class CourtDecisionTools extends BaseToolHandler {
         offset,
       };
 
-      const response = await this.zoAdapter.searchCourtDecisions(searchParams);
+      const rawResponse = await this.zoAdapter.searchCourtDecisions(searchParams);
       pagesFetched++;
 
-      if (!Array.isArray(response) || response.length === 0) break;
+      // Handle both array and { data: [...] } response formats
+      const responseData = Array.isArray(rawResponse)
+        ? rawResponse
+        : (rawResponse?.data && Array.isArray(rawResponse.data) ? rawResponse.data : []);
 
-      const filtered = response.filter((doc: any) => {
+      if (responseData.length === 0) {
+        emptyPages++;
+        if (emptyPages >= 2) break; // Stop after 2 consecutive empty pages
+        offset += pageSize;
+        continue;
+      }
+      emptyPages = 0;
+
+      const filtered = responseData.filter((doc: any) => {
         if (!doc?.doc_id) return false;
         const docDate = doc.adjudication_date ? new Date(doc.adjudication_date) : null;
         if (!docDate) return false;
@@ -675,7 +687,7 @@ export class CourtDecisionTools extends BaseToolHandler {
         seenDocIds.add(doc.doc_id);
       }
 
-      if (response.length < pageSize) break;
+      if (responseData.length < pageSize) break;
       offset += pageSize;
     }
 
