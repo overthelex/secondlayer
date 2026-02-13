@@ -80,9 +80,9 @@ services:
     networks:
     - secondlayer-stage-network
 
-  # OpenReyestr PostgreSQL Database
+  # OpenReyestr PostgreSQL Database (pre-loaded with EDR data from data.gov.ua)
   postgres-openreyestr-stage:
-    image: postgres:15-alpine
+    image: mcvovkes/openreyestr-db:latest
     container_name: openreyestr-postgres-stage
     environment:
       POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
@@ -98,7 +98,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 120s
     restart: unless-stopped
     networks:
       - secondlayer-stage-network
