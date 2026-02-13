@@ -263,14 +263,14 @@ export class UploadService {
 
   async getActiveSessionCount(userId: string): Promise<number> {
     // Exclude clearly stale sessions:
-    // - pending with 0 chunks and no update in 2+ min (abandoned before first chunk)
+    // - pending with 0 chunks and no update in 30+ sec (abandoned before first chunk — batch-init creates hundreds at once)
     // - pending/uploading with no update in 10+ min (abandoned uploads)
     // - assembling/processing with no update in 30+ min (hung processing)
     const result = await this.pool.query(
       `SELECT COUNT(*) as cnt FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
-         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
+         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 seconds')
          AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
          AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')`,
       [userId]
@@ -284,7 +284,7 @@ export class UploadService {
       `SELECT * FROM upload_sessions
        WHERE user_id = $1
          AND status NOT IN ('completed', 'cancelled', 'expired', 'failed')
-         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
+         AND NOT (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 seconds')
          AND NOT (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
          AND NOT (status IN ('assembling', 'processing') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes')
        ORDER BY created_at DESC`,
@@ -391,7 +391,7 @@ export class UploadService {
        SET status = 'cancelled', error_message = 'Auto-cleared: stale session', updated_at = CURRENT_TIMESTAMP
        WHERE user_id = $1
          AND (
-           (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '2 minutes')
+           (status = 'pending' AND (uploaded_chunks IS NULL OR array_length(uploaded_chunks, 1) IS NULL) AND updated_at < CURRENT_TIMESTAMP - INTERVAL '30 seconds')
            OR
            (status IN ('pending', 'uploading') AND updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes')
            OR

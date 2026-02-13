@@ -219,6 +219,12 @@ export function createUploadRouter(
         return res.status(400).json({ error: `Maximum ${maxBatchFiles} files per batch init` });
       }
 
+      // Auto-clear stale sessions before checking quota (batch-init creates many at once)
+      const clearedCount = await uploadService.cancelUserStaleSessions(userId);
+      if (clearedCount > 0) {
+        logger.info('[Upload] Batch init: auto-cleared stale sessions', { userId, clearedCount });
+      }
+
       // Check session quota for the entire batch
       const activeCount = await uploadService.getActiveSessionCount(userId);
       if (activeCount + files.length > MAX_USER_SESSIONS) {
