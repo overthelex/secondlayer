@@ -143,6 +143,56 @@ export class MCPOpenReyestrAPI {
           properties: {},
         },
       },
+      {
+        name: 'search_notaries',
+        description: `Пошук нотаріусів у Єдиному реєстрі нотаріусів
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук нотаріусів за ім'ям, регіоном або статусом.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я або частина імені нотаріуса" },
+            region: { type: 'string', description: 'Регіон (наприклад, "Київська")' },
+            status: { type: 'string', description: 'Статус діяльності' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_court_experts',
+        description: `Пошук атестованих судових експертів
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук судових експертів за ім'ям, регіоном або типом експертизи.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я або частина імені експерта" },
+            region: { type: 'string', description: 'Регіон' },
+            expertise_type: { type: 'string', description: 'Тип експертизи' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_arbitration_managers',
+        description: `Пошук арбітражних керуючих (банкрутство)
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук арбітражних керуючих за ім'ям або статусом свідоцтва.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я або частина імені арбітражного керуючого" },
+            status: { type: 'string', description: 'Статус свідоцтва' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
     ];
   }
 
@@ -167,6 +217,15 @@ export class MCPOpenReyestrAPI {
           break;
         case 'get_statistics':
           result = await this.tools.getStatistics();
+          break;
+        case 'search_notaries':
+          result = await this.tools.searchNotaries(args);
+          break;
+        case 'search_court_experts':
+          result = await this.tools.searchCourtExperts(args);
+          break;
+        case 'search_arbitration_managers':
+          result = await this.tools.searchArbitrationManagers(args);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);

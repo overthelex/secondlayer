@@ -14,6 +14,7 @@
     "db:setup": "npm run db:create && npm run migrate",
     "sync:deputies": "npm run build && node dist/scripts/sync-deputies.js",
     "sync:laws": "npm run build && node dist/scripts/sync-laws.js",
+    "sync:reference": "npm run build && node dist/scripts/sync-reference-data.js",
     "cleanup:cache": "npm run build && node dist/scripts/cleanup-cache.js",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",

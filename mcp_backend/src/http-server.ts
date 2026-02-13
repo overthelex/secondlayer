@@ -52,6 +52,7 @@ import { ProceduralTools } from './api/tools/procedural-tools.js';
 import { LegalAdviceTools } from './api/tools/legal-advice-tools.js';
 import { DueDiligenceTools } from './api/due-diligence-tools.js';
 import { DueDiligenceService } from './services/due-diligence-service.js';
+import { CourtSessionTools } from './api/tools/court-session-tools.js';
 import { ServiceProxy } from './services/service-proxy.js';
 import { ServiceType } from './types/gateway.js';
 import { UploadService } from './services/upload-service.js';
@@ -198,6 +199,10 @@ class HTTPMCPServer {
       this.services.embeddingService,
       this.services.patternStore,
       this.services.citationValidator
+    ));
+    this.toolRegistry.registerHandler(new CourtSessionTools(
+      this.services.zoSessionsAdapter,
+      this.services.db
     ));
     logger.info('Core tool handlers registered with ToolRegistry');
 

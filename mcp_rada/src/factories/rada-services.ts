@@ -2,6 +2,8 @@ import { Database } from '../database/database';
 import { RadaAPIAdapter } from '../adapters/rada-api-adapter';
 import { ZakonRadaAdapter } from '../adapters/zakon-rada-adapter';
 import { DeputyService } from '../services/deputy-service';
+import { FactionService } from '../services/faction-service';
+import { CommitteeService } from '../services/committee-service';
 import { BillService } from '../services/bill-service';
 import { LegislationService } from '../services/legislation-service';
 import { VotingService } from '../services/voting-service';
@@ -16,6 +18,8 @@ export interface RadaCoreServices {
   zakonAdapter: ZakonRadaAdapter;
   costTracker: CostTracker;
   deputyService: DeputyService;
+  factionService: FactionService;
+  committeeService: CommitteeService;
   billService: BillService;
   legislationService: LegislationService;
   votingService: VotingService;
@@ -35,6 +39,8 @@ export function createRadaCoreServices(): RadaCoreServices {
   llmManager.setCostTracker(costTracker);
 
   const deputyService = new DeputyService(db, radaAdapter);
+  const factionService = new FactionService(db, radaAdapter);
+  const committeeService = new CommitteeService(db, radaAdapter);
   const billService = new BillService(db, radaAdapter);
   const legislationService = new LegislationService(db, zakonAdapter);
   const votingService = new VotingService(db, radaAdapter);
@@ -59,6 +65,8 @@ export function createRadaCoreServices(): RadaCoreServices {
     zakonAdapter,
     costTracker,
     deputyService,
+    factionService,
+    committeeService,
     billService,
     legislationService,
     votingService,

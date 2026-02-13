@@ -18,6 +18,7 @@ export interface BackendCoreServices {
   embeddingService: EmbeddingService;
   zoAdapter: ZOAdapter;
   zoPracticeAdapter: ZOAdapter;
+  zoSessionsAdapter: ZOAdapter;
   patternStore: LegalPatternStore;
   citationValidator: CitationValidator;
   hallucinationGuard: HallucinationGuard;
@@ -33,6 +34,7 @@ export function createBackendCoreServices(): BackendCoreServices {
   const embeddingService = new EmbeddingService();
   const zoAdapter = new ZOAdapter(documentService, undefined, embeddingService);
   const zoPracticeAdapter = new ZOAdapter('court_practice', documentService, embeddingService);
+  const zoSessionsAdapter = new ZOAdapter('court_sessions', documentService, embeddingService);
   const patternStore = new LegalPatternStore(db, embeddingService);
   const citationValidator = new CitationValidator(db);
   const hallucinationGuard = new HallucinationGuard(db);
@@ -57,6 +59,7 @@ export function createBackendCoreServices(): BackendCoreServices {
     embeddingService,
     zoAdapter,
     zoPracticeAdapter,
+    zoSessionsAdapter,
     patternStore,
     citationValidator,
     hallucinationGuard,

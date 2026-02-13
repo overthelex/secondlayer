@@ -459,6 +459,127 @@ export class OpenReyestrTools {
     return result.rows.map((r: any) => ({ registry: r.relname, records: parseInt(r.count) }));
   }
 
+  /**
+   * Search notaries registry
+   */
+  async searchNotaries(params: { query?: string; region?: string; status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, region, status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`full_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (region) {
+      conditions.push(`region ILIKE $${paramIndex}`);
+      values.push(`%${region}%`);
+      paramIndex++;
+    }
+    if (status) {
+      conditions.push(`status = $${paramIndex}`);
+      values.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, certificate_number, full_name, region, district, organization, address, phone, status
+       FROM notaries ${whereClause}
+       ORDER BY full_name ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || region || '', message: 'Нотаріусів не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search court experts registry
+   */
+  async searchCourtExperts(params: { query?: string; region?: string; expertise_type?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, region, expertise_type, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`full_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (region) {
+      conditions.push(`region ILIKE $${paramIndex}`);
+      values.push(`%${region}%`);
+      paramIndex++;
+    }
+    if (expertise_type) {
+      conditions.push(`$${paramIndex} = ANY(expertise_types)`);
+      values.push(expertise_type);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, expert_id, full_name, region, organization, expertise_types, certificate_number, status
+       FROM court_experts ${whereClause}
+       ORDER BY full_name ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || region || '', message: 'Судових експертів не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search arbitration managers registry
+   */
+  async searchArbitrationManagers(params: { query?: string; status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`full_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (status) {
+      conditions.push(`certificate_status = $${paramIndex}`);
+      values.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, registration_number, full_name, certificate_number, certificate_status, certificate_issue_date
+       FROM arbitration_managers ${whereClause}
+       ORDER BY full_name ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || '', message: 'Арбітражних керуючих не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
   private async findEntityType(record: string): Promise<'UO' | 'FOP' | 'FSU' | null> {
     const uoResult = await this.pool.query(
       'SELECT 1 FROM legal_entities WHERE record = $1',

@@ -14,6 +14,7 @@
     "db:setup": "npm run db:create && npm run migrate",
     "import:debtors": "npm run build && node dist/scripts/import-debtors.js",
     "import:entities": "npm run build && node dist/scripts/import-legal-entities.js",
+    "import:nais": "npm run build && node dist/scripts/download-nais-registries.js",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
     "lint": "eslint src --ext .ts"
