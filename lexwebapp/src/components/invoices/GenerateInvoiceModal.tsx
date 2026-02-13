@@ -119,7 +119,7 @@ export function GenerateInvoiceModal({
             <option value="">Select a matter...</option>
             {matters.map((matter) => (
               <option key={matter.id} value={matter.id}>
-                {matter.name}
+                {matter.matter_name}
               </option>
             ))}
           </select>

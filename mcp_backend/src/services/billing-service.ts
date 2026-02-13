@@ -81,6 +81,20 @@ export class BillingService {
   }
 
   /**
+   * PG returns numeric(10,2) as string — coerce to number
+   */
+  private coerceNumericFields(row: any): UserBilling {
+    row.balance_usd = Number(row.balance_usd) || 0;
+    row.balance_uah = Number(row.balance_uah) || 0;
+    row.daily_limit_usd = Number(row.daily_limit_usd) || 0;
+    row.monthly_limit_usd = Number(row.monthly_limit_usd) || 0;
+    row.total_spent_usd = Number(row.total_spent_usd) || 0;
+    row.total_spent_uah = Number(row.total_spent_uah) || 0;
+    row.low_balance_threshold_usd = Number(row.low_balance_threshold_usd) || 0;
+    return row as UserBilling;
+  }
+
+  /**
    * Get or create user billing account
    */
   async getOrCreateUserBilling(userId: string): Promise<UserBilling> {
@@ -92,7 +106,7 @@ export class BillingService {
       );
 
       if (result.rows.length > 0) {
-        return result.rows[0] as UserBilling;
+        return this.coerceNumericFields(result.rows[0]);
       }
 
       // Create new billing account with default values
@@ -107,7 +121,7 @@ export class BillingService {
       );
 
       logger.info('Created billing account', { userId });
-      return createResult.rows[0] as UserBilling;
+      return this.coerceNumericFields(createResult.rows[0]);
     } catch (error: any) {
       logger.error('Failed to get or create user billing', {
         userId,
