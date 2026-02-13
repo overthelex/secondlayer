@@ -46,7 +46,7 @@ export function createMatterRoutes(
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
       const orgId = await matterService.getUserOrgId(userId);
-      if (!orgId) return res.status(400).json({ error: 'User is not part of an organization' });
+      if (!orgId) return res.json({ clients: [], total: 0 });
 
       const result = await matterService.listClients(orgId, {
         status: req.query.status as string,
@@ -145,7 +145,7 @@ export function createMatterRoutes(
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
       const orgId = await matterService.getUserOrgId(userId);
-      if (!orgId) return res.status(400).json({ error: 'User is not part of an organization' });
+      if (!orgId) return res.json({ matters: [], total: 0 });
 
       const result = await matterService.listMatters(orgId, userId, {
         status: req.query.status as string,

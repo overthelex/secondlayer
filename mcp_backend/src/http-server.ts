@@ -363,6 +363,7 @@ class HTTPMCPServer {
     this.app.use(cors({
       origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
       credentials: true,
+      exposedHeaders: ['X-Upload-Queue-Depth', 'X-Upload-Throttle', 'Retry-After', 'X-Total-Count'],
     }));
 
     // IMPORTANT: Stripe webhooks need raw body BEFORE json parsing

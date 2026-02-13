@@ -12,6 +12,15 @@ import { AuthenticatedRequest as DualAuthRequest } from './dual-auth.js';
 /**
  * Create balance check middleware
  */
+// Tools that are read-only and incur no cost (no LLM/external API calls)
+const FREE_TOOLS = new Set([
+  'list_documents',
+  'get_document',
+  'get_document_sections',
+  'list_conversations',
+  'get_conversation',
+]);
+
 export function createBalanceCheckMiddleware(
   billingService: BillingService,
   costTracker: CostTracker
@@ -21,6 +30,13 @@ export function createBalanceCheckMiddleware(
       // Skip balance check for API key authentication
       if (req.authType === 'apikey') {
         logger.debug('Skipping balance check for API key auth');
+        return next();
+      }
+
+      // Skip balance check for free read-only tools
+      const toolName = req.params.toolName || req.body.toolName || 'unknown';
+      if (FREE_TOOLS.has(toolName)) {
+        logger.debug('Skipping balance check for free tool', { toolName });
         return next();
       }
 
@@ -46,7 +62,6 @@ export function createBalanceCheckMiddleware(
       }
 
       // Estimate cost for this request
-      const toolName = req.params.toolName || req.body.toolName || 'unknown';
       const queryLength = JSON.stringify(req.body).length;
       const reasoningBudget = (req.body.reasoning_budget || 'standard') as 'quick' | 'standard' | 'deep';
 
