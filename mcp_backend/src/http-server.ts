@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from './utils/logger.js';
-import { dualAuth, requireJWT, optionalJWT, initializeDualAuth, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
+import { dualAuth, requireJWT, optionalJWT, initializeDualAuth, initializeWebAuthn, AuthenticatedRequest as DualAuthRequest } from './middleware/dual-auth.js';
 import { configurePassport } from './config/passport.js';
 import authRouter from './routes/auth.js';
 import { createBackendCoreServices, BackendCoreServices } from './factories/core-services.js';
@@ -345,7 +345,8 @@ class HTTPMCPServer {
     // Initialize authentication
     configurePassport(this.services.db);
     initializeDualAuth(this.services.db, this.apiKeyService);
-    logger.info('Authentication configured (Google OAuth2 + dual auth)');
+    initializeWebAuthn(this.services.db);
+    logger.info('Authentication configured (Google OAuth2 + dual auth + WebAuthn)');
 
     // Setup middleware and routes AFTER services are initialized
     this.setupMiddleware();

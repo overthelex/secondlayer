@@ -119,6 +119,86 @@ export class AuthService extends BaseService {
       return this.handleError(error);
     }
   }
+
+  // ========================================================================
+  // WebAuthn (Passkeys)
+  // ========================================================================
+
+  /**
+   * Generate WebAuthn registration options
+   */
+  async webauthnRegisterOptions(attachment?: 'cross-platform' | 'platform'): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/webauthn/register/options', { attachment });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Verify WebAuthn registration
+   */
+  async webauthnRegisterVerify(response: any, friendlyName?: string, attachment?: string): Promise<any> {
+    try {
+      const res = await this.client.post('/auth/webauthn/register/verify', {
+        response,
+        friendlyName,
+        attachment,
+      });
+      return res.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Generate WebAuthn authentication options (login)
+   */
+  async webauthnAuthOptions(attachment?: 'cross-platform'): Promise<any> {
+    try {
+      const response = await this.client.post('/auth/webauthn/auth/options', { attachment });
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Verify WebAuthn authentication (login)
+   */
+  async webauthnAuthVerify(response: any, challenge: string): Promise<any> {
+    try {
+      const res = await this.client.post('/auth/webauthn/auth/verify', { response, challenge });
+      return res.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * List user's WebAuthn credentials
+   */
+  async webauthnListCredentials(): Promise<any> {
+    try {
+      const response = await this.client.get('/auth/webauthn/credentials');
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Delete a WebAuthn credential
+   */
+  async webauthnDeleteCredential(credentialId: string): Promise<any> {
+    try {
+      const response = await this.client.delete(`/auth/webauthn/credentials/${credentialId}`);
+      return response.data;
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
 }
 
 // Export singleton instance

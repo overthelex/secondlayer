@@ -6,7 +6,6 @@ import {
   Lock,
   Key,
   Smartphone,
-  QrCode,
   Shield,
   ShieldCheck,
   ExternalLink,
@@ -18,7 +17,9 @@ import {
   EyeOff,
   User } from
 'lucide-react';
+import { startAuthentication } from '@simplewebauthn/browser';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services';
 import showToast from '../utils/toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -53,7 +54,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [name, setName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong'>('weak');
-  const [showQR, setShowQR] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -254,17 +254,48 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   };
 
-  const handleHardwareKey = () => {
+  const handleWebAuthnLogin = async (attachment?: 'cross-platform') => {
     setError(null);
-    showToast.info('Hardware key authentication is not yet implemented');
-    console.log('Hardware key authentication');
+    setIsLoading(true);
+
+    try {
+      // Get authentication options from server
+      const options = await authService.webauthnAuthOptions(attachment);
+
+      // Start WebAuthn authentication (browser handles UI including QR for hybrid)
+      const authResponse = await startAuthentication({ optionsJSON: options });
+
+      // Verify with server
+      const result = await authService.webauthnAuthVerify(authResponse, options.challenge);
+
+      // Login with the returned JWT
+      await login(result.token);
+      showToast.success('Вхід виконано успішно!');
+
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      }
+
+      navigate('/chat', { replace: true });
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        setError('Автентифікацію скасовано');
+      } else {
+        console.error('WebAuthn login failed:', err);
+        setError(err.message || 'Помилка автентифікації');
+        showToast.error('Помилка автентифікації');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleHardwareKey = () => {
+    handleWebAuthnLogin('cross-platform');
   };
 
   const handlePhoneKey = () => {
-    setError(null);
-    setShowQR(true);
-    showToast.info('Phone key authentication is not yet implemented');
-    console.log('Phone key authentication');
+    handleWebAuthnLogin(); // No attachment constraint — browser shows QR for hybrid transport
   };
 
   // Show loading state during OAuth callback processing
@@ -637,9 +668,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     scale: 0.98
                   }}
                   onClick={handleHardwareKey}
-                  className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
-
-                    Активувати ключ
+                  disabled={isLoading}
+                  className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans disabled:opacity-50">
+                    {isLoading ? (
+                      <Loader2 size={18} className="animate-spin inline mr-2" />
+                    ) : null}
+                    Автентифікація
                   </motion.button>
                 </div>
               </motion.div>
@@ -665,69 +699,36 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               }}
               className="space-y-6">
 
-                {!showQR ?
-              <div className="text-center py-8">
-                    <motion.div
-                  animate={{
-                    rotate: [0, 5, -5, 0]
-                  }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity
-                  }}
-                  className="inline-flex items-center justify-center w-20 h-20 bg-claude-accent/10 rounded-full mb-4">
-
-                      <Smartphone size={40} className="text-claude-accent" />
-                    </motion.div>
-                    <h3 className="text-lg font-serif text-claude-text mb-2">
-                      Вхід через телефон
-                    </h3>
-                    <p className="text-sm text-claude-subtext font-sans mb-6">
-                      Відскануйте QR-код у мобільному застосунку
-                    </p>
-                    <motion.button
-                  whileHover={{
-                    scale: 1.02
-                  }}
-                  whileTap={{
-                    scale: 0.98
-                  }}
-                  onClick={handlePhoneKey}
-                  className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
-
-                      Показати QR-код
-                    </motion.button>
-                  </div> :
-
-              <motion.div
-                initial={{
-                  scale: 0.9,
-                  opacity: 0
-                }}
-                animate={{
-                  scale: 1,
-                  opacity: 1
-                }}
-                className="text-center py-6">
-
-                    <div className="inline-flex items-center justify-center w-48 h-48 bg-white border-2 border-claude-border rounded-2xl mb-4 relative overflow-hidden">
-                      <QrCode size={120} className="text-claude-text" />
-                      <div className="absolute inset-0 bg-gradient-to-br from-claude-accent/5 to-transparent"></div>
-                    </div>
-                    <h3 className="text-lg font-serif text-claude-text mb-2">
-                      Відскануйте код
-                    </h3>
-                    <p className="text-sm text-claude-subtext font-sans mb-4">
-                      Відкрийте застосунок на телефоні та наведіть камеру
-                    </p>
-                    <button
-                  onClick={() => setShowQR(false)}
-                  className="text-sm text-claude-accent hover:text-[#C66345] font-sans">
-
-                      Скасувати
-                    </button>
+                <div className="text-center py-8">
+                  <motion.div
+                    animate={{
+                      rotate: [0, 5, -5, 0]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity
+                    }}
+                    className="inline-flex items-center justify-center w-20 h-20 bg-claude-accent/10 rounded-full mb-4">
+                    <Smartphone size={40} className="text-claude-accent" />
                   </motion.div>
-              }
+                  <h3 className="text-lg font-serif text-claude-text mb-2">
+                    Вхід через телефон
+                  </h3>
+                  <p className="text-sm text-claude-subtext font-sans mb-6">
+                    Браузер покаже QR-код для сканування телефоном
+                  </p>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handlePhoneKey}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans disabled:opacity-50">
+                    {isLoading ? (
+                      <Loader2 size={18} className="animate-spin inline mr-2" />
+                    ) : null}
+                    Автентифікація
+                  </motion.button>
+                </div>
               </motion.div>
             }
           </AnimatePresence>

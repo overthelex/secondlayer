@@ -7,6 +7,7 @@ import { Router } from 'express';
 import passport from 'passport';
 import * as authController from '../controllers/auth.js';
 import { authRateLimit, passwordResetRateLimit } from '../middleware/rate-limit.js';
+import { requireJWT } from '../middleware/dual-auth.js';
 
 const router: Router = Router();
 
@@ -113,5 +114,51 @@ router.post('/refresh', authController.refreshToken as any);
  * Email cannot be changed as it's managed by Google OAuth.
  */
 router.put('/profile', authController.updateProfile as any);
+
+// ============================================================================
+// WebAuthn (Passkeys) Routes
+// ============================================================================
+
+/**
+ * @route   POST /auth/webauthn/register/options
+ * @desc    Generate WebAuthn registration challenge
+ * @access  Protected (JWT required)
+ */
+router.post('/webauthn/register/options', requireJWT as any, authController.webauthnRegisterOptions as any);
+
+/**
+ * @route   POST /auth/webauthn/register/verify
+ * @desc    Verify WebAuthn registration and store credential
+ * @access  Protected (JWT required)
+ */
+router.post('/webauthn/register/verify', requireJWT as any, authController.webauthnRegisterVerify as any);
+
+/**
+ * @route   POST /auth/webauthn/auth/options
+ * @desc    Generate WebAuthn authentication challenge (login)
+ * @access  Public (rate limited)
+ */
+router.post('/webauthn/auth/options', authRateLimit as any, authController.webauthnAuthOptions as any);
+
+/**
+ * @route   POST /auth/webauthn/auth/verify
+ * @desc    Verify WebAuthn authentication and return JWT (login)
+ * @access  Public (rate limited)
+ */
+router.post('/webauthn/auth/verify', authRateLimit as any, authController.webauthnAuthVerify as any);
+
+/**
+ * @route   GET /auth/webauthn/credentials
+ * @desc    List user's WebAuthn credentials
+ * @access  Protected (JWT required)
+ */
+router.get('/webauthn/credentials', requireJWT as any, authController.webauthnListCredentials as any);
+
+/**
+ * @route   DELETE /auth/webauthn/credentials/:id
+ * @desc    Delete a WebAuthn credential
+ * @access  Protected (JWT required)
+ */
+router.delete('/webauthn/credentials/:id', requireJWT as any, authController.webauthnDeleteCredential as any);
 
 export default router;

@@ -49,6 +49,7 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@qdrant/js-client-rest": "^1.9.0",
     "@secondlayer/shared": "file:../packages/shared",
+    "@simplewebauthn/server": "^13.2.2",
     "@types/bcryptjs": "^3.0.0",
     "@types/express-session": "^1.18.2",
     "@types/jsonwebtoken": "^9.0.10",

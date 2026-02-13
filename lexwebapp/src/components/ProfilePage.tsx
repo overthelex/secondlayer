@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Mail, Shield, CreditCard, Settings, Camera, Zap, ChevronRight, Edit2, Loader2, X, Phone, Save, Upload, DollarSign, Activity } from 'lucide-react';
+import { User, Mail, Shield, CreditCard, Settings, Camera, Zap, ChevronRight, Edit2, Loader2, X, Phone, Save, Upload, DollarSign, Activity, Key, Smartphone, Trash2 } from 'lucide-react';
+import { startRegistration } from '@simplewebauthn/browser';
 import { useAuth } from '../contexts/AuthContext';
 import { authService, billingService } from '../services';
 import { BillingBalance } from '../types/models';
@@ -13,6 +14,9 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [billing, setBilling] = useState<BillingBalance | null>(null);
+  const [webauthnCredentials, setWebauthnCredentials] = useState<any[]>([]);
+  const [isRegisteringKey, setIsRegisteringKey] = useState(false);
+  const [isDeletingKey, setIsDeletingKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Edit form state
@@ -22,14 +26,24 @@ export function ProfilePage() {
     picture: ''
   });
 
-  // Fetch billing data
+  const loadCredentials = useCallback(async () => {
+    try {
+      const data = await authService.webauthnListCredentials();
+      setWebauthnCredentials(data.credentials || []);
+    } catch (err) {
+      console.error('Failed to load WebAuthn credentials:', err);
+    }
+  }, []);
+
+  // Fetch billing data and WebAuthn credentials
   useEffect(() => {
     if (user) {
       billingService.getBillingSummary()
         .then(data => setBilling(data))
         .catch(err => console.error('Failed to load billing:', err));
+      loadCredentials();
     }
-  }, [user]);
+  }, [user, loadCredentials]);
 
   // Initialize form when user data loads
   useEffect(() => {
@@ -192,6 +206,41 @@ export function ProfilePage() {
     }).catch(() => {
       showToast.error('Не вдалося скопіювати посилання');
     });
+  };
+
+  const handleRegisterPasskey = async (attachment?: 'cross-platform') => {
+    setIsRegisteringKey(true);
+    try {
+      const options = await authService.webauthnRegisterOptions(attachment);
+      const regResponse = await startRegistration({ optionsJSON: options });
+      const friendlyName = attachment === 'cross-platform' ? 'Hardware Key' : 'Phone Passkey';
+      await authService.webauthnRegisterVerify(regResponse, friendlyName, attachment);
+      showToast.success('Ключ безпеки зареєстровано!');
+      await loadCredentials();
+    } catch (err: any) {
+      if (err.name === 'NotAllowedError') {
+        showToast.error('Реєстрацію скасовано');
+      } else {
+        console.error('Passkey registration failed:', err);
+        showToast.error(err.message || 'Не вдалося зареєструвати ключ');
+      }
+    } finally {
+      setIsRegisteringKey(false);
+    }
+  };
+
+  const handleDeleteCredential = async (credentialId: string) => {
+    setIsDeletingKey(credentialId);
+    try {
+      await authService.webauthnDeleteCredential(credentialId);
+      showToast.success('Ключ видалено');
+      await loadCredentials();
+    } catch (err: any) {
+      console.error('Failed to delete credential:', err);
+      showToast.error('Не вдалося видалити ключ');
+    } finally {
+      setIsDeletingKey(null);
+    }
   };
 
   const stats = [{
@@ -420,6 +469,73 @@ export function ProfilePage() {
                 </section>
               ))}
             </div>
+
+            {/* Security Keys Section */}
+            <section className="bg-white rounded-2xl border border-claude-border shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-claude-border/50 bg-claude-bg/30">
+                <h3 className="text-sm font-semibold text-claude-subtext uppercase tracking-wider">
+                  Security Keys (Passkeys)
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                {/* Registered credentials */}
+                {webauthnCredentials.length > 0 ? (
+                  <div className="space-y-3">
+                    {webauthnCredentials.map((cred) => (
+                      <div key={cred.id} className="flex items-center justify-between p-3 rounded-xl border border-claude-border/50 hover:bg-claude-bg/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-claude-bg rounded-lg text-claude-subtext">
+                            {cred.authenticatorAttachment === 'cross-platform' ? <Key size={18} /> : <Smartphone size={18} />}
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-claude-text">
+                              {cred.friendlyName || (cred.authenticatorAttachment === 'cross-platform' ? 'Hardware Key' : 'Phone Passkey')}
+                            </div>
+                            <div className="text-xs text-claude-subtext">
+                              {cred.lastUsedAt
+                                ? `Останнє використання: ${new Date(cred.lastUsedAt).toLocaleDateString('uk-UA')}`
+                                : `Додано: ${new Date(cred.createdAt).toLocaleDateString('uk-UA')}`}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCredential(cred.id)}
+                          disabled={isDeletingKey === cred.id}
+                          className="p-2 text-claude-subtext hover:text-red-500 transition-colors disabled:opacity-50"
+                          title="Видалити ключ"
+                        >
+                          {isDeletingKey === cred.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-claude-subtext text-center py-2">
+                    Немає зареєстрованих ключів безпеки
+                  </p>
+                )}
+
+                {/* Register buttons */}
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => handleRegisterPasskey('cross-platform')}
+                    disabled={isRegisteringKey}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-claude-border text-claude-text rounded-xl font-medium text-sm hover:bg-claude-bg transition-colors disabled:opacity-50"
+                  >
+                    {isRegisteringKey ? <Loader2 size={16} className="animate-spin" /> : <Key size={16} />}
+                    USB / NFC ключ
+                  </button>
+                  <button
+                    onClick={() => handleRegisterPasskey()}
+                    disabled={isRegisteringKey}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-claude-border text-claude-text rounded-xl font-medium text-sm hover:bg-claude-bg transition-colors disabled:opacity-50"
+                  >
+                    {isRegisteringKey ? <Loader2 size={16} className="animate-spin" /> : <Smartphone size={16} />}
+                    Passkey (телефон)
+                  </button>
+                </div>
+              </div>
+            </section>
 
             {/* GDPR Privacy Section */}
             <section className="bg-white rounded-2xl p-6 border border-claude-border shadow-sm">

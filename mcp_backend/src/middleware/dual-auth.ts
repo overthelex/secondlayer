@@ -8,6 +8,7 @@ import jwt from 'jsonwebtoken';
 import { Database } from '../database/database.js';
 import { UserService, User } from '../services/user-service.js';
 import { ApiKeyService } from '../services/api-key-service.js';
+import { WebAuthnService } from '../services/webauthn-service.js';
 import { logger } from '../utils/logger.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-this-secret-in-production';
@@ -29,6 +30,7 @@ export interface AuthenticatedRequest extends Request {
 
 let userService: UserService;
 let apiKeyService: ApiKeyService;
+let webAuthnService: WebAuthnService;
 
 /**
  * Initialize dual auth middleware with database instance
@@ -48,6 +50,24 @@ export function getUserService(): UserService {
     throw new Error('UserService not initialized. Call initializeDualAuth first.');
   }
   return userService;
+}
+
+/**
+ * Initialize WebAuthn service with database instance
+ */
+export function initializeWebAuthn(db: Database) {
+  webAuthnService = new WebAuthnService(db);
+  logger.info('WebAuthn service initialized');
+}
+
+/**
+ * Get the initialized WebAuthnService instance
+ */
+export function getWebAuthnService(): WebAuthnService {
+  if (!webAuthnService) {
+    throw new Error('WebAuthnService not initialized. Call initializeWebAuthn first.');
+  }
+  return webAuthnService;
 }
 
 /**
