@@ -34,18 +34,37 @@ async function main() {
   try {
     await db.connect();
 
-    // 1. Sync factions
-    console.log('Syncing factions...');
-    const factionCount = await factionService.syncAllFactions(convocation);
-    console.log(`  Factions synced: ${factionCount}`);
+    let factionCount = 0;
+    let committeeCount = 0;
+    let assistantCount = 0;
 
-    // 2. Sync committees
+    // 1. Sync factions (gracefully handle 404 — RADA API removed separate endpoint)
+    console.log('Syncing factions...');
+    try {
+      factionCount = await factionService.syncAllFactions(convocation);
+      console.log(`  Factions synced: ${factionCount}`);
+    } catch (error: any) {
+      if (error.statusCode === 404 || error.message?.includes('404')) {
+        console.log('  Factions endpoint not available (404), skipping');
+      } else {
+        throw error;
+      }
+    }
+
+    // 2. Sync committees (gracefully handle 404)
     console.log('Syncing committees...');
-    const committeeCount = await committeeService.syncAllCommittees(convocation);
-    console.log(`  Committees synced: ${committeeCount}`);
+    try {
+      committeeCount = await committeeService.syncAllCommittees(convocation);
+      console.log(`  Committees synced: ${committeeCount}`);
+    } catch (error: any) {
+      if (error.statusCode === 404 || error.message?.includes('404')) {
+        console.log('  Committees endpoint not available (404), skipping');
+      } else {
+        throw error;
+      }
+    }
 
     // 3. Bulk sync assistants
-    let assistantCount = 0;
     if (syncAssistants) {
       console.log('Syncing deputy assistants...');
 
