@@ -154,14 +154,14 @@ export class GdprService {
 
   private async processDeletion(requestId: string, userId: string): Promise<void> {
     try {
-      // 1. Get user document IDs for Qdrant cleanup
+      // 1. Get user document IDs for cleanup
       const docsResult = await this.db.query(
         `SELECT id FROM documents WHERE user_id = $1`,
         [userId]
       );
       const docIds = docsResult.rows.map((r: any) => r.id);
 
-      // 2. Check legal holds before deletion — separate held vs deletable docs
+      // 2. Check legal holds — separate held vs deletable docs
       const heldDocIds: string[] = [];
       const deletableDocIds: string[] = [];
 
@@ -178,14 +178,13 @@ export class GdprService {
             heldDocIds.push(docId);
           }
         } catch (err: any) {
-          // If check fails, treat as held (fail safe)
           logger.warn('[GDPR] Hold check failed for doc, treating as held', { docId, error: err.message });
           heldDocIds.push(docId);
         }
       }
 
-      // 3. Delete Qdrant vectors for deletable documents only
-      for (const docId of deletableDocIds) {
+      // 3. Delete Qdrant vectors for ALL user documents (deletable + held)
+      for (const docId of [...deletableDocIds, ...heldDocIds]) {
         try {
           await this.embeddingService.deleteByDocId(docId);
         } catch (err: any) {
@@ -193,7 +192,25 @@ export class GdprService {
         }
       }
 
-      // 4. Anonymize held documents (user_id → NULL but keep data)
+      // 4. Delete deletable documents from PostgreSQL
+      //    (document_sections, embedding_chunks, citation_links, precedent_status cascade automatically)
+      if (deletableDocIds.length > 0) {
+        // Remove custody chain entries (table has immutable rule, must disable temporarily)
+        await this.db.query(`ALTER TABLE document_custody_chain DISABLE RULE no_delete_custody_chain`);
+        await this.db.query(
+          `DELETE FROM document_custody_chain WHERE document_id = ANY($1)`,
+          [deletableDocIds]
+        );
+        await this.db.query(`ALTER TABLE document_custody_chain ENABLE RULE no_delete_custody_chain`);
+
+        // Now delete the documents themselves (sections, chunks, citations cascade)
+        await this.db.query(
+          `DELETE FROM documents WHERE id = ANY($1)`,
+          [deletableDocIds]
+        );
+      }
+
+      // 5. Anonymize held documents (user_id → NULL, keep data for legal compliance)
       if (heldDocIds.length > 0) {
         await this.db.query(
           `UPDATE documents SET user_id = NULL WHERE id = ANY($1)`,
@@ -204,41 +221,32 @@ export class GdprService {
         });
       }
 
-      // 5. Delete MinIO bucket only if no held documents
-      if (heldDocIds.length === 0) {
-        try {
-          await this.minioService.deleteBucket(`user-${userId}`);
-        } catch (err: any) {
-          logger.warn('[GDPR] Failed to delete MinIO bucket', { userId, error: err.message });
-        }
-      } else {
-        logger.info('[GDPR] MinIO bucket preserved (documents under legal hold)', { userId });
+      // 6. Delete MinIO storage
+      try {
+        await this.minioService.deleteBucket(`user-${userId}`);
+      } catch (err: any) {
+        logger.warn('[GDPR] Failed to delete MinIO bucket', { userId, error: err.message });
       }
 
-      // 6. Anonymize cost_tracking (keep for aggregate analytics)
+      // 7. Anonymize cost_tracking (keep for aggregate analytics)
       await this.db.query(
         `UPDATE cost_tracking SET user_id = NULL, user_query = NULL WHERE user_id = $1`,
         [userId]
       );
 
-      // 7. Anonymize deletable documents (set user_id to NULL)
-      if (deletableDocIds.length > 0) {
-        await this.db.query(
-          `UPDATE documents SET user_id = NULL WHERE id = ANY($1)`,
-          [deletableDocIds]
-        );
-      }
-
-      // 8. Conversations + messages cascade-delete via FK
-      // 9. Upload sessions, API keys, billing all cascade from users table
-      // 10. Delete the user record itself
+      // 8. Delete the user record (cascades: conversations, messages, uploads,
+      //    api_keys, billing, credits, sessions, webauthn, GDPR requests,
+      //    matter_team, active_timers, time_entries, eula, preferences, presets,
+      //    email_verification_tokens, organizations)
       await this.db.query(`DELETE FROM users WHERE id = $1`, [userId]);
 
+      // 9. Update GDPR request (row survives with user_id=NULL via ON DELETE SET NULL)
       await this.db.query(
-        `UPDATE gdpr_requests SET status = 'completed', completed_at = NOW(),
-         metadata = $1 WHERE id = $2`,
+        `UPDATE gdpr_requests SET status = 'completed', completed_at = NOW(), metadata = $1
+         WHERE id = $2`,
         [
           JSON.stringify({
+            original_user_id: userId,
             documentsDeleted: deletableDocIds.length,
             documentsHeld: heldDocIds.length,
             heldDocumentIds: heldDocIds,
@@ -257,7 +265,7 @@ export class GdprService {
       await this.db.query(
         `UPDATE gdpr_requests SET status = 'failed', metadata = $1 WHERE id = $2`,
         [JSON.stringify({ error: error.message }), requestId]
-      );
+      ).catch(() => {});
       throw error;
     }
   }
