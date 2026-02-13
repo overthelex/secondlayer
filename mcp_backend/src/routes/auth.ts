@@ -57,15 +57,35 @@ router.post('/reset-password', authRateLimit as any, authController.resetPasswor
  *
  * Only registered when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set.
  */
+/**
+ * Build callback URL dynamically from request host.
+ * This allows OAuth to work from both legal.org.ua and stage.legal.org.ua.
+ * The redirect URI must also be registered in Google Cloud Console.
+ */
+function getCallbackURL(req: any): string {
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return `${protocol}://${host}/auth/google/callback`;
+}
+
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  router.get('/google', authController.googleOAuthInit);
+  router.get('/google', (req, res, next) => {
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      session: false,
+      callbackURL: getCallbackURL(req),
+    } as any)(req, res, next);
+  });
 
   router.get(
     '/google/callback',
-    passport.authenticate('google', {
-      session: false,
-      failureRedirect: process.env.FRONTEND_URL + '/login?error=oauth_failed',
-    }),
+    (req, res, next) => {
+      passport.authenticate('google', {
+        session: false,
+        failureRedirect: process.env.FRONTEND_URL + '/login?error=oauth_failed',
+        callbackURL: getCallbackURL(req),
+      } as any)(req, res, next);
+    },
     (authController.googleOAuthCallback as any)
   );
 } else {

@@ -51,13 +51,18 @@ export const googleOAuthInit = passport.authenticate('google', {
  */
 export async function googleOAuthCallback(req: AuthenticatedRequest, res: Response) {
   try {
+    // Determine frontend URL from request origin (supports multiple domains)
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const frontendUrl = `${protocol}://${host}`;
+
     // Passport will have attached user to req.user
     const user = req.user;
 
     if (!user) {
       // OAuth failed
       logger.error('OAuth callback failed - no user in request');
-      return res.redirect(`${FRONTEND_URL}/login?error=oauth_failed`);
+      return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
     }
 
     // Generate JWT token for the user
@@ -69,8 +74,7 @@ export async function googleOAuthCallback(req: AuthenticatedRequest, res: Respon
     });
 
     // Redirect to frontend with token in URL
-    // In production, consider using httpOnly cookies for better security
-    const redirectUrl = `${FRONTEND_URL}/login?token=${token}`;
+    const redirectUrl = `${frontendUrl}/login?token=${token}`;
     return res.redirect(redirectUrl);
   } catch (error: any) {
     logger.error('Error in OAuth callback:', error);
