@@ -22,8 +22,7 @@ export function createMatterRoutes(
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
-      const orgId = await matterService.getUserOrgId(userId);
-      if (!orgId) return res.status(400).json({ error: 'User is not part of an organization' });
+      const orgId = await matterService.ensureUserOrg(userId);
 
       const { clientName, clientType, contactEmail, taxId, metadata } = req.body;
       if (!clientName) return res.status(400).json({ error: 'clientName is required' });
@@ -69,7 +68,7 @@ export function createMatterRoutes(
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
       const orgId = await matterService.getUserOrgId(userId);
-      if (!orgId) return res.status(400).json({ error: 'User is not part of an organization' });
+      if (!orgId) return res.status(404).json({ error: 'Client not found' });
 
       const client = await matterService.getClient(req.params.clientId as string, orgId);
       if (!client) return res.status(404).json({ error: 'Client not found' });

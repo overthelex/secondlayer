@@ -465,6 +465,43 @@ export class MatterService {
     return result.rows[0]?.organization_id || null;
   }
 
+  /**
+   * Get or auto-create a personal organization for the user.
+   * Every authenticated user gets a default org so they can create clients/matters.
+   */
+  async ensureUserOrg(userId: string): Promise<string> {
+    // Check existing membership first
+    const existing = await this.getUserOrgId(userId);
+    if (existing) return existing;
+
+    // Get user info for org name
+    const userResult = await this.db.query(
+      `SELECT name, email FROM users WHERE id = $1`,
+      [userId]
+    );
+    const user = userResult.rows[0];
+    const orgName = user?.name ? `${user.name}` : 'Моя організація';
+
+    // Create personal org
+    const orgResult = await this.db.query(
+      `INSERT INTO organizations (name, owner_id, plan, max_members)
+       VALUES ($1, $2, 'free', 10)
+       RETURNING id`,
+      [orgName, userId]
+    );
+    const orgId = orgResult.rows[0].id;
+
+    // Add user as owner
+    await this.db.query(
+      `INSERT INTO organization_members (organization_id, user_id, email, role, status, joined_at)
+       VALUES ($1, $2, $3, 'owner', 'active', NOW())`,
+      [orgId, userId, user?.email || '']
+    );
+
+    logger.info(`[MatterService] Auto-created organization for user ${userId}: ${orgId}`);
+    return orgId;
+  }
+
   async isOrgAdmin(orgId: string, userId: string): Promise<boolean> {
     const result = await this.db.query(
       `SELECT 1 FROM organization_members
