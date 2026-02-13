@@ -5,6 +5,7 @@ import { MinioService } from './minio-service.js';
 import { VaultTools } from '../api/vault-tools.js';
 import { processUploadFile, ProcessorDeps } from './upload-processor.js';
 import { Pool } from 'pg';
+import { CpuAdaptiveManager } from './cpu-adaptive-manager.js';
 
 const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -43,6 +44,7 @@ export class UploadQueueService {
   private queueEvents: QueueEvents | null = null;
   private deps: ProcessorDeps;
   private metricsInterval: ReturnType<typeof setInterval> | null = null;
+  private cpuAdaptiveManager: CpuAdaptiveManager | null = null;
 
   constructor(
     private uploadService: UploadService,
@@ -126,6 +128,20 @@ export class UploadQueueService {
     this.queueEvents = new QueueEvents(QUEUE_NAME, { connection });
 
     logger.info('[UploadQueue] Worker started', { concurrency });
+
+    // Start adaptive concurrency if enabled (default: true)
+    const adaptiveEnabled = (process.env.ADAPTIVE_CONCURRENCY || 'true') !== 'false';
+    if (adaptiveEnabled && this.worker) {
+      const worker = this.worker;
+      this.cpuAdaptiveManager = new CpuAdaptiveManager(
+        concurrency,
+        (newConcurrency: number) => {
+          worker.concurrency = newConcurrency;
+        }
+      );
+      this.cpuAdaptiveManager.start();
+      logger.info('[UploadQueue] Adaptive concurrency enabled');
+    }
   }
 
   /**
@@ -248,9 +264,20 @@ export class UploadQueueService {
   }
 
   /**
+   * Get the CPU adaptive manager (for wiring metrics).
+   */
+  getCpuAdaptiveManager(): CpuAdaptiveManager | null {
+    return this.cpuAdaptiveManager;
+  }
+
+  /**
    * Stop the worker and close connections
    */
   async stop(): Promise<void> {
+    if (this.cpuAdaptiveManager) {
+      this.cpuAdaptiveManager.stop();
+      this.cpuAdaptiveManager = null;
+    }
     if (this.metricsInterval) {
       clearInterval(this.metricsInterval);
       this.metricsInterval = null;

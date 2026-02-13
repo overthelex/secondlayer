@@ -270,6 +270,12 @@ class HTTPMCPServer {
       this.metricsService.costTrackingTotalUsd.inc({ tool_name: toolName }, costUsd);
     });
 
+    // Bind CPU adaptive concurrency metrics collector
+    const cpuAdaptiveManager = this.uploadQueueService.getCpuAdaptiveManager();
+    if (cpuAdaptiveManager) {
+      cpuAdaptiveManager.setMetricsCallback((metrics) => this.metricsService.updateCpuAdaptive(metrics));
+    }
+
     logger.info('Prometheus metrics service initialized');
 
     // Initialize upload recovery service (uses BullMQ for re-enqueuing)

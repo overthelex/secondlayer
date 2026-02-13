@@ -26,6 +26,11 @@ export class MetricsService {
   readonly externalApiCallsTotal: Counter;
   readonly externalApiDuration: Histogram;
 
+  // CPU adaptive concurrency metrics
+  readonly cpuAdaptiveConcurrency: Gauge;
+  readonly cpuLoadAverage: Gauge;
+  readonly cpuCoresAvailable: Gauge;
+
   // Cost metrics
   readonly costTrackingTotalUsd: Counter;
 
@@ -103,6 +108,25 @@ export class MetricsService {
       registers: [this.registry],
     });
 
+    // --- CPU Adaptive Concurrency ---
+    this.cpuAdaptiveConcurrency = new Gauge({
+      name: 'cpu_adaptive_concurrency',
+      help: 'Current BullMQ worker concurrency setting',
+      registers: [this.registry],
+    });
+
+    this.cpuLoadAverage = new Gauge({
+      name: 'cpu_load_average',
+      help: '1-minute CPU load average',
+      registers: [this.registry],
+    });
+
+    this.cpuCoresAvailable = new Gauge({
+      name: 'cpu_cores_available',
+      help: 'Total CPU cores available',
+      registers: [this.registry],
+    });
+
     // --- Cost ---
     this.costTrackingTotalUsd = new Counter({
       name: 'cost_tracking_total_usd',
@@ -168,6 +192,15 @@ export class MetricsService {
     this.bullmqJobs.set({ status: 'delayed' }, metrics.delayed);
     this.uploadQueueDepth.set(metrics.waiting + metrics.active);
     this.uploadProcessingActive.set(metrics.active);
+  }
+
+  /**
+   * Update CPU adaptive concurrency gauges.
+   */
+  updateCpuAdaptive(metrics: { concurrency: number; loadAverage: number; cpuCores: number }): void {
+    this.cpuAdaptiveConcurrency.set(metrics.concurrency);
+    this.cpuLoadAverage.set(metrics.loadAverage);
+    this.cpuCoresAvailable.set(metrics.cpuCores);
   }
 
   /**
