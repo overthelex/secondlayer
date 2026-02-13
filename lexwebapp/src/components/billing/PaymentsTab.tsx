@@ -104,7 +104,7 @@ export function PaymentsTab() {
           currency: 'USD',
           status: 'completed',
           provider: 'Stripe',
-          description: 'Monthly subscription - Professional Plan',
+          description: 'Місячна підписка — тариф Professional',
         },
         {
           id: 'pay_2',
@@ -113,7 +113,7 @@ export function PaymentsTab() {
           currency: 'USD',
           status: 'completed',
           provider: 'Fondy',
-          description: 'Additional API credits',
+          description: 'Додаткові API-кредити',
         },
         {
           id: 'pay_3',
@@ -122,7 +122,7 @@ export function PaymentsTab() {
           currency: 'USD',
           status: 'pending',
           provider: 'Stripe',
-          description: 'Monthly subscription - Business Plan',
+          description: 'Місячна підписка — тариф Business',
         },
         {
           id: 'pay_4',
@@ -131,7 +131,7 @@ export function PaymentsTab() {
           currency: 'USD',
           status: 'failed',
           provider: 'Fondy',
-          description: 'Top-up attempt',
+          description: 'Спроба поповнення',
         },
       ];
 
@@ -139,7 +139,7 @@ export function PaymentsTab() {
       setPaymentHistory(mockHistory);
     } catch (error) {
       console.error('Failed to fetch payment data:', error);
-      showToast.error('Failed to load payment information');
+      showToast.error('Не вдалося завантажити платіжну інформацію');
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +150,7 @@ export function PaymentsTab() {
   }, []);
 
   const handleRemovePayment = async (id: string) => {
-    if (!confirm('Are you sure you want to remove this payment method?')) {
+    if (!confirm('Ви впевнені, що хочете видалити цей спосіб оплати?')) {
       return;
     }
 
@@ -158,10 +158,10 @@ export function PaymentsTab() {
     try {
       await api.billing.removePaymentMethod(id);
       setPaymentMethods(paymentMethods.filter((m) => m.id !== id));
-      showToast.success('Payment method removed');
+      showToast.success('Спосіб оплати видалено');
     } catch (error) {
       console.error('Failed to remove payment method:', error);
-      showToast.error('Failed to remove payment method');
+      showToast.error('Не вдалося видалити спосіб оплати');
     } finally {
       setIsDeletingId(null);
     }
@@ -176,10 +176,10 @@ export function PaymentsTab() {
           isPrimary: m.id === id,
         }))
       );
-      showToast.success('Primary payment method updated');
+      showToast.success('Основний спосіб оплати оновлено');
     } catch (error) {
       console.error('Failed to set primary payment method:', error);
-      showToast.error('Failed to update primary payment method');
+      showToast.error('Не вдалося оновити основний спосіб оплати');
     }
   };
 
@@ -188,10 +188,10 @@ export function PaymentsTab() {
     try {
       // In a real app, you would save this to the backend
       console.log('Saving billing info:', billingInfo);
-      showToast.success('Billing information saved');
+      showToast.success('Платіжну інформацію збережено');
     } catch (error) {
       console.error('Failed to save billing info:', error);
-      showToast.error('Failed to save billing information');
+      showToast.error('Не вдалося зберегти платіжну інформацію');
     } finally {
       setIsSavingBilling(false);
     }
@@ -228,13 +228,13 @@ export function PaymentsTab() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-claude-text flex items-center gap-2">
             <CreditCard size={20} />
-            Payment Methods
+            Способи оплати
           </h3>
           <button
             onClick={() => setShowAddPayment(!showAddPayment)}
             className="flex items-center gap-2 px-4 py-2 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-all">
             <Plus size={18} />
-            Add Payment Method
+            Додати спосіб оплати
           </button>
         </div>
 
@@ -249,11 +249,11 @@ export function PaymentsTab() {
                 id="payment-card-holder"
                 name="cardHolder"
                 type="text"
-                placeholder="Card Holder Name"
+                placeholder="Імʼя власника картки"
                 className="px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
               <select id="payment-provider" name="provider" className="px-4 py-2 border border-claude-border rounded-lg text-sm bg-white">
-                <option>Select Provider</option>
+                <option>Оберіть провайдера</option>
                 <option>Stripe</option>
                 <option>Fondy</option>
               </select>
@@ -261,7 +261,7 @@ export function PaymentsTab() {
                 id="payment-card-number"
                 name="cardNumber"
                 type="text"
-                placeholder="Card Number"
+                placeholder="Номер картки"
                 className="px-4 py-2 border border-claude-border rounded-lg text-sm md:col-span-2"
               />
               <input id="payment-expiry" name="expiry" type="text" placeholder="MM/YY" className="px-4 py-2 border border-claude-border rounded-lg text-sm" />
@@ -269,12 +269,12 @@ export function PaymentsTab() {
             </div>
             <div className="flex gap-2 mt-4">
               <button className="flex-1 px-4 py-2 bg-claude-accent text-white rounded-lg hover:bg-opacity-90">
-                Add Card
+                Додати картку
               </button>
               <button
                 onClick={() => setShowAddPayment(false)}
                 className="flex-1 px-4 py-2 bg-claude-bg border border-claude-border rounded-lg hover:border-claude-accent">
-                Cancel
+                Скасувати
               </button>
             </div>
           </motion.div>
@@ -283,7 +283,7 @@ export function PaymentsTab() {
         {/* Payment Methods List */}
         <div className="space-y-3">
           {paymentMethods.length === 0 ? (
-            <p className="text-center text-claude-subtext py-8">No payment methods added yet</p>
+            <p className="text-center text-claude-subtext py-8">Способи оплати ще не додані</p>
           ) : (
             paymentMethods.map((method, idx) => (
               <motion.div
@@ -313,7 +313,7 @@ export function PaymentsTab() {
 
                   {method.isPrimary && (
                     <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full mr-4">
-                      Primary
+                      Основний
                     </span>
                   )}
 
@@ -322,7 +322,7 @@ export function PaymentsTab() {
                       <button
                         onClick={() => handleSetPrimary(method.id)}
                         className="px-3 py-1 text-sm text-claude-accent hover:bg-claude-bg rounded-lg transition-colors">
-                        Set as Primary
+                        Зробити основним
                       </button>
                     )}
                     <button
@@ -347,23 +347,23 @@ export function PaymentsTab() {
         className="bg-white border border-claude-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-6 flex items-center gap-2">
           <Building2 size={20} />
-          Billing Information
+          Платіжна інформація
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">Company Name</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Назва компанії</label>
             <input
               type="text"
               value={billingInfo.companyName}
               onChange={(e) => setBillingInfo({ ...billingInfo, companyName: e.target.value })}
-              placeholder="Your Company Name"
+              placeholder="Назва вашої компанії"
               className="w-full px-4 py-2 border border-claude-border rounded-lg text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">EDRPOU</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">ЄДРПОУ</label>
             <input
               type="text"
               value={billingInfo.edrpou}
@@ -374,29 +374,29 @@ export function PaymentsTab() {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-claude-text mb-2">Address</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Адреса</label>
             <input
               type="text"
               value={billingInfo.address}
               onChange={(e) => setBillingInfo({ ...billingInfo, address: e.target.value })}
-              placeholder="Street Address"
+              placeholder="Вулиця, будинок"
               className="w-full px-4 py-2 border border-claude-border rounded-lg text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">City</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Місто</label>
             <input
               type="text"
               value={billingInfo.city}
               onChange={(e) => setBillingInfo({ ...billingInfo, city: e.target.value })}
-              placeholder="Kyiv"
+              placeholder="Київ"
               className="w-full px-4 py-2 border border-claude-border rounded-lg text-sm"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">Postal Code</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Поштовий індекс</label>
             <input
               type="text"
               value={billingInfo.postalCode}
@@ -407,7 +407,7 @@ export function PaymentsTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">Email</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Електронна пошта</label>
             <input
               type="email"
               value={billingInfo.email}
@@ -418,7 +418,7 @@ export function PaymentsTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">Phone</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Телефон</label>
             <input
               type="tel"
               value={billingInfo.phone}
@@ -433,7 +433,7 @@ export function PaymentsTab() {
           onClick={handleSaveBillingInfo}
           disabled={isSavingBilling}
           className="mt-6 px-6 py-2 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-all disabled:opacity-50">
-          {isSavingBilling ? 'Saving...' : 'Save Billing Information'}
+          {isSavingBilling ? 'Збереження...' : 'Зберегти платіжну інформацію'}
         </button>
       </motion.div>
 
@@ -445,18 +445,18 @@ export function PaymentsTab() {
         className="bg-white border border-claude-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-6 flex items-center gap-2">
           <DollarSign size={20} />
-          Payment History
+          Історія оплат
         </h3>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-claude-bg border-b border-claude-border">
-                <th className="px-4 py-3 text-left font-semibold text-claude-text">Date</th>
-                <th className="px-4 py-3 text-left font-semibold text-claude-text">Description</th>
-                <th className="px-4 py-3 text-left font-semibold text-claude-text">Provider</th>
-                <th className="px-4 py-3 text-right font-semibold text-claude-text">Amount</th>
-                <th className="px-4 py-3 text-center font-semibold text-claude-text">Status</th>
+                <th className="px-4 py-3 text-left font-semibold text-claude-text">Дата</th>
+                <th className="px-4 py-3 text-left font-semibold text-claude-text">Опис</th>
+                <th className="px-4 py-3 text-left font-semibold text-claude-text">Провайдер</th>
+                <th className="px-4 py-3 text-right font-semibold text-claude-text">Сума</th>
+                <th className="px-4 py-3 text-center font-semibold text-claude-text">Статус</th>
               </tr>
             </thead>
             <tbody>

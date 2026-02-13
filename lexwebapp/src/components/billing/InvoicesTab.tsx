@@ -37,7 +37,7 @@ export function InvoicesTab() {
           customerName: inv.customerName || user?.name || 'Customer',
           customerEmail: inv.customerEmail || user?.email || '',
           items: [{
-            description: 'SecondLayer Account Top-Up',
+            description: 'Поповнення акаунта SecondLayer',
             amount: inv.amount,
             currency: inv.currency,
           }],
@@ -52,7 +52,7 @@ export function InvoicesTab() {
         setInvoices(invoiceList);
       } catch (error) {
         console.error('Failed to load invoices:', error);
-        showToast.error('Failed to load invoices');
+        showToast.error('Не вдалося завантажити рахунки');
       } finally {
         setIsLoading(false);
       }
@@ -74,15 +74,15 @@ export function InvoicesTab() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      showToast.success(`Invoice ${invoice.invoiceNumber} downloaded`);
+      showToast.success(`Рахунок ${invoice.invoiceNumber} завантажено`);
     } catch {
       // Fall back to client-side PDF generation
       try {
         generateInvoicePDF(invoice);
-        showToast.success(`Invoice ${invoice.invoiceNumber} downloaded`);
+        showToast.success(`Рахунок ${invoice.invoiceNumber} завантажено`);
       } catch (error) {
         console.error('Failed to generate PDF:', error);
-        showToast.error('Failed to generate invoice PDF');
+        showToast.error('Не вдалося створити PDF рахунку');
       }
     }
   };
@@ -118,7 +118,7 @@ export function InvoicesTab() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <FileText size={48} className="text-claude-accent mx-auto mb-4 animate-pulse" />
-          <p className="text-claude-subtext">Loading invoices...</p>
+          <p className="text-claude-subtext">Завантаження рахунків...</p>
         </div>
       </div>
     );
@@ -131,7 +131,7 @@ export function InvoicesTab() {
         <div className="bg-white border border-claude-border rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-claude-subtext">Total Invoices</p>
+              <p className="text-sm text-claude-subtext">Всього рахунків</p>
               <p className="text-2xl font-bold text-claude-text mt-1">{invoices.length}</p>
             </div>
             <FileText size={32} className="text-claude-accent" />
@@ -141,7 +141,7 @@ export function InvoicesTab() {
         <div className="bg-white border border-claude-border rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-claude-subtext">Paid</p>
+              <p className="text-sm text-claude-subtext">Оплачені</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
                 {invoices.filter((i) => i.status === 'paid').length}
               </p>
@@ -153,7 +153,7 @@ export function InvoicesTab() {
         <div className="bg-white border border-claude-border rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-claude-subtext">Pending</p>
+              <p className="text-sm text-claude-subtext">Очікують оплати</p>
               <p className="text-2xl font-bold text-yellow-600 mt-1">
                 {invoices.filter((i) => i.status === 'pending').length}
               </p>
@@ -166,8 +166,7 @@ export function InvoicesTab() {
       {invoices.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Invoices are generated automatically for all top-up transactions.
-            Top up your account to see invoices here.
+            <strong>Примітка:</strong> Рахунки створюються автоматично для всіх операцій поповнення. Поповніть свій акаунт, щоб побачити рахунки тут.
           </p>
         </div>
       )}
@@ -179,22 +178,22 @@ export function InvoicesTab() {
             <thead className="bg-claude-bg border-b border-claude-border">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Invoice
+                  Рахунок
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Date
+                  Дата
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Description
+                  Опис
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Amount
+                  Сума
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Status
+                  Статус
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Actions
+                  Дії
                 </th>
               </tr>
             </thead>
@@ -223,7 +222,7 @@ export function InvoicesTab() {
                         </div>
                         {invoice.dueDate && invoice.status === 'pending' && (
                           <div className="text-xs text-claude-subtext">
-                            Due: {format(invoice.dueDate, 'MMM dd')}
+                            Термін: {format(invoice.dueDate, 'MMM dd')}
                           </div>
                         )}
                       </div>
@@ -234,7 +233,7 @@ export function InvoicesTab() {
                       {invoice.items.map((item) => item.description).join(', ')}
                     </div>
                     <div className="text-xs text-claude-subtext">
-                      via {invoice.paymentMethod}
+                      через {invoice.paymentMethod}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -280,9 +279,9 @@ export function InvoicesTab() {
       {/* Help Text */}
       <div className="text-center text-sm text-claude-subtext">
         <p>
-          Need help with an invoice?{' '}
+          Потрібна допомога з рахунком?{' '}
           <a href="mailto:billing@legal.org.ua" className="text-claude-accent hover:underline">
-            Contact Support
+            Звʼязатися з підтримкою
           </a>
         </p>
       </div>

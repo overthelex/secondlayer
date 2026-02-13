@@ -79,10 +79,10 @@ export function SettingsTab() {
         notify_monthly_report: emailNotifications.monthlyReports,
       });
 
-      showToast.success('Settings saved successfully');
+      showToast.success('Налаштування збережено');
     } catch (error: any) {
       console.error('Failed to save settings:', error);
-      const message = error.response?.data?.message || 'Failed to save settings';
+      const message = error.response?.data?.message || 'Не вдалося зберегти налаштування';
       showToast.error(message);
     } finally {
       setIsSaving(false);
@@ -94,10 +94,10 @@ export function SettingsTab() {
 
     try {
       await api.billing.testEmail();
-      showToast.success('Test email sent! Check your inbox.');
+      showToast.success('Тестовий лист надіслано! Перевірте вхідні.');
     } catch (error: any) {
       console.error('Failed to send test email:', error);
-      const message = error.response?.data?.message || 'Failed to send test email';
+      const message = error.response?.data?.message || 'Не вдалося надіслати тестовий лист';
       showToast.error(message);
     } finally {
       setIsSendingEmail(false);
@@ -110,29 +110,29 @@ export function SettingsTab() {
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4 flex items-center gap-2">
           <User size={20} />
-          Account Information
+          Інформація про акаунт
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-claude-subtext mb-1">Email</label>
+            <label className="block text-sm font-medium text-claude-subtext mb-1">Електронна пошта</label>
             <div className="flex items-center gap-2 text-sm text-claude-text">
               <Mail size={16} className="text-claude-subtext" />
-              {user?.email || 'Not available'}
+              {user?.email || 'Недоступно'}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-claude-subtext mb-1">Name</label>
+            <label className="block text-sm font-medium text-claude-subtext mb-1">Імʼя</label>
             <div className="flex items-center gap-2 text-sm text-claude-text">
               <User size={16} className="text-claude-subtext" />
-              {user?.name || 'Not available'}
+              {user?.name || 'Недоступно'}
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-claude-subtext mb-1">
-              Account Created
+              Акаунт створено
             </label>
             <div className="flex items-center gap-2 text-sm text-claude-text">
               <Calendar size={16} className="text-claude-subtext" />
@@ -142,7 +142,7 @@ export function SettingsTab() {
 
           <div>
             <label className="block text-sm font-medium text-claude-subtext mb-1">
-              Last Login
+              Останній вхід
             </label>
             <div className="flex items-center gap-2 text-sm text-claude-text">
               <Calendar size={16} className="text-claude-subtext" />
@@ -156,13 +156,13 @@ export function SettingsTab() {
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4 flex items-center gap-2">
           <DollarSign size={20} />
-          Spending Limits
+          Ліміти витрат
         </h3>
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">
-              Daily Limit (USD)
+              Денний ліміт (USD)
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-claude-subtext">
@@ -178,13 +178,13 @@ export function SettingsTab() {
               />
             </div>
             <p className="text-xs text-claude-subtext mt-1">
-              Maximum amount you can spend per day
+              Максимальна сума витрат на день
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">
-              Monthly Limit (USD)
+              Місячний ліміт (USD)
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-claude-subtext">
@@ -200,7 +200,7 @@ export function SettingsTab() {
               />
             </div>
             <p className="text-xs text-claude-subtext mt-1">
-              Maximum amount you can spend per month
+              Максимальна сума витрат на місяць
             </p>
           </div>
 
@@ -215,12 +215,12 @@ export function SettingsTab() {
                   transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
                   <Save size={18} />
                 </motion.div>
-                Saving...
+                Збереження...
               </>
             ) : (
               <>
                 <Save size={18} />
-                Save Settings
+                Зберегти налаштування
               </>
             )}
           </button>
@@ -231,7 +231,7 @@ export function SettingsTab() {
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4 flex items-center gap-2">
           <Bell size={20} />
-          Email Notifications
+          Email-сповіщення
         </h3>
 
         <div className="space-y-4">
@@ -239,10 +239,10 @@ export function SettingsTab() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <AlertCircle size={18} className="text-claude-accent" />
-                <span className="font-medium text-claude-text">Low Balance Alerts</span>
+                <span className="font-medium text-claude-text">Сповіщення про низький баланс</span>
               </div>
               <p className="text-sm text-claude-subtext">
-                Get notified when your balance drops below $5
+                Отримуйте сповіщення, коли баланс падає нижче $5
               </p>
             </div>
             <input
@@ -259,10 +259,10 @@ export function SettingsTab() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle size={18} className="text-claude-accent" />
-                <span className="font-medium text-claude-text">Payment Confirmations</span>
+                <span className="font-medium text-claude-text">Підтвердження оплат</span>
               </div>
               <p className="text-sm text-claude-subtext">
-                Receive email confirmations for successful payments
+                Отримуйте email-підтвердження успішних оплат
               </p>
             </div>
             <input
@@ -282,10 +282,10 @@ export function SettingsTab() {
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp size={18} className="text-claude-accent" />
-                <span className="font-medium text-claude-text">Monthly Usage Reports</span>
+                <span className="font-medium text-claude-text">Щомісячні звіти про використання</span>
               </div>
               <p className="text-sm text-claude-subtext">
-                Get monthly summaries of your spending and usage
+                Отримуйте щомісячні зведення витрат та використання
               </p>
             </div>
             <input
@@ -304,12 +304,12 @@ export function SettingsTab() {
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4 flex items-center gap-2">
           <Send size={20} />
-          Test Email Notifications
+          Тестові email-сповіщення
         </h3>
 
         <p className="text-sm text-claude-subtext mb-4">
-          Send a test email to <strong>{user?.email}</strong> to verify your email notifications
-          are working correctly.
+          Надіслати тестовий лист на <strong>{user?.email}</strong>, щоб перевірити, що ваші email-сповіщення
+          працюють коректно.
         </p>
 
         <button
@@ -323,20 +323,19 @@ export function SettingsTab() {
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
                 <Send size={18} />
               </motion.div>
-              Sending...
+              Надсилання...
             </>
           ) : (
             <>
               <Send size={18} />
-              Send Test Email
+              Надіслати тестовий лист
             </>
           )}
         </button>
 
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-xs text-blue-800">
-            <strong>Note:</strong> The test email should arrive within 1-2 minutes. Check your spam
-            folder if you don't see it in your inbox.
+            <strong>Примітка:</strong> Тестовий лист має надійти протягом 1-2 хвилин. Перевірте папку спам, якщо не бачите його у вхідних.
           </p>
         </div>
       </div>
@@ -346,10 +345,9 @@ export function SettingsTab() {
         <div className="flex items-start gap-3">
           <Mail size={20} className="text-claude-accent flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm text-claude-text font-medium mb-1">Email Service Configuration</p>
+            <p className="text-sm text-claude-text font-medium mb-1">Налаштування поштового сервісу</p>
             <p className="text-xs text-claude-subtext">
-              Emails are sent from <strong>billing@legal.org.ua</strong> via mail.legal.org.ua SMTP
-              server. If you have any issues receiving emails, please contact support.
+              Листи надсилаються з <strong>billing@legal.org.ua</strong> через SMTP-сервер mail.legal.org.ua. Якщо у вас є проблеми з отриманням листів, зверніться до підтримки.
             </p>
           </div>
         </div>

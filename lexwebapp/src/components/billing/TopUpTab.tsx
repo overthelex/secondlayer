@@ -65,7 +65,7 @@ function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: (
 
       if (MOCK_PAYMENTS) {
         // Mock mode - simulate success
-        showToast.success(`Mock payment of $${amount} successful!`);
+        showToast.success(`Тестова оплата $${amount} успішна!`);
         setTimeout(onSuccess, 1000);
         return;
       }
@@ -80,14 +80,14 @@ function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: (
       });
 
       if (stripeError) {
-        setError(stripeError.message || 'Payment failed');
-        showToast.error(stripeError.message || 'Payment failed');
+        setError(stripeError.message || 'Помилка оплати');
+        showToast.error(stripeError.message || 'Помилка оплати');
       } else if (paymentIntent?.status === 'succeeded') {
-        showToast.success('Payment successful! Your balance will be updated shortly.');
+        showToast.success('Оплату здійснено! Ваш баланс буде оновлено найближчим часом.');
         onSuccess();
       }
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Payment failed. Please try again.';
+      const message = err.response?.data?.message || 'Помилка оплати. Спробуйте ще раз.';
       setError(message);
       showToast.error(message);
     } finally {
@@ -98,7 +98,7 @@ function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: (
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-claude-text mb-2">Card Details</label>
+        <label className="block text-sm font-medium text-claude-text mb-2">Дані картки</label>
         <div className="p-4 border border-claude-border rounded-lg bg-white">
           <CardElement options={cardElementOptions} />
         </div>
@@ -117,12 +117,12 @@ function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: (
         {isProcessing ? (
           <>
             <Loader2 size={18} className="animate-spin" />
-            Processing...
+            Обробка...
           </>
         ) : (
           <>
             <CreditCard size={18} />
-            Pay ${amount.toFixed(2)}
+            Сплатити ${amount.toFixed(2)}
           </>
         )}
       </button>
@@ -157,16 +157,16 @@ export function TopUpTab() {
 
       if (MOCK_PAYMENTS) {
         // Mock mode - simulate success
-        showToast.success(`Mock Fondy payment of ₴${amount} initiated!`);
+        showToast.success(`Тестова оплата Fondy на ₴${amount} розпочата!`);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
       } else {
         // Real mode - redirect to Fondy
-        showToast.info('Redirecting to Fondy payment page...');
+        showToast.info('Перенаправлення на сторінку оплати Fondy...');
         window.open(data.paymentUrl, '_blank');
       }
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Failed to create payment. Please try again.';
+      const message = err.response?.data?.message || 'Не вдалося створити платіж. Спробуйте ще раз.';
       showToast.error(message);
     } finally {
       setIsFondyProcessing(false);
@@ -198,9 +198,9 @@ export function TopUpTab() {
           className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
           <CheckCircle size={24} className="text-green-600" />
           <div>
-            <p className="font-medium text-green-800">Payment Successful!</p>
+            <p className="font-medium text-green-800">Оплату здійснено!</p>
             <p className="text-sm text-green-700">
-              Your balance will be updated within a few moments.
+              Ваш баланс буде оновлено найближчим часом.
             </p>
           </div>
         </motion.div>
@@ -208,7 +208,7 @@ export function TopUpTab() {
 
       {/* Provider Selection */}
       <div className="bg-white border border-claude-border rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-claude-text mb-4">Select Payment Method</h3>
+        <h3 className="text-lg font-semibold text-claude-text mb-4">Оберіть спосіб оплати</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={() => {
@@ -226,9 +226,9 @@ export function TopUpTab() {
               <h4 className="font-semibold text-claude-text">Stripe</h4>
             </div>
             <p className="text-sm text-claude-subtext text-left">
-              Credit/debit cards (International)
+              Кредитні/дебетові картки (міжнародні)
             </p>
-            <p className="text-xs text-claude-subtext mt-1 text-left">Recommended for USD payments</p>
+            <p className="text-xs text-claude-subtext mt-1 text-left">Рекомендовано для оплати в USD</p>
           </button>
 
           <button
@@ -246,15 +246,15 @@ export function TopUpTab() {
               <DollarSign size={24} className={provider === 'fondy' ? 'text-claude-accent' : 'text-claude-subtext'} />
               <h4 className="font-semibold text-claude-text">Fondy</h4>
             </div>
-            <p className="text-sm text-claude-subtext text-left">Ukrainian cards (UAH)</p>
-            <p className="text-xs text-claude-subtext mt-1 text-left">For Ukrainian bank cards</p>
+            <p className="text-sm text-claude-subtext text-left">Українські картки (UAH)</p>
+            <p className="text-xs text-claude-subtext mt-1 text-left">Для карток українських банків</p>
           </button>
         </div>
       </div>
 
       {/* Amount Selection */}
       <div className="bg-white border border-claude-border rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-claude-text mb-4">Select Amount</h3>
+        <h3 className="text-lg font-semibold text-claude-text mb-4">Оберіть суму</h3>
 
         {/* Preset Amounts */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -277,7 +277,7 @@ export function TopUpTab() {
 
         {/* Custom Amount */}
         <div>
-          <label className="block text-sm font-medium text-claude-text mb-2">Custom Amount</label>
+          <label className="block text-sm font-medium text-claude-text mb-2">Інша сума</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-claude-subtext font-medium">
               {provider === 'stripe' ? '$' : '₴'}
@@ -293,21 +293,21 @@ export function TopUpTab() {
             />
           </div>
           <p className="text-xs text-claude-subtext mt-2">
-            Minimum: {provider === 'stripe' ? '$1.00' : '₴10'}
+            Мінімум: {provider === 'stripe' ? '$1.00' : '₴10'}
           </p>
         </div>
 
         {/* Amount Summary */}
         <div className="mt-4 p-4 bg-claude-bg rounded-lg">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-claude-subtext">You will pay:</span>
+            <span className="text-sm text-claude-subtext">До оплати:</span>
             <span className="text-2xl font-bold text-claude-text">
               {provider === 'stripe' ? `$${amount.toFixed(2)}` : `₴${amount.toFixed(2)}`}
             </span>
           </div>
           {provider === 'fondy' && (
             <p className="text-xs text-claude-subtext mt-2">
-              ≈ ${(amount * 0.027).toFixed(2)} USD (estimated conversion)
+              ≈ ${(amount * 0.027).toFixed(2)} USD (орієнтовний курс)
             </p>
           )}
         </div>
@@ -315,7 +315,7 @@ export function TopUpTab() {
 
       {/* Payment Form */}
       <div className="bg-white border border-claude-border rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-claude-text mb-4">Payment Details</h3>
+        <h3 className="text-lg font-semibold text-claude-text mb-4">Деталі оплати</h3>
 
         {provider === 'stripe' ? (
           stripePromise ? (
@@ -325,7 +325,7 @@ export function TopUpTab() {
           ) : (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">
-                Stripe is not configured. Please add VITE_STRIPE_PUBLISHABLE_KEY to your environment variables.
+                Stripe не налаштовано. Додайте VITE_STRIPE_PUBLISHABLE_KEY до змінних оточення.
               </p>
             </div>
           )
@@ -333,7 +333,7 @@ export function TopUpTab() {
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
-                You will be redirected to Fondy's secure payment page to complete your transaction.
+                Вас буде перенаправлено на захищену сторінку оплати Fondy для завершення транзакції.
               </p>
             </div>
 
@@ -344,12 +344,12 @@ export function TopUpTab() {
               {isFondyProcessing ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  Processing...
+                  Обробка...
                 </>
               ) : (
                 <>
                   <ExternalLink size={18} />
-                  Pay ₴{amount.toFixed(2)} with Fondy
+                  Сплатити ₴{amount.toFixed(2)} через Fondy
                 </>
               )}
             </button>
@@ -357,7 +357,7 @@ export function TopUpTab() {
             {MOCK_PAYMENTS && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <p className="text-xs text-yellow-800">
-                  <strong>Mock Mode:</strong> Payments are simulated. No real charges will be made.
+                  <strong>Тестовий режим:</strong> Оплати симулюються. Реальні списання не проводяться.
                 </p>
               </div>
             )}
@@ -368,8 +368,8 @@ export function TopUpTab() {
       {/* Security Notice */}
       <div className="p-4 bg-claude-bg border border-claude-border rounded-lg">
         <p className="text-xs text-claude-subtext text-center">
-          🔒 All payments are processed securely via {provider === 'stripe' ? 'Stripe' : 'Fondy'}.
-          Your card information is never stored on our servers.
+          🔒 Усі платежі обробляються безпечно через {provider === 'stripe' ? 'Stripe' : 'Fondy'}.
+          Дані вашої картки не зберігаються на наших серверах.
         </p>
       </div>
     </div>

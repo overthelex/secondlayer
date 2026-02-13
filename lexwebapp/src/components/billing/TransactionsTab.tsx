@@ -52,7 +52,7 @@ export function TransactionsTab() {
       setTransactions(response.data.transactions || []);
     } catch (error) {
       console.error('Failed to fetch transactions:', error);
-      showToast.error('Failed to load transaction history');
+      showToast.error('Не вдалося завантажити історію транзакцій');
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +67,7 @@ export function TransactionsTab() {
   );
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Description', 'Amount USD', 'Amount UAH', 'Balance After', 'Provider'];
+    const headers = ['Дата', 'Тип', 'Опис', 'Сума USD', 'Сума UAH', 'Баланс після', 'Провайдер'];
     const rows = filteredTransactions.map((t) => [
       format(new Date(t.created_at), 'yyyy-MM-dd HH:mm:ss'),
       t.type,
@@ -87,7 +87,7 @@ export function TransactionsTab() {
     link.click();
     URL.revokeObjectURL(url);
 
-    showToast.success('Transactions exported to CSV');
+    showToast.success('Транзакції експортовано у CSV');
   };
 
   const getTypeColor = (type: string) => {
@@ -130,7 +130,7 @@ export function TransactionsTab() {
             />
             <input
               type="text"
-              placeholder="Search transactions..."
+              placeholder="Пошук транзакцій..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 border border-claude-border rounded-lg focus:outline-none focus:ring-2 focus:ring-claude-accent/20"
@@ -150,11 +150,11 @@ export function TransactionsTab() {
                 setPage(0);
               }}
               className="pl-10 pr-8 py-2.5 border border-claude-border rounded-lg focus:outline-none focus:ring-2 focus:ring-claude-accent/20 bg-white appearance-none cursor-pointer">
-              <option value="all">All Types</option>
-              <option value="charge">Charges</option>
-              <option value="topup">Top-ups</option>
-              <option value="refund">Refunds</option>
-              <option value="adjustment">Adjustments</option>
+              <option value="all">Усі типи</option>
+              <option value="charge">Списання</option>
+              <option value="topup">Поповнення</option>
+              <option value="refund">Повернення</option>
+              <option value="adjustment">Коригування</option>
             </select>
           </div>
 
@@ -163,7 +163,7 @@ export function TransactionsTab() {
             onClick={exportToCSV}
             className="flex items-center gap-2 px-4 py-2.5 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-colors whitespace-nowrap">
             <Download size={18} />
-            Export CSV
+            Експорт CSV
           </button>
 
           {/* Refresh */}
@@ -183,22 +183,22 @@ export function TransactionsTab() {
             <thead className="bg-claude-bg border-b border-claude-border">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Date & Time
+                  Дата і час
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Type
+                  Тип
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Description
+                  Опис
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Amount
+                  Сума
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Balance After
+                  Баланс після
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-claude-subtext uppercase tracking-wider">
-                  Provider
+                  Провайдер
                 </th>
               </tr>
             </thead>
@@ -207,13 +207,13 @@ export function TransactionsTab() {
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
                     <RefreshCw size={32} className="text-claude-accent animate-spin mx-auto mb-2" />
-                    <p className="text-claude-subtext">Loading transactions...</p>
+                    <p className="text-claude-subtext">Завантаження транзакцій...</p>
                   </td>
                 </tr>
               ) : filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center">
-                    <p className="text-claude-subtext">No transactions found</p>
+                    <p className="text-claude-subtext">Транзакцій не знайдено</p>
                   </td>
                 </tr>
               ) : (
@@ -292,8 +292,8 @@ export function TransactionsTab() {
         {!isLoading && filteredTransactions.length > 0 && (
           <div className="px-6 py-4 border-t border-claude-border flex items-center justify-between">
             <p className="text-sm text-claude-subtext">
-              Showing {page * limit + 1} to {Math.min((page + 1) * limit, filteredTransactions.length)} of{' '}
-              {filteredTransactions.length} transactions
+              Показано {page * limit + 1} — {Math.min((page + 1) * limit, filteredTransactions.length)} з{' '}
+              {filteredTransactions.length} транзакцій
             </p>
             <div className="flex gap-2">
               <button

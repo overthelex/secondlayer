@@ -42,162 +42,162 @@ export function TariffsTab() {
       name: 'Free',
       monthlyPrice: 0,
       yearlyPrice: 0,
-      description: 'Perfect for getting started',
+      description: 'Ідеально для знайомства з платформою',
       features: [
-        'Up to 100 requests/month',
-        'Basic search tools',
-        '2 team members',
-        'Email support',
-        'Community access',
+        'До 100 запитів/місяць',
+        'Базовий пошук судових рішень',
+        '2 учасники команди',
+        'Підтримка електронною поштою',
+        'Доступ до спільноти',
       ],
       popular: false,
-      ctaText: 'Current Plan',
+      ctaText: 'Поточний план',
     },
     {
       id: 'professional',
       name: 'Professional',
       monthlyPrice: 29,
       yearlyPrice: 290,
-      description: 'For professional users',
+      description: 'Для практикуючих юристів',
       features: [
-        'Up to 5,000 requests/month',
-        'Advanced search & analytics',
-        '10 team members',
-        'Priority email support',
-        'Custom integrations',
-        'Usage analytics dashboard',
+        'До 5 000 запитів/місяць',
+        'Розширений пошук та аналітика',
+        '10 учасників команди',
+        'Пріоритетна підтримка',
+        'Користувацькі інтеграції',
+        'Панель аналітики використання',
       ],
       popular: true,
-      ctaText: 'Upgrade to Professional',
+      ctaText: 'Перейти на Professional',
     },
     {
       id: 'business',
       name: 'Business',
       monthlyPrice: 99,
       yearlyPrice: 990,
-      description: 'For growing teams',
+      description: 'Для юридичних компаній',
       features: [
-        'Up to 50,000 requests/month',
-        'All Professional features',
-        'Unlimited team members',
-        '24/7 phone support',
-        'Advanced compliance tools',
-        'Webhook integrations',
-        'Dedicated account manager',
+        'До 50 000 запитів/місяць',
+        'Усі функції Professional',
+        'Необмежена кількість учасників',
+        'Підтримка 24/7 телефоном',
+        'Інструменти комплаєнсу',
+        'Webhook-інтеграції',
+        'Персональний менеджер',
       ],
       popular: false,
-      ctaText: 'Upgrade to Business',
+      ctaText: 'Перейти на Business',
     },
     {
       id: 'enterprise',
       name: 'Enterprise',
       monthlyPrice: 0,
       yearlyPrice: 0,
-      description: 'Custom enterprise solution',
+      description: 'Індивідуальне рішення для великих компаній',
       features: [
-        'Unlimited requests',
-        'All Business features',
-        'White-label options',
-        'Custom SLA',
-        'On-premise deployment',
-        'Custom integrations',
-        'Dedicated support team',
-        'Security audit included',
+        'Необмежена кількість запитів',
+        'Усі функції Business',
+        'White-label опції',
+        'Індивідуальний SLA',
+        'Розгортання на власних серверах',
+        'Індивідуальні інтеграції',
+        'Виділена команда підтримки',
+        'Аудит безпеки включено',
       ],
       popular: false,
-      ctaText: 'Contact Sales',
+      ctaText: "Зв'язатися з відділом продажів",
     },
   ];
 
   const faqs: FAQItem[] = [
     {
-      question: 'Can I change my plan anytime?',
+      question: 'Чи можу я змінити тариф у будь-який час?',
       answer:
-        'Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately for upgrades, or at the end of your billing cycle for downgrades.',
+        'Так! Ви можете підвищити або знизити тариф у будь-який час. Підвищення набирає чинності одразу, зниження — з початку наступного платіжного періоду.',
     },
     {
-      question: 'What happens if I exceed my request limit?',
+      question: 'Що станеться, якщо я перевищу ліміт запитів?',
       answer:
-        'We offer flexible overage handling. You can set auto-upgrade to Professional, enable pay-as-you-go at standard rates, or set a hard limit that blocks additional requests.',
+        'Ми пропонуємо гнучкі варіанти: автоматичне підвищення тарифу до Professional, оплата за фактом використання за стандартними тарифами або жорсткий ліміт, що блокує додаткові запити.',
     },
     {
-      question: 'Do you offer refunds?',
+      question: 'Чи повертаєте ви кошти?',
       answer:
-        'We offer a 30-day money-back guarantee for annual plans. For monthly plans, you can cancel anytime without penalties.',
+        'Ми гарантуємо повернення коштів протягом 30 днів для річних планів. Місячні плани можна скасувати у будь-який час без штрафів.',
     },
     {
-      question: 'Is there a free trial?',
+      question: 'Чи є безкоштовний пробний період?',
       answer:
-        'Yes! All features of the Free plan are available to test. No credit card required to start.',
+        'Так! Усі функції безкоштовного плану доступні для тестування. Для реєстрації кредитна картка не потрібна.',
     },
     {
-      question: 'Can I get a discount for annual billing?',
+      question: 'Чи є знижка за річну оплату?',
       answer:
-        'Absolutely! Switch to yearly billing and save 17% on all plans. Annual subscriptions are automatically renewed.',
+        'Так! Перейдіть на річну оплату та заощадьте 17% на всіх тарифах. Річні підписки продовжуються автоматично.',
     },
   ];
 
   const allFeatures = [
-    'Requests per month',
-    'Search tools',
-    'Team members',
-    'Support',
-    'Integrations',
-    'Analytics',
+    'Запитів на місяць',
+    'Інструменти пошуку',
+    'Учасники команди',
+    'Підтримка',
+    'Інтеграції',
+    'Аналітика',
     'Webhooks',
-    'Custom SLA',
+    'Індивідуальний SLA',
     'White-label',
-    'Deployment options',
+    'Варіанти розгортання',
   ];
 
   const featureMatrix: Record<string, Record<string, boolean | string>> = {
     free: {
-      'Requests per month': 'Up to 100',
-      'Search tools': true,
-      'Team members': 'Up to 2',
-      'Support': 'Email',
-      'Integrations': false,
-      'Analytics': false,
+      'Запитів на місяць': 'До 100',
+      'Інструменти пошуку': true,
+      'Учасники команди': 'До 2',
+      'Підтримка': 'Email',
+      'Інтеграції': false,
+      'Аналітика': false,
       'Webhooks': false,
-      'Custom SLA': false,
+      'Індивідуальний SLA': false,
       'White-label': false,
-      'Deployment options': 'Cloud',
+      'Варіанти розгортання': 'Хмара',
     },
     professional: {
-      'Requests per month': 'Up to 5,000',
-      'Search tools': true,
-      'Team members': 'Up to 10',
-      'Support': 'Email & chat',
-      'Integrations': true,
-      'Analytics': true,
+      'Запитів на місяць': 'До 5 000',
+      'Інструменти пошуку': true,
+      'Учасники команди': 'До 10',
+      'Підтримка': 'Email та чат',
+      'Інтеграції': true,
+      'Аналітика': true,
       'Webhooks': false,
-      'Custom SLA': false,
+      'Індивідуальний SLA': false,
       'White-label': false,
-      'Deployment options': 'Cloud',
+      'Варіанти розгортання': 'Хмара',
     },
     business: {
-      'Requests per month': 'Up to 50,000',
-      'Search tools': true,
-      'Team members': 'Unlimited',
-      'Support': '24/7 Phone',
-      'Integrations': true,
-      'Analytics': true,
+      'Запитів на місяць': 'До 50 000',
+      'Інструменти пошуку': true,
+      'Учасники команди': 'Необмежено',
+      'Підтримка': 'Телефон 24/7',
+      'Інтеграції': true,
+      'Аналітика': true,
       'Webhooks': true,
-      'Custom SLA': 'Available',
+      'Індивідуальний SLA': 'Доступно',
       'White-label': false,
-      'Deployment options': 'Cloud',
+      'Варіанти розгортання': 'Хмара',
     },
     enterprise: {
-      'Requests per month': 'Unlimited',
-      'Search tools': true,
-      'Team members': 'Unlimited',
-      'Support': 'Dedicated team',
-      'Integrations': true,
-      'Analytics': true,
+      'Запитів на місяць': 'Необмежено',
+      'Інструменти пошуку': true,
+      'Учасники команди': 'Необмежено',
+      'Підтримка': 'Виділена команда',
+      'Інтеграції': true,
+      'Аналітика': true,
       'Webhooks': true,
-      'Custom SLA': 'Included',
+      'Індивідуальний SLA': 'Включено',
       'White-label': true,
-      'Deployment options': 'Cloud & On-premise',
+      'Варіанти розгортання': 'Хмара та локально',
     },
   };
 
@@ -205,10 +205,10 @@ export function TariffsTab() {
     setIsUpgrading(planId);
     try {
       await api.billing.upgradePlan(planId);
-      showToast.success(`Successfully upgraded to ${planId} plan`);
+      showToast.success(`Тариф ${planId} успішно активовано`);
     } catch (error) {
       console.error('Upgrade failed:', error);
-      showToast.error('Failed to upgrade plan');
+      showToast.error('Не вдалося змінити тариф');
     } finally {
       setIsUpgrading(null);
     }
@@ -228,7 +228,7 @@ export function TariffsTab() {
           className={`text-sm font-medium ${
             billingCycle === 'monthly' ? 'text-claude-text' : 'text-claude-subtext'
           }`}>
-          Monthly
+          Щомісяця
         </span>
         <button
           onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
@@ -248,7 +248,7 @@ export function TariffsTab() {
             className={`text-sm font-medium ${
               billingCycle === 'yearly' ? 'text-claude-text' : 'text-claude-subtext'
             }`}>
-            Yearly
+            Щорічно
           </span>
           {billingCycle === 'yearly' && (
             <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-full">
@@ -273,7 +273,7 @@ export function TariffsTab() {
             }`}>
             {plan.popular && (
               <div className="bg-claude-accent text-white px-4 py-2 text-center text-xs font-bold rounded-t-lg">
-                MOST POPULAR
+                НАЙПОПУЛЯРНІШИЙ
               </div>
             )}
 
@@ -287,7 +287,7 @@ export function TariffsTab() {
               {/* Pricing */}
               <div className="mb-6">
                 {plan.monthlyPrice === 0 && plan.yearlyPrice === 0 ? (
-                  <p className="text-2xl font-bold text-claude-text">Custom Pricing</p>
+                  <p className="text-2xl font-bold text-claude-text">Індивідуальна ціна</p>
                 ) : (
                   <>
                     <div className="flex items-baseline gap-2">
@@ -295,12 +295,12 @@ export function TariffsTab() {
                         ${billingCycle === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice}
                       </span>
                       <span className="text-sm text-claude-subtext">
-                        {billingCycle === 'monthly' ? '/month' : '/year'}
+                        {billingCycle === 'monthly' ? '/міс' : '/рік'}
                       </span>
                     </div>
                     {billingCycle === 'yearly' && plan.monthlyPrice > 0 && (
                       <p className="text-xs text-green-600 mt-1">
-                        ${(plan.yearlyPrice / 12).toFixed(2)}/month billed yearly
+                        ${(plan.yearlyPrice / 12).toFixed(2)}/міс при річній оплаті
                       </p>
                     )}
                   </>
@@ -316,7 +316,7 @@ export function TariffsTab() {
                     ? 'bg-claude-accent text-white hover:bg-opacity-90'
                     : 'bg-claude-bg text-claude-text border border-claude-border hover:border-claude-accent'
                 } disabled:opacity-50`}>
-                {isUpgrading === plan.id ? 'Processing...' : plan.ctaText}
+                {isUpgrading === plan.id ? 'Обробка...' : plan.ctaText}
               </button>
 
               {/* Features List */}
@@ -344,7 +344,7 @@ export function TariffsTab() {
             <thead>
               <tr className="bg-claude-bg border-b border-claude-border">
                 <th className="px-6 py-4 text-left font-semibold text-claude-text w-1/3">
-                  Features
+                  Функції
                 </th>
                 {['Free', 'Professional', 'Business', 'Enterprise'].map((name) => (
                   <th
@@ -389,7 +389,7 @@ export function TariffsTab() {
         transition={{ delay: 0.5 }}>
         <h3 className="text-2xl font-bold text-claude-text mb-6 flex items-center gap-2">
           <Zap size={24} />
-          Frequently Asked Questions
+          Часті запитання
         </h3>
         <div className="space-y-3">
           {faqs.map((faq, idx) => (

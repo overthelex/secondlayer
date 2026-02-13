@@ -47,15 +47,15 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
   };
 
   const tabs = [
-    { id: 'overview' as const, label: 'Overview', icon: DollarSign },
-    { id: 'tariffs' as const, label: 'Tariffs', icon: Zap },
-    { id: 'statistics' as const, label: 'Statistics', icon: TrendingUp },
-    { id: 'payments' as const, label: 'Payments', icon: CreditCard },
-    { id: 'limits' as const, label: 'Limits', icon: AlertCircle },
-    { id: 'transactions' as const, label: 'Transactions', icon: Receipt },
-    { id: 'topup' as const, label: 'Top Up', icon: CreditCard },
-    { id: 'invoices' as const, label: 'Invoices', icon: FileText },
-    { id: 'settings' as const, label: 'Settings', icon: Settings },
+    { id: 'overview' as const, label: 'Огляд', icon: DollarSign },
+    { id: 'tariffs' as const, label: 'Тарифи', icon: Zap },
+    { id: 'statistics' as const, label: 'Статистика', icon: TrendingUp },
+    { id: 'payments' as const, label: 'Оплати', icon: CreditCard },
+    { id: 'limits' as const, label: 'Ліміти', icon: AlertCircle },
+    { id: 'transactions' as const, label: 'Транзакції', icon: Receipt },
+    { id: 'topup' as const, label: 'Поповнення', icon: CreditCard },
+    { id: 'invoices' as const, label: 'Рахунки', icon: FileText },
+    { id: 'settings' as const, label: 'Налаштування', icon: Settings },
   ];
 
   return (
@@ -69,9 +69,9 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
             <ArrowLeft size={20} className="text-claude-text" />
           </button>
           <div>
-            <h1 className="text-2xl font-semibold text-claude-text">Billing Dashboard</h1>
+            <h1 className="text-2xl font-semibold text-claude-text">Панель білінгу</h1>
             <p className="text-sm text-claude-subtext mt-1">
-              Manage your account balance, payments, and billing settings
+              Керуйте балансом, оплатами та налаштуваннями вашого акаунта
             </p>
           </div>
         </div>

@@ -85,7 +85,7 @@ export function LimitsTab() {
       console.log('Fetched limits:', response);
     } catch (error) {
       console.error('Failed to fetch limits:', error);
-      showToast.error('Failed to load limits');
+      showToast.error('Не вдалося завантажити ліміти');
     } finally {
       setIsLoading(false);
     }
@@ -104,10 +104,10 @@ export function LimitsTab() {
         notify_monthly_report: true,
         low_balance_threshold_usd: 20,
       });
-      showToast.success('Limits updated successfully');
+      showToast.success('Ліміти оновлено');
     } catch (error) {
       console.error('Failed to save limits:', error);
-      showToast.error('Failed to update limits');
+      showToast.error('Не вдалося оновити ліміти');
     } finally {
       setIsSaving(false);
     }
@@ -147,7 +147,7 @@ export function LimitsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-3">Daily Usage</p>
+          <p className="text-sm text-claude-subtext mb-3">Денне використання</p>
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
               <p className="text-2xl font-bold text-claude-text">${n(usage.daily_spent).toFixed(2)}</p>
@@ -164,7 +164,7 @@ export function LimitsTab() {
               />
             </div>
           </div>
-          <p className="text-xs text-claude-subtext">{dailyPercentage.toFixed(0)}% used</p>
+          <p className="text-xs text-claude-subtext">{dailyPercentage.toFixed(0)}% використано</p>
         </motion.div>
 
         {/* Monthly Usage */}
@@ -173,7 +173,7 @@ export function LimitsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-3">Monthly Usage</p>
+          <p className="text-sm text-claude-subtext mb-3">Місячне використання</p>
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
               <p className="text-2xl font-bold text-claude-text">${n(usage.monthly_spent).toFixed(2)}</p>
@@ -190,7 +190,7 @@ export function LimitsTab() {
               />
             </div>
           </div>
-          <p className="text-xs text-claude-subtext">{usage.days_remaining} days remaining</p>
+          <p className="text-xs text-claude-subtext">{usage.days_remaining} днів залишилось</p>
         </motion.div>
 
         {/* Projected Monthly */}
@@ -199,22 +199,22 @@ export function LimitsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-3">Projected Monthly Cost</p>
+          <p className="text-sm text-claude-subtext mb-3">Прогнозовані місячні витрати</p>
           <div className="mb-3">
             <div className="flex items-baseline justify-between mb-1">
               <p className="text-2xl font-bold text-claude-text">
                 ${n(usage.projected_monthly).toFixed(2)}
               </p>
-              <p className="text-xs text-claude-subtext">est.</p>
+              <p className="text-xs text-claude-subtext">прогноз</p>
             </div>
             <div className="flex items-center justify-between">
               {usage.projected_monthly > usage.monthly_limit ? (
                 <span className="text-xs text-red-600 font-semibold flex items-center gap-1">
                   <AlertTriangle size={14} />
-                  Over limit
+                  Перевищено ліміт
                 </span>
               ) : (
-                <span className="text-xs text-green-600 font-semibold">On track</span>
+                <span className="text-xs text-green-600 font-semibold">В межах плану</span>
               )}
             </div>
           </div>
@@ -229,12 +229,12 @@ export function LimitsTab() {
         className="bg-white border border-claude-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-6 flex items-center gap-2">
           <Target size={20} />
-          Spending Limits
+          Ліміти витрат
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-claude-text mb-2">Daily Limit (USD)</label>
+            <label className="block text-sm font-medium text-claude-text mb-2">Денний ліміт (USD)</label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
               <input
@@ -248,12 +248,12 @@ export function LimitsTab() {
                 className="flex-1 px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
             </div>
-            <p className="text-xs text-claude-subtext mt-1">Hard limit per day</p>
+            <p className="text-xs text-claude-subtext mt-1">Жорсткий ліміт на день</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">
-              Monthly Limit (USD)
+              Місячний ліміт (USD)
             </label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
@@ -268,12 +268,12 @@ export function LimitsTab() {
                 className="flex-1 px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
             </div>
-            <p className="text-xs text-claude-subtext mt-1">Hard limit per month</p>
+            <p className="text-xs text-claude-subtext mt-1">Жорсткий ліміт на місяць</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">
-              OpenAI API Limit (USD)
+              Ліміт OpenAI API (USD)
             </label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
@@ -293,7 +293,7 @@ export function LimitsTab() {
 
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">
-              External APIs Limit (USD)
+              Ліміт зовнішніх API (USD)
             </label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-claude-subtext">$</span>
@@ -311,7 +311,7 @@ export function LimitsTab() {
                 className="flex-1 px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
             </div>
-            <p className="text-xs text-claude-subtext mt-1">ZakonOnline, Rada APIs, etc.</p>
+            <p className="text-xs text-claude-subtext mt-1">ZakonOnline, API Ради тощо</p>
           </div>
         </div>
       </motion.div>
@@ -324,25 +324,25 @@ export function LimitsTab() {
         className="bg-white border border-claude-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-6 flex items-center gap-2">
           <Zap size={20} />
-          When Limit is Reached
+          При досягненні ліміту
         </h3>
 
         <div className="space-y-3">
           {[
             {
               value: 'auto_upgrade',
-              label: 'Auto-upgrade to higher plan',
-              description: 'Automatically upgrade your plan to continue without interruption',
+              label: 'Автоматичне підвищення тарифу',
+              description: 'Автоматично підвищити тариф для продовження роботи без перерв',
             },
             {
               value: 'pay_as_you_go',
-              label: 'Pay as you go',
-              description: 'Charge overage fees at standard rates (₴0.67 per request)',
+              label: 'Оплата за фактом',
+              description: 'Нарахування за перевищення за стандартними тарифами (₴0,67 за запит)',
             },
             {
               value: 'hard_limit',
-              label: 'Hard limit (block requests)',
-              description: 'Stop processing requests when limit is reached',
+              label: 'Жорсткий ліміт (блокувати запити)',
+              description: 'Припинити обробку запитів при досягненні ліміту',
             },
           ].map((option) => (
             <label
@@ -384,12 +384,12 @@ export function LimitsTab() {
         className="bg-white border border-claude-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-6 flex items-center gap-2">
           <Bell size={20} />
-          Email Notifications
+          Email-сповіщення
         </h3>
 
         <div className="space-y-4">
           <label className="flex items-center justify-between p-4 bg-claude-bg rounded-lg cursor-pointer hover:bg-opacity-80 transition-colors">
-            <span className="font-medium text-claude-text">Enable email notifications</span>
+            <span className="font-medium text-claude-text">Увімкнути email-сповіщення</span>
             <input
               type="checkbox"
               checked={limits.email_notifications}
@@ -401,10 +401,10 @@ export function LimitsTab() {
           {limits.email_notifications && (
             <div className="space-y-3 pl-4 border-l-2 border-claude-accent">
               {[
-                { key: 'notify_at_50', label: 'At 50% of limit', color: 'green' },
-                { key: 'notify_at_80', label: 'At 80% of limit', color: 'yellow' },
-                { key: 'notify_at_95', label: 'At 95% of limit', color: 'orange' },
-                { key: 'notify_at_100', label: 'At 100% (limit reached)', color: 'red' },
+                { key: 'notify_at_50', label: 'При 50% ліміту', color: 'green' },
+                { key: 'notify_at_80', label: 'При 80% ліміту', color: 'yellow' },
+                { key: 'notify_at_95', label: 'При 95% ліміту', color: 'orange' },
+                { key: 'notify_at_100', label: 'При 100% (ліміт досягнуто)', color: 'red' },
               ].map((notif) => (
                 <label
                   key={notif.key}
@@ -431,11 +431,11 @@ export function LimitsTab() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
         className="bg-white border border-claude-border rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-claude-text mb-6">Webhook Notifications</h3>
+        <h3 className="text-lg font-semibold text-claude-text mb-6">Webhook-сповіщення</h3>
 
         <div className="space-y-4">
           <label className="flex items-center justify-between p-4 bg-claude-bg rounded-lg cursor-pointer hover:bg-opacity-80 transition-colors">
-            <span className="font-medium text-claude-text">Enable webhook notifications</span>
+            <span className="font-medium text-claude-text">Увімкнути webhook-сповіщення</span>
             <input
               type="checkbox"
               checked={limits.webhook_enabled}
@@ -455,7 +455,7 @@ export function LimitsTab() {
                 className="w-full px-4 py-2 border border-claude-border rounded-lg text-sm"
               />
               <p className="text-xs text-claude-subtext mt-2">
-                POST requests will be sent when spending limits are reached
+                POST-запити надсилатимуться при досягненні лімітів витрат
               </p>
             </div>
           )}
@@ -470,17 +470,16 @@ export function LimitsTab() {
         className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
           <TrendingUp size={20} />
-          Spending Forecast
+          Прогноз витрат
         </h3>
         <div className="space-y-2 text-sm text-blue-800">
           <p>
-            Based on your current usage pattern, you'll reach your monthly limit of{' '}
-            <strong>${n(limits.monthly_limit_usd).toFixed(2)}</strong> in approximately{' '}
-            <strong>25 days</strong>.
+            За вашим поточним рівнем використання, ви досягнете місячного ліміту в{' '}
+            <strong>${n(limits.monthly_limit_usd).toFixed(2)}</strong> приблизно за{' '}
+            <strong>25 днів</strong>.
           </p>
           <p>
-            <strong>Recommendation:</strong> Consider increasing your monthly limit or optimizing
-            API usage to reduce costs.
+            <strong>Рекомендація:</strong> Розгляньте збільшення місячного ліміту або оптимізацію використання API для зменшення витрат.
           </p>
         </div>
       </motion.div>
@@ -493,7 +492,7 @@ export function LimitsTab() {
         onClick={handleSaveLimits}
         disabled={isSaving}
         className="w-full px-6 py-3 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-all disabled:opacity-50 font-semibold">
-        {isSaving ? 'Saving...' : 'Save Limits Configuration'}
+        {isSaving ? 'Збереження...' : 'Зберегти конфігурацію лімітів'}
       </motion.button>
     </div>
   );

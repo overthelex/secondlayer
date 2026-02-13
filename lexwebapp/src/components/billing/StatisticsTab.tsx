@@ -92,7 +92,7 @@ export function StatisticsTab() {
       setData(mockData);
     } catch (error) {
       console.error('Failed to fetch statistics:', error);
-      showToast.error('Failed to load statistics');
+      showToast.error('Не вдалося завантажити статистику');
     } finally {
       setIsLoading(false);
     }
@@ -127,7 +127,7 @@ export function StatisticsTab() {
         className="flex items-center gap-3 flex-wrap">
         <span className="text-sm font-medium text-claude-subtext flex items-center gap-2">
           <Calendar size={18} />
-          Period:
+          Період:
         </span>
         {(['7d', '30d', '90d', 'year'] as PeriodType[]).map((p) => (
           <button
@@ -138,14 +138,14 @@ export function StatisticsTab() {
                 ? 'bg-claude-accent text-white'
                 : 'bg-claude-bg text-claude-text border border-claude-border hover:border-claude-accent'
             }`}>
-            {p === 'year' ? 'Year' : p.toUpperCase()}
+            {p === 'year' ? 'Рік' : p.toUpperCase()}
           </button>
         ))}
         <button
           onClick={fetchStatistics}
           className="ml-auto px-4 py-2 rounded-lg bg-claude-bg text-claude-text border border-claude-border hover:border-claude-accent transition-all flex items-center gap-2">
           <RefreshCw size={16} />
-          Refresh
+          Оновити
         </button>
       </motion.div>
 
@@ -156,9 +156,9 @@ export function StatisticsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-2">Total Requests</p>
+          <p className="text-sm text-claude-subtext mb-2">Всього запитів</p>
           <p className="text-3xl font-bold text-claude-text mb-1">{data.totalRequests}</p>
-          <p className="text-xs text-green-600">+12% from last period</p>
+          <p className="text-xs text-green-600">+12% з минулого періоду</p>
         </motion.div>
 
         <motion.div
@@ -166,13 +166,13 @@ export function StatisticsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-2">Total Cost</p>
+          <p className="text-sm text-claude-subtext mb-2">Загальні витрати</p>
           <p className="text-3xl font-bold text-claude-text mb-1">₴{data.totalCost}</p>
           <p
             className={`text-xs ${
               totalCostTrend > 0 ? 'text-red-600' : 'text-green-600'
             }`}>
-            {totalCostTrend > 0 ? '+' : ''}{(Number(totalCostTrend) || 0).toFixed(1)}% from first day
+            {totalCostTrend > 0 ? '+' : ''}{(Number(totalCostTrend) || 0).toFixed(1)}% від першого дня
           </p>
         </motion.div>
 
@@ -181,11 +181,11 @@ export function StatisticsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-2">OpenAI Tokens</p>
+          <p className="text-sm text-claude-subtext mb-2">Токени OpenAI</p>
           <p className="text-3xl font-bold text-claude-text mb-1">
             {((Number(data.openaiTokens) || 0) / 1000).toFixed(0)}K
           </p>
-          <p className="text-xs text-blue-600">API usage tracked</p>
+          <p className="text-xs text-blue-600">Використання API відстежується</p>
         </motion.div>
 
         <motion.div
@@ -193,9 +193,9 @@ export function StatisticsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className="bg-white border border-claude-border rounded-lg p-4">
-          <p className="text-sm text-claude-subtext mb-2">Avg Cost/Request</p>
+          <p className="text-sm text-claude-subtext mb-2">Сер. вартість/запит</p>
           <p className="text-3xl font-bold text-claude-text mb-1">₴{(Number(data.avgCostPerRequest) || 0).toFixed(2)}</p>
-          <p className="text-xs text-purple-600">Per request average</p>
+          <p className="text-xs text-purple-600">Середня вартість запиту</p>
         </motion.div>
       </div>
 
@@ -209,7 +209,7 @@ export function StatisticsTab() {
           className="bg-white border border-claude-border rounded-lg p-6">
           <h3 className="text-lg font-semibold text-claude-text mb-4 flex items-center gap-2">
             <TrendingUp size={20} />
-            Request Trend
+            Тренд запитів
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={data.dailyData}>
@@ -246,7 +246,7 @@ export function StatisticsTab() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
           className="bg-white border border-claude-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-claude-text mb-4">Cost Distribution</h3>
+          <h3 className="text-lg font-semibold text-claude-text mb-4">Розподіл витрат</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -274,7 +274,7 @@ export function StatisticsTab() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.7 }}
         className="bg-white border border-claude-border rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-claude-text mb-4">Daily Cost Trend</h3>
+        <h3 className="text-lg font-semibold text-claude-text mb-4">Денний тренд витрат</h3>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={data.dailyData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#E5E7E0" />
@@ -296,7 +296,7 @@ export function StatisticsTab() {
               strokeWidth={2}
               dot={{ fill: '#D97757', r: 4 }}
               activeDot={{ r: 6 }}
-              name="Daily Cost"
+              name="Денні витрати"
             />
           </LineChart>
         </ResponsiveContainer>
@@ -309,10 +309,10 @@ export function StatisticsTab() {
         transition={{ delay: 0.8 }}
         className="bg-white border border-claude-border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-claude-text">Top 5 Tools</h3>
+          <h3 className="text-lg font-semibold text-claude-text">Топ-5 інструментів</h3>
           <button className="text-sm text-claude-accent hover:text-claude-text transition-colors flex items-center gap-1">
             <Download size={16} />
-            Export
+            Експорт
           </button>
         </div>
         <div className="space-y-3">
@@ -347,12 +347,12 @@ export function StatisticsTab() {
         <div className="flex items-start gap-3">
           <AlertCircle size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-blue-900 mb-2">Optimization Recommendations</h4>
+            <h4 className="font-semibold text-blue-900 mb-2">Рекомендації з оптимізації</h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Consider caching results for frequently accessed cases to reduce API calls</li>
-              <li>• Your "search_legal_precedents" tool accounts for 31% of costs</li>
-              <li>• Batch processing could save up to 15% on API token usage</li>
-              <li>• Consider upgrading to Business plan for volume discounts</li>
+              <li>• Розгляньте кешування результатів для часто запитуваних справ, щоб зменшити кількість API-викликів</li>
+              <li>• Інструмент "search_legal_precedents" складає 31% витрат</li>
+              <li>• Пакетна обробка може заощадити до 15% на використанні API-токенів</li>
+              <li>• Розгляньте перехід на тариф Business для отримання знижок за обсяг</li>
             </ul>
           </div>
         </div>
