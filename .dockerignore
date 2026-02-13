@@ -7,8 +7,9 @@ node_modules
 */node_modules
 */*/node_modules
 
-# Build artifacts (Dockerfiles build from source)
-mcp_backend/dist
+# Build artifacts (multi-stage Dockerfiles build from source)
+# NOTE: mcp_backend/dist and packages/shared/dist are NOT excluded —
+# Dockerfile.document-service copies them directly (no builder stage)
 mcp_rada/dist
 mcp_openreyestr/dist
 lexwebapp/dist
