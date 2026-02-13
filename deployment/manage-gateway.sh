@@ -218,7 +218,7 @@ show_status() {
     print_msg "$BLUE" "Environment Status\n"
 
     print_msg "$YELLOW" "=== Staging ==="
-    docker ps --filter "name=secondlayer-.*-stage" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    docker ps --filter "name=-stage" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     echo ""
 
     print_msg "$YELLOW" "=== Local ==="
@@ -593,9 +593,15 @@ deploy_to_server() {
         ENV_FILE=".env.stage"
         DC="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
+        # Step 0: Stop host nginx if running (migrating to containerized nginx)
+        echo "Stopping host nginx service if running..."
+        sudo systemctl stop nginx 2>/dev/null || true
+        sudo systemctl disable nginx 2>/dev/null || true
+
         # Step 1: Stop app containers only (keep infra: postgres, redis, qdrant, minio running)
         echo "Stopping app containers (keeping databases running)..."
         $DC stop \
+            nginx-stage \
             app-stage rada-mcp-app-stage app-openreyestr-stage \
             document-service-stage lexwebapp-stage \
             prometheus-stage grafana-stage \
@@ -603,6 +609,7 @@ deploy_to_server() {
             redis-exporter node-exporter \
             2>/dev/null || true
         $DC rm -f \
+            nginx-stage \
             app-stage rada-mcp-app-stage app-openreyestr-stage \
             document-service-stage lexwebapp-stage \
             migrate-stage rada-migrate-stage migrate-openreyestr-stage \
@@ -666,6 +673,10 @@ deploy_to_server() {
             app-openreyestr-stage \
             document-service-stage \
             lexwebapp-stage
+
+        # Step 8b: Start nginx reverse proxy (after app services are up)
+        echo "Starting nginx reverse proxy..."
+        $DC up -d nginx-stage
 
         # Step 9: Start monitoring services
         echo "Starting monitoring services..."
