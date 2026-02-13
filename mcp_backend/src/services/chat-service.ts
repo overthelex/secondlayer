@@ -328,8 +328,8 @@ export class ChatService {
     // Filter to only tools that actually exist in the registry
     const filtered = allDefs.filter((d) => relevantNames.has(d.name));
 
-    // Cap at 10 tools to keep token usage reasonable
-    return filtered.slice(0, 10);
+    // Cap at 15 tools — modern LLMs handle 15-20 tools fine
+    return filtered.slice(0, 15);
   }
 
   /**

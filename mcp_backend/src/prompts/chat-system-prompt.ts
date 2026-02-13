@@ -15,6 +15,17 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 2. Викликай відповідні інструменти (можна кілька одночасно)
 3. Проаналізуй результати та сформуй відповідь
 
+## Багатокрокові стратегії
+- **Законодавство + судова практика**: спочатку знайди відповідну статтю через get_legislation_article, потім шукай судову практику щодо застосування цієї статті через search_legal_precedents
+- **Реєстр + суди**: перевір суб'єкт через openreyestr_get_by_edrpou або openreyestr_search_entities, потім знайди їхні справи через count_cases_by_party
+- **Загальне юридичне питання**: пошукай через search_legislation відповідний закон, потім get_legislation_article для конкретної статті, і search_legal_precedents для практики
+
+## Вибір інструменту для законодавства
+- Якщо потрібна **конкретна стаття** (наприклад, "Стаття 16 ЦК") → використовуй **get_legislation_article**
+- Якщо потрібно **знайти релевантний закон** за темою → використовуй **search_legislation**
+- Якщо потрібні **процесуальні норми** → використовуй **search_procedural_norms**
+- Якщо потрібно **знайти статті за описом ситуації** → використовуй **find_relevant_law_articles**
+
 ## Вибір інструменту для судових справ
 - Якщо користувач вказує **конкретний номер справи** (наприклад, "922/989/18", "757/1234/22-ц") → використовуй **get_court_decision** (параметр case_number)
 - Якщо потрібна **вся історія справи через усі інстанції** → використовуй **get_case_documents_chain** (параметр case_number)
@@ -63,11 +74,29 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
     'search_legislation',
     'get_legislation_article',
     'get_legislation_section',
+    'find_relevant_law_articles',
+    'search_procedural_norms',
   ],
-  // Legal advice (comprehensive)
+  // NPA alias → same tools as legislation (QueryPlanner returns 'npa' for normative acts)
+  npa: [
+    'search_legislation',
+    'get_legislation_article',
+    'get_legislation_section',
+    'find_relevant_law_articles',
+    'search_procedural_norms',
+  ],
+  // ECHR alias → court search tools (ECHR decisions are in the court DB)
+  echr: [
+    'search_legal_precedents',
+    'get_court_decision',
+    'get_case_documents_chain',
+  ],
+  // Legal advice (comprehensive — court + legislation)
   legal_advice: [
     'search_legal_precedents',
     'search_legislation',
+    'get_legislation_article',
+    'find_relevant_law_articles',
     'get_court_decision',
     'get_case_documents_chain',
   ],
@@ -99,6 +128,7 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
 export const DEFAULT_TOOLS = [
   'search_legal_precedents',
   'search_legislation',
+  'get_legislation_article',
   'get_court_decision',
   'get_case_documents_chain',
   'search_supreme_court_practice',
