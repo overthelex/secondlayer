@@ -55,6 +55,78 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 `;
 
 /**
+ * LLM prompt for classifying chat intent.
+ * Returns structured JSON with domains, keywords, and optional slots.
+ */
+export const CHAT_INTENT_CLASSIFICATION_PROMPT = `Ти — класифікатор юридичних запитів для SecondLayer. Проаналізуй запит користувача і визнач, які джерела даних потрібні для відповіді.
+
+## Доступні домени та їхні інструменти
+
+### court — Судова практика (база ZakonOnline)
+- search_legal_precedents — тематичний пошук судових рішень
+- search_supreme_court_practice — пошук практики Верховного Суду (потрібен procedure_code)
+- get_court_decision — отримання конкретного рішення за номером справи
+- get_case_documents_chain — вся історія справи через усі інстанції
+- find_similar_fact_pattern_cases — пошук справ зі схожими обставинами
+- compare_practice_pro_contra — порівняння позитивної та негативної практики
+- count_cases_by_party — статистика справ за учасником
+
+### legislation — Законодавство (Rada API + ZakonOnline)
+- search_legislation — пошук законів за темою
+- get_legislation_article — конкретна стаття закону (наприклад "ст. 16 ЦК")
+- get_legislation_section — розділ/глава закону
+- find_relevant_law_articles — знайти статті за описом ситуації
+- search_procedural_norms — пошук процесуальних норм
+
+### registry — Державний реєстр юридичних осіб (OpenReyestr / data.gov.ua)
+- openreyestr_search_entities — пошук юридичних осіб за назвою
+- openreyestr_get_entity_details — деталі юридичної особи
+- openreyestr_search_beneficiaries — пошук бенефіціарів
+- openreyestr_get_by_edrpou — пошук за кодом ЄДРПОУ
+
+### parliament — Парламентські дані (Verkhovna Rada Open Data)
+- rada_search_parliament_bills — пошук законопроєктів
+- rada_get_deputy_info — інформація про депутата
+- rada_search_legislation_text — пошук текстів законів
+- rada_analyze_voting_record — аналіз голосувань
+
+### documents — Завантажені документи користувача (Qdrant vector DB)
+- store_document — зберегти документ
+- list_documents — список документів
+- semantic_search — семантичний пошук по завантажених документах
+
+### legal_advice — Комплексна юридична консультація
+Використовуй цей домен, коли потрібні одночасно і судова практика, і законодавство.
+
+## Правила класифікації
+1. Один запит може стосуватися кількох доменів (наприклад, "court" + "legislation")
+2. Якщо запит про конкретну статтю закону → обов'язково "legislation"
+3. Якщо запит про судову практику → "court"
+4. Якщо запит про підприємство, ЄДРПОУ, засновників → "registry"
+5. Якщо запит про депутатів, законопроєкти, голосування → "parliament"
+6. Якщо запит про завантажені/збережені документи користувача → "documents"
+7. Якщо загальне юридичне питання → "legal_advice"
+8. ЄСПЛ/ECHR рішення шукаються через "court"
+9. Нормативно-правові акти (НПА) → "legislation"
+
+## Формат відповіді
+Поверни ТІЛЬКИ валідний JSON:
+{
+  "domains": ["court", "legislation"],
+  "keywords": "ключові слова для пошуку українською",
+  "slots": {
+    "procedure_code": "cpc|gpc|cac|crpc",
+    "court_level": "first_instance|appeal|cassation|SC|GrandChamber",
+    "case_number": "номер справи якщо вказано",
+    "edrpou": "код ЄДРПОУ якщо вказано",
+    "law_reference": "посилання на закон/статтю якщо вказано"
+  }
+}
+
+Поле "slots" — опціональне, включай тільки ті ключі, які можна витягнути з запиту.
+Поле "keywords" — витягни основні пошукові терміни українською для подальших викликів інструментів.`;
+
+/**
  * Map of intent domains to relevant tool names.
  * Used to filter the 45+ tools down to a focused subset for the LLM.
  */
@@ -76,20 +148,6 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
     'get_legislation_section',
     'find_relevant_law_articles',
     'search_procedural_norms',
-  ],
-  // NPA alias → same tools as legislation (QueryPlanner returns 'npa' for normative acts)
-  npa: [
-    'search_legislation',
-    'get_legislation_article',
-    'get_legislation_section',
-    'find_relevant_law_articles',
-    'search_procedural_norms',
-  ],
-  // ECHR alias → court search tools (ECHR decisions are in the court DB)
-  echr: [
-    'search_legal_precedents',
-    'get_court_decision',
-    'get_case_documents_chain',
   ],
   // Legal advice (comprehensive — court + legislation)
   legal_advice: [

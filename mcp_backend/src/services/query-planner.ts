@@ -401,44 +401,6 @@ export class QueryPlanner {
       domains.push('court');
     }
 
-    // Additional domain detection — append legislation domain for law-related keywords
-    if (
-      !domains.includes('legislation') && (
-        lowerQuery.includes('закон') ||
-        lowerQuery.includes('стаття') ||
-        lowerQuery.includes('статт') ||
-        lowerQuery.includes('кодекс') ||
-        lowerQuery.includes('конституц') ||
-        lowerQuery.includes('нормат') ||
-        lowerQuery.includes('правова норма') ||
-        /\bцк\b/.test(lowerQuery) ||
-        /\bкк\b/.test(lowerQuery) ||
-        /\bгк\b/.test(lowerQuery) ||
-        /\bзу\b/.test(lowerQuery)
-      )
-    ) {
-      domains.push('legislation');
-    }
-
-    // Append documents domain for document/vault-related keywords
-    if (
-      !domains.includes('documents') && (
-        lowerQuery.includes('документ') ||
-        lowerQuery.includes('завантаж') ||
-        lowerQuery.includes('файл') ||
-        lowerQuery.includes('vault') ||
-        lowerQuery.includes('семантичн') ||
-        lowerQuery.includes('збережен')
-      )
-    ) {
-      domains.push('documents');
-    }
-
-    // Ensure npa domain also maps to legislation
-    if (domains.includes('npa') && !domains.includes('legislation')) {
-      domains.push('legislation');
-    }
-
     return {
       intent,
       confidence: 0.6,

@@ -24,6 +24,7 @@ import {
 import { ModelSelector } from '@secondlayer/shared';
 import {
   CHAT_SYSTEM_PROMPT,
+  CHAT_INTENT_CLASSIFICATION_PROMPT,
   DOMAIN_TOOL_MAP,
   DEFAULT_TOOLS,
 } from '../prompts/chat-system-prompt.js';
@@ -72,13 +73,14 @@ export class ChatService {
     const startTime = Date.now();
 
     try {
-      // 1. Classify intent → filter tools
-      const intent = await this.queryPlanner.classifyIntent(query, 'quick');
-      const toolDefs = this.filterTools(intent.domains);
+      // 1. Classify intent via LLM → filter tools
+      const classification = await this.classifyChatIntent(query);
+      const toolDefs = this.filterTools(classification.domains);
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
-        domains: intent.domains,
+        domains: classification.domains,
+        keywords: classification.keywords,
         toolCount: toolDefs.length,
         budget,
       });
@@ -297,6 +299,68 @@ export class ChatService {
     messages.push(...historyMessages);
     messages.push({ role: 'user', content: query });
     return messages;
+  }
+
+  /**
+   * Classify chat intent using a fast LLM call (gpt-4o-mini ~200ms).
+   * Falls back to keyword-based QueryPlanner on error.
+   */
+  private async classifyChatIntent(query: string): Promise<{
+    domains: string[];
+    keywords: string;
+    slots?: Record<string, any>;
+  }> {
+    try {
+      const llm = getLLMManager();
+      const provider = ModelSelector.getNextProvider();
+
+      const response = await llm.chatCompletion(
+        {
+          messages: [
+            { role: 'system', content: CHAT_INTENT_CLASSIFICATION_PROMPT },
+            { role: 'user', content: query },
+          ],
+          max_tokens: 300,
+          temperature: 0.1,
+        },
+        'quick',
+        provider
+      );
+
+      const content = response.content || '{}';
+
+      // Extract JSON from response (may be wrapped in markdown code blocks)
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in classification response');
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      const domains = Array.isArray(parsed.domains) && parsed.domains.length > 0
+        ? parsed.domains
+        : ['court'];
+      const keywords = typeof parsed.keywords === 'string' ? parsed.keywords : query;
+      const slots = parsed.slots && typeof parsed.slots === 'object' && Object.keys(parsed.slots).length > 0
+        ? parsed.slots
+        : undefined;
+
+      logger.info('[ChatService] LLM intent classification', { domains, keywords, slots });
+
+      return { domains, keywords, slots };
+    } catch (err: any) {
+      logger.warn('[ChatService] LLM classification failed, falling back to keyword matching', {
+        error: err.message,
+      });
+
+      // Fallback to keyword-based classification
+      const intent = await this.queryPlanner.classifyIntent(query, 'quick');
+      return {
+        domains: intent.domains,
+        keywords: query,
+        slots: intent.slots as Record<string, any> | undefined,
+      };
+    }
   }
 
   /**
