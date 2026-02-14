@@ -3,10 +3,7 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {
-          "type": "grafana",
-          "uid": "-- Grafana --"
-        },
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -26,7 +23,7 @@
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "id": 1,
       "panels": [],
-      "title": "Overview — All External Sources",
+      "title": "NAIS Registries — Record Counts",
       "type": "row"
     },
     {
@@ -38,1468 +35,471 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
-      "id": 2,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total[5m]))",
-          "legendFormat": "Total RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "External API RPS (all)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
+              { "color": "red", "value": null },
               { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
-      "id": 3,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{status!=\"success\"}[5m])) / sum(rate(external_api_calls_total[5m]))",
-          "legendFormat": "Error Rate",
-          "refId": "A"
-        }
-      ],
-      "title": "Error Rate (all external)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 2 },
-              { "color": "red", "value": 5 }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
-      "id": 4,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "P95 Latency",
-          "refId": "A"
-        }
-      ],
-      "title": "P95 Latency (all external)",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
-      "id": 5,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(cost_tracking_total_usd[1h])) * 3600",
-          "legendFormat": "Cost/Hour",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Cost / Hour",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max", "sum"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{status=\"success\"}[5m])) by (service)",
-          "legendFormat": "{{service}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Successful API Calls by Service",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
-      "id": 7,
-      "panels": [],
-      "title": "ZakonOnline (Court DB + Scraping)",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
-      "id": 8,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakononline\"}[5m]))",
-          "legendFormat": "ZO API RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "ZakonOnline API RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 3 }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 14 },
-      "id": 9,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"zakononline\"}[5m])) by (le))",
-          "legendFormat": "P95",
-          "refId": "A"
-        }
-      ],
-      "title": "ZO API P95 Latency",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 14 },
-      "id": 10,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakononline_scrape\"}[5m]))",
-          "legendFormat": "Scrape RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "ZO Scraping RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 14 },
-      "id": 11,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=~\"zakononline.*\",status!=\"success\"}[5m])) / sum(rate(external_api_calls_total{service=~\"zakononline.*\"}[5m]))",
-          "legendFormat": "Error Rate",
-          "refId": "A"
-        }
-      ],
-      "title": "ZO Error Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "seconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
-      "id": 12,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.50, sum(rate(external_api_duration_seconds_bucket{service=\"zakononline\"}[5m])) by (le))",
-          "legendFormat": "API P50",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"zakononline\"}[5m])) by (le))",
-          "legendFormat": "API P95",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.99, sum(rate(external_api_duration_seconds_bucket{service=\"zakononline\"}[5m])) by (le))",
-          "legendFormat": "API P99",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"zakononline_scrape\"}[5m])) by (le))",
-          "legendFormat": "Scrape P95",
-          "refId": "D"
-        }
-      ],
-      "title": "ZakonOnline Latency Distribution",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "Rate Limited" },
-            "properties": [
-              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
-            ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Errors" },
-            "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
-            ]
-          }
-        ]
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakononline\",status=\"success\"}[5m]))",
-          "legendFormat": "Success",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakononline\",status=\"rate_limited\"}[5m]))",
-          "legendFormat": "Rate Limited",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakononline\",status=~\"error|auth_error\"}[5m]))",
-          "legendFormat": "Errors",
-          "refId": "C"
-        }
-      ],
-      "title": "ZakonOnline Status Breakdown",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
-      "id": 14,
-      "panels": [],
-      "title": "LLM Providers (OpenAI + Anthropic)",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 27 },
-      "id": 15,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"openai\"}[5m]))",
-          "legendFormat": "OpenAI RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "OpenAI RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 27 },
-      "id": 16,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"anthropic\"}[5m]))",
-          "legendFormat": "Anthropic RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "Anthropic RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 3 },
-              { "color": "red", "value": 10 }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 27 },
-      "id": 17,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"openai\"}[5m])) by (le))",
-          "legendFormat": "OpenAI P95",
-          "refId": "A"
-        }
-      ],
-      "title": "OpenAI P95 Latency",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 15 }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 27 },
-      "id": 18,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"anthropic\"}[5m])) by (le))",
-          "legendFormat": "Anthropic P95",
-          "refId": "A"
-        }
-      ],
-      "title": "Anthropic P95 Latency",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "seconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
-      "id": 19,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.50, sum(rate(external_api_duration_seconds_bucket{service=\"openai\"}[5m])) by (le))",
-          "legendFormat": "OpenAI P50",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"openai\"}[5m])) by (le))",
-          "legendFormat": "OpenAI P95",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.50, sum(rate(external_api_duration_seconds_bucket{service=\"anthropic\"}[5m])) by (le))",
-          "legendFormat": "Anthropic P50",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"anthropic\"}[5m])) by (le))",
-          "legendFormat": "Anthropic P95",
-          "refId": "D"
-        }
-      ],
-      "title": "LLM Provider Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byRegexp", "options": ".*error.*" },
-            "properties": [
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
-            ]
-          }
-        ]
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
-      "id": 20,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"openai\",status=\"success\"}[5m]))",
-          "legendFormat": "openai success",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"openai\",status=\"error\"}[5m]))",
-          "legendFormat": "openai error",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"anthropic\",status=\"success\"}[5m]))",
-          "legendFormat": "anthropic success",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"anthropic\",status=\"error\"}[5m]))",
-          "legendFormat": "anthropic error",
-          "refId": "D"
-        }
-      ],
-      "title": "LLM Provider Status",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
-      "id": 21,
-      "panels": [],
-      "title": "RADA + OpenReyestr (Parliament + State Register)",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 40 },
-      "id": 22,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"rada\"}[5m]))",
-          "legendFormat": "RADA MCP RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "RADA MCP RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 40 },
-      "id": 23,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakon_rada\"}[5m]))",
-          "legendFormat": "zakon.rada.gov.ua RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "zakon.rada.gov.ua RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
-            ]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 40 },
-      "id": 24,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"openreyestr\"}[5m]))",
-          "legendFormat": "OpenReyestr RPS",
-          "refId": "A"
-        }
-      ],
-      "title": "OpenReyestr MCP RPS",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.01 },
-              { "color": "red", "value": 0.05 }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 40 },
-      "id": 25,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=~\"rada|zakon_rada|openreyestr\",status!=\"success\"}[5m])) / sum(rate(external_api_calls_total{service=~\"rada|zakon_rada|openreyestr\"}[5m]))",
-          "legendFormat": "Error Rate",
-          "refId": "A"
-        }
-      ],
-      "title": "RADA + OpenReyestr Error Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "seconds",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
-      "id": 26,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"rada\"}[5m])) by (le))",
-          "legendFormat": "RADA MCP P95",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"zakon_rada\"}[5m])) by (le))",
-          "legendFormat": "zakon.rada P95",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket{service=\"openreyestr\"}[5m])) by (le))",
-          "legendFormat": "OpenReyestr P95",
-          "refId": "C"
-        }
-      ],
-      "title": "RADA + OpenReyestr Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
-      "id": 27,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max", "sum"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"rada\"}[5m])) by (status)",
-          "legendFormat": "RADA {{status}}",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"zakon_rada\"}[5m])) by (status)",
-          "legendFormat": "zakon.rada {{status}}",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(external_api_calls_total{service=\"openreyestr\"}[5m])) by (status)",
-          "legendFormat": "OpenReyestr {{status}}",
-          "refId": "C"
-        }
-      ],
-      "title": "RADA + OpenReyestr Status Breakdown",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
-      "id": 28,
-      "panels": [],
-      "title": "Cost by External Source",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "USD/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 53 },
-      "id": 29,
-      "options": {
-        "legend": {
-          "calcs": ["mean", "max", "sum"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(cost_tracking_total_usd[5m])) by (tool_name)",
-          "legendFormat": "{{tool_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Cost Rate by Tool",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 2 }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 61 },
-      "id": 30,
-      "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showUnfilled": true,
-        "valueMode": "color"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "topk(10, sum by (tool_name) (cost_tracking_total_usd))",
-          "legendFormat": "{{tool_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Top 10 Most Expensive Tools (total)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
+              { "color": "green", "value": 100 }
             ]
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 61 },
-      "id": 31,
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 2,
       "options": {
-        "displayMode": "gradient",
-        "minVizHeight": 10,
-        "minVizWidth": 0,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showUnfilled": true,
-        "valueMode": "color"
+        "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "topk(7, sum by (service) (external_api_calls_total))",
-          "legendFormat": "{{service}}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"notaries\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Notaries",
           "refId": "A"
         }
       ],
-      "title": "Total Calls by External Service",
-      "type": "bargauge"
+      "title": "Notaries",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"court_experts\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Court Experts",
+          "refId": "A"
+        }
+      ],
+      "title": "Court Experts",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"special_forms\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Special Forms",
+          "refId": "A"
+        }
+      ],
+      "title": "Special Forms",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"legal_acts\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Legal Acts",
+          "refId": "A"
+        }
+      ],
+      "title": "Legal Acts",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"streets\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Streets",
+          "refId": "A"
+        }
+      ],
+      "title": "Streets",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"administrative_units\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Admin Units",
+          "refId": "A"
+        }
+      ],
+      "title": "Admin Units",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 5 },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"arbitration_managers\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Arb Managers",
+          "refId": "A"
+        }
+      ],
+      "title": "Arbitration Managers",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 5 },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"bankruptcy_cases\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Bankruptcy",
+          "refId": "A"
+        }
+      ],
+      "title": "Bankruptcy Cases",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 5 },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"forensic_methods\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Forensic Methods",
+          "refId": "A"
+        }
+      ],
+      "title": "Forensic Methods",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 5 },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"enforcement_proceedings\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Enforcement",
+          "refId": "A"
+        }
+      ],
+      "title": "Enforcement Proceedings",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 100 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 5 },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"debtors\",job=\"postgres-openreyestr\"}",
+          "legendFormat": "Debtors",
+          "refId": "A"
+        }
+      ],
+      "title": "Debtors",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 5 },
+      "id": 13,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "sum(pg_stat_user_tables_n_live_tup{relname=~\"notaries|court_experts|special_forms|legal_acts|streets|administrative_units|arbitration_managers|bankruptcy_cases|forensic_methods|enforcement_proceedings|debtors\",job=\"postgres-openreyestr\"})",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Records",
+      "type": "stat"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 71 },
-      "id": 40,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 20,
       "panels": [],
-      "title": "PostgreSQL Databases",
+      "title": "Database Performance — OpenReyestr",
       "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "connections",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 72 },
-      "id": 41,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_activity_count{job=\"postgres_backend\",state=\"active\"}",
-          "legendFormat": "Backend active",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_activity_count{job=\"postgres_backend\",state=\"idle\"}",
-          "legendFormat": "Backend idle",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_activity_count{job=\"postgres_openreyestr\",state=\"active\"}",
-          "legendFormat": "OpenReyestr active",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_activity_count{job=\"postgres_openreyestr\",state=\"idle\"}",
-          "legendFormat": "OpenReyestr idle",
-          "refId": "D"
-        }
-      ],
-      "title": "PG Connections by Database",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "txn/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 72 },
-      "id": 42,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(pg_stat_database_xact_commit{job=\"postgres_backend\"}[5m]))",
-          "legendFormat": "Backend commits/s",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(pg_stat_database_xact_rollback{job=\"postgres_backend\"}[5m]))",
-          "legendFormat": "Backend rollbacks/s",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(pg_stat_database_xact_commit{job=\"postgres_openreyestr\"}[5m]))",
-          "legendFormat": "OpenReyestr commits/s",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(pg_stat_database_xact_rollback{job=\"postgres_openreyestr\"}[5m]))",
-          "legendFormat": "OpenReyestr rollbacks/s",
-          "refId": "D"
-        }
-      ],
-      "title": "Transaction Rate by Database",
-      "type": "timeseries"
     },
     {
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
@@ -1512,7 +512,7 @@
             "steps": [
               { "color": "red", "value": null },
               { "color": "yellow", "value": 0.9 },
-              { "color": "green", "value": 0.99 }
+              { "color": "green", "value": 0.95 }
             ]
           },
           "unit": "percentunit",
@@ -1521,204 +521,8 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 72 },
-      "id": 43,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(pg_stat_database_blks_hit{job=\"postgres_backend\"}) / (sum(pg_stat_database_blks_hit{job=\"postgres_backend\"}) + sum(pg_stat_database_blks_read{job=\"postgres_backend\"}))",
-          "legendFormat": "Backend",
-          "refId": "A"
-        }
-      ],
-      "title": "Backend Cache Hit",
-      "type": "gauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.9 },
-              { "color": "green", "value": 0.99 }
-            ]
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 72 },
-      "id": 44,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(pg_stat_database_blks_hit{job=\"postgres_openreyestr\"}) / (sum(pg_stat_database_blks_hit{job=\"postgres_openreyestr\"}) + sum(pg_stat_database_blks_read{job=\"postgres_openreyestr\"}))",
-          "legendFormat": "OpenReyestr",
-          "refId": "A"
-        }
-      ],
-      "title": "OpenReyestr Cache Hit",
-      "type": "gauge"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 },
-      "id": 45,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_pool_connections{state=\"active\"}",
-          "legendFormat": "App pool active",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_pool_connections{state=\"idle\"}",
-          "legendFormat": "App pool idle",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_pool_connections{state=\"waiting\"}",
-          "legendFormat": "App pool waiting",
-          "refId": "C"
-        }
-      ],
-      "title": "App PG Connection Pool",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.7 },
-              { "color": "red", "value": 0.9 }
-            ]
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 80 },
-      "id": 46,
-      "options": {
-        "minVizHeight": 75,
-        "minVizWidth": 75,
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg:pool_utilization:ratio",
-          "legendFormat": "Pool Utilization",
-          "refId": "A"
-        }
-      ],
-      "title": "PG Pool Utilization",
-      "type": "gauge"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 88 },
-      "id": 50,
-      "panels": [],
-      "title": "Redis Cache",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.7 },
-              { "color": "red", "value": 0.9 }
-            ]
-          },
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 89 },
-      "id": 51,
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 10 },
+      "id": 21,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -1727,16 +531,15 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "redis_memory_used_bytes / redis_memory_max_bytes",
-          "legendFormat": "Memory Usage",
+          "expr": "pg_stat_database_blks_hit{datname=\"openreyestr_stage\"} / (pg_stat_database_blks_hit{datname=\"openreyestr_stage\"} + pg_stat_database_blks_read{datname=\"openreyestr_stage\"})",
+          "legendFormat": "Cache Hit Ratio",
           "refId": "A"
         }
       ],
-      "title": "Redis Memory Usage %",
+      "title": "PG Cache Hit Ratio",
       "type": "stat"
     },
     {
@@ -1753,12 +556,12 @@
               { "color": "red", "value": 100 }
             ]
           },
-          "unit": "none"
+          "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 89 },
-      "id": 52,
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 10 },
+      "id": 22,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -1767,16 +570,15 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "redis_connected_clients",
-          "legendFormat": "Clients",
+          "expr": "pg_stat_database_numbackends{datname=\"openreyestr_stage\"}",
+          "legendFormat": "Active Backends",
           "refId": "A"
         }
       ],
-      "title": "Redis Connected Clients",
+      "title": "PG Active Backends",
       "type": "stat"
     },
     {
@@ -1789,16 +591,16 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 10000 },
-              { "color": "red", "value": 50000 }
+              { "color": "yellow", "value": 536870912 },
+              { "color": "red", "value": 1073741824 }
             ]
           },
-          "unit": "ops"
+          "unit": "bytes"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 89 },
-      "id": 53,
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 10 },
+      "id": 23,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -1807,16 +609,15 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "rate(redis_commands_processed_total[5m])",
-          "legendFormat": "Commands/s",
+          "expr": "pg_database_size_bytes{datname=\"openreyestr_stage\"}",
+          "legendFormat": "DB Size",
           "refId": "A"
         }
       ],
-      "title": "Redis Commands/s",
+      "title": "OpenReyestr DB Size",
       "type": "stat"
     },
     {
@@ -1829,15 +630,16 @@
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
+              { "color": "yellow", "value": 1000 },
+              { "color": "red", "value": 10000 }
             ]
           },
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 89 },
-      "id": 54,
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 10 },
+      "id": 24,
       "options": {
         "colorMode": "background",
         "graphMode": "area",
@@ -1846,16 +648,15 @@
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "rate(redis_evicted_keys_total[5m])",
-          "legendFormat": "Evicted/s",
+          "expr": "sum(pg_stat_user_tables_n_dead_tup{job=\"postgres-openreyestr\"})",
+          "legendFormat": "Dead Tuples",
           "refId": "A"
         }
       ],
-      "title": "Redis Evicted Keys/s",
+      "title": "Dead Tuples (needs VACUUM)",
       "type": "stat"
     },
     {
@@ -1867,7 +668,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "rows/s",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -1885,262 +686,47 @@
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 93 },
-      "id": 55,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "redis_memory_used_bytes",
-          "legendFormat": "Used",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "redis_memory_max_bytes",
-          "legendFormat": "Max",
-          "refId": "B"
-        }
-      ],
-      "title": "Redis Memory Trend",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "ops/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
           },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
           "unit": "ops"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 93 },
-      "id": 56,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "id": 25,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "rate(redis_commands_processed_total[5m])",
-          "legendFormat": "Commands/s",
+          "expr": "rate(pg_stat_database_tup_inserted{datname=\"openreyestr_stage\"}[5m])",
+          "legendFormat": "Inserts/s",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "rate(redis_keyspace_hits_total[5m])",
-          "legendFormat": "Hits/s",
+          "expr": "rate(pg_stat_database_tup_updated{datname=\"openreyestr_stage\"}[5m])",
+          "legendFormat": "Updates/s",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "rate(redis_keyspace_misses_total[5m])",
-          "legendFormat": "Misses/s",
+          "expr": "rate(pg_stat_database_tup_fetched{datname=\"openreyestr_stage\"}[5m])",
+          "legendFormat": "Fetches/s",
           "refId": "C"
         }
       ],
-      "title": "Redis Operations & Hit Rate",
+      "title": "OpenReyestr DB Operations",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 101 },
-      "id": 60,
-      "panels": [],
-      "title": "MinIO Object Storage",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5368709120 },
-              { "color": "red", "value": 10737418240 }
-            ]
-          },
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 102 },
-      "id": 61,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_cluster_usage_total_bytes",
-          "legendFormat": "Total Storage Used",
-          "refId": "A"
-        }
-      ],
-      "title": "MinIO Total Storage Used",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10000 },
-              { "color": "red", "value": 100000 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 102 },
-      "id": 62,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_cluster_usage_object_total",
-          "legendFormat": "Total Objects",
-          "refId": "A"
-        }
-      ],
-      "title": "MinIO Total Objects",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 0 }
-            ]
-          },
-          "unit": "bool"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 102 },
-      "id": 63,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "up{job=\"minio\"}",
-          "legendFormat": "MinIO Up",
-          "refId": "A"
-        }
-      ],
-      "title": "MinIO Status",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 102 },
-      "id": 64,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_cluster_usage_buckets_total",
-          "legendFormat": "Buckets",
-          "refId": "A"
-        }
-      ],
-      "title": "MinIO Buckets",
-      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
@@ -2151,7 +737,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "bytes",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -2169,28 +755,125 @@
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
           "unit": "bytes"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 106 },
-      "id": 65,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "id": 26,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true
+        },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_bucket_usage_total_bytes",
-          "legendFormat": "{{bucket}}",
+          "expr": "topk(10, pg_stat_user_tables_size_bytes{job=\"postgres-openreyestr\"})",
+          "legendFormat": "{{relname}}",
           "refId": "A"
         }
       ],
-      "title": "MinIO Storage by Bucket",
+      "title": "Table Sizes (Top 10)",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "id": 30,
+      "panels": [],
+      "title": "Backend Data Sources — SecondLayer",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.9 },
+              { "color": "green", "value": 0.95 }
+            ]
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 23 },
+      "id": 31,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_stat_database_blks_hit{datname=\"secondlayer_stage\"} / (pg_stat_database_blks_hit{datname=\"secondlayer_stage\"} + pg_stat_database_blks_read{datname=\"secondlayer_stage\"})",
+          "legendFormat": "Cache Hit Ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend PG Cache Hit Ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 536870912 },
+              { "color": "red", "value": 2147483648 }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 23 },
+      "id": 32,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_database_size_bytes{datname=\"secondlayer_stage\"}",
+          "legendFormat": "DB Size",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend DB Size",
+      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
@@ -2201,7 +884,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "",
+            "axisLabel": "req/s",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
@@ -2215,158 +898,39 @@
             "scaleDistribution": { "type": "linear" },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
+            "stacking": { "group": "A", "mode": "normal" },
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "none"
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "reqps"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 106 },
-      "id": 66,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "id": 33,
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_bucket_usage_object_total",
-          "legendFormat": "{{bucket}}",
+          "expr": "sum(rate(http_requests_total{job=\"mcp-backend\"}[5m])) by (route)",
+          "legendFormat": "{{route}}",
           "refId": "A"
         }
       ],
-      "title": "MinIO Objects by Bucket",
+      "title": "Backend HTTP Requests by Route",
       "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 114 },
-      "id": 70,
-      "panels": [],
-      "title": "Qdrant Vector Database",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0 },
-              { "color": "red", "value": 0 }
-            ]
-          },
-          "unit": "bool"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 115 },
-      "id": 71,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "up{job=\"qdrant\"}",
-          "legendFormat": "Qdrant Up",
-          "refId": "A"
-        }
-      ],
-      "title": "Qdrant Status",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1000000 },
-              { "color": "red", "value": 5000000 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 115 },
-      "id": 72,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(collections_total_points)",
-          "legendFormat": "Total Vectors",
-          "refId": "A"
-        }
-      ],
-      "title": "Qdrant Total Vectors",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 115 },
-      "id": 73,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "collections_total",
-          "legendFormat": "Collections",
-          "refId": "A"
-        }
-      ],
-      "title": "Qdrant Collections",
-      "type": "stat"
     },
     {
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
@@ -2395,154 +959,122 @@
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 115 },
-      "id": 74,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "id": 34,
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"mcp-backend\"}[5m])) by (le, route))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend P95 Latency by Route",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "id": 40,
+      "panels": [],
+      "title": "Service Health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "options": { "0": { "color": "red", "text": "DOWN" }, "1": { "color": "green", "text": "UP" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 36 },
+      "id": 41,
       "options": {
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto",
-        "orientation": "auto",
+        "orientation": "horizontal",
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
         "textMode": "auto"
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(rest_responses_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "P95",
-          "refId": "A"
-        }
-      ],
-      "title": "Qdrant REST P95 Latency",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 119 },
-      "id": 75,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "collections_total_points",
-          "legendFormat": "{{collection_name}} vectors",
-          "refId": "A"
-        }
-      ],
-      "title": "Qdrant Vectors by Collection",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "req/s",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 15,
-            "gradientMode": "scheme",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 119 },
-      "id": 76,
-      "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(rest_responses_total[5m])) by (method)",
-          "legendFormat": "{{method}}",
+          "expr": "up{job=\"mcp-backend\"}",
+          "legendFormat": "Backend",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(rest_responses_fail_total[5m])) by (method)",
-          "legendFormat": "{{method}} errors",
+          "expr": "up{job=\"mcp-openreyestr\"}",
+          "legendFormat": "OpenReyestr",
           "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "up{job=\"mcp-rada\"}",
+          "legendFormat": "RADA",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_up{job=\"postgres-backend\"}",
+          "legendFormat": "PG Backend",
+          "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "pg_up{job=\"postgres-openreyestr\"}",
+          "legendFormat": "PG OpenReyestr",
+          "refId": "E"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "redis_up",
+          "legendFormat": "Redis",
+          "refId": "F"
         }
       ],
-      "title": "Qdrant REST Request Rate",
-      "type": "timeseries"
+      "title": "Service Status",
+      "type": "stat"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["secondlayer", "external", "api", "databases", "storage"],
-  "templating": {
-    "list": []
-  },
-  "time": {
-    "from": "now-6h",
-    "to": "now"
-  },
+  "tags": ["external-sources", "data", "nais"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
-  "timezone": "browser",
-  "title": "SecondLayer - External Data Sources",
+  "timezone": "",
+  "title": "SecondLayer — External Data Sources",
   "uid": "external-sources",
-  "version": 1,
-  "weekStart": ""
+  "version": 1
 }
