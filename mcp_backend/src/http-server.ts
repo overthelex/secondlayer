@@ -271,6 +271,11 @@ class HTTPMCPServer {
     // Bind upload queue metrics collector (every 10s)
     this.uploadQueueService.setMetricsCollector((metrics) => this.metricsService.updateUploadQueue(metrics));
 
+    // Bind per-job processing duration to Prometheus histogram
+    this.uploadQueueService.setProcessingDurationCallback((durationSeconds, status) => {
+      this.metricsService.uploadProcessingDuration.observe({ status }, durationSeconds);
+    });
+
     // Wire cost tracker to Prometheus counter
     this.costTracker.setMetricsCallback((toolName, costUsd) => {
       this.metricsService.costTrackingTotalUsd.inc({ tool_name: toolName }, costUsd);

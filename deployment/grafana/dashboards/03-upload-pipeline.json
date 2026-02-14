@@ -427,7 +427,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "upload_processing_max_concurrency",
+          "expr": "cpu_adaptive_concurrency",
           "legendFormat": "Max Concurrency",
           "refId": "B"
         }

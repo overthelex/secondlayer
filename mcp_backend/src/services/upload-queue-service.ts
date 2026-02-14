@@ -45,6 +45,7 @@ export class UploadQueueService {
   private deps: ProcessorDeps;
   private metricsInterval: ReturnType<typeof setInterval> | null = null;
   private cpuAdaptiveManager: CpuAdaptiveManager | null = null;
+  private processingDurationCallback: ((durationSeconds: number, status: string) => void) | null = null;
 
   constructor(
     private uploadService: UploadService,
@@ -264,6 +265,13 @@ export class UploadQueueService {
   }
 
   /**
+   * Register a callback that receives processing duration for each completed/failed job.
+   */
+  setProcessingDurationCallback(callback: (durationSeconds: number, status: string) => void): void {
+    this.processingDurationCallback = callback;
+  }
+
+  /**
    * Get the CPU adaptive manager (for wiring metrics).
    */
   getCpuAdaptiveManager(): CpuAdaptiveManager | null {
@@ -298,6 +306,7 @@ export class UploadQueueService {
    * Process a single upload job
    */
   private async processJob(job: Job<UploadJobData>): Promise<string> {
+    const startTime = Date.now();
     const { sessionId, extraMetadata } = job.data;
 
     const session = await this.uploadService.getSession(sessionId);
@@ -314,6 +323,7 @@ export class UploadQueueService {
       });
       await this.uploadService.setDocumentId(session.id, existingDocId);
       await this.uploadService.cleanupAssembledFile(session.id);
+      this.processingDurationCallback?.((Date.now() - startTime) / 1000, 'completed');
       return existingDocId;
     }
 
@@ -343,17 +353,25 @@ export class UploadQueueService {
       // Cleanup temp files
       await this.uploadService.cleanupAssembledFile(session.id);
 
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      this.processingDurationCallback?.(durationSeconds, 'completed');
+
       logger.info('[UploadQueue] Processing complete', {
         sessionId: session.id,
         documentId,
+        durationSeconds: durationSeconds.toFixed(1),
       });
 
       return documentId;
     } catch (error: any) {
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      this.processingDurationCallback?.(durationSeconds, 'failed');
+
       logger.error('[UploadQueue] Processing failed', {
         sessionId: session.id,
         error: error.message,
         attempt: job.attemptsMade,
+        durationSeconds: durationSeconds.toFixed(1),
       });
 
       // Only mark as failed on final attempt
