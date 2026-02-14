@@ -61,7 +61,7 @@ function collectRecords(obj: Record<string, unknown>, path: string): Record<stri
   return current.filter(r => r != null && typeof r === 'object') as Record<string, unknown>[];
 }
 /** Files above this size (bytes) use SAX streaming parser */
-const STREAMING_THRESHOLD = 500 * 1024 * 1024; // 500 MB
+const STREAMING_THRESHOLD = 50 * 1024 * 1024; // 50 MB — files >50MB cause stack overflow in fast-xml-parser
 
 export interface ImportStats {
   registry: string;
@@ -149,8 +149,10 @@ async function importXmlStreaming(
 
     let currentRecord: Record<string, string> | null = null;
     let currentTag = '';
+    let currentText = '';
     let tagStack: string[] = [];
     let batch: Record<string, unknown>[] = [];
+    let pendingBatch: Promise<void> | null = null;
     let totalImported = 0;
     let totalErrors = 0;
     let recordCount = 0;
@@ -162,17 +164,33 @@ async function importXmlStreaming(
       }
       if (currentRecord) {
         currentTag = node.name;
+        currentText = '';
       }
     });
 
     saxStream.on('text', (text: string) => {
-      if (currentRecord && currentTag && text.trim()) {
-        currentRecord[currentTag] = text.trim();
+      if (currentRecord && currentTag) {
+        currentText += text;
+      }
+    });
+
+    saxStream.on('cdata', (text: string) => {
+      if (currentRecord && currentTag) {
+        currentText += text;
       }
     });
 
     saxStream.on('closetag', (tagName: string) => {
+      if (currentRecord && currentTag === tagName && tagName !== recordTag) {
+        const trimmed = currentText.trim();
+        if (trimmed) {
+          currentRecord[currentTag] = trimmed;
+        }
+      }
+      currentTag = '';
+      currentText = '';
       tagStack.pop();
+
       if (tagName === recordTag && currentRecord) {
         batch.push(currentRecord);
         currentRecord = null;
@@ -181,34 +199,38 @@ async function importXmlStreaming(
         if (batch.length >= BATCH_SIZE) {
           const batchToProcess = batch;
           batch = [];
-          // Process batch asynchronously
           saxStream.pause();
-          batchUpsert(pool, config, batchToProcess, sourceFile)
+          pendingBatch = batchUpsert(pool, config, batchToProcess, sourceFile)
             .then(stats => {
               totalImported += stats.imported;
               totalErrors += stats.errors;
-              process.stdout.write(`  Progress: ${recordCount} records processed\r`);
+              if (recordCount % 10000 < BATCH_SIZE) {
+                process.stdout.write(`  Progress: ${recordCount} records processed\r`);
+              }
+              pendingBatch = null;
               saxStream.resume();
             })
             .catch(err => {
               console.error('  Batch error:', err);
+              pendingBatch = null;
               saxStream.resume();
             });
         }
       }
-      if (tagStack.length === 0 || tagStack[tagStack.length - 1] !== recordTag) {
-        currentTag = '';
-      }
     });
 
     saxStream.on('end', async () => {
+      // Wait for any pending batch to finish
+      if (pendingBatch) {
+        await pendingBatch;
+      }
       // Process remaining batch
       if (batch.length > 0) {
         const stats = await batchUpsert(pool, config, batch, sourceFile);
         totalImported += stats.imported;
         totalErrors += stats.errors;
       }
-      console.log(`\n  Streaming complete: ${recordCount} records processed`);
+      console.log(`\n  Streaming complete: ${recordCount} records, ${totalImported} imported, ${totalErrors} errors`);
       resolve({ registry: config.name, imported: totalImported, errors: totalErrors, elapsed: 0 });
     });
 

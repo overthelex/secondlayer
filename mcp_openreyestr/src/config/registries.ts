@@ -169,7 +169,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       status: 'STATUS',
     },
     updateFrequency: 'weekly',
-    sizeCategory: 'medium',
+    sizeCategory: 'large',
   },
 
   forensic_methods: {
@@ -284,7 +284,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       parent_koatuu: 'PARENT_KOATUU',
     },
     updateFrequency: 'weekly',
-    sizeCategory: 'medium',
+    sizeCategory: 'large',
   },
 
   streets: {
@@ -310,7 +310,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       settlement: 'SETTLEMENT',
     },
     updateFrequency: 'weekly',
-    sizeCategory: 'medium',
+    sizeCategory: 'large',
   },
 
   enforcement_proceedings: {
