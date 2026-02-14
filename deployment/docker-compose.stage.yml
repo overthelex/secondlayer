@@ -696,8 +696,8 @@ services:
     image: grafana/grafana:10.2.3
     container_name: grafana-stage
     environment:
-      - GF_SERVER_ROOT_URL=https://stage.legal.org.ua/grafana
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_SERVER_ROOT_URL=https://grafana.legal.org.ua
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
