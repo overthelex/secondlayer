@@ -57,25 +57,85 @@ function parseArgs(): CliArgs {
 // --- Download helpers ---
 
 function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const { execSync } = require('child_process');
+  const http = require('http');
+  const https = require('https');
 
+  async function attemptDownload(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const proto = url.startsWith('https') ? https : http;
+      const fileStream = fs.createWriteStream(dest);
+      let totalBytes = 0;
+      let lastLog = 0;
+
+      const request = proto.get(url, { timeout: 45 * 60 * 1000 }, (response: any) => {
+        // Follow redirects
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          fileStream.close();
+          const redirectUrl = response.headers.location.startsWith('http')
+            ? response.headers.location
+            : new URL(response.headers.location, url).href;
+          const redirectProto = redirectUrl.startsWith('https') ? https : http;
+          redirectProto.get(redirectUrl, { timeout: 45 * 60 * 1000 }, (res2: any) => {
+            if (res2.statusCode !== 200) {
+              reject(new Error(`HTTP ${res2.statusCode} after redirect`));
+              return;
+            }
+            const fileStream2 = fs.createWriteStream(dest);
+            res2.on('data', (chunk: Buffer) => {
+              totalBytes += chunk.length;
+              const mb = totalBytes / 1024 / 1024;
+              if (mb - lastLog > 50) {
+                process.stdout.write(`  Downloaded: ${mb.toFixed(1)} MB\r`);
+                lastLog = mb;
+              }
+            });
+            res2.pipe(fileStream2);
+            fileStream2.on('finish', () => {
+              fileStream2.close();
+              console.log(`  Downloaded: ${(totalBytes / 1024 / 1024).toFixed(1)} MB`);
+              resolve();
+            });
+            fileStream2.on('error', reject);
+            res2.on('error', reject);
+          }).on('error', reject);
+          return;
+        }
+
+        if (response.statusCode !== 200) {
+          fileStream.close();
+          reject(new Error(`HTTP ${response.statusCode}`));
+          return;
+        }
+
+        response.on('data', (chunk: Buffer) => {
+          totalBytes += chunk.length;
+          const mb = totalBytes / 1024 / 1024;
+          if (mb - lastLog > 50) {
+            process.stdout.write(`  Downloaded: ${mb.toFixed(1)} MB\r`);
+            lastLog = mb;
+          }
+        });
+        response.pipe(fileStream);
+        fileStream.on('finish', () => {
+          fileStream.close();
+          console.log(`  Downloaded: ${(totalBytes / 1024 / 1024).toFixed(1)} MB`);
+          resolve();
+        });
+        fileStream.on('error', reject);
+        response.on('error', reject);
+      });
+      request.on('error', reject);
+      request.on('timeout', () => {
+        request.destroy();
+        reject(new Error('Download timeout'));
+      });
+    });
+  }
+
+  return new Promise(async (resolve, reject) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Use wget -c for resume support; BusyBox wget doesn't support -c,
-        // so fall back to plain wget -O on failure
-        try {
-          execSync(`wget -c -O "${dest}" "${url}" 2>&1`, {
-            timeout: 45 * 60 * 1000, // 45 min timeout for huge files
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        } catch {
-          // BusyBox wget fallback (no -c flag)
-          execSync(`wget -O "${dest}" "${url}" 2>&1`, {
-            timeout: 45 * 60 * 1000,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          });
-        }
+        await attemptDownload();
 
         // Verify the file is not empty / truncated
         const stats = fs.statSync(dest);
@@ -89,7 +149,6 @@ function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> 
           const header = Buffer.alloc(4);
           fs.readSync(fd, header, 0, 4, 0);
           fs.closeSync(fd);
-          // ZIP magic number: PK\x03\x04
           if (header[0] !== 0x50 || header[1] !== 0x4B) {
             throw new Error('Downloaded file is not a valid ZIP (bad magic number)');
           }
@@ -105,7 +164,7 @@ function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> 
         // Wait before retry (exponential backoff: 5s, 15s, 45s)
         const waitMs = 5000 * Math.pow(3, attempt - 1);
         console.log(`  Retrying in ${waitMs / 1000}s...`);
-        execSync(`sleep ${waitMs / 1000}`);
+        await new Promise(r => setTimeout(r, waitMs));
       }
     }
   });

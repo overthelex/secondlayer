@@ -1,7 +1,8 @@
 /**
- * CSV Streaming Importer
+ * CSV Streaming Importer — Parallel Workers
  * For large CSV registries (enforcement_proceedings, debtors).
- * Uses readline + iconv-lite for streaming without loading full file into memory.
+ * Uses readline + iconv-lite for streaming, with N parallel DB workers
+ * doing multi-row INSERTs for maximum throughput.
  */
 
 import { Pool, PoolClient } from 'pg';
@@ -10,8 +11,9 @@ import { createInterface } from 'readline';
 import iconv from 'iconv-lite';
 import { RegistryConfig } from '../config/registries';
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 1000;
 const PROGRESS_INTERVAL = 10000;
+const NUM_WORKERS = parseInt(process.env.CSV_IMPORT_WORKERS || '10', 10);
 
 export interface CsvImportStats {
   registry: string;
@@ -23,7 +25,7 @@ export interface CsvImportStats {
 
 /**
  * Import CSV file into database using registry config.
- * Streams line-by-line to handle files of any size.
+ * Streams line-by-line, dispatches batches to N parallel workers.
  */
 export async function importCsv(
   pool: Pool,
@@ -34,7 +36,7 @@ export async function importCsv(
   const start = Date.now();
   const delimiter = config.csvDelimiter || ';';
 
-  console.log(`  CSV delimiter: "${delimiter}", encoding: ${config.encoding}`);
+  console.log(`  CSV delimiter: "${delimiter}", encoding: ${config.encoding}, workers: ${NUM_WORKERS}`);
 
   // Set up streaming pipeline
   const fileStream = createReadStream(filePath);
@@ -54,7 +56,7 @@ export async function importCsv(
   let totalErrors = 0;
   let totalRows = 0;
 
-  // Get DB column names and their CSV source field names
+  // Get DB column names
   const columns = Object.keys(config.fieldMap);
   const allColumns = [...columns, 'raw_data', 'source_file'];
 
@@ -66,13 +68,26 @@ export async function importCsv(
     .map(c => `${c} = EXCLUDED.${c}`)
     .concat(['raw_data = EXCLUDED.raw_data', 'updated_at = CURRENT_TIMESTAMP']);
 
+  // Worker pool for parallel batch processing
+  const pendingBatches: Promise<{ imported: number; errors: number }>[] = [];
+  const MAX_PENDING = NUM_WORKERS;
+
+  async function drainToN(n: number) {
+    while (pendingBatches.length >= n) {
+      const settled = await Promise.race(
+        pendingBatches.map((p, i) => p.then(r => ({ r, i })))
+      );
+      totalImported += settled.r.imported;
+      totalErrors += settled.r.errors;
+      pendingBatches.splice(settled.i, 1);
+    }
+  }
+
   for await (const line of rl) {
     lineNumber++;
 
     // First line is header
     if (lineNumber === 1) {
-      // Some data.gov.ua CSVs use ';' in header but ',' in data rows.
-      // Auto-detect header delimiter: if configured delimiter produces only 1 field, try the other.
       headers = parseCsvLine(line, delimiter);
       if (headers.length <= 1) {
         const altDelimiter = delimiter === ',' ? ';' : ',';
@@ -90,9 +105,8 @@ export async function importCsv(
     if (!line.trim()) continue;
 
     const values = parseCsvLine(line, delimiter);
-    if (values.length < headers.length * 0.5) continue; // Skip malformed rows
+    if (values.length < headers.length * 0.5) continue;
 
-    // Build record from headers + values
     const record: Record<string, string> = {};
     for (let i = 0; i < headers.length && i < values.length; i++) {
       record[headers[i]] = values[i];
@@ -102,10 +116,15 @@ export async function importCsv(
     totalRows++;
 
     if (batch.length >= BATCH_SIZE) {
-      const result = await processCsvBatch(pool, config, batch, allColumns, uniqueKeys, conflictTarget, updateCols, sourceFile);
-      totalImported += result.imported;
-      totalErrors += result.errors;
+      // Drain if too many pending
+      await drainToN(MAX_PENDING);
+
+      const batchToProcess = batch;
       batch = [];
+
+      pendingBatches.push(
+        processCsvBatchMultiRow(pool, config, batchToProcess, allColumns, conflictTarget, updateCols, sourceFile)
+      );
 
       if (totalRows % PROGRESS_INTERVAL === 0) {
         process.stdout.write(`  Progress: ${totalRows} rows (${totalImported} imported, ${totalErrors} errors)\r`);
@@ -115,9 +134,17 @@ export async function importCsv(
 
   // Process remaining batch
   if (batch.length > 0) {
-    const result = await processCsvBatch(pool, config, batch, allColumns, uniqueKeys, conflictTarget, updateCols, sourceFile);
-    totalImported += result.imported;
-    totalErrors += result.errors;
+    await drainToN(MAX_PENDING);
+    pendingBatches.push(
+      processCsvBatchMultiRow(pool, config, batch, allColumns, conflictTarget, updateCols, sourceFile)
+    );
+  }
+
+  // Wait for all pending
+  const remaining = await Promise.all(pendingBatches);
+  for (const r of remaining) {
+    totalImported += r.imported;
+    totalErrors += r.errors;
   }
 
   const elapsed = (Date.now() - start) / 1000;
@@ -141,7 +168,7 @@ function parseCsvLine(line: string, delimiter: string): string[] {
       if (char === '"') {
         if (i + 1 < line.length && line[i + 1] === '"') {
           current += '"';
-          i++; // skip escaped quote
+          i++;
         } else {
           inQuotes = false;
         }
@@ -195,14 +222,81 @@ function mapCsvRecord(
 }
 
 /**
- * Process a batch of CSV records
+ * Process a batch using a single multi-row INSERT.
+ * Falls back to row-by-row on error.
  */
-async function processCsvBatch(
+async function processCsvBatchMultiRow(
   pool: Pool,
   config: RegistryConfig,
   records: Record<string, string>[],
   allColumns: string[],
-  _uniqueKeys: string[],
+  conflictTarget: string,
+  updateCols: string[],
+  sourceFile: string
+): Promise<{ imported: number; errors: number }> {
+  // Deduplicate within batch by unique key to avoid
+  // "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
+  const seen = new Map<string, number>();
+  const dedupedRecords: Record<string, string>[] = [];
+
+  for (let j = 0; j < records.length; j++) {
+    const mapped = mapCsvRecord(config, records[j], j + 1);
+    const keyParts = uniqueKeys.map(k => String(mapped[k] ?? ''));
+    const key = keyParts.join('|');
+    if (seen.has(key)) {
+      // Keep last occurrence (overwrite)
+      dedupedRecords[seen.get(key)!] = records[j];
+    } else {
+      seen.set(key, dedupedRecords.length);
+      dedupedRecords.push(records[j]);
+    }
+  }
+
+  const client: PoolClient = await pool.connect();
+  try {
+    // Build multi-row VALUES
+    const allValues: unknown[] = [];
+    const rowPlaceholders: string[] = [];
+    const colCount = allColumns.length;
+
+    for (let j = 0; j < dedupedRecords.length; j++) {
+      const mapped = mapCsvRecord(config, dedupedRecords[j], j + 1);
+      const rowValues = allColumns.map(col => {
+        if (col === 'raw_data') return JSON.stringify(dedupedRecords[j]);
+        if (col === 'source_file') return sourceFile;
+        return mapped[col] ?? null;
+      });
+
+      const offset = j * colCount;
+      const placeholders = rowValues.map((_, idx) => `$${offset + idx + 1}`);
+      rowPlaceholders.push(`(${placeholders.join(', ')})`);
+      allValues.push(...rowValues);
+    }
+
+    const sql = `INSERT INTO ${config.tableName} (${allColumns.join(', ')})
+      VALUES ${rowPlaceholders.join(', ')}
+      ON CONFLICT (${conflictTarget}) DO UPDATE SET
+        ${updateCols.join(', ')}`;
+
+    await client.query(sql, allValues);
+    return { imported: dedupedRecords.length, errors: records.length - dedupedRecords.length };
+  } catch {
+    // Multi-row failed — fall back to row-by-row with savepoints
+    return await processCsvBatchRowByRow(client, config, records, allColumns, conflictTarget, updateCols, sourceFile);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Fallback: row-by-row insert with savepoints for error isolation
+ */
+async function processCsvBatchRowByRow(
+  client: PoolClient,
+  config: RegistryConfig,
+  records: Record<string, string>[],
+  allColumns: string[],
   conflictTarget: string,
   updateCols: string[],
   sourceFile: string
@@ -210,7 +304,6 @@ async function processCsvBatch(
   let imported = 0;
   let errors = 0;
 
-  const client: PoolClient = await pool.connect();
   try {
     await client.query('BEGIN');
 
@@ -235,19 +328,15 @@ async function processCsvBatch(
         await client.query(sql, values);
         await client.query(`RELEASE SAVEPOINT ${sp}`);
         imported++;
-      } catch (err) {
+      } catch {
         await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
         errors++;
-        if (errors <= 3) console.error(`  Error importing CSV row:`, err);
       }
     }
 
     await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('  Batch failed:', err);
-  } finally {
-    client.release();
+  } catch {
+    try { await client.query('ROLLBACK'); } catch { /* ignore */ }
   }
 
   return { imported, errors };
