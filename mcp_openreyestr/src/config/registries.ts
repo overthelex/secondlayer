@@ -326,16 +326,22 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     uniqueKey: 'proceeding_number',
     recordPath: '',
     fieldMap: {
-      proceeding_number: 'VP_NUM',
-      opening_date: 'OPEN_DATE',
-      proceeding_status: 'VP_STATUS',
+      proceeding_number: 'VP_ORDERNUM',
+      opening_date: 'VP_BEGINDATE',
+      proceeding_status: 'VP_STATE',
       debtor_name: 'DEBTOR_NAME',
-      debtor_type: 'DEBTOR_TYPE',
+      debtor_type: (_v: string, r: Record<string, unknown>) => {
+        const code = String(r['DEBTOR_CODE'] || '');
+        return code.length === 8 ? 'legal' : 'individual';
+      },
       debtor_edrpou: 'DEBTOR_CODE',
       creditor_name: 'CREDITOR_NAME',
-      creditor_type: 'CREDITOR_TYPE',
+      creditor_type: (_v: string, r: Record<string, unknown>) => {
+        const code = String(r['CREDITOR_CODE'] || '');
+        return code.length === 8 ? 'legal' : 'individual';
+      },
       creditor_edrpou: 'CREDITOR_CODE',
-      enforcement_agency: 'AGENCY_NAME',
+      enforcement_agency: 'ORG_NAME',
       executor_name: 'EXECUTOR_NAME',
     },
     updateFrequency: 'daily',
@@ -356,17 +362,21 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     uniqueKey: ['proceeding_number', 'debtor_name', 'debtor_edrpou'],
     recordPath: '',
     fieldMap: {
-      proceeding_number: 'VP_NUM',
+      proceeding_number: 'VP_ORDERNUM',
       debtor_name: 'DEBTOR_NAME',
-      debtor_type: 'DEBTOR_TYPE',
+      debtor_type: (_v: string, r: Record<string, unknown>) => {
+        // No explicit type field — infer from DEBTOR_CODE length
+        const code = String(r['DEBTOR_CODE'] || '');
+        return code.length === 8 ? 'legal' : 'individual';
+      },
       debtor_edrpou: 'DEBTOR_CODE',
-      issuing_authority: 'ISSUING_AUTHORITY',
-      issuing_person: 'ISSUING_PERSON',
-      enforcement_agency: 'AGENCY_NAME',
-      executor_name: 'EXECUTOR_NAME',
-      executor_phone: 'EXECUTOR_PHONE',
-      executor_email: 'EXECUTOR_EMAIL',
-      collection_category: 'CATEGORY',
+      issuing_authority: 'PUBLISHER',
+      issuing_person: 'EMP_FULL_FIO',
+      enforcement_agency: 'ORG_NAME',
+      executor_name: 'EMP_FULL_FIO',
+      executor_phone: 'EMP_PHONE_NUM',
+      executor_email: 'EMAIL_ADDR',
+      collection_category: 'VD_CAT',
     },
     updateFrequency: 'daily',
     sizeCategory: 'huge',
