@@ -352,6 +352,8 @@
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
+          "min": 0,
+          "softMax": 20,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -360,7 +362,26 @@
           },
           "unit": "none"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "active" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "idle" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "waiting" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }
+            ]
+          }
+        ]
       },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
       "id": 6,
