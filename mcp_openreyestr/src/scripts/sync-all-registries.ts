@@ -56,19 +56,57 @@ function parseArgs(): CliArgs {
 
 // --- Download helpers ---
 
-function downloadFile(url: string, dest: string): Promise<void> {
+function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> {
   return new Promise((resolve, reject) => {
-    try {
-      // Use wget for reliable large file downloads (Node.js http can truncate >500MB files)
-      const { execSync } = require('child_process');
-      execSync(`wget -q -O "${dest}" "${url}"`, {
-        timeout: 30 * 60 * 1000, // 30 min timeout for huge files
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      resolve();
-    } catch (err: any) {
-      fs.unlink(dest, () => {});
-      reject(new Error(`Download failed: ${err.message}`));
+    const { execSync } = require('child_process');
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Use wget -c for resume support; BusyBox wget doesn't support -c,
+        // so fall back to plain wget -O on failure
+        try {
+          execSync(`wget -c -O "${dest}" "${url}" 2>&1`, {
+            timeout: 45 * 60 * 1000, // 45 min timeout for huge files
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        } catch {
+          // BusyBox wget fallback (no -c flag)
+          execSync(`wget -O "${dest}" "${url}" 2>&1`, {
+            timeout: 45 * 60 * 1000,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          });
+        }
+
+        // Verify the file is not empty / truncated
+        const stats = fs.statSync(dest);
+        if (stats.size < 1000) {
+          throw new Error(`Downloaded file too small (${stats.size} bytes), likely truncated`);
+        }
+
+        // Verify ZIP header if it's a .zip file
+        if (dest.endsWith('.zip')) {
+          const fd = fs.openSync(dest, 'r');
+          const header = Buffer.alloc(4);
+          fs.readSync(fd, header, 0, 4, 0);
+          fs.closeSync(fd);
+          // ZIP magic number: PK\x03\x04
+          if (header[0] !== 0x50 || header[1] !== 0x4B) {
+            throw new Error('Downloaded file is not a valid ZIP (bad magic number)');
+          }
+        }
+
+        return resolve();
+      } catch (err: any) {
+        console.warn(`  Download attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+        if (attempt === maxRetries) {
+          fs.unlink(dest, () => {});
+          return reject(new Error(`Download failed after ${maxRetries} attempts: ${err.message}`));
+        }
+        // Wait before retry (exponential backoff: 5s, 15s, 45s)
+        const waitMs = 5000 * Math.pow(3, attempt - 1);
+        console.log(`  Retrying in ${waitMs / 1000}s...`);
+        execSync(`sleep ${waitMs / 1000}`);
+      }
     }
   });
 }

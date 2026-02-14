@@ -71,7 +71,17 @@ export async function importCsv(
 
     // First line is header
     if (lineNumber === 1) {
+      // Some data.gov.ua CSVs use ';' in header but ',' in data rows.
+      // Auto-detect header delimiter: if configured delimiter produces only 1 field, try the other.
       headers = parseCsvLine(line, delimiter);
+      if (headers.length <= 1) {
+        const altDelimiter = delimiter === ',' ? ';' : ',';
+        const altHeaders = parseCsvLine(line, altDelimiter);
+        if (altHeaders.length > 1) {
+          console.log(`  Header uses '${altDelimiter}' delimiter (data uses '${delimiter}') — auto-detected`);
+          headers = altHeaders;
+        }
+      }
       console.log(`  CSV headers (${headers.length}): ${headers.slice(0, 5).join(', ')}...`);
       continue;
     }

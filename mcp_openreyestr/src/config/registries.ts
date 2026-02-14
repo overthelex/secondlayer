@@ -381,6 +381,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     updateFrequency: 'daily',
     sizeCategory: 'huge',
     csvDelimiter: ',',
+    /** Note: header uses ';' but data rows use ',' — the CSV importer must handle this */
   },
 };
 
