@@ -14,6 +14,7 @@ export interface ServiceProxyConfig {
 
 export class ServiceProxy {
   private axiosClient: AxiosInstance;
+  private externalApiMetrics: ((service: string, status: string, durationSec: number) => void) | null = null;
 
   constructor(private costTracker: CostTracker) {
     this.axiosClient = axios.create({
@@ -52,6 +53,7 @@ export class ServiceProxy {
       streaming: acceptHeader?.includes('event-stream'),
     });
 
+    const callStart = Date.now();
     try {
       // Make HTTP request to remote service
       const response: AxiosResponse = await this.axiosClient.post(
@@ -66,6 +68,8 @@ export class ServiceProxy {
           responseType: acceptHeader?.includes('event-stream') ? 'stream' : 'json',
         }
       );
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.(service, 'success', callDuration);
 
       // For streaming responses, return the raw stream
       if (acceptHeader?.includes('event-stream')) {
@@ -91,6 +95,9 @@ export class ServiceProxy {
 
       return response.data;
     } catch (error: any) {
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.(service, 'error', callDuration);
+
       logger.error('[ServiceProxy] Remote call failed', {
         service,
         tool: serviceName,
@@ -177,6 +184,10 @@ export class ServiceProxy {
     };
 
     return configs[service];
+  }
+
+  setExternalApiMetrics(callback: (service: string, status: string, durationSec: number) => void) {
+    this.externalApiMetrics = callback;
   }
 
   /**

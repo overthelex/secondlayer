@@ -61,6 +61,7 @@ export class LLMClientManager {
   private openaiManager: OpenAIClientManager;
   private anthropicManager: AnthropicClientManager;
   private availableProviders: LLMProvider[];
+  private externalApiMetrics: ((service: string, status: string, durationSec: number) => void) | null = null;
 
   constructor() {
     this.openaiManager = getOpenAIManager();
@@ -77,6 +78,10 @@ export class LLMClientManager {
     this.anthropicManager.setCostTracker(tracker);
   }
 
+  setExternalApiMetrics(callback: (service: string, status: string, durationSec: number) => void) {
+    this.externalApiMetrics = callback;
+  }
+
   async chatCompletion(
     request: UnifiedChatRequest,
     budget: BudgetLevel = 'standard',
@@ -90,16 +95,30 @@ export class LLMClientManager {
       model: selection.model,
     });
 
+    const callStart = Date.now();
     try {
-      return await this.executeChatCompletion(request, selection);
+      const result = await this.executeChatCompletion(request, selection);
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.(selection.provider, 'success', callDuration);
+      return result;
     } catch (primaryError: any) {
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.(selection.provider, 'error', callDuration);
       logger.warn(`Primary provider ${selection.provider} failed: ${primaryError.message}`);
 
       const fallbackProvider = this.getFallbackProvider(selection.provider);
       if (fallbackProvider) {
         logger.info(`Falling back to ${fallbackProvider}`);
         const fallbackSelection = ModelSelector.getModelSelection(budget, fallbackProvider);
-        return await this.executeChatCompletion(request, fallbackSelection);
+        const fbStart = Date.now();
+        try {
+          const result = await this.executeChatCompletion(request, fallbackSelection);
+          this.externalApiMetrics?.(fallbackSelection.provider, 'success', (Date.now() - fbStart) / 1000);
+          return result;
+        } catch (fbError: any) {
+          this.externalApiMetrics?.(fallbackSelection.provider, 'error', (Date.now() - fbStart) / 1000);
+          throw fbError;
+        }
       }
 
       throw primaryError;
@@ -336,23 +355,33 @@ export class LLMClientManager {
       model: selection.model,
     });
 
+    const streamStart = Date.now();
     try {
       if (selection.provider === 'anthropic') {
         yield* this.executeAnthropicStreamCompletion(request, selection.model, signal);
       } else {
         yield* this.executeOpenAIStreamCompletion(request, selection.model, signal);
       }
+      this.externalApiMetrics?.(selection.provider, 'success', (Date.now() - streamStart) / 1000);
     } catch (primaryError: any) {
+      this.externalApiMetrics?.(selection.provider, 'error', (Date.now() - streamStart) / 1000);
       logger.warn(`Primary streaming provider ${selection.provider} failed: ${primaryError.message}`);
 
       const fallbackProvider = this.getFallbackProvider(selection.provider);
       if (fallbackProvider) {
         logger.info(`Streaming fallback to ${fallbackProvider}`);
         const fallbackSelection = ModelSelector.getModelSelection(budget, fallbackProvider);
-        if (fallbackSelection.provider === 'anthropic') {
-          yield* this.executeAnthropicStreamCompletion(request, fallbackSelection.model, signal);
-        } else {
-          yield* this.executeOpenAIStreamCompletion(request, fallbackSelection.model, signal);
+        const fbStart = Date.now();
+        try {
+          if (fallbackSelection.provider === 'anthropic') {
+            yield* this.executeAnthropicStreamCompletion(request, fallbackSelection.model, signal);
+          } else {
+            yield* this.executeOpenAIStreamCompletion(request, fallbackSelection.model, signal);
+          }
+          this.externalApiMetrics?.(fallbackSelection.provider, 'success', (Date.now() - fbStart) / 1000);
+        } catch (fbError: any) {
+          this.externalApiMetrics?.(fallbackSelection.provider, 'error', (Date.now() - fbStart) / 1000);
+          throw fbError;
         }
       } else {
         throw primaryError;

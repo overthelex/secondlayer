@@ -58,6 +58,7 @@ export class ZOAdapter {
   private apiInFlight: number = 0;
   private apiWaitQueue: Array<() => void> = [];
   private costTracker: CostTracker | null = null;
+  private externalApiMetrics: ((service: string, status: string, durationSec: number) => void) | null = null;
 
   // Background persistence queue (to avoid DB pool exhaustion on large responses)
   private persistQueue: any[] = [];
@@ -468,6 +469,10 @@ export class ZOAdapter {
     logger.debug('Cost tracker attached to ZOAdapter');
   }
 
+  setExternalApiMetrics(callback: (service: string, status: string, durationSec: number) => void) {
+    this.externalApiMetrics = callback;
+  }
+
   private async initializeRedis() {
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -645,6 +650,7 @@ export class ZOAdapter {
           });
 
           try {
+            const apiStart = Date.now();
             const response = await this.client.get(endpoint, {
               params: queryParams,
               // IMPORTANT: set token per request to avoid races under concurrency
@@ -652,6 +658,9 @@ export class ZOAdapter {
                 'X-App-Token': token,
               },
             });
+            const apiDuration = (Date.now() - apiStart) / 1000;
+            this.externalApiMetrics?.('zakononline', 'success', apiDuration);
+
             const data = response.data;
             await this.setCache(cacheKey, data);
 
@@ -667,6 +676,8 @@ export class ZOAdapter {
           const status = error.response?.status;
           const isRateLimit = status === 429;
           const isAuthError = status === 401 || status === 403;
+          const errLabel = isRateLimit ? 'rate_limited' : isAuthError ? 'auth_error' : 'error';
+          this.externalApiMetrics?.('zakononline', errLabel, 0);
 
           logger.warn(`Request attempt ${attempt} failed:`, {
             message: error.message,
@@ -899,17 +910,21 @@ export class ZOAdapter {
       logger.info(`Fetching full text from ${url}`);
 
       // Download HTML page
+      const scrapeStart = Date.now();
       const response = await axios.get(url, {
         timeout: 15000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; SecondLayerBot/1.0)',
         },
       });
+      const scrapeDuration = (Date.now() - scrapeStart) / 1000;
 
       if (response.status !== 200) {
+        this.externalApiMetrics?.('zakononline_scrape', 'error', scrapeDuration);
         logger.warn(`Failed to fetch document HTML, status: ${response.status}`);
         return null;
       }
+      this.externalApiMetrics?.('zakononline_scrape', 'success', scrapeDuration);
 
       const htmlContent = response.data;
 

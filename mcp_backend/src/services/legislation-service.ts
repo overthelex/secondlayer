@@ -211,6 +211,10 @@ export class LegislationService {
     this.classifier = new LegislationClassifier(redis);
   }
 
+  getAdapter(): RadaLegislationAdapter {
+    return this.adapter;
+  }
+
   /**
    * Устанавливает Redis клиент для AI-классификации законодательства.
    * Используется для кэширования результатов классификации.

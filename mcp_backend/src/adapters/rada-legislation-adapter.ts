@@ -47,6 +47,7 @@ export class RadaLegislationAdapter {
   private readonly BASE_URL = 'https://zakon.rada.gov.ua';
   private readonly CHUNK_SIZE = 500; // characters per chunk for vector search
   private readonly CHUNK_OVERLAP = 100; // overlap between chunks
+  private externalApiMetrics: ((service: string, status: string, durationSec: number) => void) | null = null;
 
   constructor(db: Pool) {
     this.db = db;
@@ -67,8 +68,12 @@ export class RadaLegislationAdapter {
     const url = `${this.BASE_URL}/laws/show/${radaId}/print`;
     logger.info(`Fetching legislation from ${url}`);
 
+    const callStart = Date.now();
     try {
       const response = await this.httpClient.get(url);
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.('zakon_rada', 'success', callDuration);
+
       const html = response.data;
       const $ = cheerio.load(html);
 
@@ -78,6 +83,8 @@ export class RadaLegislationAdapter {
       logger.info(`Extracted ${articles.length} articles from ${radaId}`);
       return { metadata, articles };
     } catch (error: any) {
+      const callDuration = (Date.now() - callStart) / 1000;
+      this.externalApiMetrics?.('zakon_rada', 'error', callDuration);
       logger.error(`Failed to fetch legislation ${radaId}:`, error.message);
       throw error;
     }
@@ -426,5 +433,9 @@ export class RadaLegislationAdapter {
 
     const result = await this.db.query(sql, params);
     return result.rows;
+  }
+
+  setExternalApiMetrics(callback: (service: string, status: string, durationSec: number) => void) {
+    this.externalApiMetrics = callback;
   }
 }

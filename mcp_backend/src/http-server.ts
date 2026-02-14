@@ -78,6 +78,7 @@ import { MatterInvoiceService } from './services/matter-invoice-service.js';
 import { createTimeEntryRoutes } from './routes/time-entry-routes.js';
 import { createInvoiceRoutes } from './routes/invoice-routes.js';
 import { ChatService, ChatEvent } from './services/chat-service.js';
+import { getLLMManager } from './utils/llm-client-manager.js';
 import { ChatSearchCacheService } from './services/chat-search-cache-service.js';
 
 dotenv.config();
@@ -280,6 +281,20 @@ class HTTPMCPServer {
     if (cpuAdaptiveManager) {
       cpuAdaptiveManager.setMetricsCallback((metrics) => this.metricsService.updateCpuAdaptive(metrics));
     }
+
+    // Bind external API metrics collectors
+    const externalApiMetricsCallback = (service: string, status: string, durationSec: number) => {
+      this.metricsService.externalApiCallsTotal.inc({ service, status });
+      if (durationSec > 0) {
+        this.metricsService.externalApiDuration.observe({ service }, durationSec);
+      }
+    };
+    this.services.zoAdapter.setExternalApiMetrics(externalApiMetricsCallback);
+    this.services.zoPracticeAdapter.setExternalApiMetrics(externalApiMetricsCallback);
+    this.services.zoSessionsAdapter.setExternalApiMetrics(externalApiMetricsCallback);
+    this.serviceProxy.setExternalApiMetrics(externalApiMetricsCallback);
+    getLLMManager().setExternalApiMetrics(externalApiMetricsCallback);
+    this.services.legislationTools.getLegislationService().getAdapter().setExternalApiMetrics(externalApiMetricsCallback);
 
     logger.info('Prometheus metrics service initialized');
 
