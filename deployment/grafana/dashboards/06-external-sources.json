@@ -57,7 +57,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"notaries\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"notaries\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Notaries",
           "refId": "A"
         }
@@ -96,7 +96,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"court_experts\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"court_experts\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Court Experts",
           "refId": "A"
         }
@@ -135,7 +135,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"special_forms\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"special_forms\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Special Forms",
           "refId": "A"
         }
@@ -174,7 +174,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"legal_acts\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"legal_acts\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Legal Acts",
           "refId": "A"
         }
@@ -213,7 +213,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"streets\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"streets\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Streets",
           "refId": "A"
         }
@@ -252,7 +252,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"administrative_units\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"administrative_units\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Admin Units",
           "refId": "A"
         }
@@ -291,7 +291,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"arbitration_managers\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"arbitration_managers\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Arb Managers",
           "refId": "A"
         }
@@ -330,7 +330,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"bankruptcy_cases\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"bankruptcy_cases\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Bankruptcy",
           "refId": "A"
         }
@@ -369,7 +369,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"forensic_methods\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"forensic_methods\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Forensic Methods",
           "refId": "A"
         }
@@ -408,7 +408,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"enforcement_proceedings\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"enforcement_proceedings\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Enforcement",
           "refId": "A"
         }
@@ -447,7 +447,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"debtors\",job=\"postgres-openreyestr\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"debtors\",job=\"postgres_openreyestr\"}",
           "legendFormat": "Debtors",
           "refId": "A"
         }
@@ -485,7 +485,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(pg_stat_user_tables_n_live_tup{relname=~\"notaries|court_experts|special_forms|legal_acts|streets|administrative_units|arbitration_managers|bankruptcy_cases|forensic_methods|enforcement_proceedings|debtors\",job=\"postgres-openreyestr\"})",
+          "expr": "sum(pg_stat_user_tables_n_live_tup{relname=~\"notaries|court_experts|special_forms|legal_acts|streets|administrative_units|arbitration_managers|bankruptcy_cases|forensic_methods|enforcement_proceedings|debtors\",job=\"postgres_openreyestr\"})",
           "legendFormat": "Total",
           "refId": "A"
         }
@@ -651,7 +651,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(pg_stat_user_tables_n_dead_tup{job=\"postgres-openreyestr\"})",
+          "expr": "sum(pg_stat_user_tables_n_dead_tup{job=\"postgres_openreyestr\"})",
           "legendFormat": "Dead Tuples",
           "refId": "A"
         }
@@ -779,7 +779,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "topk(10, pg_stat_user_tables_size_bytes{job=\"postgres-openreyestr\"})",
+          "expr": "topk(10, pg_stat_user_tables_size_bytes{job=\"postgres_openreyestr\"})",
           "legendFormat": "{{relname}}",
           "refId": "A"
         }
@@ -924,7 +924,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(rate(http_requests_total{job=\"mcp-backend\"}[5m])) by (route)",
+          "expr": "sum(rate(http_requests_total{job=\"mcp_backend\"}[5m])) by (route)",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
@@ -981,7 +981,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"mcp-backend\"}[5m])) by (le, route))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"mcp_backend\"}[5m])) by (le, route))",
           "legendFormat": "{{route}}",
           "refId": "A"
         }
@@ -1028,31 +1028,31 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "up{job=\"mcp-backend\"}",
+          "expr": "up{job=\"mcp_backend\"}",
           "legendFormat": "Backend",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "up{job=\"mcp-openreyestr\"}",
+          "expr": "up{job=\"mcp_openreyestr\"}",
           "legendFormat": "OpenReyestr",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "up{job=\"mcp-rada\"}",
+          "expr": "up{job=\"mcp_rada\"}",
           "legendFormat": "RADA",
           "refId": "C"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_up{job=\"postgres-backend\"}",
+          "expr": "pg_up{job=\"postgres_backend\"}",
           "legendFormat": "PG Backend",
           "refId": "D"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_up{job=\"postgres-openreyestr\"}",
+          "expr": "pg_up{job=\"postgres_openreyestr\"}",
           "legendFormat": "PG OpenReyestr",
           "refId": "E"
         },
