@@ -105,3 +105,4 @@ vulnerability-fix-backup/
 .cursor/
 pip
 deployment/nginx/certs/
+.mcp.json
