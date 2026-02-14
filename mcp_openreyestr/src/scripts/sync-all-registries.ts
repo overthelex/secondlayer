@@ -17,8 +17,6 @@ dotenv.config();
 import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import https from 'https';
-import http from 'http';
 import unzipper from 'unzipper';
 import { REGISTRIES, RegistryConfig } from '../config/registries';
 import { importXml } from '../services/generic-xml-importer';
@@ -60,25 +58,18 @@ function parseArgs(): CliArgs {
 
 function downloadFile(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const follow = (targetUrl: string, redirects: number = 0) => {
-      if (redirects > 5) return reject(new Error('Too many redirects'));
-      const lib = targetUrl.startsWith('https') ? https : http;
-      lib.get(targetUrl, (response) => {
-        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          return follow(response.headers.location, redirects + 1);
-        }
-        if (response.statusCode !== 200) {
-          return reject(new Error(`HTTP ${response.statusCode} for ${targetUrl}`));
-        }
-        response.pipe(file);
-        file.on('finish', () => { file.close(); resolve(); });
-      }).on('error', (err: Error) => {
-        fs.unlink(dest, () => {});
-        reject(err);
+    try {
+      // Use curl for reliable large file downloads (Node.js http can truncate >500MB files)
+      const { execSync } = require('child_process');
+      execSync(`curl -sL -o "${dest}" "${url}"`, {
+        timeout: 30 * 60 * 1000, // 30 min timeout for huge files
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
-    };
-    follow(url);
+      resolve();
+    } catch (err: any) {
+      fs.unlink(dest, () => {});
+      reject(new Error(`Download failed: ${err.message}`));
+    }
   });
 }
 
