@@ -90,14 +90,11 @@ export class RadaAPIAdapter {
    */
   async fetchDeputies(convocation: number = 9): Promise<RadaDeputyRawData[]> {
     void this._costTracker;
-    await this.waitForRateLimit();
-
     const endpoint = `/ogd/mps/skl${convocation}/mps-data.json`;
     logger.info(`Fetching deputies for convocation ${convocation}`);
 
     try {
-      const response = await this.client.get(endpoint);
-      const data = response.data;
+      const data = await this.fetchMpsData(convocation);
 
       // Response can be array directly or object with mps/mps_list/deputies
       if (Array.isArray(data)) {
