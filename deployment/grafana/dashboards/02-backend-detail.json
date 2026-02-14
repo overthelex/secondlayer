@@ -277,7 +277,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=\"$service\", status=~\"2..\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"$service\", status_code=~\"2..\"}[5m]))",
           "legendFormat": "2xx",
           "refId": "A"
         },
@@ -286,7 +286,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=\"$service\", status=~\"3..\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"$service\", status_code=~\"3..\"}[5m]))",
           "legendFormat": "3xx",
           "refId": "B"
         },
@@ -295,7 +295,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=\"$service\", status=~\"4..\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"$service\", status_code=~\"4..\"}[5m]))",
           "legendFormat": "4xx",
           "refId": "C"
         },
@@ -304,7 +304,7 @@
             "type": "prometheus",
             "uid": "Prometheus"
           },
-          "expr": "sum(rate(http_requests_total{job=\"$service\", status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"$service\", status_code=~\"5..\"}[5m]))",
           "legendFormat": "5xx",
           "refId": "D"
         }
