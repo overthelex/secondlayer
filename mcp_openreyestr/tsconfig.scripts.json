@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitAny": false,
+    "strict": false
+  },
+  "include": [
+    "src/scripts/**/*",
+    "src/config/**/*",
+    "src/services/generic-xml-importer.ts",
+    "src/services/csv-importer.ts",
+    "src/services/streaming-xml-parser.ts",
+    "src/services/xml-parser.ts",
+    "src/services/database-importer.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

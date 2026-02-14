@@ -1,0 +1,9 @@
+# NAIS Registry Sync Cron Jobs
+# Install: crontab deployment/cron/nais-crontab
+# Or merge into existing crontab: crontab -l | cat - deployment/cron/nais-crontab | crontab -
+
+# Weekly full sync every Sunday at 03:00
+0 3 * * 0 /opt/secondlayer/deployment/cron/nais-weekly-sync.sh
+
+# Log rotation: keep last 30 days
+0 4 1 * * find /var/log/secondlayer -name "nais-sync.log.*" -mtime +30 -delete

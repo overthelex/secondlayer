@@ -4,7 +4,7 @@
   "description": "OpenReyestr MCP Server - NAIS registry data (debtors, legal entities, notaries) with MCP protocol",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.scripts.json && cp src/migrations/*.sql dist/migrations/",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "dev:http": "ts-node-dev --respawn --transpile-only src/http-server.ts",
     "start": "node dist/index.js",
@@ -15,6 +15,9 @@
     "import:debtors": "npm run build && node dist/scripts/import-debtors.js",
     "import:entities": "npm run build && node dist/scripts/import-legal-entities.js",
     "import:nais": "npm run build && node dist/scripts/download-nais-registries.js",
+    "sync:registries": "npm run build && node dist/scripts/sync-all-registries.js",
+    "sync:registry": "npm run build && node dist/scripts/sync-all-registries.js --only=",
+    "sync:weekly": "npm run build && node dist/scripts/sync-all-registries.js --weekly",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
     "lint": "eslint src --ext .ts"

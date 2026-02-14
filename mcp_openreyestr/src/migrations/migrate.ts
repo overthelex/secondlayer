@@ -26,6 +26,8 @@ async function runMigrations() {
     const migrations = [
       '001_initial_schema.sql',
       '002_add_cost_tracking.sql',
+      '003_add_notaries_experts_arbitration.sql',
+      '004_add_remaining_registries.sql',
     ];
 
     for (const migrationFile of migrations) {
