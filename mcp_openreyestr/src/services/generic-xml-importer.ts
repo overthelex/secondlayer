@@ -197,7 +197,9 @@ function mapRecord(
       mapped[dbCol] = mapping('', record);
     } else {
       const value = record[mapping];
-      mapped[dbCol] = value != null ? String(value) : null;
+      // Convert empty strings to null (prevents PG "invalid input syntax for type date" errors)
+      const strValue = value != null ? String(value).trim() : null;
+      mapped[dbCol] = strValue === '' ? null : strValue;
     }
   }
 
