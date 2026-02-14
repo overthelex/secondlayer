@@ -11,9 +11,55 @@ import { stat } from 'fs/promises';
 // @ts-ignore - no type declarations for sax
 import sax from 'sax';
 import iconv from 'iconv-lite';
-import { RegistryConfig, getNestedValue } from '../config/registries';
+import { RegistryConfig } from '../config/registries';
 
 const BATCH_SIZE = 500;
+
+/**
+ * Collect records from parsed XML, handling multi-section structures.
+ * E.g. for path "rna.database.document" where database has multiple numbered sections,
+ * collects all document records from all sections.
+ */
+function collectRecords(obj: Record<string, unknown>, path: string): Record<string, unknown>[] {
+  const parts = path.split('.');
+  let current: unknown[] = [obj];
+
+  for (const part of parts) {
+    const next: unknown[] = [];
+    for (const node of current) {
+      if (node == null || typeof node !== 'object') continue;
+      const rec = node as Record<string, unknown>;
+      if (rec[part] !== undefined) {
+        const val = rec[part];
+        if (Array.isArray(val)) {
+          next.push(...val);
+        } else {
+          next.push(val);
+        }
+      } else {
+        // Check if this is a numbered/multi-section object (keys are indices)
+        // e.g. { "0": { document: [...] }, "1": { document: [...] } }
+        for (const key of Object.keys(rec)) {
+          const child = rec[key];
+          if (child != null && typeof child === 'object' && !Array.isArray(child)) {
+            const childRec = child as Record<string, unknown>;
+            if (childRec[part] !== undefined) {
+              const val = childRec[part];
+              if (Array.isArray(val)) {
+                next.push(...val);
+              } else {
+                next.push(val);
+              }
+            }
+          }
+        }
+      }
+    }
+    current = next;
+  }
+
+  return current.filter(r => r != null && typeof r === 'object') as Record<string, unknown>[];
+}
 /** Files above this size (bytes) use SAX streaming parser */
 const STREAMING_THRESHOLD = 500 * 1024 * 1024; // 500 MB
 
@@ -77,12 +123,11 @@ async function importXmlInMemory(
   const result = parser.parse(xmlContent);
 
   // Navigate to records using recordPath (e.g. "DATA.RECORD")
-  let records = getNestedValue(result, config.recordPath) as Record<string, unknown>[] | Record<string, unknown>;
-  if (!records) {
+  let records = collectRecords(result, config.recordPath);
+  if (records.length === 0) {
     console.error(`  No records found at path: ${config.recordPath}`);
     return { registry: config.name, imported: 0, errors: 0, elapsed: 0 };
   }
-  if (!Array.isArray(records)) records = [records];
 
   console.log(`  Parsed ${records.length} records`);
   return batchUpsert(pool, config, records, sourceFile);
