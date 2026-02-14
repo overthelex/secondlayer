@@ -84,10 +84,11 @@ function downloadFile(url: string, dest: string): Promise<void> {
 
 async function extractZip(zipPath: string, extractDir: string): Promise<string[]> {
   const extracted: string[] = [];
+  const writePromises: Promise<void>[] = [];
 
   // Use streaming extraction to avoid loading large files into memory
   await new Promise<void>((resolve, reject) => {
-    const stream = fs.createReadStream(zipPath)
+    fs.createReadStream(zipPath)
       .pipe(unzipper.Parse())
       .on('entry', (entry: any) => {
         const filePath = entry.path as string;
@@ -96,8 +97,11 @@ async function extractZip(zipPath: string, extractDir: string): Promise<string[]
         if (type === 'File') {
           const outPath = path.join(extractDir, filePath);
           fs.mkdirSync(path.dirname(outPath), { recursive: true });
-          entry.pipe(fs.createWriteStream(outPath))
-            .on('finish', () => { extracted.push(filePath); });
+          const writePromise = new Promise<void>((res) => {
+            entry.pipe(fs.createWriteStream(outPath))
+              .on('finish', () => { extracted.push(filePath); res(); });
+          });
+          writePromises.push(writePromise);
         } else {
           entry.autodrain();
         }
@@ -105,6 +109,9 @@ async function extractZip(zipPath: string, extractDir: string): Promise<string[]
       .on('close', () => resolve())
       .on('error', (err: Error) => reject(err));
   });
+
+  // Wait for all file writes to complete
+  await Promise.all(writePromises);
 
   // Recursively extract any nested .zip files found inside
   const nestedZips = extracted.filter(f => f.toLowerCase().endsWith('.zip'));
