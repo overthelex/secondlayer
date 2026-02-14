@@ -416,9 +416,9 @@ services:
       # Upload temp directory
       UPLOAD_TEMP_DIR: /app/data/uploads
 
-      # Email (postfix on mail server, IP-based auth via port 25)
+      # Email (postfix on mail server, IP-based auth via submission/STARTTLS)
       SMTP_HOST: mail.lexapp.co.ua
-      SMTP_PORT: "25"
+      SMTP_PORT: "587"
       SMTP_SECURE: "false"
       EMAIL_FROM: noreply@legal.org.ua
       EMAIL_FROM_NAME: SecondLayer Legal Platform
