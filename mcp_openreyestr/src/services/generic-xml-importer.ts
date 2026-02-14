@@ -147,6 +147,9 @@ async function importXmlStreaming(
     const pathParts = config.recordPath.split('.');
     const recordTag = pathParts[pathParts.length - 1];
 
+    // Source stream — we pause/resume this for backpressure (sax stream has no pause/resume)
+    const fileStream = createReadStream(filePath, { highWaterMark: 64 * 1024 });
+
     let currentRecord: Record<string, string> | null = null;
     let currentTag = '';
     let currentText = '';
@@ -199,7 +202,8 @@ async function importXmlStreaming(
         if (batch.length >= BATCH_SIZE) {
           const batchToProcess = batch;
           batch = [];
-          saxStream.pause();
+          // Pause the source file stream for backpressure
+          fileStream.pause();
           pendingBatch = batchUpsert(pool, config, batchToProcess, sourceFile)
             .then(stats => {
               totalImported += stats.imported;
@@ -208,12 +212,12 @@ async function importXmlStreaming(
                 process.stdout.write(`  Progress: ${recordCount} records processed\r`);
               }
               pendingBatch = null;
-              saxStream.resume();
+              fileStream.resume();
             })
             .catch(err => {
               console.error('  Batch error:', err);
               pendingBatch = null;
-              saxStream.resume();
+              fileStream.resume();
             });
         }
       }
@@ -239,8 +243,6 @@ async function importXmlStreaming(
       reject(err);
     });
 
-    // Pipe file through iconv decoder then sax
-    const fileStream = createReadStream(filePath);
     fileStream.on('error', (err: Error) => {
       console.error('  File stream error:', err.message);
       reject(err);
