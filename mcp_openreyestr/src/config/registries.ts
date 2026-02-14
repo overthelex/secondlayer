@@ -230,7 +230,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     name: 'legal_acts',
     title: 'Єдиний державний реєстр нормативно-правових актів',
     format: 'xml',
-    encoding: 'windows-1251',
+    encoding: 'utf-8',
     datasetUrl: 'https://data.gov.ua/dataset/b22d184c-4826-4e1d-8577-972effc5700c/resource/5616dd04-949a-489c-8efc-54004293b238/download/25-edrnpa.zip',
     zipFileName: '25-edrnpa.zip',
     innerFileName: 'edrnpa_cards',
