@@ -693,6 +693,7 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-grafana@legal.org.ua}
       - GF_SERVER_ROOT_URL=https://localdev.legal.org.ua/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - PROMETHEUS_HOST=prometheus-local
     volumes:
       - grafana_local_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
