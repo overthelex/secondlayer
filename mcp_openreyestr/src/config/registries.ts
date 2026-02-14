@@ -47,10 +47,10 @@ export function getNestedValue(obj: Record<string, unknown>, path: string): unkn
  * Extract text value from EDRNPA item-based XML structure.
  * Records look like: { item: [{ "@_name": "publisher", text: "..." }, ...] }
  */
-/** Convert dd.mm.yyyy to yyyy-mm-dd for PostgreSQL */
+/** Convert dd.mm.yyyy or dd.mm.yyyy HH:MM:SS to yyyy-mm-dd for PostgreSQL */
 function parseDateDMY(dateStr: string | null): string | null {
   if (!dateStr) return null;
-  const match = dateStr.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  const match = dateStr.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})/);
   if (!match) return null;
   return `${match[3]}-${match[2]}-${match[1]}`;
 }
@@ -327,7 +327,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     recordPath: '',
     fieldMap: {
       proceeding_number: 'VP_ORDERNUM',
-      opening_date: 'VP_BEGINDATE',
+      opening_date: (_v: string, r: Record<string, unknown>) => parseDateDMY(String(r['VP_BEGINDATE'] || '')),
       proceeding_status: 'VP_STATE',
       debtor_name: 'DEBTOR_NAME',
       debtor_type: (_v: string, r: Record<string, unknown>) => {
