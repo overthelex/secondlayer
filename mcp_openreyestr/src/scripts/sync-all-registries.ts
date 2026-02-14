@@ -83,18 +83,28 @@ function downloadFile(url: string, dest: string): Promise<void> {
 }
 
 async function extractZip(zipPath: string, extractDir: string): Promise<string[]> {
-  const directory = await unzipper.Open.file(zipPath);
   const extracted: string[] = [];
 
-  for (const file of directory.files) {
-    if (file.type === 'File') {
-      const outPath = path.join(extractDir, file.path);
-      fs.mkdirSync(path.dirname(outPath), { recursive: true });
-      const content = await file.buffer();
-      fs.writeFileSync(outPath, content);
-      extracted.push(file.path);
-    }
-  }
+  // Use streaming extraction to avoid loading large files into memory
+  await new Promise<void>((resolve, reject) => {
+    const stream = fs.createReadStream(zipPath)
+      .pipe(unzipper.Parse())
+      .on('entry', (entry: any) => {
+        const filePath = entry.path as string;
+        const type = entry.type as string;
+
+        if (type === 'File') {
+          const outPath = path.join(extractDir, filePath);
+          fs.mkdirSync(path.dirname(outPath), { recursive: true });
+          entry.pipe(fs.createWriteStream(outPath))
+            .on('finish', () => { extracted.push(filePath); });
+        } else {
+          entry.autodrain();
+        }
+      })
+      .on('close', () => resolve())
+      .on('error', (err: Error) => reject(err));
+  });
 
   // Recursively extract any nested .zip files found inside
   const nestedZips = extracted.filter(f => f.toLowerCase().endsWith('.zip'));
