@@ -29,6 +29,7 @@ async function runMigrations() {
       '003_add_notaries_experts_arbitration.sql',
       '004_add_remaining_registries.sql',
       '005_widen_varchar_columns.sql',
+      '006_widen_remaining_varchar_columns.sql',
     ];
 
     for (const migrationFile of migrations) {
