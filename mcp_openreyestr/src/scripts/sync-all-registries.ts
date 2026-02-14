@@ -227,7 +227,7 @@ async function syncRegistry(
   // 3. Find data file
   const ext = config.format === 'csv' ? '.csv' : '.xml';
   let dataFile = config.innerFileName
-    ? extracted.find(f => f === config.innerFileName || f.endsWith(config.innerFileName))
+    ? extracted.find(f => f === config.innerFileName || f.endsWith(config.innerFileName) || f.includes(config.innerFileName))
     : extracted.find(f => f.toLowerCase().endsWith(ext));
 
   if (!dataFile) {
