@@ -226,7 +226,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       termination_date: 'TERMINATION_DATE',
     },
     updateFrequency: 'weekly',
-    sizeCategory: 'large',
+    sizeCategory: 'medium',
   },
 
   administrative_units: {

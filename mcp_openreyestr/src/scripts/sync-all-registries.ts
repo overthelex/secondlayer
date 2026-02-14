@@ -241,6 +241,15 @@ async function syncRegistry(
 
   const dataFilePath = path.join(registryDir, dataFile);
 
+  // 3.5 Cleanup: delete extracted files we don't need (saves disk/memory for large archives)
+  for (const f of extracted) {
+    if (f !== dataFile) {
+      try { fs.unlinkSync(path.join(registryDir, f)); } catch { /* ignore */ }
+    }
+  }
+  // Also delete the downloaded ZIP
+  try { fs.unlinkSync(zipPath); } catch { /* ignore */ }
+
   // 4. Log import start
   const logId = await logImportStart(pool, config, dataFile);
 
