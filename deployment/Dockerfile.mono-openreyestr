@@ -29,6 +29,7 @@ RUN cd mcp_openreyestr \
 
 # Copy openreyestr source and build
 COPY mcp_openreyestr/tsconfig.json mcp_openreyestr/tsconfig.json
+COPY mcp_openreyestr/tsconfig.scripts.json mcp_openreyestr/tsconfig.scripts.json
 COPY mcp_openreyestr/src mcp_openreyestr/src
 
 RUN cd mcp_openreyestr \
