@@ -301,6 +301,7 @@ services:
       SECONDLAYER_URL: http://app-stage:3000
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_OPTIONS: --max-old-space-size=3072
       TZ: Europe/Kiev
     # Ports removed - service accessed via unified gateway only
     depends_on:
@@ -320,11 +321,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '2'
+          memory: 4G
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.5'
+          memory: 1G
 
   # MinIO - S3-compatible object storage for media/large files
   minio-stage:
