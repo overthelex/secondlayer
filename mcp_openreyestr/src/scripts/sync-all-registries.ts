@@ -59,9 +59,9 @@ function parseArgs(): CliArgs {
 function downloadFile(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
-      // Use curl for reliable large file downloads (Node.js http can truncate >500MB files)
+      // Use wget for reliable large file downloads (Node.js http can truncate >500MB files)
       const { execSync } = require('child_process');
-      execSync(`curl -sL -o "${dest}" "${url}"`, {
+      execSync(`wget -q -O "${dest}" "${url}"`, {
         timeout: 30 * 60 * 1000, // 30 min timeout for huge files
         stdio: ['pipe', 'pipe', 'pipe'],
       });
