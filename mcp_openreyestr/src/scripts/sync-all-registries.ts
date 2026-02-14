@@ -96,7 +96,22 @@ async function extractZip(zipPath: string, extractDir: string): Promise<string[]
     }
   }
 
-  return extracted;
+  // Recursively extract any nested .zip files found inside
+  const nestedZips = extracted.filter(f => f.toLowerCase().endsWith('.zip'));
+  for (const nested of nestedZips) {
+    const nestedPath = path.join(extractDir, nested);
+    console.log(`  Extracting nested ZIP: ${nested}`);
+    try {
+      const innerFiles = await extractZip(nestedPath, extractDir);
+      extracted.push(...innerFiles);
+      // Remove the inner zip after extraction
+      fs.unlinkSync(nestedPath);
+    } catch (err: any) {
+      console.error(`  Failed to extract nested ZIP ${nested}: ${err.message}`);
+    }
+  }
+
+  return extracted.filter(f => !f.toLowerCase().endsWith('.zip'));
 }
 
 // --- Weekly check ---

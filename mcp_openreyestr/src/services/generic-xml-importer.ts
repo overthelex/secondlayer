@@ -174,8 +174,18 @@ async function importXmlStreaming(
 
     // Pipe file through iconv decoder then sax
     const fileStream = createReadStream(filePath);
+    fileStream.on('error', (err: Error) => {
+      console.error('  File stream error:', err.message);
+      reject(err);
+    });
+
     if (config.encoding !== 'utf-8') {
-      fileStream.pipe(iconv.decodeStream(config.encoding)).pipe(saxStream);
+      const decoder = iconv.decodeStream(config.encoding);
+      decoder.on('error', (err: Error) => {
+        console.error('  Decoder stream error:', err.message);
+        reject(err);
+      });
+      fileStream.pipe(decoder).pipe(saxStream);
     } else {
       fileStream.pipe(saxStream);
     }

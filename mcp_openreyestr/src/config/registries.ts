@@ -277,7 +277,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       settlement: 'SETTLEMENT',
     },
     updateFrequency: 'weekly',
-    sizeCategory: 'large',
+    sizeCategory: 'medium',
   },
 
   enforcement_proceedings: {
