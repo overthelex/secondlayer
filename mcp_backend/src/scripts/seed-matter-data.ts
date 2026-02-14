@@ -53,9 +53,9 @@ async function seedMatterData() {
       );
       if (existingMember.rows.length === 0) {
         await db.query(
-          `INSERT INTO organization_members (organization_id, user_id, role, status)
-           VALUES ($1, $2, 'owner', 'active')`,
-          [orgId, userId]
+          `INSERT INTO organization_members (organization_id, user_id, email, role, status, joined_at)
+           VALUES ($1, $2, $3, 'owner', 'active', now())`,
+          [orgId, userId, TEST_EMAIL]
         );
       }
     }
