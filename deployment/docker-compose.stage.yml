@@ -348,6 +348,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
       TZ: Europe/Kiev
     ports:
       - "9004:9000"   # S3 API

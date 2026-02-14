@@ -35,6 +35,24 @@ scrape_configs:
     static_configs:
       - targets: ['redis-exporter-local:9121']
 
+  - job_name: minio
+    scrape_interval: 30s
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ['minio-local:9000']
+        labels:
+          service: minio
+          environment: local
+
+  - job_name: qdrant
+    scrape_interval: 30s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['qdrant-local:6333']
+        labels:
+          service: qdrant
+          environment: local
+
   - job_name: prometheus
     scrape_interval: 15s
     static_configs:
