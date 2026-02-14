@@ -21,6 +21,10 @@ export class RadaAPIAdapter {
   private minRequestInterval: number = 100; // 100ms between requests (10 rps)
   private _costTracker?: CostTracker;
 
+  // Cache for mps-data.json (contains deputies, factions, committees, assistants)
+  private mpsDataCache: Map<number, { data: any; fetchedAt: number }> = new Map();
+  private readonly MPS_DATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor() {
     this.client = axios.create({
       baseURL: this.baseURL,
@@ -56,6 +60,28 @@ export class RadaAPIAdapter {
     }
 
     this.lastRequestTime = Date.now();
+  }
+
+  /**
+   * Fetch and cache the full mps-data.json for a convocation.
+   * This file contains deputies, factions (fr_associations), committees,
+   * assistants, parties, regions, and posts — all in one response.
+   */
+  private async fetchMpsData(convocation: number): Promise<any> {
+    const cached = this.mpsDataCache.get(convocation);
+    if (cached && Date.now() - cached.fetchedAt < this.MPS_DATA_CACHE_TTL) {
+      logger.debug('Using cached mps-data.json', { convocation });
+      return cached.data;
+    }
+
+    await this.waitForRateLimit();
+    const endpoint = `/ogd/mps/skl${convocation}/mps-data.json`;
+    logger.info(`Fetching mps-data.json for convocation ${convocation}`);
+
+    const response = await this.client.get(endpoint);
+    const data = response.data;
+    this.mpsDataCache.set(convocation, { data, fetchedAt: Date.now() });
+    return data;
   }
 
   /**
@@ -104,30 +130,60 @@ export class RadaAPIAdapter {
 
   /**
    * Fetch bills (законопроекти)
-   * Note: RADA API may have multiple endpoints for bills data
+   * Uses billinfo_list endpoint which is actively maintained and up-to-date.
+   * The older bills_main-skl9.json endpoint is stale (last updated Jan 2025).
+   *
+   * Available endpoints on data.rada.gov.ua/ogd/zpr/skl9/:
+   *   - billinfo_list-skl9.json (~8MB, light list, updated daily) <-- used here
+   *   - billinfo-skl9.json (~130MB, full details with documents/passings)
+   *   - bills_main-skl9.json (~10MB, STALE since Jan 2025)
+   *   - bills-skl9.json (~63MB, STALE since Jan 2025)
    */
   async fetchBills(filters?: { dateFrom?: string; dateTo?: string; convocation?: number }): Promise<RadaBillRawData[]> {
     void this._costTracker;
     await this.waitForRateLimit();
 
     const convocation = filters?.convocation || 9;
-    const endpoint = `/ogd/zpr/skl${convocation}/bills_main-skl${convocation}.json`;
-    logger.info('Fetching bills', { convocation, filters });
+    const endpoint = `/ogd/zpr/skl${convocation}/billinfo_list-skl${convocation}.json`;
+    logger.info('Fetching bills', { convocation, filters, endpoint });
 
     try {
-      const response = await this.client.get(endpoint);
+      const response = await this.client.get(endpoint, {
+        timeout: 120000, // billinfo_list is ~8MB, allow more time
+        maxContentLength: 50 * 1024 * 1024,
+      });
       const data = response.data;
 
-      // Response can be array or object with bills array
+      // Response is a JSON array of bill objects
       let bills: RadaBillRawData[] = [];
 
       if (Array.isArray(data)) {
-        bills = data;
+        // Normalize billinfo_list fields to RadaBillRawData format:
+        //   billinfo_list uses: id, name, registrationNumber, registrationDate (ISO with T), subject
+        //   RadaBillRawData expects: bill_id, number, title, registrationDate (YYYY-MM-DD), subject
+        bills = data.map((item: any) => ({
+          bill_id: item.id || item.bill_id,
+          number: item.registrationNumber || item.number,
+          title: item.name || item.title,
+          name: item.name,
+          registrationDate: item.registrationDate ? item.registrationDate.split('T')[0] : undefined,
+          registrationSession: item.registrationSession,
+          registrationConvocation: item.registrationConvocation,
+          subject: item.subject,
+          type: item.type,
+          rubric: item.rubric,
+          currentPhase_title: item.currentPhase?.title || item.currentPhase_title,
+          currentPhase_date: item.currentPhase?.date || item.currentPhase_date,
+          status: item.currentPhase?.status || item.status,
+          url: item.url,
+        }));
       } else if (data.bills && Array.isArray(data.bills)) {
         bills = data.bills;
       } else if (data.zpr && Array.isArray(data.zpr)) {
         bills = data.zpr;
       }
+
+      logger.info('Bills fetched from API', { totalCount: bills.length });
 
       // Apply date filters if provided
       if (filters?.dateFrom || filters?.dateTo) {
@@ -139,6 +195,7 @@ export class RadaAPIAdapter {
           if (filters.dateTo && billDate > new Date(filters.dateTo)) return false;
           return true;
         });
+        logger.info('Bills after date filter', { filteredCount: bills.length, dateFrom: filters?.dateFrom, dateTo: filters?.dateTo });
       }
 
       return bills;
@@ -185,28 +242,27 @@ export class RadaAPIAdapter {
   }
 
   /**
-   * Fetch factions (фракції) for a convocation
+   * Fetch factions (фракції) for a convocation.
+   * Extracted from mps-data.json fr_associations where is_fr === 1.
+   * The RADA API does not provide a standalone factions.json endpoint.
    */
   async fetchFactions(convocation: number = 9): Promise<RadaFactionRawData[]> {
-    await this.waitForRateLimit();
-
-    const endpoint = `/ogd/mps/skl${convocation}/factions.json`;
+    const endpoint = `/ogd/mps/skl${convocation}/mps-data.json (fr_associations)`;
     logger.info(`Fetching factions for convocation ${convocation}`);
 
     try {
-      const response = await this.client.get(endpoint);
-      const data = response.data;
+      const mpsData = await this.fetchMpsData(convocation);
 
-      // Response can be array or object with factions array
-      if (Array.isArray(data)) {
-        return data;
-      } else if (data.factions && Array.isArray(data.factions)) {
-        return data.factions;
-      } else if (data.fr_list && Array.isArray(data.fr_list)) {
-        return data.fr_list;
+      // Factions are in fr_associations with is_fr === 1
+      if (mpsData.fr_associations && Array.isArray(mpsData.fr_associations)) {
+        const factions = mpsData.fr_associations.filter(
+          (fr: any) => fr.is_fr === 1
+        );
+        logger.info(`Found ${factions.length} factions in mps-data.json`, { convocation });
+        return factions;
       }
 
-      logger.warn('Unexpected data format for factions', { convocation });
+      logger.warn('No fr_associations found in mps-data.json', { convocation });
       return [];
     } catch (error: any) {
       const statusCode = error.response?.status;
@@ -217,28 +273,27 @@ export class RadaAPIAdapter {
   }
 
   /**
-   * Fetch committees (комітети) for a convocation
+   * Fetch committees (комітети) for a convocation.
+   * Extracted from mps-data.json fr_associations where type === 2.
+   * The RADA API does not provide a standalone committees.json endpoint.
    */
   async fetchCommittees(convocation: number = 9): Promise<any[]> {
-    await this.waitForRateLimit();
-
-    const endpoint = `/ogd/mps/skl${convocation}/committees.json`;
+    const endpoint = `/ogd/mps/skl${convocation}/mps-data.json (fr_associations)`;
     logger.info(`Fetching committees for convocation ${convocation}`);
 
     try {
-      const response = await this.client.get(endpoint);
-      const data = response.data;
+      const mpsData = await this.fetchMpsData(convocation);
 
-      // Response can be array or object with committees array
-      if (Array.isArray(data)) {
-        return data;
-      } else if (data.committees && Array.isArray(data.committees)) {
-        return data.committees;
-      } else if (data.kom_list && Array.isArray(data.kom_list)) {
-        return data.kom_list;
+      // Committees are in fr_associations with type === 2
+      if (mpsData.fr_associations && Array.isArray(mpsData.fr_associations)) {
+        const committees = mpsData.fr_associations.filter(
+          (fr: any) => fr.type === 2
+        );
+        logger.info(`Found ${committees.length} committees in mps-data.json`, { convocation });
+        return committees;
       }
 
-      logger.warn('Unexpected data format for committees', { convocation });
+      logger.warn('No fr_associations found in mps-data.json', { convocation });
       return [];
     } catch (error: any) {
       const statusCode = error.response?.status;
@@ -249,32 +304,32 @@ export class RadaAPIAdapter {
   }
 
   /**
-   * Fetch deputy assistants
+   * Fetch deputy assistants.
+   * Extracted from mps-data.json — each deputy's record contains an
+   * "assistants" array. The standalone mps-assistants.json does not exist.
    */
   async fetchDeputyAssistants(radaId: string, convocation: number = 9): Promise<any[]> {
-    await this.waitForRateLimit();
-
-    const endpoint = `/ogd/mps/skl${convocation}/mps-assistants.json`;
     logger.info('Fetching deputy assistants', { radaId, convocation });
 
     try {
-      const response = await this.client.get(endpoint);
-      const data = response.data;
+      const mpsData = await this.fetchMpsData(convocation);
+      const deputies = mpsData.mps || [];
 
-      let assistants: any[] = [];
+      // Find the deputy by rada_id or id
+      const deputy = deputies.find(
+        (d: any) => String(d.rada_id) === String(radaId) || String(d.id) === String(radaId)
+      );
 
-      if (Array.isArray(data)) {
-        assistants = data;
-      } else if (data.assistants && Array.isArray(data.assistants)) {
-        assistants = data.assistants;
+      if (deputy && Array.isArray(deputy.assistants)) {
+        logger.info(`Found ${deputy.assistants.length} assistants for deputy ${radaId}`);
+        return deputy.assistants;
       }
 
-      // Filter by deputy ID
-      return assistants.filter((a) => a.mps_id === radaId || a.deputy_id === radaId);
+      logger.debug('No assistants found for deputy', { radaId });
+      return [];
     } catch (error: any) {
-      const statusCode = error.response?.status;
       const message = `Failed to fetch assistants: ${error.message}`;
-      logger.error(message, { statusCode, endpoint });
+      logger.error(message, { radaId, convocation });
       // Don't throw - assistants are optional
       return [];
     }
