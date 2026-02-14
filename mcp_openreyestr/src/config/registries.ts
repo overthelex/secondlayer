@@ -43,6 +43,32 @@ export function getNestedValue(obj: Record<string, unknown>, path: string): unkn
   return current;
 }
 
+/**
+ * Extract text value from EDRNPA item-based XML structure.
+ * Records look like: { item: [{ "@_name": "publisher", text: "..." }, ...] }
+ */
+/** Convert dd.mm.yyyy to yyyy-mm-dd for PostgreSQL */
+function parseDateDMY(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const match = dateStr.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+function extractItemText(record: Record<string, unknown>, itemName: string): string | null {
+  const items = record['item'];
+  if (!items) return null;
+  const arr = Array.isArray(items) ? items : [items];
+  const found = arr.find((it: any) => it['@_name'] === itemName);
+  if (!found) return null;
+  const text = found['text'];
+  if (text == null) return null;
+  // text can be a string or { text: [...] } (textlist)
+  if (typeof text === 'string') return text.trim();
+  if (typeof text === 'object' && text['#text']) return String(text['#text']).trim();
+  return String(text).trim() || null;
+}
+
 export const REGISTRIES: Record<string, RegistryConfig> = {
   notaries: {
     id: 2,
@@ -210,20 +236,27 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     innerFileName: 'edrnpa_cards',
     tableName: 'legal_acts',
     uniqueKey: 'act_id',
-    recordPath: 'DATA.RECORD',
+    recordPath: 'rna.database.document',
     fieldMap: {
-      act_id: 'ACT_ID',
-      publisher: 'PUBLISHER',
-      act_type: 'ACT_TYPE',
-      act_number: 'ACT_NUMBER',
-      act_date: 'ACT_DATE',
-      act_title: 'ACT_TITLE',
-      act_text: 'ACT_TEXT',
-      registration_number: 'REG_NUMBER',
-      registration_date: 'REG_DATE',
-      status: 'STATUS',
-      effective_date: 'EFFECTIVE_DATE',
-      termination_date: 'TERMINATION_DATE',
+      act_id: (_v: string, r: Record<string, unknown>) => {
+        // Build unique ID from reestr_code or number+date
+        const code = extractItemText(r, 'reestr_code');
+        if (code) return code;
+        const num = extractItemText(r, 'number');
+        const date = extractItemText(r, 'date_acc');
+        return `${num || 'unknown'}_${date || 'unknown'}`;
+      },
+      publisher: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'publisher'),
+      act_type: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'type'),
+      act_number: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'number'),
+      act_date: (_v: string, r: Record<string, unknown>) => parseDateDMY(extractItemText(r, 'date_acc')),
+      act_title: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'name'),
+      act_text: () => null, // Text is in separate file
+      registration_number: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'reestr_code'),
+      registration_date: (_v: string, r: Record<string, unknown>) => parseDateDMY(extractItemText(r, 'reestr_date')),
+      status: (_v: string, r: Record<string, unknown>) => extractItemText(r, 'status'),
+      effective_date: () => null,
+      termination_date: () => null,
     },
     updateFrequency: 'weekly',
     sizeCategory: 'medium',
