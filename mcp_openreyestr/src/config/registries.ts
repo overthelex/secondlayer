@@ -346,7 +346,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     },
     updateFrequency: 'daily',
     sizeCategory: 'huge',
-    csvDelimiter: ';',
+    csvDelimiter: ',',
   },
 
   debtors: {
@@ -380,7 +380,7 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     },
     updateFrequency: 'daily',
     sizeCategory: 'huge',
-    csvDelimiter: ';',
+    csvDelimiter: ',',
   },
 };
 
