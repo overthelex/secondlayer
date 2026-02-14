@@ -65,6 +65,13 @@ services:
   postgres-openreyestr-stage:
     image: mcvovkes/openreyestr-db:latest
     container_name: openreyestr-postgres-stage
+    command: >-
+      postgres
+      -c max_connections=200
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c work_mem=64MB
+      -c maintenance_work_mem=512MB
     environment:
       POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
       POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
@@ -83,6 +90,12 @@ services:
     restart: unless-stopped
     networks:
       - secondlayer-stage-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 
   qdrant-stage:
     image: qdrant/qdrant:latest
@@ -201,7 +214,7 @@ services:
   rada-mcp-app-stage:
     image: rada-mcp:latest
     container_name: rada-mcp-app-stage
-    command: ["node", "--max-old-space-size=2048", "dist/http-server.js"]
+    command: ["node", "--max-old-space-size=3072", "dist/http-server.js"]
     depends_on:
       rada-migrate-stage:
         condition: service_completed_successfully
@@ -249,9 +262,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3G
+          memory: 4G
         reservations:
-          memory: 512M
+          memory: 1G
 
   # OpenReyestr MCP Migrations
   migrate-openreyestr-stage:
@@ -358,7 +371,7 @@ services:
     container_name: secondlayer-app-stage
     command:
     - node
-    - --max-old-space-size=6144
+    - --max-old-space-size=8192
     - dist/http-server.js
     environment:
       NODE_ENV: staging
@@ -459,11 +472,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 8G
+          cpus: '4'
+          memory: 12G
         reservations:
-          cpus: '0.75'
-          memory: 2G
+          cpus: '1'
+          memory: 4G
   # Document Analysis Service (OCR, PDF parsing)
   document-service-stage:
     build:
@@ -471,7 +484,7 @@ services:
       dockerfile: deployment/Dockerfile.document-service
     image: document-service:latest
     container_name: document-service-stage
-    command: ["node", "--max-old-space-size=2048", "dist/document-service.js"]
+    command: ["node", "--max-old-space-size=4096", "dist/document-service.js"]
     depends_on:
       postgres-stage:
         condition: service_healthy
@@ -562,11 +575,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 3G
+          cpus: '2'
+          memory: 6G
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.5'
+          memory: 1G
 
   lexwebapp-stage:
     build:
