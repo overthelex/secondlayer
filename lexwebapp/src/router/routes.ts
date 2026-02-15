@@ -48,8 +48,13 @@ export const ROUTES = {
   // Public Offer (Fondy requirement)
   OFFER: '/:lang/offer',
 
-  // US market public pages
+  // Country-specific public pages
   US_DATA_SOURCES: '/us/data-sources',
+  UK_DATA_SOURCES: '/uk/data-sources',
+  DE_DATA_SOURCES: '/de/data-sources',
+  FR_DATA_SOURCES: '/fr/data-sources',
+  NL_DATA_SOURCES: '/nl/data-sources',
+  EE_DATA_SOURCES: '/ee/data-sources',
 
   // History
   HISTORY: '/history',

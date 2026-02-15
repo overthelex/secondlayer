@@ -44,6 +44,11 @@ import { PaymentSuccessPage } from '../pages/PaymentSuccessPage';
 import { PaymentErrorPage } from '../pages/PaymentErrorPage';
 import { OfferPage } from '../pages/OfferPage';
 import { USDataSourcesPage } from '../pages/USDataSourcesPage';
+import { UKDataSourcesPage } from '../pages/UKDataSourcesPage';
+import { DEDataSourcesPage } from '../pages/DEDataSourcesPage';
+import { FRDataSourcesPage } from '../pages/FRDataSourcesPage';
+import { NLDataSourcesPage } from '../pages/NLDataSourcesPage';
+import { EEDataSourcesPage } from '../pages/EEDataSourcesPage';
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +78,26 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.US_DATA_SOURCES,
     element: <USDataSourcesPage />,
+  },
+  {
+    path: ROUTES.UK_DATA_SOURCES,
+    element: <UKDataSourcesPage />,
+  },
+  {
+    path: ROUTES.DE_DATA_SOURCES,
+    element: <DEDataSourcesPage />,
+  },
+  {
+    path: ROUTES.FR_DATA_SOURCES,
+    element: <FRDataSourcesPage />,
+  },
+  {
+    path: ROUTES.NL_DATA_SOURCES,
+    element: <NLDataSourcesPage />,
+  },
+  {
+    path: ROUTES.EE_DATA_SOURCES,
+    element: <EEDataSourcesPage />,
   },
   {
     element: <AuthGuard />,

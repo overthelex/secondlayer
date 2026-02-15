@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,
-      allowedHosts: ['localdev.legal.org.ua', 'usa.legal.org.ua'],
+      allowedHosts: ['localdev.legal.org.ua', 'usa.legal.org.ua', 'uk.legal.org.ua', 'de.legal.org.ua', 'fr.legal.org.ua', 'nl.legal.org.ua', 'ee.legal.org.ua'],
       ...(hasLocalCerts && {
         https: {
           cert: fs.readFileSync(certFile),
