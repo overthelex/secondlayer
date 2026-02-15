@@ -1,4 +1,3 @@
-import { Request, Response, NextFunction } from 'express';
 import { getRedisClient } from '../utils/redis-client.js';
 import { logger } from '../utils/logger.js';
 
@@ -16,7 +15,7 @@ export function createRateLimiter(options: RateLimitOptions) {
     keyPrefix = 'ratelimit',
   } = options;
 
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (req: any, res: any, next: any): Promise<void> => {
     try {
       const redis = getRedisClient();
       const identifier = req.ip || req.socket.remoteAddress || 'unknown';
