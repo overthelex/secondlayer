@@ -11,7 +11,8 @@
 #   ./scripts/backfill-all.sh local --step=decisions         # Only court decisions
 #   ./scripts/backfill-all.sh stage --step=rada-bills --years=0.5
 
-set -euo pipefail
+set -uo pipefail
+# Note: no -e so individual step failures don't abort the whole run
 
 # ─── Defaults ───────────────────────────────────────────────────────────────
 ENV="${1:-local}"
@@ -110,42 +111,43 @@ if should_run "registries"; then
   NEED_OPENREYESTR=true
 fi
 
-if $NEED_BACKEND; then check_container "$BACKEND_CONTAINER"; fi
-if $NEED_RADA; then check_container "$RADA_CONTAINER"; fi
-if $NEED_OPENREYESTR; then check_container "$OPENREYESTR_CONTAINER"; fi
+if $NEED_BACKEND; then check_container "$BACKEND_CONTAINER" || exit 1; fi
+if $NEED_RADA; then check_container "$RADA_CONTAINER" || exit 1; fi
+if $NEED_OPENREYESTR; then check_container "$OPENREYESTR_CONTAINER" || exit 1; fi
+
+STEP_FAILURES=0
 
 # ─── Step 1: ZO Dictionaries ───────────────────────────────────────────────
 if should_run "dictionaries"; then
-  step_header "ZO Dictionaries (sync all)"
-  run_in_container "$BACKEND_CONTAINER" node dist/scripts/sync-dictionaries.js
-  echo -e "${GREEN}  Dictionaries synced${NC}"
+  step_header "ZO Dictionaries (sync all, 5min timeout)"
+  if timeout 300 docker exec "$BACKEND_CONTAINER" node dist/scripts/sync-dictionaries.js; then
+    echo -e "${GREEN}  Dictionaries synced${NC}"
+  else
+    echo -e "${YELLOW}  Warning: Dictionaries step failed or timed out (non-fatal)${NC}"
+    ((STEP_FAILURES++)) || true
+  fi
 fi
 
 # ─── Step 2: Court Decisions ────────────────────────────────────────────────
 if should_run "decisions"; then
   step_header "Court Decisions (${START_DATE} to ${END_DATE})"
-  docker exec \
+  if docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
     -e BATCH_DAYS="${BATCH_DAYS:-7}" \
     -e CONCURRENCY="${CONCURRENCY:-2}" \
     "$BACKEND_CONTAINER" \
-    node dist/scripts/backfill-court-decisions.js
-  echo -e "${GREEN}  Court decisions backfilled${NC}"
+    node dist/scripts/backfill-court-decisions.js; then
+    echo -e "${GREEN}  Court decisions backfilled${NC}"
+  else
+    echo -e "${RED}  Error: Court decisions step failed${NC}"
+    ((STEP_FAILURES++)) || true
+  fi
 fi
 
 # ─── Step 3: Legislation (12 codes via HTTP API) ───────────────────────────
 if should_run "legislation"; then
   step_header "Legislation (12 codes via get_legislation_structure)"
-
-  # Determine the API URL based on environment
-  if [[ "$ENV" == "local" ]]; then
-    API_URL="http://localhost:3000"
-  elif [[ "$ENV" == "stage" ]]; then
-    API_URL="http://localhost:3004"
-  else
-    API_URL="http://localhost:3000"
-  fi
 
   # Legislation codes to fetch
   CODES=(
@@ -166,12 +168,12 @@ if should_run "legislation"; then
   for code in "${CODES[@]}"; do
     echo -e "  Fetching: ${code}"
     # Call the tool via HTTP API from inside the backend container
-    docker exec "$BACKEND_CONTAINER" \
+    timeout 120 docker exec "$BACKEND_CONTAINER" \
       node -e "
         const http = require('http');
         const data = JSON.stringify({
           name: 'get_legislation_structure',
-          arguments: { query: '$code' }
+          arguments: { query: '${code}' }
         });
         const req = http.request({
           hostname: 'localhost',
@@ -207,32 +209,48 @@ fi
 # ─── Step 4: RADA Reference Data ───────────────────────────────────────────
 if should_run "rada-reference"; then
   step_header "RADA Reference Data (deputies, factions, committees)"
-  run_in_container "$RADA_CONTAINER" node dist/scripts/sync-reference-data.js
-  echo -e "${GREEN}  RADA reference data synced${NC}"
+  if docker exec "$RADA_CONTAINER" node dist/scripts/sync-reference-data.js; then
+    echo -e "${GREEN}  RADA reference data synced${NC}"
+  else
+    echo -e "${RED}  Error: RADA reference data step failed${NC}"
+    ((STEP_FAILURES++)) || true
+  fi
 fi
 
 # ─── Step 5: RADA Bills & Voting ───────────────────────────────────────────
 if should_run "rada-bills"; then
   step_header "RADA Bills & Voting (${START_DATE} to ${END_DATE})"
-  docker exec \
+  if docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
     -e CONCURRENCY="${CONCURRENCY:-5}" \
     "$RADA_CONTAINER" \
-    node dist/scripts/sync-week-data.js
-  echo -e "${GREEN}  RADA bills synced${NC}"
+    node dist/scripts/sync-week-data.js; then
+    echo -e "${GREEN}  RADA bills synced${NC}"
+  else
+    echo -e "${RED}  Error: RADA bills step failed${NC}"
+    ((STEP_FAILURES++)) || true
+  fi
 fi
 
 # ─── Step 6: NAIS Registries ───────────────────────────────────────────────
 if should_run "registries"; then
   step_header "NAIS Registries (full download)"
-  run_in_container "$OPENREYESTR_CONTAINER" node dist/scripts/sync-all-registries.js
-  echo -e "${GREEN}  NAIS registries synced${NC}"
+  if docker exec "$OPENREYESTR_CONTAINER" node dist/scripts/sync-all-registries.js; then
+    echo -e "${GREEN}  NAIS registries synced${NC}"
+  else
+    echo -e "${RED}  Error: NAIS registries step failed${NC}"
+    ((STEP_FAILURES++)) || true
+  fi
 fi
 
 # ─── Done ───────────────────────────────────────────────────────────────────
 header "Backfill Complete"
-echo -e "  All requested steps finished."
+if [[ $STEP_FAILURES -gt 0 ]]; then
+  echo -e "  ${YELLOW}Finished with ${STEP_FAILURES} step failure(s)${NC}"
+else
+  echo -e "  All steps finished successfully."
+fi
 echo -e "  Verify with:"
 echo -e "    docker exec ${BACKEND_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM documents').then(r=>console.log('Documents:',r.rows[0].count)).finally(()=>p.end())\""
 echo -e "    docker exec ${RADA_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM bills').then(r=>console.log('Bills:',r.rows[0].count)).finally(()=>p.end())\""
