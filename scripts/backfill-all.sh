@@ -1,6 +1,7 @@
 #!/bin/bash
 #
 # Unified backfill orchestrator for all external data sources.
+# Runs all 4 source groups IN PARALLEL for maximum throughput.
 #
 # Usage:
 #   ./scripts/backfill-all.sh [local|stage] [--years=2] [--step=all|dictionaries|decisions|legislation|rada-reference|rada-bills|registries]
@@ -40,12 +41,21 @@ RADA_CONTAINER="rada-mcp-app-${ENV}"
 OPENREYESTR_CONTAINER="openreyestr-app-${ENV}"
 COMPOSE_FILE="deployment/docker-compose.${ENV}.yml"
 
+# ─── Concurrency (10 threads per source) ──────────────────────────────────
+DECISIONS_CONCURRENCY="${CONCURRENCY:-10}"
+RADA_REF_CONCURRENCY="${CONCURRENCY:-10}"
+RADA_BILLS_CONCURRENCY="${CONCURRENCY:-10}"
+REGISTRIES_CONCURRENCY="${CONCURRENCY:-10}"
+
 # ─── Colors ─────────────────────────────────────────────────────────────────
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
+
+# ─── Log directory for parallel output ────────────────────────────────────
+LOG_DIR=$(mktemp -d /tmp/backfill-XXXXXX)
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 header() {
@@ -70,29 +80,18 @@ check_container() {
   echo -e "${GREEN}  Container ${name} is running${NC}"
 }
 
-run_in_container() {
-  local container="$1"
-  shift
-  docker exec "$container" "$@"
-}
-
-run_in_container_env() {
-  local container="$1"
-  shift
-  # Remaining args are -e KEY=VAL ... node script.js
-  docker exec "$@" "$container"
-}
-
 should_run() {
   [[ "$STEP" == "all" || "$STEP" == "$1" ]]
 }
 
 # ─── Banner ─────────────────────────────────────────────────────────────────
-header "SecondLayer Data Backfill"
+header "SecondLayer Data Backfill (PARALLEL)"
 echo -e "  Environment:   ${ENV}"
 echo -e "  Date range:    ${START_DATE} to ${END_DATE} (${YEARS} years)"
 echo -e "  Step:          ${STEP}"
+echo -e "  Concurrency:   ${DECISIONS_CONCURRENCY} per source"
 echo -e "  Compose file:  ${COMPOSE_FILE}"
+echo -e "  Log dir:       ${LOG_DIR}"
 
 # ─── Verify containers ─────────────────────────────────────────────────────
 echo ""
@@ -115,41 +114,46 @@ if $NEED_BACKEND; then check_container "$BACKEND_CONTAINER" || exit 1; fi
 if $NEED_RADA; then check_container "$RADA_CONTAINER" || exit 1; fi
 if $NEED_OPENREYESTR; then check_container "$OPENREYESTR_CONTAINER" || exit 1; fi
 
-STEP_FAILURES=0
+# ─── Track background PIDs ────────────────────────────────────────────────
+declare -A PIDS
+declare -A PID_NAMES
 
-# ─── Step 1: ZO Dictionaries ───────────────────────────────────────────────
-if should_run "dictionaries"; then
-  step_header "ZO Dictionaries (sync all, 5min timeout)"
-  if timeout 300 docker exec "$BACKEND_CONTAINER" node dist/scripts/sync-dictionaries.js; then
-    echo -e "${GREEN}  Dictionaries synced${NC}"
+# ─── Step functions (each runs independently) ─────────────────────────────
+
+run_dictionaries() {
+  local log="$LOG_DIR/dictionaries.log"
+  echo "[$(date +%T)] Starting dictionaries..." > "$log"
+  if timeout 300 docker exec "$BACKEND_CONTAINER" node dist/scripts/sync-dictionaries.js >> "$log" 2>&1; then
+    echo -e "\n[$(date +%T)] ✅ Dictionaries synced" >> "$log"
+    return 0
   else
-    echo -e "${YELLOW}  Warning: Dictionaries step failed or timed out (non-fatal)${NC}"
-    ((STEP_FAILURES++)) || true
+    echo -e "\n[$(date +%T)] ⚠️  Dictionaries failed or timed out" >> "$log"
+    return 1
   fi
-fi
+}
 
-# ─── Step 2: Court Decisions ────────────────────────────────────────────────
-if should_run "decisions"; then
-  step_header "Court Decisions (${START_DATE} to ${END_DATE})"
+run_decisions() {
+  local log="$LOG_DIR/decisions.log"
+  echo "[$(date +%T)] Starting court decisions (concurrency=${DECISIONS_CONCURRENCY})..." > "$log"
   if docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
     -e BATCH_DAYS="${BATCH_DAYS:-7}" \
-    -e CONCURRENCY="${CONCURRENCY:-2}" \
+    -e CONCURRENCY="$DECISIONS_CONCURRENCY" \
     "$BACKEND_CONTAINER" \
-    node dist/scripts/backfill-court-decisions.js; then
-    echo -e "${GREEN}  Court decisions backfilled${NC}"
+    node dist/scripts/backfill-court-decisions.js >> "$log" 2>&1; then
+    echo -e "\n[$(date +%T)] ✅ Court decisions backfilled" >> "$log"
+    return 0
   else
-    echo -e "${RED}  Error: Court decisions step failed${NC}"
-    ((STEP_FAILURES++)) || true
+    echo -e "\n[$(date +%T)] ❌ Court decisions failed" >> "$log"
+    return 1
   fi
-fi
+}
 
-# ─── Step 3: Legislation (12 codes via HTTP API) ───────────────────────────
-if should_run "legislation"; then
-  step_header "Legislation (12 codes via get_legislation_structure)"
+run_legislation() {
+  local log="$LOG_DIR/legislation.log"
+  echo "[$(date +%T)] Starting legislation (12 codes, 4 parallel)..." > "$log"
 
-  # Legislation codes to fetch
   CODES=(
     "Конституція України"
     "Цивільний кодекс України"
@@ -165,92 +169,208 @@ if should_run "legislation"; then
     "Господарський процесуальний кодекс України"
   )
 
+  # Fetch 4 codes in parallel
+  local leg_pids=()
+  local running=0
+  local max_parallel=4
+  local failed=0
+
   for code in "${CODES[@]}"; do
-    echo -e "  Fetching: ${code}"
-    # Call the tool via HTTP API from inside the backend container
-    timeout 120 docker exec "$BACKEND_CONTAINER" \
-      node -e "
-        const http = require('http');
-        const data = JSON.stringify({
-          name: 'get_legislation_structure',
-          arguments: { query: '${code}' }
-        });
-        const req = http.request({
-          hostname: 'localhost',
-          port: 3000,
-          path: '/api/tools/get_legislation_structure',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + process.env.SECONDARY_LAYER_KEYS?.split(',')[0],
-            'Content-Length': Buffer.byteLength(data)
-          }
-        }, (res) => {
-          let body = '';
-          res.on('data', c => body += c);
-          res.on('end', () => {
-            try {
-              const parsed = JSON.parse(body);
-              console.log('  Status:', res.statusCode, '- Articles:', parsed?.result?.articles_count || parsed?.articles_count || 'N/A');
-            } catch(e) {
-              console.log('  Status:', res.statusCode);
-            }
+    (
+      timeout 120 docker exec "$BACKEND_CONTAINER" \
+        node -e "
+          const http = require('http');
+          const data = JSON.stringify({
+            name: 'get_legislation_structure',
+            arguments: { query: '${code}' }
           });
-        });
-        req.on('error', e => console.error('  Error:', e.message));
-        req.write(data);
-        req.end();
-      " 2>&1 || echo -e "${YELLOW}  Warning: Failed to fetch ${code}${NC}"
-    sleep 2
+          const req = http.request({
+            hostname: 'localhost',
+            port: 3000,
+            path: '/api/tools/get_legislation_structure',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + process.env.SECONDARY_LAYER_KEYS?.split(',')[0],
+              'Content-Length': Buffer.byteLength(data)
+            }
+          }, (res) => {
+            let body = '';
+            res.on('data', c => body += c);
+            res.on('end', () => {
+              try {
+                const parsed = JSON.parse(body);
+                console.log('  ${code}: Status', res.statusCode, '- Articles:', parsed?.result?.articles_count || parsed?.articles_count || 'N/A');
+              } catch(e) {
+                console.log('  ${code}: Status', res.statusCode);
+              }
+            });
+          });
+          req.on('error', e => console.error('  ${code}: Error:', e.message));
+          req.write(data);
+          req.end();
+        " 2>&1
+    ) >> "$log" &
+    leg_pids+=($!)
+    ((running++))
+
+    # Wait when we hit max_parallel
+    if [[ $running -ge $max_parallel ]]; then
+      for pid in "${leg_pids[@]}"; do
+        wait "$pid" || ((failed++)) || true
+      done
+      leg_pids=()
+      running=0
+    fi
   done
-  echo -e "${GREEN}  Legislation sync complete${NC}"
-fi
 
-# ─── Step 4: RADA Reference Data ───────────────────────────────────────────
-if should_run "rada-reference"; then
-  step_header "RADA Reference Data (deputies, factions, committees)"
-  if docker exec "$RADA_CONTAINER" node dist/scripts/sync-reference-data.js; then
-    echo -e "${GREEN}  RADA reference data synced${NC}"
+  # Wait for remaining
+  for pid in "${leg_pids[@]}"; do
+    wait "$pid" || ((failed++)) || true
+  done
+
+  echo -e "\n[$(date +%T)] ✅ Legislation sync complete (${failed} failures)" >> "$log"
+  return 0
+}
+
+run_rada_reference() {
+  local log="$LOG_DIR/rada-reference.log"
+  echo "[$(date +%T)] Starting RADA reference data (concurrency=${RADA_REF_CONCURRENCY})..." > "$log"
+  if docker exec \
+    -e CONCURRENCY="$RADA_REF_CONCURRENCY" \
+    "$RADA_CONTAINER" \
+    node dist/scripts/sync-reference-data.js >> "$log" 2>&1; then
+    echo -e "\n[$(date +%T)] ✅ RADA reference data synced" >> "$log"
+    return 0
   else
-    echo -e "${RED}  Error: RADA reference data step failed${NC}"
-    ((STEP_FAILURES++)) || true
+    echo -e "\n[$(date +%T)] ❌ RADA reference data failed" >> "$log"
+    return 1
   fi
-fi
+}
 
-# ─── Step 5: RADA Bills & Voting ───────────────────────────────────────────
-if should_run "rada-bills"; then
-  step_header "RADA Bills & Voting (${START_DATE} to ${END_DATE})"
+run_rada_bills() {
+  local log="$LOG_DIR/rada-bills.log"
+  echo "[$(date +%T)] Starting RADA bills & voting (concurrency=${RADA_BILLS_CONCURRENCY})..." > "$log"
   if docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
-    -e CONCURRENCY="${CONCURRENCY:-5}" \
+    -e CONCURRENCY="$RADA_BILLS_CONCURRENCY" \
     "$RADA_CONTAINER" \
-    node dist/scripts/sync-week-data.js; then
-    echo -e "${GREEN}  RADA bills synced${NC}"
+    node dist/scripts/sync-week-data.js >> "$log" 2>&1; then
+    echo -e "\n[$(date +%T)] ✅ RADA bills synced" >> "$log"
+    return 0
   else
-    echo -e "${RED}  Error: RADA bills step failed${NC}"
-    ((STEP_FAILURES++)) || true
+    echo -e "\n[$(date +%T)] ❌ RADA bills failed" >> "$log"
+    return 1
   fi
+}
+
+run_registries() {
+  local log="$LOG_DIR/registries.log"
+  echo "[$(date +%T)] Starting NAIS registries (concurrency=${REGISTRIES_CONCURRENCY})..." > "$log"
+  if docker exec \
+    -e CONCURRENCY="$REGISTRIES_CONCURRENCY" \
+    "$OPENREYESTR_CONTAINER" \
+    node dist/scripts/sync-all-registries.js >> "$log" 2>&1; then
+    echo -e "\n[$(date +%T)] ✅ NAIS registries synced" >> "$log"
+    return 0
+  else
+    echo -e "\n[$(date +%T)] ❌ NAIS registries failed" >> "$log"
+    return 1
+  fi
+}
+
+# ─── Launch all steps in parallel ──────────────────────────────────────────
+
+echo ""
+echo -e "${CYAN}Launching all steps in parallel...${NC}"
+STEP_COUNT=0
+
+if should_run "dictionaries"; then
+  run_dictionaries &
+  PIDS[$!]="dictionaries"
+  PID_NAMES[dictionaries]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 Dictionaries    → PID $!"
 fi
 
-# ─── Step 6: NAIS Registries ───────────────────────────────────────────────
+if should_run "decisions"; then
+  run_decisions &
+  PIDS[$!]="decisions"
+  PID_NAMES[decisions]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 Court Decisions → PID $!"
+fi
+
+if should_run "legislation"; then
+  run_legislation &
+  PIDS[$!]="legislation"
+  PID_NAMES[legislation]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 Legislation     → PID $!"
+fi
+
+if should_run "rada-reference"; then
+  run_rada_reference &
+  PIDS[$!]="rada-reference"
+  PID_NAMES[rada-reference]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 RADA Reference  → PID $!"
+fi
+
+if should_run "rada-bills"; then
+  run_rada_bills &
+  PIDS[$!]="rada-bills"
+  PID_NAMES[rada-bills]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 RADA Bills      → PID $!"
+fi
+
 if should_run "registries"; then
-  step_header "NAIS Registries (full download)"
-  if docker exec "$OPENREYESTR_CONTAINER" node dist/scripts/sync-all-registries.js; then
-    echo -e "${GREEN}  NAIS registries synced${NC}"
+  run_registries &
+  PIDS[$!]="registries"
+  PID_NAMES[registries]=$!
+  ((STEP_COUNT++))
+  echo -e "  🚀 NAIS Registries → PID $!"
+fi
+
+echo ""
+echo -e "  ${CYAN}${STEP_COUNT} steps launched. Waiting for completion...${NC}"
+echo ""
+
+# ─── Wait for all and collect results ──────────────────────────────────────
+STEP_FAILURES=0
+STEP_SUCCESSES=0
+
+for pid in "${!PIDS[@]}"; do
+  name="${PIDS[$pid]}"
+  if wait "$pid"; then
+    echo -e "  ${GREEN}✅ ${name} completed${NC}"
+    ((STEP_SUCCESSES++))
   else
-    echo -e "${RED}  Error: NAIS registries step failed${NC}"
+    echo -e "  ${RED}❌ ${name} failed${NC}"
     ((STEP_FAILURES++)) || true
   fi
-fi
+done
+
+# ─── Print logs summary ───────────────────────────────────────────────────
+echo ""
+echo -e "${CYAN}─── Step Logs ───${NC}"
+for logfile in "$LOG_DIR"/*.log; do
+  name=$(basename "$logfile" .log)
+  echo ""
+  echo -e "${YELLOW}=== ${name} ===${NC}"
+  # Show last 20 lines of each log (the summary/important parts)
+  tail -20 "$logfile"
+done
 
 # ─── Done ───────────────────────────────────────────────────────────────────
 header "Backfill Complete"
+echo -e "  Succeeded: ${STEP_SUCCESSES}/${STEP_COUNT}"
 if [[ $STEP_FAILURES -gt 0 ]]; then
-  echo -e "  ${YELLOW}Finished with ${STEP_FAILURES} step failure(s)${NC}"
-else
-  echo -e "  All steps finished successfully."
+  echo -e "  ${YELLOW}Failed: ${STEP_FAILURES}/${STEP_COUNT}${NC}"
 fi
+echo -e "  Full logs: ${LOG_DIR}/"
 echo -e "  Verify with:"
 echo -e "    docker exec ${BACKEND_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM documents').then(r=>console.log('Documents:',r.rows[0].count)).finally(()=>p.end())\""
 echo -e "    docker exec ${RADA_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM bills').then(r=>console.log('Bills:',r.rows[0].count)).finally(()=>p.end())\""

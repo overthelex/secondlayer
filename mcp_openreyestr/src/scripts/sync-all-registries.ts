@@ -465,17 +465,32 @@ async function main() {
     return;
   }
 
-  // Sync each registry
+  // Sync registries in parallel batches
+  const concurrency = parseInt(process.env.CONCURRENCY || '3', 10);
   const results: { registry: string; count: number; time: number; error?: string }[] = [];
 
-  for (const config of registriesToSync) {
-    console.log(`\n--- ${config.name} (${config.title}) ---`);
+  console.log(`\nConcurrency: ${concurrency} registries in parallel`);
 
-    const result = await syncRegistry(pool, config, args.keepFiles);
-    results.push(result);
+  for (let i = 0; i < registriesToSync.length; i += concurrency) {
+    const batch = registriesToSync.slice(i, i + concurrency);
+    console.log(`\nBatch ${Math.floor(i / concurrency) + 1}: ${batch.map(c => c.name).join(', ')}`);
 
-    if (result.error) {
-      console.error(`  FAILED: ${result.error}`);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (config) => {
+        console.log(`\n--- ${config.name} (${config.title}) ---`);
+        return syncRegistry(pool, config, args.keepFiles);
+      })
+    );
+
+    for (const settled of batchResults) {
+      if (settled.status === 'fulfilled') {
+        results.push(settled.value);
+        if (settled.value.error) {
+          console.error(`  FAILED ${settled.value.registry}: ${settled.value.error}`);
+        }
+      } else {
+        results.push({ registry: 'unknown', count: 0, time: 0, error: settled.reason?.message || 'Unknown error' });
+      }
     }
   }
 

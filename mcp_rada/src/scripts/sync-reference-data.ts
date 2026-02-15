@@ -15,7 +15,7 @@ import { DeputyService } from '../services/deputy-service';
 async function main() {
   const convocation = parseInt(process.env.CONVOCATION || '9', 10);
   const syncAssistants = process.env.SYNC_ASSISTANTS !== 'false';
-  const concurrency = parseInt(process.env.CONCURRENCY || '5', 10);
+  const concurrency = parseInt(process.env.CONCURRENCY || '10', 10);
 
   console.log('\n' + '='.repeat(60));
   console.log('RADA Reference Data Sync');

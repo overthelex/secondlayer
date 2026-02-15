@@ -128,7 +128,7 @@ async function main() {
   const startDate = process.env.START_DATE || formatDate(twoYearsAgo);
   const endDate = process.env.END_DATE || formatDate(now);
   const batchDays = parseInt(process.env.BATCH_DAYS || '7', 10);
-  const concurrency = parseInt(process.env.CONCURRENCY || '2', 10);
+  const concurrency = parseInt(process.env.CONCURRENCY || '10', 10);
   const pageLimit = parseInt(process.env.PAGE_LIMIT || '40', 10);
   const maxPages = parseInt(process.env.MAX_PAGES || '25', 10);
   const dryRun = process.env.DRY_RUN === 'true';

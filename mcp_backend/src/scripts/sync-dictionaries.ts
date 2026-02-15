@@ -299,14 +299,14 @@ async function syncDictionaries() {
       }
     }
 
-    for (const entry of DICTIONARIES) {
+    // Process all dictionaries in parallel (grouped by domain for safety)
+    const processDictEntry = async (entry: DictionaryEntry) => {
       try {
         logger.info(`Fetching ${entry.domain}/${entry.name}...`);
 
         let items: any[];
 
         if (entry.extractFromSearch) {
-          // Use pre-extracted legal_acts data
           if (!legalActsData) {
             throw new Error('Legal acts data extraction failed earlier');
           }
@@ -315,13 +315,11 @@ async function syncDictionaries() {
             : legalActsData.authors;
         } else {
           const adapter = adapters.get(entry.domain)!;
-          // Fetch all pages of the dictionary
           items = await fetchAllDictionaryItems(adapter, entry.dictionaryKey, entry.name);
         }
 
         const itemsCount = items.length;
 
-        // Upsert into database
         await db.query(
           `INSERT INTO zo_dictionaries (domain, dictionary_name, data, items_count, fetched_at)
            VALUES ($1, $2, $3, $4, NOW())
@@ -330,19 +328,26 @@ async function syncDictionaries() {
           [entry.domain, entry.name, JSON.stringify(items), itemsCount]
         );
 
-        // Also cache in Redis with 24h TTL
         const cacheKey = `zo:dict:${entry.domain}:${entry.name}`;
-        await redis.setEx(cacheKey, 86400, JSON.stringify(items));
+        await redis!.setEx(cacheKey, 86400, JSON.stringify(items));
 
         logger.info(`  ✓ ${entry.name}: ${itemsCount} items`);
-        successCount++;
-
-        // Rate limit between requests (skip for extractFromSearch — already rate-limited)
-        if (!entry.extractFromSearch) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+        return true;
       } catch (error: any) {
         logger.error(`  ✗ ${entry.name}: ${error.message}`);
+        return false;
+      }
+    };
+
+    // Run all dictionaries concurrently
+    const results = await Promise.allSettled(
+      DICTIONARIES.map(entry => processDictEntry(entry))
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        successCount++;
+      } else {
         errorCount++;
       }
     }
