@@ -7,6 +7,7 @@
 
 ## 📚 Related Documentation
 
+- **[API Contract v1](API_CONTRACT.md)** - Canonical reference for all response formats, field types, and change policy (additive-only)
 - **[MCP Client Integration Guide](MCP_CLIENT_INTEGRATION_GUIDE.md)** - Comprehensive guide for connecting 10+ LLM clients (Claude Desktop, Jan AI, LibreChat, AnythingLLM, Open WebUI, etc.) with complete configurations and examples
 - **[API Explorer](../mcp_backend/docs/api-explorer.html)** - Interactive documentation for all MCP tools
 - **[Client Integration Quick Start](../mcp_backend/docs/CLIENT_INTEGRATION.md)** - Quick start guide for client integration
