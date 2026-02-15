@@ -33,7 +33,8 @@
     "sync:dictionaries": "npm run build && node dist/scripts/sync-dictionaries.js",
     "sync:dictionaries:dev": "ts-node-dev --transpile-only src/scripts/sync-dictionaries.ts",
     "seed:matters": "npm run build && node dist/scripts/seed-matter-data.js",
-    "seed:matters:dev": "ts-node-dev --transpile-only src/scripts/seed-matter-data.ts"
+    "seed:matters:dev": "ts-node-dev --transpile-only src/scripts/seed-matter-data.ts",
+    "backfill:decisions": "npm run build && node dist/scripts/backfill-court-decisions.js"
   },
   "keywords": [
     "mcp",

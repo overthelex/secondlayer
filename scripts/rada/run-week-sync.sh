@@ -5,8 +5,8 @@
 
 set -e
 
-START_DATE="${1:-2026-01-20}"
-END_DATE="${2:-2026-01-27}"
+END_DATE="${2:-$(date +%Y-%m-%d)}"
+START_DATE="${1:-$(date -d "$END_DATE - 7 days" +%Y-%m-%d)}"
 CONCURRENCY="${3:-5}"
 
 # Colors
