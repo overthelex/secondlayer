@@ -55,6 +55,7 @@ export const ROUTES = {
   FR_DATA_SOURCES: '/fr/data-sources',
   NL_DATA_SOURCES: '/nl/data-sources',
   EE_DATA_SOURCES: '/ee/data-sources',
+  EU_COMPARISON: '/eu/comparison',
 
   // History
   HISTORY: '/history',

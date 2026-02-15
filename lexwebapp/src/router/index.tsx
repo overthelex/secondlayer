@@ -49,6 +49,7 @@ import { DEDataSourcesPage } from '../pages/DEDataSourcesPage';
 import { FRDataSourcesPage } from '../pages/FRDataSourcesPage';
 import { NLDataSourcesPage } from '../pages/NLDataSourcesPage';
 import { EEDataSourcesPage } from '../pages/EEDataSourcesPage';
+import { EUComparisonPage } from '../pages/EUComparisonPage';
 
 export const router = createBrowserRouter([
   {
@@ -98,6 +99,10 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.EE_DATA_SOURCES,
     element: <EEDataSourcesPage />,
+  },
+  {
+    path: ROUTES.EU_COMPARISON,
+    element: <EUComparisonPage />,
   },
   {
     element: <AuthGuard />,

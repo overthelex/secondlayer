@@ -198,7 +198,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://localdev.legal.org.ua/auth/google/callback}
       FRONTEND_URL: ${FRONTEND_URL:-https://localdev.legal.org.ua}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localdev.legal.org.ua,https://usa.legal.org.ua,https://uk.legal.org.ua,https://de.legal.org.ua,https://fr.legal.org.ua,https://nl.legal.org.ua,https://ee.legal.org.ua,http://localhost:5173,http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://localdev.legal.org.ua,https://usa.legal.org.ua,https://uk.legal.org.ua,https://de.legal.org.ua,https://fr.legal.org.ua,https://nl.legal.org.ua,https://ee.legal.org.ua,https://eu.legal.org.ua,http://localhost:5173,http://localhost:3000}
 
       # MinIO (S3-compatible object storage)
       MINIO_ENDPOINT: minio-local
