@@ -68,71 +68,46 @@ class WeekDataSyncer {
   }
 
   /**
-   * Sync bills for a specific date
+   * Sync all bills from RADA API (full list for convocation 9)
    */
-  private async syncBillsForDate(date: string): Promise<number> {
+  private async syncAllBillsFromAPI(startDate: string, endDate: string): Promise<number> {
     try {
-      logger.info('Syncing bills', { date });
-
-      // Search for bills registered on this date
-      const result = await this.billService.searchBills({
-        query: '*',
-        date_from: date,
-        date_to: date,
-        limit: 1000,
-      });
-
-      logger.info('Bills synced', { date, count: result.total });
-      return result.total;
+      logger.info('Fetching all bills from RADA API', { startDate, endDate });
+      // syncAllBills fetches the full convocation bill list and upserts each one
+      const count = await this.billService.syncAllBills(9);
+      logger.info('Bills sync completed', { count });
+      return count;
     } catch (error: any) {
-      logger.error('Failed to sync bills', { date, error: error.message });
+      logger.error('Failed to sync bills from API', { error: error.message });
       return 0;
     }
   }
 
   /**
-   * Sync voting records for a specific date
+   * Sync voting records for a specific date by fetching from RADA API
    */
   private async syncVotingForDate(date: string): Promise<number> {
     try {
-      logger.info('Syncing voting records', { date });
+      logger.info('Syncing voting records from API', { date });
 
-      // Get list of deputies to analyze their voting
-      const deputies = await this.db.query(
-        'SELECT rada_id, short_name FROM deputies WHERE active = true LIMIT 50'
-      );
+      // getVotingByDate fetches from RADA API and saves to DB
+      const records = await this.votingService.getVotingByDate(date, 9);
 
-      let totalVotes = 0;
-      for (const deputy of deputies.rows) {
-        try {
-          const result = await this.votingService.analyzeVotingRecord({
-            deputy_name: deputy.short_name,
-            date_from: date,
-            date_to: date,
-          });
-
-          if (result.total_votes) {
-            totalVotes += result.total_votes;
-          }
-        } catch (error: any) {
-          // Continue with next deputy
-          logger.debug('No voting data for deputy', {
-            deputy: deputy.short_name,
-            date,
-          });
-        }
-      }
-
-      logger.info('Voting records synced', { date, count: totalVotes });
-      return totalVotes;
+      logger.info('Voting records synced', { date, count: records.length });
+      return records.length;
     } catch (error: any) {
+      // 404 is expected for dates with no plenary sessions
+      if (error.message?.includes('404') || error.message?.includes('Not Found')) {
+        logger.debug('No plenary session data for date', { date });
+        return 0;
+      }
       logger.error('Failed to sync voting records', { date, error: error.message });
       return 0;
     }
   }
 
   /**
-   * Sync data for a single date
+   * Sync voting data for a single date
    */
   private async syncDateData(date: string): Promise<SyncStats> {
     const startTime = Date.now();
@@ -146,18 +121,8 @@ class WeekDataSyncer {
     };
 
     try {
-      // Sync bills for this date
-      stats.bills = await this.syncBillsForDate(date);
-    } catch (error: any) {
-      stats.errors.push(`Bills: ${error.message}`);
-    }
-
-    try {
-      // Sync voting records (only if we have deputies)
-      const deputyCount = await this.db.query('SELECT COUNT(*) FROM deputies');
-      if (parseInt(deputyCount.rows[0].count) > 0) {
-        stats.votingRecords = await this.syncVotingForDate(date);
-      }
+      // Sync voting records for this date from RADA API
+      stats.votingRecords = await this.syncVotingForDate(date);
     } catch (error: any) {
       stats.errors.push(`Voting: ${error.message}`);
     }
@@ -178,13 +143,18 @@ class WeekDataSyncer {
       logger.info('Database connected');
 
       // Step 1: Sync all deputies first (once for all dates)
-      console.log('\n🔄 Step 1/2: Syncing all deputies...\n');
+      console.log('\n🔄 Step 1/3: Syncing all deputies...\n');
       const deputyCount = await this.syncAllDeputies();
       console.log(`✅ Synced ${deputyCount} deputies\n`);
 
-      // Step 2: Generate date range
+      // Step 2: Sync all bills from RADA API (one big download, filtered by date range)
+      console.log('🔄 Step 2/3: Syncing bills from RADA API...\n');
+      const billCount = await this.syncAllBillsFromAPI(startDate, endDate);
+      console.log(`✅ Synced ${billCount} bills\n`);
+
+      // Step 3: Sync voting records per day
       const dates = this.generateDateRange(startDate, endDate);
-      console.log(`🔄 Step 2/2: Syncing data for ${dates.length} days in ${this.concurrency} parallel threads...\n`);
+      console.log(`🔄 Step 3/3: Syncing voting data for ${dates.length} days in ${this.concurrency} parallel threads...\n`);
 
       // Process dates in batches with concurrency limit
       const results: SyncStats[] = [];
@@ -201,37 +171,38 @@ class WeekDataSyncer {
       console.log('📊 SYNC SUMMARY');
       console.log('='.repeat(70) + '\n');
 
-      let totalBills = 0;
       let totalVoting = 0;
       let totalErrors = 0;
 
-      console.log('Date       | Bills | Voting | Duration | Status');
-      console.log('-'.repeat(70));
+      console.log('Date       | Voting | Duration | Status');
+      console.log('-'.repeat(60));
 
       for (const stat of results) {
-        totalBills += stat.bills;
         totalVoting += stat.votingRecords;
         totalErrors += stat.errors.length;
 
         const status = stat.errors.length > 0 ? '⚠️  ' : '✅ ';
         const duration = (stat.duration / 1000).toFixed(1);
 
-        console.log(
-          `${stat.date} | ${stat.bills.toString().padStart(5)} | ${stat.votingRecords
-            .toString()
-            .padStart(6)} | ${duration.padStart(6)}s | ${status}`
-        );
+        // Only print dates that had voting records or errors
+        if (stat.votingRecords > 0 || stat.errors.length > 0) {
+          console.log(
+            `${stat.date} | ${stat.votingRecords
+              .toString()
+              .padStart(6)} | ${duration.padStart(6)}s | ${status}`
+          );
 
-        if (stat.errors.length > 0) {
-          console.log(`  Errors: ${stat.errors.join(', ')}`);
+          if (stat.errors.length > 0) {
+            console.log(`  Errors: ${stat.errors.join(', ')}`);
+          }
         }
       }
 
-      console.log('-'.repeat(70));
-      console.log(`Total      | ${totalBills.toString().padStart(5)} | ${totalVoting.toString().padStart(6)} |`);
+      console.log('-'.repeat(60));
+      console.log(`Total      | ${totalVoting.toString().padStart(6)} |`);
       console.log('');
       console.log(`👥 Deputies synced:      ${deputyCount}`);
-      console.log(`📄 Bills synced:         ${totalBills}`);
+      console.log(`📄 Bills synced:         ${billCount}`);
       console.log(`🗳️  Voting records:       ${totalVoting}`);
       console.log(`❌ Total errors:         ${totalErrors}`);
       console.log(`⏱️  Total time:           ${((Date.now() - overallStart) / 1000).toFixed(1)}s`);
