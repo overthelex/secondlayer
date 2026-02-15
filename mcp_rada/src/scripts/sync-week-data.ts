@@ -38,21 +38,6 @@ class WeekDataSyncer {
   }
 
   /**
-   * Generate date range for the last week
-   */
-  private generateDateRange(startDate: string, endDate: string): string[] {
-    const dates: string[] = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      dates.push(d.toISOString().split('T')[0]);
-    }
-
-    return dates;
-  }
-
-  /**
    * Sync all deputies for convocation 9
    */
   private async syncAllDeputies(): Promise<number> {
@@ -152,9 +137,12 @@ class WeekDataSyncer {
       const billCount = await this.syncAllBillsFromAPI(startDate, endDate);
       console.log(`✅ Synced ${billCount} bills\n`);
 
-      // Step 3: Sync voting records per day
-      const dates = this.generateDateRange(startDate, endDate);
-      console.log(`🔄 Step 3/3: Syncing voting data for ${dates.length} days in ${this.concurrency} parallel threads...\n`);
+      // Step 3: Sync voting records — only for dates with actual plenary sessions
+      console.log('🔄 Step 3/3: Fetching available session dates...\n');
+      const allSessionDates = await this.radaAdapter.fetchAvailableSessionDates(9);
+      const dates = allSessionDates.filter(d => d >= startDate && d <= endDate);
+      console.log(`  Found ${dates.length} session days in range (of ${allSessionDates.length} total)\n`);
+      console.log(`  Syncing voting data with ${this.concurrency} parallel threads...\n`);
 
       // Process dates in batches with concurrency limit
       const results: SyncStats[] = [];

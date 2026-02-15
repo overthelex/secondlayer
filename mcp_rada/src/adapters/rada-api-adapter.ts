@@ -205,36 +205,67 @@ export class RadaAPIAdapter {
   }
 
   /**
-   * Fetch voting records for a specific date
+   * Fetch voting records for a specific date.
+   * RADA endpoint: /ogd/zal/ppz/skl{N}/json/DDMMYYYY.json
    */
   async fetchVoting(date: string, convocation: number = 9): Promise<RadaVotingRawData[]> {
     await this.waitForRateLimit();
 
-    // Date format: YYYY-MM-DD -> convert to YYYYMMDD
-    const dateStr = date.replace(/-/g, '');
-    const endpoint = `/ogd/zal/skl${convocation}/plenary/${dateStr}.json`;
-    logger.info('Fetching voting records', { date, convocation });
+    // Date format: YYYY-MM-DD -> convert to DDMMYYYY (RADA format)
+    const [year, month, day] = date.split('-');
+    const dateStr = `${day}${month}${year}`;
+    const endpoint = `/ogd/zal/ppz/skl${convocation}/json/${dateStr}.json`;
+    logger.info('Fetching voting records', { date, convocation, endpoint });
 
     try {
       const response = await this.client.get(endpoint);
       const data = response.data;
 
-      // Response can be array or object with questions array
-      if (Array.isArray(data)) {
+      // Response format: { question: [...] } — each question has event_question array
+      if (data.question && Array.isArray(data.question)) {
+        return data.question;
+      } else if (Array.isArray(data)) {
         return data;
       } else if (data.questions && Array.isArray(data.questions)) {
         return data.questions;
-      } else if (data.voting && Array.isArray(data.voting)) {
-        return data.voting;
       }
 
-      logger.warn('Unexpected data format for voting', { date, convocation });
+      logger.warn('Unexpected data format for voting', { date, convocation, keys: Object.keys(data) });
       return [];
     } catch (error: any) {
       const statusCode = error.response?.status;
       const message = `Failed to fetch voting for ${date}: ${error.message}`;
       logger.error(message, { statusCode, endpoint });
       throw new RadaAPIError(message, statusCode, endpoint);
+    }
+  }
+
+  /**
+   * Fetch the list of dates that have plenary session data available.
+   * Returns dates in YYYY-MM-DD format.
+   */
+  async fetchAvailableSessionDates(convocation: number = 9): Promise<string[]> {
+    await this.waitForRateLimit();
+
+    const endpoint = `/ogd/zal/ppz/skl${convocation}/dict/dates.txt`;
+    logger.info('Fetching available session dates', { convocation });
+
+    try {
+      const response = await this.client.get(endpoint, { responseType: 'text' });
+      const text = typeof response.data === 'string' ? response.data : String(response.data);
+
+      // dates.txt has DD.MM.YYYY format, one per line
+      return text
+        .split('\n')
+        .map((line: string) => line.trim())
+        .filter((line: string) => /^\d{2}\.\d{2}\.\d{4}$/.test(line))
+        .map((line: string) => {
+          const [d, m, y] = line.split('.');
+          return `${y}-${m}-${d}`;
+        });
+    } catch (error: any) {
+      logger.error('Failed to fetch available session dates', { error: error.message });
+      return [];
     }
   }
 

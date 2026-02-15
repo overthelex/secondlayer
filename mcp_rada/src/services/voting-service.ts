@@ -76,11 +76,14 @@ export class VotingService {
       const rawVoting = await this.radaAdapter.fetchVoting(date, convocation);
 
       // Step 3: Transform and save to database
+      // Each raw item is a "question" which may contain multiple voting events
       const votingRecords: VotingRecord[] = [];
       for (const raw of rawVoting) {
-        const record = this.transformRawVoting(raw, date);
-        await this.saveVotingRecord(record);
-        votingRecords.push(record);
+        const records = this.transformRawQuestion(raw, date);
+        for (const record of records) {
+          await this.saveVotingRecord(record);
+          votingRecords.push(record);
+        }
       }
 
       return votingRecords;
@@ -435,26 +438,75 @@ Only return the JSON array, no additional text.
   }
 
   /**
-   * Transform raw RADA API data to VotingRecord type
+   * Transform a RADA API "question" object into VotingRecord(s).
+   * RADA format: { id_question, date_question, name_question, event_question: [...] }
+   * Each event_question may contain result_event with vote tallies.
    */
-  private transformRawVoting(raw: any, date: string): VotingRecord {
-    return {
-      id: uuidv4(),
-      session_date: new Date(date),
-      session_number: raw.session || raw.session_number || null,
-      question_number: raw.question_number || raw.question || null,
-      question_text: raw.question_text || raw.text || null,
-      bill_number: raw.bill_number || null,
-      question_type: raw.type || raw.question_type || null,
-      total_voted: raw.total || null,
-      voted_for: raw.for || null,
-      voted_against: raw.against || null,
-      voted_abstain: raw.abstain || null,
-      voted_not_present: raw.not_present || null,
-      result: raw.result || null,
-      votes: raw.votes || {},
-      metadata: raw,
-    };
+  private transformRawQuestion(raw: any, date: string): VotingRecord[] {
+    const records: VotingRecord[] = [];
+
+    // Extract voting events from the question
+    const events = raw.event_question || [];
+    for (const event of events) {
+      const results = event.result_event || [];
+      for (const result of results) {
+        // Only create records for events that have actual vote counts
+        const votedFor = parseInt(result.for, 10) || 0;
+        const votedAgainst = parseInt(result.against, 10) || 0;
+        const votedAbstain = parseInt(result.abstain, 10) || 0;
+        const notVoting = parseInt(result.not_voting, 10) || 0;
+        const absent = parseInt(result.absent, 10) || 0;
+        const total = parseInt(result.total, 10) || 0;
+
+        // Skip events with no vote data
+        if (total === 0 && votedFor === 0 && votedAgainst === 0) continue;
+
+        // Build per-deputy votes map from result_by_name
+        const votes: { [deputyRadaId: string]: VoteType } = {};
+        if (Array.isArray(result.result_by_name)) {
+          for (const deputy of result.result_by_name) {
+            const id = deputy.id || deputy.deputy_id;
+            const vote = deputy.voting || deputy.vote;
+            if (id && vote && this.isVoteType(vote)) {
+              votes[String(id)] = vote;
+            }
+          }
+        }
+
+        records.push({
+          id: uuidv4(),
+          session_date: new Date(date),
+          question_number: raw.id_question ? Number(raw.id_question) : undefined,
+          question_text: raw.name_question || undefined,
+          question_type: event.type_event ? String(event.type_event) : undefined,
+          total_voted: total || undefined,
+          voted_for: votedFor || undefined,
+          voted_against: votedAgainst || undefined,
+          voted_abstain: votedAbstain || undefined,
+          voted_not_present: (notVoting + absent) || undefined,
+          result: result.voting_result || undefined,
+          votes,
+          metadata: { question: raw, event },
+        });
+      }
+    }
+
+    // Fallback: if no events had results, create one record from the question itself
+    if (records.length === 0 && raw.id_question) {
+      records.push({
+        id: uuidv4(),
+        session_date: new Date(date),
+        question_number: raw.id_question ? Number(raw.id_question) : undefined,
+        question_text: raw.name_question || undefined,
+        metadata: raw,
+      });
+    }
+
+    return records;
+  }
+
+  private isVoteType(value: string): value is VoteType {
+    return ['За', 'Проти', 'Утримався', 'Не голосував'].includes(value);
   }
 
   /**
