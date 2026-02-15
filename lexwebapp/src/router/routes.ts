@@ -48,6 +48,9 @@ export const ROUTES = {
   // Public Offer (Fondy requirement)
   OFFER: '/:lang/offer',
 
+  // US market public pages
+  US_DATA_SOURCES: '/us/data-sources',
+
   // History
   HISTORY: '/history',
 

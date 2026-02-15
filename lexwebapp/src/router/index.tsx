@@ -43,6 +43,7 @@ import { InvoicesPage } from '../pages/InvoicesPage';
 import { PaymentSuccessPage } from '../pages/PaymentSuccessPage';
 import { PaymentErrorPage } from '../pages/PaymentErrorPage';
 import { OfferPage } from '../pages/OfferPage';
+import { USDataSourcesPage } from '../pages/USDataSourcesPage';
 
 export const router = createBrowserRouter([
   {
@@ -68,6 +69,10 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.OFFER,
     element: <OfferPage />,
+  },
+  {
+    path: ROUTES.US_DATA_SOURCES,
+    element: <USDataSourcesPage />,
   },
   {
     element: <AuthGuard />,
