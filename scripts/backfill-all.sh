@@ -72,14 +72,14 @@ check_container() {
 run_in_container() {
   local container="$1"
   shift
-  docker exec -T "$container" "$@"
+  docker exec "$container" "$@"
 }
 
 run_in_container_env() {
   local container="$1"
   shift
   # Remaining args are -e KEY=VAL ... node script.js
-  docker exec -T "$@" "$container"
+  docker exec "$@" "$container"
 }
 
 should_run() {
@@ -124,7 +124,7 @@ fi
 # ─── Step 2: Court Decisions ────────────────────────────────────────────────
 if should_run "decisions"; then
   step_header "Court Decisions (${START_DATE} to ${END_DATE})"
-  docker exec -T \
+  docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
     -e BATCH_DAYS="${BATCH_DAYS:-7}" \
@@ -166,7 +166,7 @@ if should_run "legislation"; then
   for code in "${CODES[@]}"; do
     echo -e "  Fetching: ${code}"
     # Call the tool via HTTP API from inside the backend container
-    docker exec -T "$BACKEND_CONTAINER" \
+    docker exec "$BACKEND_CONTAINER" \
       node -e "
         const http = require('http');
         const data = JSON.stringify({
@@ -214,7 +214,7 @@ fi
 # ─── Step 5: RADA Bills & Voting ───────────────────────────────────────────
 if should_run "rada-bills"; then
   step_header "RADA Bills & Voting (${START_DATE} to ${END_DATE})"
-  docker exec -T \
+  docker exec \
     -e START_DATE="$START_DATE" \
     -e END_DATE="$END_DATE" \
     -e CONCURRENCY="${CONCURRENCY:-5}" \
@@ -234,6 +234,6 @@ fi
 header "Backfill Complete"
 echo -e "  All requested steps finished."
 echo -e "  Verify with:"
-echo -e "    docker exec -T ${BACKEND_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM documents').then(r=>console.log('Documents:',r.rows[0].count)).finally(()=>p.end())\""
-echo -e "    docker exec -T ${RADA_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM bills').then(r=>console.log('Bills:',r.rows[0].count)).finally(()=>p.end())\""
+echo -e "    docker exec ${BACKEND_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM documents').then(r=>console.log('Documents:',r.rows[0].count)).finally(()=>p.end())\""
+echo -e "    docker exec ${RADA_CONTAINER} node -e \"const{Pool}=require('pg');const p=new Pool();p.query('SELECT COUNT(*) FROM bills').then(r=>console.log('Bills:',r.rows[0].count)).finally(()=>p.end())\""
 echo ""
