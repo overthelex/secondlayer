@@ -3,14 +3,17 @@
  * Supports API keys for MCP clients (JWT support can be added later)
  */
 
-import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 
 const RADA_API_KEYS = process.env.RADA_API_KEYS?.split(',') || [];
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest {
   clientKey?: string;
   authType?: 'apikey';
+  headers: any;
+  path?: string;
+  ip?: string;
+  [key: string]: any;
 }
 
 /**
@@ -36,9 +39,9 @@ function authenticateWithAPIKey(req: AuthenticatedRequest, apiKey: string): void
  * Currently supports API keys only (JWT support can be added later)
  */
 export async function dualAuth(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
+  req: any,
+  res: any,
+  next: any
 ): Promise<void> {
   try {
     const authHeader = req.headers.authorization;
@@ -76,9 +79,9 @@ export async function dualAuth(
  * Use this for MCP tool endpoints that require client API keys
  */
 export function requireAPIKey(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
+  req: any,
+  res: any,
+  next: any
 ): void {
   try {
     const authHeader = req.headers.authorization;
