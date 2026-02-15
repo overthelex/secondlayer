@@ -152,19 +152,20 @@ sync_pg_incremental() {
   local LABEL="$5"
   local TEMP_DB="${DB_NAME}${TEMP_DB_SUFFIX}"
 
-  msg "Incremental merge into ${DB_NAME}..."
+  # All log output goes to stderr so that only the row count is captured by the caller
+  msg "Incremental merge into ${DB_NAME}..." >&2
 
   # Copy dump into container
-  run docker cp "${DUMP_FILE}" "${CONTAINER}:/tmp/sync.dump"
+  run docker cp "${DUMP_FILE}" "${CONTAINER}:/tmp/sync.dump" >&2
 
   # Create temp DB + restore dump into it
-  msg "Creating temp DB (${TEMP_DB}) and restoring dump..."
+  msg "Creating temp DB (${TEMP_DB}) and restoring dump..." >&2
   run docker exec -i "$CONTAINER" bash -c "
     set -e
     # Drop temp DB if leftover from previous failed run
-    dropdb -U ${DB_USER} --if-exists ${TEMP_DB}
+    dropdb -U ${DB_USER} --if-exists ${TEMP_DB} 2>/dev/null
     createdb -U ${DB_USER} ${TEMP_DB}
-  "
+  " >&2
 
   run docker exec "$CONTAINER" pg_restore \
     -U "$DB_USER" \
@@ -176,22 +177,22 @@ sync_pg_incremental() {
       TABLE_COUNT=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$TEMP_DB" -tAc \
         "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
       if [[ "$TABLE_COUNT" -gt 0 ]]; then
-        warn "pg_restore had warnings but temp DB has ${TABLE_COUNT} tables — continuing"
+        warn "pg_restore had warnings but temp DB has ${TABLE_COUNT} tables — continuing" >&2
       else
-        err "pg_restore failed and temp DB is empty"
+        err "pg_restore failed and temp DB is empty" >&2
         docker exec "$CONTAINER" bash -c "dropdb -U ${DB_USER} --if-exists ${TEMP_DB}" 2>/dev/null || true
         return 1
       fi
     }
-  ok "Temp DB restored"
+  ok "Temp DB restored" >&2
 
   # Schema sync: dump schema from temp, apply to real (ignore errors for existing objects)
-  msg "Syncing schema (new tables/columns)..."
+  msg "Syncing schema (new tables/columns)..." >&2
   run docker exec "$CONTAINER" bash -c "
     pg_dump -U ${DB_USER} --schema-only --no-owner --no-privileges ${TEMP_DB} \
-      | psql -U ${DB_USER} -d ${DB_NAME} -q 2>/dev/null || true
-  "
-  ok "Schema sync done"
+      | psql -U ${DB_USER} -d ${DB_NAME} -q -o /dev/null 2>/dev/null || true
+  " >&2
+  ok "Schema sync done" >&2
 
   # Get list of all schemas to sync
   SCHEMAS=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$TEMP_DB" -tAc "
@@ -205,22 +206,24 @@ sync_pg_incremental() {
   " | tr -d ' ')
 
   # Data merge: dump data from temp with ON CONFLICT DO NOTHING, apply to real
-  msg "Merging data (ON CONFLICT DO NOTHING)..."
+  msg "Merging data (ON CONFLICT DO NOTHING)..." >&2
   for schema in $SCHEMAS; do
     run docker exec "$CONTAINER" bash -c "
-      pg_dump -U ${DB_USER} \
-        --data-only \
-        --schema=${schema} \
-        --rows-per-insert=500 \
-        --on-conflict-do-nothing \
-        --disable-triggers \
-        --no-owner \
-        --no-privileges \
-        ${TEMP_DB} \
-        | psql -U ${DB_USER} -d ${DB_NAME} -q 2>/dev/null || true
-    "
+      {
+        pg_dump -U ${DB_USER} \
+          --data-only \
+          --schema=${schema} \
+          --rows-per-insert=500 \
+          --on-conflict-do-nothing \
+          --disable-triggers \
+          --no-owner \
+          --no-privileges \
+          ${TEMP_DB} 2>/dev/null \
+          | psql -U ${DB_USER} -d ${DB_NAME} -q -o /dev/null 2>/dev/null || true
+      } 2>/dev/null
+    " >&2
   done
-  ok "Data merge done"
+  ok "Data merge done" >&2
 
   # Count rows after merge
   ROWS_AFTER=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc "
@@ -229,14 +232,14 @@ sync_pg_incremental() {
 
   ROWS_ADDED=$((ROWS_AFTER - ROWS_BEFORE))
   if [[ "$ROWS_ADDED" -gt 0 ]]; then
-    stat "${ROWS_ADDED} new rows added to ${DB_NAME}"
+    stat "${ROWS_ADDED} new rows added to ${DB_NAME}" >&2
   else
-    stat "No new rows — ${DB_NAME} already up to date"
+    stat "No new rows — ${DB_NAME} already up to date" >&2
   fi
 
   # Fix sequences to max(id)
-  msg "Fixing sequences..."
-  run docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -q -c "
+  msg "Fixing sequences..." >&2
+  run docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -q -o /dev/null -c "
     DO \$\$
     DECLARE
       r RECORD;
@@ -259,14 +262,14 @@ sync_pg_incremental() {
       END LOOP;
     END
     \$\$;
-  " 2>/dev/null || warn "Sequence fix had errors (non-critical)"
-  ok "Sequences fixed"
+  " 2>/dev/null || warn "Sequence fix had errors (non-critical)" >&2
+  ok "Sequences fixed" >&2
 
   # Drop temp DB
-  msg "Dropping temp DB..."
-  run docker exec "$CONTAINER" bash -c "dropdb -U ${DB_USER} --if-exists ${TEMP_DB}"
-  run docker exec "$CONTAINER" rm -f /tmp/sync.dump
-  ok "${LABEL} incremental sync complete"
+  msg "Dropping temp DB..." >&2
+  run docker exec "$CONTAINER" bash -c "dropdb -U ${DB_USER} --if-exists ${TEMP_DB}" >&2
+  run docker exec "$CONTAINER" rm -f /tmp/sync.dump >&2
+  ok "${LABEL} incremental sync complete" >&2
 
   echo "$ROWS_ADDED"
 }
@@ -456,7 +459,7 @@ if ! $QDRANT_ONLY; then
   else
     # Incremental mode: merge via temp DB
     # Ensure rada_mcp role exists before merge (schema sync may reference it)
-    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d postgres -c "
+    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d postgres -q -o /dev/null -c "
       DO \$\$
       BEGIN
         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rada_mcp') THEN
@@ -470,7 +473,7 @@ if ! $QDRANT_ONLY; then
       "$LOCAL_BACKEND_USER" "${DUMP_DIR}/backend.dump" "Backend")
 
     # Grant rada_mcp access
-    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -c "
+    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -q -o /dev/null -c "
       GRANT USAGE ON SCHEMA rada TO rada_mcp;
       GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rada TO rada_mcp;
       GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA rada TO rada_mcp;
