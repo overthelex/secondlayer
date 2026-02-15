@@ -23,7 +23,7 @@ async function importFSU(zipFilePath: string) {
     console.log(`Extracting and parsing ${zipFilePath}...`);
 
     const directory = await unzipper.Open.file(zipFilePath);
-    const fsuFile = directory.files.find(f => f.path === 'FSU_FULL_out.xml');
+    const fsuFile = directory.files.find(f => f.path === 'FSU_FULL_out.xml' || f.path === 'FSU.xml');
 
     if (!fsuFile) {
       throw new Error('FSU_FULL_out.xml not found in ZIP file');

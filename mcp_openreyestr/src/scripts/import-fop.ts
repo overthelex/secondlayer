@@ -23,7 +23,7 @@ async function importFOP(zipFilePath: string) {
     console.log(`Extracting and parsing ${zipFilePath}...`);
 
     const directory = await unzipper.Open.file(zipFilePath);
-    const fopFile = directory.files.find(f => f.path === 'FOP_FULL_out.xml');
+    const fopFile = directory.files.find(f => f.path === 'FOP_FULL_out.xml' || f.path === 'FOP.xml');
 
     if (!fopFile) {
       throw new Error('FOP_FULL_out.xml not found in ZIP file');

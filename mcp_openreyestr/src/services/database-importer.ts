@@ -288,6 +288,10 @@ export class DatabaseImporter {
   }
 
   private async importSingleFOP(client: PoolClient, entity: ParsedFOPEntity): Promise<void> {
+    // Skip entities without required name field
+    if (!entity.name) {
+      return;
+    }
     // Insert main entity
     await client.query(
       `INSERT INTO individual_entrepreneurs (
