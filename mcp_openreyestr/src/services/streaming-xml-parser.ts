@@ -102,37 +102,35 @@ export class StreamingXMLParser {
         const path = currentPath.join('/');
 
         if (currentObject && currentObjectPath === path) {
-          currentArray!.push(currentObject);
+          if (currentArray) {
+            currentArray.push(currentObject);
+          }
           currentObject = null;
           currentObjectPath = '';
         }
-        else if (currentArray && currentArrayPath === currentPath.slice(0, -1).join('/')) {
-          if (!currentObject) {
+        else if (currentArray) {
+          // Parent container tags → store collected array in subject, reset
+          const parentTags: Record<string, string> = {
+            'FOUNDERS': 'FOUNDER', 'BENEFICIARIES': 'BENEFICIARY',
+            'SIGNERS': 'SIGNER', 'MEMBERS': 'MEMBER',
+            'BRANCHES': 'BRANCH', 'PREDECESSORS': 'PREDECESSOR',
+            'ASSIGNEES': 'ASSIGNEE', 'EXCHANGE_DATA': 'EXCHANGE_ANSWER',
+          };
+
+          if (parentTags[tagName]) {
+            // Parent closing (e.g. </FOUNDERS>) — store and reset
+            if (currentArray.length > 0) {
+              currentSubject[tagName] = { [parentTags[tagName]]: currentArray };
+            }
+            currentArray = null;
+            currentArrayPath = '';
+          } else if (['FOUNDER', 'BENEFICIARY', 'SIGNER', 'MEMBER'].includes(tagName)) {
+            // Simple text child — push text value to array
             if (currentValue.trim()) {
               currentArray.push(currentValue.trim());
             }
           }
-
-          if (tagName === 'FOUNDERS' && currentArray.length > 0) {
-            currentSubject.FOUNDERS = { FOUNDER: currentArray };
-          } else if (tagName === 'BENEFICIARIES' && currentArray.length > 0) {
-            currentSubject.BENEFICIARIES = { BENEFICIARY: currentArray };
-          } else if (tagName === 'SIGNERS' && currentArray.length > 0) {
-            currentSubject.SIGNERS = { SIGNER: currentArray };
-          } else if (tagName === 'MEMBERS' && currentArray.length > 0) {
-            currentSubject.MEMBERS = { MEMBER: currentArray };
-          } else if (tagName === 'BRANCHES' && currentArray.length > 0) {
-            currentSubject.BRANCHES = { BRANCH: currentArray };
-          } else if (tagName === 'PREDECESSORS' && currentArray.length > 0) {
-            currentSubject.PREDECESSORS = { PREDECESSOR: currentArray };
-          } else if (tagName === 'ASSIGNEES' && currentArray.length > 0) {
-            currentSubject.ASSIGNEES = { ASSIGNEE: currentArray };
-          } else if (tagName === 'EXCHANGE_DATA' && currentArray.length > 0) {
-            currentSubject.EXCHANGE_DATA = { EXCHANGE_ANSWER: currentArray };
-          }
-
-          currentArray = null;
-          currentArrayPath = '';
+          // EXCHANGE_ANSWER and BRANCH/PREDECESSOR/ASSIGNEE handled by currentObject branch above
         }
         else if (currentValue.trim()) {
           const value = currentValue.trim();
