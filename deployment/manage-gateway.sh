@@ -621,11 +621,13 @@ deploy_to_server() {
         echo "Removing dangling images..."
         docker image prune -f
 
-        # Step 3: Pre-build shared + backend dist (needed by Dockerfile.document-service)
-        echo "Building shared package and backend dist..."
+        # Step 3: Pre-build shared + all service dists
+        echo "Building shared package and all service dists..."
         cd "$REMOTE_REPO"
         npm --prefix packages/shared install && npm --prefix packages/shared run build
         npm --prefix mcp_backend install && npm --prefix mcp_backend run build
+        npm --prefix mcp_rada install && npm --prefix mcp_rada run build
+        npm --prefix mcp_openreyestr install && npm --prefix mcp_openreyestr run build
         cd "$REMOTE_REPO/deployment"
 
         # Step 4: Build images (use --no-cache flag for full rebuild)
