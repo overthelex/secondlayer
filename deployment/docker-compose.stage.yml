@@ -16,7 +16,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
       TZ: Europe/Kiev
     ports:
-    - 5434:5432
+    - "127.0.0.1:5434:5432"
     volumes:
     - postgres_stage_data:/var/lib/postgresql/data
     healthcheck:
@@ -78,7 +78,7 @@ services:
       POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}
       TZ: Europe/Kiev
     ports:
-      - "5436:5432"
+      - "127.0.0.1:5436:5432"
     volumes:
       - postgres_openreyestr_stage_data:/var/lib/postgresql/data
     healthcheck:
@@ -101,8 +101,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: secondlayer-qdrant-stage
     ports:
-    - 6337:6333
-    - 6338:6334
+    - "127.0.0.1:6337:6333"
+    - "127.0.0.1:6338:6334"
     volumes:
     - qdrant_stage_data:/qdrant/storage
     healthcheck:
@@ -127,7 +127,7 @@ services:
     image: redis:7-alpine
     container_name: secondlayer-redis-stage
     ports:
-    - 6381:6379
+    - "127.0.0.1:6381:6379"
     volumes:
     - redis_stage_data:/data
     command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy noeviction
@@ -351,8 +351,8 @@ services:
       MINIO_PROMETHEUS_AUTH_TYPE: public
       TZ: Europe/Kiev
     ports:
-      - "9004:9000"   # S3 API
-      - "9005:9001"   # Web console
+      - "127.0.0.1:9004:9000"   # S3 API
+      - "127.0.0.1:9005:9001"   # Web console
     volumes:
       - minio_stage_data:/data
     healthcheck:
@@ -441,7 +441,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TZ: Europe/Kiev
     ports:
-    - 3004:3000
+    - "127.0.0.1:3004:3000"
     depends_on:
       postgres-stage:
         condition: service_healthy
@@ -555,7 +555,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://stage.legal.org.ua}
 
     ports:
-      - "3006:3002"  # Expose on port 3006 externally for stage
+      - "127.0.0.1:3006:3002"  # Document service - localhost only
 
     volumes:
       # Vision API credentials for OCR
@@ -598,7 +598,7 @@ services:
     image: lexwebapp-lexwebapp:latest
     container_name: lexwebapp-stage
     ports:
-    - 8092:80
+    - "127.0.0.1:8092:80"
     environment:
     - NODE_ENV=staging
     - TZ=Europe/Kiev
@@ -680,7 +680,7 @@ services:
       - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_stage_data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
@@ -707,7 +707,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
-      - "3100:3000"
+      - "127.0.0.1:3100:3000"
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
@@ -728,7 +728,7 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}?sslmode=disable"
     ports:
-      - "9187:9187"
+      - "127.0.0.1:9187:9187"
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
@@ -742,7 +742,7 @@ services:
     environment:
       DATA_SOURCE_NAME: "postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-stage:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}?sslmode=disable"
     ports:
-      - "9188:9187"
+      - "127.0.0.1:9188:9187"
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
@@ -756,7 +756,7 @@ services:
     environment:
       REDIS_ADDR: "redis://redis-stage:6379"
     ports:
-      - "9121:9121"
+      - "127.0.0.1:9121:9121"
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
