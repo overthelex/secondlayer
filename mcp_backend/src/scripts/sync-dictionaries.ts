@@ -21,10 +21,72 @@ import { createClient } from 'redis';
 interface DictionaryEntry {
   domain: ZakonOnlineDomainName;
   name: string;
-  method: string;
-  params?: Record<string, any>;
+  /** Dictionary name as known by getDictionary() — used for paginated fetch */
+  dictionaryKey: string;
   /** If true, this dictionary must be extracted from search results instead of a dedicated endpoint */
   extractFromSearch?: boolean;
+}
+
+const PAGE_SIZE = 100;
+const MAX_PAGES = 500;
+
+/**
+ * Fetch all items from a ZO dictionary endpoint, handling pagination.
+ * Strategy:
+ *   1. Try nolimits=1 first (returns everything for small dicts)
+ *   2. If response has total > items returned, paginate through remaining pages
+ */
+async function fetchAllDictionaryItems(
+  adapter: ZOAdapter,
+  dictionaryKey: string,
+  dictionaryName: string
+): Promise<any[]> {
+  // First attempt: try nolimits=1
+  const firstResponse = await (adapter as any).getDictionary(dictionaryKey, { nolimits: 1 });
+  const firstItems = Array.isArray(firstResponse) ? firstResponse : (firstResponse?.data || firstResponse?.items || []);
+  const total = firstResponse?.total;
+
+  // If no total or we got everything, we're done
+  if (!total || firstItems.length >= total) {
+    logger.info(`  ${dictionaryName}: nolimits=1 returned ${firstItems.length} items (total: ${total ?? 'unknown'})`);
+    return firstItems;
+  }
+
+  // nolimits didn't work fully — fall back to pagination
+  logger.info(`  ${dictionaryName}: nolimits returned ${firstItems.length}/${total}, paginating...`);
+
+  const allItems = new Map<string | number, any>();
+  // Index first batch by id
+  for (const item of firstItems) {
+    const key = item.id ?? JSON.stringify(item);
+    allItems.set(key, item);
+  }
+
+  let page = 1;
+  while (allItems.size < total && page <= MAX_PAGES) {
+    const response = await (adapter as any).getDictionary(dictionaryKey, {
+      limit: PAGE_SIZE,
+      page,
+    });
+    const pageItems = Array.isArray(response) ? response : (response?.data || response?.items || []);
+
+    if (pageItems.length === 0) break;
+
+    for (const item of pageItems) {
+      const key = item.id ?? JSON.stringify(item);
+      allItems.set(key, item);
+    }
+
+    logger.info(`  ${dictionaryName}: page ${page} → ${pageItems.length} items (total so far: ${allItems.size}/${total})`);
+
+    if (pageItems.length < PAGE_SIZE) break;
+
+    page++;
+    // Rate limit between page requests
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  return Array.from(allItems.values());
 }
 
 /**
@@ -100,18 +162,18 @@ const LEGAL_ACTS_AUTHORS: Record<string, string> = {
 // All dictionaries to sync, mapped to their domains
 const DICTIONARIES: DictionaryEntry[] = [
   // Court Decisions domain
-  { domain: 'court_decisions', name: 'courts', method: 'getCourtsDictionary' },
-  { domain: 'court_decisions', name: 'instances', method: 'getInstancesDictionary' },
-  { domain: 'court_decisions', name: 'judgmentForms', method: 'getJudgmentFormsDictionary' },
-  { domain: 'court_decisions', name: 'justiceKinds', method: 'getJusticeKindsDictionary' },
-  { domain: 'court_decisions', name: 'regions', method: 'getRegionsDictionary' },
-  { domain: 'court_decisions', name: 'judges', method: 'getJudgesDictionary' },
+  { domain: 'court_decisions', name: 'courts', dictionaryKey: 'courts' },
+  { domain: 'court_decisions', name: 'instances', dictionaryKey: 'instances' },
+  { domain: 'court_decisions', name: 'judgmentForms', dictionaryKey: 'judgmentForms' },
+  { domain: 'court_decisions', name: 'justiceKinds', dictionaryKey: 'justiceKinds' },
+  { domain: 'court_decisions', name: 'regions', dictionaryKey: 'regions' },
+  { domain: 'court_decisions', name: 'judges', dictionaryKey: 'judges' },
   // Legal Acts domain — dictionary endpoints return 403, extract from search results
-  { domain: 'legal_acts', name: 'documentTypes', method: 'searchCourtDecisions', extractFromSearch: true },
-  { domain: 'legal_acts', name: 'authors', method: 'searchCourtDecisions', extractFromSearch: true },
+  { domain: 'legal_acts', name: 'documentTypes', dictionaryKey: 'documentTypes', extractFromSearch: true },
+  { domain: 'legal_acts', name: 'authors', dictionaryKey: 'authors', extractFromSearch: true },
   // Court Practice domain
-  { domain: 'court_practice', name: 'categories', method: 'getCategoriesDictionary' },
-  { domain: 'court_practice', name: 'types', method: 'getTypesDictionary' },
+  { domain: 'court_practice', name: 'categories', dictionaryKey: 'categories' },
+  { domain: 'court_practice', name: 'types', dictionaryKey: 'types' },
 ];
 
 /**
@@ -253,10 +315,8 @@ async function syncDictionaries() {
             : legalActsData.authors;
         } else {
           const adapter = adapters.get(entry.domain)!;
-          // Call the dictionary method
-          const data = await (adapter as any)[entry.method](entry.params);
-          // Extract items array from response
-          items = Array.isArray(data) ? data : (data?.data || data?.items || []);
+          // Fetch all pages of the dictionary
+          items = await fetchAllDictionaryItems(adapter, entry.dictionaryKey, entry.name);
         }
 
         const itemsCount = items.length;
