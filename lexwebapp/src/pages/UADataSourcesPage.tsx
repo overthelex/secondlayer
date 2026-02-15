@@ -272,8 +272,8 @@ const categories: Category[] = [
       {
         name: 'Public Cadastral Map',
         nameUa: 'Публічна кадастрова карта',
-        url: 'https://map.land.gov.ua/',
-        description: 'Interactive map of all registered land plots in Ukraine. View boundaries, purpose, area, and ownership type. Free access without registration.',
+        url: 'https://e.land.gov.ua/',
+        description: 'Interactive map of all registered land plots in Ukraine. View boundaries, purpose, area, and ownership type. Free access without registration via the State Land Cadastre portal.',
         tags: ['Map', 'Interactive', 'Free'],
       },
       {
@@ -297,11 +297,11 @@ const categories: Category[] = [
         tags: ['Declarations', 'Anti-Corruption', 'API'],
       },
       {
-        name: 'Sanctions Lists',
-        nameUa: 'Санкційні списки РНБО',
-        url: 'https://sanctions.nazk.gov.ua/',
-        description: 'National Security and Defense Council sanctions database. Sanctioned individuals and entities with search functionality and cross-referencing capabilities.',
-        tags: ['Sanctions', 'NSDC', 'Search'],
+        name: 'NAZK Registers & Data',
+        nameUa: 'Реєстри та дані НАЗК',
+        url: 'https://nazk.gov.ua/',
+        description: 'National Agency on Corruption Prevention. Hosts the Register of Corrupt Officials, political party reports, transparency register, and anti-corruption policy data.',
+        tags: ['Anti-Corruption', 'Registers', 'Transparency'],
       },
     ],
   },
@@ -405,7 +405,7 @@ const categories: Category[] = [
       {
         name: 'Eco-Monitoring Open Data',
         nameUa: 'Відкриті дані довкілля',
-        url: 'https://data.gov.ua/group/ecology',
+        url: 'https://data.gov.ua/dataset?groups=ecology',
         description: 'Environmental datasets on data.gov.ua. Water quality, air pollution, waste management, protected areas, and ecological inspections data from government agencies.',
         tags: ['Ecology', 'Water', 'Air', 'Datasets'],
       },
