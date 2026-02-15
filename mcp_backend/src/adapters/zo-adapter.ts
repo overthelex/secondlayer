@@ -786,8 +786,9 @@ export class ZOAdapter {
           const toCondition = conditions.find(c => (c.operator || c.op) === '<=');
 
           if (fromCondition && toCondition) {
-            // Use array format for date range as per Zakononline API docs
+            // Use array format with 'between' op for date range
             apiParams.where[field] = {
+              op: 'between',
               value: [fromCondition.value, toCondition.value]
             };
 

@@ -170,7 +170,11 @@ function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> 
   });
 }
 
-async function extractZip(zipPath: string, extractDir: string): Promise<string[]> {
+async function extractZip(zipPath: string, extractDir: string, depth: number = 0): Promise<string[]> {
+  if (depth > 2) {
+    console.warn(`  Skipping nested ZIP extraction at depth ${depth} (max 2)`);
+    return [];
+  }
   const { execSync } = require('child_process');
 
   // Try system unzip first — handles ZIP64 and large files better than Node.js unzipper
@@ -209,15 +213,23 @@ async function extractZip(zipPath: string, extractDir: string): Promise<string[]
   // List all extracted files (non-directories)
   const extracted = listFilesRecursive(extractDir, extractDir);
 
-  // Recursively extract any nested .zip files found inside
+  // Recursively extract any nested .zip files found inside (max depth 2)
   const nestedZips = extracted.filter(f => f.toLowerCase().endsWith('.zip'));
+  const processedZips = new Set<string>();
   for (const nested of nestedZips) {
+    const baseName = path.basename(nested);
+    if (processedZips.has(baseName)) {
+      console.log(`  Skipping duplicate nested ZIP: ${nested}`);
+      continue;
+    }
+    processedZips.add(baseName);
     const nestedPath = path.join(extractDir, nested);
-    console.log(`  Extracting nested ZIP: ${nested}`);
+    if (!fs.existsSync(nestedPath)) continue;
+    console.log(`  Extracting nested ZIP: ${nested} (depth ${depth + 1})`);
     try {
-      const innerFiles = await extractZip(nestedPath, extractDir);
+      const innerFiles = await extractZip(nestedPath, extractDir, depth + 1);
       extracted.push(...innerFiles);
-      fs.unlinkSync(nestedPath);
+      try { fs.unlinkSync(nestedPath); } catch { /* ignore */ }
     } catch (err: any) {
       console.error(`  Failed to extract nested ZIP ${nested}: ${err.message}`);
     }
