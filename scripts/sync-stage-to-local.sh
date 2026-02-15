@@ -4,20 +4,27 @@
 #
 # Copies data from Stage environment to Local:
 #   - PostgreSQL (backend + rada schema)
-#   - PostgreSQL (openreyestr) — optional, skip with --skip-openreyestr
+#   - PostgreSQL (openreyestr) — optional, include with --include-openreyestr
 #   - Qdrant vector DB snapshots
 #   - MinIO buckets — optional, include with --include-minio
 #
-# Safe to run multiple times (idempotent):
-#   - Uses pg_restore --clean (drops before create)
-#   - Qdrant snapshot replaces collections atomically
-#   - Temp files cleaned up on exit
+# Default mode is INCREMENTAL (merge new data, skip existing):
+#   - PG: restore into temp DB, merge with ON CONFLICT DO NOTHING
+#   - Qdrant: skip collections with same point count
+#   - MinIO: mc mirror without --overwrite
+#
+# Use --full for destructive replacement (old behavior):
+#   - PG: drop + recreate databases
+#   - Qdrant: delete + re-upload all collections
+#   - MinIO: mc mirror --overwrite
 #
 # Usage:
 #   ./scripts/sync-stage-to-local.sh [OPTIONS]
 #
 # Options:
-#   --skip-openreyestr   Skip OpenReyestr DB (large, usually not needed)
+#   --full               Full destructive sync (drop + recreate)
+#   --skip-openreyestr   Skip OpenReyestr DB (default)
+#   --include-openreyestr Include OpenReyestr DB
 #   --include-minio      Also sync MinIO buckets
 #   --pg-only            Only sync PostgreSQL databases
 #   --qdrant-only        Only sync Qdrant collections
@@ -59,16 +66,20 @@ LOCAL_OPENREYESTR_USER="openreyestr"
 
 LOCAL_QDRANT_CONTAINER="secondlayer-qdrant-local"
 
+TEMP_DB_SUFFIX="_sync_tmp"
+
 # ──────────────── Colors ────────────────
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
 # ──────────────── Flags ────────────────
 
+FULL_SYNC=false
 SKIP_OPENREYESTR=true    # Skip by default (large DB, usually preloaded)
 INCLUDE_MINIO=false
 PG_ONLY=false
@@ -76,10 +87,19 @@ QDRANT_ONLY=false
 DRY_RUN=false
 AUTO_YES=false
 
+# ──────────────── Stats counters ────────────────
+
+STAT_PG_BACKEND_ROWS=0
+STAT_PG_OPENREYESTR_ROWS=0
+STAT_QDRANT_SYNCED=0
+STAT_QDRANT_SKIPPED=0
+STAT_MINIO_OBJECTS=0
+
 # ──────────────── Parse args ────────────────
 
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --full) FULL_SYNC=true; shift ;;
     --skip-openreyestr) SKIP_OPENREYESTR=true; shift ;;
     --include-openreyestr) SKIP_OPENREYESTR=false; shift ;;
     --include-minio) INCLUDE_MINIO=true; shift ;;
@@ -88,7 +108,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=true; shift ;;
     -y|--yes) AUTO_YES=true; shift ;;
     -h|--help)
-      head -28 "$0" | tail -22
+      head -35 "$0" | tail -29
       exit 0
       ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
@@ -101,6 +121,7 @@ msg()  { echo -e "${BLUE}=> $1${NC}"; }
 ok()   { echo -e "${GREEN}   ✓ $1${NC}"; }
 warn() { echo -e "${YELLOW}   ⚠ $1${NC}"; }
 err()  { echo -e "${RED}   ✗ $1${NC}"; }
+stat() { echo -e "${CYAN}   → $1${NC}"; }
 
 cleanup() {
   msg "Cleaning up temp files..."
@@ -118,6 +139,191 @@ run() {
     return 0
   fi
   "$@"
+}
+
+# ──────────────── PostgreSQL Functions ────────────────
+
+# Incremental PG sync: dump → temp DB → merge into real DB
+sync_pg_incremental() {
+  local CONTAINER="$1"
+  local DB_NAME="$2"
+  local DB_USER="$3"
+  local DUMP_FILE="$4"
+  local LABEL="$5"
+  local TEMP_DB="${DB_NAME}${TEMP_DB_SUFFIX}"
+
+  msg "Incremental merge into ${DB_NAME}..."
+
+  # Copy dump into container
+  run docker cp "${DUMP_FILE}" "${CONTAINER}:/tmp/sync.dump"
+
+  # Create temp DB + restore dump into it
+  msg "Creating temp DB (${TEMP_DB}) and restoring dump..."
+  run docker exec -i "$CONTAINER" bash -c "
+    set -e
+    # Drop temp DB if leftover from previous failed run
+    dropdb -U ${DB_USER} --if-exists ${TEMP_DB}
+    createdb -U ${DB_USER} ${TEMP_DB}
+  "
+
+  run docker exec "$CONTAINER" pg_restore \
+    -U "$DB_USER" \
+    -d "$TEMP_DB" \
+    --no-owner \
+    --no-privileges \
+    /tmp/sync.dump 2>/dev/null || {
+      # pg_restore exits non-zero on warnings; check tables exist
+      TABLE_COUNT=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$TEMP_DB" -tAc \
+        "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
+      if [[ "$TABLE_COUNT" -gt 0 ]]; then
+        warn "pg_restore had warnings but temp DB has ${TABLE_COUNT} tables — continuing"
+      else
+        err "pg_restore failed and temp DB is empty"
+        docker exec "$CONTAINER" bash -c "dropdb -U ${DB_USER} --if-exists ${TEMP_DB}" 2>/dev/null || true
+        return 1
+      fi
+    }
+  ok "Temp DB restored"
+
+  # Schema sync: dump schema from temp, apply to real (ignore errors for existing objects)
+  msg "Syncing schema (new tables/columns)..."
+  run docker exec "$CONTAINER" bash -c "
+    pg_dump -U ${DB_USER} --schema-only --no-owner --no-privileges ${TEMP_DB} \
+      | psql -U ${DB_USER} -d ${DB_NAME} -q 2>/dev/null || true
+  "
+  ok "Schema sync done"
+
+  # Get list of all schemas to sync
+  SCHEMAS=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$TEMP_DB" -tAc "
+    SELECT schema_name FROM information_schema.schemata
+    WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+  " | tr -d ' ')
+
+  # Count rows before merge
+  ROWS_BEFORE=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc "
+    SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables
+  " | tr -d ' ')
+
+  # Data merge: dump data from temp with ON CONFLICT DO NOTHING, apply to real
+  msg "Merging data (ON CONFLICT DO NOTHING)..."
+  for schema in $SCHEMAS; do
+    run docker exec "$CONTAINER" bash -c "
+      pg_dump -U ${DB_USER} \
+        --data-only \
+        --schema=${schema} \
+        --rows-per-insert=500 \
+        --on-conflict-do-nothing \
+        --disable-triggers \
+        --no-owner \
+        --no-privileges \
+        ${TEMP_DB} \
+        | psql -U ${DB_USER} -d ${DB_NAME} -q 2>/dev/null || true
+    "
+  done
+  ok "Data merge done"
+
+  # Count rows after merge
+  ROWS_AFTER=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc "
+    SELECT COALESCE(SUM(n_live_tup), 0) FROM pg_stat_user_tables
+  " | tr -d ' ')
+
+  ROWS_ADDED=$((ROWS_AFTER - ROWS_BEFORE))
+  if [[ "$ROWS_ADDED" -gt 0 ]]; then
+    stat "${ROWS_ADDED} new rows added to ${DB_NAME}"
+  else
+    stat "No new rows — ${DB_NAME} already up to date"
+  fi
+
+  # Fix sequences to max(id)
+  msg "Fixing sequences..."
+  run docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -q -c "
+    DO \$\$
+    DECLARE
+      r RECORD;
+    BEGIN
+      FOR r IN
+        SELECT
+          s.relname AS seq_name,
+          t.relname AS table_name,
+          a.attname AS column_name
+        FROM pg_class s
+        JOIN pg_depend d ON d.objid = s.oid
+        JOIN pg_class t ON d.refobjid = t.oid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+        WHERE s.relkind = 'S'
+      LOOP
+        EXECUTE format(
+          'SELECT setval(%L, COALESCE((SELECT MAX(%I) FROM %I), 1))',
+          r.seq_name, r.column_name, r.table_name
+        );
+      END LOOP;
+    END
+    \$\$;
+  " 2>/dev/null || warn "Sequence fix had errors (non-critical)"
+  ok "Sequences fixed"
+
+  # Drop temp DB
+  msg "Dropping temp DB..."
+  run docker exec "$CONTAINER" bash -c "dropdb -U ${DB_USER} --if-exists ${TEMP_DB}"
+  run docker exec "$CONTAINER" rm -f /tmp/sync.dump
+  ok "${LABEL} incremental sync complete"
+
+  echo "$ROWS_ADDED"
+}
+
+# Full PG sync: drop + recreate (old behavior)
+sync_pg_full() {
+  local CONTAINER="$1"
+  local DB_NAME="$2"
+  local DB_USER="$3"
+  local DUMP_FILE="$4"
+  local LABEL="$5"
+
+  msg "Full replacement of ${DB_NAME}..."
+
+  run docker exec -i "$CONTAINER" bash -c "
+    # Terminate existing connections
+    psql -U ${DB_USER} -d postgres -c \"
+      SELECT pg_terminate_backend(pid)
+      FROM pg_stat_activity
+      WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();
+    \" 2>/dev/null || true
+
+    # Drop and recreate
+    dropdb -U ${DB_USER} --if-exists ${DB_NAME}
+    createdb -U ${DB_USER} ${DB_NAME}
+
+    # Create rada_mcp role if missing (backend only)
+    psql -U ${DB_USER} -d postgres -c \"
+      DO \\\$\\\$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rada_mcp') THEN
+          CREATE ROLE rada_mcp WITH LOGIN PASSWORD 'rada_password';
+        END IF;
+      END
+      \\\$\\\$;
+    \" 2>/dev/null || true
+  "
+
+  run docker cp "${DUMP_FILE}" "${CONTAINER}:/tmp/sync.dump"
+  run docker exec "$CONTAINER" pg_restore \
+    -U "$DB_USER" \
+    -d "$DB_NAME" \
+    --no-owner \
+    --no-privileges \
+    --exit-on-error \
+    /tmp/sync.dump || {
+      TABLE_COUNT=$(docker exec "$CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc \
+        "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
+      if [[ "$TABLE_COUNT" -gt 0 ]]; then
+        warn "pg_restore had warnings but DB has ${TABLE_COUNT} tables — continuing"
+      else
+        err "pg_restore failed and DB is empty"
+        exit 1
+      fi
+    }
+  run docker exec "$CONTAINER" rm -f /tmp/sync.dump
+  ok "${LABEL} DB restored (${DB_NAME})"
 }
 
 # ──────────────── Pre-flight ────────────────
@@ -155,6 +361,12 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║  Stage → Local Data Sync                 ║${NC}"
 echo -e "${BLUE}╠══════════════════════════════════════════╣${NC}"
 
+if $FULL_SYNC; then
+  echo -e "${BLUE}║${NC}  Mode                      ${RED}FULL${NC}           ${BLUE}║${NC}"
+else
+  echo -e "${BLUE}║${NC}  Mode                      ${GREEN}INCREMENTAL${NC}    ${BLUE}║${NC}"
+fi
+
 if ! $QDRANT_ONLY; then
   echo -e "${BLUE}║${NC}  PostgreSQL (backend+rada)  ${GREEN}YES${NC}            ${BLUE}║${NC}"
   if $SKIP_OPENREYESTR; then
@@ -184,7 +396,11 @@ if $DRY_RUN; then
 fi
 
 if ! $AUTO_YES && ! $DRY_RUN; then
-  read -p "Proceed? Local data will be REPLACED. [y/N] " confirm
+  if $FULL_SYNC; then
+    read -p "Proceed? Local data will be REPLACED (full sync). [y/N] " confirm
+  else
+    read -p "Proceed? New data will be MERGED (incremental). [y/N] " confirm
+  fi
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "Aborted."
     exit 0
@@ -221,64 +437,47 @@ if ! $QDRANT_ONLY; then
     "${DUMP_DIR}/backend.dump"
   ok "Backend dump transferred"
 
-  msg "Restoring backend DB locally (${LOCAL_BACKEND_DB})..."
+  if $FULL_SYNC; then
+    # Full mode: stop containers, drop+recreate, restore
+    msg "Stopping local app containers..."
+    run docker stop secondlayer-app-local rada-mcp-app-local 2>/dev/null || true
 
-  # Stop app containers that use the DB to avoid connection conflicts
-  msg "Stopping local app containers..."
-  run docker stop secondlayer-app-local rada-mcp-app-local 2>/dev/null || true
+    sync_pg_full "$LOCAL_BACKEND_CONTAINER" "$LOCAL_BACKEND_DB" "$LOCAL_BACKEND_USER" \
+      "${DUMP_DIR}/backend.dump" "Backend"
 
-  run docker exec -i "$LOCAL_BACKEND_CONTAINER" bash -c "
-    # Terminate existing connections
-    psql -U ${LOCAL_BACKEND_USER} -d postgres -c \"
-      SELECT pg_terminate_backend(pid)
-      FROM pg_stat_activity
-      WHERE datname = '${LOCAL_BACKEND_DB}' AND pid <> pg_backend_pid();
-    \" 2>/dev/null || true
-
-    # Drop and recreate
-    dropdb -U ${LOCAL_BACKEND_USER} --if-exists ${LOCAL_BACKEND_DB}
-    createdb -U ${LOCAL_BACKEND_USER} ${LOCAL_BACKEND_DB}
-
-    # Create rada_mcp role if missing
-    psql -U ${LOCAL_BACKEND_USER} -d postgres -c \"
-      DO \\\$\\\$
+    # Grant rada_mcp access
+    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -c "
+      GRANT USAGE ON SCHEMA rada TO rada_mcp;
+      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rada TO rada_mcp;
+      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA rada TO rada_mcp;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON TABLES TO rada_mcp;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON SEQUENCES TO rada_mcp;
+    " 2>/dev/null || warn "RADA schema grants — schema may not exist yet"
+  else
+    # Incremental mode: merge via temp DB
+    # Ensure rada_mcp role exists before merge (schema sync may reference it)
+    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d postgres -c "
+      DO \$\$
       BEGIN
         IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rada_mcp') THEN
           CREATE ROLE rada_mcp WITH LOGIN PASSWORD 'rada_password';
         END IF;
       END
-      \\\$\\\$;
-    \"
-  "
+      \$\$;
+    " 2>/dev/null || true
 
-  run docker cp "${DUMP_DIR}/backend.dump" "${LOCAL_BACKEND_CONTAINER}:/tmp/backend.dump"
-  run docker exec "$LOCAL_BACKEND_CONTAINER" pg_restore \
-    -U "$LOCAL_BACKEND_USER" \
-    -d "$LOCAL_BACKEND_DB" \
-    --no-owner \
-    --no-privileges \
-    --exit-on-error \
-    /tmp/backend.dump || {
-      # pg_restore exits non-zero on warnings too; check if DB has tables
-      TABLE_COUNT=$(docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
-      if [[ "$TABLE_COUNT" -gt 0 ]]; then
-        warn "pg_restore had warnings but DB has ${TABLE_COUNT} tables — continuing"
-      else
-        err "pg_restore failed and DB is empty"
-        exit 1
-      fi
-    }
-  run docker exec "$LOCAL_BACKEND_CONTAINER" rm -f /tmp/backend.dump
-  ok "Backend DB restored (${LOCAL_BACKEND_DB})"
+    STAT_PG_BACKEND_ROWS=$(sync_pg_incremental "$LOCAL_BACKEND_CONTAINER" "$LOCAL_BACKEND_DB" \
+      "$LOCAL_BACKEND_USER" "${DUMP_DIR}/backend.dump" "Backend")
 
-  # Grant rada_mcp access
-  run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -c "
-    GRANT USAGE ON SCHEMA rada TO rada_mcp;
-    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rada TO rada_mcp;
-    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA rada TO rada_mcp;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON TABLES TO rada_mcp;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON SEQUENCES TO rada_mcp;
-  " 2>/dev/null || warn "RADA schema grants — schema may not exist yet"
+    # Grant rada_mcp access
+    run docker exec "$LOCAL_BACKEND_CONTAINER" psql -U "$LOCAL_BACKEND_USER" -d "$LOCAL_BACKEND_DB" -c "
+      GRANT USAGE ON SCHEMA rada TO rada_mcp;
+      GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rada TO rada_mcp;
+      GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA rada TO rada_mcp;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON TABLES TO rada_mcp;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA rada GRANT ALL ON SEQUENCES TO rada_mcp;
+    " 2>/dev/null || warn "RADA schema grants — schema may not exist yet"
+  fi
 
   # ── 1b. OpenReyestr DB (optional) ──
 
@@ -302,37 +501,15 @@ if ! $QDRANT_ONLY; then
       "${DUMP_DIR}/openreyestr.dump"
     ok "OpenReyestr dump transferred"
 
-    msg "Restoring openreyestr DB locally (${LOCAL_OPENREYESTR_DB})..."
-    run docker stop openreyestr-app-local 2>/dev/null || true
-
-    run docker exec -i "$LOCAL_OPENREYESTR_CONTAINER" bash -c "
-      psql -U ${LOCAL_OPENREYESTR_USER} -d postgres -c \"
-        SELECT pg_terminate_backend(pid)
-        FROM pg_stat_activity
-        WHERE datname = '${LOCAL_OPENREYESTR_DB}' AND pid <> pg_backend_pid();
-      \" 2>/dev/null || true
-      dropdb -U ${LOCAL_OPENREYESTR_USER} --if-exists ${LOCAL_OPENREYESTR_DB}
-      createdb -U ${LOCAL_OPENREYESTR_USER} ${LOCAL_OPENREYESTR_DB}
-    "
-
-    run docker cp "${DUMP_DIR}/openreyestr.dump" "${LOCAL_OPENREYESTR_CONTAINER}:/tmp/openreyestr.dump"
-    run docker exec "$LOCAL_OPENREYESTR_CONTAINER" pg_restore \
-      -U "$LOCAL_OPENREYESTR_USER" \
-      -d "$LOCAL_OPENREYESTR_DB" \
-      --no-owner \
-      --no-privileges \
-      --exit-on-error \
-      /tmp/openreyestr.dump || {
-        TABLE_COUNT=$(docker exec "$LOCAL_OPENREYESTR_CONTAINER" psql -U "$LOCAL_OPENREYESTR_USER" -d "$LOCAL_OPENREYESTR_DB" -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")
-        if [[ "$TABLE_COUNT" -gt 0 ]]; then
-          warn "pg_restore had warnings but DB has ${TABLE_COUNT} tables — continuing"
-        else
-          err "pg_restore failed and DB is empty"
-          exit 1
-        fi
-      }
-    run docker exec "$LOCAL_OPENREYESTR_CONTAINER" rm -f /tmp/openreyestr.dump
-    ok "OpenReyestr DB restored (${LOCAL_OPENREYESTR_DB})"
+    if $FULL_SYNC; then
+      run docker stop openreyestr-app-local 2>/dev/null || true
+      sync_pg_full "$LOCAL_OPENREYESTR_CONTAINER" "$LOCAL_OPENREYESTR_DB" \
+        "$LOCAL_OPENREYESTR_USER" "${DUMP_DIR}/openreyestr.dump" "OpenReyestr"
+    else
+      STAT_PG_OPENREYESTR_ROWS=$(sync_pg_incremental "$LOCAL_OPENREYESTR_CONTAINER" \
+        "$LOCAL_OPENREYESTR_DB" "$LOCAL_OPENREYESTR_USER" \
+        "${DUMP_DIR}/openreyestr.dump" "OpenReyestr")
+    fi
   fi
 fi
 
@@ -342,57 +519,105 @@ fi
 
 if ! $PG_ONLY; then
 
-  msg "Creating Qdrant snapshots on stage..."
+  msg "Checking Qdrant collections..."
 
-  # Get list of collections from stage
-  COLLECTIONS=$(run ssh "${STAGE_USER}@${STAGE_SERVER}" \
-    "curl -sf http://localhost:6337/collections | python3 -c 'import sys,json; [print(c[\"name\"]) for c in json.load(sys.stdin)[\"result\"][\"collections\"]]'" \
-  ) || { err "Failed to list Qdrant collections on stage"; COLLECTIONS=""; }
+  # Get stage collections with point counts
+  STAGE_COLLECTIONS_JSON=$(ssh "${STAGE_USER}@${STAGE_SERVER}" \
+    "curl -sf http://localhost:6337/collections" 2>/dev/null) || { err "Failed to list stage Qdrant collections"; STAGE_COLLECTIONS_JSON=""; }
 
-  if [[ -z "$COLLECTIONS" ]]; then
+  if [[ -z "$STAGE_COLLECTIONS_JSON" ]]; then
     warn "No Qdrant collections found on stage — skipping"
   else
-    ok "Found collections: $(echo $COLLECTIONS | tr '\n' ' ')"
+    STAGE_COLLECTIONS=$(echo "$STAGE_COLLECTIONS_JSON" | python3 -c \
+      'import sys,json; [print(c["name"]) for c in json.load(sys.stdin)["result"]["collections"]]' 2>/dev/null) || STAGE_COLLECTIONS=""
 
-    for collection in $COLLECTIONS; do
-      msg "Snapshotting collection: ${collection}..."
+    if [[ -z "$STAGE_COLLECTIONS" ]]; then
+      warn "No Qdrant collections found on stage — skipping"
+    else
+      ok "Stage collections: $(echo $STAGE_COLLECTIONS | tr '\n' ' ')"
 
-      # Create snapshot on stage Qdrant
-      SNAPSHOT_NAME=$(run ssh "${STAGE_USER}@${STAGE_SERVER}" \
-        "curl -sf -X POST http://localhost:6337/collections/${collection}/snapshots | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"result\"][\"name\"])'" \
-      ) || { err "Failed to snapshot ${collection}"; continue; }
-      ok "Snapshot created: ${SNAPSHOT_NAME}"
+      # Get local collections with point counts
+      LOCAL_COLLECTIONS_JSON=$(curl -sf http://localhost:6333/collections 2>/dev/null) || LOCAL_COLLECTIONS_JSON='{"result":{"collections":[]}}'
 
-      # Download snapshot from stage Qdrant via SSH tunnel
-      msg "Transferring snapshot ${collection}..."
-      run ssh "${STAGE_USER}@${STAGE_SERVER}" \
-        "curl -sf http://localhost:6337/collections/${collection}/snapshots/${SNAPSHOT_NAME} -o ${REMOTE_DUMP_DIR}/${collection}.snapshot"
-      run rsync -ahP --compress \
-        "${STAGE_USER}@${STAGE_SERVER}:${REMOTE_DUMP_DIR}/${collection}.snapshot" \
-        "${DUMP_DIR}/${collection}.snapshot"
-      ok "Snapshot transferred: $(du -h "${DUMP_DIR}/${collection}.snapshot" | cut -f1)"
+      for collection in $STAGE_COLLECTIONS; do
+        # Get stage point count
+        STAGE_INFO=$(ssh "${STAGE_USER}@${STAGE_SERVER}" \
+          "curl -sf http://localhost:6337/collections/${collection}" 2>/dev/null) || { err "Failed to get info for ${collection} on stage"; continue; }
+        STAGE_POINTS=$(echo "$STAGE_INFO" | python3 -c \
+          'import sys,json; print(json.load(sys.stdin)["result"]["points_count"])' 2>/dev/null) || STAGE_POINTS=0
 
-      # Delete remote snapshot to save space
-      run ssh "${STAGE_USER}@${STAGE_SERVER}" \
-        "curl -sf -X DELETE http://localhost:6337/collections/${collection}/snapshots/${SNAPSHOT_NAME} >/dev/null" || true
+        # Get local point count
+        LOCAL_INFO=$(curl -sf "http://localhost:6333/collections/${collection}" 2>/dev/null) || LOCAL_INFO=""
+        if [[ -n "$LOCAL_INFO" ]]; then
+          LOCAL_POINTS=$(echo "$LOCAL_INFO" | python3 -c \
+            'import sys,json; print(json.load(sys.stdin)["result"]["points_count"])' 2>/dev/null) || LOCAL_POINTS=0
+        else
+          LOCAL_POINTS=-1  # Collection doesn't exist locally
+        fi
 
-      # Restore to local Qdrant
-      msg "Restoring collection ${collection} locally..."
+        # Decide whether to sync
+        SHOULD_SYNC=false
+        if [[ "$LOCAL_POINTS" -eq -1 ]]; then
+          stat "${collection}: missing locally (stage has ${STAGE_POINTS} points) — will sync"
+          SHOULD_SYNC=true
+        elif [[ "$STAGE_POINTS" -gt "$LOCAL_POINTS" ]] && ! $FULL_SYNC; then
+          stat "${collection}: stage has more points (${STAGE_POINTS} vs ${LOCAL_POINTS}) — will sync"
+          SHOULD_SYNC=true
+        elif [[ "$STAGE_POINTS" -eq "$LOCAL_POINTS" ]] && ! $FULL_SYNC; then
+          stat "${collection}: same point count (${LOCAL_POINTS}) — skipping"
+          STAT_QDRANT_SKIPPED=$((STAT_QDRANT_SKIPPED + 1))
+          continue
+        elif [[ "$STAGE_POINTS" -lt "$LOCAL_POINTS" ]] && ! $FULL_SYNC; then
+          stat "${collection}: local has more points (${LOCAL_POINTS} vs ${STAGE_POINTS}) — skipping"
+          STAT_QDRANT_SKIPPED=$((STAT_QDRANT_SKIPPED + 1))
+          continue
+        elif $FULL_SYNC; then
+          stat "${collection}: full sync — will replace (${STAGE_POINTS} points)"
+          SHOULD_SYNC=true
+        fi
 
-      # Delete local collection if exists (idempotent)
-      run curl -sf -X DELETE "http://localhost:6333/collections/${collection}" >/dev/null 2>&1 || true
+        if ! $SHOULD_SYNC; then
+          continue
+        fi
 
-      # Upload snapshot to local Qdrant
-      run curl -sf -X POST "http://localhost:6333/collections/${collection}/snapshots/upload?priority=snapshot" \
-        -H "Content-Type: multipart/form-data" \
-        -F "snapshot=@${DUMP_DIR}/${collection}.snapshot" >/dev/null
-      ok "Collection ${collection} restored locally"
+        msg "Snapshotting collection: ${collection}..."
 
-      # Clean up snapshot file to save disk space
-      rm -f "${DUMP_DIR}/${collection}.snapshot"
-    done
+        # Create snapshot on stage Qdrant
+        SNAPSHOT_NAME=$(run ssh "${STAGE_USER}@${STAGE_SERVER}" \
+          "curl -sf -X POST http://localhost:6337/collections/${collection}/snapshots | python3 -c 'import sys,json; print(json.load(sys.stdin)[\"result\"][\"name\"])'" \
+        ) || { err "Failed to snapshot ${collection}"; continue; }
+        ok "Snapshot created: ${SNAPSHOT_NAME}"
 
-    ok "All Qdrant collections synced"
+        # Download snapshot from stage
+        msg "Transferring snapshot ${collection}..."
+        run ssh "${STAGE_USER}@${STAGE_SERVER}" \
+          "curl -sf http://localhost:6337/collections/${collection}/snapshots/${SNAPSHOT_NAME} -o ${REMOTE_DUMP_DIR}/${collection}.snapshot"
+        run rsync -ahP --compress \
+          "${STAGE_USER}@${STAGE_SERVER}:${REMOTE_DUMP_DIR}/${collection}.snapshot" \
+          "${DUMP_DIR}/${collection}.snapshot"
+        ok "Snapshot transferred: $(du -h "${DUMP_DIR}/${collection}.snapshot" 2>/dev/null | cut -f1)"
+
+        # Delete remote snapshot to save space
+        run ssh "${STAGE_USER}@${STAGE_SERVER}" \
+          "curl -sf -X DELETE http://localhost:6337/collections/${collection}/snapshots/${SNAPSHOT_NAME} >/dev/null" || true
+
+        # Restore to local Qdrant (delete existing collection first)
+        msg "Restoring collection ${collection} locally..."
+        run curl -sf -X DELETE "http://localhost:6333/collections/${collection}" >/dev/null 2>&1 || true
+
+        run curl -sf -X POST "http://localhost:6333/collections/${collection}/snapshots/upload?priority=snapshot" \
+          -H "Content-Type: multipart/form-data" \
+          -F "snapshot=@${DUMP_DIR}/${collection}.snapshot" >/dev/null
+        ok "Collection ${collection} restored locally"
+
+        STAT_QDRANT_SYNCED=$((STAT_QDRANT_SYNCED + 1))
+
+        # Clean up snapshot file to save disk space
+        rm -f "${DUMP_DIR}/${collection}.snapshot"
+      done
+
+      ok "Qdrant sync complete (${STAT_QDRANT_SYNCED} synced, ${STAT_QDRANT_SKIPPED} skipped)"
+    fi
   fi
 fi
 
@@ -433,7 +658,12 @@ if $INCLUDE_MINIO; then
       for bucket in $BUCKETS; do
         msg "Mirroring bucket: ${bucket}..."
         run mc mb --ignore-existing "local-sync/${bucket}" 2>/dev/null || true
-        run mc mirror --overwrite "stage-sync/${bucket}" "local-sync/${bucket}"
+        if $FULL_SYNC; then
+          run mc mirror --overwrite "stage-sync/${bucket}" "local-sync/${bucket}"
+        else
+          # Incremental: only copy objects that don't exist locally
+          run mc mirror "stage-sync/${bucket}" "local-sync/${bucket}"
+        fi
         ok "Bucket ${bucket} synced"
       done
     fi
@@ -445,29 +675,32 @@ if $INCLUDE_MINIO; then
 fi
 
 # ═══════════════════════════════════════════
-# STEP 4: Restart local app containers
+# STEP 4: Restart local app containers (full mode only)
 # ═══════════════════════════════════════════
 
-msg "Restarting local app containers..."
-run docker start secondlayer-app-local rada-mcp-app-local 2>/dev/null || true
-if ! $SKIP_OPENREYESTR; then
-  run docker start openreyestr-app-local 2>/dev/null || true
-fi
-
-# Wait for health
-msg "Waiting for containers to become healthy..."
-for i in $(seq 1 30); do
-  HEALTHY=$(docker inspect --format='{{.State.Health.Status}}' secondlayer-app-local 2>/dev/null || echo "starting")
-  if [[ "$HEALTHY" == "healthy" ]]; then
-    break
+if $FULL_SYNC; then
+  msg "Restarting local app containers..."
+  run docker start secondlayer-app-local rada-mcp-app-local 2>/dev/null || true
+  if ! $SKIP_OPENREYESTR; then
+    run docker start openreyestr-app-local 2>/dev/null || true
   fi
-  sleep 2
-done
 
-if [[ "$HEALTHY" == "healthy" ]]; then
-  ok "secondlayer-app-local is healthy"
-else
-  warn "secondlayer-app-local did not become healthy within 60s — check logs"
+  # Wait for health
+  msg "Waiting for containers to become healthy..."
+  HEALTHY="starting"
+  for i in $(seq 1 30); do
+    HEALTHY=$(docker inspect --format='{{.State.Health.Status}}' secondlayer-app-local 2>/dev/null || echo "starting")
+    if [[ "$HEALTHY" == "healthy" ]]; then
+      break
+    fi
+    sleep 2
+  done
+
+  if [[ "$HEALTHY" == "healthy" ]]; then
+    ok "secondlayer-app-local is healthy"
+  else
+    warn "secondlayer-app-local did not become healthy within 60s — check logs"
+  fi
 fi
 
 # ═══════════════════════════════════════════
@@ -476,12 +709,32 @@ fi
 
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║  Sync complete!                          ║${NC}"
+if $FULL_SYNC; then
+  echo -e "${GREEN}║  Full sync complete!                     ║${NC}"
+else
+  echo -e "${GREEN}║  Incremental sync complete!              ║${NC}"
+fi
 echo -e "${GREEN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Local backend DB:      ${LOCAL_BACKEND_DB}"
 echo -e "  Local Qdrant:          http://localhost:6333"
 if ! $SKIP_OPENREYESTR; then
   echo -e "  Local OpenReyestr DB:  ${LOCAL_OPENREYESTR_DB}"
+fi
+
+# Print stats for incremental mode
+if ! $FULL_SYNC && ! $DRY_RUN; then
+  echo ""
+  echo -e "${CYAN}  Stats:${NC}"
+  if ! $QDRANT_ONLY; then
+    echo -e "    PG backend rows added:     ${STAT_PG_BACKEND_ROWS}"
+    if ! $SKIP_OPENREYESTR; then
+      echo -e "    PG openreyestr rows added: ${STAT_PG_OPENREYESTR_ROWS}"
+    fi
+  fi
+  if ! $PG_ONLY; then
+    echo -e "    Qdrant collections synced: ${STAT_QDRANT_SYNCED}"
+    echo -e "    Qdrant collections skipped: ${STAT_QDRANT_SKIPPED}"
+  fi
 fi
 echo ""
