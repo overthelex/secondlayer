@@ -158,21 +158,69 @@ class HTTPOpenReyestrServer {
           { key: 'streets', table: 'streets', source: 'НАІС — Вулиці населених пунктів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
         ];
 
+        // Use pg_class.reltuples for fast row estimates (avoids full table scans on 30M+ row tables)
+        const tableNames = queries.map(q => q.table);
+        const rowEstimates: Record<string, number> = {};
+        try {
+          const estResult = await this.db.query(
+            `SELECT relname, reltuples::bigint as approx_rows
+             FROM pg_class WHERE relname = ANY($1)`,
+            [tableNames]
+          );
+          for (const row of estResult.rows) {
+            rowEstimates[row.relname] = Math.max(0, parseInt(row.approx_rows || '0'));
+          }
+        } catch { /* ignore */ }
+
+        // Get last update times from import_log (fast — small table)
+        const importTimes: Record<string, { lastUpdate: string | null; lastBatchCount: number }> = {};
+        try {
+          const importResult = await this.db.query(`
+            SELECT DISTINCT ON (registry_name) registry_name, import_completed_at, records_imported
+            FROM import_log WHERE status = 'completed'
+            ORDER BY registry_name, import_started_at DESC
+          `);
+          for (const row of importResult.rows) {
+            importTimes[row.registry_name] = {
+              lastUpdate: row.import_completed_at,
+              lastBatchCount: parseInt(row.records_imported || '0'),
+            };
+          }
+        } catch { /* ignore */ }
+
+        // For tables without import_log entries, get MAX(updated_at) only for small tables
         for (const q of queries) {
-          try {
-            const result = await this.db.query(
-              `SELECT COUNT(*) as cnt, MAX(updated_at) as last_update, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM ${q.table})) as lb FROM ${q.table}`
-            );
+          const est = rowEstimates[q.table] || 0;
+          const imp = importTimes[q.table] || importTimes[q.key];
+          if (imp) {
             tables[q.key] = {
-              rows: parseInt(result.rows[0]?.cnt || '0'),
+              rows: est,
               source: q.source,
               sourceUrl: q.sourceUrl,
               updateFrequency: q.frequency,
-              lastUpdate: result.rows[0]?.last_update || null,
-              lastBatchCount: parseInt(result.rows[0]?.lb || '0'),
+              lastUpdate: imp.lastUpdate,
+              lastBatchCount: imp.lastBatchCount,
             };
-          } catch {
-            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null, lastBatchCount: 0 };
+          } else {
+            // Fallback: only query MAX(updated_at) for small tables (< 1M rows)
+            let lastUpdate: string | null = null;
+            let lastBatchCount = 0;
+            if (est < 1_000_000) {
+              try {
+                const result = await this.db.query(
+                  `SELECT MAX(updated_at) as last_update FROM ${q.table}`
+                );
+                lastUpdate = result.rows[0]?.last_update || null;
+              } catch { /* ignore */ }
+            }
+            tables[q.key] = {
+              rows: est,
+              source: q.source,
+              sourceUrl: q.sourceUrl,
+              updateFrequency: q.frequency,
+              lastUpdate,
+              lastBatchCount,
+            };
           }
         }
 
