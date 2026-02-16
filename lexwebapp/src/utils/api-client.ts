@@ -216,6 +216,27 @@ export const api = {
   // Admin
   admin: {
     getDataSources: () => apiClient.get('/api/admin/data-sources'),
+    getOverview: () => apiClient.get('/api/admin/stats/overview'),
+    getRevenueChart: (days: number = 30) =>
+      apiClient.get(`/api/admin/stats/revenue-chart?days=${days}`),
+    getTierDistribution: () => apiClient.get('/api/admin/stats/tier-distribution'),
+    getUsers: (params?: { limit?: number; offset?: number; search?: string; tier?: string; status?: string }) =>
+      apiClient.get('/api/admin/users', { params }),
+    getUser: (id: string) => apiClient.get(`/api/admin/users/${id}`),
+    updateUserTier: (id: string, tier: string) =>
+      apiClient.put(`/api/admin/users/${id}/tier`, { tier }),
+    adjustBalance: (id: string, amount: number, reason: string) =>
+      apiClient.post(`/api/admin/users/${id}/adjust-balance`, { amount, reason }),
+    updateLimits: (id: string, limits: { dailyLimitUsd?: number; monthlyLimitUsd?: number }) =>
+      apiClient.put(`/api/admin/users/${id}/limits`, limits),
+    getTransactions: (params?: { limit?: number; offset?: number; type?: string; status?: string; userId?: string }) =>
+      apiClient.get('/api/admin/transactions', { params }),
+    refundTransaction: (id: string, reason: string) =>
+      apiClient.post(`/api/admin/transactions/${id}/refund`, { reason }),
+    getUsageAnalytics: (days: number = 30) =>
+      apiClient.get(`/api/admin/analytics/usage?days=${days}`),
+    getCohorts: () => apiClient.get('/api/admin/analytics/cohorts'),
+    getUploadMetrics: () => apiClient.get('/api/admin/upload-metrics'),
   },
 
   // GDPR

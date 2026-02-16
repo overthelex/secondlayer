@@ -37,7 +37,10 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.TIME_ENTRIES]: 'Time Entries',
   [ROUTES.INVOICES]: 'Invoices',
   [ROUTES.CALENDAR]: 'Calendar',
+  [ROUTES.ADMIN_OVERVIEW]: 'System Overview',
   [ROUTES.ADMIN_MONITORING]: 'Data Sources Monitoring',
+  [ROUTES.ADMIN_USERS]: 'User Management',
+  [ROUTES.ADMIN_COSTS]: 'API Costs & Analytics',
 };
 
 export function MainLayout() {
@@ -119,7 +122,10 @@ export function MainLayout() {
           onVotingAnalysisClick={() => navigate(ROUTES.VOTING_ANALYSIS)}
           onLegalCodesLibraryClick={() => navigate(ROUTES.LEGAL_CODES_LIBRARY)}
           onHistoricalAnalysisClick={() => navigate(ROUTES.HISTORICAL_ANALYSIS)}
+          onAdminOverviewClick={() => navigate(ROUTES.ADMIN_OVERVIEW)}
           onAdminMonitoringClick={() => navigate(ROUTES.ADMIN_MONITORING)}
+          onAdminUsersClick={() => navigate(ROUTES.ADMIN_USERS)}
+          onAdminCostsClick={() => navigate(ROUTES.ADMIN_COSTS)}
           onLogout={handleLogout}
         />
       </div>

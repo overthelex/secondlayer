@@ -71,7 +71,10 @@ export const ROUTES = {
   COURT_PRACTICE_ANALYSIS: '/analysis/court-practice',
 
   // Admin
+  ADMIN_OVERVIEW: '/admin/overview',
   ADMIN_MONITORING: '/admin/monitoring',
+  ADMIN_USERS: '/admin/users',
+  ADMIN_COSTS: '/admin/costs',
 } as const;
 
 // Helper function to generate dynamic routes

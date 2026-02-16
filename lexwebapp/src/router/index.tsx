@@ -38,6 +38,9 @@ import { VotingAnalysisPage } from '../components/VotingAnalysisPage';
 import { LegalCodesLibraryPage } from '../components/LegalCodesLibraryPage';
 import { HistoricalAnalysisPage } from '../components/HistoricalAnalysisPage';
 import { AdminMonitoringPage } from '../pages/AdminMonitoringPage';
+import { AdminOverviewPage } from '../pages/AdminOverviewPage';
+import { AdminUsersPage } from '../pages/AdminUsersPage';
+import { AdminCostsPage } from '../pages/AdminCostsPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -225,8 +228,20 @@ export const router = createBrowserRouter([
             element: <CourtPracticeAnalysisPage />,
           },
           {
+            path: ROUTES.ADMIN_OVERVIEW,
+            element: <AdminOverviewPage />,
+          },
+          {
             path: ROUTES.ADMIN_MONITORING,
             element: <AdminMonitoringPage />,
+          },
+          {
+            path: ROUTES.ADMIN_USERS,
+            element: <AdminUsersPage />,
+          },
+          {
+            path: ROUTES.ADMIN_COSTS,
+            element: <AdminCostsPage />,
           },
         ],
       },

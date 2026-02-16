@@ -57,7 +57,10 @@ interface SidebarProps {
   onVotingAnalysisClick?: () => void;
   onLegalCodesLibraryClick?: () => void;
   onHistoricalAnalysisClick?: () => void;
+  onAdminOverviewClick?: () => void;
   onAdminMonitoringClick?: () => void;
+  onAdminUsersClick?: () => void;
+  onAdminCostsClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -84,7 +87,10 @@ export function Sidebar({
   onVotingAnalysisClick,
   onLegalCodesLibraryClick,
   onHistoricalAnalysisClick,
+  onAdminOverviewClick,
   onAdminMonitoringClick,
+  onAdminUsersClick,
+  onAdminCostsClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -212,10 +218,10 @@ export function Sidebar({
 
   // Admin monitoring sections
   const monitoringSections = [
-    { id: 'system-overview', label: 'Огляд системи', icon: Activity, onClick: onAdminMonitoringClick },
+    { id: 'system-overview', label: 'Огляд системи', icon: Activity, onClick: onAdminOverviewClick },
     { id: 'external-sources', label: 'Зовнішні джерела', icon: Database, onClick: onAdminMonitoringClick },
-    { id: 'admin-users', label: 'Користувачі', icon: Users },
-    { id: 'api-costs', label: 'Витрати API', icon: DollarSign },
+    { id: 'admin-users', label: 'Користувачі', icon: Users, onClick: onAdminUsersClick },
+    { id: 'api-costs', label: 'Витрати API', icon: DollarSign, onClick: onAdminCostsClick },
   ];
 
   const evidenceSections = [
