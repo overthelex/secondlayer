@@ -138,29 +138,6 @@ services:
     networks:
       - secondlayer-local
 
-  seed-admin-local:
-    image: secondlayer-app:latest
-    container_name: secondlayer-seed-admin-local
-    depends_on:
-      migrate-local:
-        condition: service_completed_successfully
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
-      POSTGRES_HOST: postgres-local
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
-      ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-}
-      ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      NODE_ENV: development
-    working_dir: /app/mcp_backend
-    command: ["node", "dist/scripts/seed-admin-user.js"]
-    restart: "no"
-    networks:
-      - secondlayer-local
-
   app-local:
     image: secondlayer-app:latest
     container_name: secondlayer-app-local
