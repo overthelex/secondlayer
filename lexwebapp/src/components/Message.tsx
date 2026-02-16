@@ -185,11 +185,72 @@ export function Message({
                   remarkPlugins={[remarkGfm]}
                   components={{
                     p: ({ children }) => (
-                      <p className="whitespace-pre-wrap m-0 leading-[1.7] my-2">
+                      <p className="whitespace-pre-wrap m-0 leading-[1.7] my-2 text-claude-text">
                         {React.Children.map(children, (child) =>
                           typeof child === 'string' ? highlightLegalCodes(child) : child
                         )}
                       </p>
+                    ),
+                    h1: ({ children }) => (
+                      <h1 className="text-[19px] font-bold mt-6 mb-3 text-claude-text">{children}</h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2 className="text-[17px] font-semibold mt-5 mb-2 text-claude-text">{children}</h2>
+                    ),
+                    h3: ({ children }) => (
+                      <h3 className="text-[15px] font-semibold mt-4 mb-2 text-claude-text">{children}</h3>
+                    ),
+                    h4: ({ children }) => (
+                      <h4 className="text-[14px] font-semibold mt-3 mb-1 text-claude-text">{children}</h4>
+                    ),
+                    ul: ({ children }) => (
+                      <ul className="my-2 pl-6 list-disc text-claude-text">{children}</ul>
+                    ),
+                    ol: ({ children }) => (
+                      <ol className="my-2 pl-6 list-decimal text-claude-text">{children}</ol>
+                    ),
+                    li: ({ children }) => (
+                      <li className="leading-[1.7] text-claude-text my-0.5">{children}</li>
+                    ),
+                    strong: ({ children }) => (
+                      <strong className="font-semibold text-claude-text">{children}</strong>
+                    ),
+                    em: ({ children }) => (
+                      <em className="italic text-claude-text">{children}</em>
+                    ),
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-claude-text/20 pl-4 italic text-claude-subtext my-3">{children}</blockquote>
+                    ),
+                    hr: () => (
+                      <hr className="my-4 border-claude-border" />
+                    ),
+                    pre: ({ children }) => (
+                      <pre className="bg-claude-sidebar border border-claude-border rounded-lg my-3 p-4 overflow-x-auto text-claude-text text-[13px]">{children}</pre>
+                    ),
+                    code: ({ className, children, ...props }) => {
+                      const isBlock = className?.includes('language-');
+                      if (isBlock) {
+                        return <code className="font-mono text-claude-text" {...props}>{children}</code>;
+                      }
+                      return (
+                        <code className="text-[13px] bg-claude-bg px-1.5 py-0.5 rounded border border-claude-border font-mono text-claude-text" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    a: ({ href, children }) => (
+                      <a href={href} className="text-claude-text underline decoration-claude-subtext/30 hover:decoration-claude-text" target="_blank" rel="noopener noreferrer">{children}</a>
+                    ),
+                    table: ({ children }) => (
+                      <div className="overflow-x-auto my-3">
+                        <table className="text-[13px] w-full text-claude-text">{children}</table>
+                      </div>
+                    ),
+                    th: ({ children }) => (
+                      <th className="bg-claude-bg px-3 py-2 text-left font-semibold border border-claude-border text-claude-text">{children}</th>
+                    ),
+                    td: ({ children }) => (
+                      <td className="px-3 py-2 border border-claude-border text-claude-text">{children}</td>
                     ),
                   }}
                 >
