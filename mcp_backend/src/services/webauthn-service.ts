@@ -40,13 +40,15 @@ export class WebAuthnService {
   private db: Database;
   private rpName: string;
   private rpID: string;
-  private origin: string;
+  private origins: string[];
 
   constructor(db: Database) {
     this.db = db;
     this.rpName = process.env.WEBAUTHN_RP_NAME || 'SecondLayer Legal';
     this.rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
-    this.origin = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+    // Support multiple origins (comma-separated) for multi-domain setups
+    const originEnv = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+    this.origins = originEnv.split(',').map(o => o.trim());
   }
 
   /**
@@ -101,7 +103,7 @@ export class WebAuthnService {
     const verification = await verifyRegistrationResponse({
       response,
       expectedChallenge,
-      expectedOrigin: this.origin,
+      expectedOrigin: this.origins,
       expectedRPID: this.rpID,
     });
 
@@ -182,7 +184,7 @@ export class WebAuthnService {
       await verifyAuthenticationResponse({
         response,
         expectedChallenge,
-        expectedOrigin: this.origin,
+        expectedOrigin: this.origins,
         expectedRPID: this.rpID,
         credential: {
           id: cred.credential_id,

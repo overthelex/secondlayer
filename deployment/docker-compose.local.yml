@@ -202,6 +202,11 @@ services:
       OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL:-http://openreyestr-app-local:3004}
       OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY:-test-key-123}
 
+      # WebAuthn / FIDO2
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localdev.legal.org.ua}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-SecondLayer Legal}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-https://localdev.legal.org.ua}
+
       # OAuth (optional for local - can use API keys instead)
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}

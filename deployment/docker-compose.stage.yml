@@ -416,6 +416,11 @@ services:
       VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
 
+      # WebAuthn / FIDO2
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-legal.org.ua}
+      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-SecondLayer Legal}
+      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-https://legal.org.ua,https://stage.legal.org.ua}
+
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: https://stage.legal.org.ua/auth/google/callback
