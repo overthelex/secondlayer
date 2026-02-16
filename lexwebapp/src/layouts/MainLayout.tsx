@@ -41,6 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.ADMIN_MONITORING]: 'Data Sources Monitoring',
   [ROUTES.ADMIN_USERS]: 'User Management',
   [ROUTES.ADMIN_COSTS]: 'API Costs & Analytics',
+  [ROUTES.ADMIN_DATA_SOURCES]: 'Джерела даних',
 };
 
 export function MainLayout() {
@@ -126,6 +127,7 @@ export function MainLayout() {
           onAdminMonitoringClick={() => navigate(ROUTES.ADMIN_MONITORING)}
           onAdminUsersClick={() => navigate(ROUTES.ADMIN_USERS)}
           onAdminCostsClick={() => navigate(ROUTES.ADMIN_COSTS)}
+          onAdminDataSourcesClick={() => navigate(ROUTES.ADMIN_DATA_SOURCES)}
           onLogout={handleLogout}
         />
       </div>

@@ -27,7 +27,8 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Activity,
-  Database } from
+  Database,
+  Globe } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -61,6 +62,7 @@ interface SidebarProps {
   onAdminMonitoringClick?: () => void;
   onAdminUsersClick?: () => void;
   onAdminCostsClick?: () => void;
+  onAdminDataSourcesClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -91,6 +93,7 @@ export function Sidebar({
   onAdminMonitoringClick,
   onAdminUsersClick,
   onAdminCostsClick,
+  onAdminDataSourcesClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -222,6 +225,7 @@ export function Sidebar({
     { id: 'external-sources', label: 'Зовнішні джерела', icon: Database, onClick: onAdminMonitoringClick },
     { id: 'admin-users', label: 'Користувачі', icon: Users, onClick: onAdminUsersClick },
     { id: 'api-costs', label: 'Витрати API', icon: DollarSign, onClick: onAdminCostsClick },
+    { id: 'data-sources', label: 'Джерела даних', icon: Globe, onClick: onAdminDataSourcesClick },
   ];
 
   const evidenceSections = [

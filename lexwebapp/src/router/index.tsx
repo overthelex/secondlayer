@@ -41,6 +41,7 @@ import { AdminMonitoringPage } from '../pages/AdminMonitoringPage';
 import { AdminOverviewPage } from '../pages/AdminOverviewPage';
 import { AdminUsersPage } from '../pages/AdminUsersPage';
 import { AdminCostsPage } from '../pages/AdminCostsPage';
+import { AdminDataSourcesPage } from '../pages/AdminDataSourcesPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -242,6 +243,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.ADMIN_COSTS,
             element: <AdminCostsPage />,
+          },
+          {
+            path: ROUTES.ADMIN_DATA_SOURCES,
+            element: <AdminDataSourcesPage />,
           },
         ],
       },
