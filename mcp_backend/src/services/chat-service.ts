@@ -3,11 +3,12 @@
  *
  * Flow:
  * 1. Classify user intent → filter tools to relevant subset
- * 2. Pick LLM provider (round-robin OpenAI ↔ Anthropic)
- * 3. Stream LLM response with function calling / tool_use
- * 4. Execute tool calls via ToolRegistry
- * 5. Feed results back → loop until LLM produces final answer
- * 6. Stream token-level events to client via SSE
+ * 2. Anthropic pre-analysis: generate response template (structure, legal norms, strategy)
+ * 3. Inject template into system prompt for the main LLM
+ * 4. Stream LLM response with function calling / tool_use
+ * 5. Execute tool calls via ToolRegistry
+ * 6. Feed results back → loop until LLM produces final answer
+ * 7. Stream token-level events to client via SSE
  */
 
 import { logger } from '../utils/logger.js';
@@ -70,7 +71,7 @@ export class ChatService {
    * Run the agentic chat loop. Yields ChatEvents for SSE streaming.
    */
   async *chat(request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const { query, history = [], budget: userBudget = 'standard', signal } = request;
+    const { query, history = [], budget = 'standard', signal } = request;
     const startTime = Date.now();
 
     try {
@@ -78,12 +79,8 @@ export class ChatService {
       const classification = await this.classifyChatIntent(query);
       const toolDefs = await this.filterTools(classification.domains, classification.slots);
 
-      // 1.5. Auto-escalate budget for complex queries
-      const budget = this.escalateBudget(
-        classification,
-        query,
-        request.budget // only truthy if user explicitly set it
-      );
+      // 2. Anthropic pre-analysis: generate response template
+      const responseTemplate = await this.generateResponseTemplate(query, classification);
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
@@ -91,10 +88,10 @@ export class ChatService {
         keywords: classification.keywords,
         toolCount: toolDefs.length,
         budget,
-        budgetEscalated: budget !== userBudget,
+        hasTemplate: !!responseTemplate,
       });
 
-      // 2. Pick LLM provider (strategy-aware; anthropic-deep uses Anthropic for deep)
+      // 3. Pick LLM provider for the main loop
       const selection = ModelSelector.getModelSelection(budget);
 
       logger.info('[ChatService] Selected LLM', {
@@ -102,8 +99,8 @@ export class ChatService {
         model: selection.model,
       });
 
-      // 3. Build messages with token-aware context window (enriched with scenario catalog)
-      const messages = this.buildContextMessages(history, query, classification.domains);
+      // 4. Build messages with token-aware context window + injected template
+      const messages = this.buildContextMessages(history, query, classification.domains, responseTemplate);
 
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
@@ -286,13 +283,19 @@ export class ChatService {
   private buildContextMessages(
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     query: string,
-    classifiedDomains?: string[]
+    classifiedDomains?: string[],
+    responseTemplate?: string
   ): UnifiedMessage[] {
-    const enrichedPrompt = buildEnrichedSystemPrompt(
+    let enrichedPrompt = buildEnrichedSystemPrompt(
       CHAT_SYSTEM_PROMPT,
       SCENARIO_CATALOG,
       classifiedDomains
     );
+
+    // Inject Anthropic-generated response template into system prompt
+    if (responseTemplate) {
+      enrichedPrompt += `\n\n## Шаблон відповіді (згенерований аналітиком)\n\nДотримуйся цього шаблону при формуванні відповіді. Використовуй інструменти для заповнення конкретними даними.\n\n${responseTemplate}`;
+    }
 
     const messages: UnifiedMessage[] = [
       { role: 'system', content: enrichedPrompt },
@@ -399,111 +402,89 @@ export class ChatService {
   }
 
   /**
-   * Auto-escalate budget from standard → deep for complex legal queries.
-   * User-specified budget takes precedence (no override).
+   * Anthropic pre-analysis: send the user query to Claude to generate a structured
+   * response template (legal norms, analysis structure, tool-call strategy).
+   * The template is then injected into the system prompt for the main LLM loop.
    */
-  private escalateBudget(
-    classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
+  private async generateResponseTemplate(
     query: string,
-    userExplicitBudget?: 'quick' | 'standard' | 'deep'
-  ): 'quick' | 'standard' | 'deep' {
-    // If user explicitly chose a budget, respect it
-    if (userExplicitBudget) {
-      return userExplicitBudget;
-    }
+    classification: { domains: string[]; keywords: string; slots?: Record<string, any> }
+  ): Promise<string | undefined> {
+    try {
+      const llm = getLLMManager();
+      const available = ModelSelector.getAvailableProviders();
 
-    const lowerQuery = query.toLowerCase();
+      if (!available.includes('anthropic')) {
+        logger.debug('[ChatService] Anthropic not available, skipping pre-analysis');
+        return undefined;
+      }
 
-    // Deep-analysis keyword patterns (Ukrainian + Russian legal domain)
-    const deepPatterns = [
-      // Ukrainian
-      'проаналізу',
-      'аналіз справ',
-      'комплексний',
-      'порівня',
-      'резолютивн',
-      'правова позиція',
-      'висновк',
-      'формулюван',
-      'формування',
-      'due diligence',
-      'перевір',
-      'позовн',
-      'обґрунтуван',
-      'мотивувальн',
-      // Russian equivalents
-      'проанализ',
-      'анализ дел',
-      'комплексн',
-      'сравни',
-      'резолютивн',
-      'правовая позиция',
-      'вывод',
-      'формулиров',
-      'формирован',
-      'проверк',
-      'исковы',
-      'обоснован',
-      'мотивировочн',
-      // Common cross-language patterns
-      'інстанці',
-      'инстанци',
-      'велика палата',
-      'большая палата',
-      'касаці',
-      'кассаци',
-      'хронолог',
-      'доказов',
-    ];
+      const preAnalysisPrompt = `Ти — старший юридичний аналітик. Проаналізуй запит користувача і створи ШАБЛОН ВІДПОВІДІ, який буде використаний іншим AI-асистентом для формування фінальної відповіді.
 
-    const complexScenarios = [
-      'comprehensive_case_analysis',
-      'comprehensive_legal_advice',
-      'due_diligence_check',
-    ];
+## Запит користувача
+${query}
 
-    // Rule 1: Multi-domain with legal_advice → always deep (complex analytical query)
-    const isMultiDomain = classification.domains.length >= 2;
-    const hasLegalAdvice = classification.domains.includes('legal_advice');
-    if (isMultiDomain && hasLegalAdvice) {
-      logger.info('[ChatService] Budget escalated: multi-domain + legal_advice', {
-        queryLength: query.length,
-        domains: classification.domains,
+## Класифікація запиту
+- Домени: ${classification.domains.join(', ')}
+- Ключові слова: ${classification.keywords}
+${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}` : ''}
+
+## Твоя задача
+Створи детальний шаблон відповіді, який включає:
+
+1. **Структура відповіді** — які розділи повинна містити відповідь (наприклад: "Правова кваліфікація", "Застосовні норми", "Аналіз судової практики", "Висновок")
+
+2. **Правові норми** — які конкретні статті законів потрібно знайти та процитувати. Вказуй точні посилання: "ст. X Кодексу Y", "ч. Z ст. X Закону Y"
+
+3. **Стратегія пошуку** — які інструменти викликати і в якому порядку, з якими параметрами:
+   - search_legal_precedents(query) — для пошуку судових рішень
+   - get_court_decision(case_number) — для конкретної справи
+   - get_case_documents_chain(case_number) — для історії справи
+   - get_legislation_article(law, article) — для статті закону
+   - search_legislation(query) — для пошуку законодавства
+   - find_similar_fact_pattern_cases(description) — для схожих справ
+   - compare_practice_pro_contra(topic) — для порівняння практики
+
+4. **Ключові аспекти аналізу** — на що звернути увагу при аналізі результатів (конкретні правові конструкції, процесуальні особливості, типові помилки)
+
+5. **Формат відповіді** — як оформити фінальну відповідь (структура, рівень деталізації, чи потрібен зразок документа)
+
+## Правила
+- Пиши УКРАЇНСЬКОЮ
+- Будь конкретним: вказуй точні статті, точні параметри пошуку
+- Якщо запит стосується конкретної справи — включи стратегію аналізу всіх інстанцій
+- Якщо запит загальний — включи стратегію порівняльного аналізу практики
+- Шаблон повинен бути 300-800 слів`;
+
+      const startTime = Date.now();
+
+      const response = await llm.chatCompletion(
+        {
+          messages: [
+            { role: 'user', content: preAnalysisPrompt },
+          ],
+          max_tokens: 2048,
+          temperature: 0.2,
+        },
+        'standard',
+        'anthropic'
+      );
+
+      const template = response.content?.trim();
+      const elapsed = Date.now() - startTime;
+
+      logger.info('[ChatService] Anthropic pre-analysis completed', {
+        elapsed_ms: elapsed,
+        templateLength: template?.length || 0,
       });
-      return 'deep';
-    }
 
-    // Rule 1b: Long query + multi-domain or legal_advice
-    if (query.length > 80 && (isMultiDomain || hasLegalAdvice)) {
-      logger.info('[ChatService] Budget escalated: long query + complex domains', {
-        queryLength: query.length,
-        domains: classification.domains,
+      return template || undefined;
+    } catch (err: any) {
+      logger.warn('[ChatService] Anthropic pre-analysis failed, proceeding without template', {
+        error: err.message,
       });
-      return 'deep';
+      return undefined;
     }
-
-    // Rule 2: Deep-analysis keywords detected
-    const matchedKeyword = deepPatterns.find(p => lowerQuery.includes(p));
-    if (matchedKeyword) {
-      logger.info('[ChatService] Budget escalated: deep-analysis keyword', {
-        keyword: matchedKeyword,
-      });
-      return 'deep';
-    }
-
-    // Rule 3: Complex scenario match (from classification keywords)
-    const lowerKeywords = classification.keywords.toLowerCase();
-    const matchedScenario = complexScenarios.find(s =>
-      lowerKeywords.includes(s) || classification.domains.includes(s)
-    );
-    if (matchedScenario) {
-      logger.info('[ChatService] Budget escalated: complex scenario', {
-        scenario: matchedScenario,
-      });
-      return 'deep';
-    }
-
-    return 'standard';
   }
 
   /**
