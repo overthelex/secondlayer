@@ -41,6 +41,7 @@ interface CourtDocInfo {
   date: string | null;
   court: string | null;
   case_number: string | null;
+  dispute_category: string | null;
   loaded_at: string;
 }
 
@@ -268,6 +269,7 @@ function CourtDocsCategoryRow({ cat }: { cat: CourtCategory }) {
             <div className="text-[10px] text-claude-subtext">
               {doc.court && <span>{doc.court}</span>}
               {doc.case_number && <span className="ml-2 font-mono">{doc.case_number}</span>}
+              {doc.dispute_category && <span className="ml-2 text-blue-600">{doc.dispute_category}</span>}
             </div>
           </td>
           <td className="px-4 py-2 text-xs text-claude-subtext">{formatDate(doc.date)}</td>
