@@ -47,6 +47,8 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'КК': '2341-14',
     'КУ': '254к/96-вр',
     'КОНСТИТУЦІЯ': '254к/96-вр',
+    'КУПАП': '80731-10',
+    'КУпАП': '80731-10',
   };
 
   // Full-name aliases mapping → codeMap key
@@ -63,6 +65,8 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'СІМЕЙНИЙ КОДЕКС': '2947-14',
     'ЗЕМЕЛЬНИЙ КОДЕКС': '2768-14',
     'КОДЕКС ЗАКОНІВ ПРО ПРАЦЮ': '322-08',
+    'КОДЕКС ПРО АДМІНІСТРАТИВНІ ПРАВОПОРУШЕННЯ': '80731-10',
+    'КОДЕКС АДМІНІСТРАТИВНИХ ПРАВОПОРУШЕНЬ': '80731-10',
   };
 
   const normalized = input
@@ -72,9 +76,9 @@ export function parseLegislationReference(text: string): { radaId: string; artic
 
   const patterns: Array<{ regex: RegExp; codeGroupIndex: number; articleGroupIndex: number } | { regex: RegExp; radaIdIndex: number; articleIndex: number }> = [
     // Note: don't use \b for Cyrillic words (JS \b is ASCII-centric)
-    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
-    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
-    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)ст\.?\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ|КУПАП|КУпАП)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
+    { regex: /(?:^|\s)(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ|КУПАП|КУпАП)\s*ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, codeGroupIndex: 1, articleGroupIndex: 2 },
+    { regex: /(?:^|\s)статт(?:я|і)\s*(\d+(?:-\d+)?)\s*(ЦПК|ГПК|КАС|КПК|ЦК|ГК|ПКУ|КЗПП|КЗпП|СК|ЗК|КК|КУ|КОНСТИТУЦІЯ|КУПАП|КУпАП)(?=\s|$|[.,;:])/iu, codeGroupIndex: 2, articleGroupIndex: 1 },
     { regex: /(?:^|\s)(\d{3,4}-\d{2}).*?ст\.?\s*(\d+(?:-\d+)?)(?=\s|$|[.,;:])/iu, radaIdIndex: 1, articleIndex: 2 },
   ];
 
