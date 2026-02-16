@@ -610,8 +610,8 @@ export function Sidebar({
           </div>
           )}
 
-          {/* Finance Section — hidden for user and administrator */}
-          {role === 'company' && (
+          {/* Finance Section — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('finance')}
@@ -644,6 +644,7 @@ export function Sidebar({
                     Біллінг
                   </span>
                 </button>
+                {role === 'company' && (
                 <button
                   onClick={() => {
                     if (onTeamClick) onTeamClick();
@@ -660,6 +661,7 @@ export function Sidebar({
                     Команда
                   </span>
                 </button>
+                )}
               </div>
             )}
           </div>
