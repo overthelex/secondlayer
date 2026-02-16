@@ -3,7 +3,7 @@
  * Public informational page listing Ukrainian legal and government open data sources
  */
 
-import { ArrowLeft, ExternalLink, Scale, BookOpen, FileText, Building2, Database, Shield, Landmark, DollarSign, BarChart3, Heart, GraduationCap, Leaf } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Scale, BookOpen, FileText, Building2, Database, Shield, Landmark, DollarSign, BarChart3, Heart, GraduationCap, Leaf, Users, Receipt, Briefcase } from 'lucide-react';
 
 interface DataSource {
   name: string;
@@ -463,6 +463,149 @@ const categories: Category[] = [
     ],
   },
   {
+    title: 'State Governance (data.gov.ua) — 30 datasets',
+    icon: <Landmark className="w-5 h-5" />,
+    sources: [
+      {
+        name: 'Missing Persons Registry',
+        nameUa: 'Інформація про безвісно зниклих громадян',
+        url: 'https://data.gov.ua/dataset/470196d3-4e7a-46b0-8c0c-883b74ac65f0',
+        description: 'National registry of missing persons maintained by the National Police. Includes personal details, circumstances of disappearance, and search status. JSON format.',
+        tags: ['Missing Persons', 'National Police', 'JSON'],
+      },
+      {
+        name: 'Administrative-Territorial Dictionary',
+        nameUa: 'Словник адміністративно-територіального устрою України',
+        url: 'https://data.gov.ua/dataset/a2d6c060-e7e6-4471-ac67-42cfa1742a19',
+        description: 'Complete hierarchical dictionary of Ukraine\'s administrative-territorial structure — oblasts, raions, hromadas, settlements — plus a street name dictionary for all populated areas.',
+        tags: ['ATU', 'Addresses', 'Dictionary'],
+      },
+      {
+        name: 'Radio Equipment Registry',
+        nameUa: 'Реєстр радіоелектронних засобів та випромінювальних пристроїв',
+        url: 'https://data.gov.ua/dataset/b613b795-4eaa-48cb-86e5-26d9bdc133bf',
+        description: 'Registry of radio-electronic devices and transmitters licensed in Ukraine. Equipment types, frequencies, operators, and licensing data.',
+        tags: ['Radio', 'Licensing', 'XLSX'],
+      },
+    ],
+  },
+  {
+    title: 'Justice Ministry Registries (data.gov.ua) — 19 datasets',
+    icon: <Briefcase className="w-5 h-5" />,
+    sources: [
+      {
+        name: 'Notary Registry',
+        nameUa: 'Єдиний реєстр нотаріусів',
+        url: 'https://data.gov.ua/dataset/1603f092-68b3-4c25-afef-8632aed79daf',
+        description: 'Unified State Register of Notaries — all practicing notaries in Ukraine with license numbers, office addresses, and specialization areas.',
+        tags: ['Notaries', 'Registry', 'Ministry of Justice'],
+      },
+      {
+        name: 'Forensic Experts Registry',
+        nameUa: 'Державний реєстр атестованих судових експертів',
+        url: 'https://data.gov.ua/dataset/0a556891-d6ef-4a5f-a182-caac2f7aa9c9',
+        description: 'State Register of Certified Forensic Experts. Expert specializations (criminalistics, medical, economic, construction), certifications, and affiliated institutions.',
+        tags: ['Forensic Experts', 'Certified', 'Registry'],
+      },
+      {
+        name: 'Bankruptcy Proceedings Registry',
+        nameUa: 'Єдиний реєстр підприємств у справі про банкрутство',
+        url: 'https://data.gov.ua/dataset/78531b7b-e0b1-489f-9924-64144faa7abd',
+        description: 'Unified Register of Enterprises in Bankruptcy Proceedings. Companies under bankruptcy, liquidation status, arbitration managers, and creditor claims.',
+        tags: ['Bankruptcy', 'Enterprises', 'Liquidation'],
+      },
+      {
+        name: 'NGO & Civil Associations Registry',
+        nameUa: 'Реєстр громадських об\'єднань',
+        url: 'https://data.gov.ua/dataset/b07bc894-7301-4bf2-a796-2708e9729538',
+        description: 'Registry of all registered non-governmental organizations, civic associations, and public formations in Ukraine. Organization names, registration dates, founders, and activity areas.',
+        tags: ['NGOs', 'Civil Society', 'Registry'],
+      },
+      {
+        name: 'Corruption Offenders Registry',
+        nameUa: 'Єдиний державний реєстр осіб з корупційних правопорушень',
+        url: 'https://data.gov.ua/dataset/1b80e5ef-3c57-4090-8c4f-cda687f67721',
+        description: 'Unified State Register of persons who committed corruption offenses. Names, positions, offense types, court decisions, and sanctions applied.',
+        tags: ['Anti-Corruption', 'Offenders', 'Registry'],
+      },
+      {
+        name: 'Lustration Registry',
+        nameUa: 'Єдиний державний реєстр осіб щодо закону «Про очищення влади»',
+        url: 'https://data.gov.ua/dataset/8faa71c1-3a54-45e8-8f6e-06c92b1ff8bc',
+        description: 'Registry of persons subject to the "Government Cleansing" (lustration) law. Former officials banned from public service, with applicable restrictions and timeframes.',
+        tags: ['Lustration', 'Government Cleansing', 'Registry'],
+      },
+    ],
+  },
+  {
+    title: 'State Revenue & Taxes (data.gov.ua) — 47 datasets',
+    icon: <Receipt className="w-5 h-5" />,
+    sources: [
+      {
+        name: 'VAT Payers Registry',
+        nameUa: 'Реєстр платників податку на додану вартість',
+        url: 'https://data.gov.ua/dataset/db391c93-1e68-43c9-bd85-7c6a8427b114',
+        description: 'Registry of all registered VAT payers in Ukraine. Company names, tax IDs, registration dates, and status. Essential for business due diligence and compliance checks.',
+        tags: ['VAT', 'Tax Payers', 'Registry'],
+      },
+      {
+        name: 'Monthly Tax Revenue Reports',
+        nameUa: 'Інформація про щомісячні надходження податків і зборів',
+        url: 'https://data.gov.ua/dataset/9241a499-e979-419d-aafd-25fcb59ef90e',
+        description: 'Monthly reports on tax and fee collections by type — income tax, VAT, excise, customs duties, and local taxes. Regional breakdowns and year-over-year comparisons.',
+        tags: ['Tax Revenue', 'Monthly', 'By Region'],
+      },
+      {
+        name: 'Budget Loss from Tax Exemptions',
+        nameUa: 'Квартальні відомості про втрати бюджету від надання податкових пільг',
+        url: 'https://data.gov.ua/dataset/74dd88ed-bc73-46ad-ae2b-eef7f20ef743',
+        description: 'Quarterly data on budget revenue lost due to tax exemptions and incentives. Exemption types, beneficiary sectors, and amounts — key data for fiscal policy analysis.',
+        tags: ['Tax Exemptions', 'Budget Loss', 'Quarterly'],
+      },
+      {
+        name: 'Corporate Financial Statements',
+        nameUa: 'Фінансова звітність суб\'єктів господарювання державного та комунального секторів',
+        url: 'https://data.gov.ua/dataset/5f32a8c3-6188-4696-8037-26d895900d49',
+        description: 'Financial reporting from state-owned and municipal enterprises. Balance sheets, income statements, and key financial indicators in CSV/XML/ZIP formats.',
+        tags: ['Financial Statements', 'SOEs', 'Balance Sheets'],
+      },
+    ],
+  },
+  {
+    title: 'Society & Social Protection (data.gov.ua) — 7 datasets',
+    icon: <Users className="w-5 h-5" />,
+    sources: [
+      {
+        name: 'Housing Subsidy Recipients',
+        nameUa: 'Єдиний державний реєстр отримувачів житлових субсидій',
+        url: 'https://data.gov.ua/dataset/8ff7e5ca-2a89-48d3-9b78-d8cac6c890c5',
+        description: 'Unified State Register of housing subsidy recipients. Regional distribution, subsidy amounts, household categories, and utility types covered. Updated monthly.',
+        tags: ['Subsidies', 'Housing', 'Social Protection'],
+      },
+      {
+        name: 'Wage Debt Registry',
+        nameUa: 'Реєстр підприємств з заборгованістю із заробітної плати',
+        url: 'https://data.gov.ua/dataset/eb4cba1e-6cab-4df7-8613-4fbdb03473eb',
+        description: 'Registry of enterprises with outstanding wage debts to employees. Company names, debt amounts, number of affected workers, and duration of arrears.',
+        tags: ['Wage Debt', 'Labor Rights', 'Registry'],
+      },
+      {
+        name: 'Living Standards Indicators',
+        nameUa: 'Інформація про основні показники рівня життя населення',
+        url: 'https://data.gov.ua/dataset/109c70d0-4a82-4d9b-bbc6-29e133ff7021',
+        description: 'Key living standards indicators — average wages, pensions, minimum subsistence level, consumer basket, poverty rates, and household income/expenditure statistics.',
+        tags: ['Living Standards', 'Wages', 'Poverty'],
+      },
+      {
+        name: 'Humanitarian Aid Recipients',
+        nameUa: 'Єдиний реєстр отримувачів гуманітарної допомоги',
+        url: 'https://data.gov.ua/dataset/3045fcd0-07f2-44c7-b8dc-98fbf641c1ee',
+        description: 'Registry of humanitarian aid recipients in Ukraine. Aid types, distribution volumes, recipient categories, and regional allocation data.',
+        tags: ['Humanitarian Aid', 'Recipients', 'Registry'],
+      },
+    ],
+  },
+  {
     title: 'Education',
     icon: <GraduationCap className="w-5 h-5" />,
     sources: [
@@ -571,6 +714,42 @@ export function UADataSourcesPage() {
             <span className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 font-medium">
               ProZorro — $6B saved
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Format Statistics */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Dataset Formats on data.gov.ua</h2>
+          <p className="text-sm text-gray-500 mb-4">Distribution of 39,821 datasets by file format</p>
+          <div className="space-y-2.5">
+            {[
+              { format: 'XLSX', count: 16173, color: 'bg-green-500' },
+              { format: 'CSV', count: 12179, color: 'bg-blue-500' },
+              { format: 'XLS', count: 6992, color: 'bg-emerald-500' },
+              { format: 'DOCX', count: 2007, color: 'bg-purple-500' },
+              { format: 'ZIP', count: 1999, color: 'bg-amber-500' },
+              { format: 'DOC', count: 1826, color: 'bg-violet-500' },
+              { format: 'JSON', count: 1714, color: 'bg-cyan-500' },
+              { format: 'XML', count: 1682, color: 'bg-teal-500' },
+              { format: 'PDF', count: 1521, color: 'bg-red-500' },
+            ].map(({ format, count, color }) => (
+              <div key={format} className="flex items-center gap-3">
+                <span className="text-xs font-mono text-gray-600 w-10 text-right">{format}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                  <div className={`${color} h-full rounded-full`} style={{ width: `${(count / 16173) * 100}%` }} />
+                </div>
+                <span className="text-xs text-gray-500 w-16 text-right">{count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+            <span>12 categories</span>
+            <span>·</span>
+            <span>1,200+ publishers</span>
+            <span>·</span>
+            <span>Ranked #3 in Europe (97% maturity)</span>
           </div>
         </div>
       </div>
