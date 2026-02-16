@@ -107,6 +107,7 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response): 
         emailVerified: user.email_verified,
         lastLogin: user.last_login,
         createdAt: user.created_at,
+        role: user.role,
       },
     });
   } catch (error: any) {
@@ -396,6 +397,7 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
         emailVerified: user.email_verified,
         lastLogin: user.last_login,
         createdAt: user.created_at,
+        role: user.role,
       },
     });
   } catch (error: any) {
@@ -784,6 +786,7 @@ export async function webauthnAuthVerify(req: Request, res: Response): Promise<R
         emailVerified: user.email_verified,
         lastLogin: user.last_login,
         createdAt: user.created_at,
+        role: user.role,
       },
     });
   } catch (error: any) {

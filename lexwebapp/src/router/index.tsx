@@ -37,6 +37,7 @@ import { LegislationStatisticsPage } from '../components/LegislationStatisticsPa
 import { VotingAnalysisPage } from '../components/VotingAnalysisPage';
 import { LegalCodesLibraryPage } from '../components/LegalCodesLibraryPage';
 import { HistoricalAnalysisPage } from '../components/HistoricalAnalysisPage';
+import { AdminMonitoringPage } from '../pages/AdminMonitoringPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -222,6 +223,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.COURT_PRACTICE_ANALYSIS,
             element: <CourtPracticeAnalysisPage />,
+          },
+          {
+            path: ROUTES.ADMIN_MONITORING,
+            element: <AdminMonitoringPage />,
           },
         ],
       },

@@ -20,6 +20,7 @@ export interface User {
   created_at: Date;
   updated_at: Date;
   password_hash?: string;
+  role: 'user' | 'company' | 'administrator';
 }
 
 export interface UserCreate {

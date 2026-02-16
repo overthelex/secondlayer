@@ -25,11 +25,14 @@ import {
   Trash2,
   Edit3,
   ChevronDown,
-  ChevronsUpDown } from
+  ChevronsUpDown,
+  Activity,
+  Database } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useChatStore } from '../stores/chatStore';
+import type { UserRole } from '../types/models/User';
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -54,6 +57,7 @@ interface SidebarProps {
   onVotingAnalysisClick?: () => void;
   onLegalCodesLibraryClick?: () => void;
   onHistoricalAnalysisClick?: () => void;
+  onAdminMonitoringClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -80,13 +84,15 @@ export function Sidebar({
   onVotingAnalysisClick,
   onLegalCodesLibraryClick,
   onHistoricalAnalysisClick,
+  onAdminMonitoringClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
+  const role: UserRole = user?.role || 'user';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const allSectionIds = ['conversations', 'context', 'evidence', 'legislation', 'finance', 'participants'] as const;
+  const allSectionIds = ['conversations', 'context', 'evidence', 'legislation', 'finance', 'participants', 'monitoring'] as const;
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const toggleSection = (sectionId: string) => {
@@ -140,7 +146,10 @@ export function Sidebar({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showProfileMenu]);
-  const contextSections = [
+  // Items hidden for 'user' role (law firm features)
+  const companyOnlyContextIds = ['clients', 'matters', 'time-entries', 'invoices'];
+
+  const allContextSections = [
   {
     id: 'clients',
     label: 'Клієнти',
@@ -196,6 +205,18 @@ export function Sidebar({
     count: null,
     onClick: onHistoryClick
   }];
+
+  const contextSections = role === 'user'
+    ? allContextSections.filter(s => !companyOnlyContextIds.includes(s.id))
+    : allContextSections;
+
+  // Admin monitoring sections
+  const monitoringSections = [
+    { id: 'system-overview', label: 'Огляд системи', icon: Activity, onClick: onAdminMonitoringClick },
+    { id: 'external-sources', label: 'Зовнішні джерела', icon: Database, onClick: onAdminMonitoringClick },
+    { id: 'admin-users', label: 'Користувачі', icon: Users },
+    { id: 'api-costs', label: 'Витрати API', icon: DollarSign },
+  ];
 
   const evidenceSections = [
   {
@@ -440,7 +461,8 @@ export function Sidebar({
             </div>
           )}
 
-          {/* Context Section */}
+          {/* Context Section — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('context')}
@@ -488,8 +510,10 @@ export function Sidebar({
               </div>
             )}
           </div>
+          )}
 
-          {/* Evidence Section */}
+          {/* Evidence Section — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('evidence')}
@@ -530,8 +554,10 @@ export function Sidebar({
               </div>
             )}
           </div>
+          )}
 
-          {/* Legislative Monitoring Section */}
+          {/* Legislative Monitoring Section — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('legislation')}
@@ -572,8 +598,10 @@ export function Sidebar({
               </div>
             )}
           </div>
+          )}
 
-          {/* Finance Section */}
+          {/* Finance Section — hidden for user and administrator */}
+          {role === 'company' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('finance')}
@@ -625,8 +653,10 @@ export function Sidebar({
               </div>
             )}
           </div>
+          )}
 
-          {/* Judges and Lawyers Section */}
+          {/* Judges and Lawyers Section — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="mb-6">
             <button
               onClick={() => toggleSection('participants')}
@@ -678,8 +708,54 @@ export function Sidebar({
               </div>
             )}
           </div>
+          )}
 
-          {/* Upgrade Card */}
+          {/* Admin Monitoring Section — only for administrator */}
+          {role === 'administrator' && (
+          <div className="mb-6">
+            <button
+              onClick={() => toggleSection('monitoring')}
+              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+            >
+              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+                Моніторинг
+              </h3>
+              <ChevronDown
+                size={12}
+                strokeWidth={2.5}
+                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('monitoring') ? '-rotate-90' : ''}`}
+              />
+            </button>
+            {!collapsedSections.has('monitoring') && (
+              <div className="space-y-0.5">
+                {monitoringSections.map((section) =>
+                <button
+                  key={section.id}
+                  onClick={() => {
+                    if (section.onClick) {
+                      section.onClick();
+                      if (window.innerWidth < 1024) onClose();
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+
+                    <section.icon
+                    size={15}
+                    strokeWidth={2}
+                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+
+                    <span className="truncate font-medium tracking-tight font-sans">
+                      {section.label}
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Upgrade Card — hidden for administrator */}
+          {role !== 'administrator' && (
           <div className="px-3 py-3 border-t border-claude-border/50">
             <div className="p-3.5 bg-gradient-to-br from-claude-subtext/5 to-claude-subtext/8 rounded-[12px] border border-claude-border">
               <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">
@@ -693,6 +769,7 @@ export function Sidebar({
               </button>
             </div>
           </div>
+          )}
         </div>
 
         {/* User Profile */}

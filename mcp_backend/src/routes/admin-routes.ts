@@ -34,9 +34,9 @@ export function createAdminRoutes(db: Database): express.Router {
 
     try {
       // Check if user has admin role in database
-      const result = await db.query('SELECT is_admin FROM users WHERE id = $1', [user.id]);
+      const result = await db.query('SELECT is_admin, role FROM users WHERE id = $1', [user.id]);
 
-      if (!result.rows[0]?.is_admin) {
+      if (!result.rows[0]?.is_admin && result.rows[0]?.role !== 'administrator') {
         logger.warn('Non-admin user attempted to access admin endpoint', {
           userId: user.id,
           email: user.email || 'unknown',
@@ -825,6 +825,125 @@ export function createAdminRoutes(db: Database): express.Router {
     } catch (error: any) {
       logger.error('Failed to get settings', { error: error.message });
       res.status(500).json({ error: 'Failed to retrieve settings' });
+    }
+  });
+
+  // ========================================
+  // DATA SOURCES MONITORING
+  // ========================================
+
+  /**
+   * GET /api/admin/data-sources
+   * Returns status of all external data sources for the admin monitoring dashboard
+   */
+  router.get('/data-sources', async (req: Request, res: Response) => {
+    try {
+      // Backend DB sources
+
+      // ZakonOnline API stats (from cost_tracking)
+      const zoStats = await db.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as calls_24h,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND metadata->>'error' IS NOT NULL) as errors_24h,
+          MAX(created_at) as last_call
+        FROM cost_tracking
+        WHERE metadata->>'source' = 'zakononline'
+           OR metadata->>'tool_name' LIKE '%search_court%'
+           OR metadata->>'tool_name' LIKE '%get_document%'
+      `);
+
+      // Legislation stats
+      const legislationStats = await db.query(`
+        SELECT
+          (SELECT COUNT(*) FROM legislation) as codes_count,
+          (SELECT COUNT(*) FROM legislation_articles) as articles_count,
+          (SELECT MIN(updated_at) FROM legislation) as oldest_update,
+          (SELECT MAX(updated_at) FROM legislation) as newest_update
+      `);
+
+      // ZO Dictionaries stats
+      const dictionaryStats = await db.query(`
+        SELECT
+          COUNT(DISTINCT domain) as loaded_domains,
+          COUNT(*) as total_entries,
+          MAX(updated_at) as last_update
+        FROM zo_dictionaries
+      `);
+
+      const backendSources = [
+        {
+          id: 'zakononline',
+          name: 'ZakonOnline API',
+          service: 'backend',
+          metrics: {
+            calls_24h: parseInt(zoStats.rows[0]?.calls_24h || '0'),
+            errors_24h: parseInt(zoStats.rows[0]?.errors_24h || '0'),
+            last_call: zoStats.rows[0]?.last_call || null,
+          },
+        },
+        {
+          id: 'legislation',
+          name: 'Legislation (RADA)',
+          service: 'backend',
+          metrics: {
+            codes_count: parseInt(legislationStats.rows[0]?.codes_count || '0'),
+            articles_count: parseInt(legislationStats.rows[0]?.articles_count || '0'),
+            oldest_update: legislationStats.rows[0]?.oldest_update || null,
+            newest_update: legislationStats.rows[0]?.newest_update || null,
+          },
+        },
+        {
+          id: 'zo_dictionaries',
+          name: 'Dictionaries (ZO)',
+          service: 'backend',
+          metrics: {
+            loaded_domains: parseInt(dictionaryStats.rows[0]?.loaded_domains || '0'),
+            total_entries: parseInt(dictionaryStats.rows[0]?.total_entries || '0'),
+            last_update: dictionaryStats.rows[0]?.last_update || null,
+          },
+        },
+      ];
+
+      // External services — provide config for frontend to query health endpoints
+      const externalServices = [
+        {
+          id: 'rada',
+          name: 'RADA Server',
+          service: 'mcp_rada',
+          healthEndpoint: '/health',
+          port: 3001,
+          dataSources: [
+            { id: 'deputies', name: 'Deputies', table: 'rada.deputies' },
+            { id: 'bills', name: 'Bills', table: 'rada.bills' },
+          ],
+        },
+        {
+          id: 'openreyestr',
+          name: 'OpenReyestr Server',
+          service: 'mcp_openreyestr',
+          healthEndpoint: '/health',
+          port: 3005,
+          dataSources: [
+            { id: 'legal_entities', name: 'Legal Entities (UO)' },
+            { id: 'individual_entrepreneurs', name: 'Individual Entrepreneurs (FOP)' },
+            { id: 'public_associations', name: 'Public Associations (FSU)' },
+            { id: 'notaries', name: 'Notaries' },
+            { id: 'court_experts', name: 'Court Experts' },
+            { id: 'arbitration_courts', name: 'Arbitration Courts' },
+            { id: 'enforcement_proceedings', name: 'Enforcement Proceedings' },
+            { id: 'debtors', name: 'Debtors' },
+          ],
+        },
+      ];
+
+      res.json({
+        backendSources,
+        externalServices,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      logger.error('Failed to get data sources status', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve data sources status' });
     }
   });
 

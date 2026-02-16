@@ -69,6 +69,9 @@ export const ROUTES = {
   VOTING_ANALYSIS: '/legislation/voting',
   HISTORICAL_ANALYSIS: '/legislation/historical',
   COURT_PRACTICE_ANALYSIS: '/analysis/court-practice',
+
+  // Admin
+  ADMIN_MONITORING: '/admin/monitoring',
 } as const;
 
 // Helper function to generate dynamic routes

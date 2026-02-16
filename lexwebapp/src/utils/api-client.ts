@@ -213,6 +213,11 @@ export const api = {
       apiClient.get('/api/documents/folders', { params: { prefix } }),
   },
 
+  // Admin
+  admin: {
+    getDataSources: () => apiClient.get('/api/admin/data-sources'),
+  },
+
   // GDPR
   gdpr: {
     requestExport: () => apiClient.post('/api/gdpr/export'),

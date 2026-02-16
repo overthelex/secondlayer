@@ -37,6 +37,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.TIME_ENTRIES]: 'Time Entries',
   [ROUTES.INVOICES]: 'Invoices',
   [ROUTES.CALENDAR]: 'Calendar',
+  [ROUTES.ADMIN_MONITORING]: 'Data Sources Monitoring',
 };
 
 export function MainLayout() {
@@ -118,6 +119,7 @@ export function MainLayout() {
           onVotingAnalysisClick={() => navigate(ROUTES.VOTING_ANALYSIS)}
           onLegalCodesLibraryClick={() => navigate(ROUTES.LEGAL_CODES_LIBRARY)}
           onHistoricalAnalysisClick={() => navigate(ROUTES.HISTORICAL_ANALYSIS)}
+          onAdminMonitoringClick={() => navigate(ROUTES.ADMIN_MONITORING)}
           onLogout={handleLogout}
         />
       </div>
