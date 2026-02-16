@@ -20,16 +20,44 @@ interface DocumentTemplateProps {
   content: string;
 }
 
+/** Check if line starts with a marker (with or without trailing space). */
+function hasMarker(line: string, marker: string): boolean {
+  return line.startsWith(marker + ' ') || line.startsWith(marker);
+}
+
+/** Strip a leading marker from a line (handles ">> text", ">>text", ">>" etc). */
+function stripMarker(line: string, marker: string): string {
+  if (line.startsWith(marker + ' ')) return line.slice(marker.length + 1);
+  if (line.startsWith(marker)) return line.slice(marker.length);
+  return line;
+}
+
+/** Check if line is a section header wrapped in ** ... ** */
+function isSectionHeader(line: string): boolean {
+  const t = line.trim();
+  return (t.startsWith('**') && t.endsWith('**') && t.length > 4);
+}
+
+/** Strip ** wrapper from section header. */
+function stripSectionHeader(line: string): string {
+  let t = line.trim();
+  if (t.startsWith('** ')) t = t.slice(3);
+  else if (t.startsWith('**')) t = t.slice(2);
+  if (t.endsWith(' **')) t = t.slice(0, -3);
+  else if (t.endsWith('**')) t = t.slice(0, -2);
+  return t.trim();
+}
+
 /**
  * Build clean plain text from document markup (for copy).
  */
 function buildCleanText(lines: string[]): string {
   return lines.map(line => {
-    if (line.startsWith('>> ')) return '                    ' + line.slice(3);
-    if (line.startsWith('^^ ')) return '          ' + line.slice(3);
-    if (line.startsWith(':: ')) return '                    ' + line.slice(3);
-    if (line.startsWith('-- ')) return '\u2500'.repeat(40);
-    if (line.startsWith('** ') && line.endsWith(' **')) return line.slice(3, -3);
+    if (hasMarker(line, '>>')) return '                    ' + stripMarker(line, '>>');
+    if (hasMarker(line, '^^')) return '          ' + stripMarker(line, '^^');
+    if (hasMarker(line, '::')) return '                    ' + stripMarker(line, '::');
+    if (hasMarker(line, '--')) return '\u2500'.repeat(40);
+    if (isSectionHeader(line)) return stripSectionHeader(line);
     return line;
   }).join('\n');
 }
@@ -47,20 +75,20 @@ function buildDocumentHTML(lines: string[], title: string): string {
     const trimmed = line.trim();
     if (!trimmed) return '<div style="height:10px"></div>';
 
-    if (line.startsWith('>> '))
-      return `<div style="text-align:right;font-size:13px;line-height:1.6">${escapeHTML(line.slice(3))}</div>`;
+    if (hasMarker(line, '>>'))
+      return `<div style="text-align:right;font-size:13px;line-height:1.6">${escapeHTML(stripMarker(line, '>>'))}</div>`;
 
-    if (line.startsWith('^^ '))
-      return `<div style="text-align:center;font-weight:bold;font-size:15px;letter-spacing:1px;margin:16px 0;text-transform:uppercase">${escapeHTML(line.slice(3))}</div>`;
+    if (hasMarker(line, '^^'))
+      return `<div style="text-align:center;font-weight:bold;font-size:15px;letter-spacing:1px;margin:16px 0;text-transform:uppercase">${escapeHTML(stripMarker(line, '^^'))}</div>`;
 
-    if (line.startsWith(':: '))
-      return `<div style="text-align:right;font-size:13px;margin-top:8px;font-weight:500">${escapeHTML(line.slice(3))}</div>`;
+    if (hasMarker(line, '::'))
+      return `<div style="text-align:right;font-size:13px;margin-top:8px;font-weight:500">${escapeHTML(stripMarker(line, '::'))}</div>`;
 
-    if (line.startsWith('-- '))
+    if (hasMarker(line, '--'))
       return '<hr style="margin:12px 0;border:none;border-top:1px solid #ccc">';
 
-    if (line.startsWith('** ') && line.endsWith(' **'))
-      return `<div style="font-weight:600;font-size:14px;margin-top:16px;margin-bottom:4px">${escapeHTML(line.slice(3, -3))}</div>`;
+    if (isSectionHeader(line))
+      return `<div style="font-weight:600;font-size:14px;margin-top:16px;margin-bottom:4px">${escapeHTML(stripSectionHeader(line))}</div>`;
 
     if (line.startsWith('    '))
       return `<p style="font-size:13px;line-height:1.7;padding-left:40px;margin:2px 0">${escapeHTML(line.trimStart())}</p>`;
@@ -87,8 +115,8 @@ function buildDocumentHTML(lines: string[], title: string): string {
  * Extract a short title from the document content (first ^^ line or fallback).
  */
 function extractTitle(lines: string[]): string {
-  const titleLine = lines.find(l => l.startsWith('^^ '));
-  return titleLine ? titleLine.slice(3).trim() : 'Документ';
+  const titleLine = lines.find(l => hasMarker(l, '^^'));
+  return titleLine ? stripMarker(titleLine, '^^').trim() : 'Документ';
 }
 
 export function DocumentTemplate({ content }: DocumentTemplateProps) {
@@ -147,21 +175,21 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
         }
 
         // >> Right-aligned
-        if (line.startsWith('>> ')) {
+        if (hasMarker(line, '>>')) {
           paragraphs.push(new Paragraph({
             alignment: AlignmentType.RIGHT,
-            children: [new TextRun({ text: line.slice(3), size: 24, font: 'Times New Roman' })],
+            children: [new TextRun({ text: stripMarker(line, '>>'), size: 24, font: 'Times New Roman' })],
             spacing: { after: 20 },
           }));
           continue;
         }
 
         // ^^ Centered title
-        if (line.startsWith('^^ ')) {
+        if (hasMarker(line, '^^')) {
           paragraphs.push(new Paragraph({
             alignment: AlignmentType.CENTER,
             children: [new TextRun({
-              text: line.slice(3).toUpperCase(),
+              text: stripMarker(line, '^^').toUpperCase(),
               bold: true,
               size: 28,
               font: 'Times New Roman',
@@ -172,17 +200,17 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
         }
 
         // :: Signature line
-        if (line.startsWith(':: ')) {
+        if (hasMarker(line, '::')) {
           paragraphs.push(new Paragraph({
             alignment: AlignmentType.RIGHT,
-            children: [new TextRun({ text: line.slice(3), size: 24, font: 'Times New Roman' })],
+            children: [new TextRun({ text: stripMarker(line, '::'), size: 24, font: 'Times New Roman' })],
             spacing: { before: 80 },
           }));
           continue;
         }
 
         // -- Separator
-        if (line.startsWith('-- ')) {
+        if (hasMarker(line, '--')) {
           paragraphs.push(new Paragraph({
             border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' } },
             spacing: { before: 120, after: 120 },
@@ -191,10 +219,10 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
         }
 
         // ** Section header **
-        if (line.startsWith('** ') && line.endsWith(' **')) {
+        if (isSectionHeader(line)) {
           paragraphs.push(new Paragraph({
             children: [new TextRun({
-              text: line.slice(3, -3),
+              text: stripSectionHeader(line),
               bold: true,
               size: 26,
               font: 'Times New Roman',
@@ -259,38 +287,38 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
       return <div key={idx} className="h-3" />;
     }
 
-    if (line.startsWith('>> ')) {
+    if (hasMarker(line, '>>')) {
       return (
         <div key={idx} className="text-right text-[13px] leading-[1.6] text-claude-text break-words">
-          {line.slice(3)}
+          {stripMarker(line, '>>')}
         </div>
       );
     }
 
-    if (line.startsWith('^^ ')) {
+    if (hasMarker(line, '^^')) {
       return (
         <div key={idx} className="text-center font-bold text-[15px] tracking-wide my-4 text-claude-text uppercase break-words">
-          {line.slice(3)}
+          {stripMarker(line, '^^')}
         </div>
       );
     }
 
-    if (line.startsWith(':: ')) {
+    if (hasMarker(line, '::')) {
       return (
         <div key={idx} className="text-right text-[13px] mt-2 text-claude-text font-medium break-words">
-          {line.slice(3)}
+          {stripMarker(line, '::')}
         </div>
       );
     }
 
-    if (line.startsWith('-- ')) {
+    if (hasMarker(line, '--')) {
       return <hr key={idx} className="my-3 border-claude-border" />;
     }
 
-    if (line.startsWith('** ') && line.endsWith(' **')) {
+    if (isSectionHeader(line)) {
       return (
         <div key={idx} className="font-semibold text-[14px] mt-4 mb-1 text-claude-text break-words">
-          {line.slice(3, -3)}
+          {stripSectionHeader(line)}
         </div>
       );
     }
