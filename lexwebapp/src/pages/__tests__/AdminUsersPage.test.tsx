@@ -44,7 +44,7 @@ const mockUsersData = {
       name: 'Alice Smith',
       created_at: '2026-01-01T00:00:00Z',
       balance_usd: 50.25,
-      pricing_tier: 'professional',
+      pricing_tier: 'business',
       total_requests: 1200,
       last_request_at: '2026-02-15T10:00:00Z',
     },
@@ -105,7 +105,7 @@ describe('AdminUsersPage', () => {
 
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
     expect(screen.getByText('bob@example.com')).toBeInTheDocument();
-    expect(screen.getByText('professional')).toBeInTheDocument();
+    expect(screen.getByText('business')).toBeInTheDocument();
     expect(screen.getByText('free')).toBeInTheDocument();
     expect(screen.getByText('$50.25')).toBeInTheDocument();
   });
@@ -188,11 +188,11 @@ describe('AdminUsersPage', () => {
     });
 
     const tierSelect = screen.getByDisplayValue('All Tiers');
-    await userEvent.selectOptions(tierSelect, 'professional');
+    await userEvent.selectOptions(tierSelect, 'business');
 
     await waitFor(() => {
       expect(mockGetUsers).toHaveBeenCalledWith(
-        expect.objectContaining({ tier: 'professional' })
+        expect.objectContaining({ tier: 'business' })
       );
     });
   });

@@ -45,7 +45,7 @@ interface Pagination {
   total: number;
 }
 
-const TIERS = ['free', 'basic', 'professional', 'enterprise'];
+const TIERS = ['free', 'startup', 'business', 'enterprise', 'internal'];
 const PAGE_SIZE = 20;
 
 function formatDate(dateStr: string | null): string {
@@ -115,8 +115,8 @@ export function AdminUsersPage() {
     setSearch(searchInput);
   };
 
-  const loadDetail = async (userId: string) => {
-    if (selectedUserId === userId) {
+  const loadDetail = async (userId: string, forceReload = false) => {
+    if (selectedUserId === userId && !forceReload) {
       setSelectedUserId(null);
       setDetail(null);
       return;
@@ -140,7 +140,7 @@ export function AdminUsersPage() {
       toast.success('Tier updated');
       setTierAction(null);
       fetchUsers(pagination.offset);
-      if (selectedUserId === tierAction.userId) loadDetail(tierAction.userId);
+      if (selectedUserId === tierAction.userId) loadDetail(tierAction.userId, true);
     } catch {
       toast.error('Failed to update tier');
     }
@@ -158,7 +158,7 @@ export function AdminUsersPage() {
       toast.success('Balance adjusted');
       setBalanceAction(null);
       fetchUsers(pagination.offset);
-      if (selectedUserId === balanceAction.userId) loadDetail(balanceAction.userId);
+      if (selectedUserId === balanceAction.userId) loadDetail(balanceAction.userId, true);
     } catch {
       toast.error('Failed to adjust balance');
     }
@@ -172,7 +172,10 @@ export function AdminUsersPage() {
     try {
       await api.admin.updateLimits(limitsAction.userId, limits);
       toast.success('Limits updated');
+      const userId = limitsAction.userId;
       setLimitsAction(null);
+      fetchUsers(pagination.offset);
+      if (selectedUserId === userId) loadDetail(userId, true);
     } catch {
       toast.error('Failed to update limits');
     }

@@ -259,7 +259,7 @@ export function createAdminRoutes(db: Database): express.Router {
 
       if (search) {
         paramCount++;
-        whereClause += ` AND (u.email ILIKE $${paramCount} OR u.id::text ILIKE $${paramCount})`;
+        whereClause += ` AND (u.email ILIKE $${paramCount} OR u.name ILIKE $${paramCount} OR u.id::text ILIKE $${paramCount})`;
         params.push(`%${search}%`);
       }
 
@@ -287,6 +287,7 @@ export function createAdminRoutes(db: Database): express.Router {
         SELECT
           u.id,
           u.email,
+          u.name,
           u.created_at,
           ub.balance_usd,
           ub.total_spent_usd,
@@ -321,6 +322,7 @@ export function createAdminRoutes(db: Database): express.Router {
         users: result.rows.map((row: any) => ({
           id: row.id,
           email: row.email,
+          name: row.name || null,
           created_at: row.created_at,
           balance_usd: parseFloat(row.balance_usd || 0),
           total_spent_usd: parseFloat(row.total_spent_usd || 0),
