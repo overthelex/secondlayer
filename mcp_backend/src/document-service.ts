@@ -7,6 +7,8 @@ import { LegalPatternStore } from './services/legal-pattern-store.js';
 import { CitationValidator } from './services/citation-validator.js';
 import { EmbeddingService } from './services/embedding-service.js';
 import { DocumentService } from './services/document-service.js';
+import { ZOAdapter } from './adapters/zo-adapter.js';
+import { ScrapeWorkerService } from './services/scrape-worker-service.js';
 import { Database } from './database/database.js';
 import { logger } from './utils/logger.js';
 import path from 'path';
@@ -14,6 +16,7 @@ import path from 'path';
 dotenv.config();
 
 const PORT = process.env.DOCUMENT_SERVICE_PORT || 3001;
+const MAX_QUEUE_DEPTH = parseInt(process.env.SCRAPE_MAX_QUEUE_DEPTH || '200', 10);
 
 class DocumentAnalysisServer {
   private app: express.Application;
@@ -21,6 +24,8 @@ class DocumentAnalysisServer {
   private documentAnalysisTools: DocumentAnalysisTools;
   private db: Database;
   private embeddingService: EmbeddingService;
+  private documentService: DocumentService;
+  private scrapeWorker: ScrapeWorkerService;
 
   constructor() {
     this.app = express();
@@ -35,7 +40,7 @@ class DocumentAnalysisServer {
 
     this.documentParser = new DocumentParser(visionKeyPath);
 
-    const documentService = new DocumentService(this.db);
+    this.documentService = new DocumentService(this.db);
     const sectionizer = new SemanticSectionizer();
     const patternStore = new LegalPatternStore(this.db, this.embeddingService);
     const citationValidator = new CitationValidator(this.db);
@@ -46,7 +51,17 @@ class DocumentAnalysisServer {
       patternStore,
       citationValidator,
       this.embeddingService,
-      documentService
+      this.documentService
+    );
+
+    // Initialize ZOAdapter for court decision scraping
+    const zoAdapter = new ZOAdapter(this.documentService, undefined, this.embeddingService);
+
+    // Initialize scrape worker service
+    this.scrapeWorker = new ScrapeWorkerService(
+      this.documentService,
+      this.embeddingService,
+      zoAdapter,
     );
 
     this.setupRoutes();
@@ -55,9 +70,11 @@ class DocumentAnalysisServer {
   private setupRoutes() {
     // Health check
     this.app.get('/health', (_req, res) => {
+      const queueDepth = this.scrapeWorker.getQueueDepth();
       res.json({
         status: 'healthy',
         service: 'document-analysis',
+        scrape_queue: queueDepth,
         timestamp: new Date().toISOString()
       });
     });
@@ -65,7 +82,6 @@ class DocumentAnalysisServer {
     // Ready check (includes dependencies)
     this.app.get('/ready', async (_req, res) => {
       try {
-        // Check if document parser is initialized
         res.json({
           status: 'ready',
           service: 'document-analysis',
@@ -78,6 +94,75 @@ class DocumentAnalysisServer {
         });
       }
     });
+
+    // ==================== Scraping Endpoints ====================
+
+    // Single document scrape
+    this.app.post('/api/scrape-fulltext', async (req, res) => {
+      try {
+        const { doc_id, metadata } = req.body;
+
+        if (!doc_id) {
+          return res.status(400).json({ error: 'doc_id is required' });
+        }
+
+        // Backpressure: reject if queue is too deep
+        const queueDepth = this.scrapeWorker.getQueueDepth();
+        if (queueDepth.pending > MAX_QUEUE_DEPTH) {
+          res.setHeader('Retry-After', '5');
+          return res.status(429).json({
+            error: 'Scrape queue is full',
+            queue_depth: queueDepth,
+          });
+        }
+
+        const result = await this.scrapeWorker.scrapeAndProcess(String(doc_id), metadata);
+        return res.json(result);
+      } catch (error: any) {
+        logger.error('Scrape fulltext error:', error);
+        return res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Bulk scrape (async job)
+    this.app.post('/api/bulk-scrape', async (req, res) => {
+      try {
+        const { keywords, justice_kind, date_from, date_to, max_docs, batch_size } = req.body;
+
+        if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+          return res.status(400).json({ error: 'keywords[] is required' });
+        }
+
+        const jobId = await this.scrapeWorker.startBulkScrape({
+          keywords,
+          justice_kind,
+          date_from,
+          date_to,
+          max_docs,
+          batch_size,
+        });
+
+        return res.status(202).json({
+          job_id: jobId,
+          status: 'queued',
+          message: 'Bulk scrape job started',
+        });
+      } catch (error: any) {
+        logger.error('Bulk scrape error:', error);
+        return res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Bulk scrape job status
+    this.app.get('/api/bulk-scrape/:jobId', (req, res) => {
+      const job = this.scrapeWorker.getJobStatus(req.params.jobId);
+      if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+      }
+      return res.json(job);
+    });
+
+    // ==================== Document Analysis Endpoints ====================
 
     // Parse document
     this.app.post('/api/parse-document', async (req, res) => {
@@ -183,7 +268,7 @@ class DocumentAnalysisServer {
       // Initialize document parser
       await this.documentParser.initialize();
 
-      logger.info('Document Analysis Service initialized');
+      logger.info('Document Analysis Service initialized (with scraping worker)');
     } catch (error) {
       logger.error('Failed to initialize service:', error);
       throw error;

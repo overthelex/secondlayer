@@ -928,9 +928,12 @@ export class ZOAdapter {
 
   /**
    * Get full text of a court decision by document ID
-   * Primary: API /v1/document/by/number/{docId}
-   * Fallback: HTML scraping from zakononline.ua
-   * Returns both HTML and extracted text
+   *
+   * When DOCUMENT_SERVICE_URL is set, delegates heavy scraping to the
+   * document-service container (separate process, separate memory).
+   * Otherwise falls back to inline scraping (local dev).
+   *
+   * Flow: Redis cache → PG cache → document-service (or inline scrape)
    */
   async getDocumentFullText(docId: string | number): Promise<{ html: string; text: string; case_number?: string } | null> {
     const cacheKey = `zo:fulltext:${docId}`;
@@ -943,6 +946,99 @@ export class ZOAdapter {
       return cached;
     }
 
+    // Check PG cache
+    if (this.documentService) {
+      const existing = await this.documentService.getDocumentByZoId(String(docId));
+      if (existing && existing.full_text && existing.full_text.length > 100) {
+        const result = {
+          html: existing.full_text_html || existing.full_text,
+          text: existing.full_text,
+          case_number: existing.case_number || undefined,
+        };
+        await this.setCache(cacheKey, result, 7 * 24 * 3600);
+        await this.trackSecondLayerUsage('pg_cache', docId, true);
+        logger.debug('Full text PG cache hit', { docId });
+        return result;
+      }
+    }
+
+    // Delegate to document-service if configured
+    const docServiceUrl = process.env.DOCUMENT_SERVICE_URL;
+    if (docServiceUrl) {
+      return this.delegateToDocumentService(docId, docServiceUrl, cacheKey);
+    }
+
+    // Inline scraping fallback (local dev, no document-service)
+    return this.scrapeFullTextInline(docId, cacheKey);
+  }
+
+  /**
+   * Delegate fulltext scraping to the document-service container
+   */
+  private async delegateToDocumentService(
+    docId: string | number,
+    docServiceUrl: string,
+    cacheKey: string,
+  ): Promise<{ html: string; text: string; case_number?: string } | null> {
+    try {
+      const scrapeStart = Date.now();
+      const response = await axios.post(
+        `${docServiceUrl}/api/scrape-fulltext`,
+        { doc_id: String(docId) },
+        { timeout: 30000, headers: { 'Content-Type': 'application/json' } },
+      );
+      const scrapeDuration = (Date.now() - scrapeStart) / 1000;
+
+      const data = response.data;
+      if (data.error) {
+        logger.warn(`Document-service scrape failed for ${docId}: ${data.error}`);
+        this.externalApiMetrics?.('document_service_scrape', 'error', scrapeDuration);
+        return null;
+      }
+
+      if (data.full_text && data.full_text.length > 100) {
+        const result = {
+          html: data.full_text_html || data.full_text,
+          text: data.full_text,
+          case_number: data.case_number || undefined,
+        };
+
+        await this.setCache(cacheKey, result, 7 * 24 * 3600);
+        await this.trackSecondLayerUsage('document_service', docId, false);
+        this.externalApiMetrics?.('document_service_scrape', 'success', scrapeDuration);
+
+        logger.info('Got full text via document-service', {
+          docId,
+          textLength: data.full_text.length,
+          cached: data.cached,
+          duration: scrapeDuration,
+        });
+
+        return result;
+      }
+
+      logger.warn(`Document-service returned no meaningful text for ${docId}`);
+      return null;
+    } catch (error: any) {
+      logger.error(`Document-service delegation failed for ${docId}:`, error?.message);
+
+      // If document-service is down, fall back to inline scraping
+      if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET' || error.response?.status === 429) {
+        logger.warn(`Falling back to inline scraping for ${docId}`);
+        return this.scrapeFullTextInline(docId, cacheKey);
+      }
+
+      return null;
+    }
+  }
+
+  /**
+   * Inline fulltext scraping (original behavior, used as fallback)
+   */
+  private async scrapeFullTextInline(
+    docId: string | number,
+    cacheKey: string,
+  ): Promise<{ html: string; text: string; case_number?: string } | null> {
     // FULLTEXT_STRATEGY=scrape_only skips the useless API call (never returns text)
     // and goes straight to HTML scraping — doubles throughput for bulk loads
     const scrapeOnly = (process.env.FULLTEXT_STRATEGY || '').toLowerCase() === 'scrape_only';

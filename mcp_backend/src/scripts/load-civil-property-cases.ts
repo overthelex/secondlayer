@@ -31,6 +31,7 @@
  *   MAX_DOCS=5000 ONLY_CATEGORY=0 npm run load:civil-cases
  */
 
+import axios from 'axios';
 import { Database } from '../database/database.js';
 import { DocumentService } from '../services/document-service.js';
 import { EmbeddingService } from '../services/embedding-service.js';
@@ -201,6 +202,60 @@ async function searchKeywordInWindow(
   return { docs, fetched, newDocs, errors };
 }
 
+async function saveBatchViaDocService(
+  docServiceUrl: string,
+  docs: any[],
+  concurrency: number = 5,
+): Promise<{ saved: number; errors: number }> {
+  let saved = 0;
+  let errors = 0;
+
+  for (let i = 0; i < docs.length; i += concurrency) {
+    const batch = docs.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (doc) => {
+        try {
+          const docId = String(doc.doc_id || doc.id || doc.zakononline_id);
+          const response = await axios.post(
+            `${docServiceUrl}/api/scrape-fulltext`,
+            { doc_id: docId, metadata: doc },
+            { timeout: 30000, headers: { 'Content-Type': 'application/json' } },
+          );
+          if (response.data.error) {
+            errors++;
+            return false;
+          }
+          saved++;
+          return true;
+        } catch (error: any) {
+          errors++;
+          if (error.response?.status === 429) {
+            // Backpressure — wait and retry once
+            const retryAfter = parseInt(error.response.headers['retry-after'] || '5', 10);
+            await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+            try {
+              const docId = String(doc.doc_id || doc.id || doc.zakononline_id);
+              await axios.post(
+                `${docServiceUrl}/api/scrape-fulltext`,
+                { doc_id: docId, metadata: doc },
+                { timeout: 30000, headers: { 'Content-Type': 'application/json' } },
+              );
+              saved++;
+              errors--; // Undo the error count
+              return true;
+            } catch {
+              return false;
+            }
+          }
+          return false;
+        }
+      }),
+    );
+  }
+
+  return { saved, errors };
+}
+
 async function processCategory(
   zoAdapter: ZOAdapter,
   category: SearchCategory,
@@ -212,6 +267,7 @@ async function processCategory(
   maxPages: number,
   saveBatch: number,
   dryRun: boolean,
+  docServiceUrl?: string,
 ): Promise<CategoryResult> {
   const result: CategoryResult = {
     category: category.name,
@@ -228,8 +284,16 @@ async function processCategory(
     const toSave = pendingDocs.splice(0, saveBatch);
     console.log(`      Saving batch of ${toSave.length} documents...`);
     try {
-      await zoAdapter.saveDocumentsToDatabase(toSave, toSave.length);
-      console.log(`      Saved ${toSave.length} docs (total unique: ${seenIds.size})`);
+      if (docServiceUrl) {
+        // Delegate to document-service for scraping + saving
+        const { saved, errors } = await saveBatchViaDocService(docServiceUrl, toSave);
+        console.log(`      Doc-service: ${saved} saved, ${errors} errors (total unique: ${seenIds.size})`);
+        result.errors += errors;
+      } else {
+        // Inline save (original behavior)
+        await zoAdapter.saveDocumentsToDatabase(toSave, toSave.length);
+        console.log(`      Saved ${toSave.length} docs (total unique: ${seenIds.size})`);
+      }
     } catch (error: any) {
       logger.error(`Batch save failed:`, error?.message);
       console.error(`      SAVE FAILED: ${error?.message}`);
@@ -304,6 +368,7 @@ async function main() {
   const onlyCategory = process.env.ONLY_CATEGORY != null
     ? parseInt(process.env.ONLY_CATEGORY, 10)
     : null;
+  const docServiceUrl = process.env.DOCUMENT_SERVICE_URL || '';
 
   const windows = generateWindows(dateFrom, dateTo, batchDays);
 
@@ -318,6 +383,7 @@ async function main() {
   console.log(`  Max pages/kw:   ${maxPages}`);
   console.log(`  Save batch:     ${saveBatch}`);
   console.log(`  Dry run:        ${dryRun}`);
+  console.log(`  Doc service:    ${docServiceUrl || '(inline scraping)'}`);
   if (onlyCategory != null) {
     console.log(`  Only category:  ${onlyCategory} (${CATEGORIES[onlyCategory]?.name})`);
   }
@@ -361,7 +427,8 @@ async function main() {
       console.log(`\n  [${i}] ${CATEGORIES[i].name}`);
       const result = await processCategory(
         zoAdapter, CATEGORIES[i], seenIds, maxDocs, windows,
-        concurrency, pageSize, maxPages, saveBatch, dryRun
+        concurrency, pageSize, maxPages, saveBatch, dryRun,
+        docServiceUrl || undefined,
       );
       categoryResults.push(result);
 

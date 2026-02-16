@@ -165,6 +165,105 @@ export class DocumentServiceClient {
   }
 
   /**
+   * Scrape a single court decision full text via document-service
+   */
+  async scrapeFullText(args: {
+    doc_id: string;
+    metadata?: Record<string, any>;
+  }): Promise<{
+    doc_id: string;
+    full_text: string | null;
+    full_text_html: string | null;
+    case_number?: string;
+    sections_count: number;
+    embeddings_count: number;
+    cached: boolean;
+    error?: string;
+  }> {
+    if (!this.enabled) {
+      throw new Error('Document service is not configured');
+    }
+
+    try {
+      logger.info('Calling document service: scrape-fulltext', { doc_id: args.doc_id });
+
+      const response = await this.client.post('/api/scrape-fulltext', args);
+      return response.data;
+    } catch (error: any) {
+      logger.error('Document service scrape-fulltext failed', {
+        error: error.message,
+        status: error.response?.status
+      });
+
+      if (error.response?.status === 429) {
+        throw new Error('Document service scrape queue is full');
+      }
+
+      throw new Error(`Scrape fulltext failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Start a bulk scrape job via document-service (async)
+   */
+  async startBulkScrape(args: {
+    keywords: string[];
+    justice_kind?: number;
+    date_from?: string;
+    date_to?: string;
+    max_docs?: number;
+    batch_size?: number;
+  }): Promise<{ job_id: string; status: string }> {
+    if (!this.enabled) {
+      throw new Error('Document service is not configured');
+    }
+
+    try {
+      logger.info('Calling document service: bulk-scrape', {
+        keywords: args.keywords,
+        max_docs: args.max_docs
+      });
+
+      const response = await this.client.post('/api/bulk-scrape', args);
+      return response.data;
+    } catch (error: any) {
+      logger.error('Document service bulk-scrape failed', {
+        error: error.message,
+        status: error.response?.status
+      });
+      throw new Error(`Bulk scrape failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get bulk scrape job status
+   */
+  async getBulkScrapeStatus(jobId: string): Promise<{
+    job_id: string;
+    status: string;
+    progress: number;
+    total: number;
+    processed: number;
+    errors: number;
+    started_at: string;
+    completed_at?: string;
+  }> {
+    if (!this.enabled) {
+      throw new Error('Document service is not configured');
+    }
+
+    try {
+      const response = await this.client.get(`/api/bulk-scrape/${jobId}`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Bulk scrape job ${jobId} not found`);
+      }
+      throw new Error(`Get bulk scrape status failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Check if service is enabled
    */
   isEnabled(): boolean {
