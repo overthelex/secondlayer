@@ -1123,7 +1123,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"deputies\",job=\"postgres_backend\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"deputies\",schemaname=\"rada\",job=\"postgres_backend\"}",
           "legendFormat": "Deputies",
           "refId": "A"
         }
@@ -1162,7 +1162,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"bills\",job=\"postgres_backend\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"bills\",schemaname=\"rada\",job=\"postgres_backend\"}",
           "legendFormat": "Bills",
           "refId": "A"
         }
@@ -1201,7 +1201,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"committees\",job=\"postgres_backend\"}",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"committees\",schemaname=\"rada\",job=\"postgres_backend\"}",
           "legendFormat": "Committees",
           "refId": "A"
         }
@@ -1240,12 +1240,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"legislation\",job=\"postgres_backend\"}",
-          "legendFormat": "Legislation",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"factions\",schemaname=\"rada\",job=\"postgres_backend\"}",
+          "legendFormat": "Factions",
           "refId": "A"
         }
       ],
-      "title": "Legislation",
+      "title": "Factions",
       "type": "stat"
     },
     {
@@ -1259,7 +1259,7 @@
             "steps": [
               { "color": "red", "value": null },
               { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 1000 }
+              { "color": "green", "value": 100 }
             ]
           },
           "unit": "short"
@@ -1279,12 +1279,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"legislation_articles\",job=\"postgres_backend\"}",
-          "legendFormat": "Articles",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"deputy_assistants\",schemaname=\"rada\",job=\"postgres_backend\"}",
+          "legendFormat": "Assistants",
           "refId": "A"
         }
       ],
-      "title": "Legislation Articles",
+      "title": "Deputy Assistants",
       "type": "stat"
     },
     {
@@ -1298,7 +1298,7 @@
             "steps": [
               { "color": "red", "value": null },
               { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 10 }
+              { "color": "green", "value": 100 }
             ]
           },
           "unit": "short"
@@ -1318,12 +1318,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "pg_stat_user_tables_n_live_tup{relname=\"voting_results\",job=\"postgres_backend\"}",
-          "legendFormat": "Voting Results",
+          "expr": "pg_stat_user_tables_n_live_tup{relname=\"voting_records\",schemaname=\"rada\",job=\"postgres_backend\"}",
+          "legendFormat": "Voting Records",
           "refId": "A"
         }
       ],
-      "title": "Voting Results",
+      "title": "Voting Records",
       "type": "stat"
     },
 
@@ -1902,7 +1902,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "count(collections_total_points) or vector(0)",
+          "expr": "collections_total{job=\"qdrant\"}",
           "legendFormat": "Collections",
           "refId": "A"
         }
@@ -1939,7 +1939,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "sum(collections_total_points) or vector(0)",
+          "expr": "sum(collection_points{job=\"qdrant\"})",
           "legendFormat": "Total Points",
           "refId": "A"
         }
@@ -2072,8 +2072,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "collections_total_points",
-          "legendFormat": "{{collection}}",
+          "expr": "collection_points{job=\"qdrant\"}",
+          "legendFormat": "{{id}}",
           "refId": "A"
         }
       ],
@@ -2303,11 +2303,11 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "bytes",
+            "axisLabel": "objects",
             "axisPlacement": "auto",
             "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 20,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
             "gradientMode": "scheme",
             "hideFrom": { "legend": false, "tooltip": false, "viz": false },
             "insertNulls": false,
@@ -2317,7 +2317,7 @@
             "scaleDistribution": { "type": "linear" },
             "showPoints": "never",
             "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
+            "stacking": { "group": "A", "mode": "normal" },
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
@@ -2325,7 +2325,7 @@
             "mode": "absolute",
             "steps": [{ "color": "green", "value": null }]
           },
-          "unit": "bytes"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -2335,7 +2335,7 @@
         "legend": {
           "calcs": ["lastNotNull"],
           "displayMode": "table",
-          "placement": "bottom",
+          "placement": "right",
           "showLegend": true
         },
         "tooltip": { "mode": "multi", "sort": "desc" }
@@ -2343,12 +2343,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "minio_bucket_usage_total_bytes{job=\"minio\"}",
-          "legendFormat": "{{bucket}}",
+          "expr": "minio_cluster_objects_size_distribution{job=\"minio\"} > 0",
+          "legendFormat": "{{range}}",
           "refId": "A"
         }
       ],
-      "title": "MinIO Storage Per Bucket",
+      "title": "MinIO Object Size Distribution",
       "type": "timeseries"
     },
     {
