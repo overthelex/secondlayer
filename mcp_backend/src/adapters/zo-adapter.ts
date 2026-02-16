@@ -27,6 +27,7 @@ interface ZOSearchParams {
   fulldata?: number;
   limit?: number;
   offset?: number;
+  page?: number;
   target?: SearchTarget;
   mode?: SearchMode;
   orderBy?: {
@@ -747,6 +748,14 @@ export class ZOAdapter {
       mode: params.mode || 'sph04',
       limit: params.limit || 40,
     };
+
+    // ZO API uses 1-based `page` for pagination
+    if (params.page != null) {
+      apiParams.page = params.page;
+    } else if (params.offset != null && params.limit) {
+      // Convert offset to page number (1-based)
+      apiParams.page = Math.floor(params.offset / params.limit) + 1;
+    }
 
     // Add search query if provided (from meta.search or meta.query)
     if (params.meta?.search) {

@@ -57,14 +57,12 @@ async function searchKeyword(
   };
   const collectedDocs: any[] = [];
 
-  for (let page = 0; page < maxPages; page++) {
+  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
     // Check if we've hit the global cap
     if (seenIds.size >= maxDocs) {
       console.log(`  [${keyword}] Global cap reached (${seenIds.size}/${maxDocs}), stopping.`);
       break;
     }
-
-    const offset = page * pageSize;
 
     try {
       const response = await zoAdapter.searchCourtDecisions({
@@ -73,7 +71,7 @@ async function searchKeyword(
           { field: 'adjudication_date', operator: '>=', value: dateFrom },
         ],
         limit: pageSize,
-        offset,
+        page: pageNum,
         orderBy: { field: 'adjudication_date', direction: 'desc' },
       });
 
@@ -99,7 +97,7 @@ async function searchKeyword(
       result.newDocs += pageNew;
 
       console.log(
-        `  [${keyword}] page ${page + 1}: ${docs.length} results, ${pageNew} new ` +
+        `  [${keyword}] page ${pageNum}: ${docs.length} results, ${pageNew} new ` +
         `(total unique: ${seenIds.size}/${maxDocs})`
       );
 
@@ -113,8 +111,8 @@ async function searchKeyword(
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error: any) {
       result.errors++;
-      logger.error(`Error searching "${keyword}" page ${page + 1}:`, error?.message);
-      console.error(`  [${keyword}] page ${page + 1} ERROR: ${error?.message}`);
+      logger.error(`Error searching "${keyword}" page ${pageNum}:`, error?.message);
+      console.error(`  [${keyword}] page ${pageNum} ERROR: ${error?.message}`);
       // Continue to next page on error
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
