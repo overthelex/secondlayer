@@ -210,14 +210,35 @@ async function processCategory(
   concurrency: number,
   pageSize: number,
   maxPages: number,
-): Promise<{ result: CategoryResult; docs: any[] }> {
+  saveBatch: number,
+  dryRun: boolean,
+): Promise<CategoryResult> {
   const result: CategoryResult = {
     category: category.name,
     fetched: 0,
     newDocs: 0,
     errors: 0,
   };
-  const allDocs: any[] = [];
+  let pendingDocs: any[] = [];
+
+  const flushPending = async (force = false) => {
+    if (dryRun || pendingDocs.length === 0) return;
+    if (!force && pendingDocs.length < saveBatch) return;
+
+    const toSave = pendingDocs.splice(0, saveBatch);
+    console.log(`      Saving batch of ${toSave.length} documents...`);
+    try {
+      await zoAdapter.saveDocumentsToDatabase(toSave, toSave.length);
+      console.log(`      Saved ${toSave.length} docs (total unique: ${seenIds.size})`);
+    } catch (error: any) {
+      logger.error(`Batch save failed:`, error?.message);
+      console.error(`      SAVE FAILED: ${error?.message}`);
+    }
+    // GC help: clear references
+    toSave.length = 0;
+    // Small delay between saves to let memory settle
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  };
 
   for (const keyword of category.keywords) {
     if (seenIds.size >= maxDocs) break;
@@ -239,7 +260,7 @@ async function processCategory(
         result.fetched += r.fetched;
         result.newDocs += r.newDocs;
         result.errors += r.errors;
-        allDocs.push(...r.docs);
+        pendingDocs.push(...r.docs);
       }
 
       const windowsProcessed = Math.min(i + concurrency, windows.length);
@@ -247,10 +268,18 @@ async function processCategory(
         `      Windows ${windowsProcessed}/${windows.length}: ` +
         `${result.newDocs} new docs (total unique: ${seenIds.size})`
       );
+
+      // Save incrementally as we collect docs
+      await flushPending();
     }
   }
 
-  return { result, docs: allDocs };
+  // Flush remaining
+  while (pendingDocs.length > 0) {
+    await flushPending(true);
+  }
+
+  return result;
 }
 
 // --- Main ---
@@ -313,11 +342,10 @@ async function main() {
     console.log(`Documents before: ${beforeCount}\n`);
 
     const seenIds = new Set<string>();
-    const allDocs: any[] = [];
     const categoryResults: CategoryResult[] = [];
 
-    // Phase 1: Search all categories
-    console.log('Phase 1: Searching categories...\n');
+    // Search + save incrementally (no separate Phase 2 to avoid OOM)
+    console.log('Searching and saving incrementally...\n');
 
     for (let i = 0; i < CATEGORIES.length; i++) {
       if (seenIds.size >= maxDocs) {
@@ -331,51 +359,18 @@ async function main() {
       }
 
       console.log(`\n  [${i}] ${CATEGORIES[i].name}`);
-      const { result, docs } = await processCategory(
+      const result = await processCategory(
         zoAdapter, CATEGORIES[i], seenIds, maxDocs, windows,
-        concurrency, pageSize, maxPages
+        concurrency, pageSize, maxPages, saveBatch, dryRun
       );
       categoryResults.push(result);
-      allDocs.push(...docs);
 
       console.log(
         `  → ${result.category}: ${result.fetched} fetched, ${result.newDocs} new, ${result.errors} errors`
       );
     }
 
-    console.log(`\nPhase 1 complete: ${allDocs.length} unique documents collected.\n`);
-
-    // Phase 2: Persist
-    if (dryRun) {
-      console.log('[DRY RUN] Skipping persistence.\n');
-    } else if (allDocs.length > 0) {
-      console.log(`Phase 2: Persisting ${allDocs.length} documents (batch size: ${saveBatch})...\n`);
-
-      let totalSaved = 0;
-      const totalBatches = Math.ceil(allDocs.length / saveBatch);
-
-      for (let i = 0; i < allDocs.length; i += saveBatch) {
-        const batch = allDocs.slice(i, i + saveBatch);
-        const batchNum = Math.floor(i / saveBatch) + 1;
-
-        console.log(`  Batch ${batchNum}/${totalBatches}: ${batch.length} documents...`);
-
-        try {
-          await zoAdapter.saveDocumentsToDatabase(batch, batch.length);
-          totalSaved += batch.length;
-          console.log(`  Batch ${batchNum}/${totalBatches}: saved. Total: ${totalSaved}/${allDocs.length}`);
-        } catch (error: any) {
-          logger.error(`Batch ${batchNum} save failed:`, error?.message);
-          console.error(`  Batch ${batchNum} FAILED: ${error?.message}`);
-        }
-
-        if (i + saveBatch < allDocs.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      console.log(`\nPhase 2 complete: ${totalSaved} documents saved.\n`);
-    }
+    console.log(`\nAll categories done. Total unique IDs: ${seenIds.size}\n`);
 
     // Wait for persistence queue
     console.log('Waiting for persistence queue to flush...');
@@ -391,7 +386,8 @@ async function main() {
       console.log(`  ${cr.category}: ${cr.fetched} fetched, ${cr.newDocs} new, ${cr.errors} errors`);
     }
     console.log('───────────────────────────────────────────────────────────────');
-    console.log(`  Total unique docs:  ${allDocs.length}`);
+    const totalNewDocs = categoryResults.reduce((s, r) => s + r.newDocs, 0);
+    console.log(`  Total unique docs:  ${totalNewDocs}`);
     console.log(`  Documents before:   ${beforeCount}`);
     console.log(`  Documents after:    ${afterCount}`);
     console.log(`  New documents:      ${afterCount - beforeCount}`);
