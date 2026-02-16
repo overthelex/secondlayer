@@ -688,12 +688,23 @@ deploy_to_server() {
             2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
 
         # Step 10: Verify all domains respond
+        echo "Waiting for nginx and services to initialize..."
+        sleep 10
         echo "Verifying domain health..."
         for domain in stage.legal.org.ua legal.org.ua mcp.legal.org.ua; do
-            if curl -skf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
-                echo "  [OK] ${domain}"
-            else
-                echo "  [WARN] ${domain} not responding (may need DNS propagation)"
+            ok=false
+            for attempt in 1 2 3; do
+                if curl -skf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
+                    echo "  [OK] ${domain}"
+                    ok=true
+                    break
+                fi
+                sleep 5
+            done
+            if [ "$ok" = false ]; then
+                echo "  [WARN] ${domain} not responding after 3 attempts"
+                echo "    Checking direct backend health..."
+                curl -sf --max-time 5 "http://localhost:3004/health" 2>/dev/null && echo "    Backend is up on :3004 — likely an nginx/SSL issue" || echo "    Backend not responding on :3004 either"
             fi
         done
 
