@@ -183,22 +183,14 @@ stop_env() {
             fi
 
             # Kill stale docker-proxy processes holding local ports
-            local local_ports="5432 6379 3000 3001 3002 3004 6333 6334 9000 9001 9090 9121 3100"
-            for port in $local_ports; do
-                local pids
-                pids=$(sudo lsof -t -i :"$port" 2>/dev/null || true)
-                if [ -n "$pids" ]; then
-                    # Only kill docker-proxy processes, not user services
-                    for pid in $pids; do
-                        local pname
-                        pname=$(ps -p "$pid" -o comm= 2>/dev/null || true)
-                        if [ "$pname" = "docker-proxy" ]; then
-                            print_msg "$YELLOW" "Killing stale docker-proxy on port $port (PID $pid)"
-                            sudo kill "$pid" 2>/dev/null || true
-                        fi
-                    done
-                fi
-            done
+            local stale_proxies
+            stale_proxies=$(ps aux 2>/dev/null | grep '[d]ocker-proxy' | grep -E '\-container-port (5432|6379|3000|3001|3002|3004|6333|6334|9000|9001|9090|9121|3100)' | awk '{print $2}' || true)
+            if [ -n "$stale_proxies" ]; then
+                for pid in $stale_proxies; do
+                    print_msg "$YELLOW" "Killing stale docker-proxy (PID $pid)"
+                    kill "$pid" 2>/dev/null || sudo kill "$pid" 2>/dev/null || true
+                done
+            fi
             ;;
         *)
             print_msg "$RED" "Invalid environment: $env (use stage or local)"
@@ -433,6 +425,7 @@ deploy_local() {
     backup_id=$(create_backup "local" "localhost" "$REPO_ROOT")
 
     # Phase 3: Deploy
+    local deploy_exit=0
     (
         set -e
 
@@ -444,13 +437,13 @@ deploy_local() {
         print_msg "$BLUE" "Stopping app containers (keeping databases running)..."
         $compose_cmd $compose_args stop \
             app-local rada-mcp-app-local app-openreyestr-local \
-            document-service-local nginx-local lexwebapp-local \
+            document-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
             2>/dev/null || true
         $compose_cmd $compose_args rm -f \
             app-local rada-mcp-app-local app-openreyestr-local \
-            document-service-local nginx-local lexwebapp-local \
+            document-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
             migrate-local rada-migrate-local migrate-openreyestr-local \
-            rada-db-init-local lexwebapp-deps-local \
+            rada-db-init-local \
             2>/dev/null || true
 
         # Step 3: Cleanup exited/dead containers and dangling images
@@ -484,9 +477,11 @@ deploy_local() {
         print_msg "$BLUE" "Running RADA + OpenReyestr migrations in parallel..."
         $compose_cmd $compose_args up rada-migrate-local migrate-openreyestr-local
 
-        # Step 8: Start app services (including nginx + frontend in Docker)
+        # Step 8: Start frontend deps + app services (including nginx + frontend in Docker)
+        print_msg "$BLUE" "Installing frontend dependencies..."
+        $compose_cmd $compose_args up lexwebapp-deps-local
         print_msg "$BLUE" "Starting application services..."
-        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local nginx-local lexwebapp-local
+        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local lexwebapp-local nginx-local
 
         # Step 9: Start monitoring services
         print_msg "$BLUE" "Starting monitoring services..."
@@ -495,9 +490,9 @@ deploy_local() {
             grafana-local \
             redis-exporter-local \
             2>/dev/null || echo "  (some monitoring services may not exist)"
-    )
+    ) || deploy_exit=$?
 
-    if [ $? -ne 0 ]; then
+    if [ $deploy_exit -ne 0 ]; then
         print_msg "$RED" "Deploy failed, rolling back..."
         rollback_to_backup "local" "localhost" "$compose_file" "$env_file"
         generate_deploy_report "local" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"

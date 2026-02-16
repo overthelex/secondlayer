@@ -5,12 +5,15 @@ services:
   postgres-local:
     image: postgres:15-alpine
     container_name: secondlayer-postgres-local
+    shm_size: '512mb'
     command: >-
       postgres
       -c max_connections=500
-      -c shared_buffers=256MB
-      -c work_mem=4MB
-      -c wal_buffers=16MB
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=8MB
+      -c maintenance_work_mem=256MB
+      -c wal_buffers=32MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
@@ -32,10 +35,10 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 2G
+          memory: 4G
         reservations:
           cpus: '0.5'
-          memory: 512M
+          memory: 1G
 
   rada-db-init-local:
     image: postgres:15-alpine

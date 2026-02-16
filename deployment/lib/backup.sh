@@ -59,9 +59,9 @@ tag_current_images() {
         local) env_short="local" ;;
     esac
 
-    local tag_cmd="docker ps --filter 'name=secondlayer-.*-${env_short}' --format '{{.Image}}' | sort -u | while read img; do
-        # Only tag if not already a backup tag
-        if [[ \"\$img\" != *\":backup-\"* ]]; then
+    local tag_cmd="docker ps --filter 'name=-${env_short}' --format '{{.Image}}' | sort -u | while read img; do
+        # Only tag if not already a backup tag and not a stock image (postgres, redis, etc.)
+        if [[ \"\$img\" != *\":backup-\"* ]] && [[ \"\$img\" != postgres:* ]] && [[ \"\$img\" != redis:* ]] && [[ \"\$img\" != nginx:* ]] && [[ \"\$img\" != node:* ]] && [[ \"\$img\" != qdrant/* ]] && [[ \"\$img\" != minio/* ]] && [[ \"\$img\" != prom/* ]] && [[ \"\$img\" != grafana/* ]] && [[ \"\$img\" != oliver006/* ]]; then
             docker tag \"\$img\" \"\${img%%:*}:backup-${backup_id}\" 2>/dev/null || true
         fi
     done"
@@ -88,7 +88,7 @@ save_container_state() {
         local) env_short="local" ;;
     esac
 
-    local state_cmd="docker ps -a --filter 'name=secondlayer-.*-${env_short}' --format '{{.Names}}\t{{.Image}}\t{{.Status}}'"
+    local state_cmd="docker ps -a --filter 'name=-${env_short}' --format '{{.Names}}\t{{.Image}}\t{{.Status}}'"
 
     if [ "$target_server" = "localhost" ]; then
         eval "$state_cmd" > "${backup_path}/containers.txt" 2>/dev/null || true
