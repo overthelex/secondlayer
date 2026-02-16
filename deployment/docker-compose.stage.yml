@@ -182,6 +182,30 @@ services:
     networks:
     - secondlayer-stage-network
 
+  # Admin User Seed (runs after backend migration)
+  seed-admin-stage:
+    image: secondlayer-app:latest
+    container_name: secondlayer-seed-admin-stage
+    depends_on:
+      migrate-stage:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      ADMIN_USERS: ${ADMIN_USERS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: staging
+      TZ: Europe/Kiev
+    working_dir: /app/mcp_backend
+    command: ["node", "dist/scripts/seed-admin-user.js"]
+    restart: "no"
+    networks:
+      - secondlayer-stage-network
+
   # RADA MCP Migrations
   rada-migrate-stage:
     build:
@@ -407,6 +431,9 @@ services:
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}
 
+      # Document Service (scraping delegation)
+      DOCUMENT_SERVICE_URL: http://document-service-stage:3002
+
       # Unified Gateway Configuration
       ENABLE_UNIFIED_GATEWAY: "true"
       RADA_MCP_URL: http://rada-mcp-app-stage:3001
@@ -550,6 +577,12 @@ services:
 
       # External APIs
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
+      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+      FULLTEXT_STRATEGY: scrape_only
+
+      # Scrape worker concurrency
+      SCRAPE_MAX_CONCURRENT: "10"
+      SCRAPE_MAX_QUEUE_DEPTH: "200"
 
       # Security
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}

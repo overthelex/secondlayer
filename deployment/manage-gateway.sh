@@ -663,6 +663,10 @@ deploy_to_server() {
         echo "Running RADA + OpenReyestr migrations in parallel..."
         $DC up rada-migrate-stage migrate-openreyestr-stage
 
+        # Step 7b: Seed admin users
+        echo "Seeding admin users..."
+        $DC up seed-admin-stage
+
         # Step 8: Start application services
         echo "Starting application services..."
         $DC up -d \
