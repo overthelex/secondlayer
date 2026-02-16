@@ -53,6 +53,8 @@ import { LegalAdviceTools } from './api/tools/legal-advice-tools.js';
 import { DueDiligenceTools } from './api/due-diligence-tools.js';
 import { DueDiligenceService } from './services/due-diligence-service.js';
 import { CourtSessionTools } from './api/tools/court-session-tools.js';
+import { LegalActsTools } from './api/tools/legal-acts-tools.js';
+import { ECHRPracticeTools } from './api/tools/echr-practice-tools.js';
 import { ServiceProxy } from './services/service-proxy.js';
 import { ServiceType } from './types/gateway.js';
 import { UploadService } from './services/upload-service.js';
@@ -205,6 +207,8 @@ class HTTPMCPServer {
       this.services.zoSessionsAdapter,
       this.services.db
     ));
+    this.toolRegistry.registerHandler(new LegalActsTools(this.services.zoLegalActsAdapter));
+    this.toolRegistry.registerHandler(new ECHRPracticeTools(this.services.zoECHRAdapter));
     logger.info('Core tool handlers registered with ToolRegistry');
 
     // Initialize upload and storage services

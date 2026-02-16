@@ -862,35 +862,64 @@ export class ZOAdapter {
     return response;
   }
 
-  async searchECHRPractice(params: ZOSearchParams): Promise<ZOSearchResponse> {
-    const response = await this.requestWithRetry('/api/echr/practice', {
-      ...params,
-      fulldata: params.fulldata || 1,
-    });
-    if (Array.isArray(response)) {
-      this.enqueueDocumentsForPersistence(response);
-    } else if (response?.data && Array.isArray(response.data)) {
-      this.enqueueDocumentsForPersistence(response.data);
-    }
-    return response;
-  }
 
-  async searchNPA(params: ZOSearchParams): Promise<ZOSearchResponse> {
-    const response = await this.requestWithRetry('/api/npa/search', {
-      ...params,
-      fulldata: params.fulldata || 1,
-    });
-    if (Array.isArray(response)) {
-      this.enqueueDocumentsForPersistence(response);
-    } else if (response?.data && Array.isArray(response.data)) {
-      this.enqueueDocumentsForPersistence(response.data);
+  /**
+   * Get full document by its numeric ID via ZakonOnline API
+   * Uses /v1/document/by/number/{docId} endpoint
+   */
+  async getDocumentByNumber(docId: string | number): Promise<any | null> {
+    try {
+      const endpoint = `/v1/document/by/number/${docId}`;
+      logger.info(`Fetching document by number via API`, { docId, endpoint });
+
+      const apiStart = Date.now();
+      const response = await this.requestWithRetry(endpoint, {});
+      const apiDuration = (Date.now() - apiStart) / 1000;
+
+      if (response) {
+        logger.info('Successfully fetched document by number via API', {
+          docId,
+          duration: apiDuration,
+          hasText: !!(response.full_text || response.text || response.content),
+        });
+        return response;
+      }
+      return null;
+    } catch (error: any) {
+      logger.warn(`API document-by-number failed for ${docId}:`, error?.message);
+      return null;
     }
-    return response;
   }
 
   /**
-   * Get full text of a court decision by document ID from zakononline.ua
-   * Downloads HTML page and extracts text content
+   * Get full document by its domain-specific ID via ZakonOnline API
+   * Uses /v1/document/by/id/{id} endpoint
+   */
+  async getDocumentById(id: string | number): Promise<any | null> {
+    try {
+      const endpoint = `/v1/document/by/id/${id}`;
+      logger.info(`Fetching document by id via API`, { id, endpoint });
+
+      const response = await this.requestWithRetry(endpoint, {});
+
+      if (response) {
+        logger.info('Successfully fetched document by id via API', {
+          id,
+          hasText: !!(response.full_text || response.text || response.content),
+        });
+        return response;
+      }
+      return null;
+    } catch (error: any) {
+      logger.warn(`API document-by-id failed for ${id}:`, error?.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get full text of a court decision by document ID
+   * Primary: API /v1/document/by/number/{docId}
+   * Fallback: HTML scraping from zakononline.ua
    * Returns both HTML and extracted text
    */
   async getDocumentFullText(docId: string | number): Promise<{ html: string; text: string; case_number?: string } | null> {
@@ -900,17 +929,48 @@ export class ZOAdapter {
     const cached = await this.getCached(cacheKey);
     if (cached) {
       logger.debug('Full text cache hit', { docId });
-      // Track cached SecondLayer call (won't count in cost)
       await this.trackSecondLayerUsage('web_scraping', docId, true);
       return cached;
     }
 
+    // Primary: try API endpoint
+    try {
+      const apiDoc = await this.getDocumentByNumber(docId);
+      if (apiDoc) {
+        const text = apiDoc.full_text || apiDoc.text || apiDoc.content || '';
+        if (text.length > 100) {
+          const result = {
+            html: apiDoc.full_text_html || apiDoc.html || text,
+            text: text,
+            case_number: apiDoc.cause_num || apiDoc.case_number || undefined,
+          };
+
+          await this.setCache(cacheKey, result, 7 * 24 * 3600);
+          await this.trackSecondLayerUsage('api_fulltext', docId, false);
+
+          this.enqueueDocumentsForPersistence([
+            {
+              doc_id: docId,
+              full_text: result.text,
+              full_text_html: result.html,
+              case_number: result.case_number,
+            },
+          ]);
+
+          logger.info('Got full text via API endpoint', { docId, textLength: text.length });
+          return result;
+        }
+      }
+    } catch (error: any) {
+      logger.warn(`API full text failed for ${docId}, falling back to HTML scraping:`, error?.message);
+    }
+
+    // Fallback: HTML scraping
     try {
       const url = `https://zakononline.ua/court-decisions/show/${docId}`;
 
       logger.info(`Fetching full text from ${url}`);
 
-      // Download HTML page
       const scrapeStart = Date.now();
       const response = await axios.get(url, {
         timeout: 15000,
@@ -929,23 +989,16 @@ export class ZOAdapter {
 
       const htmlContent = response.data;
 
-      // Parse HTML using specialized court decision parser
       const parser = new CourtDecisionHTMLParser(htmlContent);
-
-      // Extract full text (all content)
       const fullText = parser.toText('full');
-
-      // Extract only article HTML (without page styles, scripts, navigation)
       const articleHTML = parser.extractArticleHTML();
-
-      // Extract metadata (including case number)
       const metadata = parser.getMetadata();
 
       if (fullText && fullText.length > 100) {
         const result = {
-          html: articleHTML,  // Only article content, not full page HTML
+          html: articleHTML,
           text: fullText,
-          case_number: metadata.caseNumber || undefined  // Add case_number from HTML
+          case_number: metadata.caseNumber || undefined
         };
 
         logger.info(`Successfully extracted full text using HTML parser`, {
@@ -956,13 +1009,9 @@ export class ZOAdapter {
           caseNumber: metadata.caseNumber
         });
 
-        // Cache for 7 days
         await this.setCache(cacheKey, result, 7 * 24 * 3600);
-
-        // Track SecondLayer API call (web scraping)
         await this.trackSecondLayerUsage('web_scraping', docId, false);
 
-        // Persist minimal record with full text (async)
         this.enqueueDocumentsForPersistence([
           {
             doc_id: docId,

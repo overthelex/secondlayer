@@ -1,11 +1,12 @@
 /**
  * Zakononline API Domain Configuration
  *
- * Zakononline provides 4 distinct API domains:
+ * Zakononline provides 5 distinct API domains:
  * 1. Court Decisions - Судові рішення
  * 2. Court Sessions - Судові засідання
  * 3. Legal Acts - Нормативно-правові акти
  * 4. Court Practice - Судова практика
+ * 5. ECHR Practice - Практика ЄСПЛ
  *
  * Each domain has its own base URL, endpoints, available search targets,
  * and date fields for filtering.
@@ -15,7 +16,8 @@ export type ZakonOnlineDomainName =
   | 'court_decisions'
   | 'court_sessions'
   | 'legal_acts'
-  | 'court_practice';
+  | 'court_practice'
+  | 'echr_practice';
 
 export type SearchTarget =
   | 'text'           // Full text search
@@ -132,6 +134,25 @@ export const ZAKONONLINE_DOMAINS: Record<ZakonOnlineDomainName, DomainConfig> = 
       meta: '/v1/search/meta',
       dictionaries: {
         categories: '/v1/categories',
+        types: '/v1/types',
+      },
+    },
+    availableTargets: ['text'],
+    defaultTarget: 'text',
+    dateFields: {
+      publication: 'date_publ',
+    },
+    defaultSortField: 'date_publ',
+  },
+
+  echr_practice: {
+    name: 'echr_practice',
+    displayName: 'Практика ЄСПЛ',
+    baseURL: 'https://echrpractice.searcher.api.zakononline.com.ua',
+    endpoints: {
+      search: '/v1/search',
+      meta: '/v1/search/meta',
+      dictionaries: {
         types: '/v1/types',
       },
     },
