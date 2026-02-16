@@ -2,21 +2,22 @@
 /**
  * Load legislation needed for TCC (ТЦК) disputes into the database.
  *
- * Laws loaded:
+ * Block 1 — Substantive law:
  *  1. КУпАП — Кодекс про адміністративні правопорушення (80731-10)
- *     Key articles: 210, 210-1, 211
  *  2. Закон «Про військовий обов'язок і військову службу» (2232-12)
  *  3. Закон «Про мобілізаційну підготовку та мобілізацію» (3543-12)
  *
- * Run on stage (inside app container):
- *   docker exec -it mcp-backend-app-stage node scripts/load-tck-legislation.js
- *   docker exec -it mcp-backend-app-stage node scripts/load-tck-legislation.js --skip-vectors
+ * Block 3 — Bylaws (підзаконні акти):
+ *  4. КМУ №1487 — Порядок військового обліку (1487-2022-п)
+ *  5. КМУ №560  — Порядок призову під час мобілізації (560-2024-п)
+ *  6. КМУ №76   — Бронювання військовозобов'язаних (76-2023-п)
+ *  7. Наказ МОУ №402 — Положення про ВЛК/ВЛЕ (z1109-08)
  *
- * Run locally:
- *   DATABASE_URL=postgresql://secondlayer:pass@localhost:5432/secondlayer_local \
- *     node scripts/load-tck-legislation.js --skip-vectors
+ * Usage:
+ *   DATABASE_URL=postgresql://... node scripts/load-tck-legislation.js --skip-vectors
+ *   node scripts/load-tck-legislation.js 80731-10 2232-12
  *
- * Env vars used: DATABASE_URL, POSTGRES_*, OPENAI_API_KEY, QDRANT_URL
+ * Env vars: DATABASE_URL, POSTGRES_*, OPENAI_API_KEY, QDRANT_URL
  */
 
 import pg from 'pg';
@@ -27,11 +28,13 @@ const { Pool } = pg;
 
 // ─── Configuration ───────────────────────────────────────────────
 const LAWS = [
+  // Block 1 — substantive law
   {
     rada_id: '80731-10',
     short: 'КУпАП',
     title: 'Кодекс України про адміністративні правопорушення',
     type: 'code',
+    parse_mode: 'articles',
     key_articles: ['210', '210-1', '211'],
   },
   {
@@ -39,6 +42,7 @@ const LAWS = [
     short: 'Про військовий обов\'язок',
     title: 'Закон України «Про військовий обов\'язок і військову службу»',
     type: 'law',
+    parse_mode: 'articles',
     key_articles: [],
   },
   {
@@ -46,6 +50,40 @@ const LAWS = [
     short: 'Про мобілізацію',
     title: 'Закон України «Про мобілізаційну підготовку та мобілізацію»',
     type: 'law',
+    parse_mode: 'articles',
+    key_articles: [],
+  },
+  // Block 3 — bylaws (підзаконні акти)
+  {
+    rada_id: '1487-2022-п',
+    short: 'КМУ №1487 (облік)',
+    title: 'Порядок організації та ведення військового обліку призовників, військовозобов\'язаних та резервістів',
+    type: 'regulation',
+    parse_mode: 'points',
+    key_articles: [],
+  },
+  {
+    rada_id: '560-2024-п',
+    short: 'КМУ №560 (призов)',
+    title: 'Питання проведення призову громадян на військову службу під час мобілізації',
+    type: 'regulation',
+    parse_mode: 'points',
+    key_articles: [],
+  },
+  {
+    rada_id: '76-2023-п',
+    short: 'КМУ №76 (бронювання)',
+    title: 'Деякі питання бронювання військовозобов\'язаних на період мобілізації та на воєнний час',
+    type: 'regulation',
+    parse_mode: 'points',
+    key_articles: [],
+  },
+  {
+    rada_id: 'z1109-08',
+    short: 'Наказ МОУ №402 (ВЛК)',
+    title: 'Положення про військово-лікарську експертизу в Збройних Силах України',
+    type: 'regulation',
+    parse_mode: 'points',
     key_articles: [],
   },
 ];
@@ -53,66 +91,67 @@ const LAWS = [
 const BASE_URL = 'https://zakon.rada.gov.ua';
 
 const skipVectors = process.argv.includes('--skip-vectors');
+const forceReload = process.argv.includes('--force');
 const explicitIds = process.argv.slice(2).filter(a => !a.startsWith('--'));
 
-// Build DATABASE_URL from individual vars or use the env directly
 const DATABASE_URL = process.env.DATABASE_URL ||
   `postgresql://${process.env.POSTGRES_USER || 'secondlayer'}:${process.env.POSTGRES_PASSWORD}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'secondlayer_stage'}`;
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 const httpClient = axios.create({
-  timeout: 60000,
+  timeout: 120000,
   headers: {
     'User-Agent': 'Mozilla/5.0 (compatible; SecondLayer/1.0)',
     'Accept': 'text/html,application/xhtml+xml',
     'Accept-Language': 'uk,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
   },
   decompress: true,
+  maxContentLength: 50 * 1024 * 1024,
 });
 
-// ─── HTML Parsing (self-contained, no backend import needed) ─────
-function parseArticlesFromHtml(html, radaId) {
+// ─── HTML Parsing: Articles (Статті) ─────────────────────────────
+function parseArticlesFromHtml(html) {
   const $ = cheerio.load(html);
   const articles = [];
 
-  // Extract title
-  const titleEl = $('.title, .doc-title, h1').first();
+  const titleEl = $('.title, .doc-title, h1, .rvts23').first();
   const title = titleEl.text().trim();
 
-  // Parse articles from /print format: <span class=rvts9>Стаття N.</span>
   const bodyHtml = $('body').html() || '';
-  const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?\s*<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9|$)/gs;
+
+  // Updated regex: allow title text inside the span after article number
+  const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.\s*([^<]*)<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9["']?>Стаття\s+\d|$)/gs;
 
   let match;
   while ((match = articleRegex.exec(bodyHtml)) !== null) {
     const articleNumber = match[1];
-    const articleHtml = match[2];
+    const inSpanTitle = match[2].trim();
+    const afterSpanHtml = match[3];
 
-    const $a = cheerio.load(`<div>${articleHtml}</div>`);
-    $a('script, style, em').remove();
-    const fullText = $a.text().trim().replace(/\s+/g, ' ').replace(/\{[^}]+\}/g, '').trim();
+    const $a = cheerio.load(`<div>${afterSpanHtml}</div>`);
+    $a('script, style').remove();
+    const afterText = $a.text().trim().replace(/\s+/g, ' ').replace(/\{[^}]+\}/g, '').trim();
+
+    const fullText = inSpanTitle
+      ? `${inSpanTitle} ${afterText}`.trim()
+      : afterText;
 
     if (fullText.length < 10) continue;
 
-    let articleTitle;
-    const firstSentence = fullText.split(/[.;]/)[0];
-    if (firstSentence && firstSentence.length < 200) {
-      articleTitle = firstSentence.trim();
-    }
-
     articles.push({
       article_number: articleNumber,
-      title: articleTitle,
+      title: inSpanTitle && inSpanTitle.length < 300 ? inSpanTitle : undefined,
       full_text: fullText,
-      full_text_html: articleHtml.substring(0, 10000),
+      full_text_html: afterSpanHtml.substring(0, 10000),
       byte_size: Buffer.byteLength(fullText, 'utf8'),
     });
   }
 
   // Fallback: plain text regex
   if (articles.length === 0) {
-    console.log('  Using fallback parser...');
+    console.log('  Using text fallback parser for articles...');
     const bodyText = $('body').text();
     const pattern = /Стаття\s+(\d+(?:-\d+)?)\.\s*/gi;
     const matches = [...bodyText.matchAll(pattern)];
@@ -122,15 +161,98 @@ function parseArticlesFromHtml(html, radaId) {
       const articleNumber = m[1];
       const start = m.index;
       const end = i + 1 < matches.length ? matches[i + 1].index : bodyText.length;
-      const fullText = bodyText.substring(start, end).trim().replace(/\s+/g, ' ');
+      let fullText = bodyText.substring(start, end).trim().replace(/\s+/g, ' ');
+      fullText = fullText.replace(/\{[^}]+\}/g, '').trim();
 
       if (fullText.length < 20) continue;
 
-      const firstSentence = fullText.replace(/^Стаття\s+\d+(?:-\d+)?\.\s*/, '').split(/[.;]/)[0];
+      const contentAfterNum = fullText.replace(/^Стаття\s+\d+(?:-\d+)?\.\s*/, '');
+      const firstSentence = contentAfterNum.split(/[.;]/)[0];
 
       articles.push({
         article_number: articleNumber,
         title: firstSentence?.length < 200 ? firstSentence.trim() : undefined,
+        full_text: fullText,
+        byte_size: Buffer.byteLength(fullText, 'utf8'),
+      });
+    }
+  }
+
+  return { title, articles };
+}
+
+// ─── HTML Parsing: Points (Пункти) for bylaws ───────────────────
+function parsePointsFromHtml(html) {
+  const $ = cheerio.load(html);
+
+  const titleEl = $('.rvts23, .title, .doc-title, h1').first();
+  const title = titleEl.text().trim();
+
+  const bodyText = $('body').text();
+  const articles = [];
+
+  // Match "N. " at start of line or after whitespace — numbered points
+  const pointPattern = /(?:^|\n)\s*(\d+)\.\s+/g;
+  const matches = [...bodyText.matchAll(pointPattern)];
+
+  // Filter to keep only top-level points (sequential numbering)
+  const topPoints = [];
+  let expectedNext = 1;
+  for (const m of matches) {
+    const num = parseInt(m[1]);
+    if (num === expectedNext) {
+      topPoints.push(m);
+      expectedNext = num + 1;
+    } else if (num === 1 && topPoints.length > 0) {
+      continue;
+    }
+  }
+
+  // If we found fewer than 3 sequential points, fallback to all matches
+  const pointsToUse = topPoints.length >= 3 ? topPoints : matches;
+
+  for (let i = 0; i < pointsToUse.length; i++) {
+    const m = pointsToUse[i];
+    const pointNumber = m[1];
+    const start = m.index;
+    const end = i + 1 < pointsToUse.length ? pointsToUse[i + 1].index : bodyText.length;
+    let fullText = bodyText.substring(start, end).trim().replace(/\s+/g, ' ');
+    fullText = fullText.replace(/\{[^}]+\}/g, '').trim();
+
+    if (fullText.length < 20) continue;
+    if (fullText.length > 50000) fullText = fullText.substring(0, 50000);
+
+    const contentAfterNum = fullText.replace(/^\d+\.\s*/, '');
+    const firstSentence = contentAfterNum.split(/[.;]/)[0];
+
+    articles.push({
+      article_number: `п.${pointNumber}`,
+      title: firstSentence?.length < 300 ? firstSentence.trim() : undefined,
+      full_text: fullText,
+      byte_size: Buffer.byteLength(fullText, 'utf8'),
+    });
+  }
+
+  // If point parsing got nothing, try section-based splitting
+  if (articles.length === 0) {
+    console.log('  Using section fallback parser for bylaw...');
+    const sectionPattern = /(?:Розділ|РОЗДІЛ)\s+([IVXLCDM\d]+)\.\s*/gi;
+    const secMatches = [...bodyText.matchAll(sectionPattern)];
+
+    for (let i = 0; i < secMatches.length; i++) {
+      const m = secMatches[i];
+      const sectionNum = m[1];
+      const start = m.index;
+      const end = i + 1 < secMatches.length ? secMatches[i + 1].index : bodyText.length;
+      let fullText = bodyText.substring(start, end).trim().replace(/\s+/g, ' ');
+      fullText = fullText.replace(/\{[^}]+\}/g, '').trim();
+
+      if (fullText.length < 20) continue;
+      if (fullText.length > 50000) fullText = fullText.substring(0, 50000);
+
+      articles.push({
+        article_number: `розд.${sectionNum}`,
+        title: fullText.substring(0, 200).split(/[.;]/)[0]?.trim(),
         full_text: fullText,
         byte_size: Buffer.byteLength(fullText, 'utf8'),
       });
@@ -150,6 +272,16 @@ async function checkExisting(radaId) {
     [radaId]
   );
   return res.rows[0] || null;
+}
+
+async function deleteExisting(radaId) {
+  const existing = await checkExisting(radaId);
+  if (existing) {
+    await pool.query('DELETE FROM legislation_chunks WHERE legislation_id = $1', [existing.id]);
+    await pool.query('DELETE FROM legislation_articles WHERE legislation_id = $1', [existing.id]);
+    await pool.query('DELETE FROM legislation WHERE id = $1', [existing.id]);
+    console.log(`  Deleted existing record (id=${existing.id}, ${existing.articles_count} articles)`);
+  }
 }
 
 async function saveLegislation(law, parsedTitle, articles) {
@@ -230,14 +362,15 @@ async function loadLaw(law) {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  ${law.short} (${law.rada_id})`);
   console.log(`  ${law.title}`);
+  console.log(`  Parse mode: ${law.parse_mode}`);
   console.log('='.repeat(60));
 
   // Check existing
   const existing = await checkExisting(law.rada_id);
-  if (existing && Number(existing.articles_count) > 0) {
+  if (existing && Number(existing.articles_count) > 0 && !forceReload) {
     console.log(`  Already loaded: ${existing.articles_count} articles, ${existing.chunks_count} chunks`);
     if (Number(existing.chunks_count) === 0 && !skipVectors) {
-      console.log('  No vector chunks — indexing...');
+      console.log('  No vector chunks — will index...');
     } else {
       if (law.key_articles.length > 0) {
         await showKeyArticles(law.rada_id, law.key_articles);
@@ -246,8 +379,13 @@ async function loadLaw(law) {
     }
   }
 
+  // Force reload: delete existing
+  if (forceReload && existing) {
+    await deleteExisting(law.rada_id);
+  }
+
   // Fetch & parse
-  if (!existing || Number(existing.articles_count) === 0) {
+  if (!existing || Number(existing.articles_count) === 0 || forceReload) {
     const url = `${BASE_URL}/laws/show/${law.rada_id}/print`;
     console.log(`  Fetching ${url} ...`);
     const start = Date.now();
@@ -255,17 +393,26 @@ async function loadLaw(law) {
     try {
       const resp = await httpClient.get(url);
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      const { title: parsedTitle, articles } = parseArticlesFromHtml(resp.data, law.rada_id);
-      console.log(`  Parsed ${articles.length} articles in ${elapsed}s`);
+      const htmlSize = (Buffer.byteLength(resp.data, 'utf8') / 1024).toFixed(0);
+      console.log(`  Fetched ${htmlSize} KB in ${elapsed}s`);
+
+      const parser = law.parse_mode === 'points' ? parsePointsFromHtml : parseArticlesFromHtml;
+      const { title: parsedTitle, articles } = parser(resp.data);
+      console.log(`  Parsed ${articles.length} ${law.parse_mode === 'points' ? 'points' : 'articles'}`);
 
       if (articles.length === 0) {
-        console.log('  WARNING: No articles parsed! HTML format may have changed.');
+        console.log('  WARNING: Nothing parsed! HTML format may have changed.');
         return { status: 'error', articles: 0, chunks: 0 };
+      }
+
+      // Show first 3 parsed items
+      for (const a of articles.slice(0, 3)) {
+        console.log(`    ${a.article_number}: ${(a.title || a.full_text.substring(0, 80)).substring(0, 80)}...`);
       }
 
       console.log('  Saving to database...');
       const { legislationId, saved } = await saveLegislation(law, parsedTitle, articles);
-      console.log(`  Saved: legislation_id=${legislationId}, ${saved} articles`);
+      console.log(`  Saved: legislation_id=${legislationId}, ${saved} records`);
     } catch (err) {
       console.error(`  ERROR fetching ${law.rada_id}:`, err.message);
       return { status: 'error', articles: 0, chunks: 0 };
@@ -281,7 +428,7 @@ async function loadLaw(law) {
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
       console.log(`  Vector indexing done in ${elapsed}s`);
     } catch (err) {
-      console.error(`  Vector indexing failed (articles still saved):`, err.message);
+      console.error(`  Vector indexing failed (records still saved):`, err.message);
     }
   }
 
@@ -302,7 +449,7 @@ async function showKeyArticles(radaId, articleNumbers) {
   console.log('  Key articles for TCC disputes:');
   for (const num of articleNumbers) {
     const res = await pool.query(
-      `SELECT article_number, title, byte_size
+      `SELECT la.article_number, la.title, la.byte_size
        FROM legislation_articles la JOIN legislation l ON la.legislation_id = l.id
        WHERE l.rada_id = $1 AND la.article_number = $2 AND la.is_current = true`,
       [radaId, num]
@@ -317,8 +464,9 @@ async function showKeyArticles(radaId, articleNumbers) {
 }
 
 async function main() {
-  console.log('Loading TCC dispute legislation');
+  console.log('Loading TCC dispute legislation (all blocks)');
   console.log(`  Vectors: ${skipVectors ? 'SKIP' : 'enabled'}`);
+  console.log(`  Force reload: ${forceReload ? 'YES' : 'no'}`);
   console.log(`  DB: ${DATABASE_URL.replace(/:[^@]+@/, ':***@')}`);
 
   const lawsToLoad = explicitIds.length > 0
@@ -331,9 +479,16 @@ async function main() {
     process.exit(1);
   }
 
+  console.log(`  Laws to load: ${lawsToLoad.length}`);
+
   const results = [];
   for (const law of lawsToLoad) {
-    results.push({ ...law, ...(await loadLaw(law)) });
+    try {
+      results.push({ ...law, ...(await loadLaw(law)) });
+    } catch (err) {
+      console.error(`  FATAL for ${law.short}: ${err.message}`);
+      results.push({ ...law, status: 'error', articles: 0, chunks: 0 });
+    }
   }
 
   // Summary
@@ -341,11 +496,12 @@ async function main() {
   console.log('Summary:');
   console.log('='.repeat(60));
   for (const r of results) {
-    const icon = r.status === 'error' ? 'FAIL' : 'OK';
-    console.log(`  [${icon}] ${r.short.padEnd(25)} ${String(r.articles || 0).padStart(5)} articles  ${String(r.chunks || 0).padStart(6)} chunks`);
+    const icon = r.status === 'error' ? 'FAIL' : r.status === 'exists' ? 'SKIP' : ' OK ';
+    console.log(`  [${icon}] ${r.short.padEnd(28)} ${String(r.articles || 0).padStart(5)} items  ${String(r.chunks || 0).padStart(6)} chunks`);
   }
   const total = results.reduce((s, r) => s + (r.articles || 0), 0);
-  console.log(`\n  Total: ${total} articles`);
+  const errors = results.filter(r => r.status === 'error').length;
+  console.log(`\n  Total: ${total} items loaded, ${errors} errors`);
 }
 
 main()
