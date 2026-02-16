@@ -409,13 +409,14 @@ export class ZOAdapter {
       const embeddings = await this.embeddingService.generateEmbeddingsBatch(chunks);
       const nowIso = new Date().toISOString();
 
-      for (let i = 0; i < chunks.length; i++) {
-        await this.embeddingService.storeChunk({
+      // Store all chunks in parallel
+      await Promise.all(chunks.map((chunk, i) =>
+        this.embeddingService!.storeChunk({
           id: '',
           source: 'zakononline',
           doc_id: args.docId,
           section_type: section.type,
-          text: chunks[i],
+          text: chunk,
           embedding: embeddings[i],
           metadata: {
             date: args.metadata.date,
@@ -428,8 +429,8 @@ export class ZOAdapter {
             law_articles: args.metadata.law_articles || [],
           },
           created_at: nowIso,
-        });
-      }
+        })
+      ));
     }
   }
 
@@ -1169,23 +1170,27 @@ export class ZOAdapter {
         totalSaved += documentsWithFullText.length;
         logger.info(`Saved batch to database: ${documentsWithFullText.length} documents (${withText} with full text). Total saved: ${totalSaved}/${validDocs.length}`);
 
-        // Extract and save sections for documents with full text
-        logger.info(`Starting section extraction for ${withText} documents with full text`);
-        for (let j = 0; j < documentsWithFullText.length; j++) {
-          const doc = documentsWithFullText[j];
-          const docId = savedIds[j];
+        // Extract and save sections for documents with full text — parallel
+        const envSectionConcurrency = process.env.SECTION_CONCURRENCY;
+        const SECTION_CONCURRENCY = envSectionConcurrency && !Number.isNaN(Number(envSectionConcurrency))
+          ? Math.max(1, Number(envSectionConcurrency))
+          : 10;
+        logger.info(`Starting section extraction for ${withText} documents with full text (concurrency: ${SECTION_CONCURRENCY})`);
 
-          if (doc.full_text && doc.full_text.length > 100) {
+        const docsWithText = documentsWithFullText
+          .map((doc, j) => ({ doc, docId: savedIds[j] }))
+          .filter(({ doc }) => doc.full_text && doc.full_text.length > 100);
+
+        for (let ci = 0; ci < docsWithText.length; ci += SECTION_CONCURRENCY) {
+          const concBatch = docsWithText.slice(ci, ci + SECTION_CONCURRENCY);
+          await Promise.all(concBatch.map(async ({ doc, docId }) => {
             try {
-              // Extract sections using SemanticSectionizer
               const sections = await this.sectionizer.extractSections(doc.full_text, true);
 
               if (sections && sections.length > 0) {
-                // Save sections to database
-                await this.documentService.saveSections(docId, sections);
+                await this.documentService!.saveSections(docId, sections);
                 logger.info(`Extracted and saved ${sections.length} sections for document ${doc.zakononline_id}`);
 
-                // Index DECISION + COURT_REASONING to vector store
                 const dateYMD = this.normalizeDateToYMD(doc.date);
                 if (dateYMD) {
                   const lawArticles = this.extractLawArticlesSimple(doc.full_text);
@@ -1209,9 +1214,8 @@ export class ZOAdapter {
               }
             } catch (sectionError: any) {
               logger.error(`Failed to extract/save sections for document ${doc.zakononline_id}:`, sectionError.message);
-              // Don't throw - continue with next document
             }
-          }
+          }));
         }
         logger.info(`Completed section extraction for batch`);
       } catch (error) {

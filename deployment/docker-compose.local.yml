@@ -272,11 +272,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 4G
+          cpus: '8.0'
+          memory: 8G
         reservations:
-          cpus: '1.0'
-          memory: 1G
+          cpus: '2.0'
+          memory: 2G
 
   rada-migrate-local:
     build:
