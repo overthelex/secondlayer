@@ -422,7 +422,10 @@ async function extractDecisionLinks(page: Page): Promise<{ url: string; id: stri
   return results;
 }
 
-async function downloadDecision(page: Page, docId: string): Promise<string | null> {
+async function downloadDecisionDirect(
+  context: import('playwright').BrowserContext,
+  docId: string
+): Promise<string | null> {
   const filePath = path.join(DOWNLOAD_DIR, `${docId}.html`);
 
   // If already downloaded, return existing HTML
@@ -431,48 +434,50 @@ async function downloadDecision(page: Page, docId: string): Promise<string | nul
     return fs.readFileSync(filePath, 'utf-8');
   }
 
+  const tab = await context.newPage();
   try {
-    const link = page.locator(`a[href="/Review/${docId}"]`);
-    if (await link.count() === 0) {
-      console.error(`  [${docId}] Link not found on results page`);
-      return null;
-    }
+    const url = `${BASE_URL}Review/${docId}`;
+    await tab.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(1500);
 
-    let docPage: Page;
-    let openedNewTab = false;
-
-    try {
-      const [newPage] = await Promise.all([
-        page.context().waitForEvent('page', { timeout: 5000 }),
-        link.first().click({ modifiers: ['Control'] }),
-      ]);
-      docPage = newPage;
-      openedNewTab = true;
-    } catch {
-      await link.first().click();
-      docPage = page;
-      openedNewTab = false;
-    }
-
-    await docPage.waitForLoadState('domcontentloaded');
-    await sleep(2000);
-
-    const html = await docPage.content();
+    const html = await tab.content();
     fs.writeFileSync(filePath, html, 'utf-8');
     console.log(`  [${docId}] Saved (${(html.length / 1024).toFixed(1)} KB)`);
-
-    if (openedNewTab) {
-      await docPage.close();
-    } else {
-      await page.goBack({ waitUntil: 'domcontentloaded' });
-      await sleep(2000);
-    }
-
     return html;
   } catch (error: any) {
     console.error(`  [${docId}] Error: ${error.message}`);
     return null;
+  } finally {
+    await tab.close();
   }
+}
+
+/**
+ * Download documents using a pool of concurrent browser tabs.
+ * Returns array of { docId, html } for successfully downloaded docs.
+ */
+async function downloadWithPool(
+  context: import('playwright').BrowserContext,
+  ids: string[]
+): Promise<Array<{ docId: string; html: string }>> {
+  const results: Array<{ docId: string; html: string }> = [];
+  const active: Promise<void>[] = [];
+
+  for (const docId of ids) {
+    const task = downloadDecisionDirect(context, docId).then((html) => {
+      if (html) results.push({ docId, html });
+      const idx = active.indexOf(task);
+      if (idx !== -1) active.splice(idx, 1);
+    });
+    active.push(task);
+
+    if (active.length >= CONCURRENCY) {
+      await Promise.race(active);
+    }
+  }
+
+  await Promise.all(active);
+  return results;
 }
 
 async function goToNextPage(page: Page): Promise<boolean> {
@@ -552,9 +557,6 @@ async function main() {
     });
     const page = await context.newPage();
 
-    // Collect items for batch processing
-    const processingQueue: Array<{ docId: string; html: string }> = [];
-
     try {
       console.log('Navigating to court registry...');
       await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -576,36 +578,26 @@ async function main() {
           break;
         }
 
-        for (const { id } of links) {
-          if (totalDownloaded >= MAX_DOCS) break;
+        // Take only as many IDs as we still need
+        const remaining = MAX_DOCS - totalDownloaded;
+        const idsToDownload = links.slice(0, remaining).map(l => l.id);
 
-          const html = await downloadDecision(page, id);
-          if (html) {
-            totalDownloaded++;
-            processingQueue.push({ docId: id, html });
+        // Download concurrently with CONCURRENCY tabs
+        console.log(`  Downloading ${idsToDownload.length} decisions (${CONCURRENCY} concurrent tabs)...`);
+        const downloaded = await downloadWithPool(context, idsToDownload);
+        totalDownloaded += downloaded.length;
+        totalErrors += idsToDownload.length - downloaded.length;
 
-            // Process in batches when queue reaches CONCURRENCY * 2
-            if (processingQueue.length >= CONCURRENCY * 2) {
-              console.log(`\n  Processing batch of ${processingQueue.length} documents...`);
-              await processWithPool(ctx, processingQueue.splice(0));
-            }
-          } else {
-            totalErrors++;
-          }
-
-          await sleep(DELAY_MS);
+        // Process downloaded batch through DB pipeline
+        if (downloaded.length > 0) {
+          console.log(`\n  Processing batch of ${downloaded.length} documents...`);
+          await processWithPool(ctx, downloaded);
         }
 
         if (totalDownloaded < MAX_DOCS && pageNum < MAX_PAGES) {
           const hasNext = await goToNextPage(page);
           if (!hasNext) break;
         }
-      }
-
-      // Process remaining items in queue
-      if (processingQueue.length > 0) {
-        console.log(`\n  Processing final batch of ${processingQueue.length} documents...`);
-        await processWithPool(ctx, processingQueue);
       }
     } finally {
       await browser.close();
