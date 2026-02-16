@@ -136,6 +136,68 @@ class HTTPOpenReyestrServer {
       });
     });
 
+    // Stats endpoint for admin monitoring (no auth — internal network only)
+    this.app.get('/api/stats', async (_req, res) => {
+      try {
+        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }> = {};
+
+        const queries: Array<{ key: string; table: string; source: string; sourceUrl: string; frequency: string }> = [
+          { key: 'legal_entities', table: 'legal_entities', source: 'НАІС — ЄДР (юридичні особи)', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт XML)' },
+          { key: 'individual_entrepreneurs', table: 'individual_entrepreneurs', source: 'НАІС — ЄДР (ФОП)', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт XML)' },
+          { key: 'public_associations', table: 'public_associations', source: 'НАІС — ЄДР (ГО)', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт XML)' },
+          { key: 'notaries', table: 'notaries', source: 'НАІС — Реєстр нотаріусів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'court_experts', table: 'court_experts', source: 'НАІС — Реєстр судових експертів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'arbitration_managers', table: 'arbitration_managers', source: 'НАІС — Реєстр арбітражних керуючих', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'debtors', table: 'debtors', source: 'НАІС — Реєстр боржників', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт CSV)' },
+          { key: 'enforcement_proceedings', table: 'enforcement_proceedings', source: 'НАІС — Виконавчі провадження', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт CSV)' },
+          { key: 'bankruptcy_cases', table: 'bankruptcy_cases', source: 'НАІС — Справи про банкрутство', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт XML)' },
+          { key: 'special_forms', table: 'special_forms', source: 'НАІС — Спец. бланки нотаріусів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'forensic_methods', table: 'forensic_methods', source: 'НАІС — Методики судових експертиз', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'legal_acts', table: 'legal_acts', source: 'НАІС — Нормативно-правові акти', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+        ];
+
+        for (const q of queries) {
+          try {
+            const result = await this.db.query(`SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM ${q.table}`);
+            tables[q.key] = {
+              rows: parseInt(result.rows[0]?.cnt || '0'),
+              source: q.source,
+              sourceUrl: q.sourceUrl,
+              updateFrequency: q.frequency,
+              lastUpdate: result.rows[0]?.last_update || null,
+            };
+          } catch {
+            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null };
+          }
+        }
+
+        // Registry metadata
+        let registryMeta: any[] = [];
+        try {
+          const metaResult = await this.db.query('SELECT * FROM registry_metadata ORDER BY registry_name');
+          registryMeta = metaResult.rows;
+        } catch { /* ignore */ }
+
+        // Last imports
+        let recentImports: any[] = [];
+        try {
+          const importResult = await this.db.query('SELECT registry_name, status, records_imported, records_failed, import_completed_at FROM import_log ORDER BY import_started_at DESC LIMIT 20');
+          recentImports = importResult.rows;
+        } catch { /* ignore */ }
+
+        // DB size
+        let dbSizeMb = 0;
+        try {
+          const sizeResult = await this.db.query("SELECT pg_database_size(current_database()) as size_bytes");
+          dbSizeMb = Math.round(parseInt(sizeResult.rows[0]?.size_bytes || '0') / 1024 / 1024);
+        } catch { /* ignore */ }
+
+        res.json({ service: 'openreyestr', tables, registryMeta, recentImports, dbSizeMb, timestamp: new Date().toISOString() });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // List available tools
     this.app.get('/api/tools', requireAPIKey as any, ((_req: AuthenticatedRequest, res: Response) => {
       try {

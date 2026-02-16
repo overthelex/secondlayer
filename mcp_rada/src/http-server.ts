@@ -127,6 +127,47 @@ class HTTPRadaServer {
       });
     });
 
+    // Stats endpoint for admin monitoring (no auth — internal network only)
+    this.app.get('/api/stats', async (_req, res) => {
+      try {
+        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }> = {};
+
+        const queries: Array<{ key: string; query: string; source: string; sourceUrl: string; frequency: string }> = [
+          { key: 'deputies', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.deputies', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
+          { key: 'deputy_assistants', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.deputy_assistants', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
+          { key: 'bills', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.bills', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Щоденно (кеш 1 день)' },
+          { key: 'factions', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.factions', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+          { key: 'committees', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.committees', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+        ];
+
+        for (const q of queries) {
+          try {
+            const result = await this.services.db.query(q.query);
+            tables[q.key] = {
+              rows: parseInt(result.rows[0]?.cnt || '0'),
+              source: q.source,
+              sourceUrl: q.sourceUrl,
+              updateFrequency: q.frequency,
+              lastUpdate: result.rows[0]?.last_update || null,
+            };
+          } catch {
+            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null };
+          }
+        }
+
+        // DB size
+        let dbSizeMb = 0;
+        try {
+          const sizeResult = await this.services.db.query("SELECT pg_database_size(current_database()) as size_bytes");
+          dbSizeMb = Math.round(parseInt(sizeResult.rows[0]?.size_bytes || '0') / 1024 / 1024);
+        } catch { /* ignore */ }
+
+        res.json({ service: 'rada', tables, dbSizeMb, timestamp: new Date().toISOString() });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // List available tools
     this.app.get('/api/tools', requireAPIKey as any, ((_req: AuthenticatedRequest, res: Response) => {
       try {

@@ -838,122 +838,90 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.get('/data-sources', async (req: Request, res: Response) => {
     try {
-      // Backend DB sources — each wrapped in try/catch so one failing table doesn't break all
+      // ---- Backend DB sources ----
+      const backendTables: Array<{
+        id: string; name: string; rows: number;
+        source: string; sourceUrl: string;
+        updateFrequency: string; lastUpdate: string | null;
+      }> = [];
 
-      let zoMetrics = { calls_24h: 0, errors_24h: 0, last_call: null as string | null };
-      try {
-        const zoStats = await db.query(`
-          SELECT
-            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as calls_24h,
-            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND status = 'failed') as errors_24h,
-            MAX(created_at) as last_call
-          FROM cost_tracking
-          WHERE tool_name LIKE '%search_court%'
-             OR tool_name LIKE '%get_document%'
-             OR zakononline_api_calls > 0
-        `);
-        zoMetrics = {
-          calls_24h: parseInt(zoStats.rows[0]?.calls_24h || '0'),
-          errors_24h: parseInt(zoStats.rows[0]?.errors_24h || '0'),
-          last_call: zoStats.rows[0]?.last_call || null,
-        };
-      } catch (e: any) {
-        logger.warn('Failed to query ZakonOnline stats', { error: e.message });
-      }
-
-      let legMetrics = { codes_count: 0, articles_count: 0, oldest_update: null as string | null, newest_update: null as string | null };
-      try {
-        const legislationStats = await db.query(`
-          SELECT
-            (SELECT COUNT(*) FROM legislation) as codes_count,
-            (SELECT COUNT(*) FROM legislation_articles) as articles_count,
-            (SELECT MIN(updated_at) FROM legislation) as oldest_update,
-            (SELECT MAX(updated_at) FROM legislation) as newest_update
-        `);
-        legMetrics = {
-          codes_count: parseInt(legislationStats.rows[0]?.codes_count || '0'),
-          articles_count: parseInt(legislationStats.rows[0]?.articles_count || '0'),
-          oldest_update: legislationStats.rows[0]?.oldest_update || null,
-          newest_update: legislationStats.rows[0]?.newest_update || null,
-        };
-      } catch (e: any) {
-        logger.warn('Failed to query legislation stats', { error: e.message });
-      }
-
-      let dictMetrics = { loaded_domains: 0, total_entries: 0, last_update: null as string | null };
-      try {
-        const dictionaryStats = await db.query(`
-          SELECT
-            COUNT(DISTINCT domain) as loaded_domains,
-            COUNT(*) as total_entries,
-            MAX(updated_at) as last_update
-          FROM zo_dictionaries
-        `);
-        dictMetrics = {
-          loaded_domains: parseInt(dictionaryStats.rows[0]?.loaded_domains || '0'),
-          total_entries: parseInt(dictionaryStats.rows[0]?.total_entries || '0'),
-          last_update: dictionaryStats.rows[0]?.last_update || null,
-        };
-      } catch (e: any) {
-        logger.warn('Failed to query zo_dictionaries stats', { error: e.message });
-      }
-
-      const backendSources = [
-        {
-          id: 'zakononline',
-          name: 'ZakonOnline API',
-          service: 'backend',
-          metrics: zoMetrics,
-        },
-        {
-          id: 'legislation',
-          name: 'Legislation (RADA)',
-          service: 'backend',
-          metrics: legMetrics,
-        },
-        {
-          id: 'zo_dictionaries',
-          name: 'Dictionaries (ZO)',
-          service: 'backend',
-          metrics: dictMetrics,
-        },
+      const backendQueries = [
+        { id: 'documents', name: 'Документи (судові рішення)', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM documents', source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'За запитом (кеш 7 днів)' },
+        { id: 'document_sections', name: 'Секції документів', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM document_sections', source: 'SemanticSectionizer (автоматично)', sourceUrl: '', frequency: 'При завантаженні документа' },
+        { id: 'embedding_chunks', name: 'Вектори (embeddings)', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM embedding_chunks', source: 'OpenAI text-embedding-3-small', sourceUrl: 'https://platform.openai.com', frequency: 'При обробці документа' },
+        { id: 'legislation', name: 'Кодекси та закони', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM legislation', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (кеш 30 днів)' },
+        { id: 'legislation_articles', name: 'Статті законодавства', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM legislation_articles', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (get_legislation_structure)' },
+        { id: 'zo_dictionaries', name: 'Довідники ZakonOnline', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM zo_dictionaries', source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'Ручний синхр. (sync-dictionaries.ts)' },
+        { id: 'conversations', name: 'Розмови (чат)', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM conversations', source: 'Дії користувачів', sourceUrl: '', frequency: 'Реальний час' },
+        { id: 'conversation_messages', name: 'Повідомлення чату', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM conversation_messages', source: 'AI + користувачі', sourceUrl: '', frequency: 'Реальний час' },
+        { id: 'users', name: 'Користувачі', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM users', source: 'Google OAuth', sourceUrl: '', frequency: 'При реєстрації' },
+        { id: 'cost_tracking', name: 'Трекінг витрат API', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM cost_tracking', source: 'CostTracker (автоматично)', sourceUrl: '', frequency: 'Кожен API виклик' },
+        { id: 'clients', name: 'Клієнти', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM clients', source: 'Дії адміністратора', sourceUrl: '', frequency: 'При створенні' },
+        { id: 'matters', name: 'Справи', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM matters', source: 'Дії юристів', sourceUrl: '', frequency: 'При створенні' },
+        { id: 'upload_sessions', name: 'Сесії завантаження', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM upload_sessions', source: 'UploadService', sourceUrl: '', frequency: 'При завантаженні файлів' },
       ];
 
-      // External services — provide config for frontend to query health endpoints
-      const externalServices = [
-        {
-          id: 'rada',
-          name: 'RADA Server',
-          service: 'mcp_rada',
-          healthEndpoint: '/health',
-          port: 3001,
-          dataSources: [
-            { id: 'deputies', name: 'Deputies', table: 'rada.deputies' },
-            { id: 'bills', name: 'Bills', table: 'rada.bills' },
-          ],
-        },
-        {
-          id: 'openreyestr',
-          name: 'OpenReyestr Server',
-          service: 'mcp_openreyestr',
-          healthEndpoint: '/health',
-          port: 3005,
-          dataSources: [
-            { id: 'legal_entities', name: 'Legal Entities (UO)' },
-            { id: 'individual_entrepreneurs', name: 'Individual Entrepreneurs (FOP)' },
-            { id: 'public_associations', name: 'Public Associations (FSU)' },
-            { id: 'notaries', name: 'Notaries' },
-            { id: 'court_experts', name: 'Court Experts' },
-            { id: 'arbitration_courts', name: 'Arbitration Courts' },
-            { id: 'enforcement_proceedings', name: 'Enforcement Proceedings' },
-            { id: 'debtors', name: 'Debtors' },
-          ],
-        },
-      ];
+      for (const q of backendQueries) {
+        try {
+          const result = await db.query(q.query);
+          backendTables.push({
+            id: q.id, name: q.name,
+            rows: parseInt(result.rows[0]?.cnt || '0'),
+            source: q.source, sourceUrl: q.sourceUrl,
+            updateFrequency: q.frequency,
+            lastUpdate: result.rows[0]?.lu || null,
+          });
+        } catch {
+          backendTables.push({
+            id: q.id, name: q.name, rows: 0,
+            source: q.source, sourceUrl: q.sourceUrl,
+            updateFrequency: q.frequency, lastUpdate: null,
+          });
+        }
+      }
+
+      // Backend DB size
+      let backendDbSizeMb = 0;
+      try {
+        const sizeResult = await db.query("SELECT pg_database_size(current_database()) as size_bytes");
+        backendDbSizeMb = Math.round(parseInt(sizeResult.rows[0]?.size_bytes || '0') / 1024 / 1024);
+      } catch { /* ignore */ }
+
+      // ---- Fetch stats from RADA and OpenReyestr services ----
+      const radaUrl = process.env.RADA_MCP_URL || 'http://rada-mcp-app-local:3001';
+      const openreyestrUrl = process.env.OPENREYESTR_MCP_URL || 'http://openreyestr-app-local:3004';
+
+      let radaStats: any = null;
+      let openreyestrStats: any = null;
+
+      const fetchWithTimeout = async (url: string, timeoutMs = 5000) => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return await response.json();
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      try {
+        [radaStats, openreyestrStats] = await Promise.allSettled([
+          fetchWithTimeout(`${radaUrl}/api/stats`),
+          fetchWithTimeout(`${openreyestrUrl}/api/stats`),
+        ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null));
+      } catch (e: any) {
+        logger.warn('Failed to fetch external service stats', { error: e.message });
+      }
 
       res.json({
-        backendSources,
-        externalServices,
+        backend: {
+          tables: backendTables,
+          dbSizeMb: backendDbSizeMb,
+        },
+        rada: radaStats,
+        openreyestr: openreyestrStats,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
