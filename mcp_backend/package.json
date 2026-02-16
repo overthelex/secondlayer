@@ -36,7 +36,8 @@
     "seed:matters": "npm run build && node dist/scripts/seed-matter-data.js",
     "seed:matters:dev": "ts-node-dev --transpile-only src/scripts/seed-matter-data.ts",
     "backfill:decisions": "npm run build && node dist/scripts/backfill-court-decisions.js",
-    "load:debt-cases": "npm run build && node dist/scripts/load-debt-cases.js"
+    "load:debt-cases": "npm run build && node dist/scripts/load-debt-cases.js",
+    "scrape:court": "npm run build && node dist/scripts/scrape-court-registry.js"
   },
   "keywords": [
     "mcp",

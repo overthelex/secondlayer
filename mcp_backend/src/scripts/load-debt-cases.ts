@@ -11,6 +11,8 @@
  *   PAGE_SIZE   - Results per page (default: 1000)
  *   MAX_PAGES   - Max pages per keyword (default: 50)
  *   SAVE_BATCH  - Documents per saveDocumentsToDatabase call (default: 200)
+ *   START_PAGE  - Starting page number for first keyword (default: 1)
+ *   SKIP_KEYWORDS - Comma-separated keywords to skip (default: none)
  *
  * Usage:
  *   npm run load:debt-cases
@@ -47,6 +49,7 @@ async function searchKeyword(
   pageSize: number,
   maxPages: number,
   dateFrom: string,
+  startPage: number = 1,
 ): Promise<{ result: KeywordResult; docs: any[] }> {
   const result: KeywordResult = {
     keyword,
@@ -57,7 +60,7 @@ async function searchKeyword(
   };
   const collectedDocs: any[] = [];
 
-  for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+  for (let pageNum = startPage; pageNum <= maxPages; pageNum++) {
     // Check if we've hit the global cap
     if (seenIds.size >= maxDocs) {
       console.log(`  [${keyword}] Global cap reached (${seenIds.size}/${maxDocs}), stopping.`);
@@ -140,6 +143,8 @@ async function main() {
   const pageSize = parseInt(process.env.PAGE_SIZE || '1000', 10);
   const maxPages = parseInt(process.env.MAX_PAGES || '50', 10);
   const saveBatch = parseInt(process.env.SAVE_BATCH || '200', 10);
+  const startPage = parseInt(process.env.START_PAGE || '1', 10);
+  const skipKeywords = new Set((process.env.SKIP_KEYWORDS || '').split(',').map(s => s.trim()).filter(Boolean));
 
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('  Debt Collection Court Decisions Loader');
@@ -148,6 +153,7 @@ async function main() {
   console.log(`  Date from:      ${dateFrom}`);
   console.log(`  Page size:      ${pageSize}`);
   console.log(`  Max pages/kw:   ${maxPages}`);
+  console.log(`  Start page:     ${startPage}`);
   console.log(`  Save batch:     ${saveBatch}`);
   console.log(`  Dry run:        ${dryRun}`);
   console.log(`  Keywords:       ${KEYWORDS.join(', ')}`);
@@ -180,9 +186,15 @@ async function main() {
         break;
       }
 
+      if (skipKeywords.has(keyword)) {
+        console.log(`\nSkipping: "${keyword}" (SKIP_KEYWORDS)`);
+        continue;
+      }
+
       console.log(`\nSearching: "${keyword}"`);
+      const kwStartPage = (keywordResults.length === 0) ? startPage : 1;
       const { result, docs } = await searchKeyword(
-        zoAdapter, keyword, seenIds, maxDocs, pageSize, maxPages, dateFrom
+        zoAdapter, keyword, seenIds, maxDocs, pageSize, maxPages, dateFrom, kwStartPage
       );
       keywordResults.push(result);
       allDocs.push(...docs);
