@@ -414,8 +414,9 @@ export class ChatService {
 
     const lowerQuery = query.toLowerCase();
 
-    // Deep-analysis keyword patterns (Ukrainian legal domain)
+    // Deep-analysis keyword patterns (Ukrainian + Russian legal domain)
     const deepPatterns = [
+      // Ukrainian
       'проаналізу',
       'аналіз справ',
       'комплексний',
@@ -430,6 +431,29 @@ export class ChatService {
       'позовн',
       'обґрунтуван',
       'мотивувальн',
+      // Russian equivalents
+      'проанализ',
+      'анализ дел',
+      'комплексн',
+      'сравни',
+      'резолютивн',
+      'правовая позиция',
+      'вывод',
+      'формулиров',
+      'формирован',
+      'проверк',
+      'исковы',
+      'обоснован',
+      'мотивировочн',
+      // Common cross-language patterns
+      'інстанці',
+      'инстанци',
+      'велика палата',
+      'большая палата',
+      'касаці',
+      'кассаци',
+      'хронолог',
+      'доказов',
     ];
 
     const complexScenarios = [
@@ -438,10 +462,19 @@ export class ChatService {
       'due_diligence_check',
     ];
 
-    // Rule 1: Long query + multi-domain or legal_advice domain
+    // Rule 1: Multi-domain with legal_advice → always deep (complex analytical query)
     const isMultiDomain = classification.domains.length >= 2;
     const hasLegalAdvice = classification.domains.includes('legal_advice');
-    if (query.length > 150 && (isMultiDomain || hasLegalAdvice)) {
+    if (isMultiDomain && hasLegalAdvice) {
+      logger.info('[ChatService] Budget escalated: multi-domain + legal_advice', {
+        queryLength: query.length,
+        domains: classification.domains,
+      });
+      return 'deep';
+    }
+
+    // Rule 1b: Long query + multi-domain or legal_advice
+    if (query.length > 80 && (isMultiDomain || hasLegalAdvice)) {
       logger.info('[ChatService] Budget escalated: long query + complex domains', {
         queryLength: query.length,
         domains: classification.domains,
