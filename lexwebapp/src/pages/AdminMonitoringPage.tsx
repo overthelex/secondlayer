@@ -1,9 +1,10 @@
 /**
  * Admin Monitoring Page
  * Dashboard showing volume, source, and update frequency of all data sources
+ * Loads each section independently for progressive rendering
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Activity,
   Database,
@@ -29,23 +30,23 @@ interface TableInfo {
   lastUpdate: string | null;
 }
 
-interface ServiceStats {
-  service: string;
-  tables: Record<string, TableInfo>;
-  dbSizeMb: number;
-  registryMeta?: any[];
-  recentImports?: any[];
-  timestamp: string;
+interface SectionState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
 }
 
-interface DataSourcesResponse {
-  backend: {
-    tables: TableInfo[];
-    dbSizeMb: number;
-  };
-  rada: ServiceStats | null;
-  openreyestr: ServiceStats | null;
-  timestamp: string;
+interface BackendData {
+  tables: TableInfo[];
+  dbSizeMb: number;
+}
+
+interface ServiceData {
+  service: string;
+  tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }>;
+  dbSizeMb: number;
+  recentImports?: any[];
+  error?: string;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -74,17 +75,30 @@ function ServiceStatusBadge({ available }: { available: boolean }) {
   );
 }
 
-function DataTable({ tables, title }: { tables: TableInfo[]; title?: string }) {
-  const totalRows = tables.reduce((s, t) => s + t.rows, 0);
+function SectionLoader() {
+  return (
+    <div className="bg-white rounded-xl border border-claude-border p-8 flex items-center justify-center">
+      <RefreshCw size={18} className="text-claude-subtext animate-spin mr-2" />
+      <span className="text-sm text-claude-subtext">Завантаження...</span>
+    </div>
+  );
+}
 
+function SectionError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="bg-white rounded-xl border border-claude-border p-6 text-center">
+      <XCircle size={20} className="mx-auto mb-2 text-red-400" />
+      <p className="text-sm text-red-600 mb-3">{message}</p>
+      <button onClick={onRetry} className="text-xs px-3 py-1.5 border border-claude-border rounded-lg hover:bg-gray-50 transition-colors">
+        Повторити
+      </button>
+    </div>
+  );
+}
+
+function DataTable({ tables }: { tables: TableInfo[] }) {
   return (
     <div className="bg-white rounded-xl border border-claude-border shadow-sm overflow-hidden">
-      {title && (
-        <div className="px-4 py-3 border-b border-claude-border/50 bg-gray-50/50 flex items-center justify-between">
-          <span className="text-sm font-medium text-claude-text">{title}</span>
-          <span className="text-xs text-claude-subtext">{formatNumber(totalRows)} записів</span>
-        </div>
-      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -112,12 +126,7 @@ function DataTable({ tables, title }: { tables: TableInfo[]; title?: string }) {
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-claude-text">{t.source}</span>
                     {t.sourceUrl && (
-                      <a
-                        href={t.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-500 hover:text-blue-700"
-                      >
+                      <a href={t.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
                         <ExternalLink size={10} />
                       </a>
                     )}
@@ -139,82 +148,109 @@ function DataTable({ tables, title }: { tables: TableInfo[]; title?: string }) {
   );
 }
 
+function toTableInfoArray(tables: Record<string, any>): TableInfo[] {
+  return Object.entries(tables).map(([id, t]) => ({
+    id,
+    name: t.source?.split('—')[1]?.trim() || id,
+    rows: t.rows || 0,
+    source: t.source || '',
+    sourceUrl: t.sourceUrl || '',
+    updateFrequency: t.updateFrequency || '',
+    lastUpdate: t.lastUpdate || null,
+  }));
+}
+
+function SummaryCard({
+  icon: Icon, label, value, sub, status, loading: isLoading,
+}: {
+  icon: React.ElementType; label: string; value: string; sub: string;
+  status?: 'online' | 'offline' | 'loading'; loading?: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-claude-border p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div className="p-2 bg-claude-bg rounded-lg">
+          <Icon size={16} className="text-claude-text" />
+        </div>
+        {status === 'loading' || isLoading ? (
+          <RefreshCw size={10} className="text-claude-subtext animate-spin" />
+        ) : status ? (
+          <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-green-500' : 'bg-red-400'}`} />
+        ) : null}
+      </div>
+      <div className="text-xl font-semibold text-claude-text font-mono">
+        {isLoading ? <span className="text-claude-subtext text-base">...</span> : value}
+      </div>
+      <div className="text-xs text-claude-subtext mt-0.5">{label}</div>
+      <div className="text-[10px] text-claude-subtext/70 mt-1">{sub}</div>
+    </div>
+  );
+}
+
 export function AdminMonitoringPage() {
-  const [data, setData] = useState<DataSourcesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [backend, setBackend] = useState<SectionState<BackendData>>({ data: null, loading: true, error: null });
+  const [rada, setRada] = useState<SectionState<ServiceData>>({ data: null, loading: true, error: null });
+  const [openreyestr, setOpenreyestr] = useState<SectionState<ServiceData>>({ data: null, loading: true, error: null });
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+  const fetchBackend = useCallback(async () => {
+    setBackend(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const response = await api.admin.getDataSources();
-      setData(response.data);
+      const res = await api.admin.getDataSources('backend');
+      setBackend({ data: res.data, loading: false, error: null });
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Failed to fetch data sources');
-    } finally {
-      setLoading(false);
+      setBackend(prev => ({ ...prev, loading: false, error: err.response?.data?.error || err.message }));
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
 
-  if (loading && !data) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw size={32} className="text-claude-subtext animate-spin" />
-          <p className="text-claude-subtext">Завантаження даних...</p>
-        </div>
-      </div>
-    );
-  }
+  const fetchRada = useCallback(async () => {
+    setRada(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const res = await api.admin.getDataSources('rada');
+      const d = res.data;
+      if (d.error && Object.keys(d.tables || {}).length === 0) {
+        setRada({ data: null, loading: false, error: d.error });
+      } else {
+        setRada({ data: d, loading: false, error: null });
+      }
+    } catch (err: any) {
+      setRada(prev => ({ ...prev, loading: false, error: err.response?.data?.error || err.message }));
+    }
+  }, []);
 
-  if (error && !data) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <XCircle size={32} className="text-red-500" />
-          <p className="text-red-600">{error}</p>
-          <button onClick={fetchData} className="px-4 py-2 bg-claude-text text-white rounded-lg text-sm">
-            Повторити
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const fetchOpenreyestr = useCallback(async () => {
+    setOpenreyestr(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const res = await api.admin.getDataSources('openreyestr');
+      const d = res.data;
+      if (d.error && Object.keys(d.tables || {}).length === 0) {
+        setOpenreyestr({ data: null, loading: false, error: d.error });
+      } else {
+        setOpenreyestr({ data: d, loading: false, error: null });
+      }
+    } catch (err: any) {
+      setOpenreyestr(prev => ({ ...prev, loading: false, error: err.response?.data?.error || err.message }));
+    }
+  }, []);
 
-  // Convert rada/openreyestr table records to TableInfo[]
-  const radaTables: TableInfo[] = data?.rada?.tables
-    ? Object.entries(data.rada.tables).map(([id, t]: [string, any]) => ({
-        id,
-        name: t.source?.split('—')[1]?.trim() || id,
-        rows: t.rows || 0,
-        source: t.source || '',
-        sourceUrl: t.sourceUrl || '',
-        updateFrequency: t.updateFrequency || '',
-        lastUpdate: t.lastUpdate || null,
-      }))
-    : [];
+  const fetchAll = useCallback(() => {
+    fetchBackend();
+    fetchRada();
+    fetchOpenreyestr();
+  }, [fetchBackend, fetchRada, fetchOpenreyestr]);
 
-  const openreyestrTables: TableInfo[] = data?.openreyestr?.tables
-    ? Object.entries(data.openreyestr.tables).map(([id, t]: [string, any]) => ({
-        id,
-        name: t.source?.split('—')[1]?.trim() || id,
-        rows: t.rows || 0,
-        source: t.source || '',
-        sourceUrl: t.sourceUrl || '',
-        updateFrequency: t.updateFrequency || '',
-        lastUpdate: t.lastUpdate || null,
-      }))
-    : [];
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
-  const backendTotalRows = data?.backend?.tables?.reduce((s, t) => s + t.rows, 0) || 0;
-  const radaTotalRows = radaTables.reduce((s, t) => s + t.rows, 0);
-  const openreyestrTotalRows = openreyestrTables.reduce((s, t) => s + t.rows, 0);
-  const totalRows = backendTotalRows + radaTotalRows + openreyestrTotalRows;
+  const anyLoading = backend.loading || rada.loading || openreyestr.loading;
+
+  const backendRows = backend.data?.tables?.reduce((s, t) => s + t.rows, 0) || 0;
+  const radaTables = rada.data ? toTableInfoArray(rada.data.tables) : [];
+  const radaRows = radaTables.reduce((s, t) => s + t.rows, 0);
+  const orTables = openreyestr.data ? toTableInfoArray(openreyestr.data.tables) : [];
+  const orRows = orTables.reduce((s, t) => s + t.rows, 0);
+  const totalRows = backendRows + radaRows + orRows;
+  const totalTables = (backend.data?.tables?.length || 0) + radaTables.length + orTables.length;
 
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -222,16 +258,13 @@ export function AdminMonitoringPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-claude-text font-sans">Моніторинг джерел даних</h1>
-          <p className="text-sm text-claude-subtext mt-1">
-            Оновлено: {data?.timestamp ? formatDate(data.timestamp) : '—'}
-          </p>
         </div>
         <button
-          onClick={fetchData}
-          disabled={loading}
+          onClick={fetchAll}
+          disabled={anyLoading}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={anyLoading ? 'animate-spin' : ''} />
           Оновити
         </button>
       </div>
@@ -242,28 +275,29 @@ export function AdminMonitoringPage() {
           icon={Layers}
           label="Всього записів"
           value={formatNumber(totalRows)}
-          sub={`${(data?.backend?.tables?.length || 0) + radaTables.length + openreyestrTables.length} таблиць`}
+          sub={`${totalTables} таблиць`}
+          loading={anyLoading && totalRows === 0}
         />
         <SummaryCard
           icon={HardDrive}
           label="Backend DB"
-          value={`${data?.backend?.dbSizeMb || 0} MB`}
-          sub={`${formatNumber(backendTotalRows)} записів`}
-          status="online"
+          value={`${backend.data?.dbSizeMb || 0} MB`}
+          sub={`${formatNumber(backendRows)} записів`}
+          status={backend.loading ? 'loading' : 'online'}
         />
         <SummaryCard
           icon={Server}
           label="RADA DB"
-          value={data?.rada ? `${data.rada.dbSizeMb || 0} MB` : '—'}
-          sub={data?.rada ? `${formatNumber(radaTotalRows)} записів` : 'Недоступний'}
-          status={data?.rada ? 'online' : 'offline'}
+          value={rada.data ? `${rada.data.dbSizeMb || 0} MB` : '—'}
+          sub={rada.loading ? 'Завантаження...' : rada.data ? `${formatNumber(radaRows)} записів` : 'Недоступний'}
+          status={rada.loading ? 'loading' : rada.data ? 'online' : 'offline'}
         />
         <SummaryCard
           icon={Database}
           label="OpenReyestr DB"
-          value={data?.openreyestr ? `${data.openreyestr.dbSizeMb || 0} MB` : '—'}
-          sub={data?.openreyestr ? `${formatNumber(openreyestrTotalRows)} записів` : 'Недоступний'}
-          status={data?.openreyestr ? 'online' : 'offline'}
+          value={openreyestr.data ? `${openreyestr.data.dbSizeMb || 0} MB` : '—'}
+          sub={openreyestr.loading ? 'Завантаження...' : openreyestr.data ? `${formatNumber(orRows)} записів` : 'Недоступний'}
+          status={openreyestr.loading ? 'loading' : openreyestr.data ? 'online' : 'offline'}
         />
       </div>
 
@@ -273,15 +307,21 @@ export function AdminMonitoringPage() {
           <div className="flex items-center gap-2">
             <Activity size={18} className="text-claude-subtext" />
             <h2 className="text-lg font-semibold text-claude-text font-sans">Backend (mcp_backend)</h2>
-            <ServiceStatusBadge available={true} />
+            {!backend.loading && <ServiceStatusBadge available={!backend.error} />}
           </div>
-          <span className="text-xs text-claude-subtext bg-claude-bg px-2 py-1 rounded-full">
-            PostgreSQL :5432 · {data?.backend?.dbSizeMb || 0} MB
-          </span>
+          {backend.data && (
+            <span className="text-xs text-claude-subtext bg-claude-bg px-2 py-1 rounded-full">
+              PostgreSQL :5432 · {backend.data.dbSizeMb} MB
+            </span>
+          )}
         </div>
-        {data?.backend?.tables && data.backend.tables.length > 0 && (
-          <DataTable tables={data.backend.tables} />
-        )}
+        {backend.loading ? (
+          <SectionLoader />
+        ) : backend.error ? (
+          <SectionError message={backend.error} onRetry={fetchBackend} />
+        ) : backend.data ? (
+          <DataTable tables={backend.data.tables} />
+        ) : null}
       </section>
 
       {/* RADA Sources */}
@@ -290,20 +330,24 @@ export function AdminMonitoringPage() {
           <div className="flex items-center gap-2">
             <Server size={18} className="text-claude-subtext" />
             <h2 className="text-lg font-semibold text-claude-text font-sans">RADA Server (mcp_rada)</h2>
-            <ServiceStatusBadge available={!!data?.rada} />
+            {!rada.loading && <ServiceStatusBadge available={!!rada.data} />}
           </div>
-          {data?.rada && (
+          {rada.data && (
             <span className="text-xs text-claude-subtext bg-claude-bg px-2 py-1 rounded-full">
-              PostgreSQL :5433 · {data.rada.dbSizeMb} MB
+              PostgreSQL :5433 · {rada.data.dbSizeMb} MB
             </span>
           )}
         </div>
-        {radaTables.length > 0 ? (
+        {rada.loading ? (
+          <SectionLoader />
+        ) : rada.error ? (
+          <SectionError message={rada.error} onRetry={fetchRada} />
+        ) : radaTables.length > 0 ? (
           <DataTable tables={radaTables} />
         ) : (
           <div className="bg-white rounded-xl border border-claude-border p-8 text-center">
             <AlertTriangle size={24} className="mx-auto mb-2 text-yellow-500" />
-            <p className="text-sm text-claude-subtext">RADA сервер недоступний або не повертає статистику</p>
+            <p className="text-sm text-claude-subtext">RADA сервер не повертає статистику</p>
           </div>
         )}
       </section>
@@ -314,26 +358,30 @@ export function AdminMonitoringPage() {
           <div className="flex items-center gap-2">
             <Database size={18} className="text-claude-subtext" />
             <h2 className="text-lg font-semibold text-claude-text font-sans">OpenReyestr Server (mcp_openreyestr)</h2>
-            <ServiceStatusBadge available={!!data?.openreyestr} />
+            {!openreyestr.loading && <ServiceStatusBadge available={!!openreyestr.data} />}
           </div>
-          {data?.openreyestr && (
+          {openreyestr.data && (
             <span className="text-xs text-claude-subtext bg-claude-bg px-2 py-1 rounded-full">
-              PostgreSQL :5435 · {data.openreyestr.dbSizeMb} MB
+              PostgreSQL :5435 · {openreyestr.data.dbSizeMb} MB
             </span>
           )}
         </div>
-        {openreyestrTables.length > 0 ? (
-          <DataTable tables={openreyestrTables} />
+        {openreyestr.loading ? (
+          <SectionLoader />
+        ) : openreyestr.error ? (
+          <SectionError message={openreyestr.error} onRetry={fetchOpenreyestr} />
+        ) : orTables.length > 0 ? (
+          <DataTable tables={orTables} />
         ) : (
           <div className="bg-white rounded-xl border border-claude-border p-8 text-center">
             <AlertTriangle size={24} className="mx-auto mb-2 text-yellow-500" />
-            <p className="text-sm text-claude-subtext">OpenReyestr сервер недоступний або не повертає статистику</p>
+            <p className="text-sm text-claude-subtext">OpenReyestr сервер не повертає статистику</p>
           </div>
         )}
       </section>
 
       {/* Recent Imports (OpenReyestr) */}
-      {data?.openreyestr?.recentImports && data.openreyestr.recentImports.length > 0 && (
+      {openreyestr.data?.recentImports && openreyestr.data.recentImports.length > 0 && (
         <section className="mb-8">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-claude-subtext" />
@@ -352,7 +400,7 @@ export function AdminMonitoringPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.openreyestr.recentImports.map((imp: any, i: number) => (
+                  {openreyestr.data.recentImports.map((imp: any, i: number) => (
                     <tr key={i} className="border-b border-claude-border/30 hover:bg-gray-50/50">
                       <td className="px-4 py-2.5 text-xs font-medium text-claude-text">{imp.registry_name}</td>
                       <td className="px-4 py-2.5">
@@ -377,36 +425,6 @@ export function AdminMonitoringPage() {
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function SummaryCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  status,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  sub: string;
-  status?: 'online' | 'offline';
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-claude-border p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <div className="p-2 bg-claude-bg rounded-lg">
-          <Icon size={16} className="text-claude-text" />
-        </div>
-        {status && (
-          <div className={`w-2 h-2 rounded-full ${status === 'online' ? 'bg-green-500' : 'bg-red-400'}`} />
-        )}
-      </div>
-      <div className="text-xl font-semibold text-claude-text font-mono">{value}</div>
-      <div className="text-xs text-claude-subtext mt-0.5">{label}</div>
-      <div className="text-[10px] text-claude-subtext/70 mt-1">{sub}</div>
     </div>
   );
 }

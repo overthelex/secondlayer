@@ -215,7 +215,8 @@ export const api = {
 
   // Admin
   admin: {
-    getDataSources: () => apiClient.get('/api/admin/data-sources'),
+    getDataSources: (section?: string) =>
+      apiClient.get('/api/admin/data-sources', { params: section ? { section } : undefined }),
     getOverview: () => apiClient.get('/api/admin/stats/overview'),
     getRevenueChart: (days: number = 30) =>
       apiClient.get(`/api/admin/stats/revenue-chart?days=${days}`),
