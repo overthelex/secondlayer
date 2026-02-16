@@ -154,6 +154,8 @@ class HTTPOpenReyestrServer {
           { key: 'special_forms', table: 'special_forms', source: 'НАІС — Спец. бланки нотаріусів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
           { key: 'forensic_methods', table: 'forensic_methods', source: 'НАІС — Методики судових експертиз', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
           { key: 'legal_acts', table: 'legal_acts', source: 'НАІС — Нормативно-правові акти', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'administrative_units', table: 'administrative_units', source: 'НАІС — Адміністративно-територіальний устрій', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
+          { key: 'streets', table: 'streets', source: 'НАІС — Вулиці населених пунктів', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щотижня (імпорт XML)' },
         ];
 
         for (const q of queries) {
