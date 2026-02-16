@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { DecisionCard, Decision } from './DecisionCard';
 import { AnalyticsBlock } from './AnalyticsBlock';
 import { ThinkingSteps } from './ThinkingSteps';
+import { DocumentTemplate } from './DocumentTemplate';
 import showToast from '../utils/toast';
 
 export type MessageRole = 'user' | 'assistant';
@@ -224,13 +225,22 @@ export function Message({
                     hr: () => (
                       <hr className="my-4 border-claude-border" />
                     ),
-                    pre: ({ children }) => (
-                      <pre className="bg-claude-sidebar border border-claude-border rounded-lg my-3 p-4 overflow-x-auto text-claude-text text-[13px]">{children}</pre>
-                    ),
+                    pre: ({ children }) => {
+                      // Check if this pre contains a document code block
+                      const child = React.Children.toArray(children)[0] as React.ReactElement;
+                      if (child?.props?.className?.includes('language-document')) {
+                        // Render as DocumentTemplate — extract text content
+                        const text = String(child.props.children || '').replace(/\n$/, '');
+                        return <DocumentTemplate content={text} />;
+                      }
+                      return (
+                        <pre className="bg-claude-sidebar border border-claude-border rounded-lg my-3 p-4 overflow-x-auto text-claude-text text-[13px]">{children}</pre>
+                      );
+                    },
                     code: ({ className, children, ...props }) => {
                       const isBlock = className?.includes('language-');
                       if (isBlock) {
-                        return <code className="font-mono text-claude-text" {...props}>{children}</code>;
+                        return <code className={`font-mono text-claude-text ${className || ''}`} {...props}>{children}</code>;
                       }
                       return (
                         <code className="text-[13px] bg-claude-bg px-1.5 py-0.5 rounded border border-claude-border font-mono text-claude-text" {...props}>
