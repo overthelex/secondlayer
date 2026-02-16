@@ -191,6 +191,7 @@ services:
       # ZakonOnline API
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-local-dev-zo-token}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+      ZAKONONLINE_TOKEN_STRATEGY: round_robin
 
       # Security (relaxed for local dev)
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}

@@ -943,39 +943,45 @@ export class ZOAdapter {
       return cached;
     }
 
-    // Primary: try API endpoint
-    try {
-      const apiDoc = await this.getDocumentByNumber(docId);
-      if (apiDoc) {
-        const text = apiDoc.full_text || apiDoc.text || apiDoc.content || '';
-        if (text.length > 100) {
-          const result = {
-            html: apiDoc.full_text_html || apiDoc.html || text,
-            text: text,
-            case_number: apiDoc.cause_num || apiDoc.case_number || undefined,
-          };
+    // FULLTEXT_STRATEGY=scrape_only skips the useless API call (never returns text)
+    // and goes straight to HTML scraping — doubles throughput for bulk loads
+    const scrapeOnly = (process.env.FULLTEXT_STRATEGY || '').toLowerCase() === 'scrape_only';
 
-          await this.setCache(cacheKey, result, 7 * 24 * 3600);
-          await this.trackSecondLayerUsage('api_fulltext', docId, false);
+    if (!scrapeOnly) {
+      // Primary: try API endpoint
+      try {
+        const apiDoc = await this.getDocumentByNumber(docId);
+        if (apiDoc) {
+          const text = apiDoc.full_text || apiDoc.text || apiDoc.content || '';
+          if (text.length > 100) {
+            const result = {
+              html: apiDoc.full_text_html || apiDoc.html || text,
+              text: text,
+              case_number: apiDoc.cause_num || apiDoc.case_number || undefined,
+            };
 
-          this.enqueueDocumentsForPersistence([
-            {
-              doc_id: docId,
-              full_text: result.text,
-              full_text_html: result.html,
-              case_number: result.case_number,
-            },
-          ]);
+            await this.setCache(cacheKey, result, 7 * 24 * 3600);
+            await this.trackSecondLayerUsage('api_fulltext', docId, false);
 
-          logger.info('Got full text via API endpoint', { docId, textLength: text.length });
-          return result;
+            this.enqueueDocumentsForPersistence([
+              {
+                doc_id: docId,
+                full_text: result.text,
+                full_text_html: result.html,
+                case_number: result.case_number,
+              },
+            ]);
+
+            logger.info('Got full text via API endpoint', { docId, textLength: text.length });
+            return result;
+          }
         }
+      } catch (error: any) {
+        logger.warn(`API full text failed for ${docId}, falling back to HTML scraping:`, error?.message);
       }
-    } catch (error: any) {
-      logger.warn(`API full text failed for ${docId}, falling back to HTML scraping:`, error?.message);
     }
 
-    // Fallback: HTML scraping
+    // HTML scraping (primary when scrape_only, fallback otherwise)
     try {
       const url = `https://zakononline.ua/court-decisions/show/${docId}`;
 
