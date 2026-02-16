@@ -41,7 +41,8 @@
     "scrape:court:civil-property": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='визнати право власності нерухоме майно' MAX_DOCS=500 npm run scrape:court",
     "scrape:court:civil-vindication": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='витребувати майно чужого незаконного володіння' MAX_DOCS=500 npm run scrape:court",
     "scrape:court:civil-registration": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='скасувати державну реєстрацію права нерухоме' MAX_DOCS=500 npm run scrape:court",
-    "scrape:court:civil-contracts": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='недійсність договору купівлі-продажу нерухомого майна' MAX_DOCS=500 npm run scrape:court"
+    "scrape:court:civil-contracts": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='недійсність договору купівлі-продажу нерухомого майна' MAX_DOCS=500 npm run scrape:court",
+    "load:civil-cases": "npm run build && node dist/scripts/load-civil-property-cases.js"
   },
   "keywords": [
     "mcp",
