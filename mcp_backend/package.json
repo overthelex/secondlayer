@@ -37,7 +37,11 @@
     "seed:matters:dev": "ts-node-dev --transpile-only src/scripts/seed-matter-data.ts",
     "backfill:decisions": "npm run build && node dist/scripts/backfill-court-decisions.js",
     "load:debt-cases": "npm run build && node dist/scripts/load-debt-cases.js",
-    "scrape:court": "npm run build && node dist/scripts/scrape-court-registry.js"
+    "scrape:court": "npm run build && node dist/scripts/scrape-court-registry.js",
+    "scrape:court:civil-property": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='визнати право власності нерухоме майно' MAX_DOCS=500 npm run scrape:court",
+    "scrape:court:civil-vindication": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='витребувати майно чужого незаконного володіння' MAX_DOCS=500 npm run scrape:court",
+    "scrape:court:civil-registration": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='скасувати державну реєстрацію права нерухоме' MAX_DOCS=500 npm run scrape:court",
+    "scrape:court:civil-contracts": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='недійсність договору купівлі-продажу нерухомого майна' MAX_DOCS=500 npm run scrape:court"
   },
   "keywords": [
     "mcp",

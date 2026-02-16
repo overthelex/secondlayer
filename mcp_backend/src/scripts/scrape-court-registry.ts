@@ -2,8 +2,8 @@
  * Scrape Court Decisions from reyestr.court.gov.ua
  *
  * Opens the Ukrainian court registry in a headed browser, fills the search form
- * (Цивільне + Рішення), navigates paginated results, and downloads each
- * decision's print-version HTML to disk.
+ * with configurable justice kind, document form, and search text, then navigates
+ * paginated results and downloads each decision's print-version HTML to disk.
  *
  * After downloading, each document is processed through the DB pipeline:
  *   HTML → text extraction → save to documents table → section extraction →
@@ -19,11 +19,19 @@
  *   CONCURRENCY       - Parallel processing threads (default: 10)
  *   SKIP_EMBEDDINGS   - If "true", save to DB but skip embedding step
  *   PROCESS_ONLY      - If "true", skip scraping and process existing HTML files
+ *   JUSTICE_KIND      - Justice kind to search (default: "Цивільне")
+ *                       Options: Цивільне, Господарське, Адміністративне, Кримінальне
+ *   JUSTICE_KIND_ID   - Numeric ID for metadata grouping (default: "1")
+ *                       1=Цивільне, 2=Господарське, 3=Адміністративне, 4=Кримінальне
+ *   DOC_FORM          - Document form to search (default: "Рішення")
+ *   SEARCH_TEXT       - Text to search in decisions (optional, fills the text field)
+ *   DATE_FROM         - Start date dd.mm.yyyy (default: "01.01.2010")
  *
  * Usage:
  *   npm run scrape:court
  *   MAX_DOCS=10 npm run scrape:court
  *   PROCESS_ONLY=true CONCURRENCY=5 npm run scrape:court
+ *   JUSTICE_KIND=Цивільне SEARCH_TEXT="витребувати майно" MAX_DOCS=2000 npm run scrape:court
  */
 
 import { chromium, type Page } from 'playwright';
@@ -45,6 +53,11 @@ const DELAY_MS = parseInt(process.env.DELAY_MS || '2000', 10);
 const CONCURRENCY = parseInt(process.env.CONCURRENCY || '10', 10);
 const SKIP_EMBEDDINGS = process.env.SKIP_EMBEDDINGS === 'true';
 const PROCESS_ONLY = process.env.PROCESS_ONLY === 'true';
+const JUSTICE_KIND = process.env.JUSTICE_KIND || 'Цивільне';
+const JUSTICE_KIND_ID = process.env.JUSTICE_KIND_ID || '1';
+const DOC_FORM = process.env.DOC_FORM || 'Рішення';
+const SEARCH_TEXT = process.env.SEARCH_TEXT || '';
+const DATE_FROM = process.env.DATE_FROM || '01.01.2010';
 const BASE_URL = 'https://reyestr.court.gov.ua/';
 
 // Processing stats
@@ -194,6 +207,8 @@ async function processDocument(
       metadata: {
         source: 'reyestr.court.gov.ua',
         registry_id: docId,
+        justice_kind: JUSTICE_KIND_ID,
+        search_text: SEARCH_TEXT || undefined,
         scraped_at: new Date().toISOString(),
       },
     };
@@ -344,25 +359,50 @@ async function clickMultiSelectOption(page: Page, labelText: string): Promise<bo
 
 async function fillSearchForm(page: Page): Promise<void> {
   console.log('Filling search form...');
+  console.log(`  Justice kind: ${JUSTICE_KIND} (id=${JUSTICE_KIND_ID})`);
+  console.log(`  Document form: ${DOC_FORM}`);
+  if (SEARCH_TEXT) console.log(`  Search text: "${SEARCH_TEXT}"`);
 
   await page.waitForSelector('select', { timeout: 10000 });
   await sleep(1000);
 
-  await clickMultiSelectOption(page, 'Цивільне');
+  // Select justice kind (Цивільне, Господарське, etc.)
+  await clickMultiSelectOption(page, JUSTICE_KIND);
   await sleep(500);
 
-  await clickMultiSelectOption(page, 'Рішення');
+  // Select document form (Рішення, Ухвала, etc.)
+  await clickMultiSelectOption(page, DOC_FORM);
   await sleep(500);
 
+  // Fill search text if provided (searches in decision text)
+  if (SEARCH_TEXT) {
+    const textInput = page.locator('input[name="SearchExpression"], textarea[name="SearchExpression"]');
+    if (await textInput.count() > 0) {
+      await textInput.first().fill(SEARCH_TEXT);
+      console.log(`  Set search text: "${SEARCH_TEXT}"`);
+    } else {
+      // Fallback: try any large text input
+      const fallbackInput = page.locator('textarea, input[type="text"][name*="text" i], input[type="text"][name*="search" i]');
+      if (await fallbackInput.count() > 0) {
+        await fallbackInput.first().fill(SEARCH_TEXT);
+        console.log(`  Set search text (fallback): "${SEARCH_TEXT}"`);
+      } else {
+        console.log('  WARNING: Could not find text search input');
+      }
+    }
+    await sleep(500);
+  }
+
+  // Set date from
   const dateFrom = page.locator('input[name="DateFrom"]');
   if (await dateFrom.count() > 0) {
-    await dateFrom.fill('01.01.2010');
-    console.log('  Set date from: 01.01.2010');
+    await dateFrom.fill(DATE_FROM);
+    console.log(`  Set date from: ${DATE_FROM}`);
   } else {
     const dateInputs = page.locator('input[type="text"][id*="date" i], input[type="text"][name*="date" i], input[type="text"][placeholder*="дд.мм.рррр"]');
     if (await dateInputs.count() > 0) {
-      await dateInputs.first().fill('01.01.2010');
-      console.log('  Set date from: 01.01.2010 (fallback)');
+      await dateInputs.first().fill(DATE_FROM);
+      console.log(`  Set date from: ${DATE_FROM} (fallback)`);
     }
   }
   await sleep(500);
@@ -516,6 +556,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('  Court Registry Scraper + DB Pipeline');
   console.log('═══════════════════════════════════════════════════════════════');
+  console.log(`  Justice kind:     ${JUSTICE_KIND} (id=${JUSTICE_KIND_ID})`);
+  console.log(`  Document form:    ${DOC_FORM}`);
+  console.log(`  Search text:      ${SEARCH_TEXT || '(none)'}`);
+  console.log(`  Date from:        ${DATE_FROM}`);
   console.log(`  Max documents:    ${MAX_DOCS === Infinity ? 'unlimited' : MAX_DOCS}`);
   console.log(`  Max pages:        ${MAX_PAGES}`);
   console.log(`  Download dir:     ${DOWNLOAD_DIR}`);
