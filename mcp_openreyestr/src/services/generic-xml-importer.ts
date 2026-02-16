@@ -9,6 +9,7 @@ import { Pool, PoolClient } from 'pg';
 import { XMLParser } from 'fast-xml-parser';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
+import { Transform } from 'stream';
 // @ts-ignore - no type declarations for sax
 import sax from 'sax';
 import iconv from 'iconv-lite';
@@ -274,15 +275,30 @@ async function importXmlStreaming(
       reject(err);
     });
 
+    // Strip control characters (like \x1A EOF marker) that break SAX parsing
+    const sanitizer = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        // Replace \x1A (SUB/EOF) and other invalid XML control chars with space
+        const buf = Buffer.from(chunk);
+        for (let i = 0; i < buf.length; i++) {
+          const b = buf[i];
+          if (b < 0x20 && b !== 0x09 && b !== 0x0A && b !== 0x0D) {
+            buf[i] = 0x20; // replace with space
+          }
+        }
+        callback(null, buf);
+      }
+    });
+
     if (config.encoding !== 'utf-8') {
       const decoder = iconv.decodeStream(config.encoding);
       decoder.on('error', (err: Error) => {
         console.error('  Decoder stream error:', err.message);
         reject(err);
       });
-      fileStream.pipe(decoder).pipe(saxStream);
+      fileStream.pipe(decoder).pipe(sanitizer).pipe(saxStream);
     } else {
-      fileStream.pipe(saxStream);
+      fileStream.pipe(sanitizer).pipe(saxStream);
     }
   });
 }

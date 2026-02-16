@@ -438,6 +438,14 @@ async function main() {
     database: process.env.POSTGRES_DB || 'openreyestr',
   });
 
+  // Clean up stale in_progress entries from previous crashed runs
+  const staleResult = await pool.query(
+    `UPDATE import_log SET status='failed', import_completed_at=CURRENT_TIMESTAMP, error_message='Process crashed/interrupted (cleaned up on next run)' WHERE status='in_progress' AND import_started_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes'`
+  );
+  if (staleResult.rowCount && staleResult.rowCount > 0) {
+    console.log(`Cleaned up ${staleResult.rowCount} stale in_progress entries`);
+  }
+
   // Determine which registries to sync
   let registriesToSync: RegistryConfig[] = Object.values(REGISTRIES);
 
