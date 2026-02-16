@@ -48,7 +48,15 @@ export class ModelSelector {
       return { provider: 'openai', model: this.SINGLE_MODEL, budget };
     }
 
-    const provider = preferredProvider || this.selectProvider();
+    let provider = preferredProvider || this.selectProvider();
+
+    // anthropic-deep: override to Anthropic for deep budget if available
+    if (this.PROVIDER_STRATEGY === 'anthropic-deep' && budget === 'deep' && !preferredProvider) {
+      const available = this.getAvailableProviders();
+      if (available.includes('anthropic')) {
+        provider = 'anthropic';
+      }
+    }
 
     const selection: ModelSelection = {
       provider,
@@ -66,6 +74,9 @@ export class ModelSelector {
         return this.getNextProvider();
       case 'anthropic-first':
         return 'anthropic';
+      case 'anthropic-deep':
+        // Default to OpenAI; deep budget override happens in getModelSelection()
+        return 'openai';
       case 'openai-first':
       default:
         return 'openai';

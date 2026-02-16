@@ -70,7 +70,7 @@ export class ChatService {
    * Run the agentic chat loop. Yields ChatEvents for SSE streaming.
    */
   async *chat(request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const { query, history = [], budget = 'standard', signal } = request;
+    const { query, history = [], budget: userBudget = 'standard', signal } = request;
     const startTime = Date.now();
 
     try {
@@ -78,17 +78,24 @@ export class ChatService {
       const classification = await this.classifyChatIntent(query);
       const toolDefs = await this.filterTools(classification.domains, classification.slots);
 
+      // 1.5. Auto-escalate budget for complex queries
+      const budget = this.escalateBudget(
+        classification,
+        query,
+        request.budget // only truthy if user explicitly set it
+      );
+
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
         domains: classification.domains,
         keywords: classification.keywords,
         toolCount: toolDefs.length,
         budget,
+        budgetEscalated: budget !== userBudget,
       });
 
-      // 2. Pick LLM provider (round-robin)
-      const provider = ModelSelector.getNextProvider();
-      const selection = ModelSelector.getModelSelection(budget, provider);
+      // 2. Pick LLM provider (strategy-aware; anthropic-deep uses Anthropic for deep)
+      const selection = ModelSelector.getModelSelection(budget);
 
       logger.info('[ChatService] Selected LLM', {
         provider: selection.provider,
@@ -389,6 +396,81 @@ export class ChatService {
         slots: intent.slots as Record<string, any> | undefined,
       };
     }
+  }
+
+  /**
+   * Auto-escalate budget from standard → deep for complex legal queries.
+   * User-specified budget takes precedence (no override).
+   */
+  private escalateBudget(
+    classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
+    query: string,
+    userExplicitBudget?: 'quick' | 'standard' | 'deep'
+  ): 'quick' | 'standard' | 'deep' {
+    // If user explicitly chose a budget, respect it
+    if (userExplicitBudget) {
+      return userExplicitBudget;
+    }
+
+    const lowerQuery = query.toLowerCase();
+
+    // Deep-analysis keyword patterns (Ukrainian legal domain)
+    const deepPatterns = [
+      'проаналізу',
+      'аналіз справ',
+      'комплексний',
+      'порівня',
+      'резолютивн',
+      'правова позиція',
+      'висновк',
+      'формулюван',
+      'формування',
+      'due diligence',
+      'перевір',
+      'позовн',
+      'обґрунтуван',
+      'мотивувальн',
+    ];
+
+    const complexScenarios = [
+      'comprehensive_case_analysis',
+      'comprehensive_legal_advice',
+      'due_diligence_check',
+    ];
+
+    // Rule 1: Long query + multi-domain or legal_advice domain
+    const isMultiDomain = classification.domains.length >= 2;
+    const hasLegalAdvice = classification.domains.includes('legal_advice');
+    if (query.length > 150 && (isMultiDomain || hasLegalAdvice)) {
+      logger.info('[ChatService] Budget escalated: long query + complex domains', {
+        queryLength: query.length,
+        domains: classification.domains,
+      });
+      return 'deep';
+    }
+
+    // Rule 2: Deep-analysis keywords detected
+    const matchedKeyword = deepPatterns.find(p => lowerQuery.includes(p));
+    if (matchedKeyword) {
+      logger.info('[ChatService] Budget escalated: deep-analysis keyword', {
+        keyword: matchedKeyword,
+      });
+      return 'deep';
+    }
+
+    // Rule 3: Complex scenario match (from classification keywords)
+    const lowerKeywords = classification.keywords.toLowerCase();
+    const matchedScenario = complexScenarios.find(s =>
+      lowerKeywords.includes(s) || classification.domains.includes(s)
+    );
+    if (matchedScenario) {
+      logger.info('[ChatService] Budget escalated: complex scenario', {
+        scenario: matchedScenario,
+      });
+      return 'deep';
+    }
+
+    return 'standard';
   }
 
   /**
