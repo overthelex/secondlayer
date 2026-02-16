@@ -87,41 +87,78 @@ function extractMetadataFromHTML(html: string, docId: string): {
   disputeCategory: string | null;
   fullText: string;
 } {
-  const parser = new CourtDecisionHTMLParser(html);
-  const meta = parser.getMetadata();
-  const fullText = parser.toText('plain');
-
-  // Extract court name from text — usually in the first few lines
   const $ = load(html);
-  const articleText = $('#article-container').text() || $('body').text();
 
-  // Court name patterns
-  let court: string | null = null;
-  const courtMatch = articleText.match(
-    /([А-ЯІЇЄҐа-яіїєґ'\s]+(?:районний|апеляційний|касаційний|господарський|окружний|міський)\s+суд[а-яіїєґ'\s]*)/i
-  );
-  if (courtMatch) {
-    court = courtMatch[1].trim().replace(/\s+/g, ' ');
+  // Court registry pages store the decision as nested HTML inside <textarea id="txtdepository">
+  // and metadata in #divcasecat / #info
+  const innerHtml = $('#txtdepository').text() || '';
+  let fullText = '';
+
+  if (innerHtml.length > 0) {
+    // Parse the inner HTML to extract plain text
+    const inner$ = load(innerHtml);
+    fullText = inner$('body').text().replace(/\s+/g, ' ').trim();
   }
 
-  // Date pattern: dd.mm.yyyy
+  // Fallback: try CourtDecisionHTMLParser (works for ZakonOnline-style pages)
+  if (!fullText || fullText.length < 100) {
+    try {
+      const parser = new CourtDecisionHTMLParser(html);
+      fullText = parser.toText('plain');
+    } catch {
+      // Last resort: strip all tags from body
+      fullText = $('body').text().replace(/\s+/g, ' ').trim();
+    }
+  }
+
+  // Metadata from #divcasecat header line:
+  // "Категорія справи № 2-229/2010: Цивільні справи; Позовне провадження; Спори..."
+  const casecatText = $('#divcasecat').text() || '';
+  const infoText = $('#info').text() || '';
+  const metaText = casecatText + ' ' + infoText;
+
+  // Case number: "справи № XXX" or "Справа №XXX"
+  let caseNumber: string | null = null;
+  const caseMatch = metaText.match(/(?:справи?|Справа)\s*№\s*([\d\w\-\/]+)/i)
+    || fullText.match(/Справа\s*№\s*([\d\w\-\/]+)/i);
+  if (caseMatch) {
+    caseNumber = caseMatch[1];
+  }
+
+  // Court name from decision text
+  let court: string | null = null;
+  const courtMatch = fullText.match(
+    /([А-ЯІЇЄҐа-яіїєґ''\s]+(?:районний|апеляційний|касаційний|господарський|окружний|міський)\s+суд[а-яіїєґ''\s]*)/i
+  );
+  if (courtMatch) {
+    court = courtMatch[1].trim().replace(/\s+/g, ' ').substring(0, 200);
+  }
+
+  // Date: "Дата набрання законної сили: dd.mm.yyyy" or first dd.mm.yyyy in text
   let date: string | null = null;
-  const dateMatch = articleText.match(/(\d{2}\.\d{2}\.\d{4})/);
-  if (dateMatch) {
-    const [dd, mm, yyyy] = dateMatch[1].split('.');
+  const dateForceMatch = metaText.match(/набрання законної сили:\s*(\d{2}\.\d{2}\.\d{4})/);
+  const dateFallback = fullText.match(/(\d{2}\.\d{2}\.\d{4})/);
+  const dateStr = dateForceMatch ? dateForceMatch[1] : dateFallback ? dateFallback[1] : null;
+  if (dateStr) {
+    const [dd, mm, yyyy] = dateStr.split('.');
     date = `${yyyy}-${mm}-${dd}`;
   }
 
-  // Dispute category from meta description or title
+  // Dispute category from divcasecat: text after the case number colon
   let disputeCategory: string | null = null;
-  const categoryMatch = articleText.match(/Категорія:\s*([^\n]+)/i);
+  const categoryMatch = casecatText.match(/:\s*(.+)/);
   if (categoryMatch) {
-    disputeCategory = categoryMatch[1].trim();
+    disputeCategory = categoryMatch[1].trim().substring(0, 255);
   }
 
+  // Title
+  const title = caseNumber
+    ? `Рішення у справі ${caseNumber}`
+    : `Рішення ${docId}`;
+
   return {
-    title: meta.title || `Рішення ${docId}`,
-    caseNumber: meta.caseNumber,
+    title,
+    caseNumber,
     court,
     date,
     disputeCategory,
