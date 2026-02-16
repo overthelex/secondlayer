@@ -82,17 +82,21 @@ export class ChatService {
       // 2. Anthropic pre-analysis: generate response template
       const responseTemplate = await this.generateResponseTemplate(query, classification);
 
+      // 3. If template was generated, escalate to deep budget for the main loop
+      const effectiveBudget = responseTemplate ? 'deep' as const : budget;
+
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
         domains: classification.domains,
         keywords: classification.keywords,
         toolCount: toolDefs.length,
-        budget,
+        budget: effectiveBudget,
+        budgetEscalated: effectiveBudget !== budget,
         hasTemplate: !!responseTemplate,
       });
 
-      // 3. Pick LLM provider for the main loop
-      const selection = ModelSelector.getModelSelection(budget);
+      // 4. Pick LLM provider for the main loop (deep → Anthropic via anthropic-deep strategy)
+      const selection = ModelSelector.getModelSelection(effectiveBudget);
 
       logger.info('[ChatService] Selected LLM', {
         provider: selection.provider,
@@ -129,7 +133,7 @@ export class ChatService {
             max_tokens: 4096,
             temperature: 0.3,
           },
-          budget,
+          effectiveBudget,
           selection.provider,
           signal
         )) {
@@ -543,18 +547,17 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
 
   /**
    * Summarize large tool results to prevent context window overflow.
+   * Court document chains and search results are compacted to essential fields only.
    */
   private summarizeResult(result: any): any {
     if (!result) return { empty: true };
 
-    const text = typeof result === 'string' ? result : JSON.stringify(result);
-
-    if (text.length <= MAX_RESULT_LENGTH) {
-      return result;
-    }
-
-    // For MCP tool results with content array
+    // For MCP tool results with content array — try compact extraction first
     if (result.content && Array.isArray(result.content)) {
+      const compacted = this.compactCourtResult(result);
+      if (compacted) return compacted;
+
+      // Fallback: truncate text blocks
       for (const block of result.content) {
         if (block.type === 'text' && typeof block.text === 'string') {
           if (block.text.length > MAX_RESULT_LENGTH) {
@@ -565,11 +568,77 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
       return result;
     }
 
+    const text = typeof result === 'string' ? result : JSON.stringify(result);
+
+    if (text.length <= MAX_RESULT_LENGTH) {
+      return result;
+    }
+
     // Generic truncation
     return {
       summary: text.slice(0, MAX_RESULT_LENGTH),
       truncated: true,
       original_length: text.length,
     };
+  }
+
+  /**
+   * Compact court document chain/search results for LLM context.
+   * Strips snippets, URLs, resolution text — keeps only fields needed for analysis.
+   */
+  private compactCourtResult(result: any): any | null {
+    if (!result.content?.[0]?.text) return null;
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(result.content[0].text);
+    } catch {
+      return null;
+    }
+
+    // Case documents chain: { case_number, total_documents, grouped_documents }
+    if (parsed.grouped_documents && parsed.total_documents) {
+      const compact: any = {
+        case_number: parsed.case_number,
+        total_documents: parsed.total_documents,
+        grouped_documents: {},
+      };
+
+      for (const [instance, docs] of Object.entries(parsed.grouped_documents)) {
+        compact.grouped_documents[instance] = (docs as any[]).map((d: any) => ({
+          doc_id: d.doc_id,
+          case_number: d.case_number,
+          document_type: d.document_type,
+          instance: d.instance,
+          court: d.court,
+          judge: d.judge,
+          date: d.date,
+          resolution: d.resolution ? d.resolution.slice(0, 120) : undefined,
+        }));
+      }
+
+      return { content: [{ type: 'text', text: JSON.stringify(compact) }] };
+    }
+
+    // Search results: { results: [...], total_count }
+    if (Array.isArray(parsed.results)) {
+      const compact = {
+        total_count: parsed.total_count || parsed.results.length,
+        results: parsed.results.map((r: any) => ({
+          doc_id: r.doc_id,
+          case_number: r.case_number,
+          document_type: r.document_type,
+          court: r.court,
+          judge: r.judge,
+          date: r.date || r.adjudication_date,
+          instance: r.instance,
+          resolution: r.resolution ? r.resolution.slice(0, 120) : undefined,
+        })),
+      };
+
+      return { content: [{ type: 'text', text: JSON.stringify(compact) }] };
+    }
+
+    return null;
   }
 }
