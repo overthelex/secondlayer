@@ -184,14 +184,14 @@ export function createAdminRoutes(db: Database): express.Router {
         SELECT
           DATE(created_at) as date,
           COALESCE(SUM(total_cost_usd), 0) as revenue_usd,
-          COALESCE(SUM(base_cost_usd), 0) as cost_usd,
-          COALESCE(SUM(markup_amount_usd), 0) as profit_usd,
+          COALESCE(SUM(CASE WHEN openai_cost_usd IS NOT NULL THEN openai_cost_usd ELSE 0 END), 0) as cost_usd,
+          COALESCE(SUM(total_cost_usd), 0) - COALESCE(SUM(CASE WHEN openai_cost_usd IS NOT NULL THEN openai_cost_usd ELSE 0 END), 0) as profit_usd,
           COUNT(*) as requests
         FROM cost_tracking
-        WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+        WHERE created_at >= CURRENT_DATE - $1::integer * INTERVAL '1 day'
         GROUP BY DATE(created_at)
         ORDER BY date DESC
-      `);
+      `, [days]);
 
       res.json({
         data: result.rows.map((row: any) => ({
@@ -755,16 +755,16 @@ export function createAdminRoutes(db: Database): express.Router {
 
       const result = await db.query(`
         SELECT
-          metadata->>'tool_name' as tool_name,
+          tool_name,
           COUNT(*) as request_count,
           COALESCE(SUM(total_cost_usd), 0) as total_revenue,
           COALESCE(AVG(total_cost_usd), 0) as avg_cost
         FROM cost_tracking
-        WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
-          AND metadata->>'tool_name' IS NOT NULL
-        GROUP BY metadata->>'tool_name'
+        WHERE created_at >= CURRENT_DATE - $1::integer * INTERVAL '1 day'
+          AND tool_name IS NOT NULL
+        GROUP BY tool_name
         ORDER BY request_count DESC
-      `);
+      `, [days]);
 
       res.json({
         usage: result.rows.map((row: any) => ({
@@ -838,69 +838,84 @@ export function createAdminRoutes(db: Database): express.Router {
    */
   router.get('/data-sources', async (req: Request, res: Response) => {
     try {
-      // Backend DB sources
+      // Backend DB sources — each wrapped in try/catch so one failing table doesn't break all
 
-      // ZakonOnline API stats (from cost_tracking)
-      const zoStats = await db.query(`
-        SELECT
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as calls_24h,
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND metadata->>'error' IS NOT NULL) as errors_24h,
-          MAX(created_at) as last_call
-        FROM cost_tracking
-        WHERE metadata->>'source' = 'zakononline'
-           OR metadata->>'tool_name' LIKE '%search_court%'
-           OR metadata->>'tool_name' LIKE '%get_document%'
-      `);
+      let zoMetrics = { calls_24h: 0, errors_24h: 0, last_call: null as string | null };
+      try {
+        const zoStats = await db.query(`
+          SELECT
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') as calls_24h,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND status = 'failed') as errors_24h,
+            MAX(created_at) as last_call
+          FROM cost_tracking
+          WHERE tool_name LIKE '%search_court%'
+             OR tool_name LIKE '%get_document%'
+             OR zakononline_api_calls > 0
+        `);
+        zoMetrics = {
+          calls_24h: parseInt(zoStats.rows[0]?.calls_24h || '0'),
+          errors_24h: parseInt(zoStats.rows[0]?.errors_24h || '0'),
+          last_call: zoStats.rows[0]?.last_call || null,
+        };
+      } catch (e: any) {
+        logger.warn('Failed to query ZakonOnline stats', { error: e.message });
+      }
 
-      // Legislation stats
-      const legislationStats = await db.query(`
-        SELECT
-          (SELECT COUNT(*) FROM legislation) as codes_count,
-          (SELECT COUNT(*) FROM legislation_articles) as articles_count,
-          (SELECT MIN(updated_at) FROM legislation) as oldest_update,
-          (SELECT MAX(updated_at) FROM legislation) as newest_update
-      `);
+      let legMetrics = { codes_count: 0, articles_count: 0, oldest_update: null as string | null, newest_update: null as string | null };
+      try {
+        const legislationStats = await db.query(`
+          SELECT
+            (SELECT COUNT(*) FROM legislation) as codes_count,
+            (SELECT COUNT(*) FROM legislation_articles) as articles_count,
+            (SELECT MIN(updated_at) FROM legislation) as oldest_update,
+            (SELECT MAX(updated_at) FROM legislation) as newest_update
+        `);
+        legMetrics = {
+          codes_count: parseInt(legislationStats.rows[0]?.codes_count || '0'),
+          articles_count: parseInt(legislationStats.rows[0]?.articles_count || '0'),
+          oldest_update: legislationStats.rows[0]?.oldest_update || null,
+          newest_update: legislationStats.rows[0]?.newest_update || null,
+        };
+      } catch (e: any) {
+        logger.warn('Failed to query legislation stats', { error: e.message });
+      }
 
-      // ZO Dictionaries stats
-      const dictionaryStats = await db.query(`
-        SELECT
-          COUNT(DISTINCT domain) as loaded_domains,
-          COUNT(*) as total_entries,
-          MAX(updated_at) as last_update
-        FROM zo_dictionaries
-      `);
+      let dictMetrics = { loaded_domains: 0, total_entries: 0, last_update: null as string | null };
+      try {
+        const dictionaryStats = await db.query(`
+          SELECT
+            COUNT(DISTINCT domain) as loaded_domains,
+            COUNT(*) as total_entries,
+            MAX(updated_at) as last_update
+          FROM zo_dictionaries
+        `);
+        dictMetrics = {
+          loaded_domains: parseInt(dictionaryStats.rows[0]?.loaded_domains || '0'),
+          total_entries: parseInt(dictionaryStats.rows[0]?.total_entries || '0'),
+          last_update: dictionaryStats.rows[0]?.last_update || null,
+        };
+      } catch (e: any) {
+        logger.warn('Failed to query zo_dictionaries stats', { error: e.message });
+      }
 
       const backendSources = [
         {
           id: 'zakononline',
           name: 'ZakonOnline API',
           service: 'backend',
-          metrics: {
-            calls_24h: parseInt(zoStats.rows[0]?.calls_24h || '0'),
-            errors_24h: parseInt(zoStats.rows[0]?.errors_24h || '0'),
-            last_call: zoStats.rows[0]?.last_call || null,
-          },
+          metrics: zoMetrics,
         },
         {
           id: 'legislation',
           name: 'Legislation (RADA)',
           service: 'backend',
-          metrics: {
-            codes_count: parseInt(legislationStats.rows[0]?.codes_count || '0'),
-            articles_count: parseInt(legislationStats.rows[0]?.articles_count || '0'),
-            oldest_update: legislationStats.rows[0]?.oldest_update || null,
-            newest_update: legislationStats.rows[0]?.newest_update || null,
-          },
+          metrics: legMetrics,
         },
         {
           id: 'zo_dictionaries',
           name: 'Dictionaries (ZO)',
           service: 'backend',
-          metrics: {
-            loaded_domains: parseInt(dictionaryStats.rows[0]?.loaded_domains || '0'),
-            total_entries: parseInt(dictionaryStats.rows[0]?.total_entries || '0'),
-            last_update: dictionaryStats.rows[0]?.last_update || null,
-          },
+          metrics: dictMetrics,
         },
       ];
 

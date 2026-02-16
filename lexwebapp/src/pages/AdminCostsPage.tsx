@@ -343,7 +343,7 @@ export function AdminCostsPage() {
                           {tx.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right font-mono">${(tx.amount_usd || 0).toFixed(4)}</td>
+                      <td className="px-4 py-3 text-right font-mono">${Number(tx.amount_usd || 0).toFixed(4)}</td>
                       <td className="px-4 py-3">
                         {tx.status === 'completed' && tx.type === 'charge' && (
                           <button
