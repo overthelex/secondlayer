@@ -78,7 +78,9 @@ async function searchKeyword(
       result.pages++;
 
       const docs = Array.isArray(response) ? response : response?.data || [];
-      const total = Array.isArray(response) ? docs.length : (response?.total ?? docs.length);
+      // ZO API returns array (no total field) — only stop on short page
+      const hasTotal = !Array.isArray(response) && response?.total != null;
+      const total = hasTotal ? response.total : Infinity;
 
       result.fetched += docs.length;
 
@@ -104,8 +106,14 @@ async function searchKeyword(
       // Stop if we got fewer results than page size (no more pages)
       if (docs.length < pageSize) break;
 
-      // Stop if we've fetched everything available
-      if (result.fetched >= total) break;
+      // Stop if API told us the total and we've fetched it all
+      if (hasTotal && result.fetched >= total) break;
+
+      // Stop if this page had zero new docs (all duplicates — exhausted unique results)
+      if (pageNew === 0) {
+        console.log(`  [${keyword}] page ${pageNum} had 0 new docs, stopping.`);
+        break;
+      }
 
       // Rate limit delay
       await new Promise(resolve => setTimeout(resolve, 500));

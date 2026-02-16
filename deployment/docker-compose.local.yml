@@ -171,7 +171,7 @@ services:
       # OpenAI Configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Dynamic model selection (cost-optimized defaults)
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
@@ -389,7 +389,7 @@ services:
       # OpenAI Configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Dynamic model selection
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}

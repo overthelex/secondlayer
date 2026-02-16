@@ -393,7 +393,7 @@ services:
       REDIS_PORT: 6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
@@ -527,7 +527,7 @@ services:
       # OpenAI Configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-ada-002}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Dynamic model selection
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}

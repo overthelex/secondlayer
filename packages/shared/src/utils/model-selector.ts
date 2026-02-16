@@ -14,7 +14,7 @@ export interface ModelSelection {
  * Supports multiple LLM providers (OpenAI, Anthropic) with automatic fallback
  */
 export class ModelSelector {
-  private static readonly DEFAULT_EMBEDDING_MODEL = 'text-embedding-ada-002';
+  private static readonly DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 
   private static readonly PROVIDER_STRATEGY = process.env.LLM_PROVIDER_STRATEGY || 'openai-first';
 
