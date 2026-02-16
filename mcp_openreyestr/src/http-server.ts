@@ -139,7 +139,7 @@ class HTTPOpenReyestrServer {
     // Stats endpoint for admin monitoring (no auth — internal network only)
     this.app.get('/api/stats', async (_req, res) => {
       try {
-        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }> = {};
+        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null; lastBatchCount: number }> = {};
 
         const queries: Array<{ key: string; table: string; source: string; sourceUrl: string; frequency: string }> = [
           { key: 'legal_entities', table: 'legal_entities', source: 'НАІС — ЄДР (юридичні особи)', sourceUrl: 'https://nais.gov.ua/pass_opendata', frequency: 'Щоденно (імпорт XML)' },
@@ -158,16 +158,19 @@ class HTTPOpenReyestrServer {
 
         for (const q of queries) {
           try {
-            const result = await this.db.query(`SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM ${q.table}`);
+            const result = await this.db.query(
+              `SELECT COUNT(*) as cnt, MAX(updated_at) as last_update, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM ${q.table})) as lb FROM ${q.table}`
+            );
             tables[q.key] = {
               rows: parseInt(result.rows[0]?.cnt || '0'),
               source: q.source,
               sourceUrl: q.sourceUrl,
               updateFrequency: q.frequency,
               lastUpdate: result.rows[0]?.last_update || null,
+              lastBatchCount: parseInt(result.rows[0]?.lb || '0'),
             };
           } catch {
-            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null };
+            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null, lastBatchCount: 0 };
           }
         }
 

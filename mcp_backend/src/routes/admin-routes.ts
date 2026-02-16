@@ -839,19 +839,19 @@ export function createAdminRoutes(db: Database): express.Router {
   // Helper: fetch backend table stats
   const getBackendStats = async () => {
     const backendQueries = [
-      { id: 'documents', name: 'Документи (судові рішення)', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM documents', source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'За запитом (кеш 7 днів)' },
-      { id: 'document_sections', name: 'Секції документів', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM document_sections', source: 'SemanticSectionizer (автоматично)', sourceUrl: '', frequency: 'При завантаженні документа' },
-      { id: 'embedding_chunks', name: 'Вектори (embeddings)', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM embedding_chunks', source: 'OpenAI text-embedding-3-small', sourceUrl: 'https://platform.openai.com', frequency: 'При обробці документа' },
-      { id: 'legislation', name: 'Кодекси та закони', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM legislation', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (кеш 30 днів)' },
-      { id: 'legislation_articles', name: 'Статті законодавства', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM legislation_articles', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (get_legislation_structure)' },
-      { id: 'zo_dictionaries', name: 'Довідники ZakonOnline', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM zo_dictionaries', source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'Ручний синхр. (sync-dictionaries.ts)' },
-      { id: 'conversations', name: 'Розмови (чат)', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM conversations', source: 'Дії користувачів', sourceUrl: '', frequency: 'Реальний час' },
-      { id: 'conversation_messages', name: 'Повідомлення чату', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM conversation_messages', source: 'AI + користувачі', sourceUrl: '', frequency: 'Реальний час' },
-      { id: 'users', name: 'Користувачі', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM users', source: 'Google OAuth', sourceUrl: '', frequency: 'При реєстрації' },
-      { id: 'cost_tracking', name: 'Трекінг витрат API', query: 'SELECT COUNT(*) as cnt, MAX(created_at) as lu FROM cost_tracking', source: 'CostTracker (автоматично)', sourceUrl: '', frequency: 'Кожен API виклик' },
-      { id: 'clients', name: 'Клієнти', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM clients', source: 'Дії адміністратора', sourceUrl: '', frequency: 'При створенні' },
-      { id: 'matters', name: 'Справи', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM matters', source: 'Дії юристів', sourceUrl: '', frequency: 'При створенні' },
-      { id: 'upload_sessions', name: 'Сесії завантаження', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as lu FROM upload_sessions', source: 'UploadService', sourceUrl: '', frequency: 'При завантаженні файлів' },
+      { id: 'documents', name: 'Документи (судові рішення)', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM documents)) as lb FROM documents", source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'За запитом (кеш 7 днів)' },
+      { id: 'document_sections', name: 'Секції документів', query: "SELECT COUNT(*) as cnt, MAX(created_at) as lu, COUNT(*) FILTER (WHERE created_at::date = (SELECT MAX(created_at)::date FROM document_sections)) as lb FROM document_sections", source: 'SemanticSectionizer (автоматично)', sourceUrl: '', frequency: 'При завантаженні документа' },
+      { id: 'embedding_chunks', name: 'Вектори (embeddings)', query: "SELECT COUNT(*) as cnt, MAX(created_at) as lu, COUNT(*) FILTER (WHERE created_at::date = (SELECT MAX(created_at)::date FROM embedding_chunks)) as lb FROM embedding_chunks", source: 'OpenAI text-embedding-3-small', sourceUrl: 'https://platform.openai.com', frequency: 'При обробці документа' },
+      { id: 'legislation', name: 'Кодекси та закони', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM legislation)) as lb FROM legislation", source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (кеш 30 днів)' },
+      { id: 'legislation_articles', name: 'Статті законодавства', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM legislation_articles)) as lb FROM legislation_articles", source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Ручний синхр. (get_legislation_structure)' },
+      { id: 'zo_dictionaries', name: 'Довідники ZakonOnline', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM zo_dictionaries)) as lb FROM zo_dictionaries", source: 'ZakonOnline API', sourceUrl: 'https://zakononline.com.ua', frequency: 'Ручний синхр. (sync-dictionaries.ts)' },
+      { id: 'conversations', name: 'Розмови (чат)', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM conversations)) as lb FROM conversations", source: 'Дії користувачів', sourceUrl: '', frequency: 'Реальний час' },
+      { id: 'conversation_messages', name: 'Повідомлення чату', query: "SELECT COUNT(*) as cnt, MAX(created_at) as lu, COUNT(*) FILTER (WHERE created_at::date = (SELECT MAX(created_at)::date FROM conversation_messages)) as lb FROM conversation_messages", source: 'AI + користувачі', sourceUrl: '', frequency: 'Реальний час' },
+      { id: 'users', name: 'Користувачі', query: "SELECT COUNT(*) as cnt, MAX(created_at) as lu, COUNT(*) FILTER (WHERE created_at::date = (SELECT MAX(created_at)::date FROM users)) as lb FROM users", source: 'Google OAuth', sourceUrl: '', frequency: 'При реєстрації' },
+      { id: 'cost_tracking', name: 'Трекінг витрат API', query: "SELECT COUNT(*) as cnt, MAX(created_at) as lu, COUNT(*) FILTER (WHERE created_at::date = (SELECT MAX(created_at)::date FROM cost_tracking)) as lb FROM cost_tracking", source: 'CostTracker (автоматично)', sourceUrl: '', frequency: 'Кожен API виклик' },
+      { id: 'clients', name: 'Клієнти', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM clients)) as lb FROM clients", source: 'Дії адміністратора', sourceUrl: '', frequency: 'При створенні' },
+      { id: 'matters', name: 'Справи', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM matters)) as lb FROM matters", source: 'Дії юристів', sourceUrl: '', frequency: 'При створенні' },
+      { id: 'upload_sessions', name: 'Сесії завантаження', query: "SELECT COUNT(*) as cnt, MAX(updated_at) as lu, COUNT(*) FILTER (WHERE updated_at::date = (SELECT MAX(updated_at)::date FROM upload_sessions)) as lb FROM upload_sessions", source: 'UploadService', sourceUrl: '', frequency: 'При завантаженні файлів' },
     ];
 
     const tables = [];
@@ -864,12 +864,13 @@ export function createAdminRoutes(db: Database): express.Router {
           source: q.source, sourceUrl: q.sourceUrl,
           updateFrequency: q.frequency,
           lastUpdate: result.rows[0]?.lu || null,
+          lastBatchCount: parseInt(result.rows[0]?.lb || '0'),
         });
       } catch {
         tables.push({
           id: q.id, name: q.name, rows: 0,
           source: q.source, sourceUrl: q.sourceUrl,
-          updateFrequency: q.frequency, lastUpdate: null,
+          updateFrequency: q.frequency, lastUpdate: null, lastBatchCount: 0,
         });
       }
     }

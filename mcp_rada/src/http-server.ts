@@ -130,28 +130,31 @@ class HTTPRadaServer {
     // Stats endpoint for admin monitoring (no auth — internal network only)
     this.app.get('/api/stats', async (_req, res) => {
       try {
-        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }> = {};
+        const tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null; lastBatchCount: number }> = {};
 
-        const queries: Array<{ key: string; query: string; source: string; sourceUrl: string; frequency: string }> = [
-          { key: 'deputies', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.deputies', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
-          { key: 'deputy_assistants', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.deputy_assistants', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
-          { key: 'bills', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.bills', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Щоденно (кеш 1 день)' },
-          { key: 'factions', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.factions', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
-          { key: 'committees', query: 'SELECT COUNT(*) as cnt, MAX(updated_at) as last_update FROM rada.committees', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+        const queries: Array<{ key: string; schema_table: string; ts_col: string; source: string; sourceUrl: string; frequency: string }> = [
+          { key: 'deputies', schema_table: 'rada.deputies', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
+          { key: 'deputy_assistants', schema_table: 'rada.deputy_assistants', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
+          { key: 'bills', schema_table: 'rada.bills', ts_col: 'updated_at', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Щоденно (кеш 1 день)' },
+          { key: 'factions', schema_table: 'rada.factions', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+          { key: 'committees', schema_table: 'rada.committees', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
         ];
 
         for (const q of queries) {
           try {
-            const result = await this.services.db.query(q.query);
+            const result = await this.services.db.query(
+              `SELECT COUNT(*) as cnt, MAX(${q.ts_col}) as last_update, COUNT(*) FILTER (WHERE ${q.ts_col}::date = (SELECT MAX(${q.ts_col})::date FROM ${q.schema_table})) as lb FROM ${q.schema_table}`
+            );
             tables[q.key] = {
               rows: parseInt(result.rows[0]?.cnt || '0'),
               source: q.source,
               sourceUrl: q.sourceUrl,
               updateFrequency: q.frequency,
               lastUpdate: result.rows[0]?.last_update || null,
+              lastBatchCount: parseInt(result.rows[0]?.lb || '0'),
             };
           } catch {
-            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null };
+            tables[q.key] = { rows: 0, source: q.source, sourceUrl: q.sourceUrl, updateFrequency: q.frequency, lastUpdate: null, lastBatchCount: 0 };
           }
         }
 

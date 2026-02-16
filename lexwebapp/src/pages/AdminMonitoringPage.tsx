@@ -28,6 +28,7 @@ interface TableInfo {
   sourceUrl: string;
   updateFrequency: string;
   lastUpdate: string | null;
+  lastBatchCount?: number;
 }
 
 interface SectionState<T> {
@@ -43,7 +44,7 @@ interface BackendData {
 
 interface ServiceData {
   service: string;
-  tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null }>;
+  tables: Record<string, { rows: number; source: string; sourceUrl: string; updateFrequency: string; lastUpdate: string | null; lastBatchCount?: number }>;
   dbSizeMb: number;
   recentImports?: any[];
   error?: string;
@@ -108,6 +109,7 @@ function DataTable({ tables }: { tables: TableInfo[] }) {
               <th className="text-left px-4 py-2.5 font-medium text-claude-subtext text-xs">Джерело</th>
               <th className="text-left px-4 py-2.5 font-medium text-claude-subtext text-xs">Частота оновлення</th>
               <th className="text-left px-4 py-2.5 font-medium text-claude-subtext text-xs">Останнє оновлення</th>
+              <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Завантажено</th>
             </tr>
           </thead>
           <tbody>
@@ -139,6 +141,15 @@ function DataTable({ tables }: { tables: TableInfo[] }) {
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-claude-subtext">{formatDate(t.lastUpdate)}</td>
+                <td className="px-4 py-2.5 text-right">
+                  {t.lastBatchCount != null && t.lastBatchCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 font-mono">
+                      +{formatNumber(t.lastBatchCount)}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-claude-subtext">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -157,6 +168,7 @@ function toTableInfoArray(tables: Record<string, any>): TableInfo[] {
     sourceUrl: t.sourceUrl || '',
     updateFrequency: t.updateFrequency || '',
     lastUpdate: t.lastUpdate || null,
+    lastBatchCount: t.lastBatchCount || 0,
   }));
 }
 
