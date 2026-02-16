@@ -193,6 +193,146 @@ export class MCPOpenReyestrAPI {
           },
         },
       },
+      {
+        name: 'search_debtors',
+        description: `Пошук боржників у Єдиному реєстрі боржників
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук боржників за ім'ям/назвою, ЄДРПОУ або категорією стягнення.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я/назва боржника або частина назви" },
+            edrpou: { type: 'string', description: 'Код ЄДРПОУ боржника' },
+            collection_category: { type: 'string', description: 'Категорія стягнення' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_enforcement_proceedings',
+        description: `Пошук виконавчих проваджень
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук виконавчих проваджень за боржником, стягувачем або статусом.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я/назва боржника" },
+            debtor_edrpou: { type: 'string', description: 'ЄДРПОУ боржника' },
+            creditor_name: { type: 'string', description: "Ім'я/назва стягувача" },
+            proceeding_status: { type: 'string', description: 'Статус провадження' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_bankruptcy_cases',
+        description: `Пошук справ про банкрутство
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук справ про банкрутство за боржником, ЄДРПОУ або номером справи.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: "Ім'я/назва боржника" },
+            debtor_edrpou: { type: 'string', description: 'ЄДРПОУ боржника' },
+            case_number: { type: 'string', description: 'Номер справи' },
+            proceeding_status: { type: 'string', description: 'Статус провадження' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_special_forms',
+        description: `Пошук спеціальних бланків нотаріальних документів
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук спеціальних бланків за серією, номером або отримувачем.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            series: { type: 'string', description: 'Серія бланка' },
+            form_number: { type: 'string', description: 'Номер бланка' },
+            recipient: { type: 'string', description: "Ім'я отримувача" },
+            status: { type: 'string', description: 'Статус бланка' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_forensic_methods',
+        description: `Пошук методик судових експертиз
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук зареєстрованих методик судових експертиз за назвою або типом експертизи.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Назва методики або ключове слово' },
+            expertise_type: { type: 'string', description: 'Тип експертизи' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_legal_acts',
+        description: `Пошук нормативно-правових актів у реєстрі НАІС
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук НПА за назвою, типом акту, видавником або статусом.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Назва або ключове слово в назві акту' },
+            act_type: { type: 'string', description: 'Тип акту (закон, указ, постанова тощо)' },
+            publisher: { type: 'string', description: 'Видавник акту' },
+            status: { type: 'string', description: 'Статус акту (чинний, нечинний)' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_administrative_units',
+        description: `Пошук адміністративно-територіальних одиниць (КОАТУУ)
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук населених пунктів, районів та областей за назвою або регіоном.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Назва населеного пункту або адмінодиниці' },
+            region: { type: 'string', description: 'Область' },
+            unit_type: { type: 'string', description: 'Тип одиниці (місто, село, селище, район тощо)' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
+        name: 'search_streets',
+        description: `Пошук вулиць у реєстрі НАІС
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Пошук вулиць за назвою, населеним пунктом або регіоном.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Назва вулиці або частина назви' },
+            settlement: { type: 'string', description: 'Населений пункт' },
+            region: { type: 'string', description: 'Область' },
+            street_type: { type: 'string', description: 'Тип (вулиця, проспект, бульвар тощо)' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
     ];
   }
 
@@ -226,6 +366,30 @@ export class MCPOpenReyestrAPI {
           break;
         case 'search_arbitration_managers':
           result = await this.tools.searchArbitrationManagers(args);
+          break;
+        case 'search_debtors':
+          result = await this.tools.searchDebtors(args);
+          break;
+        case 'search_enforcement_proceedings':
+          result = await this.tools.searchEnforcementProceedings(args);
+          break;
+        case 'search_bankruptcy_cases':
+          result = await this.tools.searchBankruptcyCases(args);
+          break;
+        case 'search_special_forms':
+          result = await this.tools.searchSpecialForms(args);
+          break;
+        case 'search_forensic_methods':
+          result = await this.tools.searchForensicMethods(args);
+          break;
+        case 'search_legal_acts':
+          result = await this.tools.searchLegalActs(args);
+          break;
+        case 'search_administrative_units':
+          result = await this.tools.searchAdministrativeUnits(args);
+          break;
+        case 'search_streets':
+          result = await this.tools.searchStreets(args);
           break;
         default:
           throw new Error(`Unknown tool: ${name}`);

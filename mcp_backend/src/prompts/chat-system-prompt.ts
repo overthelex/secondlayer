@@ -18,6 +18,9 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 ## Багатокрокові стратегії
 - **Законодавство + судова практика**: спочатку знайди відповідну статтю через get_legislation_article, потім шукай судову практику щодо застосування цієї статті через search_legal_precedents
 - **Реєстр + суди**: перевір суб'єкт через openreyestr_get_by_edrpou або openreyestr_search_entities, потім знайди їхні справи через count_cases_by_party
+- **Боржники + виконавчі провадження**: шукай боржника через openreyestr_search_debtors, деталі проваджень через openreyestr_search_enforcement_proceedings
+- **Банкрутство**: пошук справ про банкрутство через openreyestr_search_bankruptcy_cases, арбітражних керуючих через openreyestr_search_arbitration_managers
+- **Нотаріуси та експерти**: пошук нотаріусів через openreyestr_search_notaries, судових експертів через openreyestr_search_court_experts, методик експертиз через openreyestr_search_forensic_methods
 - **Загальне юридичне питання**: пошукай через search_legislation відповідний закон, потім get_legislation_article для конкретної статті, і search_legal_precedents для практики
 
 ## Вибір інструменту для законодавства
@@ -92,11 +95,22 @@ export const CHAT_INTENT_CLASSIFICATION_PROMPT = `Ти — класифікат�
 - find_relevant_law_articles — знайти статті за описом ситуації
 - search_procedural_norms — пошук процесуальних норм
 
-### registry — Державний реєстр юридичних осіб (OpenReyestr / data.gov.ua)
+### registry — Державні реєстри (OpenReyestr / data.gov.ua / НАІС)
 - openreyestr_search_entities — пошук юридичних осіб за назвою
 - openreyestr_get_entity_details — деталі юридичної особи
 - openreyestr_search_beneficiaries — пошук бенефіціарів
 - openreyestr_get_by_edrpou — пошук за кодом ЄДРПОУ
+- openreyestr_search_debtors — пошук боржників
+- openreyestr_search_enforcement_proceedings — виконавчі провадження
+- openreyestr_search_bankruptcy_cases — справи про банкрутство
+- openreyestr_search_notaries — реєстр нотаріусів
+- openreyestr_search_court_experts — реєстр судових експертів
+- openreyestr_search_arbitration_managers — арбітражні керуючі
+- openreyestr_search_forensic_methods — методики судових експертиз
+- openreyestr_search_legal_acts — нормативно-правові акти (НАІС)
+- openreyestr_search_administrative_units — адмін. устрій (КОАТУУ)
+- openreyestr_search_streets — вулиці
+- openreyestr_search_special_forms — спец. бланки нотаріусів
 
 ### parliament — Парламентські дані (Verkhovna Rada Open Data)
 - rada_search_parliament_bills — пошук законопроєктів
@@ -117,6 +131,12 @@ export const CHAT_INTENT_CLASSIFICATION_PROMPT = `Ти — класифікат�
 2. Якщо запит про конкретну статтю закону → обов'язково "legislation"
 3. Якщо запит про судову практику → "court"
 4. Якщо запит про підприємство, ЄДРПОУ, засновників → "registry"
+4a. Якщо запит про боржника, борг, виконавче провадження → "registry"
+4b. Якщо запит про банкрутство, ліквідацію → "registry"
+4c. Якщо запит про нотаріуса → "registry"
+4d. Якщо запит про судового експерта, експертизу, методику експертизи → "registry"
+4e. Якщо запит про арбітражного керуючого → "registry"
+4f. Якщо запит про населений пункт, вулицю, адмінустрій → "registry"
 5. Якщо запит про депутатів, законопроєкти, голосування → "parliament"
 6. Якщо запит про завантажені/збережені документи користувача → "documents"
 7. Якщо загальне юридичне питання → "legal_advice"
@@ -172,12 +192,23 @@ export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
     'get_court_decision',
     'get_case_documents_chain',
   ],
-  // Business registry
+  // Business registry + state registries
   registry: [
     'openreyestr_search_entities',
     'openreyestr_get_entity_details',
     'openreyestr_search_beneficiaries',
     'openreyestr_get_by_edrpou',
+    'openreyestr_search_debtors',
+    'openreyestr_search_enforcement_proceedings',
+    'openreyestr_search_bankruptcy_cases',
+    'openreyestr_search_notaries',
+    'openreyestr_search_court_experts',
+    'openreyestr_search_arbitration_managers',
+    'openreyestr_search_forensic_methods',
+    'openreyestr_search_legal_acts',
+    'openreyestr_search_administrative_units',
+    'openreyestr_search_streets',
+    'openreyestr_search_special_forms',
   ],
   // Parliament
   parliament: [
@@ -206,4 +237,5 @@ export const DEFAULT_TOOLS = [
   'search_supreme_court_practice',
   'openreyestr_get_by_edrpou',
   'openreyestr_search_entities',
+  'openreyestr_search_debtors',
 ];

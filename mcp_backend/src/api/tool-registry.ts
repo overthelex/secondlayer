@@ -279,13 +279,24 @@ export class ToolRegistry {
       });
     }
 
-    // ========== OpenReyestr Tools (5 tools) - Prefix 'openreyestr_', HTTP proxy ==========
+    // ========== OpenReyestr Tools (16 tools) - Prefix 'openreyestr_', HTTP proxy ==========
     const openreyestrTools = [
       { clientName: 'openreyestr_search_entities', serviceName: 'search_entities' },
       { clientName: 'openreyestr_get_entity_details', serviceName: 'get_entity_details' },
       { clientName: 'openreyestr_search_beneficiaries', serviceName: 'search_beneficiaries' },
       { clientName: 'openreyestr_get_by_edrpou', serviceName: 'get_by_edrpou' },
       { clientName: 'openreyestr_get_statistics', serviceName: 'get_statistics' },
+      { clientName: 'openreyestr_search_notaries', serviceName: 'search_notaries' },
+      { clientName: 'openreyestr_search_court_experts', serviceName: 'search_court_experts' },
+      { clientName: 'openreyestr_search_arbitration_managers', serviceName: 'search_arbitration_managers' },
+      { clientName: 'openreyestr_search_debtors', serviceName: 'search_debtors' },
+      { clientName: 'openreyestr_search_enforcement_proceedings', serviceName: 'search_enforcement_proceedings' },
+      { clientName: 'openreyestr_search_bankruptcy_cases', serviceName: 'search_bankruptcy_cases' },
+      { clientName: 'openreyestr_search_special_forms', serviceName: 'search_special_forms' },
+      { clientName: 'openreyestr_search_forensic_methods', serviceName: 'search_forensic_methods' },
+      { clientName: 'openreyestr_search_legal_acts', serviceName: 'search_legal_acts' },
+      { clientName: 'openreyestr_search_administrative_units', serviceName: 'search_administrative_units' },
+      { clientName: 'openreyestr_search_streets', serviceName: 'search_streets' },
     ];
 
     for (const tool of openreyestrTools) {

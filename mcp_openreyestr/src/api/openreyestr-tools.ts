@@ -580,6 +580,362 @@ export class OpenReyestrTools {
     return result.rows;
   }
 
+  /**
+   * Search debtors registry
+   */
+  async searchDebtors(params: { query?: string; edrpou?: string; collection_category?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, edrpou, collection_category, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`debtor_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (edrpou) {
+      conditions.push(`debtor_edrpou = $${paramIndex}`);
+      values.push(edrpou);
+      paramIndex++;
+    }
+    if (collection_category) {
+      conditions.push(`collection_category ILIKE $${paramIndex}`);
+      values.push(`%${collection_category}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, proceeding_number, debtor_name, debtor_type, debtor_edrpou, issuing_authority, enforcement_agency, executor_name, collection_category
+       FROM debtors ${whereClause}
+       ORDER BY id DESC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || edrpou || '', message: 'Боржників не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search enforcement proceedings
+   */
+  async searchEnforcementProceedings(params: { query?: string; debtor_edrpou?: string; creditor_name?: string; proceeding_status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, debtor_edrpou, creditor_name, proceeding_status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`debtor_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (debtor_edrpou) {
+      conditions.push(`debtor_edrpou = $${paramIndex}`);
+      values.push(debtor_edrpou);
+      paramIndex++;
+    }
+    if (creditor_name) {
+      conditions.push(`creditor_name ILIKE $${paramIndex}`);
+      values.push(`%${creditor_name}%`);
+      paramIndex++;
+    }
+    if (proceeding_status) {
+      conditions.push(`proceeding_status ILIKE $${paramIndex}`);
+      values.push(`%${proceeding_status}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, proceeding_number, opening_date, proceeding_status, debtor_name, debtor_edrpou, creditor_name, creditor_edrpou, enforcement_agency, executor_name
+       FROM enforcement_proceedings ${whereClause}
+       ORDER BY opening_date DESC NULLS LAST
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || debtor_edrpou || '', message: 'Виконавчих проваджень не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search bankruptcy cases
+   */
+  async searchBankruptcyCases(params: { query?: string; debtor_edrpou?: string; case_number?: string; proceeding_status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, debtor_edrpou, case_number, proceeding_status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`debtor_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (debtor_edrpou) {
+      conditions.push(`debtor_edrpou = $${paramIndex}`);
+      values.push(debtor_edrpou);
+      paramIndex++;
+    }
+    if (case_number) {
+      conditions.push(`case_number ILIKE $${paramIndex}`);
+      values.push(`%${case_number}%`);
+      paramIndex++;
+    }
+    if (proceeding_status) {
+      conditions.push(`proceeding_status ILIKE $${paramIndex}`);
+      values.push(`%${proceeding_status}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, registration_number, registration_date, case_number, court_decision_date, debtor_name, debtor_edrpou, proceeding_status, court_name
+       FROM bankruptcy_cases ${whereClause}
+       ORDER BY registration_date DESC NULLS LAST
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || debtor_edrpou || '', message: 'Справ про банкрутство не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search special notary forms
+   */
+  async searchSpecialForms(params: { series?: string; form_number?: string; recipient?: string; status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { series, form_number, recipient, status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (series) {
+      conditions.push(`series = $${paramIndex}`);
+      values.push(series);
+      paramIndex++;
+    }
+    if (form_number) {
+      conditions.push(`form_number = $${paramIndex}`);
+      values.push(form_number);
+      paramIndex++;
+    }
+    if (recipient) {
+      conditions.push(`recipient ILIKE $${paramIndex}`);
+      values.push(`%${recipient}%`);
+      paramIndex++;
+    }
+    if (status) {
+      conditions.push(`status = $${paramIndex}`);
+      values.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, series, form_number, issue_date, recipient, document_type, status, usage_date
+       FROM special_forms ${whereClause}
+       ORDER BY issue_date DESC NULLS LAST
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: series || form_number || recipient || '', message: 'Спеціальних бланків не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search forensic methods registry
+   */
+  async searchForensicMethods(params: { query?: string; expertise_type?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, expertise_type, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`method_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (expertise_type) {
+      conditions.push(`expertise_type ILIKE $${paramIndex}`);
+      values.push(`%${expertise_type}%`);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, registration_code, expertise_type, method_name, developer, year_created, registration_date, status
+       FROM forensic_methods ${whereClause}
+       ORDER BY registration_date DESC NULLS LAST
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || expertise_type || '', message: 'Методик судових експертиз не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search legal acts registry
+   */
+  async searchLegalActs(params: { query?: string; act_type?: string; publisher?: string; status?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, act_type, publisher, status, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`act_title ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (act_type) {
+      conditions.push(`act_type ILIKE $${paramIndex}`);
+      values.push(`%${act_type}%`);
+      paramIndex++;
+    }
+    if (publisher) {
+      conditions.push(`publisher ILIKE $${paramIndex}`);
+      values.push(`%${publisher}%`);
+      paramIndex++;
+    }
+    if (status) {
+      conditions.push(`status = $${paramIndex}`);
+      values.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, act_id, publisher, act_type, act_number, act_date, act_title, status, effective_date
+       FROM legal_acts ${whereClause}
+       ORDER BY act_date DESC NULLS LAST
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || act_type || '', message: 'Нормативно-правових актів не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search administrative units
+   */
+  async searchAdministrativeUnits(params: { query?: string; region?: string; unit_type?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, region, unit_type, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`(settlement_name ILIKE $${paramIndex} OR full_name ILIKE $${paramIndex})`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (region) {
+      conditions.push(`region ILIKE $${paramIndex}`);
+      values.push(`%${region}%`);
+      paramIndex++;
+    }
+    if (unit_type) {
+      conditions.push(`unit_type = $${paramIndex}`);
+      values.push(unit_type);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, koatuu, unit_type, region, district, settlement_name, full_name
+       FROM administrative_units ${whereClause}
+       ORDER BY settlement_name ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || region || '', message: 'Адміністративних одиниць не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
+  /**
+   * Search streets registry
+   */
+  async searchStreets(params: { query?: string; settlement?: string; region?: string; street_type?: string; limit?: number; offset?: number }): Promise<any[]> {
+    const { query, settlement, region, street_type, limit = 50, offset = 0 } = params;
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (query) {
+      conditions.push(`street_name ILIKE $${paramIndex}`);
+      values.push(`%${query}%`);
+      paramIndex++;
+    }
+    if (settlement) {
+      conditions.push(`settlement ILIKE $${paramIndex}`);
+      values.push(`%${settlement}%`);
+      paramIndex++;
+    }
+    if (region) {
+      conditions.push(`region ILIKE $${paramIndex}`);
+      values.push(`%${region}%`);
+      paramIndex++;
+    }
+    if (street_type) {
+      conditions.push(`street_type = $${paramIndex}`);
+      values.push(street_type);
+      paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT id, street_id, street_type, street_name, full_address, region, district, settlement
+       FROM streets ${whereClause}
+       ORDER BY street_name ASC
+       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{ found: false, query: query || settlement || '', message: 'Вулиць не знайдено за вашим запитом' }];
+    }
+    return result.rows;
+  }
+
   private async findEntityType(record: string): Promise<'UO' | 'FOP' | 'FSU' | null> {
     const uoResult = await this.pool.query(
       'SELECT 1 FROM legal_entities WHERE record = $1',
