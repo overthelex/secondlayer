@@ -26,6 +26,7 @@
  *   DOC_FORM          - Document form to search (default: "Рішення")
  *   SEARCH_TEXT       - Text to search in decisions (optional, fills the text field)
  *   DATE_FROM         - Start date dd.mm.yyyy (default: "01.01.2010")
+ *   HEADLESS          - If "true", run browser in headless mode (for servers)
  *
  * Usage:
  *   npm run scrape:court
@@ -58,6 +59,7 @@ const JUSTICE_KIND_ID = process.env.JUSTICE_KIND_ID || '1';
 const DOC_FORM = process.env.DOC_FORM || 'Рішення';
 const SEARCH_TEXT = process.env.SEARCH_TEXT || '';
 const DATE_FROM = process.env.DATE_FROM || '01.01.2010';
+const HEADLESS = process.env.HEADLESS === 'true';
 const BASE_URL = 'https://reyestr.court.gov.ua/';
 
 // Processing stats
@@ -567,6 +569,7 @@ async function main() {
   console.log(`  Concurrency:      ${CONCURRENCY}`);
   console.log(`  Skip embeddings:  ${SKIP_EMBEDDINGS}`);
   console.log(`  Process only:     ${PROCESS_ONLY}`);
+  console.log(`  Headless:         ${HEADLESS}`);
   console.log('═══════════════════════════════════════════════════════════════\n');
 
   // Initialize DB services
@@ -594,7 +597,7 @@ async function main() {
     await processWithPool(ctx, items);
   } else {
     // Scrape + process
-    const browser = await chromium.launch({ headless: false });
+    const browser = await chromium.launch({ headless: HEADLESS });
     const context = await browser.newContext({
       viewport: { width: 1280, height: 900 },
       locale: 'uk-UA',
