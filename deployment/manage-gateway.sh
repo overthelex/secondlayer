@@ -477,6 +477,10 @@ deploy_local() {
         print_msg "$BLUE" "Running RADA + OpenReyestr migrations in parallel..."
         $compose_cmd $compose_args up rada-migrate-local migrate-openreyestr-local
 
+        # Step 7b: Seed admin user
+        print_msg "$BLUE" "Seeding admin user..."
+        $compose_cmd $compose_args up seed-admin-local
+
         # Step 8: Start frontend deps + app services (including nginx + frontend in Docker)
         print_msg "$BLUE" "Installing frontend dependencies..."
         $compose_cmd $compose_args up lexwebapp-deps-local
@@ -662,6 +666,10 @@ deploy_to_server() {
         $DC up migrate-stage
         echo "Running RADA + OpenReyestr migrations in parallel..."
         $DC up rada-migrate-stage migrate-openreyestr-stage
+
+        # Step 7b: Seed admin user
+        echo "Seeding admin user..."
+        $DC up seed-admin-stage
 
         # Step 8: Start application services
         echo "Starting application services..."

@@ -20,6 +20,7 @@
     "process:docs": "npm run build && node dist/scripts/process-existing-documents.js",
     "process:docs:dev": "ts-node-dev --transpile-only scripts/process-existing-documents.ts",
     "migrate:legislation": "bash scripts/migrate-legislation-schema.sh",
+    "seed:admin": "npm run build && node dist/scripts/seed-admin-user.js",
     "seed:test-account": "npm run build && node dist/scripts/seed-test-account.js",
     "seed:test-account:dev": "ts-node-dev --transpile-only src/scripts/seed-test-account.ts",
     "test:email": "npm run build && node dist/scripts/test-email.js",

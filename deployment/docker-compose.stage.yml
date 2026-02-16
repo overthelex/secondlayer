@@ -182,6 +182,32 @@ services:
     networks:
     - secondlayer-stage-network
 
+  seed-admin-stage:
+    image: secondlayer-app:latest
+    container_name: secondlayer-seed-admin-stage
+    depends_on:
+      migrate-stage:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: postgres-stage
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_stage}
+      ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-}
+      ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: staging
+      TZ: Europe/Kiev
+    working_dir: /app/mcp_backend
+    command:
+    - node
+    - dist/scripts/seed-admin-user.js
+    restart: 'no'
+    networks:
+    - secondlayer-stage-network
+
   # RADA MCP Migrations
   rada-migrate-stage:
     build:
