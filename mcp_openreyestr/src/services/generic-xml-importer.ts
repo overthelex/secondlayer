@@ -2,26 +2,22 @@
  * Generic XML Importer
  * Config-driven XML parser and database importer for NAIS registries.
  * Uses fast-xml-parser for small/medium files, SAX streaming for large files.
- * Streaming path uses parallel DB workers for throughput.
+ * Streaming path uses pipelined multi-row INSERTs for throughput.
  */
 
 import { Pool, PoolClient } from 'pg';
 import { XMLParser } from 'fast-xml-parser';
-import { createReadStream, ReadStream } from 'fs';
+import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 // @ts-ignore - no type declarations for sax
 import sax from 'sax';
 import iconv from 'iconv-lite';
 import { RegistryConfig } from '../config/registries';
 
-const BATCH_SIZE = 500;
-const WORKER_CONCURRENCY = parseInt(process.env.XML_IMPORT_WORKERS || '10', 10);
-const MAX_QUEUE = WORKER_CONCURRENCY * 3;
+const BATCH_SIZE = 2000;
 
 /**
  * Collect records from parsed XML, handling multi-section structures.
- * E.g. for path "rna.database.document" where database has multiple numbered sections,
- * collects all document records from all sections.
  */
 function collectRecords(obj: Record<string, unknown>, path: string): Record<string, unknown>[] {
   const parts = path.split('.');
@@ -40,8 +36,6 @@ function collectRecords(obj: Record<string, unknown>, path: string): Record<stri
           next.push(val);
         }
       } else {
-        // Check if this is a numbered/multi-section object (keys are indices)
-        // e.g. { "0": { document: [...] }, "1": { document: [...] } }
         for (const key of Object.keys(rec)) {
           const child = rec[key];
           if (child != null && typeof child === 'object' && !Array.isArray(child)) {
@@ -63,8 +57,8 @@ function collectRecords(obj: Record<string, unknown>, path: string): Record<stri
 
   return current.filter(r => r != null && typeof r === 'object') as Record<string, unknown>[];
 }
-/** Files above this size (bytes) use SAX streaming parser */
-const STREAMING_THRESHOLD = 50 * 1024 * 1024; // 50 MB — files >50MB cause stack overflow in fast-xml-parser
+
+const STREAMING_THRESHOLD = 50 * 1024 * 1024;
 
 export interface ImportStats {
   registry: string;
@@ -90,7 +84,7 @@ export async function importXml(
 
   let stats: ImportStats;
   if (fileInfo.size > STREAMING_THRESHOLD || config.sizeCategory === 'large') {
-    console.log(`  Using SAX streaming parser (file > ${STREAMING_THRESHOLD / 1024 / 1024} MB or large category, ${WORKER_CONCURRENCY} workers)`);
+    console.log(`  Using SAX streaming parser (batch=${BATCH_SIZE}, multi-row INSERT)`);
     stats = await importXmlStreaming(pool, config, filePath, sourceFile);
   } else {
     console.log(`  Using in-memory parser`);
@@ -102,7 +96,7 @@ export async function importXml(
 }
 
 /**
- * In-memory XML parsing for small/medium files (<500MB)
+ * In-memory XML parsing for small/medium files
  */
 async function importXmlInMemory(
   pool: Pool,
@@ -110,14 +104,12 @@ async function importXmlInMemory(
   filePath: string,
   sourceFile: string
 ): Promise<ImportStats> {
-  // Read and decode
   const { readFileSync } = require('fs');
   const rawBuffer = readFileSync(filePath);
   const xmlContent = config.encoding === 'utf-8'
     ? rawBuffer.toString('utf-8')
     : iconv.decode(rawBuffer, config.encoding);
 
-  // Parse XML
   const parser = new XMLParser({
     ignoreAttributes: false,
     parseTagValue: false,
@@ -125,7 +117,6 @@ async function importXmlInMemory(
   });
   const result = parser.parse(xmlContent);
 
-  // Navigate to records using recordPath (e.g. "DATA.RECORD")
   let records = collectRecords(result, config.recordPath);
   if (records.length === 0) {
     console.error(`  No records found at path: ${config.recordPath}`);
@@ -133,221 +124,167 @@ async function importXmlInMemory(
   }
 
   console.log(`  Parsed ${records.length} records`);
-  return batchUpsert(pool, config, records, sourceFile);
-}
-
-// ─── Parallel Worker Pool ──────────────────────────────────────────
-
-interface WorkerPool {
-  queue: Record<string, unknown>[][];
-  activeWorkers: number;
-  imported: number;
-  errors: number;
-  recordCount: number;
-  startTime: number;
-  done: boolean;
-  fileStream: ReadStream | null;
-  resolve: ((stats: { imported: number; errors: number }) => void) | null;
-  pool: Pool;
-  config: RegistryConfig;
-  sourceFile: string;
-}
-
-function createWorkerPool(
-  pool: Pool,
-  config: RegistryConfig,
-  sourceFile: string,
-): WorkerPool {
-  return {
-    queue: [],
-    activeWorkers: 0,
-    imported: 0,
-    errors: 0,
-    recordCount: 0,
-    startTime: Date.now(),
-    done: false,
-    fileStream: null,
-    resolve: null,
-    pool,
-    config,
-    sourceFile,
-  };
-}
-
-async function runWorker(wp: WorkerPool) {
-  while (wp.queue.length > 0) {
-    const batch = wp.queue.shift()!;
-
-    // Resume reading if queue drained below threshold
-    if (wp.fileStream && wp.queue.length < MAX_QUEUE / 2) {
-      wp.fileStream.resume();
-    }
-
-    const client = await wp.pool.connect();
-    try {
-      const result = await batchUpsertSingle(client, wp.config, batch, wp.sourceFile);
-      wp.imported += result.imported;
-      wp.errors += result.errors;
-    } catch (error: any) {
-      wp.errors += batch.length;
-      console.error(`  Worker error: ${error.message}`);
-    } finally {
-      client.release();
-    }
+  let imported = 0;
+  let errors = 0;
+  for (let i = 0; i < records.length; i += BATCH_SIZE) {
+    const batch = records.slice(i, i + BATCH_SIZE);
+    const result = await multiRowUpsert(pool, config, batch, sourceFile);
+    imported += result.imported;
+    errors += result.errors;
   }
-
-  wp.activeWorkers--;
-
-  // Log progress
-  const elapsed = ((Date.now() - wp.startTime) / 1000).toFixed(0);
-  const rate = Math.round(wp.imported / ((Date.now() - wp.startTime) / 1000)) || 0;
-  console.log(`  [${elapsed}s] ${wp.config.name}: ${wp.imported} imported, ${wp.errors} errors (${rate}/s, workers: ${wp.activeWorkers}, queue: ${wp.queue.length})`);
-
-  // If done and no more workers, resolve
-  if (wp.done && wp.activeWorkers === 0 && wp.queue.length === 0 && wp.resolve) {
-    wp.resolve({ imported: wp.imported, errors: wp.errors });
-  }
-}
-
-function enqueueBatch(wp: WorkerPool, batch: Record<string, unknown>[]) {
-  wp.queue.push(batch);
-
-  // Pause reading if queue is full
-  if (wp.fileStream && wp.queue.length >= MAX_QUEUE) {
-    wp.fileStream.pause();
-  }
-
-  // Spawn workers up to WORKER_CONCURRENCY — increment counter synchronously to avoid race
-  while (wp.activeWorkers < WORKER_CONCURRENCY && wp.queue.length > 0) {
-    wp.activeWorkers++;
-    runWorker(wp);
-  }
+  return { registry: config.name, imported, errors, elapsed: 0 };
 }
 
 /**
- * SAX streaming XML parsing for large files with parallel DB workers
+ * SAX streaming with sequential multi-row INSERTs.
+ * Graceful on SAX errors — returns partial results instead of rejecting.
  */
 async function importXmlStreaming(
-  _parentPool: Pool,
+  pool: Pool,
   config: RegistryConfig,
   filePath: string,
   sourceFile: string
 ): Promise<ImportStats> {
-  // Dedicated pool isolated from the sync orchestrator's pool
-  const dedicatedPool = new Pool({
-    host: process.env.POSTGRES_HOST || 'localhost',
-    port: parseInt(process.env.POSTGRES_PORT || '5435', 10),
-    user: process.env.POSTGRES_USER || 'openreyestr',
-    password: process.env.POSTGRES_PASSWORD,
-    database: process.env.POSTGRES_DB || 'openreyestr',
-    max: WORKER_CONCURRENCY + 2,
-  });
+  return new Promise((resolve, reject) => {
+    const saxStream = sax.createStream(true, { trim: true });
+    const pathParts = config.recordPath.split('.');
+    const recordTag = pathParts[pathParts.length - 1];
 
-  try {
-    const result = await new Promise<{ imported: number; errors: number }>((resolve, reject) => {
-      const wp = createWorkerPool(dedicatedPool, config, sourceFile);
-      wp.resolve = resolve;
+    const fileStream = createReadStream(filePath, { highWaterMark: 256 * 1024 });
 
-      const saxStream = sax.createStream(true, { trim: true });
-      const pathParts = config.recordPath.split('.');
-      const recordTag = pathParts[pathParts.length - 1];
+    let currentRecord: Record<string, unknown> | null = null;
+    let currentTag = '';
+    let currentText = '';
+    let currentAttrs: Record<string, string> = {};
+    let tagStack: string[] = [];
+    // For item-based XML (EDRNPA): <item name="X"><text>Y</text></item>
+    let currentItemName: string | null = null;
+    let itemArray: Record<string, string>[] | null = null;
+    let batch: Record<string, unknown>[] = [];
+    let pendingBatch: Promise<void> | null = null;
+    let totalImported = 0;
+    let totalErrors = 0;
+    let recordCount = 0;
+    const startTime = Date.now();
 
-      const fileStream = createReadStream(filePath, { highWaterMark: 256 * 1024 });
-      wp.fileStream = fileStream;
-
-      let currentRecord: Record<string, string> | null = null;
-      let currentTag = '';
-      let currentText = '';
-      let tagStack: string[] = [];
-      let batch: Record<string, unknown>[] = [];
-
-      saxStream.on('opentag', (node: sax.Tag) => {
-        tagStack.push(node.name);
-        if (node.name === recordTag) {
-          currentRecord = {};
-        }
-        if (currentRecord) {
-          currentTag = node.name;
-          currentText = '';
-        }
-      });
-
-      saxStream.on('text', (text: string) => {
-        if (currentRecord && currentTag) {
-          currentText += text;
-        }
-      });
-
-      saxStream.on('cdata', (text: string) => {
-        if (currentRecord && currentTag) {
-          currentText += text;
-        }
-      });
-
-      saxStream.on('closetag', (tagName: string) => {
-        if (currentRecord && currentTag === tagName && tagName !== recordTag) {
-          const trimmed = currentText.trim();
-          if (trimmed) {
-            currentRecord[currentTag] = trimmed;
-          }
-        }
-        currentTag = '';
+    saxStream.on('opentag', (node: sax.Tag) => {
+      tagStack.push(node.name);
+      if (node.name === recordTag) {
+        currentRecord = {};
+        itemArray = null;
+      }
+      if (currentRecord) {
+        currentTag = node.name;
         currentText = '';
-        tagStack.pop();
-
-        if (tagName === recordTag && currentRecord) {
-          batch.push(currentRecord);
-          currentRecord = null;
-          wp.recordCount++;
-
-          if (batch.length >= BATCH_SIZE) {
-            enqueueBatch(wp, batch);
-            batch = [];
-          }
+        currentAttrs = node.attributes as Record<string, string>;
+        // Track <item name="..."> for item-based XML
+        if (node.name === 'item' && currentAttrs.name) {
+          currentItemName = currentAttrs.name;
         }
-      });
-
-      saxStream.on('end', () => {
-        // Flush remaining batch
-        if (batch.length > 0) {
-          enqueueBatch(wp, batch);
-          batch = [];
-        }
-        wp.done = true;
-
-        // If all workers already finished
-        if (wp.activeWorkers === 0 && wp.queue.length === 0 && wp.resolve) {
-          wp.resolve({ imported: wp.imported, errors: wp.errors });
-        }
-      });
-
-      saxStream.on('error', (err: Error) => {
-        console.error('  SAX parse error:', err.message);
-        reject(err);
-      });
-
-      fileStream.on('error', (err: Error) => {
-        console.error('  File stream error:', err.message);
-        reject(err);
-      });
-
-      if (config.encoding !== 'utf-8') {
-        const decoder = iconv.decodeStream(config.encoding);
-        decoder.on('error', (err: Error) => {
-          console.error('  Decoder stream error:', err.message);
-          reject(err);
-        });
-        fileStream.pipe(decoder).pipe(saxStream);
-      } else {
-        fileStream.pipe(saxStream);
       }
     });
 
-    console.log(`\n  Streaming complete: ${result.imported} imported, ${result.errors} errors`);
-    return { registry: config.name, imported: result.imported, errors: result.errors, elapsed: 0 };
-  } finally {
-    await dedicatedPool.end();
-  }
+    saxStream.on('text', (text: string) => {
+      if (currentRecord && currentTag) {
+        currentText += text;
+      }
+    });
+
+    saxStream.on('cdata', (text: string) => {
+      if (currentRecord && currentTag) {
+        currentText += text;
+      }
+    });
+
+    saxStream.on('closetag', (tagName: string) => {
+      if (currentRecord) {
+        const trimmed = currentText.trim();
+
+        if (tagName === 'text' && currentItemName) {
+          // Inside <item name="X"><text>Y</text></item> — build item array for extractItemText
+          if (!itemArray) itemArray = [];
+          itemArray.push({ '@_name': currentItemName, text: trimmed });
+        } else if (tagName === 'item' && currentItemName) {
+          currentItemName = null;
+        } else if (tagName !== recordTag && trimmed && !currentItemName) {
+          // Simple flat field (non-item XML)
+          currentRecord[currentTag] = trimmed;
+        }
+      }
+      currentTag = '';
+      currentText = '';
+      tagStack.pop();
+
+      if (tagName === recordTag && currentRecord) {
+        // Attach item array if present (for extractItemText compatibility)
+        if (itemArray && itemArray.length > 0) {
+          currentRecord['item'] = itemArray;
+        }
+        batch.push(currentRecord);
+        currentRecord = null;
+        itemArray = null;
+        recordCount++;
+
+        if (batch.length >= BATCH_SIZE) {
+          const batchToProcess = batch;
+          batch = [];
+          fileStream.pause();
+          pendingBatch = multiRowUpsert(pool, config, batchToProcess, sourceFile)
+            .then(stats => {
+              totalImported += stats.imported;
+              totalErrors += stats.errors;
+              if (recordCount % 10000 < BATCH_SIZE) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+                const rate = Math.round(totalImported / ((Date.now() - startTime) / 1000)) || 0;
+                console.log(`  [${elapsed}s] ${config.name}: ${totalImported} imported, ${totalErrors} errors (${rate}/s)`);
+              }
+              pendingBatch = null;
+              fileStream.resume();
+            })
+            .catch(err => {
+              console.error('  Batch error:', err);
+              pendingBatch = null;
+              fileStream.resume();
+            });
+        }
+      }
+    });
+
+    const finalize = async () => {
+      if (pendingBatch) await pendingBatch;
+      if (batch.length > 0) {
+        const stats = await multiRowUpsert(pool, config, batch, sourceFile);
+        totalImported += stats.imported;
+        totalErrors += stats.errors;
+      }
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`\n  Streaming complete: ${recordCount} records, ${totalImported} imported, ${totalErrors} errors in ${elapsed}s`);
+      resolve({ registry: config.name, imported: totalImported, errors: totalErrors, elapsed: 0 });
+    };
+
+    saxStream.on('end', finalize);
+
+    saxStream.on('error', (err: Error) => {
+      console.warn(`  SAX parse warning (continuing): ${err.message.split('\n')[0]}`);
+      finalize();
+    });
+
+    fileStream.on('error', (err: Error) => {
+      console.error('  File stream error:', err.message);
+      reject(err);
+    });
+
+    if (config.encoding !== 'utf-8') {
+      const decoder = iconv.decodeStream(config.encoding);
+      decoder.on('error', (err: Error) => {
+        console.error('  Decoder stream error:', err.message);
+        reject(err);
+      });
+      fileStream.pipe(decoder).pipe(saxStream);
+    } else {
+      fileStream.pipe(saxStream);
+    }
+  });
 }
 
 /**
@@ -365,13 +302,11 @@ function mapRecord(
       mapped[dbCol] = mapping('', record);
     } else {
       const value = record[mapping];
-      // Convert empty strings to null (prevents PG "invalid input syntax for type date" errors)
       const strValue = value != null ? String(value).trim() : null;
       mapped[dbCol] = strValue === '' ? null : strValue;
     }
   }
 
-  // Ensure unique key columns have values
   const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
   for (const key of uniqueKeys) {
     if (!mapped[key] && mapped[key] !== 0) {
@@ -383,19 +318,18 @@ function mapRecord(
 }
 
 /**
- * Upsert a single batch using a provided PoolClient (caller manages connection lifecycle)
+ * Multi-row INSERT ... VALUES (...),(...),... ON CONFLICT DO UPDATE
+ * Single round-trip per batch. Falls back to row-by-row on failure.
  */
-async function batchUpsertSingle(
-  client: PoolClient,
+async function multiRowUpsert(
+  pool: Pool,
   config: RegistryConfig,
   records: Record<string, unknown>[],
   sourceFile: string
 ): Promise<{ imported: number; errors: number }> {
-  let imported = 0;
-  let errors = 0;
-
   const columns = Object.keys(config.fieldMap);
   const allColumns = [...columns, 'raw_data', 'source_file'];
+  const colCount = allColumns.length;
 
   const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
   const conflictTarget = uniqueKeys.join(', ');
@@ -404,14 +338,42 @@ async function batchUpsertSingle(
     .map(c => `${c} = EXCLUDED.${c}`)
     .concat(['raw_data = EXCLUDED.raw_data', 'updated_at = CURRENT_TIMESTAMP']);
 
+  const allValues: unknown[] = [];
+  const rowPlaceholders: string[] = [];
+
+  for (let i = 0; i < records.length; i++) {
+    const mapped = mapRecord(config, records[i], i + 1);
+    const offset = i * colCount;
+    const ph: string[] = [];
+    for (let c = 0; c < allColumns.length; c++) {
+      const col = allColumns[c];
+      ph.push(`$${offset + c + 1}`);
+      if (col === 'raw_data') {
+        allValues.push(JSON.stringify(records[i]));
+      } else if (col === 'source_file') {
+        allValues.push(sourceFile);
+      } else {
+        allValues.push(mapped[col] ?? null);
+      }
+    }
+    rowPlaceholders.push(`(${ph.join(', ')})`);
+  }
+
+  const sql = `INSERT INTO ${config.tableName} (${allColumns.join(', ')})
+    VALUES ${rowPlaceholders.join(', ')}
+    ON CONFLICT (${conflictTarget}) DO UPDATE SET
+      ${updateCols.join(', ')}`;
+
+  const client: PoolClient = await pool.connect();
   try {
-    await client.query('BEGIN');
-
+    await client.query(sql, allValues);
+    return { imported: records.length, errors: 0 };
+  } catch (err) {
+    // Batch failed — fall back to row-by-row to isolate bad records
+    let imported = 0;
+    let errors = 0;
     for (let j = 0; j < records.length; j++) {
-      const sp = `sp_${j}`;
       try {
-        await client.query(`SAVEPOINT ${sp}`);
-
         const mapped = mapRecord(config, records[j], j + 1);
         const values = allColumns.map((col) => {
           if (col === 'raw_data') return JSON.stringify(records[j]);
@@ -419,55 +381,19 @@ async function batchUpsertSingle(
           return mapped[col] ?? null;
         });
         const placeholders = values.map((_, idx) => `$${idx + 1}`).join(', ');
-
-        const sql = `INSERT INTO ${config.tableName} (${allColumns.join(', ')})
+        const rowSql = `INSERT INTO ${config.tableName} (${allColumns.join(', ')})
           VALUES (${placeholders})
           ON CONFLICT (${conflictTarget}) DO UPDATE SET
             ${updateCols.join(', ')}`;
-
-        await client.query(sql, values);
-        await client.query(`RELEASE SAVEPOINT ${sp}`);
+        await client.query(rowSql, values);
         imported++;
-      } catch (err) {
-        await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+      } catch (rowErr) {
         errors++;
-        if (errors <= 3) console.error(`  Error importing record:`, err);
+        if (errors <= 3) console.error(`  Error importing record:`, rowErr);
       }
     }
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('  Batch failed:', err);
+    return { imported, errors };
+  } finally {
+    client.release();
   }
-
-  return { imported, errors };
-}
-
-/**
- * Batch upsert records into the database (used by in-memory path)
- */
-async function batchUpsert(
-  pool: Pool,
-  config: RegistryConfig,
-  records: Record<string, unknown>[],
-  sourceFile: string
-): Promise<ImportStats> {
-  let imported = 0;
-  let errors = 0;
-
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const batch = records.slice(i, i + BATCH_SIZE);
-    const client: PoolClient = await pool.connect();
-
-    try {
-      const result = await batchUpsertSingle(client, config, batch, sourceFile);
-      imported += result.imported;
-      errors += result.errors;
-    } finally {
-      client.release();
-    }
-  }
-
-  return { registry: config.name, imported, errors, elapsed: 0 };
 }
