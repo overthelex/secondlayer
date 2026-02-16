@@ -57,55 +57,74 @@ async function waitForCaptcha(page: Page): Promise<void> {
   throw new Error('CAPTCHA timeout — not solved within 5 minutes');
 }
 
+async function clickMultiSelectOption(page: Page, labelText: string): Promise<boolean> {
+  // These are custom multi-select dropdowns: div.multiSelectOptions > label
+  // The label contains a checkbox input + text. Clicking the label toggles it.
+
+  // First, the dropdown panel might be hidden — we need to open it by clicking the trigger.
+  // Find all multiSelect containers and expand any that contain our target option.
+  const containers = page.locator('.multiSelectOptions');
+  const count = await containers.count();
+
+  for (let i = 0; i < count; i++) {
+    const container = containers.nth(i);
+    const label = container.locator(`label:has-text("${labelText}")`);
+
+    if (await label.count() > 0) {
+      // Make sure the container is visible — if not, click its trigger to expand
+      const isVisible = await container.isVisible().catch(() => false);
+      if (!isVisible) {
+        // The trigger is usually a sibling element before the options div
+        const trigger = container.locator('..').locator('.multiSelectTrigger, .trigger, > span, > a, > div').first();
+        if (await trigger.count() > 0) {
+          await trigger.click();
+          await sleep(300);
+        }
+      }
+
+      await label.first().click();
+      console.log(`  Checked: "${labelText}"`);
+      return true;
+    }
+  }
+
+  // Fallback: just find any label with that text in the page
+  const fallbackLabel = page.locator(`.multiSelectOptions label:has-text("${labelText}")`);
+  if (await fallbackLabel.count() > 0) {
+    // Scroll into view and click
+    await fallbackLabel.first().scrollIntoViewIfNeeded();
+    await fallbackLabel.first().click();
+    console.log(`  Checked (fallback): "${labelText}"`);
+    return true;
+  }
+
+  console.log(`  WARNING: Could not find multi-select option "${labelText}"`);
+  return false;
+}
+
 async function fillSearchForm(page: Page): Promise<void> {
   console.log('Filling search form...');
 
-  // Select "Цивільне" (Civil) in proceeding type
-  // The form uses select elements — find by label text
-  const proceedingSelect = page.locator('select[name="CSType"]');
-  if (await proceedingSelect.count() > 0) {
-    await proceedingSelect.selectOption({ label: 'Цивільне' });
-    console.log('  Selected proceeding type: Цивільне');
-  } else {
-    // Try alternative selector
-    const selects = page.locator('select');
-    const count = await selects.count();
-    for (let i = 0; i < count; i++) {
-      const options = await selects.nth(i).locator('option').allTextContents();
-      if (options.some(o => o.includes('Цивільне'))) {
-        await selects.nth(i).selectOption({ label: 'Цивільне' });
-        console.log('  Selected proceeding type: Цивільне');
-        break;
-      }
-    }
-  }
+  // Wait for form to be interactive
+  await page.waitForSelector('select', { timeout: 10000 });
+  await sleep(1000);
 
+  // The proceeding type and decision form use custom multi-select dropdowns:
+  // div.multiSelectOptions > label (with checkbox inside)
+  // We need to click the label to toggle the checkbox.
+
+  // Select "Цивільне" — click the label inside multiSelectOptions
+  await clickMultiSelectOption(page, 'Цивільне');
   await sleep(500);
 
-  // Select "Рішення" (Decision) in form type
-  const formSelect = page.locator('select[name="VRType"]');
-  if (await formSelect.count() > 0) {
-    await formSelect.selectOption({ label: 'Рішення' });
-    console.log('  Selected decision form: Рішення');
-  } else {
-    const selects = page.locator('select');
-    const count = await selects.count();
-    for (let i = 0; i < count; i++) {
-      const options = await selects.nth(i).locator('option').allTextContents();
-      if (options.some(o => o.includes('Рішення'))) {
-        await selects.nth(i).selectOption({ label: 'Рішення' });
-        console.log('  Selected decision form: Рішення');
-        break;
-      }
-    }
-  }
-
+  // Select "Рішення" — click the label inside multiSelectOptions
+  await clickMultiSelectOption(page, 'Рішення');
   await sleep(500);
 
   // Set records per page to 100
-  const pageSizeSelect = page.locator('select[name="PagingInfo.ItemsPerPage"]');
-  if (await pageSizeSelect.count() > 0) {
-    await pageSizeSelect.selectOption('100');
+  const pageSizeEl = page.locator('select[name="PagingInfo.ItemsPerPage"]');
+  if (await pageSizeEl.count() > 0) {
+    await pageSizeEl.selectOption('100');
     console.log('  Set page size: 100');
   }
 }
@@ -113,24 +132,33 @@ async function fillSearchForm(page: Page): Promise<void> {
 async function clickSearch(page: Page): Promise<void> {
   console.log('Clicking search button...');
 
-  // Try multiple selectors for the search button
-  const searchBtn = page.locator('input[type="submit"][value="Пошук"], button:has-text("Пошук"), input[value="Шукати"]');
-  if (await searchBtn.count() > 0) {
-    await searchBtn.first().click();
-  } else {
-    // Fallback: find any submit button
-    await page.locator('input[type="submit"]').first().click();
+  // The site uses Btn_search_click() JS function to submit
+  // Try calling it directly, then fall back to clicking the button element
+  try {
+    await page.evaluate('Btn_search_click()');
+  } catch {
+    // Fallback: find the search button by various selectors
+    const searchBtn = page.locator(
+      '#search_btn, .searchbtn, input[type="submit"], button:has-text("Пошук"), a[onclick*="Btn_search"]'
+    );
+    if (await searchBtn.count() > 0) {
+      await searchBtn.first().click();
+    } else {
+      // Last resort: submit the form
+      await page.locator('#login > form, form').first().evaluate((form: any) => form.submit());
+    }
   }
 
   // Wait for CAPTCHA or results
   await sleep(3000);
   await waitForCaptcha(page);
 
-  // Wait for results to appear
+  // Wait for results to appear — try multiple known result container selectors
   console.log('Waiting for results...');
-  await page.waitForSelector('.search_result, .result, table.results, #divresult', {
-    timeout: 60000,
-  }).catch(() => {
+  await page.waitForSelector(
+    '.search_result, .result, table.results, #divresult, a[href*="/Review/"]',
+    { timeout: 60000 }
+  ).catch(() => {
     console.log('  Could not detect standard result container, continuing anyway...');
   });
 
