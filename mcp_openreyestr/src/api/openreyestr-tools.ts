@@ -590,8 +590,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`debtor_name ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', debtor_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (edrpou) {
@@ -632,8 +632,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`debtor_name ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', debtor_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (debtor_edrpou) {
@@ -642,8 +642,8 @@ export class OpenReyestrTools {
       paramIndex++;
     }
     if (creditor_name) {
-      conditions.push(`creditor_name ILIKE $${paramIndex}`);
-      values.push(`%${creditor_name}%`);
+      conditions.push(`to_tsvector('russian', creditor_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(creditor_name);
       paramIndex++;
     }
     if (proceeding_status) {
@@ -679,8 +679,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`debtor_name ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', debtor_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (debtor_edrpou) {
@@ -773,8 +773,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`method_name ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', method_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (expertise_type) {
@@ -810,8 +810,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`act_title ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', act_title) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (act_type) {
@@ -857,8 +857,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`(settlement_name ILIKE $${paramIndex} OR full_name ILIKE $${paramIndex})`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', settlement_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (region) {
@@ -899,8 +899,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`street_name ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
+      conditions.push(`to_tsvector('russian', street_name) @@ plainto_tsquery('russian', $${paramIndex})`);
+      values.push(query);
       paramIndex++;
     }
     if (settlement) {
