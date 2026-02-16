@@ -28,6 +28,7 @@ import {
   DOMAIN_TOOL_MAP,
   DEFAULT_TOOLS,
 } from '../prompts/chat-system-prompt.js';
+import { buildEnrichedSystemPrompt, SCENARIO_CATALOG } from '../prompts/tool-registry-catalog.js';
 import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-service.js';
 
 // ============================
@@ -94,8 +95,8 @@ export class ChatService {
         model: selection.model,
       });
 
-      // 3. Build messages with token-aware context window
-      const messages = this.buildContextMessages(history, query);
+      // 3. Build messages with token-aware context window (enriched with scenario catalog)
+      const messages = this.buildContextMessages(history, query, classification.domains);
 
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
@@ -277,13 +278,20 @@ export class ChatService {
    */
   private buildContextMessages(
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
-    query: string
+    query: string,
+    classifiedDomains?: string[]
   ): UnifiedMessage[] {
+    const enrichedPrompt = buildEnrichedSystemPrompt(
+      CHAT_SYSTEM_PROMPT,
+      SCENARIO_CATALOG,
+      classifiedDomains
+    );
+
     const messages: UnifiedMessage[] = [
-      { role: 'system', content: CHAT_SYSTEM_PROMPT },
+      { role: 'system', content: enrichedPrompt },
     ];
 
-    const systemChars = CHAT_SYSTEM_PROMPT.length;
+    const systemChars = enrichedPrompt.length;
     const queryChars = query.length;
     let availableChars = MAX_CONTEXT_CHARS - systemChars - queryChars;
 

@@ -2,7 +2,15 @@
  * System prompt for the agentic chat pipeline.
  * Instructs the LLM on how to use available legal tools
  * and format responses for Ukrainian legal questions.
+ *
+ * Tool-selection sections and multi-step strategies have been moved to
+ * tool-registry-catalog.ts and are injected dynamically via buildEnrichedSystemPrompt().
  */
+
+import {
+  DERIVED_DOMAIN_TOOL_MAP,
+  DERIVED_DEFAULT_TOOLS,
+} from './tool-registry-catalog.js';
 
 export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент SecondLayer, який спеціалізується на українському праві.
 
@@ -14,39 +22,7 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 1. Спочатку визнач, які джерела потрібні для відповіді (судова практика, законодавство, реєстри)
 2. Викликай відповідні інструменти (можна кілька одночасно)
 3. Проаналізуй результати та сформуй відповідь
-
-## Багатокрокові стратегії
-- **Законодавство + судова практика**: спочатку знайди відповідну статтю через get_legislation_article, потім шукай судову практику щодо застосування цієї статті через search_legal_precedents
-- **Реєстр + суди**: перевір суб'єкт через openreyestr_get_by_edrpou або openreyestr_search_entities, потім знайди їхні справи через count_cases_by_party
-- **Боржники + виконавчі провадження**: шукай боржника через openreyestr_search_debtors, деталі проваджень через openreyestr_search_enforcement_proceedings
-- **Банкрутство**: пошук справ про банкрутство через openreyestr_search_bankruptcy_cases, арбітражних керуючих через openreyestr_search_arbitration_managers
-- **Нотаріуси та експерти**: пошук нотаріусів через openreyestr_search_notaries, судових експертів через openreyestr_search_court_experts, методик експертиз через openreyestr_search_forensic_methods
-- **Загальне юридичне питання**: пошукай через search_legislation відповідний закон, потім get_legislation_article для конкретної статті, і search_legal_precedents для практики
-
-## Вибір інструменту для законодавства
-- Якщо потрібна **конкретна стаття** (наприклад, "Стаття 16 ЦК") → використовуй **get_legislation_article**
-- Якщо потрібно **знайти релевантний закон** за темою → використовуй **search_legislation**
-- Якщо потрібні **процесуальні норми** → використовуй **search_procedural_norms**
-- Якщо потрібно **знайти статті за описом ситуації** → використовуй **find_relevant_law_articles**
-
-## Вибір інструменту для судових справ
-- Якщо користувач вказує **конкретний номер справи** (наприклад, "922/989/18", "757/1234/22-ц") → використовуй **get_court_decision** (параметр case_number)
-- Якщо потрібна **вся історія справи через усі інстанції** → використовуй **get_case_documents_chain** (параметр case_number)
-- Якщо потрібен **тематичний пошук практики** (наприклад, "практика щодо виселення") → використовуй **search_legal_precedents** або **search_supreme_court_practice**
-- Для search_supreme_court_practice обов'язково вказуй правильний procedure_code:
-  - cpc = цивільне судочинство (суди з кодами 1xx, 3xx, 5xx, 7xx)
-  - gpc = господарське судочинство (суди з кодами 9xx)
-  - cac = адміністративне судочинство (суди з кодами 8xx, 160, 260)
-  - crpc = кримінальне судочинство
-
-## Формат відповіді
-Структуруй відповідь так:
-
-**Правова норма**: Які статті законів регулюють це питання
-**Позиція суду**: Як суди вирішують подібні справи (з посиланням на конкретні рішення)
-**Висновок**: Коротка відповідь на запитання користувача
-**Ризики**: Можливі ризики або нюанси, на які варто звернути увагу
-**Джерела**: Перелік використаних джерел (номери справ, статті законів)
+4. Використовуй шаблон відповіді з каталогу сценаріїв нижче
 
 ## Обробка результатів реєстру (OpenReyestr)
 - Якщо результат містить "found": false — повідом користувача, що суб'єкт не знайдено в Єдиному державному реєстрі
@@ -54,12 +30,6 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 - Запропонуй альтернативні способи пошуку з suggestions
 - Якщо ЄДРПОУ не знайдено — запропонуй пошук за назвою через openreyestr_search_entities
 - Якщо пошук за назвою не дав результатів — запропонуй уточнити запит
-
-## Вибір інструменту для парламентських даних
-- Якщо потрібен **список депутатів фракції** (наприклад, "Слуга Народу", "ОПЗЖ") → використовуй **rada_get_deputy_info** з параметром **faction**
-- Якщо потрібна **інформація про конкретного депутата** → використовуй **rada_get_deputy_info** з параметром **name**
-- Якщо потрібен **пошук законопроєктів** → використовуй **rada_search_parliament_bills**
-- Коли користувач просить "повний список" або "всіх" — викликай ТОЙ САМИЙ інструмент повторно і покажи ВСІ результати
 
 ## Формат юридичних документів (позовні заяви, скарги, клопотання, заяви)
 
@@ -225,81 +195,19 @@ export const CHAT_INTENT_CLASSIFICATION_PROMPT = `Ти — класифікат�
 Поле "keywords" — витягни основні пошукові терміни українською для подальших викликів інструментів.`;
 
 /**
- * Map of intent domains to relevant tool names.
- * Used to filter the 45+ tools down to a focused subset for the LLM.
+ * Domain→tools map and default tools — derived from the scenario catalog.
+ * Re-exported for backward compatibility with ChatService and other consumers.
  */
 export const DOMAIN_TOOL_MAP: Record<string, string[]> = {
-  // Court cases and judicial practice
-  court: [
-    'search_legal_precedents',
-    'search_supreme_court_practice',
-    'get_court_decision',
-    'get_case_documents_chain',
-    'find_similar_fact_pattern_cases',
-    'compare_practice_pro_contra',
-    'count_cases_by_party',
-  ],
-  // Legislation
-  legislation: [
-    'search_legislation',
-    'get_legislation_article',
-    'get_legislation_section',
-    'find_relevant_law_articles',
-    'search_procedural_norms',
-  ],
-  // Legal advice (comprehensive — court + legislation)
-  legal_advice: [
-    'search_legal_precedents',
-    'search_legislation',
-    'get_legislation_article',
-    'find_relevant_law_articles',
-    'get_court_decision',
-    'get_case_documents_chain',
-  ],
-  // Business registry + state registries
+  ...DERIVED_DOMAIN_TOOL_MAP,
+  // Ensure registry tools that don't appear in catalog scenarios are still mapped
   registry: [
-    'openreyestr_search_entities',
-    'openreyestr_get_entity_details',
-    'openreyestr_search_beneficiaries',
-    'openreyestr_get_by_edrpou',
-    'openreyestr_search_debtors',
-    'openreyestr_search_enforcement_proceedings',
-    'openreyestr_search_bankruptcy_cases',
-    'openreyestr_search_notaries',
-    'openreyestr_search_court_experts',
-    'openreyestr_search_arbitration_managers',
-    'openreyestr_search_forensic_methods',
-    'openreyestr_search_legal_acts',
-    'openreyestr_search_administrative_units',
-    'openreyestr_search_streets',
-    'openreyestr_search_special_forms',
-  ],
-  // Parliament
-  parliament: [
-    'rada_search_parliament_bills',
-    'rada_get_deputy_info',
-    'rada_search_legislation_text',
-    'rada_analyze_voting_record',
-  ],
-  // Documents
-  documents: [
-    'store_document',
-    'list_documents',
-    'semantic_search',
+    ...(DERIVED_DOMAIN_TOOL_MAP.registry || []),
+    ...['openreyestr_get_entity_details', 'openreyestr_search_arbitration_managers',
+      'openreyestr_search_legal_acts', 'openreyestr_search_administrative_units',
+      'openreyestr_search_streets', 'openreyestr_search_special_forms',
+    ].filter((t) => !(DERIVED_DOMAIN_TOOL_MAP.registry || []).includes(t)),
   ],
 };
 
-/**
- * Default tools to always include (most commonly useful).
- */
-export const DEFAULT_TOOLS = [
-  'search_legal_precedents',
-  'search_legislation',
-  'get_legislation_article',
-  'get_court_decision',
-  'get_case_documents_chain',
-  'search_supreme_court_practice',
-  'openreyestr_get_by_edrpou',
-  'openreyestr_search_entities',
-  'openreyestr_search_debtors',
-];
+export const DEFAULT_TOOLS = DERIVED_DEFAULT_TOOLS;
