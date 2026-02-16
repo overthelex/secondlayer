@@ -354,7 +354,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
       </div>
 
       {/* Document body */}
-      <div ref={docRef} className="px-4 sm:px-8 py-6 font-serif overflow-hidden break-words">
+      <div ref={docRef} className="px-4 sm:px-8 py-6 font-sans overflow-hidden break-words">
         {lines.map((line, idx) => renderLine(line, idx))}
       </div>
     </div>
