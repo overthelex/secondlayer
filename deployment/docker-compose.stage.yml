@@ -519,7 +519,7 @@ services:
       dockerfile: deployment/Dockerfile.document-service
     image: document-service:latest
     container_name: document-service-stage
-    command: ["node", "--max-old-space-size=4096", "dist/document-service.js"]
+    command: ["node", "--max-old-space-size=5120", "--expose-gc", "dist/document-service.js"]
     depends_on:
       postgres-stage:
         condition: service_healthy
@@ -581,8 +581,9 @@ services:
       FULLTEXT_STRATEGY: scrape_only
 
       # Scrape worker concurrency
-      SCRAPE_MAX_CONCURRENT: "10"
+      SCRAPE_MAX_CONCURRENT: "5"
       SCRAPE_MAX_QUEUE_DEPTH: "200"
+      SCRAPE_SKIP_EMBEDDINGS: "true"
 
       # Security
       SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS}

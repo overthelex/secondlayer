@@ -164,9 +164,10 @@ export class ScrapeWorkerService {
         metadata: metadata || {},
       });
 
-      // Extract sections
+      // Extract sections (skip embeddings during bulk to save memory)
       let sectionsCount = 0;
       let embeddingsCount = 0;
+      const skipEmbeddings = (process.env.SCRAPE_SKIP_EMBEDDINGS || '').toLowerCase() === 'true';
 
       try {
         const sections = await this.sectionizer.extractSections(fullTextData.text, true);
@@ -177,14 +178,16 @@ export class ScrapeWorkerService {
             await this.documentService.saveSections(doc.id, sections);
             sectionsCount = sections.length;
 
-            // Generate embeddings for key sections
-            embeddingsCount = await this.indexSections(
-              doc.id,
-              String(docId),
-              sections,
-              fullTextData.text,
-              metadata,
-            );
+            // Generate embeddings for key sections (can be skipped to save memory)
+            if (!skipEmbeddings) {
+              embeddingsCount = await this.indexSections(
+                doc.id,
+                String(docId),
+                sections,
+                fullTextData.text,
+                metadata,
+              );
+            }
           }
         }
       } catch (sectionError: any) {
