@@ -937,5 +937,137 @@ export function createAdminRoutes(db: Database): express.Router {
     }
   });
 
+  // ========================================
+  // RECENT COURT DOCUMENTS BY PRACTICE AREA
+  // ========================================
+
+  /**
+   * GET /api/admin/court-documents/recent
+   * Returns recent court documents grouped by dispute_category (вид права)
+   * Query params:
+   *   days - number of days to look back (default 30, max 365)
+   *   limit - max documents per category (default 5, max 20)
+   */
+  router.get('/court-documents/recent', async (req: Request, res: Response) => {
+    try {
+      const days = Math.min(365, Math.max(1, Number(req.query.days || 30)));
+      const limitPerCategory = Math.min(20, Math.max(1, Number(req.query.limit || 5)));
+
+      // 1. Get summary stats by dispute_category
+      const summaryResult = await db.query(`
+        SELECT
+          COALESCE(dispute_category, 'unknown') as category,
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - $1::integer * INTERVAL '1 day') as recent,
+          MIN(date) as earliest_date,
+          MAX(date) as latest_date,
+          MAX(created_at) as last_loaded_at
+        FROM documents
+        WHERE type = 'court_decision'
+        GROUP BY COALESCE(dispute_category, 'unknown')
+        ORDER BY recent DESC, total DESC
+      `, [days]);
+
+      // 2. Get recent documents per category
+      const recentResult = await db.query(`
+        WITH ranked AS (
+          SELECT
+            id, title, date, court, case_number,
+            COALESCE(dispute_category, 'unknown') as category,
+            created_at,
+            ROW_NUMBER() OVER (PARTITION BY COALESCE(dispute_category, 'unknown') ORDER BY created_at DESC) as rn
+          FROM documents
+          WHERE type = 'court_decision'
+            AND created_at >= NOW() - $1::integer * INTERVAL '1 day'
+        )
+        SELECT * FROM ranked WHERE rn <= $2
+        ORDER BY category, created_at DESC
+      `, [days, limitPerCategory]);
+
+      // 3. Load justiceKinds dictionary for human-readable category names
+      let categoryNames: Record<string, string> = {};
+      try {
+        const dictResult = await db.query(`
+          SELECT data FROM zo_dictionaries
+          WHERE dictionary_name = 'justiceKinds' AND domain = 'court_decisions'
+          LIMIT 1
+        `);
+        if (dictResult.rows[0]?.data) {
+          const items = dictResult.rows[0].data;
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              if (item.id != null && item.name) {
+                categoryNames[String(item.id)] = item.name;
+              }
+            }
+          }
+        }
+      } catch { /* dictionary not available, use codes */ }
+
+      // 4. Also try categories from court_practice domain
+      try {
+        const dictResult = await db.query(`
+          SELECT data FROM zo_dictionaries
+          WHERE dictionary_name = 'categories' AND domain = 'court_practice'
+          LIMIT 1
+        `);
+        if (dictResult.rows[0]?.data) {
+          const items = dictResult.rows[0].data;
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              if (item.id != null && item.name && !categoryNames[String(item.id)]) {
+                categoryNames[String(item.id)] = item.name;
+              }
+            }
+          }
+        }
+      } catch { /* ignore */ }
+
+      // 5. Totals
+      const totalsResult = await db.query(`
+        SELECT
+          COUNT(*) as total_court_docs,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - $1::integer * INTERVAL '1 day') as recent_court_docs
+        FROM documents
+        WHERE type = 'court_decision'
+      `, [days]);
+
+      // Build grouped response
+      const categories = summaryResult.rows.map((row: any) => {
+        const code = row.category;
+        return {
+          code,
+          name: categoryNames[code] || (code === 'unknown' ? 'Не визначено' : `Категорія ${code}`),
+          total: parseInt(row.total),
+          recent: parseInt(row.recent),
+          earliest_date: row.earliest_date,
+          latest_date: row.latest_date,
+          last_loaded_at: row.last_loaded_at,
+          documents: recentResult.rows
+            .filter((d: any) => d.category === code)
+            .map((d: any) => ({
+              id: d.id,
+              title: d.title,
+              date: d.date,
+              court: d.court,
+              case_number: d.case_number,
+              loaded_at: d.created_at,
+            })),
+        };
+      });
+
+      res.json({
+        total_court_docs: parseInt(totalsResult.rows[0]?.total_court_docs || '0'),
+        recent_court_docs: parseInt(totalsResult.rows[0]?.recent_court_docs || '0'),
+        days,
+        categories,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      logger.error('Failed to get recent court documents', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve court document statistics' });
+    }
+  });
+
   return router;
 }

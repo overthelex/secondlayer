@@ -238,6 +238,8 @@ export const api = {
       apiClient.get(`/api/admin/analytics/usage?days=${days}`),
     getCohorts: () => apiClient.get('/api/admin/analytics/cohorts'),
     getUploadMetrics: () => apiClient.get('/api/admin/upload-metrics'),
+    getRecentCourtDocs: (days: number = 30, limit: number = 5) =>
+      apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),
   },
 
   // GDPR
