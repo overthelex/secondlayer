@@ -51,7 +51,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // >> Right-aligned text (court header, addresses)
     if (line.startsWith('>> ')) {
       return (
-        <div key={idx} className="text-right text-[13px] leading-[1.6] text-claude-text">
+        <div key={idx} className="text-right text-[13px] leading-[1.6] text-claude-text break-words">
           {line.slice(3)}
         </div>
       );
@@ -60,7 +60,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // ^^ Centered text (document title)
     if (line.startsWith('^^ ')) {
       return (
-        <div key={idx} className="text-center font-bold text-[15px] tracking-wide my-4 text-claude-text uppercase">
+        <div key={idx} className="text-center font-bold text-[15px] tracking-wide my-4 text-claude-text uppercase break-words">
           {line.slice(3)}
         </div>
       );
@@ -69,7 +69,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // :: Signature / date line (right-aligned, styled)
     if (line.startsWith(':: ')) {
       return (
-        <div key={idx} className="text-right text-[13px] mt-2 text-claude-text font-medium">
+        <div key={idx} className="text-right text-[13px] mt-2 text-claude-text font-medium break-words">
           {line.slice(3)}
         </div>
       );
@@ -83,7 +83,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // ** Bold section header **
     if (line.startsWith('** ') && line.endsWith(' **')) {
       return (
-        <div key={idx} className="font-semibold text-[14px] mt-4 mb-1 text-claude-text">
+        <div key={idx} className="font-semibold text-[14px] mt-4 mb-1 text-claude-text break-words">
           {line.slice(3, -3)}
         </div>
       );
@@ -92,7 +92,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // Indented paragraph (starts with 4 spaces)
     if (line.startsWith('    ')) {
       return (
-        <p key={idx} className="text-[13px] leading-[1.7] text-claude-text pl-8 my-0.5">
+        <p key={idx} className="text-[13px] leading-[1.7] text-claude-text pl-8 my-0.5 break-words">
           {line.trimStart()}
         </p>
       );
@@ -101,7 +101,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
     // Numbered list item (1. 2. etc.)
     if (/^\d+\.\s/.test(trimmed)) {
       return (
-        <p key={idx} className="text-[13px] leading-[1.7] text-claude-text pl-4 my-0.5">
+        <p key={idx} className="text-[13px] leading-[1.7] text-claude-text pl-4 my-0.5 break-words">
           {trimmed}
         </p>
       );
@@ -109,14 +109,14 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
 
     // Default body text
     return (
-      <p key={idx} className="text-[13px] leading-[1.7] text-claude-text my-0.5">
+      <p key={idx} className="text-[13px] leading-[1.7] text-claude-text my-0.5 break-words">
         {trimmed}
       </p>
     );
   };
 
   return (
-    <div className="my-4 border border-claude-border rounded-lg bg-white shadow-sm overflow-hidden">
+    <div className="my-4 border border-claude-border rounded-lg bg-white shadow-sm overflow-hidden" style={{ overflowWrap: 'anywhere', wordBreak: 'normal' }}>
       {/* Document toolbar */}
       <div className="flex items-center justify-between px-4 py-2 bg-claude-bg/60 border-b border-claude-border">
         <span className="text-[12px] font-medium text-claude-subtext uppercase tracking-wider">
@@ -133,7 +133,7 @@ export function DocumentTemplate({ content }: DocumentTemplateProps) {
       </div>
 
       {/* Document body */}
-      <div className="px-8 py-6 font-serif">
+      <div className="px-4 sm:px-8 py-6 font-serif overflow-hidden break-words">
         {lines.map((line, idx) => renderLine(line, idx))}
       </div>
     </div>
