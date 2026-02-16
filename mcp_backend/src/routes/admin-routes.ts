@@ -894,7 +894,7 @@ export function createAdminRoutes(db: Database): express.Router {
       let radaStats: any = null;
       let openreyestrStats: any = null;
 
-      const fetchWithTimeout = async (url: string, timeoutMs = 5000) => {
+      const fetchWithTimeout = async (url: string, timeoutMs = 30000) => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
