@@ -90,6 +90,42 @@ async function fetchAllDictionaryItems(
 }
 
 /**
+ * Known legal_acts document types.
+ * The legal_acts API (searcher.api.zakononline.com.ua) returns 403 on /v1/document_types
+ * and 500 on search, so we maintain this static mapping of Ukrainian legal document types.
+ */
+const LEGAL_ACTS_DOCUMENT_TYPES: Record<string, string> = {
+  '1': 'Закон',
+  '2': 'Кодекс',
+  '3': 'Указ',
+  '4': 'Постанова',
+  '5': 'Наказ',
+  '6': 'Розпорядження',
+  '7': 'Рішення',
+  '8': 'Лист',
+  '9': 'Інструкція',
+  '10': 'Положення',
+  '11': 'Угода',
+  '12': 'Договір',
+  '13': 'Конвенція',
+  '14': 'Декрет',
+  '15': 'Регламент',
+  '16': 'Повідомлення',
+  '17': 'Протокол',
+  '18': 'Висновок',
+  '19': 'Ухвала',
+  '20': 'Директива',
+  '21': 'Меморандум',
+  '22': 'Стандарт',
+  '23': 'Правила',
+  '24': 'Порядок',
+  '25': 'Статут',
+  '26': 'Роз\'яснення',
+  '27': 'Доповідь',
+  '28': 'Методичні рекомендації',
+};
+
+/**
  * Known legal_acts author ID -> name mapping.
  * The legal_acts API (searcher.api.zakononline.com.ua) returns 403 on /v1/authors,
  * so we maintain this mapping based on document analysis and website scraping.
@@ -233,17 +269,27 @@ async function extractLegalActsDictionaries(
     }
   }
 
-  // Build documentTypes array
-  const documentTypes = Array.from(typesMap.entries()).map(([id, name]) => ({
+  // Build documentTypes array from API results
+  let documentTypes = Array.from(typesMap.entries()).map(([id, name]) => ({
     id,
     name,
   }));
 
-  // Build authors array using known mapping + any new IDs found
-  const authors = Array.from(authorsSet).map(id => ({
+  // Build authors array using API results + known mapping
+  let authors = Array.from(authorsSet).map(id => ({
     id,
     name: LEGAL_ACTS_AUTHORS[id] || `Unknown Author (${id})`,
   }));
+
+  // Fallback to hardcoded data if API returned nothing
+  if (documentTypes.length === 0) {
+    logger.warn('API returned no document types — using hardcoded fallback');
+    documentTypes = Object.entries(LEGAL_ACTS_DOCUMENT_TYPES).map(([id, name]) => ({ id: Number(id), name }));
+  }
+  if (authors.length === 0) {
+    logger.warn('API returned no authors — using hardcoded fallback');
+    authors = Object.entries(LEGAL_ACTS_AUTHORS).map(([id, name]) => ({ id, name }));
+  }
 
   // Log any unknown authors for future mapping
   const unknownAuthors = Array.from(authorsSet).filter(id => !LEGAL_ACTS_AUTHORS[id]);
