@@ -24,25 +24,6 @@ CREATE INDEX IF NOT EXISTS idx_court_registry_checkpoint_config
 CREATE INDEX IF NOT EXISTS idx_court_registry_checkpoint_status
   ON court_registry_scrape_checkpoints(status);
 
--- Очередь URL для queue-based архитектуры
-CREATE TABLE IF NOT EXISTS court_registry_scrape_queue (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  doc_id VARCHAR(50) NOT NULL UNIQUE,
-  url TEXT NOT NULL,
-  page_number INTEGER NOT NULL,
-  checkpoint_id UUID REFERENCES court_registry_scrape_checkpoints(id) ON DELETE SET NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'pending',
-  retry_count INTEGER NOT NULL DEFAULT 0,
-  error_message TEXT,
-  scraped_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_scrape_queue_status ON court_registry_scrape_queue(status);
-CREATE INDEX IF NOT EXISTS idx_scrape_queue_checkpoint ON court_registry_scrape_queue(checkpoint_id);
-CREATE INDEX IF NOT EXISTS idx_scrape_queue_doc_id ON court_registry_scrape_queue(doc_id);
-
 -- Статистика для мониторинга и алертов
 CREATE TABLE IF NOT EXISTS court_registry_scrape_stats (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -66,11 +47,6 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_checkpoint_updated_at') THEN
     CREATE TRIGGER update_court_registry_checkpoint_updated_at
       BEFORE UPDATE ON court_registry_scrape_checkpoints
-      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_queue_updated_at') THEN
-    CREATE TRIGGER update_court_registry_queue_updated_at
-      BEFORE UPDATE ON court_registry_scrape_queue
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
 END $$;

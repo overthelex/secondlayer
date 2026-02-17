@@ -590,19 +590,18 @@ async function tryGoToPageDirect(page: Page, targetPageNum: number): Promise<boo
     if (await verifyOnResultPage(page)) return true;
   }
 
-  // Try 2: set PagingInfo.Page and submit (ASP.NET). Runs in browser.
-  const set = await page.evaluate((pageNum: number) => {
-    const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => Array<{ name: string; value: string }> } }).document;
-    if (!doc) return false;
-    const inputs = doc.querySelectorAll('input[name*="Page"], input[name*="page"]');
+  // Try 2: set PagingInfo.Page and submit (ASP.NET). Runs in browser context.
+  // Use string form to avoid TS needing 'dom' lib for `document`.
+  const set = await page.evaluate(`(() => {
+    const inputs = document.querySelectorAll('input[name*="Page"], input[name*="page"]');
     for (const inp of inputs) {
       if (inp.name.toLowerCase().includes('page') && !inp.name.toLowerCase().includes('per')) {
-        inp.value = String(pageNum);
+        inp.value = String(${targetPageNum});
         return true;
       }
     }
     return false;
-  }, targetPageNum);
+  })()`) as boolean;
   if (set) {
     const form = page.locator('form').first();
     if ((await form.count()) > 0) {
@@ -810,16 +809,17 @@ async function main() {
             if (startPage > 20) {
               console.log(`  Resume: direct page nav not available, clicking through ${startPage - 1} pages (slow)...`);
             }
-            let actualPage = 1;
             for (let i = 1; i < startPage; i++) {
               const { hasNext, captchaResult } = await goToNextPage(page);
-              actualPage = i + 1;
               if (captchaResult !== 'solved') {
                 captchaCount += captchaResult === 'timeout' ? 1 : 0;
                 blockCount += captchaResult === 'blocked' ? 1 : 0;
-                startPage = actualPage;
-                console.log(`  Resume: CAPTCHA/block on page ${actualPage}, continuing from page ${startPage}`);
-                break;
+                // goToNextPage failed → browser is still on page i, not i+1
+                await scrapeService.upsertCheckpoint(
+                  scrapeConfig, i, totalDownloaded, totalErrors, 'failed',
+                  captchaResult === 'timeout' ? 'CAPTCHA timeout during resume' : 'Access blocked during resume'
+                );
+                throw new Error(`Resume blocked at page ${i}: ${captchaResult}`);
               }
               if (!hasNext) break;
             }
