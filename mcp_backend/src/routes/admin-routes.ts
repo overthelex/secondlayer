@@ -1293,16 +1293,16 @@ export function createAdminRoutes(db: Database, prometheusUrl?: string): express
       });
 
       // Compute totals
-      const summary = byJusticeKind.reduce<{ total_documents: number; with_plaintext: number; with_html: number; with_both: number; missing_both: number }>(
-        (acc, row) => ({
-          total_documents: acc.total_documents + row.total,
-          with_plaintext: acc.with_plaintext + row.has_plaintext,
-          with_html: acc.with_html + row.has_html,
-          with_both: acc.with_both + row.has_both,
-          missing_both: acc.missing_both + row.missing_both,
-        }),
-        { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 }
-      );
+      let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 };
+      for (const row of byJusticeKind) {
+        summary = {
+          total_documents: summary.total_documents + row.total,
+          with_plaintext: summary.with_plaintext + row.has_plaintext,
+          with_html: summary.with_html + row.has_html,
+          with_both: summary.with_both + row.has_both,
+          missing_both: summary.missing_both + row.missing_both,
+        };
+      }
 
       res.json({
         checked_at: new Date().toISOString(),
