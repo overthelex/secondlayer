@@ -160,6 +160,14 @@ export const api = {
       apiClient.post('/api/billing/payment/stripe/create', data),
     createFondy: (data: { amount_uah: number }) =>
       apiClient.post('/api/billing/payment/fondy/create', data),
+    createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
+      apiClient.post('/api/billing/payment/metamask/create', data),
+    verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>
+      apiClient.post('/api/billing/payment/metamask/verify', data),
+    createBinancePay: (data: { amount_usd: number }) =>
+      apiClient.post('/api/billing/payment/binance-pay/create', data),
+    getAvailableProviders: () =>
+      apiClient.get('/api/billing/payment/available-providers'),
     getStatus: (provider: string, paymentId: string) =>
       apiClient.get(`/api/billing/payment/${provider}/${paymentId}/status`),
   },
@@ -296,6 +304,12 @@ export const api = {
       apiClient.get('/api/admin/metrics/backend-detail', { params: { range } }),
     getCostRealtimeMetrics: (range: string = '6h') =>
       apiClient.get('/api/admin/metrics/cost-realtime', { params: { range } }),
+    getUserTags: (userId: string) =>
+      apiClient.get(`/api/admin/users/${userId}/tags`),
+    toggleCryptoTag: (userId: string, enable: boolean) =>
+      enable
+        ? apiClient.put(`/api/admin/users/${userId}/tags/crypto`)
+        : apiClient.delete(`/api/admin/users/${userId}/tags/crypto`),
   },
 
   // GDPR

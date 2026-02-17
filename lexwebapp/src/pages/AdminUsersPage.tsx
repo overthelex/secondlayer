@@ -26,6 +26,7 @@ interface UserRow {
   total_requests: number;
   total_spent_usd?: number;
   last_request_at: string | null;
+  has_crypto_tag?: boolean;
 }
 
 interface UserDetail {
@@ -181,6 +182,17 @@ export function AdminUsersPage() {
     }
   };
 
+  const handleToggleCrypto = async (userId: string, currentlyEnabled: boolean) => {
+    try {
+      await api.admin.toggleCryptoTag(userId, !currentlyEnabled);
+      toast.success(currentlyEnabled ? 'Crypto tag removed' : 'Crypto tag assigned');
+      fetchUsers(pagination.offset);
+      if (selectedUserId === userId) loadDetail(userId, true);
+    } catch {
+      toast.error('Failed to toggle crypto tag');
+    }
+  };
+
   const totalPages = Math.ceil(pagination.total / PAGE_SIZE);
   const currentPage = Math.floor(pagination.offset / PAGE_SIZE) + 1;
 
@@ -328,6 +340,16 @@ export function AdminUsersPage() {
                             className="px-2 py-1 text-xs border border-claude-border rounded hover:bg-gray-100 transition-colors"
                           >
                             Limits
+                          </button>
+                          <button
+                            onClick={() => handleToggleCrypto(u.id, !!u.has_crypto_tag)}
+                            className={`px-2 py-1 text-xs border rounded transition-colors ${
+                              u.has_crypto_tag
+                                ? 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100'
+                                : 'border-claude-border text-claude-subtext hover:bg-gray-100'
+                            }`}
+                          >
+                            Crypto
                           </button>
                         </div>
                       </td>

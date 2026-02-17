@@ -314,7 +314,11 @@ export function createAdminRoutes(
             SELECT MAX(created_at)
             FROM cost_tracking ct
             WHERE ct.user_id = u.id
-          ) as last_request_at
+          ) as last_request_at,
+          EXISTS (
+            SELECT 1 FROM user_tags ut
+            WHERE ut.user_id = u.id AND ut.tag = 'crypto'
+          ) as has_crypto_tag
         FROM users u
         LEFT JOIN user_billing ub ON u.id = ub.user_id
         WHERE ${whereClause}
@@ -342,6 +346,7 @@ export function createAdminRoutes(
           monthly_limit_usd: parseFloat(row.monthly_limit_usd || 0),
           total_requests: parseInt(row.total_requests || 0),
           last_request_at: row.last_request_at,
+          has_crypto_tag: row.has_crypto_tag || false,
         })),
         pagination: {
           limit,
@@ -578,6 +583,53 @@ export function createAdminRoutes(
     } catch (error: any) {
       logger.error('Failed to update limits', { error: error.message });
       res.status(500).json({ error: 'Failed to update limits' });
+    }
+  });
+
+  // ========================================
+  // USER TAGS (CRYPTO)
+  // ========================================
+
+  router.get('/users/:userId/tags', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      const result = await db.query(
+        'SELECT tag, assigned_by, assigned_at FROM user_tags WHERE user_id = $1 ORDER BY assigned_at',
+        [userId]
+      );
+      res.json({ tags: result.rows });
+    } catch (error: any) {
+      logger.error('Failed to get user tags', { error: error.message });
+      res.status(500).json({ error: 'Failed to get user tags' });
+    }
+  });
+
+  router.put('/users/:userId/tags/crypto', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      const adminId = (req as any).user.id;
+      await db.query(
+        `INSERT INTO user_tags (user_id, tag, assigned_by) VALUES ($1, 'crypto', $2) ON CONFLICT (user_id, tag) DO NOTHING`,
+        [userId, adminId]
+      );
+      await logAdminAction(adminId, 'assign_crypto_tag', userId, null, { tag: 'crypto' }, req);
+      res.json({ success: true, message: 'Crypto tag assigned' });
+    } catch (error: any) {
+      logger.error('Failed to assign crypto tag', { error: error.message });
+      res.status(500).json({ error: 'Failed to assign crypto tag' });
+    }
+  });
+
+  router.delete('/users/:userId/tags/crypto', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      const adminId = (req as any).user.id;
+      await db.query('DELETE FROM user_tags WHERE user_id = $1 AND tag = $2', [userId, 'crypto']);
+      await logAdminAction(adminId, 'remove_crypto_tag', userId, null, { tag: 'crypto' }, req);
+      res.json({ success: true, message: 'Crypto tag removed' });
+    } catch (error: any) {
+      logger.error('Failed to remove crypto tag', { error: error.message });
+      res.status(500).json({ error: 'Failed to remove crypto tag' });
     }
   });
 

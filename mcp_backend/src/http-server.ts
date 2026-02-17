@@ -18,9 +18,14 @@ import { CostTracker } from './services/cost-tracker.js';
 import { BillingService } from './services/billing-service.js';
 import { StripeService } from './services/stripe-service.js';
 import { FondyService } from './services/fondy-service.js';
+import { MetaMaskService } from './services/metamask-service.js';
+import { BinancePayService } from './services/binance-pay-service.js';
 import { EmailService } from './services/email-service.js';
 import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
 import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
+import { MockMetaMaskService } from './services/__mocks__/metamask-service-mock.js';
+import { MockBinancePayService } from './services/__mocks__/binance-pay-service-mock.js';
+import { initializeCryptoTagMiddleware } from './middleware/crypto-tag-required.js';
 import { createBalanceCheckMiddleware } from './middleware/balance-check.js';
 import { InvoiceService } from './services/invoice-service.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
@@ -97,6 +102,8 @@ class HTTPMCPServer {
   private billingService: BillingService;
   private stripeService: StripeService | MockStripeService;
   private fondyService: FondyService | MockFondyService;
+  private metamaskService: MetaMaskService | MockMetaMaskService;
+  private binancePayService: BinancePayService | MockBinancePayService;
   private emailService: EmailService;
   private invoiceService: InvoiceService;
   private mcpSSEServer: MCPSSEServer;
@@ -351,10 +358,32 @@ class HTTPMCPServer {
       logger.info('💳 Using REAL Fondy service');
     }
 
+    const useMockMetaMask = mockPaymentsEnabled || !process.env.CRYPTO_RECEIVING_WALLET || !process.env.ETHEREUM_RPC_URL;
+    if (useMockMetaMask) {
+      this.metamaskService = new MockMetaMaskService(this.billingService, this.emailService);
+      logger.warn('Using MOCK MetaMask service');
+    } else {
+      this.metamaskService = new MetaMaskService(this.billingService, this.emailService, this.services.db);
+      logger.info('Using REAL MetaMask service');
+    }
+
+    const useMockBinancePay = mockPaymentsEnabled || !process.env.BINANCE_PAY_API_KEY || !process.env.BINANCE_PAY_SECRET_KEY;
+    if (useMockBinancePay) {
+      this.binancePayService = new MockBinancePayService(this.billingService, this.emailService);
+      logger.warn('Using MOCK Binance Pay service');
+    } else {
+      this.binancePayService = new BinancePayService(this.billingService, this.emailService, this.services.db);
+      logger.info('Using REAL Binance Pay service');
+    }
+
+    initializeCryptoTagMiddleware(this.services.db);
+
     logger.info('Payment services initialized', {
       mockPayments: mockPaymentsEnabled,
       stripeMode: useMockStripe ? 'MOCK' : 'REAL',
       fondyMode: useMockFondy ? 'MOCK' : 'REAL',
+      metamaskMode: useMockMetaMask ? 'MOCK' : 'REAL',
+      binancePayMode: useMockBinancePay ? 'MOCK' : 'REAL',
     });
 
     const openaiManager = getOpenAIManager();
@@ -398,7 +427,7 @@ class HTTPMCPServer {
       '/webhooks/stripe',
       webhookRateLimit as any,
       express.raw({ type: 'application/json', limit: '10mb' }),
-      createWebhookRouter(this.stripeService, this.fondyService)
+      createWebhookRouter(this.stripeService, this.fondyService, this.binancePayService)
     );
 
     // JSON parsing with UTF-8 support (for all other routes)
@@ -1545,7 +1574,7 @@ class HTTPMCPServer {
     // POST /api/billing/payment/stripe/create - Create Stripe PaymentIntent
     // POST /api/billing/payment/fondy/create - Create Fondy payment
     // GET /api/billing/payment/:provider/:paymentId/status - Check payment status
-    this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.stripeService, this.fondyService));
+    this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.stripeService, this.fondyService, this.metamaskService, this.binancePayService, this.services.db));
 
     // Test email route - require JWT (user login)
     // POST /api/billing/test-email - Send test email
