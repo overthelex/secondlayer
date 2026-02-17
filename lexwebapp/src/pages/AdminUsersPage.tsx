@@ -295,7 +295,7 @@ export function AdminUsersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right font-mono">
-                        ${(u.balance_usd || 0).toFixed(2)}
+                        ${Number(u.balance_usd || 0).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {(u.total_requests || 0).toLocaleString()}
@@ -346,11 +346,11 @@ export function AdminUsersPage() {
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                               <div>
                                 <div className="text-xs text-claude-subtext mb-1">Total Spent</div>
-                                <div className="font-medium">${(detail.stats.total_spent || 0).toFixed(2)}</div>
+                                <div className="font-medium">${Number(detail.stats.total_spent || 0).toFixed(2)}</div>
                               </div>
                               <div>
                                 <div className="text-xs text-claude-subtext mb-1">Avg Cost/Request</div>
-                                <div className="font-medium">${(detail.stats.avg_cost || 0).toFixed(4)}</div>
+                                <div className="font-medium">${Number(detail.stats.avg_cost || 0).toFixed(4)}</div>
                               </div>
                               <div>
                                 <div className="text-xs text-claude-subtext mb-1">Total Requests</div>
@@ -367,7 +367,7 @@ export function AdminUsersPage() {
                                     {detail.transactions.slice(0, 5).map((tx: any, i: number) => (
                                       <div key={i} className="flex items-center justify-between text-xs bg-white rounded px-3 py-1.5 border border-claude-border/50">
                                         <span className="text-claude-subtext">{tx.type}</span>
-                                        <span className="font-mono">${(tx.amount_usd || 0).toFixed(4)}</span>
+                                        <span className="font-mono">${Number(tx.amount_usd || 0).toFixed(4)}</span>
                                         <span className="text-claude-subtext">{formatDate(tx.created_at)}</span>
                                       </div>
                                     ))}
