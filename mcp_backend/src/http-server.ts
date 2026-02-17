@@ -82,6 +82,8 @@ import { createInvoiceRoutes } from './routes/invoice-routes.js';
 import { ChatService, ChatEvent } from './services/chat-service.js';
 import { getLLMManager } from './utils/llm-client-manager.js';
 import { ChatSearchCacheService } from './services/chat-search-cache-service.js';
+import { PricingService } from './services/pricing-service.js';
+import { SubscriptionService } from './services/subscription-service.js';
 
 dotenv.config();
 
@@ -1468,7 +1470,9 @@ class HTTPMCPServer {
     // GET /api/admin/analytics/usage - Usage analytics
     // GET /api/admin/api-keys - List API keys
     // GET /api/admin/settings - Get system settings
-    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db, process.env.PROMETHEUS_URL));
+    const pricingService = new PricingService(this.services.db);
+    const subscriptionService = new SubscriptionService(this.services.db);
+    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db, process.env.PROMETHEUS_URL, pricingService, subscriptionService));
 
     // Upload metrics endpoint (admin)
     this.app.get('/api/admin/upload-metrics', requireJWT as any, (async (_req: DualAuthRequest, res: express.Response) => {

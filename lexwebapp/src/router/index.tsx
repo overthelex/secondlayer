@@ -42,6 +42,7 @@ import { AdminOverviewPage } from '../pages/AdminOverviewPage';
 import { AdminUsersPage } from '../pages/AdminUsersPage';
 import { AdminCostsPage } from '../pages/AdminCostsPage';
 import { AdminDataSourcesPage } from '../pages/AdminDataSourcesPage';
+import { AdminBillingPage } from '../pages/AdminBillingPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -247,6 +248,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.ADMIN_DATA_SOURCES,
             element: <AdminDataSourcesPage />,
+          },
+          {
+            path: ROUTES.ADMIN_BILLING,
+            element: <AdminBillingPage />,
           },
         ],
       },

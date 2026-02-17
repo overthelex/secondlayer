@@ -2,6 +2,8 @@
  * Pricing Service
  * Manages pricing tiers and markup calculations for SecondLayer startup
  *
+ * DB-backed with in-memory cache and hardcoded fallback.
+ *
  * Pricing Strategy:
  * - FREE tier: 0% markup (cost pass-through for early adopters)
  * - STARTUP tier: 30% markup (standard commercial tier)
@@ -9,6 +11,7 @@
  * - ENTERPRISE tier: Custom pricing (negotiated contracts)
  */
 
+import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 
 export type PricingTier = 'free' | 'startup' | 'business' | 'enterprise' | 'internal';
@@ -18,6 +21,12 @@ export interface PricingConfig {
   markup_percentage: number;
   description: string;
   features: string[];
+  monthly_price_usd?: number;
+  annual_price_usd?: number;
+  trial_days?: number;
+  is_active?: boolean;
+  display_name?: string;
+  display_order?: number;
 }
 
 export interface PriceCalculation {
@@ -29,8 +38,13 @@ export interface PriceCalculation {
 }
 
 export class PricingService {
-  // Pricing tier configurations
-  private readonly PRICING_TIERS: Record<PricingTier, PricingConfig> = {
+  private db: Database | null;
+  private cache: Map<string, PricingConfig> | null = null;
+  private cacheLoadedAt: number = 0;
+  private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+  // Hardcoded fallback pricing tier configurations
+  private static readonly FALLBACK_TIERS: Record<PricingTier, PricingConfig> = {
     free: {
       tier: 'free',
       markup_percentage: 0,
@@ -41,6 +55,12 @@ export class PricingService {
         'Community support',
         'Rate limits apply',
       ],
+      monthly_price_usd: 0,
+      annual_price_usd: 0,
+      trial_days: 0,
+      is_active: true,
+      display_name: 'Free',
+      display_order: 0,
     },
     startup: {
       tier: 'startup',
@@ -53,6 +73,12 @@ export class PricingService {
         'Standard rate limits',
         'Monthly usage reports',
       ],
+      monthly_price_usd: 29,
+      annual_price_usd: 290,
+      trial_days: 14,
+      is_active: true,
+      display_name: 'Startup',
+      display_order: 1,
     },
     business: {
       tier: 'business',
@@ -67,6 +93,12 @@ export class PricingService {
         'Custom integrations support',
         'Advanced analytics dashboard',
       ],
+      monthly_price_usd: 99,
+      annual_price_usd: 990,
+      trial_days: 14,
+      is_active: true,
+      display_name: 'Business',
+      display_order: 2,
     },
     enterprise: {
       tier: 'enterprise',
@@ -82,6 +114,12 @@ export class PricingService {
         'Custom tool development',
         'On-premise deployment options',
       ],
+      monthly_price_usd: 499,
+      annual_price_usd: 4990,
+      trial_days: 30,
+      is_active: true,
+      display_name: 'Enterprise',
+      display_order: 3,
     },
     internal: {
       tier: 'internal',
@@ -91,14 +129,80 @@ export class PricingService {
         'Internal SecondLayer team usage',
         'Cost pass-through for testing/development',
       ],
+      monthly_price_usd: 0,
+      annual_price_usd: 0,
+      trial_days: 0,
+      is_active: false,
+      display_name: 'Internal',
+      display_order: 99,
     },
   };
+
+  constructor(db?: Database) {
+    this.db = db || null;
+  }
+
+  /**
+   * Load tiers from DB into cache, fall back to hardcoded on error / missing table
+   */
+  private async loadTiers(): Promise<Map<string, PricingConfig>> {
+    if (this.cache && (Date.now() - this.cacheLoadedAt) < PricingService.CACHE_TTL_MS) {
+      return this.cache;
+    }
+
+    const map = new Map<string, PricingConfig>();
+
+    if (this.db) {
+      try {
+        const result = await this.db.query(
+          `SELECT * FROM pricing_tiers ORDER BY display_order ASC`
+        );
+        if (result.rows.length > 0) {
+          for (const row of result.rows) {
+            const tier = row.tier_key as PricingTier;
+            map.set(tier, {
+              tier,
+              markup_percentage: Number(row.markup_percentage),
+              description: row.description || '',
+              features: Array.isArray(row.features) ? row.features : [],
+              monthly_price_usd: Number(row.monthly_price_usd) || 0,
+              annual_price_usd: Number(row.annual_price_usd) || 0,
+              trial_days: Number(row.trial_days) || 0,
+              is_active: row.is_active ?? true,
+              display_name: row.display_name || tier,
+              display_order: Number(row.display_order) || 0,
+            });
+          }
+          this.cache = map;
+          this.cacheLoadedAt = Date.now();
+          return map;
+        }
+      } catch (err: any) {
+        logger.warn('Failed to load pricing tiers from DB, using fallback', { error: err.message });
+      }
+    }
+
+    // Fallback: populate from hardcoded
+    for (const [key, config] of Object.entries(PricingService.FALLBACK_TIERS)) {
+      map.set(key, config);
+    }
+    this.cache = map;
+    this.cacheLoadedAt = Date.now();
+    return map;
+  }
+
+  /** Invalidate cache so next call re-reads from DB */
+  invalidateCache(): void {
+    this.cache = null;
+    this.cacheLoadedAt = 0;
+  }
 
   /**
    * Calculate price with markup for a given cost and tier
    */
   calculatePrice(costUsd: number, tier: PricingTier = 'startup'): PriceCalculation {
-    const config = this.PRICING_TIERS[tier];
+    // Synchronous: use cache or fallback directly
+    const config = this.cache?.get(tier) || PricingService.FALLBACK_TIERS[tier];
 
     if (!config) {
       logger.warn('Invalid pricing tier, defaulting to startup', { tier });
@@ -131,14 +235,85 @@ export class PricingService {
    * Get pricing configuration for a tier
    */
   getTierConfig(tier: PricingTier): PricingConfig {
-    return this.PRICING_TIERS[tier];
+    return this.cache?.get(tier) || PricingService.FALLBACK_TIERS[tier];
   }
 
   /**
-   * Get all available pricing tiers
+   * Get all available pricing tiers (async — reads DB)
+   */
+  async getAllTiersAsync(): Promise<PricingConfig[]> {
+    const map = await this.loadTiers();
+    return Array.from(map.values());
+  }
+
+  /**
+   * Get all available pricing tiers (sync — cache or fallback)
    */
   getAllTiers(): PricingConfig[] {
-    return Object.values(this.PRICING_TIERS);
+    if (this.cache) {
+      return Array.from(this.cache.values());
+    }
+    return Object.values(PricingService.FALLBACK_TIERS);
+  }
+
+  /**
+   * Update a tier in the DB and invalidate cache
+   */
+  async updateTier(tierKey: string, updates: Partial<PricingConfig>): Promise<void> {
+    if (!this.db) throw new Error('No database connection');
+
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (updates.markup_percentage !== undefined) {
+      sets.push(`markup_percentage = $${idx++}`);
+      params.push(updates.markup_percentage);
+    }
+    if (updates.monthly_price_usd !== undefined) {
+      sets.push(`monthly_price_usd = $${idx++}`);
+      params.push(updates.monthly_price_usd);
+    }
+    if (updates.annual_price_usd !== undefined) {
+      sets.push(`annual_price_usd = $${idx++}`);
+      params.push(updates.annual_price_usd);
+    }
+    if (updates.trial_days !== undefined) {
+      sets.push(`trial_days = $${idx++}`);
+      params.push(updates.trial_days);
+    }
+    if (updates.is_active !== undefined) {
+      sets.push(`is_active = $${idx++}`);
+      params.push(updates.is_active);
+    }
+    if (updates.description !== undefined) {
+      sets.push(`description = $${idx++}`);
+      params.push(updates.description);
+    }
+    if (updates.features !== undefined) {
+      sets.push(`features = $${idx++}`);
+      params.push(JSON.stringify(updates.features));
+    }
+    if (updates.display_name !== undefined) {
+      sets.push(`display_name = $${idx++}`);
+      params.push(updates.display_name);
+    }
+    if (updates.display_order !== undefined) {
+      sets.push(`display_order = $${idx++}`);
+      params.push(updates.display_order);
+    }
+
+    if (sets.length === 0) return;
+
+    sets.push(`updated_at = NOW()`);
+    params.push(tierKey);
+    await this.db.query(
+      `UPDATE pricing_tiers SET ${sets.join(', ')} WHERE tier_key = $${idx}`,
+      params
+    );
+
+    this.invalidateCache();
+    logger.info('Pricing tier updated', { tierKey, updates });
   }
 
   /**
@@ -253,7 +428,7 @@ export class PricingService {
    * Validate tier name
    */
   isValidTier(tier: string): tier is PricingTier {
-    return tier in this.PRICING_TIERS;
+    return tier in PricingService.FALLBACK_TIERS;
   }
 
   /**

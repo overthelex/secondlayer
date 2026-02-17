@@ -42,6 +42,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.ADMIN_USERS]: 'User Management',
   [ROUTES.ADMIN_COSTS]: 'API Costs & Analytics',
   [ROUTES.ADMIN_DATA_SOURCES]: 'Джерела даних',
+  [ROUTES.ADMIN_BILLING]: 'Billing Management',
 };
 
 export function MainLayout() {
@@ -131,6 +132,7 @@ export function MainLayout() {
           onAdminUsersClick={() => navigate(ROUTES.ADMIN_USERS)}
           onAdminCostsClick={() => navigate(ROUTES.ADMIN_COSTS)}
           onAdminDataSourcesClick={() => navigate(ROUTES.ADMIN_DATA_SOURCES)}
+          onAdminBillingClick={() => navigate(ROUTES.ADMIN_BILLING)}
           onLogout={handleLogout}
         />
       </div>

@@ -77,7 +77,7 @@ export class BillingService {
   private pricingService: PricingService;
 
   constructor(private db: Database) {
-    this.pricingService = new PricingService();
+    this.pricingService = new PricingService(db);
   }
 
   /**

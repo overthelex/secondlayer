@@ -63,6 +63,7 @@ interface SidebarProps {
   onAdminUsersClick?: () => void;
   onAdminCostsClick?: () => void;
   onAdminDataSourcesClick?: () => void;
+  onAdminBillingClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -94,6 +95,7 @@ export function Sidebar({
   onAdminUsersClick,
   onAdminCostsClick,
   onAdminDataSourcesClick,
+  onAdminBillingClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -226,6 +228,7 @@ export function Sidebar({
     { id: 'admin-users', label: 'Користувачі', icon: Users, onClick: onAdminUsersClick },
     { id: 'api-costs', label: 'Витрати API', icon: DollarSign, onClick: onAdminCostsClick },
     { id: 'data-sources', label: 'Джерела даних', icon: Globe, onClick: onAdminDataSourcesClick },
+    { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, onClick: onAdminBillingClick },
   ];
 
   const evidenceSections = [

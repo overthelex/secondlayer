@@ -825,8 +825,8 @@ export function createAdminRoutes(
    */
   router.get('/settings', async (req: Request, res: Response) => {
     try {
-      // Get pricing tier configs
-      const tiers = billingService.getAllPricingTiers();
+      // Get pricing tier configs (DB-backed)
+      const tiers = await pricing.getAllTiersAsync();
 
       // Get presets
       const presets = await preferencesService.getAllPresets();
@@ -1507,6 +1507,165 @@ export function createAdminRoutes(
     } catch (error: any) {
       logger.error('Failed to run document completeness check', { error: error.message });
       res.status(500).json({ error: 'Failed to run document completeness check' });
+    }
+  });
+
+  // ========================================
+  // BILLING MANAGEMENT (Pricing Tiers & Subscriptions)
+  // ========================================
+
+  /**
+   * GET /api/admin/billing/tiers
+   * List all pricing tiers from DB
+   */
+  router.get('/billing/tiers', async (_req: Request, res: Response) => {
+    try {
+      const tiers = await pricing.getAllTiersAsync();
+      res.json({ tiers });
+    } catch (error: any) {
+      logger.error('Failed to get pricing tiers', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve pricing tiers' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/tiers/:tierKey
+   * Update a pricing tier
+   */
+  router.put('/billing/tiers/:tierKey', async (req: Request, res: Response) => {
+    try {
+      const tierKey = getStringParam(req.params.tierKey);
+      if (!tierKey) return res.status(400).json({ error: 'tierKey is required' });
+
+      await pricing.updateTier(tierKey, req.body);
+
+      await logAdminAction(
+        (req as any).user.id,
+        'update_pricing_tier',
+        null,
+        tierKey,
+        req.body,
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to update pricing tier', { error: error.message });
+      res.status(500).json({ error: 'Failed to update pricing tier' });
+    }
+  });
+
+  /**
+   * GET /api/admin/billing/subscriptions
+   * List subscriptions with filtering
+   */
+  router.get('/billing/subscriptions', async (req: Request, res: Response) => {
+    try {
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
+      const offset = Math.max(0, Number(req.query.offset || 0));
+      const status = req.query.status as string | undefined;
+      const tier = req.query.tier as string | undefined;
+
+      const result = await subscriptions.list({ limit, offset, status });
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Failed to list subscriptions', { error: error.message });
+      res.status(500).json({ error: 'Failed to list subscriptions' });
+    }
+  });
+
+  /**
+   * POST /api/admin/billing/subscriptions
+   * Create a new subscription
+   */
+  router.post('/billing/subscriptions', async (req: Request, res: Response) => {
+    try {
+      const sub = await subscriptions.create({
+        ...req.body,
+        created_by: (req as any).user.id,
+      });
+
+      await logAdminAction(
+        (req as any).user.id,
+        'create_subscription',
+        req.body.user_id || null,
+        sub.id,
+        req.body,
+        req
+      );
+
+      res.status(201).json(sub);
+    } catch (error: any) {
+      logger.error('Failed to create subscription', { error: error.message });
+      res.status(500).json({ error: 'Failed to create subscription' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/subscriptions/:id
+   * Update a subscription (status, tier, cycle, price, cancel)
+   */
+  router.put('/billing/subscriptions/:id', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'id is required' });
+
+      const updated = await subscriptions.update(id, req.body);
+
+      await logAdminAction(
+        (req as any).user.id,
+        'update_subscription',
+        null,
+        id,
+        req.body,
+        req
+      );
+
+      res.json(updated);
+    } catch (error: any) {
+      logger.error('Failed to update subscription', { error: error.message });
+      res.status(500).json({ error: 'Failed to update subscription' });
+    }
+  });
+
+  /**
+   * DELETE /api/admin/billing/subscriptions/:id
+   * Hard-delete a subscription
+   */
+  router.delete('/billing/subscriptions/:id', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'id is required' });
+
+      await subscriptions.remove(id);
+
+      await logAdminAction(
+        (req as any).user.id,
+        'delete_subscription',
+        null,
+        id,
+        {},
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to delete subscription', { error: error.message });
+      res.status(500).json({ error: 'Failed to delete subscription' });
+    }
+  });
+
+  /**
+   * GET /api/admin/billing/subscription-stats
+   * Aggregate subscription statistics
+   */
+  router.get('/billing/subscription-stats', async (_req: Request, res: Response) => {
+    try {
+      const stats = await subscriptions.getStats();
+      res.json(stats);
+    } catch (error: any) {
+      logger.error('Failed to get subscription stats', { error: error.message });
+      res.status(500).json({ error: 'Failed to get subscription stats' });
     }
   });
 

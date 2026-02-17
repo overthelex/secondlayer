@@ -252,6 +252,22 @@ export const api = {
       apiClient.get('/api/admin/metrics/services'),
     getSystemMetrics: () =>
       apiClient.get('/api/admin/metrics/system'),
+
+    // Billing management
+    getBillingTiers: () =>
+      apiClient.get('/api/admin/billing/tiers'),
+    updateBillingTier: (tierKey: string, data: any) =>
+      apiClient.put(`/api/admin/billing/tiers/${tierKey}`, data),
+    getSubscriptions: (params?: { limit?: number; offset?: number; status?: string; tier?: string }) =>
+      apiClient.get('/api/admin/billing/subscriptions', { params }),
+    createSubscription: (data: any) =>
+      apiClient.post('/api/admin/billing/subscriptions', data),
+    updateSubscription: (id: string, data: any) =>
+      apiClient.put(`/api/admin/billing/subscriptions/${id}`, data),
+    deleteSubscription: (id: string) =>
+      apiClient.delete(`/api/admin/billing/subscriptions/${id}`),
+    getSubscriptionStats: () =>
+      apiClient.get('/api/admin/billing/subscription-stats'),
   },
 
   // GDPR
