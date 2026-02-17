@@ -1205,6 +1205,114 @@ class HTTPMCPServer {
       }
     }) as any);
 
+    // GET /api/billing/settings - Get billing settings
+    this.app.get('/api/billing/settings', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const summary = await this.billingService.getBillingSummary(userId);
+        const emailPrefs = await this.billingService.getEmailPreferences(userId);
+
+        res.json({
+          daily_limit_usd: summary?.daily_limit_usd ?? 50,
+          monthly_limit_usd: summary?.monthly_limit_usd ?? 1000,
+          email_notifications: emailPrefs?.email_notifications ?? true,
+          notify_low_balance: emailPrefs?.notify_low_balance ?? true,
+          notify_payment_success: emailPrefs?.notify_payment_success ?? true,
+          notify_payment_failure: emailPrefs?.notify_payment_failure ?? false,
+          notify_monthly_report: emailPrefs?.notify_monthly_report ?? true,
+          low_balance_threshold_usd: emailPrefs?.low_balance_threshold_usd ?? 20,
+        });
+      } catch (error: any) {
+        logger.error('Failed to get billing settings', { error: error.message });
+        res.status(500).json({ error: 'Failed to get billing settings' });
+      }
+    }) as any);
+
+    // GET /api/billing/statistics - Get billing statistics
+    this.app.get('/api/billing/statistics', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const period = (req.query.period as string) || '30d';
+
+        // Query cost_tracking for aggregated stats
+        let intervalSql = '30 days';
+        if (period === '7d') intervalSql = '7 days';
+        else if (period === '90d') intervalSql = '90 days';
+        else if (period === 'year') intervalSql = '365 days';
+
+        const statsQuery = `
+          SELECT
+            COUNT(*) as total_requests,
+            COALESCE(SUM(total_cost_usd), 0) as total_cost,
+            COALESCE(SUM(openai_prompt_tokens + openai_completion_tokens), 0) as total_tokens,
+            COALESCE(AVG(total_cost_usd), 0) as avg_cost_per_request
+          FROM cost_tracking
+          WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '${intervalSql}'
+        `;
+        const statsResult = await this.services.db.query(statsQuery, [userId]);
+        const stats = statsResult.rows[0] || {};
+
+        const dailyQuery = `
+          SELECT
+            TO_CHAR(created_at::date, 'Mon DD') as date,
+            COUNT(*) as requests,
+            COALESCE(SUM(total_cost_usd), 0) as cost
+          FROM cost_tracking
+          WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '${intervalSql}'
+          GROUP BY created_at::date
+          ORDER BY created_at::date
+        `;
+        const dailyResult = await this.services.db.query(dailyQuery, [userId]);
+
+        const toolsQuery = `
+          SELECT
+            tool_name as name,
+            COUNT(*) as count
+          FROM cost_tracking
+          WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '${intervalSql}'
+            AND tool_name IS NOT NULL
+          GROUP BY tool_name
+          ORDER BY count DESC
+          LIMIT 5
+        `;
+        const toolsResult = await this.services.db.query(toolsQuery, [userId]);
+
+        const totalReqs = parseInt(stats.total_requests) || 0;
+        const topTools = toolsResult.rows.map((t: any) => ({
+          name: t.name,
+          count: parseInt(t.count),
+          percentage: totalReqs > 0 ? Math.round((parseInt(t.count) / totalReqs) * 100) : 0,
+        }));
+
+        res.json({
+          period,
+          totalRequests: totalReqs,
+          totalCost: parseFloat(stats.total_cost) || 0,
+          openaiTokens: parseInt(stats.total_tokens) || 0,
+          avgCostPerRequest: parseFloat(stats.avg_cost_per_request) || 0,
+          costByService: [],
+          topTools,
+          dailyData: dailyResult.rows.map((d: any) => ({
+            date: d.date,
+            requests: parseInt(d.requests),
+            cost: parseFloat(d.cost) || 0,
+          })),
+        });
+      } catch (error: any) {
+        logger.error('Failed to get billing statistics', { error: error.message });
+        res.status(500).json({ error: 'Failed to get billing statistics' });
+      }
+    }) as any);
+
+    // GET /api/billing/payment-methods - List saved payment methods (stub)
+    this.app.get('/api/billing/payment-methods', requireJWT as any, (async (_req: DualAuthRequest, res: Response) => {
+      // Payment methods storage not yet implemented — return empty list
+      res.json({ paymentMethods: [] });
+    }) as any);
+
     // PUT /api/billing/settings - Update billing settings
     this.app.put('/api/billing/settings', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
       try {
