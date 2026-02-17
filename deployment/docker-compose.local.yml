@@ -229,6 +229,9 @@ services:
       VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
       GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
 
+      # Prometheus (for admin metrics dashboard)
+      PROMETHEUS_URL: http://prometheus-local:9090
+
       # Logging (verbose for development)
       LOG_LEVEL: ${LOG_LEVEL:-debug}
 

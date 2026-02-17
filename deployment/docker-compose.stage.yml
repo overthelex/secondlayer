@@ -472,6 +472,9 @@ services:
       EMAIL_FROM: noreply@legal.org.ua
       EMAIL_FROM_NAME: SecondLayer Legal Platform
 
+      # Prometheus (for admin metrics dashboard)
+      PROMETHEUS_URL: http://prometheus-stage:9090
+
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TZ: Europe/Kiev
     ports:

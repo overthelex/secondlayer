@@ -242,6 +242,14 @@ export const api = {
       apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),
     runDocumentCompletenessCheck: () =>
       apiClient.post('/api/admin/document-completeness-check'),
+    getTrafficMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/traffic', { params: { range } }),
+    getLatencyMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/latency', { params: { range } }),
+    getServicesHealth: () =>
+      apiClient.get('/api/admin/metrics/services'),
+    getSystemMetrics: () =>
+      apiClient.get('/api/admin/metrics/system'),
   },
 
   // GDPR

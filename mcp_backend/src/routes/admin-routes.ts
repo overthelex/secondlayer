@@ -8,6 +8,7 @@ import express, { Request, Response } from 'express';
 import { Database } from '../database/database.js';
 import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
+import { PrometheusService } from '../services/prometheus-service.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -18,10 +19,11 @@ function getStringParam(param: string | string[] | undefined): string | null {
   return Array.isArray(param) ? param[0] : param;
 }
 
-export function createAdminRoutes(db: Database): express.Router {
+export function createAdminRoutes(db: Database, prometheusUrl?: string): express.Router {
   const router = express.Router();
   const billingService = new BillingService(db);
   const preferencesService = new UserPreferencesService(db);
+  const prometheus = new PrometheusService(prometheusUrl);
 
   /**
    * Middleware to verify admin access
@@ -827,6 +829,154 @@ export function createAdminRoutes(db: Database): express.Router {
     } catch (error: any) {
       logger.error('Failed to get settings', { error: error.message });
       res.status(500).json({ error: 'Failed to retrieve settings' });
+    }
+  });
+
+  // ========================================
+  // PROMETHEUS METRICS
+  // ========================================
+
+  /**
+   * GET /api/admin/metrics/traffic
+   * Request rate & error rate time-series
+   * Query params: range=1h|6h|24h (default 1h)
+   */
+  router.get('/metrics/traffic', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const rangeSeconds: Record<string, number> = { '1h': 3600, '6h': 21600, '24h': 86400 };
+      const seconds = rangeSeconds[range] || 3600;
+      const step = seconds <= 3600 ? '30s' : seconds <= 21600 ? '2m' : '5m';
+      const end = Math.floor(Date.now() / 1000);
+      const start = end - seconds;
+
+      const [rpsResults, errorResults] = await Promise.all([
+        prometheus.queryRange(
+          'sum(rate(http_requests_total[1m]))',
+          start, end, step
+        ),
+        prometheus.queryRange(
+          'sum(rate(http_requests_total{status_code=~"5.."}[1m]))',
+          start, end, step
+        ),
+      ]);
+
+      const rps = rpsResults[0]?.values?.map(([ts, val]) => ({
+        timestamp: ts,
+        value: parseFloat(val) || 0,
+      })) || [];
+
+      const errors = errorResults[0]?.values?.map(([ts, val]) => ({
+        timestamp: ts,
+        value: parseFloat(val) || 0,
+      })) || [];
+
+      res.json({ rps, errors, range });
+    } catch (error: any) {
+      logger.error('Failed to get traffic metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve traffic metrics' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/latency
+   * P50/P95/P99 latency time-series
+   * Query params: range=1h|6h|24h (default 1h)
+   */
+  router.get('/metrics/latency', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const rangeSeconds: Record<string, number> = { '1h': 3600, '6h': 21600, '24h': 86400 };
+      const seconds = rangeSeconds[range] || 3600;
+      const step = seconds <= 3600 ? '30s' : seconds <= 21600 ? '2m' : '5m';
+      const end = Math.floor(Date.now() / 1000);
+      const start = end - seconds;
+
+      const [p50Results, p95Results, p99Results] = await Promise.all([
+        prometheus.queryRange(
+          'histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))',
+          start, end, step
+        ),
+        prometheus.queryRange(
+          'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))',
+          start, end, step
+        ),
+        prometheus.queryRange(
+          'histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))',
+          start, end, step
+        ),
+      ]);
+
+      const format = (results: any[]) =>
+        results[0]?.values?.map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          value: (parseFloat(val) || 0) * 1000, // convert to ms
+        })) || [];
+
+      res.json({
+        p50: format(p50Results),
+        p95: format(p95Results),
+        p99: format(p99Results),
+        range,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get latency metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve latency metrics' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/services
+   * Service health: up/down per service
+   */
+  router.get('/metrics/services', async (req: Request, res: Response) => {
+    try {
+      const upResults = await prometheus.queryInstant('up');
+
+      const services = upResults.map((r) => ({
+        job: r.metric.job || r.metric.instance || 'unknown',
+        instance: r.metric.instance || '',
+        up: r.value[1] === '1',
+      }));
+
+      res.json({ services });
+    } catch (error: any) {
+      logger.error('Failed to get service health', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve service health' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/system
+   * System gauges: PG pool, Redis memory, upload queue depth
+   */
+  router.get('/metrics/system', async (req: Request, res: Response) => {
+    try {
+      const [pgPool, redisMem, redisMaxMem, uploadQueue] = await Promise.all([
+        prometheus.queryInstant('pg_pool_active_connections'),
+        prometheus.queryInstant('redis_memory_used_bytes'),
+        prometheus.queryInstant('redis_memory_max_bytes'),
+        prometheus.queryInstant('upload_queue_depth'),
+      ]);
+
+      const pgActive = parseFloat(pgPool[0]?.value?.[1] || '0');
+      const pgMax = 500; // from PG config
+      const redisUsed = parseFloat(redisMem[0]?.value?.[1] || '0');
+      const redisMax = parseFloat(redisMaxMem[0]?.value?.[1] || '1');
+      const queueDepth = parseFloat(uploadQueue[0]?.value?.[1] || '0');
+
+      res.json({
+        pg_pool: { active: pgActive, max: pgMax, utilization_pct: (pgActive / pgMax) * 100 },
+        redis: {
+          used_bytes: redisUsed,
+          max_bytes: redisMax,
+          utilization_pct: redisMax > 0 ? (redisUsed / redisMax) * 100 : 0,
+        },
+        upload_queue: { depth: queueDepth },
+      });
+    } catch (error: any) {
+      logger.error('Failed to get system metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve system metrics' });
     }
   });
 
