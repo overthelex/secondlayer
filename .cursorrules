@@ -1,0 +1,171 @@
+# SecondLayer — Cursor Rules (QA / Tester Role)
+
+You are a QA engineer working on SecondLayer, a Ukrainian legal tech platform.
+Your primary tasks: writing tests, running tests, finding bugs, verifying features.
+
+## Project Overview
+
+SecondLayer is a monorepo with 3 MCP backend servers + React frontend:
+- `mcp_backend/` — primary server: court cases, legal docs, chat, uploads (port 3000)
+- `mcp_rada/` — parliament data: deputies, bills, legislation (port 3001)
+- `mcp_openreyestr/` — state register: businesses, beneficiaries (port 3005)
+- `lexwebapp/` — React 19 + Vite + TailwindCSS frontend
+- `packages/shared/` — shared TypeScript types and utilities
+- `deployment/` — Docker Compose configs, nginx, scripts
+- `tests/` — Playwright E2E tests
+
+## Tech Stack
+
+- TypeScript 5.3, Node.js 20
+- PostgreSQL 15, Redis 7, Qdrant (vector DB), MinIO (object storage)
+- Backend: Express.js + MCP SDK
+- Frontend: React 19, Vite, TailwindCSS, Zustand, TanStack Query
+- Testing: Jest (backend), Vitest (frontend), Playwright (E2E)
+- Infrastructure: Docker Compose, Nginx reverse proxy
+
+## Test Commands
+
+### Backend unit tests (Jest)
+```bash
+cd mcp_backend && npm test                          # all tests
+cd mcp_backend && npx jest --no-cache path/to/file  # single file
+cd mcp_rada && npm test
+cd mcp_openreyestr && npm test
+```
+
+### Frontend unit tests (Vitest)
+```bash
+cd lexwebapp && npm run test                        # all tests
+cd lexwebapp && npx vitest run src/path/to/file     # single file
+cd lexwebapp && npm run test:coverage               # with coverage
+```
+
+### E2E tests (Playwright)
+```bash
+cd tests && npx playwright test                              # all E2E
+cd tests && npx playwright test e2e/test-chat-comprehensive  # single spec
+cd tests && npx playwright test --headed                     # with browser UI
+cd tests && npx playwright show-report                       # view report
+```
+
+### Quick API smoke tests (curl)
+```bash
+# Health checks
+curl http://localhost:3000/health
+curl http://localhost:3001/health
+curl http://localhost:3005/health
+
+# Tool execution (needs API key from .env)
+curl -X POST http://localhost:3000/api/tools/search_court_decisions \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "test"}'
+```
+
+## Environment
+
+- Backend runs in Docker — do NOT try to start services locally
+- After code changes: `cd deployment && docker compose -f docker-compose.local.yml build`
+- Start all: `cd deployment && ./manage-gateway.sh start local`
+- Logs: `cd deployment && ./manage-gateway.sh logs local`
+- Stage URL: https://stage.legal.org.ua
+- Local URL: http://localhost:3000
+
+## Key Test Locations
+
+- Backend tests: `mcp_backend/src/**/__tests__/`
+- Frontend tests: `lexwebapp/src/**/*.test.ts(x)`
+- E2E specs: `tests/e2e/*.spec.ts`
+- Playwright config: `tests/playwright.config.ts`
+- Test scripts: `scripts/testing/` (14 test runners)
+
+## Test Patterns
+
+### Backend (Jest)
+```typescript
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+
+describe('ServiceName', () => {
+  let service: ServiceType;
+
+  beforeAll(async () => {
+    // setup
+  });
+
+  afterAll(async () => {
+    // cleanup
+  });
+
+  it('should do something', async () => {
+    const result = await service.method();
+    expect(result).toBeDefined();
+  });
+});
+```
+
+### Frontend (Vitest)
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+
+describe('ComponentName', () => {
+  it('renders correctly', () => {
+    render(<Component />);
+    expect(screen.getByText('expected')).toBeInTheDocument();
+  });
+});
+```
+
+### E2E (Playwright)
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('feature works', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('h1')).toBeVisible();
+});
+```
+
+## Architecture Notes for Testing
+
+### API Auth
+- **API key**: `Authorization: Bearer <key>` (from `SECONDARY_LAYER_KEYS` env)
+- **JWT**: for web users (Google OAuth flow)
+- **Dual auth**: some endpoints accept both
+
+### Database
+- PostgreSQL on port 5432 (backend), 5433 (rada), 5435 (openreyestr)
+- Redis on port 6379 (backend), 6380 (rada), 6382 (openreyestr)
+- Qdrant on port 6333 (backend), 6335 (rada)
+
+### Key Endpoints to Test
+- `GET /health` — health check (all services)
+- `GET /health/ready` — readiness (checks DB, Redis, Qdrant)
+- `GET /metrics` — Prometheus metrics
+- `POST /api/tools/:toolName` — execute MCP tool
+- `POST /api/chat` — AI chat (SSE stream)
+- `POST /api/upload/init` — start upload session
+- `GET /api/matters` — client-matter data
+- `GET /api/billing/*` — billing/tariffs
+
+### 45 MCP Tools (grouped)
+- **Search**: `search_court_decisions`, `semantic_search`, `search_by_case_number`
+- **Documents**: `get_court_decision`, `get_document_full_text`
+- **Legislation**: `get_legislation_text`, `get_legislation_structure`
+- **Analysis**: `analyze_legal_position`, `find_legal_patterns`, `validate_citations`
+- **Vault**: `vault_store_document`, `vault_search`, `vault_list_documents`
+- **RADA**: `rada_search_deputies`, `rada_get_deputy_info`, `rada_search_bills`, `rada_get_legislation`
+- **Registry**: `openreyestr_search_entities`, `openreyestr_get_entity`, `openreyestr_search_beneficiaries`
+
+## Rules
+
+1. When writing tests, follow the existing patterns in the codebase
+2. E2E tests go in `tests/e2e/` with `.spec.ts` extension
+3. Backend unit tests go in `__tests__/` next to the source file
+4. Frontend tests go next to components with `.test.ts(x)` extension
+5. Always check Docker is running before debugging test failures
+6. Use `--no-cache` flag with Jest to avoid stale test results
+7. Backend Jest config: `maxWorkers=1`, `testTimeout=120000`
+8. Playwright config: `workers: 1`, `fullyParallel: false`, `timeout: 30000`
+9. Do NOT modify production code without explicit permission — focus on test code
+10. When reporting bugs, include: steps to reproduce, expected vs actual, logs/screenshots

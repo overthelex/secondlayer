@@ -1,0 +1,131 @@
+### SecondLayer API Quick Tests
+### Use REST Client extension (humao.rest-client) in Cursor/VS Code
+### Set API_KEY in .vscode/settings.json: "rest-client.environmentVariables"
+
+@baseUrl = http://localhost:3000
+@radaUrl = http://localhost:3001
+@registryUrl = http://localhost:3005
+@apiKey = {{$dotenv %API_KEY}}
+
+### ============================
+### Health Checks
+### ============================
+
+### Backend health
+GET {{baseUrl}}/health
+
+###
+
+### Backend readiness (checks PG, Redis, Qdrant, MinIO)
+GET {{baseUrl}}/health/ready
+
+###
+
+### Rada health
+GET {{radaUrl}}/health
+
+###
+
+### OpenReyestr health
+GET {{registryUrl}}/health
+
+###
+
+### Backend metrics (Prometheus format)
+GET {{baseUrl}}/metrics
+
+### ============================
+### MCP Tool Execution
+### ============================
+
+### Search court decisions
+POST {{baseUrl}}/api/tools/search_court_decisions
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "query": "спір про право власності на нерухоме майно",
+  "limit": 3
+}
+
+###
+
+### Get legislation text
+POST {{baseUrl}}/api/tools/get_legislation_text
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "query": "Конституція України стаття 124"
+}
+
+###
+
+### Semantic search
+POST {{baseUrl}}/api/tools/semantic_search
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "query": "відшкодування моральної шкоди",
+  "limit": 5
+}
+
+###
+
+### Search deputies (Rada)
+POST {{radaUrl}}/api/tools/rada_search_deputies
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "query": "Стефанчук"
+}
+
+###
+
+### Search entities (OpenReyestr)
+POST {{registryUrl}}/api/tools/openreyestr_search_entities
+Authorization: Bearer {{apiKey}}
+Content-Type: application/json
+
+{
+  "query": "Приватбанк"
+}
+
+### ============================
+### Chat (SSE stream)
+### ============================
+
+### AI Chat — requires JWT token from OAuth login
+# POST {{baseUrl}}/api/chat
+# Authorization: Bearer {{jwtToken}}
+# Content-Type: application/json
+#
+# {
+#   "message": "Які правові підстави для розірвання договору оренди?",
+#   "conversationId": null
+# }
+
+### ============================
+### Upload
+### ============================
+
+### Init upload session (requires JWT)
+# POST {{baseUrl}}/api/upload/init
+# Authorization: Bearer {{jwtToken}}
+# Content-Type: application/json
+#
+# {
+#   "filename": "test-document.pdf",
+#   "fileSize": 1024000,
+#   "mimeType": "application/pdf"
+# }
+
+### ============================
+### Admin / Billing
+### ============================
+
+### Upload metrics
+GET {{baseUrl}}/api/admin/upload-metrics
+Authorization: Bearer {{apiKey}}
