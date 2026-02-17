@@ -93,11 +93,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '1'
+          cpus: '2'
           memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
 
   qdrant-stage:
     image: qdrant/qdrant:latest
@@ -150,9 +150,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 10G
+          memory: 9G
         reservations:
-          memory: 8G
+          memory: 4G
   migrate-stage:
     build:
       context: ..
@@ -360,11 +360,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
           cpus: '1'
           memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
   # MinIO - S3-compatible object storage for media/large files
   minio-stage:
@@ -510,10 +510,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4'
-          memory: 12G
+          cpus: '2'
+          memory: 10G
         reservations:
-          cpus: '1'
+          cpus: '0.5'
           memory: 4G
   # Document Analysis Service (OCR, PDF parsing)
   document-service-stage:
