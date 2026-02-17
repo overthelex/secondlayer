@@ -58,7 +58,6 @@ yarn-error.log*
 Thumbs.db
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -102,7 +101,8 @@ redis_data/
 # Cleanup backups (temporary)
 .cleanup_backup/
 vulnerability-fix-backup/
-.cursor/
+.cursor/keys/
+.cursor/settings/
 pip
 deployment/nginx/certs/
 .mcp.json
