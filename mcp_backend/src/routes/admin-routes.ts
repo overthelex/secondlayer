@@ -2030,5 +2030,404 @@ export function createAdminRoutes(
     }
   });
 
+  // ========================================
+  // INFRASTRUCTURE METRICS
+  // ========================================
+
+  /**
+   * Helper: parse range param and compute start/end/step
+   */
+  function parseRange(range: string) {
+    const rangeSeconds: Record<string, number> = { '1h': 3600, '6h': 21600, '24h': 86400 };
+    const seconds = rangeSeconds[range] || 3600;
+    const step = seconds <= 3600 ? '30s' : seconds <= 21600 ? '2m' : '5m';
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - seconds;
+    return { start, end, step };
+  }
+
+  /**
+   * Helper: extract series from prometheus range query result
+   */
+  function extractSeries(results: any[], valueKey = 'value') {
+    return results[0]?.values?.map(([ts, val]: [number, string]) => ({
+      timestamp: ts,
+      [valueKey]: parseFloat(val) || 0,
+    })) || [];
+  }
+
+  /**
+   * GET /api/admin/metrics/infrastructure
+   * CPU, memory, disk I/O, network, PG detailed, Redis detailed
+   */
+  router.get('/metrics/infrastructure', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const { start, end, step } = parseRange(range);
+
+      const [
+        cpuUser, cpuSystem, cpuIowait,
+        memUsedPct, memTotal, memAvailable,
+        diskRead, diskWrite,
+        netRx, netTx,
+        pgActive, pgIdle, pgIdleTx,
+        pgCommits, pgRollbacks,
+        pgCacheHit,
+        redisMem, redisMaxMem,
+        redisClients, redisCommands, redisEvicted,
+      ] = await Promise.all([
+        prometheus.queryRange('avg(rate(node_cpu_seconds_total{mode="user"}[1m]))', start, end, step),
+        prometheus.queryRange('avg(rate(node_cpu_seconds_total{mode="system"}[1m]))', start, end, step),
+        prometheus.queryRange('avg(rate(node_cpu_seconds_total{mode="iowait"}[1m]))', start, end, step),
+        prometheus.queryInstant('(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'),
+        prometheus.queryInstant('node_memory_MemTotal_bytes'),
+        prometheus.queryInstant('node_memory_MemAvailable_bytes'),
+        prometheus.queryRange('rate(node_disk_read_bytes_total[1m])', start, end, step),
+        prometheus.queryRange('rate(node_disk_written_bytes_total[1m])', start, end, step),
+        prometheus.queryRange('rate(node_network_receive_bytes_total{device!="lo"}[1m])', start, end, step),
+        prometheus.queryRange('rate(node_network_transmit_bytes_total{device!="lo"}[1m])', start, end, step),
+        prometheus.queryRange('pg_stat_activity_count{state="active"}', start, end, step),
+        prometheus.queryRange('pg_stat_activity_count{state="idle"}', start, end, step),
+        prometheus.queryRange('pg_stat_activity_count{state="idle in transaction"}', start, end, step),
+        prometheus.queryRange('rate(pg_stat_database_xact_commit{datname!=""}[1m])', start, end, step),
+        prometheus.queryRange('rate(pg_stat_database_xact_rollback{datname!=""}[1m])', start, end, step),
+        prometheus.queryInstant('pg_stat_database_blks_hit{datname!=""} / (pg_stat_database_blks_hit{datname!=""} + pg_stat_database_blks_read{datname!=""})'),
+        prometheus.queryRange('redis_memory_used_bytes', start, end, step),
+        prometheus.queryRange('redis_memory_max_bytes', start, end, step),
+        prometheus.queryRange('redis_connected_clients', start, end, step),
+        prometheus.queryRange('rate(redis_commands_processed_total[1m])', start, end, step),
+        prometheus.queryRange('redis_evicted_keys_total', start, end, step),
+      ]);
+
+      // Build CPU series by merging timestamps
+      const cpuUserSeries = cpuUser[0]?.values || [];
+      const cpuSystemSeries = cpuSystem[0]?.values || [];
+      const cpuIowaitSeries = cpuIowait[0]?.values || [];
+      const cpuSeries = cpuUserSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        user: parseFloat(val) || 0,
+        system: parseFloat(cpuSystemSeries[i]?.[1] || '0'),
+        iowait: parseFloat(cpuIowaitSeries[i]?.[1] || '0'),
+      }));
+
+      // Build PG connections series
+      const pgActiveSeries = pgActive[0]?.values || [];
+      const pgIdleSeries = pgIdle[0]?.values || [];
+      const pgIdleTxSeries = pgIdleTx[0]?.values || [];
+      const pgConnSeries = pgActiveSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        active: parseFloat(val) || 0,
+        idle: parseFloat(pgIdleSeries[i]?.[1] || '0'),
+        idle_in_tx: parseFloat(pgIdleTxSeries[i]?.[1] || '0'),
+      }));
+
+      // Build PG transactions series
+      const pgCommitsSeries = pgCommits[0]?.values || [];
+      const pgRollbacksSeries = pgRollbacks[0]?.values || [];
+      const pgTxSeries = pgCommitsSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        commits: parseFloat(val) || 0,
+        rollbacks: parseFloat(pgRollbacksSeries[i]?.[1] || '0'),
+      }));
+
+      // Build Redis series
+      const redisMemSeries = redisMem[0]?.values || [];
+      const redisMaxSeries = redisMaxMem[0]?.values || [];
+      const redisMemMerged = redisMemSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        used: parseFloat(val) || 0,
+        max: parseFloat(redisMaxSeries[i]?.[1] || '0'),
+      }));
+
+      // Build disk series
+      const diskReadSeries = diskRead[0]?.values || [];
+      const diskWriteSeries = diskWrite[0]?.values || [];
+      const diskSeries = diskReadSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        read_bytes: parseFloat(val) || 0,
+        write_bytes: parseFloat(diskWriteSeries[i]?.[1] || '0'),
+      }));
+
+      // Build network series
+      const netRxSeries = netRx[0]?.values || [];
+      const netTxSeries = netTx[0]?.values || [];
+      const networkSeries = netRxSeries.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        rx_bytes: parseFloat(val) || 0,
+        tx_bytes: parseFloat(netTxSeries[i]?.[1] || '0'),
+      }));
+
+      res.json({
+        cpu: { series: cpuSeries },
+        memory: {
+          used_pct: parseFloat(memUsedPct[0]?.value?.[1] || '0'),
+          total_bytes: parseFloat(memTotal[0]?.value?.[1] || '0'),
+          available_bytes: parseFloat(memAvailable[0]?.value?.[1] || '0'),
+        },
+        disk_io: { series: diskSeries },
+        network: { series: networkSeries },
+        pg: {
+          connections: { series: pgConnSeries },
+          transactions: { series: pgTxSeries },
+          cache_hit_ratio: parseFloat(pgCacheHit[0]?.value?.[1] || '0'),
+        },
+        redis: {
+          memory: { series: redisMemMerged },
+          clients: { series: extractSeries(redisClients) },
+          commands_rate: { series: extractSeries(redisCommands) },
+          evicted_keys: { series: extractSeries(redisEvicted) },
+        },
+        range,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get infrastructure metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve infrastructure metrics' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/upload-pipeline
+   * BullMQ jobs, processing duration, queue depth, concurrency
+   */
+  router.get('/metrics/upload-pipeline', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const { start, end, step } = parseRange(range);
+
+      const [
+        jobsCompleted, jobsFailed, jobsActive, jobsWaiting, jobsDelayed,
+        durationP50, durationP95, durationP99,
+        queueDepth,
+        concurrencyActive, concurrencyMax,
+      ] = await Promise.all([
+        prometheus.queryRange('upload_jobs_completed_total', start, end, step),
+        prometheus.queryRange('upload_jobs_failed_total', start, end, step),
+        prometheus.queryRange('upload_jobs_active', start, end, step),
+        prometheus.queryRange('upload_jobs_waiting', start, end, step),
+        prometheus.queryRange('upload_jobs_delayed', start, end, step),
+        prometheus.queryRange('histogram_quantile(0.50, rate(upload_processing_duration_seconds_bucket[5m]))', start, end, step),
+        prometheus.queryRange('histogram_quantile(0.95, rate(upload_processing_duration_seconds_bucket[5m]))', start, end, step),
+        prometheus.queryRange('histogram_quantile(0.99, rate(upload_processing_duration_seconds_bucket[5m]))', start, end, step),
+        prometheus.queryRange('upload_queue_depth', start, end, step),
+        prometheus.queryRange('upload_concurrent_processing', start, end, step),
+        prometheus.queryRange('upload_max_concurrent_processing', start, end, step),
+      ]);
+
+      // Merge job series
+      const completedVals = jobsCompleted[0]?.values || [];
+      const failedVals = jobsFailed[0]?.values || [];
+      const activeVals = jobsActive[0]?.values || [];
+      const waitingVals = jobsWaiting[0]?.values || [];
+      const delayedVals = jobsDelayed[0]?.values || [];
+      const jobsSeries = completedVals.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        completed: parseFloat(val) || 0,
+        failed: parseFloat(failedVals[i]?.[1] || '0'),
+        active: parseFloat(activeVals[i]?.[1] || '0'),
+        waiting: parseFloat(waitingVals[i]?.[1] || '0'),
+        delayed: parseFloat(delayedVals[i]?.[1] || '0'),
+      }));
+
+      // Merge duration percentiles
+      const p50Vals = durationP50[0]?.values || [];
+      const p95Vals = durationP95[0]?.values || [];
+      const p99Vals = durationP99[0]?.values || [];
+      const durationSeries = p50Vals.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        p50: (parseFloat(val) || 0) * 1000,
+        p95: (parseFloat(p95Vals[i]?.[1] || '0')) * 1000,
+        p99: (parseFloat(p99Vals[i]?.[1] || '0')) * 1000,
+      }));
+
+      // Merge concurrency
+      const activeConc = concurrencyActive[0]?.values || [];
+      const maxConc = concurrencyMax[0]?.values || [];
+      const concurrencySeries = activeConc.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        active: parseFloat(val) || 0,
+        max: parseFloat(maxConc[i]?.[1] || '0'),
+      }));
+
+      res.json({
+        jobs: { series: jobsSeries },
+        processing_duration: { series: durationSeries },
+        queue_depth: { series: extractSeries(queueDepth) },
+        concurrency: { series: concurrencySeries },
+        range,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get upload pipeline metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve upload pipeline metrics' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/backend-detail
+   * Per-route RPS, status code distribution, external API calls/duration
+   */
+  router.get('/metrics/backend-detail', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const { start, end, step } = parseRange(range);
+
+      const [
+        byRouteResults,
+        status2xx, status3xx, status4xx, status5xx,
+        externalCalls, externalDuration,
+      ] = await Promise.all([
+        prometheus.queryRange('sum(rate(http_requests_total[1m])) by (route)', start, end, step),
+        prometheus.queryRange('sum(rate(http_requests_total{status_code=~"2.."}[1m]))', start, end, step),
+        prometheus.queryRange('sum(rate(http_requests_total{status_code=~"3.."}[1m]))', start, end, step),
+        prometheus.queryRange('sum(rate(http_requests_total{status_code=~"4.."}[1m]))', start, end, step),
+        prometheus.queryRange('sum(rate(http_requests_total{status_code=~"5.."}[1m]))', start, end, step),
+        prometheus.queryRange('sum(rate(external_api_calls_total[1m])) by (service)', start, end, step),
+        prometheus.queryRange('histogram_quantile(0.95, sum(rate(external_api_duration_seconds_bucket[5m])) by (le, service))', start, end, step),
+      ]);
+
+      // By route: each result series is a route
+      const byRoute = byRouteResults.map((r: any) => ({
+        route: r.metric?.route || 'unknown',
+        series: (r.values || []).map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          rps: parseFloat(val) || 0,
+        })),
+      }));
+
+      // Status codes merged
+      const s2xx = status2xx[0]?.values || [];
+      const s3xx = status3xx[0]?.values || [];
+      const s4xx = status4xx[0]?.values || [];
+      const s5xx = status5xx[0]?.values || [];
+      const statusSeries = s2xx.map(([ts, val]: [number, string], i: number) => ({
+        timestamp: ts,
+        '2xx': parseFloat(val) || 0,
+        '3xx': parseFloat(s3xx[i]?.[1] || '0'),
+        '4xx': parseFloat(s4xx[i]?.[1] || '0'),
+        '5xx': parseFloat(s5xx[i]?.[1] || '0'),
+      }));
+
+      // External API calls by service
+      const externalCallsSeries = externalCalls.map((r: any) => ({
+        service: r.metric?.service || 'unknown',
+        series: (r.values || []).map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          value: parseFloat(val) || 0,
+        })),
+      }));
+
+      const externalDurationSeries = externalDuration.map((r: any) => ({
+        service: r.metric?.service || 'unknown',
+        series: (r.values || []).map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          value: (parseFloat(val) || 0) * 1000,
+        })),
+      }));
+
+      res.json({
+        by_route: byRoute,
+        status_codes: { series: statusSeries },
+        external_apis: {
+          calls: externalCallsSeries,
+          duration_p95: externalDurationSeries,
+        },
+        range,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get backend detail metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve backend detail metrics' });
+    }
+  });
+
+  /**
+   * GET /api/admin/metrics/cost-realtime
+   * Cost/hour, cost/day, cost/month extrapolated, cost trend by model, top tools
+   */
+  router.get('/metrics/cost-realtime', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '6h';
+      const { start, end, step } = parseRange(range);
+
+      // Cost from last hour for rate calculation
+      const lastHourResult = await db.query(`
+        SELECT COALESCE(SUM(
+          COALESCE(openai_cost_usd, 0) + COALESCE(anthropic_cost_usd, 0) +
+          COALESCE(zakononline_cost_usd, 0) + COALESCE(secondlayer_cost_usd, 0)
+        ), 0) as total
+        FROM cost_tracking
+        WHERE created_at >= NOW() - INTERVAL '1 hour'
+          AND status = 'completed'
+      `);
+      const costPerHour = parseFloat(lastHourResult.rows[0]?.total || '0');
+      const costPerDay = costPerHour * 24;
+      const costPerMonth = costPerDay * 30;
+
+      // Cost by model over time range
+      const costByModelResult = await db.query(`
+        SELECT
+          date_trunc('hour', created_at) as hour,
+          elem->>'model' as model,
+          SUM((elem->>'cost')::numeric) as cost
+        FROM cost_tracking,
+          jsonb_array_elements(
+            CASE WHEN openai_calls IS NOT NULL AND openai_calls != 'null'::jsonb AND jsonb_typeof(openai_calls) = 'array'
+              THEN openai_calls ELSE '[]'::jsonb END
+            ||
+            CASE WHEN anthropic_calls IS NOT NULL AND anthropic_calls != 'null'::jsonb AND jsonb_typeof(anthropic_calls) = 'array'
+              THEN anthropic_calls ELSE '[]'::jsonb END
+          ) AS elem
+        WHERE created_at >= NOW() - INTERVAL '${range === '24h' ? '24 hours' : range === '6h' ? '6 hours' : '1 hour'}'
+          AND status = 'completed'
+          AND elem->>'model' IS NOT NULL
+        GROUP BY hour, model
+        ORDER BY hour
+      `);
+
+      // Pivot by model
+      const modelMap = new Map<number, Record<string, number>>();
+      for (const row of costByModelResult.rows) {
+        const ts = Math.floor(new Date(row.hour).getTime() / 1000);
+        if (!modelMap.has(ts)) modelMap.set(ts, {});
+        const entry = modelMap.get(ts)!;
+        entry[row.model] = parseFloat(row.cost) || 0;
+      }
+      const byModelSeries = Array.from(modelMap.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([ts, models]) => ({ timestamp: ts, ...models }));
+
+      // Top tools by cost
+      const topToolsResult = await db.query(`
+        SELECT
+          tool_name,
+          SUM(
+            COALESCE(openai_cost_usd, 0) + COALESCE(anthropic_cost_usd, 0) +
+            COALESCE(zakononline_cost_usd, 0) + COALESCE(secondlayer_cost_usd, 0)
+          ) as total_cost
+        FROM cost_tracking
+        WHERE created_at >= NOW() - INTERVAL '7 days'
+          AND status = 'completed'
+          AND tool_name IS NOT NULL
+        GROUP BY tool_name
+        ORDER BY total_cost DESC
+        LIMIT 10
+      `);
+
+      const topTools = topToolsResult.rows.map((r: any) => ({
+        tool: r.tool_name,
+        cost: parseFloat(r.total_cost) || 0,
+      }));
+
+      res.json({
+        cost_per_hour: costPerHour,
+        cost_per_day: costPerDay,
+        cost_per_month: costPerMonth,
+        by_model: { series: byModelSeries },
+        top_tools: topTools,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get cost realtime metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve cost realtime metrics' });
+    }
+  });
+
   return router;
 }
