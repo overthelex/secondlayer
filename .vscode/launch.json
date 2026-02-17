@@ -1,0 +1,65 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jest: Current File (Backend)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["jest", "--no-cache", "--runInBand", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/mcp_backend",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Jest: Current File (Rada)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["jest", "--no-cache", "--runInBand", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/mcp_rada",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Vitest: Current File (Frontend)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["vitest", "run", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/lexwebapp",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Playwright: Current File",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["playwright", "test", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/tests",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Playwright: Current File (Headed)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["playwright", "test", "--headed", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/tests",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Playwright: Debug Current File",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npx",
+      "args": ["playwright", "test", "--debug", "${relativeFile}"],
+      "cwd": "${workspaceFolder}/tests",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
+    }
+  ]
+}
