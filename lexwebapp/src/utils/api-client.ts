@@ -150,7 +150,7 @@ export const api = {
     setPrimaryPaymentMethod: (id: string) =>
       apiClient.put(`/api/billing/payment-methods/${id}/primary`, {}),
     upgradePlan: (planId: string) =>
-      apiClient.post('/api/billing/upgrade', { planId }),
+      apiClient.put('/api/billing/settings', { pricingTier: planId }),
     getPricingInfo: () => apiClient.get('/api/billing/pricing-info'),
   },
 
