@@ -208,7 +208,7 @@ export class MetaMaskService {
         const transferTopic = iface.getEvent('Transfer')!.topicHash;
 
         const transferLog = receipt.logs.find(
-          (log) =>
+          (log: any) =>
             log.address.toLowerCase() === contractAddress.toLowerCase() &&
             log.topics[0] === transferTopic
         );

@@ -76,6 +76,7 @@
     "cors": "^2.8.5",
     "diff": "^4.0.4",
     "dotenv": "^17.3.1",
+    "ethers": "^6.16.0",
     "express": "^5.2.1",
     "express-session": "^1.18.2",
     "jsonwebtoken": "^9.0.3",
