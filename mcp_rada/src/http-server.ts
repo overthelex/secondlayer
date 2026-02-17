@@ -134,10 +134,10 @@ class HTTPRadaServer {
 
         const queries: Array<{ key: string; schema_table: string; ts_col: string; source: string; sourceUrl: string; frequency: string }> = [
           { key: 'deputies', schema_table: 'rada.deputies', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
-          { key: 'deputy_assistants', schema_table: 'rada.deputy_assistants', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
+          { key: 'deputy_assistants', schema_table: 'rada.deputy_assistants', ts_col: 'created_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua/ogd/mps/skpidata', frequency: 'Щотижня (sync:deputies)' },
           { key: 'bills', schema_table: 'rada.bills', ts_col: 'updated_at', source: 'Верховна Рада API', sourceUrl: 'https://zakon.rada.gov.ua/api', frequency: 'Щоденно (кеш 1 день)' },
-          { key: 'factions', schema_table: 'rada.factions', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
-          { key: 'committees', schema_table: 'rada.committees', ts_col: 'updated_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+          { key: 'factions', schema_table: 'rada.factions', ts_col: 'created_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
+          { key: 'committees', schema_table: 'rada.committees', ts_col: 'created_at', source: 'Верховна Рада — Відкриті дані', sourceUrl: 'https://data.rada.gov.ua', frequency: 'Щотижня' },
         ];
 
         for (const q of queries) {
