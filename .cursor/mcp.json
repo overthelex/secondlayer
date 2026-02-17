@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "secondlayer": {
+      "url": "https://mcp.legal.org.ua/sse",
+      "transport": {
+        "type": "sse"
+      }
+    }
+  }
+}
