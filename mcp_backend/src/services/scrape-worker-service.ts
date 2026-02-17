@@ -385,6 +385,10 @@ export class ScrapeWorkerService {
     return count;
   }
 
+  /**
+   * Streaming bulk scrape: search one page at a time, scrape immediately,
+   * never accumulate more than one page of docs in memory.
+   */
   private async runBulkScrape(jobId: string, request: BulkScrapeRequest): Promise<void> {
     const job = this.jobs.get(jobId);
     if (!job) return;
@@ -392,7 +396,7 @@ export class ScrapeWorkerService {
     job.status = 'running';
 
     const maxDocs = request.max_docs || 1000;
-    const batchSize = request.batch_size || 30;
+    const batchSize = request.batch_size || 10;
     const now = new Date();
     const threeYearsAgo = new Date(now);
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
@@ -400,21 +404,22 @@ export class ScrapeWorkerService {
     const dateTo = request.date_to || now.toISOString().split('T')[0];
 
     const seenIds = new Set<string>();
-    const allDocs: any[] = [];
 
-    // Phase 1: Search for documents via ZO API
-    logger.info(`Bulk scrape ${jobId}: searching for documents`, {
+    logger.info(`Bulk scrape ${jobId}: streaming mode`, {
       keywords: request.keywords,
       dateFrom,
       dateTo,
       maxDocs,
     });
 
+    // Stream: search one page → scrape that page → discard → next page
     for (const keyword of request.keywords) {
       if (seenIds.size >= maxDocs) break;
 
       for (let page = 1; page <= 50; page++) {
         if (seenIds.size >= maxDocs) break;
+
+        let pageDocs: Array<{ docId: string; metadata: any }> = [];
 
         try {
           const where: any[] = [
@@ -436,53 +441,48 @@ export class ScrapeWorkerService {
           const items = Array.isArray(response) ? response : response?.data || [];
           if (items.length === 0) break;
 
+          // Collect only doc IDs + minimal metadata for this page
           for (const doc of items) {
             const docId = String(doc.doc_id || doc.id);
             if (!docId || docId === 'undefined') continue;
             if (!seenIds.has(docId)) {
               seenIds.add(docId);
-              allDocs.push(doc);
+              pageDocs.push({
+                docId,
+                metadata: {
+                  title: doc.title || doc.cause_num,
+                  adjudication_date: doc.adjudication_date || doc.date,
+                  cause_num: doc.cause_num,
+                  court: doc.court || doc.court_name,
+                  court_code: doc.court_code,
+                  judgment_form: doc.judgment_form || doc.form_name,
+                  justice_kind: doc.justice_kind,
+                },
+              });
               if (seenIds.size >= maxDocs) break;
             }
           }
 
-          if (items.length < 100) break;
+          job.total = seenIds.size;
+
+          if (items.length < 100) {
+            // Last page for this keyword — scrape and break
+            await this.scrapePageDocs(job, pageDocs, batchSize);
+            break;
+          }
         } catch (error: any) {
           logger.error(`Bulk search error [${keyword}] page ${page}:`, error.message);
           job.errors++;
           job.error_details.push(`Search error: ${error.message}`);
           if (job.error_details.length > 100) job.error_details.shift();
         }
-      }
-    }
 
-    job.total = allDocs.length;
-    logger.info(`Bulk scrape ${jobId}: found ${allDocs.length} unique documents, starting scraping`);
+        // Scrape this page's docs immediately, then release memory
+        await this.scrapePageDocs(job, pageDocs, batchSize);
+        pageDocs = []; // release refs
 
-    // Phase 2: Scrape in batches
-    for (let i = 0; i < allDocs.length; i += batchSize) {
-      const batch = allDocs.slice(i, i + batchSize);
-
-      const results = await Promise.all(
-        batch.map((doc) =>
-          this.scrapeAndProcess(String(doc.doc_id || doc.id), doc).catch((error: any) => {
-            job.errors++;
-            job.error_details.push(`${doc.doc_id}: ${error.message}`);
-            if (job.error_details.length > 100) job.error_details.shift();
-            return null;
-          }),
-        ),
-      );
-
-      job.processed += results.filter((r) => r != null).length;
-      job.progress = Math.round((job.processed / job.total) * 100);
-
-      logger.info(`Bulk scrape ${jobId}: ${job.processed}/${job.total} (${job.progress}%)`);
-
-      // GC pause between batches
-      if (i + batchSize < allDocs.length) {
+        // GC between pages
         if (global.gc) global.gc();
-        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
 
@@ -490,6 +490,37 @@ export class ScrapeWorkerService {
     job.progress = 100;
     job.completed_at = new Date().toISOString();
 
-    logger.info(`Bulk scrape ${jobId} completed: ${job.processed} processed, ${job.errors} errors`);
+    logger.info(`Bulk scrape ${jobId} completed: ${job.processed}/${job.total}, ${job.errors} errors`);
+  }
+
+  /**
+   * Scrape a small page of docs sequentially (low memory)
+   */
+  private async scrapePageDocs(
+    job: BulkScrapeJob,
+    docs: Array<{ docId: string; metadata: any }>,
+    batchSize: number,
+  ): Promise<void> {
+    for (let i = 0; i < docs.length; i += batchSize) {
+      const batch = docs.slice(i, i + batchSize);
+
+      // Process sequentially to minimize memory
+      for (const { docId, metadata } of batch) {
+        try {
+          await this.scrapeAndProcess(docId, metadata);
+          job.processed++;
+        } catch (error: any) {
+          job.errors++;
+          job.error_details.push(`${docId}: ${error.message}`);
+          if (job.error_details.length > 100) job.error_details.shift();
+        }
+      }
+
+      job.progress = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
+      logger.info(`Bulk scrape ${job.job_id}: ${job.processed}/${job.total} (${job.progress}%)`);
+
+      // Pause between batches
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 }
