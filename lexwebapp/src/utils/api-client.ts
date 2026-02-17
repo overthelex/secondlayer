@@ -286,6 +286,16 @@ export const api = {
       apiClient.put(`/api/admin/billing/subscriptions/${id}/activate`),
     getSubscriptionStats: () =>
       apiClient.get('/api/admin/billing/subscription-stats'),
+
+    // Infrastructure dashboards
+    getInfrastructureMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/infrastructure', { params: { range } }),
+    getUploadPipelineMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/upload-pipeline', { params: { range } }),
+    getBackendDetailMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/backend-detail', { params: { range } }),
+    getCostRealtimeMetrics: (range: string = '6h') =>
+      apiClient.get('/api/admin/metrics/cost-realtime', { params: { range } }),
   },
 
   // GDPR
