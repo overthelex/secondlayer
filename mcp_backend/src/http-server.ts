@@ -1269,22 +1269,62 @@ class HTTPMCPServer {
         const toolsQuery = `
           SELECT
             tool_name as name,
-            COUNT(*) as count
+            COUNT(*) as count,
+            COALESCE(SUM(total_cost_usd), 0) as cost
           FROM cost_tracking
           WHERE user_id = $1
             AND created_at >= NOW() - INTERVAL '${intervalSql}'
             AND tool_name IS NOT NULL
           GROUP BY tool_name
           ORDER BY count DESC
-          LIMIT 5
+          LIMIT 10
         `;
         const toolsResult = await this.services.db.query(toolsQuery, [userId]);
 
+        // Cost breakdown by tool
+        const costByServiceQuery = `
+          SELECT
+            tool_name as name,
+            COALESCE(SUM(total_cost_usd), 0) as value
+          FROM cost_tracking
+          WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '${intervalSql}'
+            AND tool_name IS NOT NULL
+          GROUP BY tool_name
+          ORDER BY value DESC
+          LIMIT 8
+        `;
+        const costByServiceResult = await this.services.db.query(costByServiceQuery, [userId]);
+
+        // Previous period comparison
+        const prevStatsQuery = `
+          SELECT
+            COUNT(*) as total_requests,
+            COALESCE(SUM(total_cost_usd), 0) as total_cost
+          FROM cost_tracking
+          WHERE user_id = $1
+            AND created_at >= NOW() - INTERVAL '${intervalSql}' * 2
+            AND created_at < NOW() - INTERVAL '${intervalSql}'
+        `;
+        const prevStatsResult = await this.services.db.query(prevStatsQuery, [userId]);
+        const prevStats = prevStatsResult.rows[0] || {};
+
         const totalReqs = parseInt(stats.total_requests) || 0;
+        const prevTotalReqs = parseInt(prevStats.total_requests) || 0;
+        const prevTotalCost = parseFloat(prevStats.total_cost) || 0;
+
         const topTools = toolsResult.rows.map((t: any) => ({
           name: t.name,
           count: parseInt(t.count),
+          cost: parseFloat(t.cost) || 0,
           percentage: totalReqs > 0 ? Math.round((parseInt(t.count) / totalReqs) * 100) : 0,
+        }));
+
+        const serviceColors = ['#D97757', '#C66345', '#B55133', '#A43F21', '#932D0F', '#823C1E', '#6B2E15', '#54200C'];
+        const costByService = costByServiceResult.rows.map((s: any, idx: number) => ({
+          name: s.name,
+          value: parseFloat(s.value) || 0,
+          color: serviceColors[idx % serviceColors.length],
         }));
 
         res.json({
@@ -1293,13 +1333,19 @@ class HTTPMCPServer {
           totalCost: parseFloat(stats.total_cost) || 0,
           openaiTokens: parseInt(stats.total_tokens) || 0,
           avgCostPerRequest: parseFloat(stats.avg_cost_per_request) || 0,
-          costByService: [],
+          costByService,
           topTools,
           dailyData: dailyResult.rows.map((d: any) => ({
             date: d.date,
             requests: parseInt(d.requests),
             cost: parseFloat(d.cost) || 0,
           })),
+          previousPeriod: {
+            totalRequests: prevTotalReqs,
+            totalCost: prevTotalCost,
+            requestsChange: prevTotalReqs > 0 ? Math.round(((totalReqs - prevTotalReqs) / prevTotalReqs) * 100) : 0,
+            costChange: prevTotalCost > 0 ? Math.round(((parseFloat(stats.total_cost) - prevTotalCost) / prevTotalCost) * 100) : 0,
+          },
         });
       } catch (error: any) {
         logger.error('Failed to get billing statistics', { error: error.message });
