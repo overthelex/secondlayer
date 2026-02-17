@@ -88,25 +88,6 @@ export class CourtRegistryScrapeService {
     return this.mapCheckpoint(r.rows[0]);
   }
 
-  async enqueueUrls(
-    checkpointId: string,
-    items: { docId: string; url: string; pageNumber: number }[]
-  ): Promise<number> {
-    if (items.length === 0) return 0;
-    const docIds = items.map((i) => i.docId);
-    const urls = items.map((i) => i.url);
-    const pageNumbers = items.map((i) => i.pageNumber);
-    const res = await this.db.query(
-      `INSERT INTO court_registry_scrape_queue (doc_id, url, page_number, checkpoint_id, status)
-       SELECT unnest($1::varchar[]), unnest($2::text[]), unnest($3::int[]), $4::uuid, 'pending'
-       ON CONFLICT (doc_id) DO NOTHING`,
-      [docIds, urls, pageNumbers, checkpointId]
-    );
-    return res.rowCount ?? 0;
-  }
-
-  /** Queue methods (getNextBatch, markCompleted, markFailed) reserved for future discovery/extraction mode. */
-
   async recordStats(
     runId: string,
     checkpointId: string | null,

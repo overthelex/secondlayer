@@ -1,33 +1,30 @@
 /**
- * Prometheus metrics for court registry scraping (LEG-53).
- * Script does not expose HTTP /metrics; counters are for logging/debug. Pushgateway can be added later.
+ * Simple counters for court registry scraping (LEG-53).
+ * No prom-client dependency — the scraper is a standalone script
+ * that does not expose /metrics. Values are used for logging and alerts only.
  */
 
-import { Registry, Counter, Gauge } from 'prom-client';
+class SimpleCounter {
+  private value = 0;
+  inc(_labels?: Record<string, string>): void {
+    this.value++;
+  }
+  get(): number {
+    return this.value;
+  }
+}
 
-const registry = new Registry();
+class SimpleGauge {
+  private value = 0;
+  set(v: number): void {
+    this.value = v;
+  }
+  get(): number {
+    return this.value;
+  }
+}
 
-export const courtRegistryScrapeTotal = new Counter({
-  name: 'court_registry_scrape_total',
-  help: 'Total documents scraped from court registry',
-  labelNames: ['status'],
-  registers: [registry],
-});
-
-export const courtRegistryScrapeSuccessRate = new Gauge({
-  name: 'court_registry_scrape_success_rate',
-  help: 'Success rate of last scrape run',
-  registers: [registry],
-});
-
-export const courtRegistryCaptchaCount = new Counter({
-  name: 'court_registry_captcha_total',
-  help: 'Total CAPTCHAs encountered',
-  registers: [registry],
-});
-
-export const courtRegistryBlockCount = new Counter({
-  name: 'court_registry_block_total',
-  help: 'Total access blocks encountered',
-  registers: [registry],
-});
+export const courtRegistryScrapeTotal = new SimpleCounter();
+export const courtRegistryScrapeSuccessRate = new SimpleGauge();
+export const courtRegistryCaptchaCount = new SimpleCounter();
+export const courtRegistryBlockCount = new SimpleCounter();
