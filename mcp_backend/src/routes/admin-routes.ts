@@ -1516,42 +1516,403 @@ export function createAdminRoutes(
 
   /**
    * GET /api/admin/billing/tiers
-   * List all pricing tiers from DB
+   * List all billing tiers directly from billing_tiers table
    */
   router.get('/billing/tiers', async (_req: Request, res: Response) => {
     try {
-      const tiers = await pricing.getAllTiersAsync();
+      const result = await db.query(`
+        SELECT id, tier_key, display_name, markup_percentage, description,
+               features, default_daily_limit_usd, default_monthly_limit_usd,
+               is_default, is_active, sort_order, created_at, updated_at
+        FROM billing_tiers
+        ORDER BY sort_order ASC, tier_key ASC
+      `);
+      const tiers = result.rows.map((row: any) => ({
+        ...row,
+        markup_percentage: parseFloat(row.markup_percentage),
+        default_daily_limit_usd: parseFloat(row.default_daily_limit_usd),
+        default_monthly_limit_usd: parseFloat(row.default_monthly_limit_usd),
+        features: row.features || [],
+      }));
       res.json({ tiers });
     } catch (error: any) {
-      logger.error('Failed to get pricing tiers', { error: error.message });
-      res.status(500).json({ error: 'Failed to retrieve pricing tiers' });
+      logger.error('Failed to get billing tiers', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve billing tiers' });
     }
   });
 
   /**
-   * PUT /api/admin/billing/tiers/:tierKey
-   * Update a pricing tier
+   * PUT /api/admin/billing/tiers/:idOrKey
+   * Update a billing tier by UUID or tier_key
    */
-  router.put('/billing/tiers/:tierKey', async (req: Request, res: Response) => {
+  router.put('/billing/tiers/:idOrKey', async (req: Request, res: Response) => {
     try {
-      const tierKey = getStringParam(req.params.tierKey);
-      if (!tierKey) return res.status(400).json({ error: 'tierKey is required' });
+      const idOrKey = getStringParam(req.params.idOrKey);
+      if (!idOrKey) return res.status(400).json({ error: 'Tier identifier is required' });
 
-      await pricing.updateTier(tierKey, req.body);
+      const { display_name, markup_percentage, description, features, default_daily_limit_usd, default_monthly_limit_usd } = req.body;
+
+      // Determine whether idOrKey is a UUID or a tier_key
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrKey);
+      const whereClause = isUuid ? 'id = $1' : 'tier_key = $1';
+
+      const updates: string[] = [];
+      const params: any[] = [idOrKey];
+      let paramCount = 1;
+
+      if (display_name !== undefined) { paramCount++; updates.push(`display_name = $${paramCount}`); params.push(display_name); }
+      if (markup_percentage !== undefined) { paramCount++; updates.push(`markup_percentage = $${paramCount}`); params.push(markup_percentage); }
+      if (description !== undefined) { paramCount++; updates.push(`description = $${paramCount}`); params.push(description); }
+      if (features !== undefined) { paramCount++; updates.push(`features = $${paramCount}`); params.push(JSON.stringify(features)); }
+      if (default_daily_limit_usd !== undefined) { paramCount++; updates.push(`default_daily_limit_usd = $${paramCount}`); params.push(default_daily_limit_usd); }
+      if (default_monthly_limit_usd !== undefined) { paramCount++; updates.push(`default_monthly_limit_usd = $${paramCount}`); params.push(default_monthly_limit_usd); }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      updates.push('updated_at = NOW()');
+
+      const result = await db.query(
+        `UPDATE billing_tiers SET ${updates.join(', ')} WHERE ${whereClause} RETURNING tier_key`,
+        params
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Tier not found' });
+      }
+
+      // Also update PricingService cache if available
+      try { await pricing.updateTier(result.rows[0].tier_key, req.body); } catch { /* cache update is best-effort */ }
 
       await logAdminAction(
         (req as any).user.id,
-        'update_pricing_tier',
+        'update_billing_tier',
         null,
-        tierKey,
+        idOrKey,
         req.body,
         req
       );
 
       res.json({ success: true });
     } catch (error: any) {
-      logger.error('Failed to update pricing tier', { error: error.message });
-      res.status(500).json({ error: 'Failed to update pricing tier' });
+      logger.error('Failed to update billing tier', { error: error.message });
+      res.status(500).json({ error: 'Failed to update billing tier' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/tiers/:id/default
+   * Set a tier as the default
+   */
+  router.put('/billing/tiers/:id/default', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Tier id is required' });
+
+      await db.query('UPDATE billing_tiers SET is_default = false, updated_at = NOW()');
+      const result = await db.query(
+        'UPDATE billing_tiers SET is_default = true, updated_at = NOW() WHERE id = $1 RETURNING tier_key',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Tier not found' });
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'set_default_tier',
+        null,
+        id,
+        { tier_key: result.rows[0].tier_key },
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to set default tier', { error: error.message });
+      res.status(500).json({ error: 'Failed to set default tier' });
+    }
+  });
+
+  /**
+   * DELETE /api/admin/billing/tiers/:id
+   * Deactivate a billing tier (soft delete)
+   */
+  router.delete('/billing/tiers/:id', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Tier id is required' });
+
+      const result = await db.query(
+        'UPDATE billing_tiers SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING tier_key',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Tier not found' });
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'deactivate_billing_tier',
+        null,
+        id,
+        { tier_key: result.rows[0].tier_key },
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to deactivate billing tier', { error: error.message });
+      res.status(500).json({ error: 'Failed to deactivate billing tier' });
+    }
+  });
+
+  /**
+   * GET /api/admin/billing/volume-discounts
+   * List volume discount thresholds
+   */
+  router.get('/billing/volume-discounts', async (_req: Request, res: Response) => {
+    try {
+      const result = await db.query(
+        'SELECT id, min_monthly_spend_usd, discount_percentage FROM volume_discount_thresholds ORDER BY min_monthly_spend_usd ASC'
+      );
+      const discounts = result.rows.map((row: any) => ({
+        ...row,
+        min_monthly_spend_usd: parseFloat(row.min_monthly_spend_usd),
+        discount_percentage: parseFloat(row.discount_percentage),
+      }));
+      res.json({ discounts });
+    } catch (error: any) {
+      logger.error('Failed to get volume discounts', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve volume discounts' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/volume-discounts
+   * Replace all volume discount thresholds
+   */
+  router.put('/billing/volume-discounts', async (req: Request, res: Response) => {
+    try {
+      const { thresholds } = req.body;
+      if (!Array.isArray(thresholds)) {
+        return res.status(400).json({ error: 'thresholds must be an array' });
+      }
+
+      const client = await (db as any).pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM volume_discount_thresholds');
+        for (const t of thresholds) {
+          await client.query(
+            'INSERT INTO volume_discount_thresholds (min_monthly_spend_usd, discount_percentage) VALUES ($1, $2)',
+            [t.min_monthly_spend_usd, t.discount_percentage]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'update_volume_discounts',
+        null,
+        null,
+        { count: thresholds.length },
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to update volume discounts', { error: error.message });
+      res.status(500).json({ error: 'Failed to update volume discounts' });
+    }
+  });
+
+  /**
+   * GET /api/admin/billing/organizations
+   * List all organizations with billing info
+   */
+  router.get('/billing/organizations', async (_req: Request, res: Response) => {
+    try {
+      const result = await db.query(`
+        SELECT
+          o.id, o.name, o.plan, o.max_members,
+          o.billing_tier_key, o.billing_email,
+          COALESCE(o.balance_usd, 0) as balance_usd,
+          COALESCE(o.total_spent_usd, 0) as total_spent_usd,
+          o.created_at,
+          (SELECT COUNT(*) FROM organization_members om WHERE om.organization_id = o.id) as member_count,
+          u.email as owner_email,
+          u.name as owner_name
+        FROM organizations o
+        LEFT JOIN organization_members om_owner ON o.id = om_owner.organization_id AND om_owner.role = 'owner'
+        LEFT JOIN users u ON om_owner.user_id = u.id
+        ORDER BY o.created_at DESC
+      `);
+      const organizations = result.rows.map((row: any) => ({
+        ...row,
+        balance_usd: parseFloat(row.balance_usd),
+        total_spent_usd: parseFloat(row.total_spent_usd),
+        member_count: parseInt(row.member_count),
+      }));
+      res.json({ organizations });
+    } catch (error: any) {
+      logger.error('Failed to list organizations', { error: error.message });
+      res.status(500).json({ error: 'Failed to list organizations' });
+    }
+  });
+
+  /**
+   * GET /api/admin/billing/organizations/:id
+   * Get organization details with members
+   */
+  router.get('/billing/organizations/:id', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Organization id is required' });
+
+      const orgResult = await db.query('SELECT * FROM organizations WHERE id = $1', [id]);
+      if (orgResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Organization not found' });
+      }
+
+      const membersResult = await db.query(`
+        SELECT om.user_id, om.role, om.joined_at, u.email, u.name
+        FROM organization_members om
+        JOIN users u ON om.user_id = u.id
+        WHERE om.organization_id = $1
+        ORDER BY om.role ASC, om.joined_at ASC
+      `, [id]);
+
+      res.json({
+        organization: orgResult.rows[0],
+        members: membersResult.rows,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get organization details', { error: error.message });
+      res.status(500).json({ error: 'Failed to get organization details' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/organizations/:id
+   * Update organization billing fields
+   */
+  router.put('/billing/organizations/:id', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Organization id is required' });
+
+      const { plan, max_members, billing_tier_key, billing_email } = req.body;
+
+      const updates: string[] = [];
+      const params: any[] = [id];
+      let paramCount = 1;
+
+      if (plan !== undefined) { paramCount++; updates.push(`plan = $${paramCount}`); params.push(plan); }
+      if (max_members !== undefined) { paramCount++; updates.push(`max_members = $${paramCount}`); params.push(max_members); }
+      if (billing_tier_key !== undefined) { paramCount++; updates.push(`billing_tier_key = $${paramCount}`); params.push(billing_tier_key || null); }
+      if (billing_email !== undefined) { paramCount++; updates.push(`billing_email = $${paramCount}`); params.push(billing_email || null); }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      updates.push('updated_at = NOW()');
+
+      const result = await db.query(
+        `UPDATE organizations SET ${updates.join(', ')} WHERE id = $1 RETURNING id`,
+        params
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Organization not found' });
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'update_organization',
+        null,
+        id,
+        req.body,
+        req
+      );
+
+      res.json({ success: true });
+    } catch (error: any) {
+      logger.error('Failed to update organization', { error: error.message });
+      res.status(500).json({ error: 'Failed to update organization' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/subscriptions/:id/cancel
+   * Cancel a subscription
+   */
+  router.put('/billing/subscriptions/:id/cancel', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Subscription id is required' });
+
+      const { reason } = req.body;
+      const result = await subscriptions.cancel(id, reason || 'Admin canceled');
+
+      if (!result) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'cancel_subscription',
+        null,
+        id,
+        { reason },
+        req
+      );
+
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Failed to cancel subscription', { error: error.message });
+      res.status(500).json({ error: 'Failed to cancel subscription' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/billing/subscriptions/:id/activate
+   * Activate a canceled subscription
+   */
+  router.put('/billing/subscriptions/:id/activate', async (req: Request, res: Response) => {
+    try {
+      const id = getStringParam(req.params.id);
+      if (!id) return res.status(400).json({ error: 'Subscription id is required' });
+
+      const result = await subscriptions.activate(id);
+
+      if (!result) {
+        return res.status(404).json({ error: 'Subscription not found' });
+      }
+
+      await logAdminAction(
+        (req as any).user.id,
+        'activate_subscription',
+        null,
+        id,
+        {},
+        req
+      );
+
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Failed to activate subscription', { error: error.message });
+      res.status(500).json({ error: 'Failed to activate subscription' });
     }
   });
 

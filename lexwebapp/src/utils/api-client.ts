@@ -256,8 +256,22 @@ export const api = {
     // Billing management
     getBillingTiers: () =>
       apiClient.get('/api/admin/billing/tiers'),
-    updateBillingTier: (tierKey: string, data: any) =>
-      apiClient.put(`/api/admin/billing/tiers/${tierKey}`, data),
+    updateBillingTier: (idOrKey: string, data: any) =>
+      apiClient.put(`/api/admin/billing/tiers/${idOrKey}`, data),
+    setDefaultTier: (id: string) =>
+      apiClient.put(`/api/admin/billing/tiers/${id}/default`),
+    deleteBillingTier: (id: string) =>
+      apiClient.delete(`/api/admin/billing/tiers/${id}`),
+    getVolumeDiscounts: () =>
+      apiClient.get('/api/admin/billing/volume-discounts'),
+    updateVolumeDiscounts: (thresholds: any[]) =>
+      apiClient.put('/api/admin/billing/volume-discounts', { thresholds }),
+    getOrganizations: () =>
+      apiClient.get('/api/admin/billing/organizations'),
+    getOrganization: (id: string) =>
+      apiClient.get(`/api/admin/billing/organizations/${id}`),
+    updateOrganization: (id: string, data: any) =>
+      apiClient.put(`/api/admin/billing/organizations/${id}`, data),
     getSubscriptions: (params?: { limit?: number; offset?: number; status?: string; tier?: string }) =>
       apiClient.get('/api/admin/billing/subscriptions', { params }),
     createSubscription: (data: any) =>
@@ -266,6 +280,10 @@ export const api = {
       apiClient.put(`/api/admin/billing/subscriptions/${id}`, data),
     deleteSubscription: (id: string) =>
       apiClient.delete(`/api/admin/billing/subscriptions/${id}`),
+    cancelSubscription: (id: string, reason: string) =>
+      apiClient.put(`/api/admin/billing/subscriptions/${id}/cancel`, { reason }),
+    activateSubscription: (id: string) =>
+      apiClient.put(`/api/admin/billing/subscriptions/${id}/activate`),
     getSubscriptionStats: () =>
       apiClient.get('/api/admin/billing/subscription-stats'),
   },
