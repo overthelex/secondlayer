@@ -1293,7 +1293,7 @@ export function createAdminRoutes(db: Database, prometheusUrl?: string): express
       });
 
       // Compute totals
-      const summary = byJusticeKind.reduce(
+      const summary = byJusticeKind.reduce<{ total_documents: number; with_plaintext: number; with_html: number; with_both: number; missing_both: number }>(
         (acc, row) => ({
           total_documents: acc.total_documents + row.total,
           with_plaintext: acc.with_plaintext + row.has_plaintext,
