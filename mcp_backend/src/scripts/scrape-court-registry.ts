@@ -12,27 +12,31 @@
  * The browser is headed so the user can solve CAPTCHAs manually.
  *
  * Environment variables:
- *   MAX_DOCS          - Max documents to download (default: unlimited)
- *   MAX_PAGES         - Max result pages to process (default: 100)
- *   DOWNLOAD_DIR      - Output directory (default: ~/Downloads)
- *   DELAY_MS          - Delay between downloads in ms (default: 2000)
- *   CONCURRENCY       - Parallel processing threads (default: 10)
- *   SKIP_EMBEDDINGS   - If "true", save to DB but skip embedding step
- *   PROCESS_ONLY      - If "true", skip scraping and process existing HTML files
- *   JUSTICE_KIND      - Justice kind to search (default: "Цивільне")
- *                       Options: Цивільне, Господарське, Адміністративне, Кримінальне
- *   JUSTICE_KIND_ID   - Numeric ID for metadata grouping (default: "1")
- *                       1=Цивільне, 2=Господарське, 3=Адміністративне, 4=Кримінальне
- *   DOC_FORM          - Document form to search (default: "Рішення")
- *   SEARCH_TEXT       - Text to search in decisions (optional, fills the text field)
- *   DATE_FROM         - Start date dd.mm.yyyy (default: "01.01.2010")
- *   HEADLESS          - If "true", run browser in headless mode (for servers)
+ *   MAX_DOCS             - Max documents to download (default: unlimited)
+ *   MAX_PAGES            - Max result pages to process (default: 100)
+ *   DOWNLOAD_DIR         - Output directory (default: ~/Downloads)
+ *   DELAY_MS             - Delay between downloads in ms (default: 2000)
+ *   CONCURRENCY          - Parallel processing threads (default: 10)
+ *   SKIP_EMBEDDINGS      - If "true", save to DB but skip embedding step
+ *   PROCESS_ONLY         - If "true", skip scraping and process existing HTML files
+ *   JUSTICE_KIND         - Justice kind to search (default: "Цивільне")
+ *   JUSTICE_KIND_ID      - Numeric ID for metadata grouping (default: "1")
+ *   DOC_FORM             - Document form to search (default: "Рішення")
+ *   SEARCH_TEXT          - Text to search in decisions (optional)
+ *   DATE_FROM            - Start date dd.mm.yyyy (default: "01.01.2010")
+ *   HEADLESS             - If "true", run browser in headless mode (for servers)
+ *   INCREMENTAL          - If "true", scrape only since last successful run (LEG-53)
+ *   RESUME               - If "true", resume from last checkpoint page (LEG-53)
+ *   SCRAPE_PROXY         - HTTP proxy for Playwright (LEG-53)
+ *   SCRAPE_ALERT_WEBHOOK - URL for CAPTCHA/block alerts (LEG-53)
+ *   SCRAPE_DELAY_MIN_MS  - Min delay between requests (default: 1500) (LEG-53)
+ *   SCRAPE_DELAY_MAX_MS  - Max delay between requests (default: 3500) (LEG-53)
  *
  * Usage:
  *   npm run scrape:court
  *   MAX_DOCS=10 npm run scrape:court
- *   PROCESS_ONLY=true CONCURRENCY=5 npm run scrape:court
- *   JUSTICE_KIND=Цивільне SEARCH_TEXT="витребувати майно" MAX_DOCS=2000 npm run scrape:court
+ *   INCREMENTAL=true npm run scrape:court
+ *   RESUME=true npm run scrape:court
  */
 
 import { chromium, type Page } from 'playwright';
@@ -44,6 +48,18 @@ import { Database } from '../database/database.js';
 import { DocumentService, type Document } from '../services/document-service.js';
 import { SemanticSectionizer } from '../services/semantic-sectionizer.js';
 import { EmbeddingService } from '../services/embedding-service.js';
+import { CourtRegistryScrapeService } from '../services/court-registry-scrape-service.js';
+import {
+  getRandomUserAgent,
+  sleepWithJitter,
+  getRandomDelay,
+} from '../utils/scrape-anti-detection.js';
+import {
+  courtRegistryScrapeTotal,
+  courtRegistryScrapeSuccessRate,
+  courtRegistryCaptchaCount,
+  courtRegistryBlockCount,
+} from '../services/court-registry-metrics.js';
 import { SectionType } from '../types/index.js';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 
@@ -60,6 +76,10 @@ const DOC_FORM = process.env.DOC_FORM || 'Рішення';
 const SEARCH_TEXT = process.env.SEARCH_TEXT || '';
 const DATE_FROM = process.env.DATE_FROM || '01.01.2010';
 const HEADLESS = process.env.HEADLESS === 'true';
+const INCREMENTAL = process.env.INCREMENTAL === 'true';
+const RESUME = process.env.RESUME === 'true';
+const SCRAPE_DELAY_MIN_MS = parseInt(process.env.SCRAPE_DELAY_MIN_MS || '1500', 10);
+const SCRAPE_DELAY_MAX_MS = parseInt(process.env.SCRAPE_DELAY_MAX_MS || '3500', 10);
 const BASE_URL = 'https://reyestr.court.gov.ua/';
 
 // Processing stats
@@ -191,7 +211,8 @@ async function processDocument(
     const meta = extractMetadataFromHTML(html, docId);
 
     if (!meta.fullText || meta.fullText.length < 100) {
-      console.log(`  [PROC ${docId}] Text too short (${meta.fullText.length} chars), skipping`);
+      console.log(`  [PROC ${docId}] Text too short (${meta.fullText?.length ?? 0} chars), skipping`);
+      courtRegistryScrapeTotal.inc({ status: 'skipped' });
       return false;
     }
 
@@ -263,10 +284,13 @@ async function processDocument(
     }
 
     processedCount++;
+    courtRegistryScrapeTotal.inc({ status: 'success' });
     return true;
-  } catch (error: any) {
-    console.error(`  [PROC ${docId}] Error: ${error.message}`);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`  [PROC ${docId}] Error: ${msg}`);
     processErrors++;
+    courtRegistryScrapeTotal.inc({ status: 'failed' });
     return false;
   }
 }
@@ -301,12 +325,29 @@ async function processWithPool(
 
 // ─── Scraping Functions ─────────────────────────────────────────────────────
 
-async function waitForCaptcha(page: Page): Promise<void> {
+type CaptchaResult = 'solved' | 'timeout' | 'blocked';
+
+async function waitForCaptcha(page: Page): Promise<CaptchaResult> {
   const captchaVisible = await page.locator('#modalcaptcha').isVisible().catch(() => false);
-  if (!captchaVisible) return;
+  if (!captchaVisible) return 'solved';
 
   console.log('\n  CAPTCHA detected! Please solve it in the browser window.');
   console.log('   Waiting up to 5 minutes...\n');
+
+  courtRegistryCaptchaCount.inc();
+
+  const webhook = process.env.SCRAPE_ALERT_WEBHOOK;
+  if (webhook) {
+    fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'captcha_detected',
+        source: 'reyestr.court.gov.ua',
+        message: 'CAPTCHA detected, waiting for manual solve',
+      }),
+    }).catch(() => {});
+  }
 
   const startTime = Date.now();
   const timeout = 5 * 60 * 1000;
@@ -315,12 +356,21 @@ async function waitForCaptcha(page: Page): Promise<void> {
     const stillVisible = await page.locator('#modalcaptcha').isVisible().catch(() => false);
     if (!stillVisible) {
       console.log('   CAPTCHA solved, continuing...\n');
-      return;
+      return 'solved';
     }
+
+    const bodyText = await page.locator('body').textContent().catch(() => '') ?? '';
+    if (/доступ заборонено|403|forbidden|blocked/i.test(bodyText)) {
+      console.log('   Access blocked detected.');
+      courtRegistryBlockCount.inc();
+      return 'blocked';
+    }
+
     await sleep(1000);
   }
 
-  throw new Error('CAPTCHA timeout — not solved within 5 minutes');
+  console.log('   CAPTCHA timeout — not solved within 5 minutes.');
+  return 'timeout';
 }
 
 async function clickMultiSelectOption(page: Page, labelText: string): Promise<boolean> {
@@ -359,31 +409,28 @@ async function clickMultiSelectOption(page: Page, labelText: string): Promise<bo
   return false;
 }
 
-async function fillSearchForm(page: Page): Promise<void> {
+async function fillSearchForm(page: Page, dateFromValue: string): Promise<void> {
   console.log('Filling search form...');
   console.log(`  Justice kind: ${JUSTICE_KIND} (id=${JUSTICE_KIND_ID})`);
   console.log(`  Document form: ${DOC_FORM}`);
   if (SEARCH_TEXT) console.log(`  Search text: "${SEARCH_TEXT}"`);
+  console.log(`  Date from: ${dateFromValue}`);
 
   await page.waitForSelector('select', { timeout: 10000 });
-  await sleep(1000);
+  await sleepWithJitter(1000);
 
-  // Select justice kind (Цивільне, Господарське, etc.)
   await clickMultiSelectOption(page, JUSTICE_KIND);
-  await sleep(500);
+  await sleepWithJitter(500);
 
-  // Select document form (Рішення, Ухвала, etc.)
   await clickMultiSelectOption(page, DOC_FORM);
-  await sleep(500);
+  await sleepWithJitter(500);
 
-  // Fill search text if provided (searches in decision text)
   if (SEARCH_TEXT) {
     const textInput = page.locator('input[name="SearchExpression"], textarea[name="SearchExpression"]');
     if (await textInput.count() > 0) {
       await textInput.first().fill(SEARCH_TEXT);
       console.log(`  Set search text: "${SEARCH_TEXT}"`);
     } else {
-      // Fallback: try any large text input
       const fallbackInput = page.locator('textarea, input[type="text"][name*="text" i], input[type="text"][name*="search" i]');
       if (await fallbackInput.count() > 0) {
         await fallbackInput.first().fill(SEARCH_TEXT);
@@ -392,22 +439,21 @@ async function fillSearchForm(page: Page): Promise<void> {
         console.log('  WARNING: Could not find text search input');
       }
     }
-    await sleep(500);
+    await sleepWithJitter(500);
   }
 
-  // Set date from
-  const dateFrom = page.locator('input[name="DateFrom"]');
-  if (await dateFrom.count() > 0) {
-    await dateFrom.fill(DATE_FROM);
-    console.log(`  Set date from: ${DATE_FROM}`);
+  const dateFromEl = page.locator('input[name="DateFrom"]');
+  if (await dateFromEl.count() > 0) {
+    await dateFromEl.fill(dateFromValue);
+    console.log(`  Set date from: ${dateFromValue}`);
   } else {
     const dateInputs = page.locator('input[type="text"][id*="date" i], input[type="text"][name*="date" i], input[type="text"][placeholder*="дд.мм.рррр"]');
     if (await dateInputs.count() > 0) {
-      await dateInputs.first().fill(DATE_FROM);
-      console.log(`  Set date from: ${DATE_FROM} (fallback)`);
+      await dateInputs.first().fill(dateFromValue);
+      console.log(`  Set date from: ${dateFromValue} (fallback)`);
     }
   }
-  await sleep(500);
+  await sleepWithJitter(500);
 
   const pageSizeEl = page.locator('select[name="PagingInfo.ItemsPerPage"]');
   if (await pageSizeEl.count() > 0) {
@@ -416,7 +462,7 @@ async function fillSearchForm(page: Page): Promise<void> {
   }
 }
 
-async function clickSearch(page: Page): Promise<void> {
+async function clickSearch(page: Page): Promise<CaptchaResult> {
   console.log('Clicking search button...');
 
   try {
@@ -428,12 +474,13 @@ async function clickSearch(page: Page): Promise<void> {
     if (await searchBtn.count() > 0) {
       await searchBtn.first().click();
     } else {
-      await page.locator('#login > form, form').first().evaluate((form: any) => form.submit());
+      await page.locator('#login > form, form').first().evaluate((form: { submit: () => void }) => form.submit());
     }
   }
 
   await sleep(3000);
-  await waitForCaptcha(page);
+  const captchaResult = await waitForCaptcha(page);
+  if (captchaResult !== 'solved') return captchaResult;
 
   console.log('Waiting for results...');
   await page.waitForSelector(
@@ -443,7 +490,8 @@ async function clickSearch(page: Page): Promise<void> {
     console.log('  Could not detect standard result container, continuing anyway...');
   });
 
-  await sleep(2000);
+  await sleepWithJitter(2000);
+  return 'solved';
 }
 
 async function extractDecisionLinks(page: Page): Promise<{ url: string; id: string }[]> {
@@ -470,24 +518,29 @@ async function downloadDecisionDirect(
 ): Promise<string | null> {
   const filePath = path.join(DOWNLOAD_DIR, `${docId}.html`);
 
-  // If already downloaded, return existing HTML
   if (fs.existsSync(filePath)) {
     console.log(`  [${docId}] Already exists, reading from disk`);
     return fs.readFileSync(filePath, 'utf-8');
   }
 
+  await sleepWithJitter(
+    getRandomDelay(SCRAPE_DELAY_MIN_MS, SCRAPE_DELAY_MAX_MS),
+    300
+  );
+
   const tab = await context.newPage();
   try {
     const url = `${BASE_URL}Review/${docId}`;
     await tab.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(1500);
+    await sleepWithJitter(1500);
 
     const html = await tab.content();
     fs.writeFileSync(filePath, html, 'utf-8');
     console.log(`  [${docId}] Saved (${(html.length / 1024).toFixed(1)} KB)`);
     return html;
-  } catch (error: any) {
-    console.error(`  [${docId}] Error: ${error.message}`);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`  [${docId}] Error: ${msg}`);
     return null;
   } finally {
     await tab.close();
@@ -522,7 +575,52 @@ async function downloadWithPool(
   return results;
 }
 
-async function goToNextPage(page: Page): Promise<boolean> {
+/**
+ * Try to navigate directly to a specific result page (avoids O(N) click-through).
+ * Verifies we're on the right page after navigation.
+ */
+async function tryGoToPageDirect(page: Page, targetPageNum: number): Promise<boolean> {
+  if (targetPageNum <= 1) return true;
+
+  // Try 1: pagination link with exact page number (exact: true avoids "2" matching "12"/"21")
+  const exactLink = page.getByRole('link', { name: String(targetPageNum), exact: true });
+  if ((await exactLink.count()) > 0) {
+    await exactLink.first().click();
+    await sleep(3000);
+    if (await verifyOnResultPage(page)) return true;
+  }
+
+  // Try 2: set PagingInfo.Page and submit (ASP.NET). Runs in browser context.
+  // Use string form to avoid TS needing 'dom' lib for `document`.
+  const set = await page.evaluate(`(() => {
+    const inputs = document.querySelectorAll('input[name*="Page"], input[name*="page"]');
+    for (const inp of inputs) {
+      if (inp.name.toLowerCase().includes('page') && !inp.name.toLowerCase().includes('per')) {
+        inp.value = String(${targetPageNum});
+        return true;
+      }
+    }
+    return false;
+  })()`) as boolean;
+  if (set) {
+    const form = page.locator('form').first();
+    if ((await form.count()) > 0) {
+      await form.evaluate((f: { submit: () => void }) => f.submit());
+      await sleep(3000);
+      if (await verifyOnResultPage(page)) return true;
+    }
+  }
+
+  return false;
+}
+
+/** Verify we're on a result page after direct navigation (links present). */
+async function verifyOnResultPage(page: Page): Promise<boolean> {
+  const links = await page.locator('a[href*="/Review/"]').count();
+  return links > 0;
+}
+
+async function goToNextPage(page: Page): Promise<{ hasNext: boolean; captchaResult: CaptchaResult }> {
   const nextBtn = page.locator(
     'a:has-text("Наступна"), a:has-text("»"), a:has-text(">"):not(:has-text(">>"))'
   );
@@ -540,14 +638,46 @@ async function goToNextPage(page: Page): Promise<boolean> {
 
   if (!clicked) {
     console.log('No next page button found.');
-    return false;
+    return { hasNext: false, captchaResult: 'solved' };
   }
 
   await sleep(3000);
-  await waitForCaptcha(page);
-  await sleep(2000);
+  const captchaResult = await waitForCaptcha(page);
+  await sleepWithJitter(2000);
 
-  return true;
+  return { hasNext: true, captchaResult };
+}
+
+function formatDateForForm(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
+async function sendAlert(stats: {
+  success_rate: number;
+  block_count: number;
+  captcha_count: number;
+  event?: string;
+}): Promise<void> {
+  const webhook = process.env.SCRAPE_ALERT_WEBHOOK;
+  if (!webhook) return;
+
+  if (stats.success_rate < 0.8 && stats.success_rate >= 0) {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'low_success_rate', ...stats }),
+    }).catch(() => {});
+  }
+  if (stats.block_count > 0 || stats.captcha_count > 2) {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'access_issues', ...stats }),
+    }).catch(() => {});
+  }
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -556,7 +686,7 @@ async function main() {
   fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log('  Court Registry Scraper + DB Pipeline');
+  console.log('  Court Registry Scraper + DB Pipeline (LEG-53)');
   console.log('═══════════════════════════════════════════════════════════════');
   console.log(`  Justice kind:     ${JUSTICE_KIND} (id=${JUSTICE_KIND_ID})`);
   console.log(`  Document form:    ${DOC_FORM}`);
@@ -570,17 +700,57 @@ async function main() {
   console.log(`  Skip embeddings:  ${SKIP_EMBEDDINGS}`);
   console.log(`  Process only:     ${PROCESS_ONLY}`);
   console.log(`  Headless:         ${HEADLESS}`);
+  console.log(`  Incremental:      ${INCREMENTAL}`);
+  console.log(`  Resume:           ${RESUME}`);
   console.log('═══════════════════════════════════════════════════════════════\n');
 
-  // Initialize DB services
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const startTime = Date.now();
+
   console.log('Initializing database services...');
   const ctx = await initServices();
+  const scrapeService = new CourtRegistryScrapeService(ctx.db);
   console.log('  DB services ready.\n');
 
-  let totalDownloaded = 0;
-  let totalErrors = 0;
+  try {
+    const scrapeConfig = {
+      justiceKind: JUSTICE_KIND,
+      docForm: DOC_FORM,
+      searchText: SEARCH_TEXT || undefined,
+      dateFrom: DATE_FROM,
+    };
 
-  if (PROCESS_ONLY) {
+    let effectiveDateFrom = DATE_FROM;
+    let startPage = 1;
+    let checkpointId: string | null = null;
+
+    if ((INCREMENTAL || RESUME) && !PROCESS_ONLY) {
+      const checkpoint = await scrapeService.getCheckpoint(scrapeConfig);
+      if (checkpoint) {
+        checkpointId = checkpoint.id;
+        if (INCREMENTAL && checkpoint.last_scraped_at) {
+          const lastDate = new Date(checkpoint.last_scraped_at);
+          const daysSince = (Date.now() - lastDate.getTime()) / (24 * 60 * 60 * 1000);
+          if (daysSince < 7) {
+            const nextDay = new Date(lastDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            effectiveDateFrom = formatDateForForm(nextDay);
+            console.log(`  Incremental: scraping from ${effectiveDateFrom} (since last run)`);
+          }
+        }
+        if (RESUME && checkpoint.status === 'in_progress') {
+          startPage = checkpoint.last_page + 1;
+          console.log(`  Resume: starting from page ${startPage}`);
+        }
+      }
+    }
+
+    let totalDownloaded = 0;
+    let totalErrors = 0;
+    let captchaCount = 0;
+    let blockCount = 0;
+
+    if (PROCESS_ONLY) {
     // Process existing HTML files from DOWNLOAD_DIR
     console.log('PROCESS_ONLY mode: processing existing HTML files...\n');
     const files = fs.readdirSync(DOWNLOAD_DIR).filter(f => f.endsWith('.html'));
@@ -594,79 +764,173 @@ async function main() {
     }
 
     console.log(`Found ${items.length} HTML files to process\n`);
-    await processWithPool(ctx, items);
-  } else {
-    // Scrape + process
-    const browser = await chromium.launch({ headless: HEADLESS });
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 900 },
-      locale: 'uk-UA',
-    });
-    const page = await context.newPage();
+      await processWithPool(ctx, items);
+    } else {
+      const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
+      const launchOptions: Parameters<typeof chromium.launch>[0] = {
+        headless: HEADLESS,
+        ...(proxy && { proxy: { server: proxy } }),
+      };
+      const contextOptions: Parameters<import('playwright').Browser['newContext']>[0] = {
+        viewport: { width: 1280, height: 900 },
+        locale: 'uk-UA',
+        userAgent: getRandomUserAgent(),
+      };
 
-    try {
-      console.log('Navigating to court registry...');
-      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(2000);
+      const browser = await chromium.launch(launchOptions);
+      const context = await browser.newContext(contextOptions);
+      const page = await context.newPage();
 
-      await fillSearchForm(page);
-      await clickSearch(page);
+      try {
+        console.log('Navigating to court registry...');
+        await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await sleepWithJitter(2000);
 
-      for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
-        if (totalDownloaded >= MAX_DOCS) break;
-
-        console.log(`\n--- Page ${pageNum} ---`);
-
-        const links = await extractDecisionLinks(page);
-        console.log(`Found ${links.length} decisions on this page`);
-
-        if (links.length === 0) {
-          console.log('No decisions found, stopping.');
-          break;
+        await fillSearchForm(page, effectiveDateFrom);
+        const searchCaptchaResult = await clickSearch(page);
+        if (searchCaptchaResult !== 'solved') {
+          captchaCount += searchCaptchaResult === 'timeout' ? 1 : 0;
+          blockCount += searchCaptchaResult === 'blocked' ? 1 : 0;
+          const cp = await scrapeService.upsertCheckpoint(
+            scrapeConfig,
+            0,
+            totalDownloaded,
+            totalErrors,
+            'failed',
+            searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
+          );
+          await scrapeService.recordStats(runId, cp.id, processedCount, processErrors, captchaCount, blockCount, 0);
+          throw new Error(searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked');
         }
 
-        // Take only as many IDs as we still need
-        const remaining = MAX_DOCS - totalDownloaded;
-        const idsToDownload = links.slice(0, remaining).map(l => l.id);
-
-        // Download concurrently with CONCURRENCY tabs
-        console.log(`  Downloading ${idsToDownload.length} decisions (${CONCURRENCY} concurrent tabs)...`);
-        const downloaded = await downloadWithPool(context, idsToDownload);
-        totalDownloaded += downloaded.length;
-        totalErrors += idsToDownload.length - downloaded.length;
-
-        // Process downloaded batch through DB pipeline
-        if (downloaded.length > 0) {
-          console.log(`\n  Processing batch of ${downloaded.length} documents...`);
-          await processWithPool(ctx, downloaded);
+        if (startPage > 1) {
+          const directOk = await tryGoToPageDirect(page, startPage);
+          if (!directOk) {
+            if (startPage > 20) {
+              console.log(`  Resume: direct page nav not available, clicking through ${startPage - 1} pages (slow)...`);
+            }
+            for (let i = 1; i < startPage; i++) {
+              const { hasNext, captchaResult } = await goToNextPage(page);
+              if (captchaResult !== 'solved') {
+                captchaCount += captchaResult === 'timeout' ? 1 : 0;
+                blockCount += captchaResult === 'blocked' ? 1 : 0;
+                // goToNextPage failed → browser is still on page i, not i+1
+                await scrapeService.upsertCheckpoint(
+                  scrapeConfig, i, totalDownloaded, totalErrors, 'failed',
+                  captchaResult === 'timeout' ? 'CAPTCHA timeout during resume' : 'Access blocked during resume'
+                );
+                throw new Error(`Resume blocked at page ${i}: ${captchaResult}`);
+              }
+              if (!hasNext) break;
+            }
+          } else {
+            console.log(`  Resume: navigated directly to page ${startPage}`);
+          }
         }
 
-        if (totalDownloaded < MAX_DOCS && pageNum < MAX_PAGES) {
-          const hasNext = await goToNextPage(page);
-          if (!hasNext) break;
+        for (let pageNum = startPage; pageNum <= MAX_PAGES; pageNum++) {
+          if (totalDownloaded >= MAX_DOCS) break;
+
+          console.log(`\n--- Page ${pageNum} ---`);
+
+          const links = await extractDecisionLinks(page);
+          console.log(`Found ${links.length} decisions on this page`);
+
+          if (links.length === 0) {
+            console.log('No decisions found, stopping.');
+            break;
+          }
+
+          const remaining = MAX_DOCS - totalDownloaded;
+          const idsToDownload = links.slice(0, remaining).map((l) => l.id);
+
+          console.log(`  Downloading ${idsToDownload.length} decisions (${CONCURRENCY} concurrent tabs)...`);
+          const downloaded = await downloadWithPool(context, idsToDownload);
+          totalDownloaded += downloaded.length;
+          totalErrors += idsToDownload.length - downloaded.length;
+
+          if (downloaded.length > 0) {
+            console.log(`\n  Processing batch of ${downloaded.length} documents...`);
+            await processWithPool(ctx, downloaded);
+          }
+
+          const cp = await scrapeService.upsertCheckpoint(
+            scrapeConfig,
+            pageNum,
+            totalDownloaded,
+            totalErrors,
+            pageNum < MAX_PAGES && totalDownloaded < MAX_DOCS ? 'in_progress' : 'completed'
+          );
+          checkpointId = cp.id;
+
+          if (totalDownloaded < MAX_DOCS && pageNum < MAX_PAGES) {
+            const { hasNext, captchaResult } = await goToNextPage(page);
+            if (captchaResult !== 'solved') {
+              captchaCount += captchaResult === 'timeout' ? 1 : 0;
+              blockCount += captchaResult === 'blocked' ? 1 : 0;
+              await scrapeService.upsertCheckpoint(
+                scrapeConfig,
+                pageNum,
+                totalDownloaded,
+                totalErrors,
+                'failed',
+                captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
+              );
+              console.log(`\n  Stopping: ${captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'}`);
+              break;
+            }
+            if (!hasNext) break;
+          }
         }
+      } finally {
+        await browser.close();
       }
-    } finally {
-      await browser.close();
     }
+
+    const durationSec = (Date.now() - startTime) / 1000;
+    const totalProcessed = processedCount + processErrors;
+    const successRate = totalProcessed > 0 ? processedCount / totalProcessed : 0;
+
+    courtRegistryScrapeSuccessRate.set(successRate);
+
+    if (checkpointId) {
+      await scrapeService.recordStats(
+        runId,
+        checkpointId,
+        processedCount,
+        processErrors,
+        captchaCount,
+        blockCount,
+        durationSec
+      );
+    }
+
+    await sendAlert({
+      success_rate: successRate,
+      block_count: blockCount,
+      captcha_count: captchaCount,
+    });
+
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('  Summary');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`  Downloaded:   ${totalDownloaded}`);
+    console.log(`  Download err: ${totalErrors}`);
+    console.log(`  Processed:    ${processedCount}`);
+    console.log(`  Process err:  ${processErrors}`);
+    console.log(`  Embedded:     ${embeddedCount}`);
+    console.log(`  Success rate: ${(successRate * 100).toFixed(1)}%`);
+    console.log(`  Duration:     ${durationSec.toFixed(1)}s`);
+    console.log(`  Output dir:   ${DOWNLOAD_DIR}`);
+    console.log('═══════════════════════════════════════════════════════════════');
+  } finally {
+    await ctx.db.close();
   }
-
-  // Cleanup DB connection
-  await ctx.db.close();
-
-  console.log('\n═══════════════════════════════════════════════════════════════');
-  console.log('  Summary');
-  console.log('═══════════════════════════════════════════════════════════════');
-  console.log(`  Downloaded:   ${totalDownloaded}`);
-  console.log(`  Download err: ${totalErrors}`);
-  console.log(`  Processed:    ${processedCount}`);
-  console.log(`  Process err:  ${processErrors}`);
-  console.log(`  Embedded:     ${embeddedCount}`);
-  console.log(`  Output dir:   ${DOWNLOAD_DIR}`);
-  console.log('═══════════════════════════════════════════════════════════════');
 }
 
-main().catch((err) => {
-  console.error('Scraper failed:', err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Scraper failed:', err);
+    process.exit(1);
+  });
