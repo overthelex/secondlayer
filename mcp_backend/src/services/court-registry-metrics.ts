@@ -1,8 +1,9 @@
 /**
- * Prometheus metrics for court registry scraping (LEG-53)
+ * Prometheus metrics for court registry scraping (LEG-53).
+ * Script does not expose HTTP /metrics; counters are for logging/debug. Pushgateway can be added later.
  */
 
-import { Registry, Counter, Gauge, Histogram } from 'prom-client';
+import { Registry, Counter, Gauge } from 'prom-client';
 
 const registry = new Registry();
 
@@ -10,14 +11,6 @@ export const courtRegistryScrapeTotal = new Counter({
   name: 'court_registry_scrape_total',
   help: 'Total documents scraped from court registry',
   labelNames: ['status'],
-  registers: [registry],
-});
-
-export const courtRegistryScrapeDuration = new Histogram({
-  name: 'court_registry_scrape_duration_seconds',
-  help: 'Scraping duration per document',
-  labelNames: ['status'],
-  buckets: [0.5, 1, 2, 5, 10, 30],
   registers: [registry],
 });
 
@@ -38,7 +31,3 @@ export const courtRegistryBlockCount = new Counter({
   help: 'Total access blocks encountered',
   registers: [registry],
 });
-
-export function getCourtRegistryMetricsRegistry(): Registry {
-  return registry;
-}

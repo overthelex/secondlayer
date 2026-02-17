@@ -577,46 +577,48 @@ async function downloadWithPool(
 
 /**
  * Try to navigate directly to a specific result page (avoids O(N) click-through).
- * reyestr.court.gov.ua may use PagingInfo.Page or pagination links.
+ * Verifies we're on the right page after navigation.
  */
 async function tryGoToPageDirect(page: Page, targetPageNum: number): Promise<boolean> {
   if (targetPageNum <= 1) return true;
 
-  // Try 1: pagination link with exact page number (e.g. <a>2</a>)
-  const pageLink = page.getByRole('link', { name: String(targetPageNum) });
-  if ((await pageLink.count()) > 0) {
-    await pageLink.first().click();
+  // Try 1: pagination link with exact page number (exact: true avoids "2" matching "12"/"21")
+  const exactLink = page.getByRole('link', { name: String(targetPageNum), exact: true });
+  if ((await exactLink.count()) > 0) {
+    await exactLink.first().click();
     await sleep(3000);
-    return true;
+    if (await verifyOnResultPage(page)) return true;
   }
 
-  // Try 2: set PagingInfo.Page hidden input and trigger form postback (ASP.NET)
-  const set = await page.evaluate(
-    (pageNum: number) => {
-      const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => { length: number; [i: number]: { name: string; value: string } } } }).document;
-      if (!doc) return false;
-      const inputs = doc.querySelectorAll('input[name*="Page"], input[name*="page"]');
-      for (let i = 0; i < inputs.length; i++) {
-        const inp = inputs[i] as { name: string; value: string };
-        if (inp.name.toLowerCase().includes('page') && !inp.name.toLowerCase().includes('per')) {
-          inp.value = String(pageNum);
-          return true;
-        }
+  // Try 2: set PagingInfo.Page and submit (ASP.NET). Runs in browser.
+  const set = await page.evaluate((pageNum: number) => {
+    const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => Array<{ name: string; value: string }> } }).document;
+    if (!doc) return false;
+    const inputs = doc.querySelectorAll('input[name*="Page"], input[name*="page"]');
+    for (const inp of inputs) {
+      if (inp.name.toLowerCase().includes('page') && !inp.name.toLowerCase().includes('per')) {
+        inp.value = String(pageNum);
+        return true;
       }
-      return false;
-    },
-    targetPageNum
-  );
+    }
+    return false;
+  }, targetPageNum);
   if (set) {
     const form = page.locator('form').first();
     if ((await form.count()) > 0) {
       await form.evaluate((f: { submit: () => void }) => f.submit());
       await sleep(3000);
-      return true;
+      if (await verifyOnResultPage(page)) return true;
     }
   }
 
   return false;
+}
+
+/** Verify we're on a result page after direct navigation (links present). */
+async function verifyOnResultPage(page: Page): Promise<boolean> {
+  const links = await page.locator('a[href*="/Review/"]').count();
+  return links > 0;
 }
 
 async function goToNextPage(page: Page): Promise<{ hasNext: boolean; captchaResult: CaptchaResult }> {
@@ -712,44 +714,44 @@ async function main() {
   console.log('  DB services ready.\n');
 
   try {
-  const scrapeConfig = {
-    justiceKind: JUSTICE_KIND,
-    docForm: DOC_FORM,
-    searchText: SEARCH_TEXT || undefined,
-    dateFrom: DATE_FROM,
-  };
+    const scrapeConfig = {
+      justiceKind: JUSTICE_KIND,
+      docForm: DOC_FORM,
+      searchText: SEARCH_TEXT || undefined,
+      dateFrom: DATE_FROM,
+    };
 
-  let effectiveDateFrom = DATE_FROM;
-  let startPage = 1;
-  let checkpointId: string | null = null;
+    let effectiveDateFrom = DATE_FROM;
+    let startPage = 1;
+    let checkpointId: string | null = null;
 
-  if ((INCREMENTAL || RESUME) && !PROCESS_ONLY) {
-    const checkpoint = await scrapeService.getCheckpoint(scrapeConfig);
-    if (checkpoint) {
-      checkpointId = checkpoint.id;
-      if (INCREMENTAL && checkpoint.last_scraped_at) {
-        const lastDate = new Date(checkpoint.last_scraped_at);
-        const daysSince = (Date.now() - lastDate.getTime()) / (24 * 60 * 60 * 1000);
-        if (daysSince < 7) {
-          const nextDay = new Date(lastDate);
-          nextDay.setDate(nextDay.getDate() + 1);
-          effectiveDateFrom = formatDateForForm(nextDay);
-          console.log(`  Incremental: scraping from ${effectiveDateFrom} (since last run)`);
+    if ((INCREMENTAL || RESUME) && !PROCESS_ONLY) {
+      const checkpoint = await scrapeService.getCheckpoint(scrapeConfig);
+      if (checkpoint) {
+        checkpointId = checkpoint.id;
+        if (INCREMENTAL && checkpoint.last_scraped_at) {
+          const lastDate = new Date(checkpoint.last_scraped_at);
+          const daysSince = (Date.now() - lastDate.getTime()) / (24 * 60 * 60 * 1000);
+          if (daysSince < 7) {
+            const nextDay = new Date(lastDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            effectiveDateFrom = formatDateForForm(nextDay);
+            console.log(`  Incremental: scraping from ${effectiveDateFrom} (since last run)`);
+          }
+        }
+        if (RESUME && checkpoint.status === 'in_progress') {
+          startPage = checkpoint.last_page + 1;
+          console.log(`  Resume: starting from page ${startPage}`);
         }
       }
-      if (RESUME && checkpoint.status === 'in_progress') {
-        startPage = checkpoint.last_page + 1;
-        console.log(`  Resume: starting from page ${startPage}`);
-      }
     }
-  }
 
-  let totalDownloaded = 0;
-  let totalErrors = 0;
-  let captchaCount = 0;
-  let blockCount = 0;
+    let totalDownloaded = 0;
+    let totalErrors = 0;
+    let captchaCount = 0;
+    let blockCount = 0;
 
-  if (PROCESS_ONLY) {
+    if (PROCESS_ONLY) {
     // Process existing HTML files from DOWNLOAD_DIR
     console.log('PROCESS_ONLY mode: processing existing HTML files...\n');
     const files = fs.readdirSync(DOWNLOAD_DIR).filter(f => f.endsWith('.html'));
@@ -763,160 +765,164 @@ async function main() {
     }
 
     console.log(`Found ${items.length} HTML files to process\n`);
-    await processWithPool(ctx, items);
-  } else {
-    const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
-    const launchOptions: Parameters<typeof chromium.launch>[0] = {
-      headless: HEADLESS,
-      ...(proxy && { proxy: { server: proxy } }),
-    };
-    const contextOptions: Parameters<import('playwright').Browser['newContext']>[0] = {
-      viewport: { width: 1280, height: 900 },
-      locale: 'uk-UA',
-      userAgent: getRandomUserAgent(),
-    };
+      await processWithPool(ctx, items);
+    } else {
+      const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
+      const launchOptions: Parameters<typeof chromium.launch>[0] = {
+        headless: HEADLESS,
+        ...(proxy && { proxy: { server: proxy } }),
+      };
+      const contextOptions: Parameters<import('playwright').Browser['newContext']>[0] = {
+        viewport: { width: 1280, height: 900 },
+        locale: 'uk-UA',
+        userAgent: getRandomUserAgent(),
+      };
 
-    const browser = await chromium.launch(launchOptions);
-    const context = await browser.newContext(contextOptions);
-    const page = await context.newPage();
+      const browser = await chromium.launch(launchOptions);
+      const context = await browser.newContext(contextOptions);
+      const page = await context.newPage();
 
-    try {
-      console.log('Navigating to court registry...');
-      await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleepWithJitter(2000);
+      try {
+        console.log('Navigating to court registry...');
+        await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await sleepWithJitter(2000);
 
-      await fillSearchForm(page, effectiveDateFrom);
-      const searchCaptchaResult = await clickSearch(page);
-      if (searchCaptchaResult !== 'solved') {
-        captchaCount += searchCaptchaResult === 'timeout' ? 1 : 0;
-        blockCount += searchCaptchaResult === 'blocked' ? 1 : 0;
-        const cp = await scrapeService.upsertCheckpoint(
-          scrapeConfig,
-          0,
-          totalDownloaded,
-          totalErrors,
-          'failed',
-          searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
-        );
-        await scrapeService.recordStats(runId, cp.id, processedCount, processErrors, captchaCount, blockCount, 0);
-        throw new Error(searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked');
-      }
+        await fillSearchForm(page, effectiveDateFrom);
+        const searchCaptchaResult = await clickSearch(page);
+        if (searchCaptchaResult !== 'solved') {
+          captchaCount += searchCaptchaResult === 'timeout' ? 1 : 0;
+          blockCount += searchCaptchaResult === 'blocked' ? 1 : 0;
+          const cp = await scrapeService.upsertCheckpoint(
+            scrapeConfig,
+            0,
+            totalDownloaded,
+            totalErrors,
+            'failed',
+            searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
+          );
+          await scrapeService.recordStats(runId, cp.id, processedCount, processErrors, captchaCount, blockCount, 0);
+          throw new Error(searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked');
+        }
 
-      if (startPage > 1) {
-        const directOk = await tryGoToPageDirect(page, startPage);
-        if (!directOk) {
-          if (startPage > 20) {
-            console.log(`  Resume: direct page nav not available, clicking through ${startPage - 1} pages (slow)...`);
+        if (startPage > 1) {
+          const directOk = await tryGoToPageDirect(page, startPage);
+          if (!directOk) {
+            if (startPage > 20) {
+              console.log(`  Resume: direct page nav not available, clicking through ${startPage - 1} pages (slow)...`);
+            }
+            let actualPage = 1;
+            for (let i = 1; i < startPage; i++) {
+              const { hasNext, captchaResult } = await goToNextPage(page);
+              actualPage = i + 1;
+              if (captchaResult !== 'solved') {
+                captchaCount += captchaResult === 'timeout' ? 1 : 0;
+                blockCount += captchaResult === 'blocked' ? 1 : 0;
+                startPage = actualPage;
+                console.log(`  Resume: CAPTCHA/block on page ${actualPage}, continuing from page ${startPage}`);
+                break;
+              }
+              if (!hasNext) break;
+            }
+          } else {
+            console.log(`  Resume: navigated directly to page ${startPage}`);
           }
-          for (let i = 1; i < startPage; i++) {
+        }
+
+        for (let pageNum = startPage; pageNum <= MAX_PAGES; pageNum++) {
+          if (totalDownloaded >= MAX_DOCS) break;
+
+          console.log(`\n--- Page ${pageNum} ---`);
+
+          const links = await extractDecisionLinks(page);
+          console.log(`Found ${links.length} decisions on this page`);
+
+          if (links.length === 0) {
+            console.log('No decisions found, stopping.');
+            break;
+          }
+
+          const remaining = MAX_DOCS - totalDownloaded;
+          const idsToDownload = links.slice(0, remaining).map((l) => l.id);
+
+          console.log(`  Downloading ${idsToDownload.length} decisions (${CONCURRENCY} concurrent tabs)...`);
+          const downloaded = await downloadWithPool(context, idsToDownload);
+          totalDownloaded += downloaded.length;
+          totalErrors += idsToDownload.length - downloaded.length;
+
+          if (downloaded.length > 0) {
+            console.log(`\n  Processing batch of ${downloaded.length} documents...`);
+            await processWithPool(ctx, downloaded);
+          }
+
+          const cp = await scrapeService.upsertCheckpoint(
+            scrapeConfig,
+            pageNum,
+            totalDownloaded,
+            totalErrors,
+            pageNum < MAX_PAGES && totalDownloaded < MAX_DOCS ? 'in_progress' : 'completed'
+          );
+          checkpointId = cp.id;
+
+          if (totalDownloaded < MAX_DOCS && pageNum < MAX_PAGES) {
             const { hasNext, captchaResult } = await goToNextPage(page);
             if (captchaResult !== 'solved') {
               captchaCount += captchaResult === 'timeout' ? 1 : 0;
               blockCount += captchaResult === 'blocked' ? 1 : 0;
+              await scrapeService.upsertCheckpoint(
+                scrapeConfig,
+                pageNum,
+                totalDownloaded,
+                totalErrors,
+                'failed',
+                captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
+              );
+              console.log(`\n  Stopping: ${captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'}`);
               break;
             }
             if (!hasNext) break;
           }
-        } else {
-          console.log(`  Resume: navigated directly to page ${startPage}`);
         }
+      } finally {
+        await browser.close();
       }
-
-      for (let pageNum = startPage; pageNum <= MAX_PAGES; pageNum++) {
-        if (totalDownloaded >= MAX_DOCS) break;
-
-        console.log(`\n--- Page ${pageNum} ---`);
-
-        const links = await extractDecisionLinks(page);
-        console.log(`Found ${links.length} decisions on this page`);
-
-        if (links.length === 0) {
-          console.log('No decisions found, stopping.');
-          break;
-        }
-
-        const remaining = MAX_DOCS - totalDownloaded;
-        const idsToDownload = links.slice(0, remaining).map((l) => l.id);
-
-        console.log(`  Downloading ${idsToDownload.length} decisions (${CONCURRENCY} concurrent tabs)...`);
-        const downloaded = await downloadWithPool(context, idsToDownload);
-        totalDownloaded += downloaded.length;
-        totalErrors += idsToDownload.length - downloaded.length;
-
-        if (downloaded.length > 0) {
-          console.log(`\n  Processing batch of ${downloaded.length} documents...`);
-          await processWithPool(ctx, downloaded);
-        }
-
-        const cp = await scrapeService.upsertCheckpoint(
-          scrapeConfig,
-          pageNum,
-          totalDownloaded,
-          totalErrors,
-          pageNum < MAX_PAGES && totalDownloaded < MAX_DOCS ? 'in_progress' : 'completed'
-        );
-        checkpointId = cp.id;
-
-        if (totalDownloaded < MAX_DOCS && pageNum < MAX_PAGES) {
-          const { hasNext, captchaResult } = await goToNextPage(page);
-          if (captchaResult !== 'solved') {
-            captchaCount += captchaResult === 'timeout' ? 1 : 0;
-            blockCount += captchaResult === 'blocked' ? 1 : 0;
-            await scrapeService.upsertCheckpoint(
-              scrapeConfig,
-              pageNum,
-              totalDownloaded,
-              totalErrors,
-              'failed',
-              captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
-            );
-            console.log(`\n  Stopping: ${captchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'}`);
-            break;
-          }
-          if (!hasNext) break;
-        }
-      }
-    } finally {
-      await browser.close();
     }
-  }
 
-  const durationSec = (Date.now() - startTime) / 1000;
-  const totalProcessed = processedCount + processErrors;
-  const successRate = totalProcessed > 0 ? processedCount / totalProcessed : 0;
+    const durationSec = (Date.now() - startTime) / 1000;
+    const totalProcessed = processedCount + processErrors;
+    const successRate = totalProcessed > 0 ? processedCount / totalProcessed : 0;
 
-  courtRegistryScrapeSuccessRate.set(successRate);
+    courtRegistryScrapeSuccessRate.set(successRate);
 
-  if (checkpointId) {
-    await scrapeService.recordStats(
-      runId,
-      checkpointId,
-      processedCount,
-      processErrors,
-      captchaCount,
-      blockCount,
-      durationSec
-    );
-  }
+    if (checkpointId) {
+      await scrapeService.recordStats(
+        runId,
+        checkpointId,
+        processedCount,
+        processErrors,
+        captchaCount,
+        blockCount,
+        durationSec
+      );
+    }
 
-  await sendAlert({
-    success_rate: successRate,
-    block_count: blockCount,
-    captcha_count: captchaCount,
-  });
+    await sendAlert({
+      success_rate: successRate,
+      block_count: blockCount,
+      captcha_count: captchaCount,
+    });
 
-  console.log('\n═══════════════════════════════════════════════════════════════');
-  console.log('  Summary');
-  console.log('═══════════════════════════════════════════════════════════════');
-  console.log(`  Downloaded:   ${totalDownloaded}`);
-  console.log(`  Download err: ${totalErrors}`);
-  console.log(`  Processed:    ${processedCount}`);
-  console.log(`  Process err:  ${processErrors}`);
-  console.log(`  Embedded:     ${embeddedCount}`);
-  console.log(`  Success rate: ${(successRate * 100).toFixed(1)}%`);
-  console.log(`  Duration:     ${durationSec.toFixed(1)}s`);
-  console.log(`  Output dir:   ${DOWNLOAD_DIR}`);
-  console.log('═══════════════════════════════════════════════════════════════');
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('  Summary');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log(`  Downloaded:   ${totalDownloaded}`);
+    console.log(`  Download err: ${totalErrors}`);
+    console.log(`  Processed:    ${processedCount}`);
+    console.log(`  Process err:  ${processErrors}`);
+    console.log(`  Embedded:     ${embeddedCount}`);
+    console.log(`  Success rate: ${(successRate * 100).toFixed(1)}%`);
+    console.log(`  Duration:     ${durationSec.toFixed(1)}s`);
+    console.log(`  Output dir:   ${DOWNLOAD_DIR}`);
+    console.log('═══════════════════════════════════════════════════════════════');
   } finally {
     await ctx.db.close();
   }

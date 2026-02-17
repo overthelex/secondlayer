@@ -66,7 +66,7 @@ export class CourtRegistryScrapeService {
         documents_failed = EXCLUDED.documents_failed,
         status = EXCLUDED.status,
         error_message = EXCLUDED.error_message,
-        last_scraped_at = NOW(),
+        last_scraped_at = CASE WHEN EXCLUDED.status IN ('completed', 'failed') THEN NOW() ELSE court_registry_scrape_checkpoints.last_scraped_at END,
         updated_at = NOW()`,
       [
         hash,
@@ -105,37 +105,7 @@ export class CourtRegistryScrapeService {
     return res.rowCount ?? 0;
   }
 
-  async getNextBatch(status: string, limit: number): Promise<{ doc_id: string; url: string }[]> {
-    const res = await this.db.query(
-      `WITH to_claim AS (
-        SELECT id FROM court_registry_scrape_queue
-        WHERE status = $1
-        ORDER BY page_number, created_at
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED
-      )
-      UPDATE court_registry_scrape_queue
-      SET status = 'in_progress', updated_at = NOW()
-      WHERE id IN (SELECT id FROM to_claim)
-      RETURNING doc_id, url`,
-      [status, limit]
-    );
-    return res.rows;
-  }
-
-  async markCompleted(docId: string): Promise<void> {
-    await this.db.query(
-      `UPDATE court_registry_scrape_queue SET status = 'completed', scraped_at = NOW(), updated_at = NOW() WHERE doc_id = $1`,
-      [docId]
-    );
-  }
-
-  async markFailed(docId: string, errorMessage: string): Promise<void> {
-    await this.db.query(
-      `UPDATE court_registry_scrape_queue SET status = 'failed', retry_count = retry_count + 1, error_message = $2, updated_at = NOW() WHERE doc_id = $1`,
-      [docId, errorMessage]
-    );
-  }
+  /** Queue methods (getNextBatch, markCompleted, markFailed) reserved for future discovery/extraction mode. */
 
   async recordStats(
     runId: string,
