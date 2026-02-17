@@ -16,7 +16,9 @@ When the user asks for a specific task (e.g., 'commit frontend changes'), do exa
 
 ## Git & Deployment Workflow
 
-After completing code changes, always: 1) Build and verify no errors, 2) Commit with a descriptive message, 3) Push to remote, 4) Deploy locally if requested. Do NOT over-scope commits — only stage files relevant to the current task.
+Branch `main` is protected — direct pushes are blocked for everyone (including admins). All changes must go through a Pull Request with at least 1 approving review.
+
+After completing code changes, always: 1) Build and verify no errors, 2) Create a feature branch (`git checkout -b <descriptive-name>`), 3) Commit with a descriptive message, 4) Push the branch and create a PR via `gh pr create`, 5) Deploy locally if requested. Do NOT over-scope commits — only stage files relevant to the current task. NEVER push directly to `main`.
 
 ## Local Dev Environment
 
