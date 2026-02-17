@@ -18,15 +18,15 @@
 - ✅ Сохранение HTML на диск
 - ✅ Pipeline: HTML → text → sections → embeddings → Qdrant
 
-### Что нужно добавить
-- ❌ Checkpoint: сохранение последней страницы/даты в БД
-- ❌ Incremental mode: скрапить только решения с даты последнего успешного запуска
-- ❌ Anti-detection: рандомизированные задержки, ротация user-agent
-- ❌ Graceful handling CAPTCHA/блокировок (pause + alert)
-- ❌ Proxy support
-- ❌ Мониторинг success rate и алерты при деградации
-- ❌ Prometheus metrics
-- ❌ Queue-based: discovery (список URL) отдельно от extraction (скрап контента)
+### Реализовано (LEG-53)
+- ✅ Checkpoint: сохранение последней страницы/даты в БД
+- ✅ Incremental mode: скрапить только решения с даты последнего успешного запуска
+- ✅ Anti-detection: рандомизированные задержки, ротация user-agent (Chrome 133+, Firefox 133)
+- ✅ Graceful handling CAPTCHA/блокировок (pause + webhook alert)
+- ✅ Proxy support (передаётся в `chromium.launch()`)
+- ✅ Мониторинг success rate и алерты при деградации
+- ✅ Prometheus metrics
+- ⏳ Queue-based: discovery/extraction — planned for follow-up
 
 ---
 
@@ -40,7 +40,7 @@
 -- Checkpoint для скрапинга court registry
 CREATE TABLE IF NOT EXISTS court_registry_scrape_checkpoints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  scrape_config_hash VARCHAR(64) NOT NULL,  -- hash(justice_kind + doc_form + search_text + date_from)
+  scrape_config_hash VARCHAR(64) NOT NULL,  -- hash(justice_kind + doc_form + search_text) — без date_from для incremental
   justice_kind VARCHAR(100) NOT NULL,
   doc_form VARCHAR(100) NOT NULL,
   search_text TEXT,
@@ -97,6 +97,21 @@ CREATE TABLE IF NOT EXISTS court_registry_scrape_stats (
 
 CREATE INDEX IF NOT EXISTS idx_scrape_stats_run ON court_registry_scrape_stats(run_id);
 CREATE INDEX IF NOT EXISTS idx_scrape_stats_recorded ON court_registry_scrape_stats(recorded_at);
+
+-- Триггеры updated_at (как в остальных таблицах)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_checkpoint_updated_at') THEN
+    CREATE TRIGGER update_court_registry_checkpoint_updated_at
+      BEFORE UPDATE ON court_registry_scrape_checkpoints
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_queue_updated_at') THEN
+    CREATE TRIGGER update_court_registry_queue_updated_at
+      BEFORE UPDATE ON court_registry_scrape_queue
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
 ```
 
 ---
@@ -129,12 +144,13 @@ export interface Checkpoint {
 export class CourtRegistryScrapeService {
   constructor(private db: Database) {}
 
+  /** Hash без dateFrom — иначе incremental mode ломается при смене effectiveDateFrom */
   hashConfig(config: ScrapeConfig): string {
-    const str = `${config.justiceKind}|${config.docForm}|${config.searchText || ''}|${config.dateFrom}`;
+    const str = `${config.justiceKind}|${config.docForm}|${config.searchText || ''}`;
     return crypto.createHash('sha256').update(str).digest('hex').slice(0, 32);
   }
 
-  async getOrCreateCheckpoint(config: ScrapeConfig): Promise<Checkpoint | null> {
+  async getCheckpoint(config: ScrapeConfig): Promise<Checkpoint | null> {
     const hash = this.hashConfig(config);
     const res = await this.db.query(
       `SELECT * FROM court_registry_scrape_checkpoints WHERE scrape_config_hash = $1`,
@@ -164,7 +180,7 @@ export class CourtRegistryScrapeService {
         documents_failed = EXCLUDED.documents_failed,
         status = EXCLUDED.status,
         error_message = EXCLUDED.error_message,
-        last_scraped_at = NOW(),
+        last_scraped_at = NOW(),  /* обновляется и при in_progress — incremental после краша */
         updated_at = NOW()
     `, [hash, config.justiceKind, config.docForm, config.searchText || null, config.dateFrom,
         lastPage, documentsScraped, documentsFailed, status, errorMessage || null]);
@@ -173,16 +189,17 @@ export class CourtRegistryScrapeService {
   }
 
   async enqueueUrls(checkpointId: string, items: { docId: string; url: string; pageNumber: number }[]): Promise<number> {
-    let inserted = 0;
-    for (const { docId, url, pageNumber } of items) {
-      const res = await this.db.query(`
-        INSERT INTO court_registry_scrape_queue (doc_id, url, page_number, checkpoint_id, status)
-        VALUES ($1, $2, $3, $4, 'pending')
-        ON CONFLICT (doc_id) DO NOTHING
-      `, [docId, url, pageNumber, checkpointId]);
-      if (res.rowCount && res.rowCount > 0) inserted++;
-    }
-    return inserted;
+    if (items.length === 0) return 0;
+    const docIds = items.map((i) => i.docId);
+    const urls = items.map((i) => i.url);
+    const pageNumbers = items.map((i) => i.pageNumber);
+    const res = await this.db.query(
+      `INSERT INTO court_registry_scrape_queue (doc_id, url, page_number, checkpoint_id, status)
+       SELECT unnest($1::varchar[]), unnest($2::text[]), unnest($3::int[]), $4::uuid, 'pending'
+       ON CONFLICT (doc_id) DO NOTHING`,
+      [docIds, urls, pageNumbers, checkpointId]
+    );
+    return res.rowCount ?? 0;
   }
 
   async getNextBatch(status: string, limit: number): Promise<{ doc_id: string; url: string }[]> {
@@ -246,10 +263,10 @@ export class CourtRegistryScrapeService {
 
 ```typescript
 const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15',
 ];
 
 export function getRandomUserAgent(): string {
@@ -367,20 +384,16 @@ async function waitForCaptcha(page: Page): Promise<'solved' | 'timeout' | 'block
 
 **Файл:** `scrape-court-registry.ts`
 
+Proxy передаётся в `chromium.launch()`, не в `newContext()` — Playwright ожидает proxy на уровне launch.
+
 ```typescript
-async function createBrowserContext(): Promise<import('playwright').BrowserContext> {
-  const browser = await chromium.launch({ headless: HEADLESS });
-  const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
-  const contextOptions: any = {
-    viewport: { width: 1280, height: 900 },
-    locale: 'uk-UA',
-    userAgent: getRandomUserAgent(),
-  };
-  if (proxy) {
-    contextOptions.proxy = { server: proxy };
-  }
-  return browser.newContext(contextOptions);
-}
+const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
+const launchOptions = {
+  headless: HEADLESS,
+  ...(proxy && { proxy: { server: proxy } }),
+};
+const browser = await chromium.launch(launchOptions);
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'uk-UA', userAgent: getRandomUserAgent() });
 ```
 
 ---
@@ -511,6 +524,34 @@ async function checkAndAlert(stats: { success_rate: number; block_count: number;
 
 ---
 
+### 9.1. Resume: прямая навигация на страницу
+
+Вместо O(N) кликов по «Наступна» при resume — попытка прямого перехода:
+- Клик по ссылке с номером страницы (pagination links)
+- Или установка `PagingInfo.Page` и submit формы (ASP.NET)
+- Fallback: цикл кликов с предупреждением при `startPage > 20`
+
+### 9.2. Cleanup при ошибках
+
+`process.exit(1)` заменён на `throw` — чтобы `finally` блоки закрывали browser и db. Обёртка `try/finally` гарантирует `ctx.db.close()`.
+
+---
+
+## Code Review Fixes (Vladimir)
+
+| # | Проблема | Исправление |
+|---|----------|-------------|
+| 1 | Hash включал dateFrom — ломал incremental | Убран dateFrom из hashConfig |
+| 2 | Resume O(N) пролистывание | tryGoToPageDirect() — прямая навигация |
+| 3 | enqueueUrls N+1 запросов | Bulk insert через unnest() |
+| 4 | Proxy в newContext() | Перенесён в chromium.launch() |
+| 5 | process.exit(1) без cleanup | throw + try/finally для db |
+| 6 | last_scraped_at только при completed/failed | Обновляется при каждом upsert |
+| 7 | updated_at без триггера | Добавлены триггеры в миграцию |
+| 8 | User-Agent устаревшие (Chrome 120) | Chrome 133, Firefox 133, Safari 17.6 |
+
+---
+
 ## Структура изменений
 
 | Файл | Действие |
@@ -541,17 +582,19 @@ async function checkAndAlert(stats: { success_rate: number; block_count: number;
 
 ## Чеклист
 
-- [ ] Миграция 045
-- [ ] CourtRegistryScrapeService
-- [ ] scrape-anti-detection.ts
-- [ ] Checkpoint в scrape-court-registry.ts
-- [ ] Incremental mode
-- [ ] Anti-detection (delays, user-agent)
-- [ ] CAPTCHA/block handling + webhook
-- [ ] Proxy support
-- [ ] Prometheus metrics
-- [ ] court_registry_scrape_stats + alert logic
-- [ ] Queue-based architecture (discovery / extraction)
+- [x] Миграция 045 (+ триггеры updated_at)
+- [x] CourtRegistryScrapeService (hash без dateFrom, bulk enqueueUrls)
+- [x] scrape-anti-detection.ts (User-Agent 133+)
+- [x] Checkpoint в scrape-court-registry.ts
+- [x] Incremental mode
+- [x] Anti-detection (delays, user-agent)
+- [x] CAPTCHA/block handling + webhook
+- [x] Proxy support (launch-level)
+- [x] Prometheus metrics
+- [x] court_registry_scrape_stats + alert logic
+- [x] Resume: tryGoToPageDirect + fallback
+- [x] Cleanup: throw вместо process.exit, try/finally для db
+- [ ] Queue-based architecture (discovery / extraction) — follow-up
 - [ ] Тесты
 
 ---

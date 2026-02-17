@@ -575,6 +575,50 @@ async function downloadWithPool(
   return results;
 }
 
+/**
+ * Try to navigate directly to a specific result page (avoids O(N) click-through).
+ * reyestr.court.gov.ua may use PagingInfo.Page or pagination links.
+ */
+async function tryGoToPageDirect(page: Page, targetPageNum: number): Promise<boolean> {
+  if (targetPageNum <= 1) return true;
+
+  // Try 1: pagination link with exact page number (e.g. <a>2</a>)
+  const pageLink = page.getByRole('link', { name: String(targetPageNum) });
+  if ((await pageLink.count()) > 0) {
+    await pageLink.first().click();
+    await sleep(3000);
+    return true;
+  }
+
+  // Try 2: set PagingInfo.Page hidden input and trigger form postback (ASP.NET)
+  const set = await page.evaluate(
+    (pageNum: number) => {
+      const doc = (globalThis as unknown as { document?: { querySelectorAll: (s: string) => { length: number; [i: number]: { name: string; value: string } } } }).document;
+      if (!doc) return false;
+      const inputs = doc.querySelectorAll('input[name*="Page"], input[name*="page"]');
+      for (let i = 0; i < inputs.length; i++) {
+        const inp = inputs[i] as { name: string; value: string };
+        if (inp.name.toLowerCase().includes('page') && !inp.name.toLowerCase().includes('per')) {
+          inp.value = String(pageNum);
+          return true;
+        }
+      }
+      return false;
+    },
+    targetPageNum
+  );
+  if (set) {
+    const form = page.locator('form').first();
+    if ((await form.count()) > 0) {
+      await form.evaluate((f: { submit: () => void }) => f.submit());
+      await sleep(3000);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function goToNextPage(page: Page): Promise<{ hasNext: boolean; captchaResult: CaptchaResult }> {
   const nextBtn = page.locator(
     'a:has-text("Наступна"), a:has-text("»"), a:has-text(">"):not(:has-text(">>"))'
@@ -667,6 +711,7 @@ async function main() {
   const scrapeService = new CourtRegistryScrapeService(ctx.db);
   console.log('  DB services ready.\n');
 
+  try {
   const scrapeConfig = {
     justiceKind: JUSTICE_KIND,
     docForm: DOC_FORM,
@@ -721,16 +766,17 @@ async function main() {
     await processWithPool(ctx, items);
   } else {
     const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
+    const launchOptions: Parameters<typeof chromium.launch>[0] = {
+      headless: HEADLESS,
+      ...(proxy && { proxy: { server: proxy } }),
+    };
     const contextOptions: Parameters<import('playwright').Browser['newContext']>[0] = {
       viewport: { width: 1280, height: 900 },
       locale: 'uk-UA',
       userAgent: getRandomUserAgent(),
     };
-    if (proxy) {
-      (contextOptions as Record<string, unknown>).proxy = { server: proxy };
-    }
 
-    const browser = await chromium.launch({ headless: HEADLESS });
+    const browser = await chromium.launch(launchOptions);
     const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
@@ -753,20 +799,27 @@ async function main() {
           searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'
         );
         await scrapeService.recordStats(runId, cp.id, processedCount, processErrors, captchaCount, blockCount, 0);
-        console.log(`\n  Stopping: ${searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked'}`);
-        await browser.close();
-        await ctx.db.close();
-        process.exit(1);
+        throw new Error(searchCaptchaResult === 'timeout' ? 'CAPTCHA timeout' : 'Access blocked');
       }
 
-      for (let i = 1; i < startPage; i++) {
-        const { hasNext, captchaResult } = await goToNextPage(page);
-        if (captchaResult !== 'solved') {
-          captchaCount += captchaResult === 'timeout' ? 1 : 0;
-          blockCount += captchaResult === 'blocked' ? 1 : 0;
-          break;
+      if (startPage > 1) {
+        const directOk = await tryGoToPageDirect(page, startPage);
+        if (!directOk) {
+          if (startPage > 20) {
+            console.log(`  Resume: direct page nav not available, clicking through ${startPage - 1} pages (slow)...`);
+          }
+          for (let i = 1; i < startPage; i++) {
+            const { hasNext, captchaResult } = await goToNextPage(page);
+            if (captchaResult !== 'solved') {
+              captchaCount += captchaResult === 'timeout' ? 1 : 0;
+              blockCount += captchaResult === 'blocked' ? 1 : 0;
+              break;
+            }
+            if (!hasNext) break;
+          }
+        } else {
+          console.log(`  Resume: navigated directly to page ${startPage}`);
         }
-        if (!hasNext) break;
       }
 
       for (let pageNum = startPage; pageNum <= MAX_PAGES; pageNum++) {
@@ -852,8 +905,6 @@ async function main() {
     captcha_count: captchaCount,
   });
 
-  await ctx.db.close();
-
   console.log('\n═══════════════════════════════════════════════════════════════');
   console.log('  Summary');
   console.log('═══════════════════════════════════════════════════════════════');
@@ -866,9 +917,14 @@ async function main() {
   console.log(`  Duration:     ${durationSec.toFixed(1)}s`);
   console.log(`  Output dir:   ${DOWNLOAD_DIR}`);
   console.log('═══════════════════════════════════════════════════════════════');
+  } finally {
+    await ctx.db.close();
+  }
 }
 
-main().catch((err) => {
-  console.error('Scraper failed:', err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('Scraper failed:', err);
+    process.exit(1);
+  });

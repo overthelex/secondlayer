@@ -27,8 +27,12 @@ export interface Checkpoint {
 export class CourtRegistryScrapeService {
   constructor(private db: Database) {}
 
+  /**
+   * Hash excludes dateFrom so incremental mode works: when effectiveDateFrom
+   * changes (since last run), we still find the same checkpoint.
+   */
   hashConfig(config: ScrapeConfig): string {
-    const str = `${config.justiceKind}|${config.docForm}|${config.searchText || ''}|${config.dateFrom}`;
+    const str = `${config.justiceKind}|${config.docForm}|${config.searchText || ''}`;
     return crypto.createHash('sha256').update(str).digest('hex').slice(0, 32);
   }
 
@@ -62,7 +66,7 @@ export class CourtRegistryScrapeService {
         documents_failed = EXCLUDED.documents_failed,
         status = EXCLUDED.status,
         error_message = EXCLUDED.error_message,
-        last_scraped_at = CASE WHEN EXCLUDED.status IN ('completed', 'failed') THEN NOW() ELSE court_registry_scrape_checkpoints.last_scraped_at END,
+        last_scraped_at = NOW(),
         updated_at = NOW()`,
       [
         hash,
@@ -88,17 +92,17 @@ export class CourtRegistryScrapeService {
     checkpointId: string,
     items: { docId: string; url: string; pageNumber: number }[]
   ): Promise<number> {
-    let inserted = 0;
-    for (const { docId, url, pageNumber } of items) {
-      const res = await this.db.query(
-        `INSERT INTO court_registry_scrape_queue (doc_id, url, page_number, checkpoint_id, status)
-         VALUES ($1, $2, $3, $4, 'pending')
-         ON CONFLICT (doc_id) DO NOTHING`,
-        [docId, url, pageNumber, checkpointId]
-      );
-      if (res.rowCount && res.rowCount > 0) inserted++;
-    }
-    return inserted;
+    if (items.length === 0) return 0;
+    const docIds = items.map((i) => i.docId);
+    const urls = items.map((i) => i.url);
+    const pageNumbers = items.map((i) => i.pageNumber);
+    const res = await this.db.query(
+      `INSERT INTO court_registry_scrape_queue (doc_id, url, page_number, checkpoint_id, status)
+       SELECT unnest($1::varchar[]), unnest($2::text[]), unnest($3::int[]), $4::uuid, 'pending'
+       ON CONFLICT (doc_id) DO NOTHING`,
+      [docIds, urls, pageNumbers, checkpointId]
+    );
+    return res.rowCount ?? 0;
   }
 
   async getNextBatch(status: string, limit: number): Promise<{ doc_id: string; url: string }[]> {

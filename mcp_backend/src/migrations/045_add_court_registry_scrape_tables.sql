@@ -59,3 +59,18 @@ CREATE TABLE IF NOT EXISTS court_registry_scrape_stats (
 
 CREATE INDEX IF NOT EXISTS idx_scrape_stats_run ON court_registry_scrape_stats(run_id);
 CREATE INDEX IF NOT EXISTS idx_scrape_stats_recorded ON court_registry_scrape_stats(recorded_at);
+
+-- updated_at triggers (same pattern as other tables)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_checkpoint_updated_at') THEN
+    CREATE TRIGGER update_court_registry_checkpoint_updated_at
+      BEFORE UPDATE ON court_registry_scrape_checkpoints
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_court_registry_queue_updated_at') THEN
+    CREATE TRIGGER update_court_registry_queue_updated_at
+      BEFORE UPDATE ON court_registry_scrape_queue
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  END IF;
+END $$;
