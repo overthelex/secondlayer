@@ -55,8 +55,14 @@ export interface ChatRequest {
 // ============================
 
 const MAX_TOOL_CALLS = parseInt(process.env.MAX_CHAT_TOOL_CALLS || '5', 10);
-const MAX_RESULT_LENGTH = 8000; // chars per tool result before summarization
-const MAX_CONTEXT_CHARS = parseInt(process.env.MAX_CONTEXT_CHARS || '48000', 10); // ~12K tokens
+
+// Budget-aware limits: deep analysis needs much more context
+const BUDGET_LIMITS = {
+  quick:    { maxResultChars: 6000,   maxContextChars: 48_000,  maxTokens: 4096,  resolutionSlice: 120 },
+  standard: { maxResultChars: 8000,   maxContextChars: 64_000,  maxTokens: 4096,  resolutionSlice: 300 },
+  deep:     { maxResultChars: 30_000, maxContextChars: 180_000, maxTokens: 16384, resolutionSlice: 1000 },
+} as const;
+type BudgetKey = keyof typeof BUDGET_LIMITS;
 
 export class ChatService {
   constructor(
@@ -104,7 +110,8 @@ export class ChatService {
       });
 
       // 4. Build messages with token-aware context window + injected template
-      const messages = this.buildContextMessages(history, query, classification.domains, responseTemplate);
+      const limits = BUDGET_LIMITS[effectiveBudget as BudgetKey] || BUDGET_LIMITS.standard;
+      const messages = this.buildContextMessages(history, query, classification.domains, responseTemplate, limits.maxContextChars);
 
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
@@ -130,7 +137,7 @@ export class ChatService {
             messages,
             tools: llmTools.length > 0 ? llmTools : undefined,
             tool_choice: llmTools.length > 0 ? 'auto' : undefined,
-            max_tokens: 4096,
+            max_tokens: limits.maxTokens,
             temperature: 0.3,
           },
           effectiveBudget,
@@ -215,7 +222,7 @@ export class ChatService {
 
           collectedThinkingSteps.push({ tool: call.name, params: call.arguments, result: toolResult });
 
-          const summarized = this.summarizeResult(toolResult);
+          const summarized = this.summarizeResult(toolResult, limits);
 
           // Send the FULL result to the frontend for evidence extraction (decisions, citations).
           // The summarized version is only used for the LLM conversation to save tokens.
@@ -288,8 +295,11 @@ export class ChatService {
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     query: string,
     classifiedDomains?: string[],
-    responseTemplate?: string
+    responseTemplate?: string,
+    maxContextChars?: number
   ): UnifiedMessage[] {
+    const contextBudget = maxContextChars || BUDGET_LIMITS.standard.maxContextChars;
+
     let enrichedPrompt = buildEnrichedSystemPrompt(
       CHAT_SYSTEM_PROMPT,
       SCENARIO_CATALOG,
@@ -306,6 +316,7 @@ export class ChatService {
 3. Заповнити кожен розділ КОНКРЕТНИМИ фактами: номери справ, дати, імена суддів, цитати з рішень
 4. НІКОЛИ не залишати плейсхолдери типу [інформація], [опис], [дата] — замість них має бути реальна інформація
 5. Якщо інструмент не повернув певну інформацію — напиши "інформація не знайдена", а не плейсхолдер
+6. Відповідь ПОВИННА бути максимально детальною — аналізуй кожну інстанцію окремо, цитуй мотивувальні частини рішень, вказуй конкретні норми
 
 ${responseTemplate}`;
     }
@@ -316,7 +327,7 @@ ${responseTemplate}`;
 
     const systemChars = enrichedPrompt.length;
     const queryChars = query.length;
-    let availableChars = MAX_CONTEXT_CHARS - systemChars - queryChars;
+    let availableChars = contextBudget - systemChars - queryChars;
 
     // Add history from most recent backwards until budget exhausted
     const historyMessages: UnifiedMessage[] = [];
@@ -556,36 +567,39 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
 
   /**
    * Summarize large tool results to prevent context window overflow.
-   * Court document chains and search results are compacted to essential fields only.
+   * Budget-aware: deep analysis preserves much more content.
    */
-  private summarizeResult(result: any): any {
+  private summarizeResult(result: any, limits: typeof BUDGET_LIMITS[BudgetKey]): any {
     if (!result) return { empty: true };
+
+    const maxLen = limits.maxResultChars;
 
     // For MCP tool results with content array — try compact extraction first
     if (result.content && Array.isArray(result.content)) {
-      const compacted = this.compactCourtResult(result);
+      const compacted = this.compactCourtResult(result, limits);
       if (compacted) return compacted;
 
       // Fallback: truncate text blocks
-      for (const block of result.content) {
+      const cloned = { ...result, content: result.content.map((b: any) => ({ ...b })) };
+      for (const block of cloned.content) {
         if (block.type === 'text' && typeof block.text === 'string') {
-          if (block.text.length > MAX_RESULT_LENGTH) {
-            block.text = block.text.slice(0, MAX_RESULT_LENGTH) + '\n\n[... результат скорочено]';
+          if (block.text.length > maxLen) {
+            block.text = block.text.slice(0, maxLen) + '\n\n[... результат скорочено]';
           }
         }
       }
-      return result;
+      return cloned;
     }
 
     const text = typeof result === 'string' ? result : JSON.stringify(result);
 
-    if (text.length <= MAX_RESULT_LENGTH) {
+    if (text.length <= maxLen) {
       return result;
     }
 
     // Generic truncation
     return {
-      summary: text.slice(0, MAX_RESULT_LENGTH),
+      summary: text.slice(0, maxLen),
       truncated: true,
       original_length: text.length,
     };
@@ -593,9 +607,9 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
 
   /**
    * Compact court document chain/search results for LLM context.
-   * Strips snippets, URLs, resolution text — keeps only fields needed for analysis.
+   * Budget-aware: deep budget preserves sections, full_text snippets, and longer resolution.
    */
-  private compactCourtResult(result: any): any | null {
+  private compactCourtResult(result: any, limits: typeof BUDGET_LIMITS[BudgetKey]): any | null {
     if (!result.content?.[0]?.text) return null;
 
     let parsed: any;
@@ -604,6 +618,9 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
     } catch {
       return null;
     }
+
+    const resSlice = limits.resolutionSlice;
+    const isDeep = limits.maxTokens > 4096;
 
     // Case documents chain: { case_number, total_documents, grouped_documents }
     if (parsed.grouped_documents && parsed.total_documents) {
@@ -614,38 +631,63 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
       };
 
       for (const [instance, docs] of Object.entries(parsed.grouped_documents)) {
-        compact.grouped_documents[instance] = (docs as any[]).map((d: any) => ({
-          doc_id: d.doc_id,
-          case_number: d.case_number,
-          document_type: d.document_type,
-          instance: d.instance,
-          court: d.court,
-          judge: d.judge,
-          date: d.date,
-          resolution: d.resolution ? d.resolution.slice(0, 120) : undefined,
-        }));
+        compact.grouped_documents[instance] = (docs as any[]).map((d: any) => {
+          const entry: any = {
+            doc_id: d.doc_id,
+            case_number: d.case_number,
+            document_type: d.document_type,
+            instance: d.instance,
+            court: d.court,
+            judge: d.judge,
+            date: d.date,
+            resolution: d.resolution ? d.resolution.slice(0, resSlice) : undefined,
+          };
+          // Deep budget: preserve sections and full_text for court analysis
+          if (isDeep) {
+            if (d.sections) entry.sections = d.sections;
+            if (d.full_text) entry.full_text = d.full_text.slice(0, 15000);
+            if (d.snippets) entry.snippets = d.snippets;
+          }
+          return entry;
+        });
       }
 
-      return { content: [{ type: 'text', text: JSON.stringify(compact) }] };
+      const compactText = JSON.stringify(compact);
+      // If deep result exceeds budget, fall back to truncation rather than stripping
+      if (compactText.length > limits.maxResultChars) {
+        return { content: [{ type: 'text', text: compactText.slice(0, limits.maxResultChars) + '\n[... скорочено]' }] };
+      }
+      return { content: [{ type: 'text', text: compactText }] };
     }
 
     // Search results: { results: [...], total_count }
     if (Array.isArray(parsed.results)) {
       const compact = {
         total_count: parsed.total_count || parsed.results.length,
-        results: parsed.results.map((r: any) => ({
-          doc_id: r.doc_id,
-          case_number: r.case_number,
-          document_type: r.document_type,
-          court: r.court,
-          judge: r.judge,
-          date: r.date || r.adjudication_date,
-          instance: r.instance,
-          resolution: r.resolution ? r.resolution.slice(0, 120) : undefined,
-        })),
+        results: parsed.results.map((r: any) => {
+          const entry: any = {
+            doc_id: r.doc_id,
+            case_number: r.case_number,
+            document_type: r.document_type,
+            court: r.court,
+            judge: r.judge,
+            date: r.date || r.adjudication_date,
+            instance: r.instance,
+            resolution: r.resolution ? r.resolution.slice(0, resSlice) : undefined,
+          };
+          if (isDeep) {
+            if (r.sections) entry.sections = r.sections;
+            if (r.snippets) entry.snippets = r.snippets;
+          }
+          return entry;
+        }),
       };
 
-      return { content: [{ type: 'text', text: JSON.stringify(compact) }] };
+      const compactText = JSON.stringify(compact);
+      if (compactText.length > limits.maxResultChars) {
+        return { content: [{ type: 'text', text: compactText.slice(0, limits.maxResultChars) + '\n[... скорочено]' }] };
+      }
+      return { content: [{ type: 'text', text: compactText }] };
     }
 
     return null;
