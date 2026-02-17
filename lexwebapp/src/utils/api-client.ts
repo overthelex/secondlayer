@@ -240,6 +240,8 @@ export const api = {
     getUploadMetrics: () => apiClient.get('/api/admin/upload-metrics'),
     getRecentCourtDocs: (days: number = 30, limit: number = 5) =>
       apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),
+    runDocumentCompletenessCheck: () =>
+      apiClient.post('/api/admin/document-completeness-check'),
   },
 
   // GDPR

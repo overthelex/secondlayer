@@ -21,6 +21,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  Play,
 } from 'lucide-react';
 import { api } from '../utils/api-client';
 
@@ -61,6 +62,30 @@ interface CourtDocsData {
   recent_court_docs: number;
   days: number;
   categories: CourtCategory[];
+}
+
+interface CompletenessResult {
+  checked_at: string;
+  runs_today: number;
+  max_runs_per_day: number;
+  summary: {
+    total_documents: number;
+    with_plaintext: number;
+    with_html: number;
+    with_both: number;
+    missing_both: number;
+    completeness_pct: number;
+  };
+  by_justice_kind: Array<{
+    justice_kind: string;
+    justice_kind_code: string;
+    total: number;
+    has_plaintext: number;
+    has_html: number;
+    has_both: number;
+    missing_both: number;
+    completeness_pct: number;
+  }>;
 }
 
 interface SectionState<T> {
@@ -350,6 +375,160 @@ function CourtDocsSection({
   );
 }
 
+function completenessColor(pct: number): string {
+  if (pct >= 100) return 'text-green-700';
+  if (pct >= 80) return 'text-yellow-600';
+  return 'text-red-600';
+}
+
+function completenessBg(pct: number): string {
+  if (pct >= 100) return 'bg-green-50';
+  if (pct >= 80) return 'bg-yellow-50';
+  return 'bg-red-50';
+}
+
+function DocumentCompletenessSection() {
+  const [result, setResult] = useState<CompletenessResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
+
+  const runCheck = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.admin.runDocumentCompletenessCheck();
+      setResult(res.data);
+      if (res.data.runs_today >= res.data.max_runs_per_day) {
+        setLimitReached(true);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 429) {
+        setLimitReached(true);
+        setError(err.response?.data?.error || 'Ліміт вичерпано');
+      } else {
+        setError(err.response?.data?.error || err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      {/* Action button */}
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={runCheck}
+          disabled={loading || limitReached}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <RefreshCw size={14} className="animate-spin" />
+          ) : (
+            <Play size={14} />
+          )}
+          {limitReached ? 'Ліміт вичерпано' : 'Запустити перевірку'}
+        </button>
+        {result && (
+          <span className="text-xs text-claude-subtext">
+            {result.runs_today}/{result.max_runs_per_day} перевірок сьогодні · {formatDate(result.checked_at)}
+          </span>
+        )}
+      </div>
+
+      {error && !result && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">{error}</div>
+      )}
+
+      {result && (
+        <>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-lg border border-claude-border p-3">
+              <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(result.summary.total_documents)}</div>
+              <div className="text-[10px] text-claude-subtext">Всього документів</div>
+            </div>
+            <div className={`rounded-lg border border-claude-border p-3 ${completenessBg(result.summary.completeness_pct)}`}>
+              <div className={`text-lg font-semibold font-mono ${completenessColor(result.summary.completeness_pct)}`}>
+                {result.summary.completeness_pct}%
+              </div>
+              <div className="text-[10px] text-claude-subtext">Повнота (обидва поля)</div>
+            </div>
+            <div className="bg-white rounded-lg border border-claude-border p-3">
+              <div className="text-lg font-semibold text-green-700 font-mono">{formatNumber(result.summary.with_both)}</div>
+              <div className="text-[10px] text-claude-subtext">З обома полями</div>
+            </div>
+            <div className={`rounded-lg border border-claude-border p-3 ${result.summary.missing_both > 0 ? 'bg-red-50' : 'bg-white'}`}>
+              <div className={`text-lg font-semibold font-mono ${result.summary.missing_both > 0 ? 'text-red-600' : 'text-claude-text'}`}>
+                {formatNumber(result.summary.missing_both)}
+              </div>
+              <div className="text-[10px] text-claude-subtext">Без обох полів</div>
+            </div>
+          </div>
+
+          {/* Breakdown table */}
+          <div className="bg-white rounded-xl border border-claude-border shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-claude-border bg-gray-50">
+                    <th className="text-left px-4 py-2.5 font-medium text-claude-subtext text-xs">Вид права</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Всього</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Plaintext</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">HTML</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Обидва</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Відсутні</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Повнота %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.by_justice_kind.map((row) => (
+                    <tr key={row.justice_kind_code} className="border-b border-claude-border/30 hover:bg-gray-50/50">
+                      <td className="px-4 py-2.5">
+                        <div className="font-medium text-xs text-claude-text">{row.justice_kind}</div>
+                        <div className="text-[10px] text-claude-subtext font-mono">{row.justice_kind_code}</div>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.total)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.has_plaintext)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.has_html)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(row.has_both)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs">
+                        <span className={row.missing_both > 0 ? 'text-red-600' : ''}>{formatNumber(row.missing_both)}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${completenessBg(row.completeness_pct)} ${completenessColor(row.completeness_pct)}`}>
+                          {row.completeness_pct}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {/* Summary row */}
+                  <tr className="border-t-2 border-claude-border bg-gray-50 font-semibold">
+                    <td className="px-4 py-2.5 text-xs text-claude-text">Всього</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.total_documents)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.with_plaintext)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.with_html)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(result.summary.with_both)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">
+                      <span className={result.summary.missing_both > 0 ? 'text-red-600' : ''}>{formatNumber(result.summary.missing_both)}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${completenessBg(result.summary.completeness_pct)} ${completenessColor(result.summary.completeness_pct)}`}>
+                        {result.summary.completeness_pct}%
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AdminMonitoringPage() {
   const [backend, setBackend] = useState<SectionState<BackendData>>({ data: null, loading: true, error: null });
   const [rada, setRada] = useState<SectionState<ServiceData>>({ data: null, loading: true, error: null });
@@ -526,6 +705,15 @@ export function AdminMonitoringPage() {
           </div>
         </div>
         <CourtDocsSection state={courtDocs} onRetry={() => fetchCourtDocs()} />
+      </section>
+
+      {/* Document Completeness Check */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <CheckCircle size={18} className="text-claude-subtext" />
+          <h2 className="text-lg font-semibold text-claude-text font-sans">Перевірка повноти документів</h2>
+        </div>
+        <DocumentCompletenessSection />
       </section>
 
       {/* RADA Sources */}

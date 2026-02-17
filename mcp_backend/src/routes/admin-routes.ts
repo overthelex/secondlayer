@@ -1065,5 +1065,112 @@ export function createAdminRoutes(db: Database): express.Router {
     }
   });
 
+  // ========================================
+  // DOCUMENT COMPLETENESS CHECK
+  // ========================================
+
+  const completenessRunCounts = new Map<string, number>();
+  const MAX_COMPLETENESS_RUNS_PER_DAY = 5;
+
+  router.post('/document-completeness-check', async (req: Request, res: Response) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const runsToday = completenessRunCounts.get(today) || 0;
+
+      if (runsToday >= MAX_COMPLETENESS_RUNS_PER_DAY) {
+        return res.status(429).json({
+          error: `Ліміт вичерпано: ${MAX_COMPLETENESS_RUNS_PER_DAY}/${MAX_COMPLETENESS_RUNS_PER_DAY} перевірок сьогодні`,
+          runs_today: runsToday,
+          max_runs_per_day: MAX_COMPLETENESS_RUNS_PER_DAY,
+        });
+      }
+
+      // Increment run count (clean up old dates)
+      for (const key of completenessRunCounts.keys()) {
+        if (key !== today) completenessRunCounts.delete(key);
+      }
+      completenessRunCounts.set(today, runsToday + 1);
+
+      // Load justice_kind names from zo_dictionaries
+      const kindNames: Record<string, string> = {};
+      try {
+        const dictResult = await db.query(`
+          SELECT data FROM zo_dictionaries
+          WHERE dictionary_name = 'justiceKinds' AND domain = 'court_decisions'
+          LIMIT 1
+        `);
+        if (dictResult.rows[0]?.data) {
+          const items = dictResult.rows[0].data;
+          if (Array.isArray(items)) {
+            for (const item of items) {
+              if (item.justice_kind != null && item.name) {
+                kindNames[String(item.justice_kind)] = item.name;
+              }
+            }
+          }
+        }
+      } catch { /* dictionary not available */ }
+
+      // Run completeness query
+      const result = await db.query(`
+        SELECT
+          COALESCE(metadata->>'justice_kind', 'unknown') AS justice_kind,
+          COUNT(*) AS total,
+          COUNT(full_text) FILTER (WHERE full_text IS NOT NULL AND full_text != '') AS has_plaintext,
+          COUNT(full_text_html) FILTER (WHERE full_text_html IS NOT NULL AND full_text_html != '') AS has_html,
+          COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NULL OR full_text_html = '')) AS missing_both,
+          COUNT(*) FILTER (WHERE full_text IS NOT NULL AND full_text != '' AND full_text_html IS NOT NULL AND full_text_html != '') AS has_both
+        FROM documents
+        WHERE user_id IS NULL
+        GROUP BY COALESCE(metadata->>'justice_kind', 'unknown')
+        ORDER BY total DESC
+      `);
+
+      const byJusticeKind = result.rows.map((row: any) => {
+        const total = parseInt(row.total);
+        const hasBoth = parseInt(row.has_both);
+        const kindCode = row.justice_kind;
+        return {
+          justice_kind: kindNames[kindCode] || (kindCode === 'unknown' ? 'Невідомий' : `Вид ${kindCode}`),
+          justice_kind_code: kindCode,
+          total,
+          has_plaintext: parseInt(row.has_plaintext),
+          has_html: parseInt(row.has_html),
+          has_both: hasBoth,
+          missing_both: parseInt(row.missing_both),
+          completeness_pct: total > 0 ? Math.round((hasBoth / total) * 10000) / 100 : 0,
+        };
+      });
+
+      // Compute totals
+      const summary = byJusticeKind.reduce(
+        (acc, row) => ({
+          total_documents: acc.total_documents + row.total,
+          with_plaintext: acc.with_plaintext + row.has_plaintext,
+          with_html: acc.with_html + row.has_html,
+          with_both: acc.with_both + row.has_both,
+          missing_both: acc.missing_both + row.missing_both,
+        }),
+        { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 }
+      );
+
+      res.json({
+        checked_at: new Date().toISOString(),
+        runs_today: runsToday + 1,
+        max_runs_per_day: MAX_COMPLETENESS_RUNS_PER_DAY,
+        summary: {
+          ...summary,
+          completeness_pct: summary.total_documents > 0
+            ? Math.round((summary.with_both / summary.total_documents) * 10000) / 100
+            : 0,
+        },
+        by_justice_kind: byJusticeKind,
+      });
+    } catch (error: any) {
+      logger.error('Failed to run document completeness check', { error: error.message });
+      res.status(500).json({ error: 'Failed to run document completeness check' });
+    }
+  });
+
   return router;
 }
