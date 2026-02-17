@@ -237,6 +237,8 @@ export const api = {
     getUsageAnalytics: (days: number = 30) =>
       apiClient.get(`/api/admin/analytics/usage?days=${days}`),
     getCohorts: () => apiClient.get('/api/admin/analytics/cohorts'),
+    getCostBreakdown: (days: number = 30) =>
+      apiClient.get('/api/admin/stats/cost-breakdown', { params: { days } }),
     getUploadMetrics: () => apiClient.get('/api/admin/upload-metrics'),
     getRecentCourtDocs: (days: number = 30, limit: number = 5) =>
       apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),

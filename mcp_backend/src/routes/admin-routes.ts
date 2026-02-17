@@ -9,6 +9,8 @@ import { Database } from '../database/database.js';
 import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
 import { PrometheusService } from '../services/prometheus-service.js';
+import { PricingService } from '../services/pricing-service.js';
+import { SubscriptionService } from '../services/subscription-service.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -19,11 +21,18 @@ function getStringParam(param: string | string[] | undefined): string | null {
   return Array.isArray(param) ? param[0] : param;
 }
 
-export function createAdminRoutes(db: Database, prometheusUrl?: string): express.Router {
+export function createAdminRoutes(
+  db: Database,
+  prometheusUrl?: string,
+  pricingService?: PricingService,
+  subscriptionService?: SubscriptionService
+): express.Router {
   const router = express.Router();
   const billingService = new BillingService(db);
   const preferencesService = new UserPreferencesService(db);
   const prometheus = new PrometheusService(prometheusUrl);
+  const pricing = pricingService || new PricingService(db);
+  const subscriptions = subscriptionService || new SubscriptionService(db);
 
   /**
    * Middleware to verify admin access
@@ -977,6 +986,185 @@ export function createAdminRoutes(db: Database, prometheusUrl?: string): express
     } catch (error: any) {
       logger.error('Failed to get system metrics', { error: error.message });
       res.status(500).json({ error: 'Failed to retrieve system metrics' });
+    }
+  });
+
+  // ========================================
+  // COST BREAKDOWN
+  // ========================================
+
+  /**
+   * GET /api/admin/stats/cost-breakdown
+   * Detailed cost breakdown by provider, model, and day
+   * Query params: days=30 (7-90)
+   */
+  router.get('/stats/cost-breakdown', async (req: Request, res: Response) => {
+    try {
+      const days = Math.min(90, Math.max(7, Number(req.query.days || 30)));
+      const interval = `${days} days`;
+
+      // 1. Totals
+      const totalsResult = await db.query(`
+        SELECT
+          COALESCE(SUM(openai_cost_usd), 0) as openai_cost,
+          COALESCE(SUM(anthropic_cost_usd), 0) as anthropic_cost,
+          COALESCE(SUM(zakononline_cost_usd), 0) as zakononline_cost,
+          COALESCE(SUM(secondlayer_cost_usd), 0) as secondlayer_cost,
+          COALESCE(SUM(openai_cost_usd), 0) + COALESCE(SUM(anthropic_cost_usd), 0) +
+            COALESCE(SUM(zakononline_cost_usd), 0) + COALESCE(SUM(secondlayer_cost_usd), 0) as total_cost,
+          COUNT(*) as total_requests
+        FROM cost_tracking
+        WHERE created_at >= NOW() - $1::interval
+          AND status = 'completed'
+      `, [interval]);
+
+      const totals = totalsResult.rows[0];
+
+      // 2. By provider (with token counts from JSONB)
+      const openaiTokensResult = await db.query(`
+        SELECT
+          COALESCE(SUM((elem->>'tokens')::numeric), 0) as tokens,
+          COUNT(*) as calls
+        FROM cost_tracking,
+          jsonb_array_elements(CASE WHEN openai_calls IS NOT NULL AND openai_calls != 'null'::jsonb AND jsonb_typeof(openai_calls) = 'array' THEN openai_calls ELSE '[]'::jsonb END) AS elem
+        WHERE created_at >= NOW() - $1::interval
+          AND status = 'completed'
+      `, [interval]);
+
+      const anthropicTokensResult = await db.query(`
+        SELECT
+          COALESCE(SUM((elem->>'tokens')::numeric), 0) as tokens,
+          COUNT(*) as calls
+        FROM cost_tracking,
+          jsonb_array_elements(CASE WHEN anthropic_calls IS NOT NULL AND anthropic_calls != 'null'::jsonb AND jsonb_typeof(anthropic_calls) = 'array' THEN anthropic_calls ELSE '[]'::jsonb END) AS elem
+        WHERE created_at >= NOW() - $1::interval
+          AND status = 'completed'
+      `, [interval]);
+
+      const zoCallsResult = await db.query(`
+        SELECT COALESCE(SUM(zakononline_api_calls), 0) as calls
+        FROM cost_tracking
+        WHERE created_at >= NOW() - $1::interval
+          AND status = 'completed'
+      `, [interval]);
+
+      const byProvider = [
+        {
+          provider: 'OpenAI',
+          cost_usd: parseFloat(totals.openai_cost),
+          requests: parseInt(openaiTokensResult.rows[0]?.calls || '0'),
+          tokens: parseInt(openaiTokensResult.rows[0]?.tokens || '0'),
+        },
+        {
+          provider: 'Anthropic',
+          cost_usd: parseFloat(totals.anthropic_cost),
+          requests: parseInt(anthropicTokensResult.rows[0]?.calls || '0'),
+          tokens: parseInt(anthropicTokensResult.rows[0]?.tokens || '0'),
+        },
+        {
+          provider: 'ZakonOnline',
+          cost_usd: parseFloat(totals.zakononline_cost),
+          calls: parseInt(zoCallsResult.rows[0]?.calls || '0'),
+        },
+        {
+          provider: 'SecondLayer API',
+          cost_usd: parseFloat(totals.secondlayer_cost),
+          calls: parseInt(totals.total_requests),
+        },
+      ];
+
+      // 3. By model (unpack JSONB arrays)
+      const byModelResult = await db.query(`
+        WITH openai_models AS (
+          SELECT
+            'OpenAI' as provider,
+            elem->>'model' as model,
+            COALESCE((elem->>'cost')::numeric, 0) as cost,
+            COALESCE((elem->>'tokens')::numeric, 0) as tokens
+          FROM cost_tracking,
+            jsonb_array_elements(CASE WHEN openai_calls IS NOT NULL AND openai_calls != 'null'::jsonb AND jsonb_typeof(openai_calls) = 'array' THEN openai_calls ELSE '[]'::jsonb END) AS elem
+          WHERE created_at >= NOW() - $1::interval
+            AND status = 'completed'
+        ),
+        anthropic_models AS (
+          SELECT
+            'Anthropic' as provider,
+            elem->>'model' as model,
+            COALESCE((elem->>'cost')::numeric, 0) as cost,
+            COALESCE((elem->>'tokens')::numeric, 0) as tokens
+          FROM cost_tracking,
+            jsonb_array_elements(CASE WHEN anthropic_calls IS NOT NULL AND anthropic_calls != 'null'::jsonb AND jsonb_typeof(anthropic_calls) = 'array' THEN anthropic_calls ELSE '[]'::jsonb END) AS elem
+          WHERE created_at >= NOW() - $1::interval
+            AND status = 'completed'
+        ),
+        all_models AS (
+          SELECT * FROM openai_models
+          UNION ALL
+          SELECT * FROM anthropic_models
+        )
+        SELECT
+          provider,
+          model,
+          SUM(cost) as cost_usd,
+          SUM(tokens) as tokens,
+          COUNT(*) as requests
+        FROM all_models
+        WHERE model IS NOT NULL
+        GROUP BY provider, model
+        ORDER BY cost_usd DESC
+      `, [interval]);
+
+      const byModel = byModelResult.rows.map((row: any) => ({
+        provider: row.provider,
+        model: row.model,
+        cost_usd: parseFloat(row.cost_usd),
+        tokens: parseInt(row.tokens),
+        requests: parseInt(row.requests),
+      }));
+
+      // 4. Daily breakdown
+      const dailyResult = await db.query(`
+        SELECT
+          DATE(created_at) as date,
+          COALESCE(SUM(openai_cost_usd), 0) as openai,
+          COALESCE(SUM(anthropic_cost_usd), 0) as anthropic,
+          COALESCE(SUM(zakononline_cost_usd), 0) as zakononline,
+          COALESCE(SUM(secondlayer_cost_usd), 0) as secondlayer
+        FROM cost_tracking
+        WHERE created_at >= NOW() - $1::interval
+          AND status = 'completed'
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `, [interval]);
+
+      const daily = dailyResult.rows.map((row: any) => ({
+        date: row.date,
+        openai: parseFloat(row.openai),
+        anthropic: parseFloat(row.anthropic),
+        zakononline: parseFloat(row.zakononline),
+        secondlayer: parseFloat(row.secondlayer),
+      }));
+
+      const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const toDate = new Date().toISOString().split('T')[0];
+
+      res.json({
+        period: { from: fromDate, to: toDate, days },
+        totals: {
+          openai_cost_usd: parseFloat(totals.openai_cost),
+          anthropic_cost_usd: parseFloat(totals.anthropic_cost),
+          zakononline_cost_usd: parseFloat(totals.zakononline_cost),
+          secondlayer_cost_usd: parseFloat(totals.secondlayer_cost),
+          total_cost_usd: parseFloat(totals.total_cost),
+          total_requests: parseInt(totals.total_requests),
+        },
+        by_provider: byProvider,
+        by_model: byModel,
+        daily,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get cost breakdown', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve cost breakdown' });
     }
   });
 
