@@ -40,11 +40,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 8G
+          cpus: '2.0'
+          memory: 4G
         reservations:
-          cpus: '1.0'
-          memory: 2G
+          cpus: '0.5'
+          memory: 1G
 
   rada-db-init-local:
     image: postgres:15-alpine
@@ -276,11 +276,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '8.0'
-          memory: 8G
-        reservations:
           cpus: '2.0'
-          memory: 2G
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
 
   rada-migrate-local:
     build:
@@ -455,11 +455,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 4G
-        reservations:
           cpus: '1.0'
-          memory: 1G
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
 
   # OpenReyestr MCP Server - Ukrainian State Register
   postgres-openreyestr-local:
@@ -571,8 +571,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '6'
-          memory: 16G
+          cpus: '1.0'
+          memory: 1G
         reservations:
           cpus: '0.25'
           memory: 256M
