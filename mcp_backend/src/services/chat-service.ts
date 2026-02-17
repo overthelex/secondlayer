@@ -438,8 +438,10 @@ ${responseTemplate}`;
       const llm = getLLMManager();
       const available = ModelSelector.getAvailableProviders();
 
-      if (!available.includes('anthropic')) {
-        logger.debug('[ChatService] Anthropic not available, skipping pre-analysis');
+      // Pre-analysis uses OpenAI to preserve Anthropic rate limit for the main deep loop
+      const preAnalysisProvider = available.includes('openai') ? 'openai' : 'anthropic';
+      if (!available.includes('openai') && !available.includes('anthropic')) {
+        logger.debug('[ChatService] No LLM provider available for pre-analysis');
         return undefined;
       }
 
@@ -493,13 +495,14 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
           temperature: 0.2,
         },
         'standard',
-        'anthropic'
+        preAnalysisProvider
       );
 
       const template = response.content?.trim();
       const elapsed = Date.now() - startTime;
 
-      logger.info('[ChatService] Anthropic pre-analysis completed', {
+      logger.info('[ChatService] Pre-analysis completed', {
+        provider: preAnalysisProvider,
         elapsed_ms: elapsed,
         templateLength: template?.length || 0,
       });
