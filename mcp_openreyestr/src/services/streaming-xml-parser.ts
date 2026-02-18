@@ -4,6 +4,7 @@ import { ParsedUOEntity, ParsedFOPEntity, ParsedFSUEntity } from './xml-parser.j
 
 type EntityCallback<T> = (entity: T) => Promise<void>;
 type BatchCallback<T> = (entities: T[]) => Promise<void>;
+type ProgressCallback = (count: number) => void;
 
 export class StreamingXMLParser {
   async parseUOStream(stream: Readable, onEntity: EntityCallback<ParsedUOEntity>): Promise<number> {
@@ -21,12 +22,15 @@ export class StreamingXMLParser {
   /**
    * Parse with proper backpressure — pauses stream while batch is being processed.
    * Use this for large files (FOP 8GB+, UO 20GB+) to avoid OOM.
+   *
+   * Uses event-driven flow instead of setTimeout polling for efficiency.
    */
   async parseBatched<T>(
     stream: Readable,
     entityType: 'UO' | 'FOP' | 'FSU',
     batchSize: number,
-    onBatch: BatchCallback<T>
+    onBatch: BatchCallback<T>,
+    onProgress?: ProgressCallback
   ): Promise<number> {
     const parser = sax.createStream(true, { trim: true, normalize: true });
     let count = 0;
@@ -39,8 +43,17 @@ export class StreamingXMLParser {
     let currentObject: any = null;
     let currentObjectPath = '';
 
-    // We need manual flow control: pause the source when a batch is ready
-    let resolveDrain: (() => void) | null = null;
+    // Event-driven batch signaling: resolve when batch is ready or stream ends
+    let resolveBatchReady: (() => void) | null = null;
+    let finished = false;
+
+    const signalBatchReady = () => {
+      if (resolveBatchReady) {
+        const resolve = resolveBatchReady;
+        resolveBatchReady = null;
+        resolve();
+      }
+    };
 
     parser.on('opentag', (node) => {
       const tagName = node.name;
@@ -88,6 +101,7 @@ export class StreamingXMLParser {
           const entity = this.extractEntityData(currentSubject, entityType);
           batch.push(entity as T);
           count++;
+          if (onProgress) onProgress(count);
         }
         currentSubject = null;
         // Reset array/object state to prevent leaks between entities
@@ -95,8 +109,10 @@ export class StreamingXMLParser {
         currentArrayPath = '';
         currentObject = null;
         currentObjectPath = '';
-        if (count % 10000 === 0) {
-          console.log(`  Parsed ${count} entities...`);
+
+        // Signal when batch is full
+        if (batch.length >= batchSize) {
+          signalBatchReady();
         }
       } else if (currentSubject) {
         const path = currentPath.join('/');
@@ -157,24 +173,23 @@ export class StreamingXMLParser {
       currentValue = '';
     });
 
-    // Use a pull-based approach: read chunks manually with async iteration
     return new Promise<number>(async (resolve, reject) => {
-      let finished = false;
-
       parser.on('error', (err) => {
         finished = true;
+        signalBatchReady(); // Unblock waiting loop
         reject(err);
       });
 
       parser.on('end', () => {
         finished = true;
+        signalBatchReady(); // Unblock waiting loop
       });
 
       // Pipe stream to parser but control flow via pause/resume
       stream.pipe(parser);
 
-      // Poll for batches
-      const checkBatch = async () => {
+      // Event-driven batch processing loop
+      const processBatches = async () => {
         while (!finished || batch.length > 0) {
           if (batch.length >= batchSize) {
             stream.pause();
@@ -197,14 +212,14 @@ export class StreamingXMLParser {
             }
             break;
           } else {
-            // Wait a bit for more data
-            await new Promise(r => setTimeout(r, 50));
+            // Wait for batch to fill or stream to end — event-driven, no polling
+            await new Promise<void>(r => { resolveBatchReady = r; });
           }
         }
         resolve(count);
       };
 
-      checkBatch().catch(reject);
+      processBatches().catch(reject);
     });
   }
 
