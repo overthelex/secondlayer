@@ -1751,7 +1751,6 @@ class HTTPMCPServer {
     // ============ AI Chat endpoint (agentic LLM loop with SSE) ============
     // POST /api/chat - Streams thinking steps, tool results, and final answer
     this.app.post('/api/chat', chatRateLimit as any, requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
-      const CHAT_CREDITS = 3;
       const userId = req.user?.id;
       const requestId = `chat-${uuidv4()}`;
 
@@ -1762,13 +1761,14 @@ class HTTPMCPServer {
           return res.status(400).json({ error: 'query is required' });
         }
 
-        // Pre-flight credit check
+        // Pre-flight credit check — use minimum from DB function
         if (userId && this.creditService) {
-          const balance = await this.creditService.checkBalance(userId, CHAT_CREDITS);
+          const minCredits = await this.creditService.calculateCreditsForTool('ai_chat', userId);
+          const balance = await this.creditService.checkBalance(userId, minCredits);
           if (!balance.hasCredits) {
             return res.status(402).json({
               error: 'Insufficient credits',
-              required: CHAT_CREDITS,
+              required: minCredits,
               currentBalance: balance.currentBalance,
             });
           }
@@ -1794,6 +1794,7 @@ class HTTPMCPServer {
         });
 
         let chatCompleted = false;
+        let chatTotalCostUsd = 0;
         try {
           for await (const event of this.chatService.chat({
             query,
@@ -1806,7 +1807,10 @@ class HTTPMCPServer {
           })) {
             if (abortController.signal.aborted) break;
 
-            if (event.type === 'complete') chatCompleted = true;
+            if (event.type === 'complete') {
+              chatCompleted = true;
+              chatTotalCostUsd = event.data?.total_cost_usd || 0;
+            }
 
             res.write(`event: ${event.type}\n`);
             res.write(`data: ${JSON.stringify(event.data)}\n\n`);
@@ -1815,20 +1819,22 @@ class HTTPMCPServer {
           clearInterval(heartbeat);
         }
 
-        // Post-execution credit deduction (only if chat completed successfully)
+        // Post-execution credit deduction based on actual LLM cost
         if (chatCompleted && userId && this.creditService) {
           try {
+            const creditsToDeduct = await this.creditService.usdToCredits(chatTotalCostUsd);
             const deduction = await this.creditService.deductCredits(
               userId,
-              CHAT_CREDITS,
+              creditsToDeduct,
               'ai_chat',
               requestId,
-              'AI chat conversation'
+              `AI chat (cost: $${chatTotalCostUsd.toFixed(4)})`
             );
             if (deduction.success) {
               logger.info('[ChatService] Credits deducted', {
                 userId,
-                creditsDeducted: CHAT_CREDITS,
+                creditsDeducted: creditsToDeduct,
+                totalCostUsd: chatTotalCostUsd,
                 newBalance: deduction.newBalance,
                 requestId,
               });
@@ -1844,7 +1850,8 @@ class HTTPMCPServer {
                 }
                 res.write(`event: cost_summary\n`);
                 res.write(`data: ${JSON.stringify({
-                  credits_deducted: CHAT_CREDITS,
+                  credits_deducted: creditsToDeduct,
+                  total_cost_usd: chatTotalCostUsd,
                   new_balance_credits: deduction.newBalance,
                   balance_usd: balanceUsd ?? null,
                 })}\n\n`);
