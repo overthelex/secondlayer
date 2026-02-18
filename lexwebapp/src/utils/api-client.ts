@@ -158,8 +158,6 @@ export const api = {
   payment: {
     createStripe: (data: { amount_usd: number; metadata?: any }) =>
       apiClient.post('/api/billing/payment/stripe/create', data),
-    createFondy: (data: { amount_uah: number }) =>
-      apiClient.post('/api/billing/payment/fondy/create', data),
     createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
       apiClient.post('/api/billing/payment/metamask/create', data),
     verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>

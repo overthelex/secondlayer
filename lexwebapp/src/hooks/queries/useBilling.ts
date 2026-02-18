@@ -86,21 +86,6 @@ export function useCreateStripePayment() {
 }
 
 /**
- * Create Fondy payment
- */
-export function useCreateFondyPayment() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (amount: number) => billingService.createFondyPayment(amount),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.balance });
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.transactions() });
-    },
-  });
-}
-
-/**
  * Send test email
  */
 export function useSendTestEmail() {

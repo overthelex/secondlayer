@@ -36,7 +36,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface PaymentMethod {
   id: string;
-  provider: 'stripe' | 'fondy';
+  provider: 'stripe' | 'metamask' | 'binance_pay';
   cardLast4: string;
   cardBrand: string;
   cardBank: string;
@@ -354,7 +354,7 @@ export function SettingsTab() {
         {showAddPayment && (
           <div className="mb-4 p-4 bg-claude-bg border border-claude-border rounded-lg">
             <p className="text-sm text-claude-subtext mb-3">
-              Для додавання картки скористайтесь кнопкою "Поповнити баланс" на вкладці Огляд — картка буде збережена автоматично під час першої оплати через Stripe або Fondy.
+              Для додавання картки скористайтесь кнопкою "Поповнити баланс" на вкладці Огляд — картка буде збережена автоматично під час першої оплати через Stripe.
             </p>
             <button
               onClick={() => setShowAddPayment(false)}
@@ -384,13 +384,13 @@ export function SettingsTab() {
                 }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
-                    <span className="text-2xl">{method.provider === 'stripe' ? '💳' : '🏦'}</span>
+                    <span className="text-2xl">{method.provider === 'stripe' ? '💳' : method.provider === 'metamask' ? '🦊' : '🟡'}</span>
                     <div>
                       <p className="font-semibold text-claude-text text-sm">
                         {method.cardBrand} •••• {method.cardLast4}
                       </p>
                       <p className="text-xs text-claude-subtext">
-                        {method.cardBank} · {method.provider === 'stripe' ? 'Stripe' : 'Fondy'}
+                        {method.cardBank} · {method.provider === 'stripe' ? 'Stripe' : method.provider === 'metamask' ? 'MetaMask' : 'Binance Pay'}
                       </p>
                     </div>
                   </div>

@@ -38,8 +38,7 @@ export interface UpdateBillingSettingsRequest {
 
 export interface CreatePaymentRequest {
   amount_usd?: number;
-  amount_uah?: number;
-  provider: 'stripe' | 'fondy';
+  provider: 'stripe' | 'metamask' | 'binance_pay';
   metadata?: Record<string, any>;
 }
 

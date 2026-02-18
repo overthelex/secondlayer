@@ -95,33 +95,10 @@ export class BillingService extends BaseService {
   }
 
   /**
-   * Create Fondy payment
-   */
-  async createFondyPayment(amount_uah: number): Promise<PaymentIntent> {
-    try {
-      const response = await this.client.post<CreatePaymentResponse>(
-        '/api/billing/payment/fondy/create',
-        { amount_uah }
-      );
-
-      return {
-        id: response.data.payment_id,
-        amount: amount_uah,
-        currency: 'UAH',
-        status: response.data.status,
-        provider: 'fondy',
-        createdAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  /**
    * Get payment status
    */
   async getPaymentStatus(
-    provider: 'stripe' | 'fondy',
+    provider: string,
     paymentId: string
   ): Promise<any> {
     try {

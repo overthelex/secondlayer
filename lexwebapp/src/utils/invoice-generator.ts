@@ -207,7 +207,7 @@ export function generateMockInvoices(count: number = 10): InvoiceData[] {
   const invoices: InvoiceData[] = [];
   const today = new Date();
 
-  const paymentMethods = ['Stripe', 'Fondy', 'Manual', 'Wire Transfer'];
+  const paymentMethods = ['Stripe', 'MetaMask', 'Binance Pay', 'Wire Transfer'];
   const statuses: ('paid' | 'pending' | 'overdue')[] = ['paid', 'paid', 'paid', 'pending'];
 
   for (let i = 0; i < count; i++) {

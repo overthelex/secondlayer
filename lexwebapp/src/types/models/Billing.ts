@@ -44,6 +44,6 @@ export interface PaymentIntent {
   amount: number;
   currency: 'USD' | 'UAH';
   status: 'pending' | 'succeeded' | 'failed';
-  provider: 'stripe' | 'fondy';
+  provider: 'stripe' | 'metamask' | 'binance_pay';
   createdAt: string;
 }

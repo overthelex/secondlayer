@@ -1,13 +1,12 @@
 /**
  * Top-up Tab
- * Allows users to add funds via Stripe, Fondy, MetaMask, or Binance Pay
+ * Allows users to add funds via Stripe, MetaMask, or Binance Pay
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   CreditCard,
-  DollarSign,
   CheckCircle,
   AlertCircle,
   Loader2,
@@ -26,7 +25,7 @@ const MOCK_PAYMENTS = import.meta.env.VITE_MOCK_PAYMENTS === 'true';
 
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
-type PaymentProvider = 'stripe' | 'fondy' | 'metamask' | 'binance_pay';
+type PaymentProvider = 'stripe' | 'metamask' | 'binance_pay';
 
 interface ProviderInfo {
   id: string;
@@ -537,11 +536,14 @@ function BinancePayForm({ amount, onSuccess }: { amount: number; onSuccess: () =
   );
 }
 
-export function TopUpTab() {
+interface TopUpTabProps {
+  initialAmount?: number;
+}
+
+export function TopUpTab({ initialAmount }: TopUpTabProps) {
   const [provider, setProvider] = useState<PaymentProvider>('stripe');
-  const [amount, setAmount] = useState<number>(25);
-  const [customAmount, setCustomAmount] = useState<string>('');
-  const [isFondyProcessing, setIsFondyProcessing] = useState(false);
+  const [amount, setAmount] = useState<number>(initialAmount || 25);
+  const [customAmount, setCustomAmount] = useState<string>(initialAmount ? String(initialAmount) : '');
   const [showSuccess, setShowSuccess] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<ProviderInfo[]>([]);
 
@@ -550,32 +552,19 @@ export function TopUpTab() {
       .then(({ data }) => setAvailableProviders(data.providers || []))
       .catch(() => setAvailableProviders([
         { id: 'stripe', name: 'Stripe', enabled: true, currency: 'USD' },
-        { id: 'fondy', name: 'Fondy', enabled: true, currency: 'UAH' },
       ]));
   }, []);
 
-  const cryptoEnabled = availableProviders.some((p) => p.id === 'metamask' && p.enabled);
-  const presetAmounts = provider === 'fondy' ? [100, 250, 500, 1000] : [10, 25, 50, 100];
-  const currencySymbol = provider === 'fondy' ? '₴' : '$';
-
-  const handleFondyPayment = async () => {
-    setIsFondyProcessing(true);
-    try {
-      const { data } = await api.payment.createFondy({ amount_uah: amount });
-      if (MOCK_PAYMENTS) {
-        showToast.success(`Тестова оплата Fondy ₴${amount}`);
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 3000);
-      } else {
-        showToast.info('Перенаправлення на Fondy...');
-        window.open(data.paymentUrl, '_blank');
-      }
-    } catch (err: any) {
-      showToast.error(err.response?.data?.message || 'Не вдалося створити платіж.');
-    } finally {
-      setIsFondyProcessing(false);
+  useEffect(() => {
+    if (initialAmount && initialAmount > 0) {
+      setAmount(initialAmount);
+      setCustomAmount(String(initialAmount));
     }
-  };
+  }, [initialAmount]);
+
+  const cryptoEnabled = availableProviders.some((p) => p.id === 'metamask' && p.enabled);
+  const presetAmounts = [10, 25, 50, 100];
+  const currencySymbol = '$';
 
   const handleSuccess = () => {
     setShowSuccess(true);
@@ -587,7 +576,7 @@ export function TopUpTab() {
   const handleProviderChange = (p: PaymentProvider) => {
     setProvider(p);
     setCustomAmount('');
-    setAmount(p === 'fondy' ? 250 : 25);
+    setAmount(25);
   };
 
   return (
@@ -606,7 +595,7 @@ export function TopUpTab() {
       {/* Provider Selection */}
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4">Оберіть спосіб оплати</h3>
-        <div className={`grid grid-cols-1 gap-4 ${cryptoEnabled ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2'}`}>
+        <div className={`grid grid-cols-1 gap-4 ${cryptoEnabled ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
           <button onClick={() => handleProviderChange('stripe')}
             className={`p-4 border-2 rounded-xl transition-all ${provider === 'stripe' ? 'border-claude-accent bg-claude-accent/5' : 'border-claude-border hover:border-claude-accent/50'}`}>
             <div className="flex items-center gap-3 mb-2">
@@ -615,16 +604,6 @@ export function TopUpTab() {
             </div>
             <p className="text-sm text-claude-subtext text-left">Кредитні/дебетові картки (міжнародні)</p>
             <p className="text-xs text-claude-subtext mt-1 text-left">Рекомендовано для оплати в USD</p>
-          </button>
-
-          <button onClick={() => handleProviderChange('fondy')}
-            className={`p-4 border-2 rounded-xl transition-all ${provider === 'fondy' ? 'border-claude-accent bg-claude-accent/5' : 'border-claude-border hover:border-claude-accent/50'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <DollarSign size={24} className={provider === 'fondy' ? 'text-claude-accent' : 'text-claude-subtext'} />
-              <h4 className="font-semibold text-claude-text">Fondy</h4>
-            </div>
-            <p className="text-sm text-claude-subtext text-left">Українські картки (UAH)</p>
-            <p className="text-xs text-claude-subtext mt-1 text-left">Для карток українських банків</p>
           </button>
 
           {cryptoEnabled && (
@@ -668,19 +647,18 @@ export function TopUpTab() {
           <label className="block text-sm font-medium text-claude-text mb-2">Інша сума</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-claude-subtext font-medium">{currencySymbol}</span>
-            <input type="number" min={provider === 'fondy' ? '10' : '1'} step={provider === 'fondy' ? '1' : '0.01'}
+            <input type="number" min="1" step="0.01"
               value={customAmount} onChange={(e) => { setCustomAmount(e.target.value); const p = parseFloat(e.target.value); if (!isNaN(p) && p > 0) setAmount(p); }}
-              placeholder={provider === 'fondy' ? '250' : '25.00'}
+              placeholder="25.00"
               className="w-full pl-8 pr-4 py-3 border border-claude-border rounded-lg focus:outline-none focus:ring-2 focus:ring-claude-accent/20" />
           </div>
-          <p className="text-xs text-claude-subtext mt-2">Мінімум: {provider === 'fondy' ? '₴10' : '$1.00'}</p>
+          <p className="text-xs text-claude-subtext mt-2">Мінімум: $1.00</p>
         </div>
         <div className="mt-4 p-4 bg-claude-bg rounded-lg">
           <div className="flex items-center justify-between">
             <span className="text-sm text-claude-subtext">До оплати:</span>
             <span className="text-2xl font-bold text-claude-text">{currencySymbol}{amount.toFixed(2)}</span>
           </div>
-          {provider === 'fondy' && <p className="text-xs text-claude-subtext mt-2">≈ ${(amount * 0.027).toFixed(2)} USD</p>}
         </div>
       </div>
 
@@ -695,21 +673,6 @@ export function TopUpTab() {
               <p className="text-sm text-red-800">Stripe не налаштовано. Додайте VITE_STRIPE_PUBLISHABLE_KEY.</p>
             </div>
           )
-        ) : provider === 'fondy' ? (
-          <div className="space-y-4">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">Вас буде перенаправлено на Fondy для завершення оплати.</p>
-            </div>
-            <button onClick={handleFondyPayment} disabled={isFondyProcessing || amount < 10}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50 font-medium">
-              {isFondyProcessing ? <><Loader2 size={18} className="animate-spin" /> Обробка...</> : <><ExternalLink size={18} /> Сплатити ₴{amount.toFixed(2)} через Fondy</>}
-            </button>
-            {MOCK_PAYMENTS && (
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-xs text-yellow-800"><strong>Тестовий режим:</strong> Оплати симулюються.</p>
-              </div>
-            )}
-          </div>
         ) : provider === 'metamask' ? (
           <MetaMaskPaymentForm amount={amount} onSuccess={handleSuccess} />
         ) : provider === 'binance_pay' ? (
@@ -722,7 +685,7 @@ export function TopUpTab() {
         <p className="text-xs text-claude-subtext text-center">
           {provider === 'metamask' ? 'Крипто-платежі верифікуються on-chain. Баланс оновлюється після підтвердження.'
             : provider === 'binance_pay' ? 'Binance Pay оплата обробляється автоматично після підтвердження.'
-            : `Усі платежі обробляються безпечно через ${provider === 'stripe' ? 'Stripe' : 'Fondy'}. Дані картки не зберігаються.`}
+            : 'Усі платежі обробляються безпечно через Stripe. Дані картки не зберігаються.'}
         </p>
       </div>
     </div>

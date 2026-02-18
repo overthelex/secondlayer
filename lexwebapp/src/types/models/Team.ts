@@ -64,7 +64,7 @@ export interface UsageChartData {
 
 export interface PaymentMethod {
   id: string;
-  provider: 'stripe' | 'fondy';
+  provider: 'stripe' | 'metamask' | 'binance_pay';
   cardLast4: string;
   cardBrand: string;
   cardBank: string;
