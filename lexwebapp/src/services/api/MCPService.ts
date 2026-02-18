@@ -31,7 +31,7 @@ export interface CitationWarning {
 
 export interface ChatStreamCallbacks {
   onPlan?: (data: { goal: string; steps: Array<{ id: number; tool: string; params: Record<string, any>; purpose: string; depends_on?: number[] }>; expected_iterations: number }) => void;
-  onThinking?: (data: { step: number; tool: string; params: any }) => void;
+  onThinking?: (data: { step: number; tool: string; params: any; description?: string }) => void;
   onToolResult?: (data: { tool: string; result: any }) => void;
   onAnswerDelta?: (data: { text: string }) => void;
   onAnswer?: (data: { text: string; provider: string; model: string }) => void;

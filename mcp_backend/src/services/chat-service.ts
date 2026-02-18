@@ -14,6 +14,7 @@
 import { logger } from '../utils/logger.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { QueryPlanner } from './query-planner.js';
+import { generateThinkingDescription } from './thinking-descriptions.js';
 import { CostTracker } from './cost-tracker.js';
 import { ConversationService } from './conversation-service.js';
 import {
@@ -207,6 +208,7 @@ export class ChatService {
               step: iteration + 1,
               tool: call.name,
               params: call.arguments,
+              description: generateThinkingDescription(call.name, call.arguments as Record<string, unknown>),
             },
           };
         }
