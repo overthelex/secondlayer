@@ -125,6 +125,20 @@ function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: (
   );
 }
 
+const CHAIN_IDS: Record<string, string> = {
+  ethereum: '0x1',
+  polygon: '0x89',
+};
+
+const CHAIN_NAMES: Record<string, string> = {
+  '0x1': 'Ethereum Mainnet',
+  '0x89': 'Polygon Mainnet',
+};
+
+function truncateAddress(addr: string): string {
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
 function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess: () => void }) {
   const [network, setNetwork] = useState<'ethereum' | 'polygon'>('ethereum');
   const [token, setToken] = useState<'eth' | 'usdt' | 'usdc'>('usdt');
@@ -132,6 +146,95 @@ function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess:
   const [paymentData, setPaymentData] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Wallet connection state
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [chainId, setChainId] = useState<string | null>(null);
+
+  const ethereum = (window as any).ethereum;
+  const hasMetaMask = !!ethereum;
+
+  // Listen for account and chain changes
+  useEffect(() => {
+    if (!ethereum) return;
+
+    const handleAccountsChanged = (accounts: string[]) => {
+      if (accounts.length === 0) {
+        setConnectedAddress(null);
+        setChainId(null);
+      } else {
+        setConnectedAddress(accounts[0]);
+      }
+    };
+
+    const handleChainChanged = (newChainId: string) => {
+      setChainId(newChainId);
+    };
+
+    ethereum.on('accountsChanged', handleAccountsChanged);
+    ethereum.on('chainChanged', handleChainChanged);
+
+    // Check if already connected
+    ethereum.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
+      if (accounts.length > 0) {
+        setConnectedAddress(accounts[0]);
+        ethereum.request({ method: 'eth_chainId' }).then((id: string) => setChainId(id));
+      }
+    });
+
+    return () => {
+      ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener('chainChanged', handleChainChanged);
+    };
+  }, [ethereum]);
+
+  const handleConnectWallet = async () => {
+    if (!ethereum) return;
+    setIsConnecting(true);
+    setError(null);
+    try {
+      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+      setConnectedAddress(accounts[0]);
+      const currentChainId = await ethereum.request({ method: 'eth_chainId' });
+      setChainId(currentChainId);
+    } catch (err: any) {
+      if (err.code === 4001) {
+        setError('Підключення відхилено користувачем');
+      } else {
+        setError(err.message || 'Не вдалося підключити гаманець');
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    setConnectedAddress(null);
+    setChainId(null);
+    setPaymentData(null);
+    setError(null);
+  };
+
+  const handleSwitchNetwork = async () => {
+    if (!ethereum) return;
+    const targetChainId = CHAIN_IDS[network];
+    try {
+      await ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: targetChainId }],
+      });
+    } catch (err: any) {
+      if (err.code === 4001) {
+        setError('Перемикання мережі відхилено');
+      } else {
+        setError(err.message || 'Не вдалося перемкнути мережу');
+      }
+    }
+  };
+
+  const expectedChainId = CHAIN_IDS[network];
+  const isCorrectChain = chainId === expectedChainId;
 
   const handleCreatePayment = async () => {
     setIsProcessing(true);
@@ -160,17 +263,11 @@ function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess:
   };
 
   const handleSendViaMetaMask = async () => {
-    if (!paymentData) return;
-    const ethereum = (window as any).ethereum;
-    if (!ethereum) {
-      showToast.error('MetaMask не знайдено. Встановіть розширення MetaMask.');
-      return;
-    }
+    if (!paymentData || !connectedAddress) return;
     setVerifying(true);
     setError(null);
     try {
-      const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-      const from = accounts[0];
+      const from = connectedAddress;
       let txHash: string;
 
       if (token === 'eth') {
@@ -218,8 +315,75 @@ function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess:
     }
   };
 
+  // State 1: MetaMask not available
+  if (!hasMetaMask) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-center space-y-3">
+          <Wallet size={32} className="text-orange-400 mx-auto" />
+          <p className="text-sm font-medium text-orange-800">MetaMask не знайдено</p>
+          <p className="text-sm text-orange-700">Встановіть розширення MetaMask для вашого браузера, щоб здійснювати крипто-платежі.</p>
+          <a
+            href="https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium text-sm"
+          >
+            <ExternalLink size={16} /> Встановіть MetaMask
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // State 2: Not connected
+  if (!connectedAddress) {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-center space-y-3">
+          <Wallet size={32} className="text-orange-400 mx-auto" />
+          <p className="text-sm font-medium text-orange-800">MetaMask не підключено</p>
+          <p className="text-sm text-orange-700">Підключіть гаманець, щоб здійснити оплату криптовалютою.</p>
+        </div>
+        {error && <p className="text-sm text-red-600 flex items-center gap-1"><AlertCircle size={14} />{error}</p>}
+        <button
+          onClick={handleConnectWallet}
+          disabled={isConnecting}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 font-medium"
+        >
+          {isConnecting ? (
+            <><Loader2 size={18} className="animate-spin" /> Підключення...</>
+          ) : (
+            <><Wallet size={18} /> Підключити гаманець</>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  // State 3+: Connected
   return (
     <div className="space-y-4">
+      {/* Connected address badge */}
+      <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full" />
+          <span className="text-sm font-medium text-green-800">{truncateAddress(connectedAddress)}</span>
+          <button
+            onClick={() => { navigator.clipboard.writeText(connectedAddress); showToast.success('Адресу скопійовано'); }}
+            className="p-1 hover:bg-green-100 rounded"
+          >
+            <Copy size={14} className="text-green-600" />
+          </button>
+        </div>
+        <button
+          onClick={handleDisconnect}
+          className="text-xs text-green-700 hover:text-red-600 transition-colors"
+        >
+          Відключити
+        </button>
+      </div>
+
       {!paymentData ? (
         <>
           <div>
@@ -233,6 +397,25 @@ function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess:
               ))}
             </div>
           </div>
+
+          {/* Network mismatch warning */}
+          {!isCorrectChain && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle size={16} className="text-yellow-600" />
+                <span className="text-sm text-yellow-800">
+                  Поточна мережа: {CHAIN_NAMES[chainId!] || `Невідома (${chainId})`}
+                </span>
+              </div>
+              <button
+                onClick={handleSwitchNetwork}
+                className="text-sm font-medium text-yellow-700 hover:text-yellow-900 underline"
+              >
+                Перемкнути на {network === 'ethereum' ? 'Ethereum' : 'Polygon'}
+              </button>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-claude-text mb-2">Токен</label>
             <div className="grid grid-cols-3 gap-3">
