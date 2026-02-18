@@ -129,11 +129,7 @@ export class LLMClientManager {
     request: UnifiedChatRequest,
     selection: ModelSelection
   ): Promise<UnifiedChatResponse> {
-    if (selection.provider === 'anthropic') {
-      return await this.executeAnthropicChatCompletion(request, selection.model);
-    } else {
-      return await this.executeOpenAIChatCompletion(request, selection.model);
-    }
+    return await this.executeOpenAIChatCompletion(request, selection.model);
   }
 
   private async executeOpenAIChatCompletion(
@@ -357,35 +353,12 @@ export class LLMClientManager {
 
     const streamStart = Date.now();
     try {
-      if (selection.provider === 'anthropic') {
-        yield* this.executeAnthropicStreamCompletion(request, selection.model, signal);
-      } else {
-        yield* this.executeOpenAIStreamCompletion(request, selection.model, signal);
-      }
+      yield* this.executeOpenAIStreamCompletion(request, selection.model, signal);
       this.externalApiMetrics?.(selection.provider, 'success', (Date.now() - streamStart) / 1000);
     } catch (primaryError: any) {
       this.externalApiMetrics?.(selection.provider, 'error', (Date.now() - streamStart) / 1000);
-      logger.warn(`Primary streaming provider ${selection.provider} failed: ${primaryError.message}`);
-
-      const fallbackProvider = this.getFallbackProvider(selection.provider);
-      if (fallbackProvider) {
-        logger.info(`Streaming fallback to ${fallbackProvider}`);
-        const fallbackSelection = ModelSelector.getModelSelection(budget, fallbackProvider);
-        const fbStart = Date.now();
-        try {
-          if (fallbackSelection.provider === 'anthropic') {
-            yield* this.executeAnthropicStreamCompletion(request, fallbackSelection.model, signal);
-          } else {
-            yield* this.executeOpenAIStreamCompletion(request, fallbackSelection.model, signal);
-          }
-          this.externalApiMetrics?.(fallbackSelection.provider, 'success', (Date.now() - fbStart) / 1000);
-        } catch (fbError: any) {
-          this.externalApiMetrics?.(fallbackSelection.provider, 'error', (Date.now() - fbStart) / 1000);
-          throw fbError;
-        }
-      } else {
-        throw primaryError;
-      }
+      logger.warn(`OpenAI streaming failed: ${primaryError.message}`);
+      throw primaryError;
     }
   }
 
