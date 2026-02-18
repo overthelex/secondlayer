@@ -22,6 +22,7 @@ import {
 import { StreamingCallbacks } from '../../types/api/sse';
 
 export interface ChatStreamCallbacks {
+  onPlan?: (data: { goal: string; steps: Array<{ id: number; tool: string; params: Record<string, any>; purpose: string; depends_on?: number[] }>; expected_iterations: number }) => void;
   onThinking?: (data: { step: number; tool: string; params: any }) => void;
   onToolResult?: (data: { tool: string; result: any }) => void;
   onAnswerDelta?: (data: { text: string }) => void;
@@ -176,6 +177,9 @@ export class MCPService extends BaseService {
                 try {
                   const data = JSON.parse(currentData);
                   switch (currentEvent) {
+                    case 'plan':
+                      callbacks.onPlan?.(data);
+                      break;
                     case 'thinking':
                       callbacks.onThinking?.(data);
                       break;

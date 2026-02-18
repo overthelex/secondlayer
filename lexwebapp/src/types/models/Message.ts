@@ -8,6 +8,7 @@ export interface Message {
   content: string;
   isStreaming?: boolean;
   thinkingSteps?: ThinkingStep[];
+  executionPlan?: ExecutionPlan;
   decisions?: Decision[];
   citations?: Citation[];
   documents?: VaultDocument[];
@@ -18,6 +19,21 @@ export interface ThinkingStep {
   title: string;
   content: string;
   isComplete: boolean;
+}
+
+export interface ExecutionPlan {
+  goal: string;
+  steps: PlanStep[];
+  expected_iterations: number;
+}
+
+export interface PlanStep {
+  id: number;
+  tool: string;
+  params: Record<string, any>;
+  purpose: string;
+  depends_on?: number[];
+  completed?: boolean;
 }
 
 export interface Decision {

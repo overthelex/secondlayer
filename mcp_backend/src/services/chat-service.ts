@@ -28,6 +28,8 @@ import {
   CHAT_INTENT_CLASSIFICATION_PROMPT,
   DOMAIN_TOOL_MAP,
   DEFAULT_TOOLS,
+  buildPlanGenerationPrompt,
+  ExecutionPlan,
 } from '../prompts/chat-system-prompt.js';
 import { buildEnrichedSystemPrompt, SCENARIO_CATALOG } from '../prompts/tool-registry-catalog.js';
 import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-service.js';
@@ -37,7 +39,7 @@ import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-s
 // ============================
 
 export interface ChatEvent {
-  type: 'thinking' | 'tool_result' | 'answer_delta' | 'answer' | 'complete' | 'error';
+  type: 'plan' | 'thinking' | 'tool_result' | 'answer_delta' | 'answer' | 'complete' | 'error';
   data: any;
 }
 
@@ -85,11 +87,16 @@ export class ChatService {
       const classification = await this.classifyChatIntent(query);
       const toolDefs = await this.filterTools(classification.domains, classification.slots);
 
-      // 2. Anthropic pre-analysis: generate response template
-      const responseTemplate = await this.generateResponseTemplate(query, classification);
+      // 2. Generate execution plan (replaces old response template)
+      const plan = await this.generateExecutionPlan(query, classification, toolDefs);
 
-      // 3. If template was generated, escalate to deep budget for the main loop
-      const effectiveBudget = responseTemplate ? 'deep' as const : budget;
+      // 3. Emit plan to client via SSE
+      if (plan) {
+        yield { type: 'plan', data: plan };
+      }
+
+      // 4. Budget escalation: >= 3 steps → deep, otherwise keep original
+      const effectiveBudget = (plan && plan.steps.length >= 3) ? 'deep' as const : budget;
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
@@ -98,7 +105,8 @@ export class ChatService {
         toolCount: toolDefs.length,
         budget: effectiveBudget,
         budgetEscalated: effectiveBudget !== budget,
-        hasTemplate: !!responseTemplate,
+        hasPlan: !!plan,
+        planSteps: plan?.steps.length || 0,
       });
 
       // 4. Pick LLM provider for the main loop
@@ -115,9 +123,9 @@ export class ChatService {
         strategy: isTaskAware ? 'task-aware' : 'default',
       });
 
-      // 4. Build messages with token-aware context window + injected template
+      // 5. Build messages with token-aware context window + injected plan
       const limits = BUDGET_LIMITS[effectiveBudget as BudgetKey] || BUDGET_LIMITS.standard;
-      const messages = this.buildContextMessages(history, query, classification.domains, responseTemplate, limits.maxContextChars);
+      const messages = this.buildContextMessages(history, query, classification.domains, plan, limits.maxContextChars);
 
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
@@ -301,7 +309,7 @@ export class ChatService {
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     query: string,
     classifiedDomains?: string[],
-    responseTemplate?: string,
+    plan?: ExecutionPlan,
     maxContextChars?: number
   ): UnifiedMessage[] {
     const contextBudget = maxContextChars || BUDGET_LIMITS.standard.maxContextChars;
@@ -312,19 +320,25 @@ export class ChatService {
       classifiedDomains
     );
 
-    // Inject Anthropic-generated response template into system prompt
-    if (responseTemplate) {
-      enrichedPrompt += `\n\n## План аналізу (згенерований старшим аналітиком)
+    // Inject execution plan into system prompt
+    if (plan) {
+      const stepsText = plan.steps
+        .map((s) => {
+          const paramsStr = JSON.stringify(s.params);
+          const depsStr = s.depends_on?.length ? ` (після кроків ${s.depends_on.join(', ')})` : '';
+          return `Крок ${s.id}: ${s.tool}(${paramsStr})${depsStr}\n  → Мета: ${s.purpose}`;
+        })
+        .join('\n\n');
 
-ВАЖЛИВО: Це ПЛАН дій та структура відповіді, а НЕ готова відповідь. Ти МУСИШ:
-1. Викликати інструменти згідно з планом пошуку нижче
-2. Проаналізувати РЕАЛЬНІ дані з результатів інструментів
-3. Заповнити кожен розділ КОНКРЕТНИМИ фактами: номери справ, дати, імена суддів, цитати з рішень
-4. НІКОЛИ не залишати плейсхолдери типу [інформація], [опис], [дата] — замість них має бути реальна інформація
-5. Якщо інструмент не повернув певну інформацію — напиши "інформація не знайдена", а не плейсхолдер
-6. Відповідь ПОВИННА бути максимально детальною — аналізуй кожну інстанцію окремо, цитуй мотивувальні частини рішень, вказуй конкретні норми
+      enrichedPrompt += `\n\n## План виконання
 
-${responseTemplate}`;
+Ціль: ${plan.goal}
+
+${stepsText}
+
+ВАЖЛИВО: Виконай кроки в зазначеному порядку. Можеш адаптувати параметри на основі результатів попередніх кроків.
+Використовуй РЕАЛЬНІ дані з результатів інструментів. НІКОЛИ не залишай плейсхолдери — тільки конкретні факти.
+Якщо інструмент не повернув певну інформацію — напиши "інформація не знайдена".`;
     }
 
     const messages: UnifiedMessage[] = [
@@ -432,90 +446,83 @@ ${responseTemplate}`;
   }
 
   /**
-   * Anthropic pre-analysis: send the user query to Claude to generate a structured
-   * response template (legal norms, analysis structure, tool-call strategy).
-   * The template is then injected into the system prompt for the main LLM loop.
+   * Generate a structured execution plan: which tools to call, in what order,
+   * with what parameters. Uses a fast LLM call (quick budget, ~200-400ms).
+   * Falls back to undefined on error → agentic loop runs without a plan.
    */
-  private async generateResponseTemplate(
+  private async generateExecutionPlan(
     query: string,
-    classification: { domains: string[]; keywords: string; slots?: Record<string, any> }
-  ): Promise<string | undefined> {
+    classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
+    toolDefs: ToolDefinition[]
+  ): Promise<ExecutionPlan | undefined> {
     try {
       const llm = getLLMManager();
-      const available = ModelSelector.getAvailableProviders();
+      const provider = ModelSelector.getNextProvider();
 
-      // Pre-analysis uses OpenAI to preserve Anthropic rate limit for the main deep loop
-      const preAnalysisProvider = available.includes('openai') ? 'openai' : 'anthropic';
-      if (!available.includes('openai') && !available.includes('anthropic')) {
-        logger.debug('[ChatService] No LLM provider available for pre-analysis');
-        return undefined;
-      }
+      // Build tool descriptions for the prompt
+      const toolDescriptions = toolDefs
+        .map((d) => `- ${d.name}: ${d.description}`)
+        .join('\n');
 
-      const preAnalysisPrompt = `Ти — старший юридичний аналітик. Проаналізуй запит користувача і створи ШАБЛОН ВІДПОВІДІ, який буде використаний іншим AI-асистентом для формування фінальної відповіді.
-
-## Запит користувача
-${query}
-
-## Класифікація запиту
-- Домени: ${classification.domains.join(', ')}
-- Ключові слова: ${classification.keywords}
-${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}` : ''}
-
-## Твоя задача
-Створи детальний шаблон відповіді, який включає:
-
-1. **Структура відповіді** — які розділи повинна містити відповідь (наприклад: "Правова кваліфікація", "Застосовні норми", "Аналіз судової практики", "Висновок"). Визнач логічну послідовність розділів для цього типу запиту.
-
-2. **Напрямки правового аналізу** — які галузі права задіяні, які правові інститути та конструкції релевантні. НЕ вигадуй конкретних статей — вкажи лише напрямки пошуку (наприклад: "норми про позовну давність у ЦК", "процесуальні підстави для зміни предмета позову у ГПК"). Конкретні статті будуть знайдені інструментами.
-
-3. **Стратегія пошуку** — які інструменти викликати і в якому порядку:
-   - search_legal_precedents(query) — для пошуку судових рішень
-   - get_court_decision(case_number) — для конкретної справи
-   - get_case_documents_chain(case_number) — для історії справи через усі інстанції
-   - search_legislation(query) — для пошуку законодавства за темою
-   - get_legislation_article(law, article) — для конкретної статті (ТІЛЬКИ після знаходження інструментом)
-   - find_similar_fact_pattern_cases(description) — для схожих справ
-   - compare_practice_pro_contra(topic) — для порівняння позитивної та негативної практики
-   Вкажи конкретні пошукові запити (query) для кожного виклику.
-
-4. **Ключові аспекти аналізу** — на що звернути увагу при аналізі результатів інструментів: які правові конструкції шукати в текстах рішень, процесуальні особливості, типові помилки сторін, на які висновки суду звернути увагу.
-
-5. **Формат відповіді** — як оформити фінальну відповідь (структура, рівень деталізації, чи потрібен зразок документа). Вкажи очікувану глибину аналізу.
-
-## Правила
-- Пиши УКРАЇНСЬКОЮ
-- НЕ вигадуй конкретних номерів статей, номерів справ — це робитимуть інструменти
-- Вказуй напрямки пошуку та правові інститути, а не конкретні норми
-- Якщо запит стосується конкретної справи — включи стратегію аналізу всіх інстанцій
-- Якщо запит загальний — включи стратегію порівняльного аналізу практики
-- Шаблон повинен бути 300-600 слів`;
+      const prompt = buildPlanGenerationPrompt(query, classification, toolDescriptions);
 
       const startTime = Date.now();
 
       const response = await llm.chatCompletion(
         {
           messages: [
-            { role: 'user', content: preAnalysisPrompt },
+            { role: 'user', content: prompt },
           ],
-          max_tokens: 2048,
-          temperature: 0.2,
+          max_tokens: 800,
+          temperature: 0.1,
         },
-        'standard',
-        preAnalysisProvider
+        'quick',
+        provider
       );
 
-      const template = response.content?.trim();
+      const content = response.content || '{}';
       const elapsed = Date.now() - startTime;
 
-      logger.info('[ChatService] Pre-analysis completed', {
-        provider: preAnalysisProvider,
+      // Extract JSON from response (may be wrapped in markdown code blocks)
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in plan response');
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // Validate plan structure
+      if (!parsed.goal || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+        throw new Error('Invalid plan structure: missing goal or steps');
+      }
+
+      // Cap at 5 steps
+      const steps = parsed.steps.slice(0, 5);
+
+      // Validate each step has required fields
+      for (const step of steps) {
+        if (!step.tool || !step.purpose) {
+          throw new Error(`Invalid step: missing tool or purpose`);
+        }
+        step.params = step.params || {};
+      }
+
+      const plan: ExecutionPlan = {
+        goal: parsed.goal,
+        steps,
+        expected_iterations: parsed.expected_iterations || steps.length,
+      };
+
+      logger.info('[ChatService] Execution plan generated', {
+        provider,
         elapsed_ms: elapsed,
-        templateLength: template?.length || 0,
+        steps: plan.steps.length,
+        goal: plan.goal.slice(0, 100),
       });
 
-      return template || undefined;
+      return plan;
     } catch (err: any) {
-      logger.warn('[ChatService] Anthropic pre-analysis failed, proceeding without template', {
+      logger.warn('[ChatService] Plan generation failed, proceeding without plan', {
         error: err.message,
       });
       return undefined;

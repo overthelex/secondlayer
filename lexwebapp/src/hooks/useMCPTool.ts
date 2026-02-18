@@ -9,7 +9,7 @@ import { useChatStore } from '../stores';
 import { useSettingsStore } from '../stores';
 import { mcpService } from '../services';
 import showToast from '../utils/toast';
-import type { Decision, Citation, VaultDocument } from '../types/models/Message';
+import type { Decision, Citation, VaultDocument, ExecutionPlan } from '../types/models/Message';
 
 /**
  * Human-friendly tool name labels for thinking steps display.
@@ -848,6 +848,8 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
   const accumulatedDocuments = useRef<VaultDocument[]>([]);
   // Ref to accumulate streaming answer text without stale closure issues
   const contentRef = useRef('');
+  // Track execution plan for step-completion matching
+  const planRef = useRef<ExecutionPlan | null>(null);
 
   const executeChat = useCallback(
     async (query: string, documentIds?: string[]) => {
@@ -856,6 +858,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
       accumulatedCitations.current = [];
       accumulatedDocuments.current = [];
       contentRef.current = '';
+      planRef.current = null;
       // 1. Add user message
       const userMessage = {
         id: Date.now().toString(),
@@ -897,9 +900,43 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
       try {
         const chatConversationId = useChatStore.getState().conversationId || undefined;
         const controller = await mcpService.streamChat(query, history, {
+          onPlan: (data) => {
+            // Store the plan and add it to the message for UI rendering
+            const plan: ExecutionPlan = {
+              goal: data.goal,
+              steps: data.steps.map((s) => ({ ...s, completed: false })),
+              expected_iterations: data.expected_iterations,
+            };
+            planRef.current = plan;
+            updateMessage(assistantMessageId, { executionPlan: plan });
+
+            // Also add a thinking step showing the plan
+            const planSummary = data.steps
+              .map((s) => `${s.id}. ${s.purpose}`)
+              .join('\n');
+            addThinkingStep(assistantMessageId, {
+              id: 'plan',
+              title: `📋 Стратегія: ${data.goal}`,
+              content: planSummary,
+              isComplete: true,
+            });
+          },
+
           onThinking: (data) => {
             // Clear partial streamed text when entering a tool-calling iteration
             contentRef.current = '';
+
+            // Mark matching plan step as in-progress
+            if (planRef.current) {
+              const matchingStep = planRef.current.steps.find((s) => s.tool === data.tool);
+              if (matchingStep && !matchingStep.completed) {
+                matchingStep.completed = true;
+                updateMessage(assistantMessageId, {
+                  executionPlan: { ...planRef.current, steps: [...planRef.current.steps] },
+                });
+              }
+            }
+
             addThinkingStep(assistantMessageId, {
               id: `step-${data.step}`,
               title: `🔍 ${getToolLabel(data.tool)}`,

@@ -6,8 +6,10 @@ import remarkGfm from 'remark-gfm';
 import { DecisionCard, Decision } from './DecisionCard';
 import { AnalyticsBlock } from './AnalyticsBlock';
 import { ThinkingSteps } from './ThinkingSteps';
+import { PlanDisplay } from './PlanDisplay';
 import { DocumentTemplate } from './DocumentTemplate';
 import showToast from '../utils/toast';
+import type { ExecutionPlan } from '../types/models/Message';
 
 export type MessageRole = 'user' | 'assistant';
 export interface MessageProps {
@@ -39,6 +41,7 @@ export interface MessageProps {
     content?: string;
     isComplete: boolean;
   }>;
+  executionPlan?: ExecutionPlan;
   onRegenerate?: () => void;
 }
 
@@ -89,6 +92,7 @@ export function Message({
   citations,
   documents,
   thinkingSteps,
+  executionPlan,
   onRegenerate
 }: MessageProps) {
   const isUser = role === 'user';
@@ -150,6 +154,9 @@ export function Message({
 
             {/* Content */}
             <div className="flex-1 min-w-0 space-y-4">
+              {/* Execution Plan */}
+              {executionPlan && <PlanDisplay plan={executionPlan} />}
+
               {/* Thinking Steps */}
               {thinkingSteps && thinkingSteps.length > 0 && <div>
                   <button onClick={() => setShowThinking(!showThinking)} className="flex items-center gap-2 text-[13px] text-claude-subtext hover:text-claude-text transition-colors mb-2">
