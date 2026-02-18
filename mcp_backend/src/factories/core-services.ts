@@ -7,6 +7,7 @@ import { EmbeddingService } from '../services/embedding-service.js';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
 import { CitationValidator } from '../services/citation-validator.js';
 import { HallucinationGuard } from '../services/hallucination-guard.js';
+import { ShepardizationService } from '../services/shepardization-service.js';
 import { MCPQueryAPI } from '../api/mcp-query-api.js';
 import { LegislationTools } from '../api/legislation-tools.js';
 
@@ -22,6 +23,7 @@ export interface BackendCoreServices {
   zoLegalActsAdapter: ZOAdapter;
   zoECHRAdapter: ZOAdapter;
   patternStore: LegalPatternStore;
+  shepardizationService: ShepardizationService;
   citationValidator: CitationValidator;
   hallucinationGuard: HallucinationGuard;
   legislationTools: LegislationTools;
@@ -40,8 +42,9 @@ export function createBackendCoreServices(): BackendCoreServices {
   const zoLegalActsAdapter = new ZOAdapter('legal_acts', documentService, embeddingService);
   const zoECHRAdapter = new ZOAdapter('echr_practice', documentService, embeddingService);
   const patternStore = new LegalPatternStore(db, embeddingService);
-  const citationValidator = new CitationValidator(db);
-  const hallucinationGuard = new HallucinationGuard(db);
+  const shepardizationService = new ShepardizationService(zoAdapter, db);
+  const citationValidator = new CitationValidator(db, shepardizationService);
+  const hallucinationGuard = new HallucinationGuard(db, shepardizationService);
   const legislationTools = new LegislationTools(db.getPool(), embeddingService);
 
   const mcpAPI = new MCPQueryAPI(
@@ -67,6 +70,7 @@ export function createBackendCoreServices(): BackendCoreServices {
     zoLegalActsAdapter,
     zoECHRAdapter,
     patternStore,
+    shepardizationService,
     citationValidator,
     hallucinationGuard,
     legislationTools,

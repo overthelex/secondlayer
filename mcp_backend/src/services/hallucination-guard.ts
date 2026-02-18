@@ -1,9 +1,12 @@
 import { Database } from '../database/database.js';
 import { ValidationResult } from '../types/index.js';
+import type { ShepardizationService } from './shepardization-service.js';
+import { logger } from '../utils/logger.js';
 
 export class HallucinationGuard {
   constructor(
-    private db: Database
+    private db: Database,
+    private shepardizationService?: ShepardizationService
   ) {}
 
   async validateResponse(
@@ -13,6 +16,7 @@ export class HallucinationGuard {
     const claims_without_sources: string[] = [];
     const invalid_citations: string[] = [];
     const warnings: string[] = [];
+    const overturned_citations: string[] = [];
 
     // Extract claims from response
     const claims = this.extractClaims(response);
@@ -56,6 +60,7 @@ export class HallucinationGuard {
       invalid_citations,
       confidence,
       warnings,
+      overturned_citations: overturned_citations.length > 0 ? overturned_citations : undefined,
     };
   }
 
@@ -69,7 +74,7 @@ export class HallucinationGuard {
 
     // Try to find claim in database
     const found = await this.db.query(
-      `SELECT id FROM documents 
+      `SELECT id FROM documents
        WHERE full_text ILIKE $1 OR title ILIKE $1
        LIMIT 1`,
       [`%${claim.substring(0, 100)}%`]
@@ -131,9 +136,25 @@ export class HallucinationGuard {
   }
 
   private async validateCitation(citation: string): Promise<boolean> {
+    // Quick precedent status check via ShepardizationService (cache-only, fast)
+    if (this.shepardizationService) {
+      try {
+        const status = await this.shepardizationService.quickCheck(citation);
+        if (status && status.status === 'explicitly_overruled') {
+          logger.info('[HallucinationGuard] Citation is overturned', {
+            citation,
+            status: status.status,
+          });
+          return false;
+        }
+      } catch {
+        // Non-critical — fall through to DB check
+      }
+    }
+
     // Check if citation exists in database
     const result = await this.db.query(
-      `SELECT id FROM documents 
+      `SELECT id FROM documents
        WHERE zakononline_id LIKE $1 OR metadata->>'case_number' = $2
        LIMIT 1`,
       [`%${citation}%`, citation]

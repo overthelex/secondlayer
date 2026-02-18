@@ -9,7 +9,7 @@ import { ThinkingSteps } from './ThinkingSteps';
 import { PlanDisplay } from './PlanDisplay';
 import { DocumentTemplate } from './DocumentTemplate';
 import showToast from '../utils/toast';
-import type { ExecutionPlan } from '../types/models/Message';
+import type { ExecutionPlan, CitationWarning } from '../types/models/Message';
 
 export type MessageRole = 'user' | 'assistant';
 export interface MessageProps {
@@ -42,6 +42,7 @@ export interface MessageProps {
     isComplete: boolean;
   }>;
   executionPlan?: ExecutionPlan;
+  citationWarnings?: CitationWarning[];
   onRegenerate?: () => void;
 }
 
@@ -93,6 +94,7 @@ export function Message({
   documents,
   thinkingSteps,
   executionPlan,
+  citationWarnings,
   onRegenerate
 }: MessageProps) {
   const isUser = role === 'user';
@@ -275,6 +277,41 @@ export function Message({
                 </ReactMarkdown>
                 {isStreaming && <span className="inline-block w-[2px] h-[18px] ml-1 bg-claude-text/40 animate-pulse align-middle rounded-[1px]" />}
               </div>
+
+              {/* Citation Warnings (Shepardization) */}
+              {citationWarnings && citationWarnings.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  {citationWarnings.map((warning, idx) => (
+                    <motion.div
+                      key={`cw-${idx}`}
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: idx * 0.1 }}
+                      className={`flex items-start gap-3 px-4 py-3 rounded-lg border ${
+                        warning.status === 'explicitly_overruled'
+                          ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800'
+                          : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+                      }`}
+                    >
+                      <span className="text-lg mt-0.5">
+                        {warning.status === 'explicitly_overruled' ? '\u26D4' : '\u26A0\uFE0F'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${
+                          warning.status === 'explicitly_overruled'
+                            ? 'text-red-800 dark:text-red-300'
+                            : 'text-amber-800 dark:text-amber-300'
+                        }`}>
+                          {warning.message}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {warning.status === 'explicitly_overruled' ? 'Скасовано' : 'Змінено'} &middot; впевненість: {Math.round(warning.confidence * 100)}%
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
 
               {/* Citations */}
               {citations && citations.length > 0 && <div className="space-y-3 mt-5">

@@ -60,6 +60,7 @@ export interface PrecedentStatus {
   last_checked: string;
   confidence: number;
   citation_chain?: CitationLink[];
+  shepardization?: any;
 }
 
 export interface CitationLink {
@@ -129,6 +130,7 @@ export interface ValidationResult {
   invalid_citations: string[];
   confidence: number;
   warnings: string[];
+  overturned_citations?: string[];
 }
 
 export interface ReasoningBudget {

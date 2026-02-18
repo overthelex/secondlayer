@@ -1033,6 +1033,25 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
             onSuccess?.(data);
           },
 
+          onCitationWarning: (data) => {
+            // Accumulate citation warnings on the assistant message
+            const currentMsg = useChatStore.getState().messages.find(
+              (m) => m.id === assistantMessageId
+            );
+            const existing = currentMsg?.citationWarnings || [];
+            updateMessage(assistantMessageId, {
+              citationWarnings: [
+                ...existing,
+                {
+                  case_number: data.case_number,
+                  status: data.status,
+                  confidence: data.confidence,
+                  message: data.message,
+                },
+              ],
+            });
+          },
+
           onError: (error) => {
             updateMessage(assistantMessageId, {
               content: `Помилка: ${error.message}`,

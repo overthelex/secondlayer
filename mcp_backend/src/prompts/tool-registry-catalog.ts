@@ -143,6 +143,31 @@ export const SCENARIO_CATALOG: ScenarioCatalogEntry[] = [
   },
 
   {
+    id: 'precedent_verification',
+    label: 'Перевірка актуальності рішення',
+    domains: ['court'],
+    triggerSlots: ['case_number'],
+    exampleQueries: [
+      'Чи актуальне рішення у справі 922/989/18?',
+      'Перевір чи не скасовано рішення у справі 757/1234/22',
+    ],
+    dataSources: [
+      { name: 'ZakonOnline', provides: 'ланцюг рішень через інстанції' },
+      { name: 'PostgreSQL', provides: 'кешований статус прецеденту' },
+    ],
+    toolChain: [
+      { tool: 'check_precedent_status', purpose: 'Перевірити чи рішення не скасовано' },
+      { tool: 'get_case_documents_chain', purpose: 'Отримати ланцюг інстанцій' },
+    ],
+    responseTemplate: [
+      { heading: 'Статус рішення', instruction: 'актуальне / скасоване / змінене з поясненням' },
+      { heading: 'Ланцюг інстанцій', instruction: 'хронологія рішень вищих інстанцій' },
+      { heading: 'Рішення що вплинули', instruction: 'які саме рішення скасували / змінили' },
+      { heading: 'Висновок', instruction: 'чи можна посилатися на це рішення' },
+    ],
+  },
+
+  {
     id: 'comprehensive_case_analysis',
     label: 'Комплексний аналіз справи через усі інстанції',
     domains: ['court', 'legal_advice'],

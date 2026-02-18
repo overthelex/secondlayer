@@ -261,9 +261,10 @@ class HTTPMCPServer {
       this.services.queryPlanner,
       this.costTracker,
       chatSearchCache,
-      this.conversationService
+      this.conversationService,
+      this.services.shepardizationService
     );
-    logger.info('ChatService initialized with search cache and conversation persistence');
+    logger.info('ChatService initialized with search cache, conversation persistence, and shepardization');
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
