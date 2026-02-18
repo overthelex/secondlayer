@@ -33,13 +33,14 @@ import {
 } from '../prompts/chat-system-prompt.js';
 import { buildEnrichedSystemPrompt, SCENARIO_CATALOG } from '../prompts/tool-registry-catalog.js';
 import { ChatSearchCacheService, isCourtSearchTool } from './chat-search-cache-service.js';
+import type { ShepardizationService, ShepardizationResult } from './shepardization-service.js';
 
 // ============================
 // Types
 // ============================
 
 export interface ChatEvent {
-  type: 'plan' | 'thinking' | 'tool_result' | 'answer_delta' | 'answer' | 'complete' | 'error';
+  type: 'plan' | 'thinking' | 'tool_result' | 'answer_delta' | 'answer' | 'citation_warning' | 'complete' | 'error';
   data: any;
 }
 
@@ -66,13 +67,17 @@ const BUDGET_LIMITS = {
 } as const;
 type BudgetKey = keyof typeof BUDGET_LIMITS;
 
+const CITATION_CHECK_TIMEOUT_MS = 5_000;
+const CASE_NUMBER_REGEX = /\d+\/\d+\/\d{2,4}/g;
+
 export class ChatService {
   constructor(
     private toolRegistry: ToolRegistry,
     private queryPlanner: QueryPlanner,
     private costTracker: CostTracker,
     private searchCache?: ChatSearchCacheService,
-    private conversationService?: ConversationService
+    private conversationService?: ConversationService,
+    private shepardizationService?: ShepardizationService
   ) {}
 
   /**
@@ -191,10 +196,11 @@ export class ChatService {
           break;
         }
 
-        // Tool-calling iteration — execute each tool call
+        // Tool-calling iteration — execute all tool calls in parallel
+
+        // Step 1: Emit all thinking events upfront
         for (const call of toolCalls) {
           collectedToolCalls.push(call);
-
           yield {
             type: 'thinking',
             data: {
@@ -203,36 +209,29 @@ export class ChatService {
               params: call.arguments,
             },
           };
+        }
 
-          let toolResult: any;
-          let cached = false;
+        // Step 2: Execute all tools in parallel
+        const settled = await Promise.allSettled(
+          toolCalls.map(call => this.executeToolWithCache(call))
+        );
 
-          // Check cache for court search tools
-          if (this.searchCache && isCourtSearchTool(call.name)) {
-            const hit = await this.searchCache.getCachedResult(call.name, call.arguments);
-            if (hit) {
-              toolResult = hit;
-              cached = true;
-              logger.info('[ChatService] Cache hit for tool', { tool: call.name });
-            }
-          }
+        // Step 3: Build correct message format — ONE assistant message with ALL tool_calls
+        messages.push({
+          role: 'assistant',
+          content: fullContent || '',
+          tool_calls: toolCalls,
+        });
 
-          if (!cached) {
-            try {
-              toolResult = await this.toolRegistry.executeTool(call.name, call.arguments);
-            } catch (err: any) {
-              toolResult = { error: err.message };
-            }
+        // Step 4: Yield results and append individual tool result messages
+        for (let i = 0; i < settled.length; i++) {
+          const outcome = settled[i];
+          const call = toolCalls[i];
 
-            // Post-execution: cache result & trigger background downloads
-            if (this.searchCache && isCourtSearchTool(call.name) && !toolResult?.error) {
-              this.searchCache.cacheResult(call.name, call.arguments, toolResult);
-              const docIds = this.searchCache.extractDocIds(toolResult);
-              if (docIds.length > 0) {
-                this.searchCache.triggerBackgroundDownloads(docIds);
-              }
-            }
-          }
+          const toolResult = outcome.status === 'fulfilled'
+            ? outcome.value.result
+            : { error: (outcome.reason as Error).message };
+          const cached = outcome.status === 'fulfilled' ? outcome.value.cached : false;
 
           collectedThinkingSteps.push({ tool: call.name, params: call.arguments, result: toolResult });
 
@@ -249,12 +248,6 @@ export class ChatService {
             },
           };
 
-          // Append assistant tool_calls + tool result to messages (summarized for LLM)
-          messages.push({
-            role: 'assistant',
-            content: fullContent || '',
-            tool_calls: [call],
-          });
           messages.push({
             role: 'tool',
             content: JSON.stringify(summarized),
@@ -263,6 +256,11 @@ export class ChatService {
         }
 
         iteration++;
+      }
+
+      // Post-answer citation verification (non-blocking, with timeout)
+      if (this.shepardizationService && fullAnswerText) {
+        yield* this.verifyCitationsInAnswer(fullAnswerText);
       }
 
       // Yield completion event
@@ -718,5 +716,86 @@ ${stepsText}
     }
 
     return null;
+  }
+
+  /**
+   * Extract case numbers from the LLM answer and verify their precedent status.
+   * Yields citation_warning events for overruled or limited decisions.
+   */
+  private async *verifyCitationsInAnswer(answerText: string): AsyncGenerator<ChatEvent> {
+    try {
+      const matches = answerText.match(CASE_NUMBER_REGEX);
+      if (!matches || matches.length === 0) return;
+
+      const caseNumbers = [...new Set(matches)];
+      logger.info('[ChatService] Verifying citations in answer', { count: caseNumbers.length });
+
+      const results = await Promise.race([
+        this.shepardizationService!.batchAnalyze(caseNumbers),
+        new Promise<ShepardizationResult[]>((_, reject) =>
+          setTimeout(() => reject(new Error('citation check timeout')), CITATION_CHECK_TIMEOUT_MS)
+        ),
+      ]);
+
+      for (const result of results) {
+        if (result.status === 'explicitly_overruled' || result.status === 'limited') {
+          yield {
+            type: 'citation_warning',
+            data: {
+              case_number: result.case_number,
+              status: result.status,
+              confidence: result.confidence,
+              affecting_decisions: result.affecting_decisions,
+              message: result.status === 'explicitly_overruled'
+                ? `Рішення у справі ${result.case_number} було скасовано вищою інстанцією`
+                : `Рішення у справі ${result.case_number} було змінено вищою інстанцією`,
+            },
+          };
+        }
+      }
+    } catch (err: any) {
+      logger.debug('[ChatService] Citation verification skipped', { error: err.message });
+      // Non-critical — don't yield error, just skip
+    }
+  }
+
+  /**
+   * Execute a single tool call with cache check/store logic.
+   * Extracted to enable parallel execution via Promise.allSettled().
+   */
+  private async executeToolWithCache(
+    call: ToolCall
+  ): Promise<{ call: ToolCall; result: any; cached: boolean }> {
+    let toolResult: any;
+    let cached = false;
+
+    // Check cache for court search tools
+    if (this.searchCache && isCourtSearchTool(call.name)) {
+      const hit = await this.searchCache.getCachedResult(call.name, call.arguments);
+      if (hit) {
+        toolResult = hit;
+        cached = true;
+        logger.info('[ChatService] Cache hit for tool', { tool: call.name });
+      }
+    }
+
+    if (!cached) {
+      try {
+        toolResult = await this.toolRegistry.executeTool(call.name, call.arguments);
+      } catch (err: any) {
+        toolResult = { error: err.message };
+      }
+
+      // Post-execution: cache result & trigger background downloads
+      if (this.searchCache && isCourtSearchTool(call.name) && !toolResult?.error) {
+        this.searchCache.cacheResult(call.name, call.arguments, toolResult);
+        const docIds = this.searchCache.extractDocIds(toolResult);
+        if (docIds.length > 0) {
+          this.searchCache.triggerBackgroundDownloads(docIds);
+        }
+      }
+    }
+
+    return { call, result: toolResult, cached };
   }
 }
