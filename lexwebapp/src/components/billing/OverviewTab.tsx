@@ -28,7 +28,11 @@ interface BalanceData {
   is_active: boolean;
 }
 
-export function OverviewTab() {
+interface OverviewTabProps {
+  onTopUp?: () => void;
+}
+
+export function OverviewTab({ onTopUp }: OverviewTabProps) {
   const [data, setData] = useState<BalanceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -96,7 +100,16 @@ export function OverviewTab() {
             <DollarSign size={24} />
           </div>
           <p className="text-4xl font-bold mb-2">${n(data.balance_usd).toFixed(2)}</p>
-          <p className="text-sm opacity-75">Доступно для використання</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm opacity-75">Доступно для використання</p>
+            {onTopUp && (
+              <button
+                onClick={onTopUp}
+                className="px-4 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors backdrop-blur-sm">
+                Поповнити
+              </button>
+            )}
+          </div>
         </motion.div>
 
         {/* UAH Balance */}
@@ -238,10 +251,7 @@ export function OverviewTab() {
             </p>
           </div>
           <button
-            onClick={() => {
-              // This would be handled by parent component
-              window.location.hash = '#topup';
-            }}
+            onClick={() => onTopUp?.()}
             className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm font-medium whitespace-nowrap">
             Поповнити зараз
           </button>
