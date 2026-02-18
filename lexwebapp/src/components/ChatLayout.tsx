@@ -91,7 +91,14 @@ export function ChatLayout() {
   const [messagingClientIds, setMessagingClientIds] = useState<string[]>([]);
 
   // Use Zustand store for messages and streaming state
-  const { messages, isStreaming, cancelStream, removeMessage } = useChatStore();
+  const { messages, isStreaming, cancelStream, removeMessage, conversationId, switchConversation } = useChatStore();
+
+  // Reload messages from server when returning to chat view with an active conversation
+  React.useEffect(() => {
+    if (currentView === 'chat' && conversationId && !isStreaming && messages.length === 0) {
+      switchConversation(conversationId);
+    }
+  }, [currentView, conversationId]);
 
   // Aggregate evidence from ALL messages in the current chat (deduplicated)
   const allDecisions = React.useMemo(() => {

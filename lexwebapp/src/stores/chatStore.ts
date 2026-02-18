@@ -198,7 +198,10 @@ export const useChatStore = create<ChatState>()(
               currentSessionId: null,
             });
           } catch {
-            // fallback: do nothing
+            // Keep conversationId set but preserve existing messages if API fails
+            if (get().conversationId !== conversationId) {
+              set({ conversationId, currentSessionId: null });
+            }
           }
         },
 
