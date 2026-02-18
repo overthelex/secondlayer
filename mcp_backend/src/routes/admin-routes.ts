@@ -491,6 +491,18 @@ export function createAdminRoutes(
         return res.status(400).json({ error: 'Invalid amount' });
       }
 
+      // Get current balance first
+      const currentBalance = await db.query(
+        'SELECT balance_usd FROM user_billing WHERE user_id = $1',
+        [userId]
+      );
+
+      if (currentBalance.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const balanceBefore = parseFloat(currentBalance.rows[0].balance_usd);
+
       const result = await db.query(
         `UPDATE user_billing
          SET balance_usd = balance_usd + $1, updated_at = NOW()
@@ -499,19 +511,20 @@ export function createAdminRoutes(
         [amount, userId]
       );
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+      const balanceAfter = parseFloat(result.rows[0].balance_usd);
 
       // Create transaction record
       await db.query(`
         INSERT INTO billing_transactions
-          (user_id, transaction_type, amount_usd, status, metadata)
-        VALUES ($1, $2, $3, 'completed', $4)
+          (user_id, type, amount_usd, balance_before_usd, balance_after_usd, description, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [
         userId,
         amount > 0 ? 'admin_credit' : 'admin_debit',
         Math.abs(amount),
+        balanceBefore,
+        balanceAfter,
+        reason || 'Admin balance adjustment',
         JSON.stringify({ reason, admin_id: (req as any).user?.id }),
       ]);
 
