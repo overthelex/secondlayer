@@ -110,6 +110,7 @@
     "@types/nodemailer": "^7.0.10",
     "@types/pdfkit": "^0.17.5",
     "@types/pg": "^8.10.9",
+    "@types/supertest": "^6.0.3",
     "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^8.56.0",
     "@typescript-eslint/parser": "^8.54.0",
@@ -117,6 +118,7 @@
     "eventsource": "^4.1.0",
     "jest": "^30.2.0",
     "jest-util": "^30.2.0",
+    "supertest": "^7.2.2",
     "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3"
