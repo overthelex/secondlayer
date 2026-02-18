@@ -78,6 +78,7 @@ export const ROUTES = {
   ADMIN_DATA_SOURCES: '/admin/data-sources',
   ADMIN_BILLING: '/admin/billing',
   ADMIN_INFRASTRUCTURE: '/admin/infrastructure',
+  ADMIN_CONTAINERS: '/admin/containers',
 } as const;
 
 // Helper function to generate dynamic routes

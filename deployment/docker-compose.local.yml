@@ -723,6 +723,23 @@ services:
       - secondlayer-local
     restart: unless-stopped
 
+  cadvisor-local:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor-local
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - secondlayer-local
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
   redis-exporter-local:
     image: oliver006/redis_exporter:v1.56.0
     container_name: redis-exporter-local

@@ -819,6 +819,23 @@ services:
       - secondlayer-stage-network
     restart: unless-stopped
 
+  cadvisor-stage:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor-stage
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - secondlayer-stage-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
 volumes:
   postgres_stage_data:
     driver: local

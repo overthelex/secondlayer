@@ -44,6 +44,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.ADMIN_DATA_SOURCES]: 'Джерела даних',
   [ROUTES.ADMIN_BILLING]: 'Billing Management',
   [ROUTES.ADMIN_INFRASTRUCTURE]: 'Інфраструктура',
+  [ROUTES.ADMIN_CONTAINERS]: 'Контейнери',
 };
 
 export function MainLayout() {
@@ -135,6 +136,7 @@ export function MainLayout() {
           onAdminDataSourcesClick={() => navigate(ROUTES.ADMIN_DATA_SOURCES)}
           onAdminBillingClick={() => navigate(ROUTES.ADMIN_BILLING)}
           onAdminInfrastructureClick={() => navigate(ROUTES.ADMIN_INFRASTRUCTURE)}
+          onAdminContainersClick={() => navigate(ROUTES.ADMIN_CONTAINERS)}
           onLogout={handleLogout}
         />
       </div>
