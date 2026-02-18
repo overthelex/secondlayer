@@ -5,7 +5,7 @@ import { ChatInput } from './ChatInput';
 import { MessageThread } from './MessageThread';
 import { EmptyState } from './EmptyState';
 import { ProfilePage } from './ProfilePage';
-import { useChatStore } from '../stores';
+import { useChatStore, useUIStore } from '../stores';
 import { useMCPTool, useAIChat } from '../hooks/useMCPTool';
 import showToast from '../utils/toast';
 import { JudgesPage } from './JudgesPage';
@@ -81,6 +81,7 @@ export function ChatLayout() {
   const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+  const { rightPanelWidth } = useUIStore();
   const [selectedTool, setSelectedTool] = useState('ai_chat');
   const [currentView, setCurrentView] = useState<ViewState>('chat');
   const [selectedPerson, setSelectedPerson] = useState<SelectedPerson | null>(
@@ -594,7 +595,7 @@ export function ChatLayout() {
       </main>
 
       {/* Right Panel */}
-      <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`}>
+      <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
         <RightPanel
           isOpen={isRightPanelOpen}
           onClose={() => setIsRightPanelOpen(false)}
