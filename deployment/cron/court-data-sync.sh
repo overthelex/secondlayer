@@ -47,10 +47,10 @@ log "========================================"
 log "Court data sync started (monthly=$MONTHLY, dry_run=${DRY_RUN:-false})"
 
 # Determine container name
-if docker ps --format '{{.Names}}' | grep -q 'app-backend-stage'; then
-  CONTAINER="app-backend-stage"
-elif docker ps --format '{{.Names}}' | grep -q 'app-backend-local'; then
-  CONTAINER="app-backend-local"
+if docker ps --format '{{.Names}}' | grep -q 'secondlayer-app-stage'; then
+  CONTAINER="secondlayer-app-stage"
+elif docker ps --format '{{.Names}}' | grep -q 'secondlayer-app-local'; then
+  CONTAINER="secondlayer-app-local"
 else
   log "ERROR: No backend container running"
   exit 1
