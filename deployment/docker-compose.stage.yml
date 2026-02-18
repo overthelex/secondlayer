@@ -306,8 +306,6 @@ services:
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # Anthropic models removed — OpenAI-only pipeline
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
       SECONDLAYER_URL: http://app-stage:3000
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS}
@@ -461,9 +459,6 @@ services:
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
-      # Anthropic models removed — OpenAI-only pipeline
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
@@ -602,12 +597,7 @@ services:
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
 
-      # Anthropic (optional)
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
-      # Anthropic models removed — OpenAI-only pipeline
-
-      # LLM Provider Strategy
+      # LLM Provider Strategy (OpenAI-only pipeline)
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
 
       # Vision/OCR credentials path (inside container)
