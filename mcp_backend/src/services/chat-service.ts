@@ -25,6 +25,7 @@ import {
   type LLMProvider,
 } from '@secondlayer/shared';
 import { ModelSelector, type TaskType } from '@secondlayer/shared';
+import type { EmbeddingService } from './embedding-service.js';
 import {
   CHAT_SYSTEM_PROMPT,
   CHAT_INTENT_CLASSIFICATION_PROMPT,
@@ -74,13 +75,17 @@ const CITATION_CHECK_TIMEOUT_MS = 5_000;
 const CASE_NUMBER_REGEX = /\d+\/\d+\/\d{2,4}/g;
 
 export class ChatService {
+  /** In-memory cache: conversationId → compressed summary of older history */
+  private historySummaryCache = new Map<string, { messageCount: number; summary: string }>();
+
   constructor(
     private toolRegistry: ToolRegistry,
     private queryPlanner: QueryPlanner,
     private costTracker: CostTracker,
     private searchCache?: ChatSearchCacheService,
     private conversationService?: ConversationService,
-    private shepardizationService?: ShepardizationService
+    private shepardizationService?: ShepardizationService,
+    private embeddingService?: EmbeddingService
   ) {}
 
   /**
@@ -148,7 +153,7 @@ export class ChatService {
 
       // 5. Build messages with token-aware context window + injected plan
       const limits = BUDGET_LIMITS[effectiveBudget as BudgetKey] || BUDGET_LIMITS.standard;
-      const messages = this.buildContextMessages(history, query, classification.domains, plan, limits.maxContextChars);
+      const messages = await this.buildContextMessages(history, query, classification.domains, plan, limits.maxContextChars, request.conversationId, requestId);
 
       // Log estimated prompt size for rate-limit debugging
       const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
@@ -315,6 +320,26 @@ export class ChatService {
           });
         }
 
+        // RAG compaction: if accumulated tool results are too large, compact them
+        if (this.embeddingService && iteration >= 2) {
+          const toolMessages = messages.filter(m => m.role === 'tool');
+          if (toolMessages.length >= 3) {
+            const toolContents = toolMessages.map(m => ({
+              tool: (m as any).tool_call_id || 'unknown',
+              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+            }));
+            const compacted = await this.ragCompactToolResults(query, toolContents, limits.maxResultChars * 2);
+            // Replace tool message contents with compacted versions
+            let compIdx = 0;
+            for (const msg of messages) {
+              if (msg.role === 'tool' && compIdx < compacted.length) {
+                msg.content = compacted[compIdx].content;
+                compIdx++;
+              }
+            }
+          }
+        }
+
         iteration++;
       }
 
@@ -392,16 +417,18 @@ export class ChatService {
   }
 
   /**
-   * Token-aware sliding window: include as much history as fits within MAX_CONTEXT_CHARS.
-   * Uses chars/4 heuristic for token estimation.
+   * Token-aware sliding window with history compression.
+   * Recent messages (last 4) are kept verbatim; older messages are LLM-summarized.
    */
-  private buildContextMessages(
+  private async buildContextMessages(
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     query: string,
     classifiedDomains?: string[],
     plan?: ExecutionPlan,
-    maxContextChars?: number
-  ): UnifiedMessage[] {
+    maxContextChars?: number,
+    conversationId?: string,
+    requestId?: string
+  ): Promise<UnifiedMessage[]> {
     const contextBudget = maxContextChars || BUDGET_LIMITS.standard.maxContextChars;
 
     let enrichedPrompt = buildEnrichedSystemPrompt(
@@ -439,18 +466,115 @@ ${stepsText}
     const queryChars = query.length;
     let availableChars = contextBudget - systemChars - queryChars;
 
-    // Add history from most recent backwards until budget exhausted
-    const historyMessages: UnifiedMessage[] = [];
-    for (let i = history.length - 1; i >= 0; i--) {
-      const msgChars = history[i].content.length + 20; // overhead for role/framing
-      if (availableChars - msgChars < 0) break;
-      availableChars -= msgChars;
-      historyMessages.unshift({ role: history[i].role, content: history[i].content });
+    // Split history: last 4 messages are "recent", the rest are "older"
+    const RECENT_COUNT = 4;
+    const recentHistory = history.slice(-RECENT_COUNT);
+    const olderHistory = history.slice(0, Math.max(0, history.length - RECENT_COUNT));
+
+    // Compress older history into a summary if it exists
+    if (olderHistory.length > 0) {
+      const summary = await this.compressOlderHistory(olderHistory, conversationId, requestId);
+      if (summary) {
+        const summaryChars = summary.length + 20;
+        if (availableChars - summaryChars > 0) {
+          messages.push({ role: 'user', content: summary });
+          availableChars -= summaryChars;
+        }
+      }
     }
 
-    messages.push(...historyMessages);
+    // Add recent messages verbatim (truncated to 2000 chars each), from most recent backwards
+    const recentMessages: UnifiedMessage[] = [];
+    for (let i = recentHistory.length - 1; i >= 0; i--) {
+      const content = recentHistory[i].content.slice(0, 2000);
+      const msgChars = content.length + 20;
+      if (availableChars - msgChars < 0) break;
+      availableChars -= msgChars;
+      recentMessages.unshift({ role: recentHistory[i].role, content });
+    }
+
+    messages.push(...recentMessages);
     messages.push({ role: 'user', content: query });
     return messages;
+  }
+
+  /**
+   * Compress older chat history into a concise summary using a quick LLM call.
+   * Caches summaries per conversation to avoid re-summarizing on each iteration.
+   */
+  private async compressOlderHistory(
+    olderMessages: Array<{ role: string; content: string }>,
+    conversationId?: string,
+    requestId?: string
+  ): Promise<string | null> {
+    // If total content is small, just concatenate
+    const totalChars = olderMessages.reduce((sum, m) => sum + m.content.length, 0);
+    if (totalChars < 2000) {
+      const concat = olderMessages.map(m => `${m.role}: ${m.content}`).join('\n');
+      return `[Контекст попередніх повідомлень]: ${concat}`;
+    }
+
+    // Check cache
+    if (conversationId) {
+      const cached = this.historySummaryCache.get(conversationId);
+      if (cached && cached.messageCount === olderMessages.length) {
+        return cached.summary;
+      }
+    }
+
+    try {
+      const llm = getLLMManager();
+      const provider = ModelSelector.getNextProvider();
+
+      const historyText = olderMessages
+        .map(m => `${m.role}: ${m.content.slice(0, 1000)}`)
+        .join('\n---\n');
+
+      const response = await llm.chatCompletion(
+        {
+          messages: [
+            {
+              role: 'system',
+              content: 'Стисло підсумуй контекст розмови (до 200 слів). Збережи ключові юридичні факти, номери справ, посилання на закони та прийняті рішення. Відповідай українською.',
+            },
+            { role: 'user', content: historyText },
+          ],
+          max_tokens: 400,
+          temperature: 0.1,
+        },
+        'quick',
+        provider
+      );
+
+      if (requestId && response.usage) {
+        this.recordStreamingCost(requestId, response.provider, response.model, response.usage, 'history_compression');
+      }
+
+      const summary = `[Контекст попередніх повідомлень]: ${response.content || ''}`;
+
+      // Cache the summary
+      if (conversationId) {
+        this.historySummaryCache.set(conversationId, {
+          messageCount: olderMessages.length,
+          summary,
+        });
+      }
+
+      logger.info('[ChatService] Compressed older history', {
+        originalMessages: olderMessages.length,
+        originalChars: totalChars,
+        summaryChars: summary.length,
+      });
+
+      return summary;
+    } catch (err: any) {
+      logger.warn('[ChatService] History compression failed, using truncated concat', { error: err.message });
+      // Fallback: truncated concatenation
+      const concat = olderMessages
+        .map(m => `${m.role}: ${m.content.slice(0, 300)}`)
+        .join('\n');
+      return `[Контекст попередніх повідомлень]: ${concat}`.slice(0, 3000);
+    }
   }
 
   /**
@@ -748,7 +872,8 @@ ${stepsText}
 
   /**
    * Compact court document chain/search results for LLM context.
-   * Budget-aware: deep budget preserves sections, full_text snippets, and longer resolution.
+   * Never sends full_text to LLM — extracts key sections (FACTS, REASONING, DECISION) instead.
+   * Budget-aware section limits: quick=500, standard=1500, deep=3000 chars per section.
    */
   private compactCourtResult(result: any, limits: typeof BUDGET_LIMITS[BudgetKey]): any | null {
     if (!result.content?.[0]?.text) return null;
@@ -761,7 +886,7 @@ ${stepsText}
     }
 
     const resSlice = limits.resolutionSlice;
-    const isDeep = limits.maxTokens > 4096;
+    const sectionLimit = limits.maxTokens > 4096 ? 3000 : (limits.maxResultChars <= 6000 ? 500 : 1500);
 
     // Case documents chain: { case_number, total_documents, grouped_documents }
     if (parsed.grouped_documents && parsed.total_documents) {
@@ -783,18 +908,14 @@ ${stepsText}
             date: d.date,
             resolution: d.resolution ? d.resolution.slice(0, resSlice) : undefined,
           };
-          // Deep budget: preserve sections and full_text for court analysis
-          if (isDeep) {
-            if (d.sections) entry.sections = d.sections;
-            if (d.full_text) entry.full_text = d.full_text.slice(0, 8000);
-            if (d.snippets) entry.snippets = d.snippets;
-          }
+          // Extract key sections instead of full_text
+          entry.key_sections = this.extractKeySections(d.sections, d.full_text, sectionLimit);
+          if (d.snippets) entry.snippets = d.snippets;
           return entry;
         });
       }
 
       const compactText = JSON.stringify(compact);
-      // If deep result exceeds budget, fall back to truncation rather than stripping
       if (compactText.length > limits.maxResultChars) {
         return { content: [{ type: 'text', text: compactText.slice(0, limits.maxResultChars) + '\n[... скорочено]' }] };
       }
@@ -816,10 +937,8 @@ ${stepsText}
             instance: r.instance,
             resolution: r.resolution ? r.resolution.slice(0, resSlice) : undefined,
           };
-          if (isDeep) {
-            if (r.sections) entry.sections = r.sections;
-            if (r.snippets) entry.snippets = r.snippets;
-          }
+          entry.key_sections = this.extractKeySections(r.sections, r.full_text, sectionLimit);
+          if (r.snippets) entry.snippets = r.snippets;
           return entry;
         }),
       };
@@ -832,6 +951,127 @@ ${stepsText}
     }
 
     return null;
+  }
+
+  /**
+   * Extract key sections (FACTS, COURT_REASONING, DECISION) from court document.
+   * Uses structured sections if available, otherwise falls back to regex extraction from full_text.
+   */
+  private extractKeySections(
+    sections: any,
+    fullText: string | undefined,
+    charLimit: number
+  ): { facts?: string; reasoning?: string; decision?: string } | undefined {
+    const KEY_SECTION_TYPES = ['FACTS', 'COURT_REASONING', 'DECISION', 'ВСТАНОВИВ', 'МОТИВУВАЛЬНА', 'РЕЗОЛЮТИВНА'];
+
+    const result: { facts?: string; reasoning?: string; decision?: string } = {};
+
+    // Try structured sections first
+    if (sections && Array.isArray(sections)) {
+      for (const s of sections) {
+        const type = (s.type || s.section_type || '').toUpperCase();
+        const text = s.text || s.content || '';
+        if (!text) continue;
+
+        if (type.includes('FACT') || type.includes('ВСТАНОВИВ')) {
+          result.facts = text.slice(0, charLimit);
+        } else if (type.includes('REASON') || type.includes('МОТИВ')) {
+          result.reasoning = text.slice(0, charLimit);
+        } else if (type.includes('DECISION') || type.includes('РЕЗОЛЮТ')) {
+          result.decision = text.slice(0, charLimit);
+        }
+      }
+    }
+
+    // If we didn't find sections from structured data, try regex from full_text
+    if (!result.facts && !result.reasoning && !result.decision && fullText) {
+      // Ukrainian court decisions commonly have: ВСТАНОВИВ, МОТИВУВАЛЬНА ЧАСТИНА, ВИРІШИВ/УХВАЛИВ/ПОСТАНОВИВ
+      const factsMatch = fullText.match(/ВСТАНОВИВ[:\s]*([\s\S]{10,}?)(?=(?:МОТИВУВАЛЬНА|ВИРІШИВ|УХВАЛИВ|ПОСТАНОВИВ)|$)/i);
+      const reasoningMatch = fullText.match(/МОТИВУВАЛЬНА[^:]*:[:\s]*([\s\S]{10,}?)(?=(?:ВИРІШИВ|УХВАЛИВ|ПОСТАНОВИВ|РЕЗОЛЮТИВНА)|$)/i);
+      const decisionMatch = fullText.match(/(?:ВИРІШИВ|УХВАЛИВ|ПОСТАНОВИВ)[:\s]*([\s\S]{10,}?)$/i);
+
+      if (factsMatch) result.facts = factsMatch[1].trim().slice(0, charLimit);
+      if (reasoningMatch) result.reasoning = reasoningMatch[1].trim().slice(0, charLimit);
+      if (decisionMatch) result.decision = decisionMatch[1].trim().slice(0, charLimit);
+    }
+
+    // Return undefined if no sections extracted to avoid empty object in JSON
+    return (result.facts || result.reasoning || result.decision) ? result : undefined;
+  }
+
+  /**
+   * RAG-based compaction of tool results when context gets too large.
+   * Embeds the user query, computes cosine similarity with each tool result,
+   * and keeps the top-K most relevant results fully while summarizing the rest.
+   * Only triggers when there are 3+ results and total chars exceed threshold.
+   */
+  private async ragCompactToolResults(
+    query: string,
+    toolResults: Array<{ tool: string; content: string }>,
+    maxChars: number
+  ): Promise<Array<{ tool: string; content: string }>> {
+    if (!this.embeddingService || toolResults.length < 3) return toolResults;
+
+    const totalChars = toolResults.reduce((sum, r) => sum + r.content.length, 0);
+    if (totalChars <= maxChars * 1.5) return toolResults;
+
+    try {
+      // Embed the query
+      const queryEmbedding = await this.embeddingService.generateEmbedding(query);
+
+      // Embed each tool result (use first 500 chars as representative)
+      const scored = await Promise.all(
+        toolResults.map(async (r) => {
+          const snippet = r.content.slice(0, 500);
+          const embedding = await this.embeddingService!.generateEmbedding(snippet);
+          const similarity = this.cosineSimilarity(queryEmbedding, embedding);
+          return { ...r, similarity };
+        })
+      );
+
+      // Sort by relevance (highest first)
+      scored.sort((a, b) => b.similarity - a.similarity);
+
+      // Keep top results fully until we approach the budget; summarize the rest
+      const compacted: Array<{ tool: string; content: string }> = [];
+      let usedChars = 0;
+
+      for (const item of scored) {
+        if (usedChars + item.content.length <= maxChars) {
+          compacted.push({ tool: item.tool, content: item.content });
+          usedChars += item.content.length;
+        } else {
+          // Summarize to just metadata line
+          const summary = `[${item.tool}]: результат скорочено (релевантність: ${item.similarity.toFixed(2)}, ${item.content.length} символів)`;
+          compacted.push({ tool: item.tool, content: summary });
+          usedChars += summary.length;
+        }
+      }
+
+      logger.info('[ChatService] RAG compacted tool results', {
+        originalResults: toolResults.length,
+        originalChars: totalChars,
+        compactedChars: usedChars,
+        fullResults: compacted.filter(r => !r.content.startsWith('[')).length,
+      });
+
+      return compacted;
+    } catch (err: any) {
+      logger.warn('[ChatService] RAG compaction failed, returning original results', { error: err.message });
+      return toolResults;
+    }
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) return 0;
+    let dot = 0, normA = 0, normB = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    const denom = Math.sqrt(normA) * Math.sqrt(normB);
+    return denom === 0 ? 0 : dot / denom;
   }
 
   /**
