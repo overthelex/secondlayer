@@ -9,7 +9,7 @@ import { useChatStore } from '../stores';
 import { useSettingsStore } from '../stores';
 import { mcpService } from '../services';
 import showToast from '../utils/toast';
-import type { Decision, Citation, VaultDocument, ExecutionPlan } from '../types/models/Message';
+import type { Decision, Citation, VaultDocument, ExecutionPlan, CostSummary } from '../types/models/Message';
 
 /**
  * Human-friendly tool name labels for thinking steps display.
@@ -850,6 +850,8 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
   const contentRef = useRef('');
   // Track execution plan for step-completion matching
   const planRef = useRef<ExecutionPlan | null>(null);
+  // Track cost summary data from complete + cost_summary events
+  const costSummaryRef = useRef<Partial<CostSummary>>({});
 
   const executeChat = useCallback(
     async (query: string, documentIds?: string[]) => {
@@ -859,6 +861,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
       accumulatedDocuments.current = [];
       contentRef.current = '';
       planRef.current = null;
+      costSummaryRef.current = {};
       // 1. Add user message
       const userMessage = {
         id: Date.now().toString(),
@@ -937,9 +940,10 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
               }
             }
 
+            const costSuffix = data.cost_usd ? ` · $${data.cost_usd.toFixed(4)}` : '';
             addThinkingStep(assistantMessageId, {
               id: `step-${data.step}`,
-              title: data.description || `🔍 ${getToolLabel(data.tool)}`,
+              title: (data.description || `🔍 ${getToolLabel(data.tool)}`) + costSuffix,
               content: JSON.stringify(data.params, null, 2),
               isComplete: false,
             });
@@ -951,9 +955,10 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
               ? data.result.slice(0, 500)
               : JSON.stringify(data.result, null, 2).slice(0, 500);
 
+            const costSuffix = data.cost_usd ? ` · $${data.cost_usd.toFixed(4)}` : '';
             addThinkingStep(assistantMessageId, {
               id: `result-${data.tool}`,
-              title: `✓ ${getToolLabel(data.tool)}`,
+              title: `✓ ${getToolLabel(data.tool)}` + costSuffix,
               content: toolPreview,
               isComplete: true,
             });
@@ -1065,8 +1070,32 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
           },
 
           onComplete: (data) => {
-            // Completion event — streaming is already finished in onAnswer
+            // Store cost data from complete event
+            if (data.tools_used || data.total_cost_usd != null || data.credits_deducted != null) {
+              costSummaryRef.current = {
+                ...costSummaryRef.current,
+                tools_used: data.tools_used || [],
+                total_cost_usd: data.total_cost_usd || 0,
+                credits_deducted: data.credits_deducted || 3,
+              };
+              updateMessage(assistantMessageId, {
+                costSummary: costSummaryRef.current as CostSummary,
+              });
+            }
             console.log('[AIChat] Complete', data);
+          },
+
+          onCostSummary: (data) => {
+            // Merge balance info from cost_summary event
+            costSummaryRef.current = {
+              ...costSummaryRef.current,
+              credits_deducted: data.credits_deducted,
+              new_balance_credits: data.new_balance_credits,
+              balance_usd: data.balance_usd,
+            };
+            updateMessage(assistantMessageId, {
+              costSummary: costSummaryRef.current as CostSummary,
+            });
           },
         }, 'standard', chatConversationId);
 

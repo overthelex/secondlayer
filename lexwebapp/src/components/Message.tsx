@@ -8,8 +8,9 @@ import { AnalyticsBlock } from './AnalyticsBlock';
 import { ThinkingSteps } from './ThinkingSteps';
 import { PlanDisplay } from './PlanDisplay';
 import { DocumentTemplate } from './DocumentTemplate';
+import { CostSummary } from './CostSummary';
 import showToast from '../utils/toast';
-import type { ExecutionPlan, CitationWarning } from '../types/models/Message';
+import type { ExecutionPlan, CitationWarning, CostSummary as CostSummaryType } from '../types/models/Message';
 
 export type MessageRole = 'user' | 'assistant';
 export interface MessageProps {
@@ -43,6 +44,7 @@ export interface MessageProps {
   }>;
   executionPlan?: ExecutionPlan;
   citationWarnings?: CitationWarning[];
+  costSummary?: CostSummaryType;
   onRegenerate?: () => void;
 }
 
@@ -95,6 +97,7 @@ export function Message({
   thinkingSteps,
   executionPlan,
   citationWarnings,
+  costSummary,
   onRegenerate
 }: MessageProps) {
   const isUser = role === 'user';
@@ -368,6 +371,11 @@ export function Message({
 
               {/* Analytics Block */}
               {analytics && <AnalyticsBlock data={analytics} />}
+
+              {/* Cost Summary */}
+              {costSummary && !isStreaming && (
+                <CostSummary data={costSummary} />
+              )}
 
               {/* Actions */}
               {!isStreaming && content && <div className="flex items-center gap-1 pt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

@@ -9,6 +9,14 @@ export interface CitationWarning {
   message: string;
 }
 
+export interface CostSummary {
+  tools_used: string[];
+  total_cost_usd: number;
+  credits_deducted: number;
+  new_balance_credits?: number;
+  balance_usd?: number | null;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -20,6 +28,7 @@ export interface Message {
   citations?: Citation[];
   documents?: VaultDocument[];
   citationWarnings?: CitationWarning[];
+  costSummary?: CostSummary;
 }
 
 export interface ThinkingStep {

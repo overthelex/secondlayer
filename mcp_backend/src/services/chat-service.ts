@@ -176,6 +176,8 @@ export class ChatService {
       const llm = getLLMManager();
       let iteration = 0;
       let fullAnswerText = '';
+      let totalCostUsd = 0;
+      const toolsUsed: string[] = [];
       const collectedToolCalls: ToolCall[] = [];
       const collectedThinkingSteps: Array<{ tool: string; params: any; result: any }> = [];
 
@@ -233,7 +235,10 @@ export class ChatService {
         if (signal?.aborted) break;
 
         // Record LLM cost for this iteration
+        let iterationCostUsd = 0;
         if (requestId && iterationUsage.total_tokens > 0) {
+          iterationCostUsd = ModelSelector.estimateCostAccurate(iterationModel, iterationUsage.prompt_tokens, iterationUsage.completion_tokens);
+          totalCostUsd += iterationCostUsd;
           this.recordStreamingCost(requestId, iterationProvider, iterationModel, iterationUsage, `chat_iteration_${iteration}`);
         }
 
@@ -252,6 +257,7 @@ export class ChatService {
         // Step 1: Emit all thinking events upfront
         for (const call of toolCalls) {
           collectedToolCalls.push(call);
+          if (!toolsUsed.includes(call.name)) toolsUsed.push(call.name);
           yield {
             type: 'thinking',
             data: {
@@ -259,6 +265,7 @@ export class ChatService {
               tool: call.name,
               params: call.arguments,
               description: generateThinkingDescription(call.name, call.arguments as Record<string, unknown>),
+              cost_usd: iterationCostUsd,
             },
           };
         }
@@ -297,6 +304,7 @@ export class ChatService {
               tool: call.name,
               result: toolResult,
               cached,
+              cost_usd: iterationCostUsd,
             },
           };
 
@@ -322,6 +330,9 @@ export class ChatService {
         data: {
           iterations: iteration,
           elapsed_ms: elapsed,
+          tools_used: toolsUsed,
+          total_cost_usd: totalCostUsd,
+          credits_deducted: 3,
         },
       };
 
