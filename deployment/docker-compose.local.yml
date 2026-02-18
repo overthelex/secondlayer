@@ -174,16 +174,14 @@ services:
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Dynamic model selection (cost-optimized defaults)
-      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
-      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
 
       # Anthropic/Claude (optional for local dev)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
-      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
-      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
-      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+      # Anthropic models removed — OpenAI-only pipeline
 
       # LLM Provider Strategy
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
@@ -334,13 +332,11 @@ services:
       REDIS_PORT: 6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
       OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
-      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
-      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
-      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
-      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+      # Anthropic models removed — OpenAI-only pipeline
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
       SECONDLAYER_URL: http://app-local:3000
       SECONDLAYER_API_KEY: ${SECONDARY_LAYER_KEYS:-test-key-123}
@@ -396,16 +392,14 @@ services:
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
       # Dynamic model selection
-      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
-      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
 
       # Anthropic (optional)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_API_KEY2: ${ANTHROPIC_API_KEY2:-}
-      ANTHROPIC_MODEL_QUICK: ${ANTHROPIC_MODEL_QUICK:-claude-haiku-4.5}
-      ANTHROPIC_MODEL_STANDARD: ${ANTHROPIC_MODEL_STANDARD:-claude-sonnet-4.5}
-      ANTHROPIC_MODEL_DEEP: ${ANTHROPIC_MODEL_DEEP:-claude-opus-4.5}
+      # Anthropic models removed — OpenAI-only pipeline
 
       # LLM Provider Strategy
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
@@ -529,9 +523,9 @@ services:
 
       # OpenAI Configuration (optional for future AI features)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-local-dev-openai-key}
-      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-4o-mini}
-      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-4o}
-      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-4o}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
 
       # SecondLayer Integration (for cross-referencing)
       SECONDLAYER_URL: http://app-local:3000

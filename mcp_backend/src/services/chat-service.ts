@@ -24,7 +24,7 @@ import {
   ToolCall,
   type LLMProvider,
 } from '@secondlayer/shared';
-import { ModelSelector, type TaskType } from '@secondlayer/shared';
+import { ModelSelector } from '@secondlayer/shared';
 import type { EmbeddingService } from './embedding-service.js';
 import {
   CHAT_SYSTEM_PROMPT,
@@ -137,18 +137,12 @@ export class ChatService {
         planSteps: plan?.steps.length || 0,
       });
 
-      // 4. Pick LLM provider for the main loop
-      const taskType = this.classifyTaskType(classification.domains);
-      const isTaskAware = ModelSelector.isTaskAwareStrategy();
-      const selection = isTaskAware
-        ? ModelSelector.getTaskRouting(taskType, effectiveBudget)
-        : ModelSelector.getModelSelection(effectiveBudget);
+      // 4. Pick LLM model for the main loop
+      const selection = ModelSelector.getModelSelection(effectiveBudget);
 
       logger.info('[ChatService] Selected LLM', {
         provider: selection.provider,
         model: selection.model,
-        taskType: isTaskAware ? taskType : undefined,
-        strategy: isTaskAware ? 'task-aware' : 'default',
       });
 
       // 5. Build messages with token-aware context window + injected plan
@@ -585,7 +579,6 @@ ${stepsText}
 
     try {
       const llm = getLLMManager();
-      const provider = ModelSelector.getNextProvider();
 
       const historyText = olderMessages
         .map(m => `${m.role}: ${m.content.slice(0, 1000)}`)
@@ -603,8 +596,7 @@ ${stepsText}
           max_tokens: 400,
           temperature: 0.1,
         },
-        'quick',
-        provider
+        'quick'
       );
 
       if (requestId && response.usage) {
@@ -649,13 +641,11 @@ ${stepsText}
   }> {
     try {
       const llm = getLLMManager();
-      const provider = ModelSelector.getNextProvider();
 
       const classifyChars = CHAT_INTENT_CLASSIFICATION_PROMPT.length + query.length;
       logger.debug('[ChatService] Intent classification prompt size', {
         chars: classifyChars,
         estimatedTokens: Math.ceil(classifyChars / 3.5),
-        provider,
       });
 
       const response = await llm.chatCompletion(
@@ -667,8 +657,7 @@ ${stepsText}
           max_tokens: 300,
           temperature: 0.1,
         },
-        'quick',
-        provider
+        'quick'
       );
 
       // Record classification LLM cost
@@ -745,7 +734,6 @@ ${stepsText}
   ): Promise<ExecutionPlan | undefined> {
     try {
       const llm = getLLMManager();
-      const provider = ModelSelector.getNextProvider();
 
       // Build tool descriptions for the prompt
       const toolDescriptions = toolDefs
@@ -757,7 +745,6 @@ ${stepsText}
       logger.debug('[ChatService] Execution plan prompt size', {
         chars: prompt.length,
         estimatedTokens: Math.ceil(prompt.length / 3.5),
-        provider,
       });
 
       const startTime = Date.now();
@@ -770,8 +757,7 @@ ${stepsText}
           max_tokens: 800,
           temperature: 0.1,
         },
-        'quick',
-        provider
+        'quick'
       );
 
       // Record plan generation LLM cost
@@ -813,7 +799,7 @@ ${stepsText}
       };
 
       logger.info('[ChatService] Execution plan generated', {
-        provider,
+        provider: 'openai',
         elapsed_ms: elapsed,
         steps: plan.steps.length,
         goal: plan.goal.slice(0, 100),
@@ -826,17 +812,6 @@ ${stepsText}
       });
       return undefined;
     }
-  }
-
-  /**
-   * Map classified domains to a task type for task-aware model routing.
-   */
-  private classifyTaskType(domains: string[]): TaskType {
-    if (domains.includes('legal_advice')) return 'analysis';
-    if (domains.includes('court')) return 'search';
-    if (domains.includes('legislation') && domains.length === 1) return 'lookup';
-    if (domains.every(d => ['registry', 'parliament'].includes(d))) return 'lookup';
-    return 'search';
   }
 
   /**
@@ -1160,11 +1135,7 @@ ${stepsText}
       task,
     };
 
-    const recordFn = provider === 'anthropic'
-      ? this.costTracker.recordAnthropicCall(params)
-      : this.costTracker.recordOpenAICall(params);
-
-    recordFn.catch((e: Error) => {
+    this.costTracker.recordOpenAICall(params).catch((e: Error) => {
       logger.warn('[ChatService] Failed to record LLM cost', { error: e.message, task });
     });
   }

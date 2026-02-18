@@ -19,18 +19,11 @@ export class ModelSelector {
 
   private static readonly PROVIDER_STRATEGY = process.env.LLM_PROVIDER_STRATEGY || 'openai-first';
 
-  private static readonly OPENAI_QUICK = process.env.OPENAI_MODEL_QUICK || 'gpt-4o-mini';
-  private static readonly OPENAI_STANDARD = process.env.OPENAI_MODEL_STANDARD || 'gpt-4o-mini';
-  private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-4.1';
-
-  private static readonly ANTHROPIC_QUICK = process.env.ANTHROPIC_MODEL_QUICK || 'claude-haiku-4-5-20251001';
-  private static readonly ANTHROPIC_STANDARD = process.env.ANTHROPIC_MODEL_STANDARD || 'claude-sonnet-4-20250514';
-  private static readonly ANTHROPIC_DEEP = process.env.ANTHROPIC_MODEL_DEEP || 'claude-sonnet-4-20250514';
-  private static readonly ANTHROPIC_ANALYSIS = process.env.ANTHROPIC_MODEL_ANALYSIS || 'claude-opus-4-20250514';
+  private static readonly OPENAI_QUICK = process.env.OPENAI_MODEL_QUICK || 'gpt-5-nano';
+  private static readonly OPENAI_STANDARD = process.env.OPENAI_MODEL_STANDARD || 'gpt-5-mini';
+  private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-5.1';
 
   private static readonly SINGLE_MODEL = process.env.OPENAI_MODEL;
-
-  private static roundRobinCounter = 0;
 
   static getEmbeddingModel(): string {
     const model = process.env.OPENAI_EMBEDDING_MODEL || this.DEFAULT_EMBEDDING_MODEL;
@@ -50,19 +43,9 @@ export class ModelSelector {
       return { provider: 'openai', model: this.SINGLE_MODEL, budget };
     }
 
-    let provider = preferredProvider || this.selectProvider();
-
-    // anthropic-deep: override to Anthropic for deep budget if available
-    if (this.PROVIDER_STRATEGY === 'anthropic-deep' && budget === 'deep' && !preferredProvider) {
-      const available = this.getAvailableProviders();
-      if (available.includes('anthropic')) {
-        provider = 'anthropic';
-      }
-    }
-
     const selection: ModelSelection = {
-      provider,
-      model: this.getModelForProvider(provider, budget),
+      provider: 'openai',
+      model: this.getModelForBudget(budget),
       budget,
     };
 
@@ -71,55 +54,22 @@ export class ModelSelector {
   }
 
   private static selectProvider(): LLMProvider {
-    switch (this.PROVIDER_STRATEGY) {
-      case 'round-robin':
-        return this.getNextProvider();
-      case 'anthropic-first':
-        return 'anthropic';
-      case 'anthropic-deep':
-        // Default to OpenAI; deep budget override happens in getModelSelection()
-        return 'openai';
-      case 'task-aware':
-        // Default to OpenAI; actual task routing happens in ChatService via getTaskRouting()
-        return 'openai';
-      case 'openai-first':
-      default:
-        return 'openai';
-    }
+    return 'openai';
   }
 
   /**
-   * Round-robin provider selection — alternates between available providers.
-   * Falls back to single provider if only one is configured.
+   * @deprecated Round-robin removed. Always returns 'openai'.
    */
   static getNextProvider(): LLMProvider {
-    const available = this.getAvailableProviders();
-    if (available.length === 0) return 'openai'; // fallback
-    if (available.length === 1) return available[0];
-
-    const provider = available[this.roundRobinCounter % available.length];
-    this.roundRobinCounter++;
-    return provider;
+    return 'openai';
   }
 
-  private static getModelForProvider(provider: LLMProvider, budget: BudgetLevel, taskType?: TaskType): string {
-    if (provider === 'anthropic') {
-      // Use Opus for analysis tasks with deep budget
-      if (taskType === 'analysis' && budget === 'deep') {
-        return this.ANTHROPIC_ANALYSIS;
-      }
-      return {
-        quick: this.ANTHROPIC_QUICK,
-        standard: this.ANTHROPIC_STANDARD,
-        deep: this.ANTHROPIC_DEEP,
-      }[budget];
-    } else {
-      return {
-        quick: this.OPENAI_QUICK,
-        standard: this.OPENAI_STANDARD,
-        deep: this.OPENAI_DEEP,
-      }[budget];
-    }
+  private static getModelForBudget(budget: BudgetLevel): string {
+    return {
+      quick: this.OPENAI_QUICK,
+      standard: this.OPENAI_STANDARD,
+      deep: this.OPENAI_DEEP,
+    }[budget];
   }
 
   static getAvailableProviders(): LLMProvider[] {
@@ -129,60 +79,32 @@ export class ModelSelector {
       providers.push('openai');
     }
 
-    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your-anthropic-key-1') {
-      providers.push('anthropic');
-    }
-
     return providers;
-  }
-
-  /**
-   * Check if the current strategy is task-aware routing.
-   */
-  static isTaskAwareStrategy(): boolean {
-    return this.PROVIDER_STRATEGY === 'task-aware';
-  }
-
-  /**
-   * Task-aware model routing: maps task types to optimal provider+budget.
-   * - search (recall-heavy): GPT-4o (OpenAI deep)
-   * - analysis (reasoning): Claude (Anthropic deep)
-   * - lookup (simple): gpt-4o-mini (OpenAI quick)
-   */
-  static getTaskRouting(taskType: TaskType, budget: BudgetLevel): ModelSelection {
-    const routing: Record<TaskType, { provider: LLMProvider; budget: BudgetLevel }> = {
-      search:   { provider: 'openai',    budget: 'deep' },
-      analysis: { provider: 'anthropic', budget: 'deep' },
-      lookup:   { provider: 'openai',    budget: 'quick' },
-    };
-    const route = routing[taskType] || { provider: 'openai', budget };
-    const available = this.getAvailableProviders();
-    const provider = available.includes(route.provider) ? route.provider : available[0] || 'openai';
-
-    if (this.SINGLE_MODEL) {
-      return { provider: 'openai', model: this.SINGLE_MODEL, budget: route.budget };
-    }
-
-    return {
-      provider,
-      model: this.getModelForProvider(provider, route.budget, taskType),
-      budget: route.budget,
-    };
   }
 
   static estimateCost(model: string, tokens: number): number {
     const costPer1M: Record<string, { input: number; output: number }> = {
+      // GPT-5 family
+      'gpt-5.1': { input: 2.00, output: 8.00 },
+      'gpt-5': { input: 2.00, output: 8.00 },
+      'gpt-5-mini': { input: 0.40, output: 1.60 },
+      'gpt-5-nano': { input: 0.10, output: 0.40 },
+      // GPT-4.1 family
       'gpt-4.1': { input: 2.00, output: 8.00 },
       'gpt-4.1-mini': { input: 0.40, output: 1.60 },
       'gpt-4.1-nano': { input: 0.10, output: 0.40 },
+      // GPT-4o family
       'gpt-4o': { input: 2.50, output: 10.00 },
       'gpt-4o-mini': { input: 0.15, output: 0.60 },
       'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
+      // Legacy
       'gpt-4-turbo': { input: 10.00, output: 30.00 },
       'gpt-4': { input: 30.00, output: 60.00 },
+      // Embeddings
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      // Claude (historical — kept for cost tracking of past usage)
       'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
       'claude-opus-4.1': { input: 15.00, output: 75.00 },
@@ -215,17 +137,27 @@ export class ModelSelector {
     completionTokens: number
   ): number {
     const costPer1M: Record<string, { input: number; output: number }> = {
+      // GPT-5 family
+      'gpt-5.1': { input: 2.00, output: 8.00 },
+      'gpt-5': { input: 2.00, output: 8.00 },
+      'gpt-5-mini': { input: 0.40, output: 1.60 },
+      'gpt-5-nano': { input: 0.10, output: 0.40 },
+      // GPT-4.1 family
       'gpt-4.1': { input: 2.00, output: 8.00 },
       'gpt-4.1-mini': { input: 0.40, output: 1.60 },
       'gpt-4.1-nano': { input: 0.10, output: 0.40 },
+      // GPT-4o family
       'gpt-4o': { input: 2.50, output: 10.00 },
       'gpt-4o-mini': { input: 0.15, output: 0.60 },
       'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
+      // Legacy
       'gpt-4-turbo': { input: 10.00, output: 30.00 },
       'gpt-4': { input: 30.00, output: 60.00 },
+      // Embeddings
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      // Claude (historical — kept for cost tracking of past usage)
       'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
       'claude-opus-4.1': { input: 15.00, output: 75.00 },
@@ -279,6 +211,10 @@ export class ModelSelector {
 
   static supportsJsonMode(model: string): boolean {
     const jsonModeModels = [
+      'gpt-5.1',
+      'gpt-5',
+      'gpt-5-mini',
+      'gpt-5-nano',
       'gpt-4.1',
       'gpt-4.1-mini',
       'gpt-4.1-nano',
