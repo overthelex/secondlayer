@@ -654,6 +654,7 @@ ${stepsText}
           ],
           max_tokens: 300,
           temperature: 0.1,
+          response_format: { type: 'json_object' },
         },
         'quick'
       );
@@ -754,6 +755,7 @@ ${stepsText}
           ],
           max_tokens: 800,
           temperature: 0.1,
+          response_format: { type: 'json_object' },
         },
         'quick'
       );
