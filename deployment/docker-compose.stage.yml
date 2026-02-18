@@ -452,9 +452,9 @@ services:
 
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_CALLBACK_URL: https://stage.legal.org.ua/auth/google/callback
-      FRONTEND_URL: https://stage.legal.org.ua
-      ALLOWED_ORIGINS: https://stage.legal.org.ua,https://stage.mcp.legal.org.ua,https://legal.org.ua,https://mcp.legal.org.ua
+      GOOGLE_CALLBACK_URL: https://legal.org.ua/auth/google/callback
+      FRONTEND_URL: https://legal.org.ua
+      ALLOWED_ORIGINS: https://legal.org.ua,https://stage.legal.org.ua,https://mcp.legal.org.ua,https://stage.mcp.legal.org.ua
       # MinIO (S3-compatible object storage)
       MINIO_ENDPOINT: minio-stage
       MINIO_PORT: 9000
@@ -632,7 +632,7 @@ services:
       dockerfile: lexwebapp/Dockerfile
       args:
         - BUILD_ENV=staging
-        - VITE_API_URL=https://stage.legal.org.ua
+        - VITE_API_URL=https://legal.org.ua
         - VITE_API_KEY=${VITE_API_KEY_STAGE:-REDACTED_SL_KEY_STAGE}
         - VITE_ENABLE_SSE_STREAMING=true
         - VITE_ENABLE_ALL_MCP_TOOLS=true
