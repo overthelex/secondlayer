@@ -570,8 +570,8 @@ export class ShepardizationService {
         return this.unknownResult(caseNumber, 'local');
       }
 
-      const overruledBy = result.rows.filter((r) => r.citation_type === 'overrules');
-      const distinguished = result.rows.filter((r) => r.citation_type === 'distinguishes');
+      const overruledBy = result.rows.filter((r: any) => r.citation_type === 'overrules');
+      const distinguished = result.rows.filter((r: any) => r.citation_type === 'distinguishes');
 
       let status: PrecedentStatusType = 'valid';
       if (overruledBy.length > 0) status = 'explicitly_overruled';
@@ -581,7 +581,7 @@ export class ShepardizationService {
         case_number: caseNumber,
         status,
         confidence: 0.6,
-        affecting_decisions: overruledBy.map((r) => ({
+        affecting_decisions: overruledBy.map((r: any) => ({
           doc_id: r.from_case_id,
           instance: 'Невідомо',
           court: '',
