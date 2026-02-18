@@ -12,6 +12,73 @@ import {
   DERIVED_DEFAULT_TOOLS,
 } from './tool-registry-catalog.js';
 
+// ============================
+// Execution Plan Types
+// ============================
+
+export interface ExecutionPlan {
+  goal: string;                // Goal of the analysis (1 sentence)
+  steps: PlanStep[];           // Ordered steps
+  expected_iterations: number; // Estimated iteration count
+}
+
+export interface PlanStep {
+  id: number;
+  tool: string;                // Tool name
+  params: Record<string, any>; // Call parameters
+  purpose: string;             // Why this step (for UI, Ukrainian)
+  depends_on?: number[];       // Dependencies on prior steps
+}
+
+// ============================
+// Plan Generation Prompt
+// ============================
+
+export function buildPlanGenerationPrompt(
+  query: string,
+  classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
+  toolDescriptions: string
+): string {
+  return `Ти — планувальник дій юридичного AI-асистента SecondLayer. Твоя задача — створити план виконання запиту користувача.
+
+## Запит користувача
+${query}
+
+## Класифікація запиту
+- Домени: ${classification.domains.join(', ')}
+- Ключові слова: ${classification.keywords}
+${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}` : ''}
+
+## Доступні інструменти
+${toolDescriptions}
+
+## Правила генерації плану
+1. Максимум 5 кроків
+2. Використовуй ТІЛЬКИ інструменти зі списку вище
+3. Для кожного кроку вкажи КОНКРЕТНІ параметри (не плейсхолдери)
+4. Якщо запит простий (потрібен 1 інструмент) — план з 1 кроку
+5. Якщо в слотах є case_number — починай з get_case_documents_chain або get_court_decision
+6. Якщо в слотах є law_reference — починай з get_legislation_article
+7. depends_on — список id кроків, від яких залежить поточний
+8. purpose пиши УКРАЇНСЬКОЮ, коротко (до 10 слів)
+9. Параметри мають бути валідним JSON
+
+## Формат відповіді
+Поверни ТІЛЬКИ валідний JSON (без markdown, без коментарів):
+{
+  "goal": "Ціль аналізу одним реченням",
+  "steps": [
+    {
+      "id": 1,
+      "tool": "tool_name",
+      "params": {"key": "value"},
+      "purpose": "Мета кроку українською"
+    }
+  ],
+  "expected_iterations": 3
+}`;
+}
+
 export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент SecondLayer, який спеціалізується на українському праві.
 
 ## Твоя задача
