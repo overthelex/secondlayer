@@ -10,10 +10,9 @@ services:
       -c work_mem=128MB
       -c maintenance_work_mem=2GB
       -c wal_buffers=64MB
-      -c idle_in_transaction_session_timeout=30000
-      -c idle_session_timeout=300000
-      -c statement_timeout=60000
-      -c lock_timeout=10000
+      -c idle_in_transaction_session_timeout=60000
+      -c statement_timeout=300000
+      -c lock_timeout=30000
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -112,10 +111,9 @@ services:
       -c effective_cache_size=6GB
       -c work_mem=128MB
       -c maintenance_work_mem=1GB
-      -c idle_in_transaction_session_timeout=30000
-      -c idle_session_timeout=300000
-      -c statement_timeout=60000
-      -c lock_timeout=10000
+      -c idle_in_transaction_session_timeout=60000
+      -c statement_timeout=300000
+      -c lock_timeout=30000
     environment:
       POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
       POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
@@ -176,7 +174,7 @@ services:
     - "127.0.0.1:6381:6379"
     volumes:
     - redis_stage_data:/data
-    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy volatile-lru
     healthcheck:
       test:
       - CMD
@@ -447,8 +445,8 @@ services:
       HTTP_PORT: ${HTTP_PORT:-3000}
       HTTP_HOST: 0.0.0.0
       JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
-      POSTGRES_HOST: postgres-stage
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@pgbouncer-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: pgbouncer-stage
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -520,7 +518,7 @@ services:
     ports:
     - "127.0.0.1:3004:3000"
     depends_on:
-      postgres-stage:
+      pgbouncer-stage:
         condition: service_healthy
       qdrant-stage:
         condition: service_healthy
@@ -579,8 +577,8 @@ services:
       HTTP_HOST: 0.0.0.0
 
       # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
-      POSTGRES_HOST: postgres-stage
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@pgbouncer-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: pgbouncer-stage
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
