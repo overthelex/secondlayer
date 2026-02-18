@@ -1,19 +1,36 @@
+import { createHash } from 'crypto';
 import { Pool, PoolClient } from 'pg';
 import { ParsedUOEntity, ParsedFOPEntity, ParsedFSUEntity } from './xml-parser.js';
+import { EntityValidator, ValidationResult } from './entity-validator.js';
+
+export interface ImportStats {
+  imported: number;
+  skipped: number;
+  errors: number;
+  unchanged: number;
+}
 
 export class DatabaseImporter {
   private pool: Pool;
+  private validator: EntityValidator | null;
+  private diffMode: boolean;
 
-  constructor(pool: Pool) {
+  constructor(pool: Pool, options: { validate?: boolean; diffMode?: boolean } = {}) {
     this.pool = pool;
+    this.validator = options.validate !== false ? new EntityValidator() : null;
+    this.diffMode = options.diffMode ?? false;
   }
 
-  async importUOEntities(entities: ParsedUOEntity[], batchSize: number = 1000): Promise<void> {
-    let imported = 0;
-    let errors = 0;
+  getValidator(): EntityValidator | null {
+    return this.validator;
+  }
 
-    for (let i = 0; i < entities.length; i += batchSize) {
-      const batch = entities.slice(i, i + batchSize);
+  async importUOEntities(entities: ParsedUOEntity[], batchSize?: number): Promise<ImportStats> {
+    const size = batchSize ?? parseInt(process.env.IMPORT_BATCH_SIZE || '500');
+    const stats: ImportStats = { imported: 0, skipped: 0, errors: 0, unchanged: 0 };
+
+    for (let i = 0; i < entities.length; i += size) {
+      const batch = entities.slice(i, i + size);
       const client = await this.pool.connect();
 
       try {
@@ -23,20 +40,47 @@ export class DatabaseImporter {
           const entity = batch[j];
           const savepointName = `sp_${j}`;
 
+          // Validate
+          if (this.validator) {
+            const result = this.validator.validateUO(entity);
+            if (!result.valid) {
+              if (this.validator.skipInvalid) {
+                stats.skipped++;
+                continue;
+              }
+              throw new Error(`Validation failed for ${entity.record}: ${result.errors.join(', ')}`);
+            }
+          }
+
           try {
             await client.query(`SAVEPOINT ${savepointName}`);
-            await this.importSingleUO(client, entity);
+
+            // Hash-based change detection
+            if (this.diffMode) {
+              const hash = this.computeUOHash(entity);
+              const existing = await client.query(
+                'SELECT content_hash FROM legal_entities WHERE record = $1', [entity.record]
+              );
+              if (existing.rows.length > 0 && existing.rows[0].content_hash === hash) {
+                stats.unchanged++;
+                await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+                continue;
+              }
+              await this.importSingleUO(client, entity, hash);
+            } else {
+              await this.importSingleUO(client, entity);
+            }
+
             await client.query(`RELEASE SAVEPOINT ${savepointName}`);
-            imported++;
+            stats.imported++;
           } catch (error) {
-            errors++;
+            stats.errors++;
             await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             console.error(`Error importing UO entity ${entity.record}:`, error);
           }
         }
 
         await client.query('COMMIT');
-        console.log(`Imported batch: ${imported} entities, ${errors} errors`);
       } catch (error) {
         await client.query('ROLLBACK');
         console.error('Batch import failed:', error);
@@ -46,15 +90,15 @@ export class DatabaseImporter {
       }
     }
 
-    console.log(`Total imported: ${imported} UO entities, ${errors} errors`);
+    return stats;
   }
 
-  async importFOPEntities(entities: ParsedFOPEntity[], batchSize: number = 1000): Promise<void> {
-    let imported = 0;
-    let errors = 0;
+  async importFOPEntities(entities: ParsedFOPEntity[], batchSize?: number): Promise<ImportStats> {
+    const size = batchSize ?? parseInt(process.env.IMPORT_BATCH_SIZE || '500');
+    const stats: ImportStats = { imported: 0, skipped: 0, errors: 0, unchanged: 0 };
 
-    for (let i = 0; i < entities.length; i += batchSize) {
-      const batch = entities.slice(i, i + batchSize);
+    for (let i = 0; i < entities.length; i += size) {
+      const batch = entities.slice(i, i + size);
       const client = await this.pool.connect();
 
       try {
@@ -64,20 +108,45 @@ export class DatabaseImporter {
           const entity = batch[j];
           const savepointName = `sp_${j}`;
 
+          if (this.validator) {
+            const result = this.validator.validateFOP(entity);
+            if (!result.valid) {
+              if (this.validator.skipInvalid) {
+                stats.skipped++;
+                continue;
+              }
+              throw new Error(`Validation failed for ${entity.record}: ${result.errors.join(', ')}`);
+            }
+          }
+
           try {
             await client.query(`SAVEPOINT ${savepointName}`);
-            await this.importSingleFOP(client, entity);
+
+            if (this.diffMode) {
+              const hash = this.computeFOPHash(entity);
+              const existing = await client.query(
+                'SELECT content_hash FROM individual_entrepreneurs WHERE record = $1', [entity.record]
+              );
+              if (existing.rows.length > 0 && existing.rows[0].content_hash === hash) {
+                stats.unchanged++;
+                await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+                continue;
+              }
+              await this.importSingleFOP(client, entity, hash);
+            } else {
+              await this.importSingleFOP(client, entity);
+            }
+
             await client.query(`RELEASE SAVEPOINT ${savepointName}`);
-            imported++;
+            stats.imported++;
           } catch (error) {
-            errors++;
+            stats.errors++;
             await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             console.error(`Error importing FOP entity ${entity.record}:`, error);
           }
         }
 
         await client.query('COMMIT');
-        console.log(`Imported batch: ${imported} entities, ${errors} errors`);
       } catch (error) {
         await client.query('ROLLBACK');
         console.error('Batch import failed:', error);
@@ -87,15 +156,15 @@ export class DatabaseImporter {
       }
     }
 
-    console.log(`Total imported: ${imported} FOP entities, ${errors} errors`);
+    return stats;
   }
 
-  async importFSUEntities(entities: ParsedFSUEntity[], batchSize: number = 1000): Promise<void> {
-    let imported = 0;
-    let errors = 0;
+  async importFSUEntities(entities: ParsedFSUEntity[], batchSize?: number): Promise<ImportStats> {
+    const size = batchSize ?? parseInt(process.env.IMPORT_BATCH_SIZE || '500');
+    const stats: ImportStats = { imported: 0, skipped: 0, errors: 0, unchanged: 0 };
 
-    for (let i = 0; i < entities.length; i += batchSize) {
-      const batch = entities.slice(i, i + batchSize);
+    for (let i = 0; i < entities.length; i += size) {
+      const batch = entities.slice(i, i + size);
       const client = await this.pool.connect();
 
       try {
@@ -105,20 +174,45 @@ export class DatabaseImporter {
           const entity = batch[j];
           const savepointName = `sp_${j}`;
 
+          if (this.validator) {
+            const result = this.validator.validateFSU(entity);
+            if (!result.valid) {
+              if (this.validator.skipInvalid) {
+                stats.skipped++;
+                continue;
+              }
+              throw new Error(`Validation failed for ${entity.record}: ${result.errors.join(', ')}`);
+            }
+          }
+
           try {
             await client.query(`SAVEPOINT ${savepointName}`);
-            await this.importSingleFSU(client, entity);
+
+            if (this.diffMode) {
+              const hash = this.computeFSUHash(entity);
+              const existing = await client.query(
+                'SELECT content_hash FROM public_associations WHERE record = $1', [entity.record]
+              );
+              if (existing.rows.length > 0 && existing.rows[0].content_hash === hash) {
+                stats.unchanged++;
+                await client.query(`RELEASE SAVEPOINT ${savepointName}`);
+                continue;
+              }
+              await this.importSingleFSU(client, entity, hash);
+            } else {
+              await this.importSingleFSU(client, entity);
+            }
+
             await client.query(`RELEASE SAVEPOINT ${savepointName}`);
-            imported++;
+            stats.imported++;
           } catch (error) {
-            errors++;
+            stats.errors++;
             await client.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
             console.error(`Error importing FSU entity ${entity.record}:`, error);
           }
         }
 
         await client.query('COMMIT');
-        console.log(`Imported batch: ${imported} entities, ${errors} errors`);
       } catch (error) {
         await client.query('ROLLBACK');
         console.error('Batch import failed:', error);
@@ -128,18 +222,49 @@ export class DatabaseImporter {
       }
     }
 
-    console.log(`Total imported: ${imported} FSU entities, ${errors} errors`);
+    return stats;
   }
 
-  private async importSingleUO(client: PoolClient, entity: ParsedUOEntity): Promise<void> {
+  // --- Hash computation ---
+
+  private computeUOHash(entity: ParsedUOEntity): string {
+    const data = JSON.stringify({
+      n: entity.name, sn: entity.short_name, e: entity.edrpou, o: entity.opf,
+      s: entity.stan, ac: entity.authorized_capital, r: entity.registration,
+      ti: entity.terminated_info, f: entity.founders?.length,
+      b: entity.beneficiaries?.length, sg: entity.signers?.length,
+    });
+    return createHash('md5').update(data).digest('hex');
+  }
+
+  private computeFOPHash(entity: ParsedFOPEntity): string {
+    const data = JSON.stringify({
+      n: entity.name, s: entity.stan, f: entity.farmer, em: entity.estate_manager,
+      r: entity.registration, ti: entity.terminated_info,
+    });
+    return createHash('md5').update(data).digest('hex');
+  }
+
+  private computeFSUHash(entity: ParsedFSUEntity): string {
+    const data = JSON.stringify({
+      n: entity.name, sn: entity.short_name, e: entity.edrpou, ts: entity.type_subject,
+      tb: entity.type_branch, s: entity.stan, r: entity.registration,
+      ti: entity.terminated_info, f: entity.founders?.length,
+    });
+    return createHash('md5').update(data).digest('hex');
+  }
+
+  // --- Single entity importers with multi-row INSERTs for related tables ---
+
+  private async importSingleUO(client: PoolClient, entity: ParsedUOEntity, contentHash?: string): Promise<void> {
     // Insert main entity
     await client.query(
       `INSERT INTO legal_entities (
         record, edrpou, name, short_name, opf, stan,
         authorized_capital, founding_document_num, purpose,
         superior_management, statute, registration, managing_paper,
-        terminated_info, termination_cancel_info
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        terminated_info, termination_cancel_info${contentHash ? ', content_hash' : ''}
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15${contentHash ? ', $16' : ''})
       ON CONFLICT (record) DO UPDATE SET
         edrpou = EXCLUDED.edrpou,
         name = EXCLUDED.name,
@@ -155,6 +280,7 @@ export class DatabaseImporter {
         managing_paper = EXCLUDED.managing_paper,
         terminated_info = EXCLUDED.terminated_info,
         termination_cancel_info = EXCLUDED.termination_cancel_info,
+        ${contentHash ? 'content_hash = EXCLUDED.content_hash,' : ''}
         updated_at = CURRENT_TIMESTAMP`,
       [
         entity.record,
@@ -172,6 +298,7 @@ export class DatabaseImporter {
         entity.managing_paper,
         entity.terminated_info,
         entity.termination_cancel_info,
+        ...(contentHash ? [contentHash] : []),
       ]
     );
 
@@ -188,68 +315,43 @@ export class DatabaseImporter {
     await client.query('DELETE FROM bankruptcy_info WHERE entity_record = $1', [entity.record]);
     await client.query('DELETE FROM exchange_data WHERE entity_type = $1 AND entity_record = $2', ['UO', entity.record]);
 
-    // Insert related records
-    if (entity.founders) {
-      for (const founder of entity.founders) {
-        await client.query(
-          'INSERT INTO founders (entity_type, entity_record, founder_info) VALUES ($1, $2, $3)',
-          ['UO', entity.record, founder]
-        );
-      }
+    // Multi-row INSERTs for related tables
+    if (entity.founders && entity.founders.length > 0) {
+      await this.bulkInsertSimple(client, 'founders', ['entity_type', 'entity_record', 'founder_info'],
+        entity.founders.map(f => ['UO', entity.record, f]));
     }
 
-    if (entity.beneficiaries) {
-      for (const beneficiary of entity.beneficiaries) {
-        await client.query(
-          'INSERT INTO beneficiaries (entity_type, entity_record, beneficiary_info) VALUES ($1, $2, $3)',
-          ['UO', entity.record, beneficiary]
-        );
-      }
+    if (entity.beneficiaries && entity.beneficiaries.length > 0) {
+      await this.bulkInsertSimple(client, 'beneficiaries', ['entity_type', 'entity_record', 'beneficiary_info'],
+        entity.beneficiaries.map(b => ['UO', entity.record, b]));
     }
 
-    if (entity.signers) {
-      for (const signer of entity.signers) {
-        await client.query(
-          'INSERT INTO signers (entity_type, entity_record, signer_info) VALUES ($1, $2, $3)',
-          ['UO', entity.record, signer]
-        );
-      }
+    if (entity.signers && entity.signers.length > 0) {
+      await this.bulkInsertSimple(client, 'signers', ['entity_type', 'entity_record', 'signer_info'],
+        entity.signers.map(s => ['UO', entity.record, s]));
     }
 
-    if (entity.members) {
-      for (const member of entity.members) {
-        await client.query(
-          'INSERT INTO members (entity_record, member_info) VALUES ($1, $2)',
-          [entity.record, member]
-        );
-      }
+    if (entity.members && entity.members.length > 0) {
+      await this.bulkInsertSimple(client, 'members', ['entity_record', 'member_info'],
+        entity.members.map(m => [entity.record, m]));
     }
 
-    if (entity.branches) {
-      for (const branch of entity.branches) {
-        await client.query(
-          'INSERT INTO branches (parent_record, code, name, signer, create_date) VALUES ($1, $2, $3, $4, $5)',
-          [entity.record, branch.code, branch.name, branch.signer, branch.create_date]
-        );
-      }
+    if (entity.branches && entity.branches.length > 0) {
+      await this.bulkInsertSimple(client, 'branches',
+        ['parent_record', 'code', 'name', 'signer', 'create_date'],
+        entity.branches.map(b => [entity.record, b.code, b.name, b.signer, b.create_date]));
     }
 
-    if (entity.predecessors) {
-      for (const predecessor of entity.predecessors) {
-        await client.query(
-          'INSERT INTO predecessors (entity_type, entity_record, predecessor_name, predecessor_code) VALUES ($1, $2, $3, $4)',
-          ['UO', entity.record, predecessor.name, predecessor.code]
-        );
-      }
+    if (entity.predecessors && entity.predecessors.length > 0) {
+      await this.bulkInsertSimple(client, 'predecessors',
+        ['entity_type', 'entity_record', 'predecessor_name', 'predecessor_code'],
+        entity.predecessors.map(p => ['UO', entity.record, p.name, p.code]));
     }
 
-    if (entity.assignees) {
-      for (const assignee of entity.assignees) {
-        await client.query(
-          'INSERT INTO assignees (entity_record, assignee_name, assignee_code) VALUES ($1, $2, $3)',
-          [entity.record, assignee.name, assignee.code]
-        );
-      }
+    if (entity.assignees && entity.assignees.length > 0) {
+      await this.bulkInsertSimple(client, 'assignees',
+        ['entity_record', 'assignee_name', 'assignee_code'],
+        entity.assignees.map(a => [entity.record, a.name, a.code]));
     }
 
     if (entity.executive_power) {
@@ -276,18 +378,14 @@ export class DatabaseImporter {
       );
     }
 
-    if (entity.exchange_data) {
-      for (const exchange of entity.exchange_data) {
-        await client.query(
-          'INSERT INTO exchange_data (entity_type, entity_record, tax_payer_type, start_date, start_num, end_date, end_num) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          ['UO', entity.record, exchange.tax_payer_type, exchange.start_date,
-           exchange.start_num, exchange.end_date, exchange.end_num]
-        );
-      }
+    if (entity.exchange_data && entity.exchange_data.length > 0) {
+      await this.bulkInsertSimple(client, 'exchange_data',
+        ['entity_type', 'entity_record', 'tax_payer_type', 'start_date', 'start_num', 'end_date', 'end_num'],
+        entity.exchange_data.map(e => ['UO', entity.record, e.tax_payer_type, e.start_date, e.start_num, e.end_date, e.end_num]));
     }
   }
 
-  private async importSingleFOP(client: PoolClient, entity: ParsedFOPEntity): Promise<void> {
+  private async importSingleFOP(client: PoolClient, entity: ParsedFOPEntity, contentHash?: string): Promise<void> {
     // Skip entities without required name field
     if (!entity.name) {
       return;
@@ -296,8 +394,8 @@ export class DatabaseImporter {
     await client.query(
       `INSERT INTO individual_entrepreneurs (
         record, name, stan, farmer, estate_manager, registration,
-        terminated_info, termination_cancel_info
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        terminated_info, termination_cancel_info${contentHash ? ', content_hash' : ''}
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8${contentHash ? ', $9' : ''})
       ON CONFLICT (record) DO UPDATE SET
         name = EXCLUDED.name,
         stan = EXCLUDED.stan,
@@ -306,6 +404,7 @@ export class DatabaseImporter {
         registration = EXCLUDED.registration,
         terminated_info = EXCLUDED.terminated_info,
         termination_cancel_info = EXCLUDED.termination_cancel_info,
+        ${contentHash ? 'content_hash = EXCLUDED.content_hash,' : ''}
         updated_at = CURRENT_TIMESTAMP`,
       [
         entity.record,
@@ -316,31 +415,27 @@ export class DatabaseImporter {
         entity.registration,
         entity.terminated_info,
         entity.termination_cancel_info,
+        ...(contentHash ? [contentHash] : []),
       ]
     );
 
     // Delete existing exchange data
     await client.query('DELETE FROM exchange_data WHERE entity_type = $1 AND entity_record = $2', ['FOP', entity.record]);
 
-    // Insert exchange data
-    if (entity.exchange_data) {
-      for (const exchange of entity.exchange_data) {
-        await client.query(
-          'INSERT INTO exchange_data (entity_type, entity_record, tax_payer_type, start_date, start_num, end_date, end_num) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          ['FOP', entity.record, exchange.tax_payer_type, exchange.start_date,
-           exchange.start_num, exchange.end_date, exchange.end_num]
-        );
-      }
+    if (entity.exchange_data && entity.exchange_data.length > 0) {
+      await this.bulkInsertSimple(client, 'exchange_data',
+        ['entity_type', 'entity_record', 'tax_payer_type', 'start_date', 'start_num', 'end_date', 'end_num'],
+        entity.exchange_data.map(e => ['FOP', entity.record, e.tax_payer_type, e.start_date, e.start_num, e.end_date, e.end_num]));
     }
   }
 
-  private async importSingleFSU(client: PoolClient, entity: ParsedFSUEntity): Promise<void> {
+  private async importSingleFSU(client: PoolClient, entity: ParsedFSUEntity, contentHash?: string): Promise<void> {
     // Insert main entity
     await client.query(
       `INSERT INTO public_associations (
         record, edrpou, name, short_name, type_subject, type_branch,
-        stan, founding_document, registration, terminated_info, termination_cancel_info
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        stan, founding_document, registration, terminated_info, termination_cancel_info${contentHash ? ', content_hash' : ''}
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11${contentHash ? ', $12' : ''})
       ON CONFLICT (record) DO UPDATE SET
         edrpou = EXCLUDED.edrpou,
         name = EXCLUDED.name,
@@ -352,6 +447,7 @@ export class DatabaseImporter {
         registration = EXCLUDED.registration,
         terminated_info = EXCLUDED.terminated_info,
         termination_cancel_info = EXCLUDED.termination_cancel_info,
+        ${contentHash ? 'content_hash = EXCLUDED.content_hash,' : ''}
         updated_at = CURRENT_TIMESTAMP`,
       [
         entity.record,
@@ -365,6 +461,7 @@ export class DatabaseImporter {
         entity.registration,
         entity.terminated_info,
         entity.termination_cancel_info,
+        ...(contentHash ? [contentHash] : []),
       ]
     );
 
@@ -376,41 +473,26 @@ export class DatabaseImporter {
     await client.query('DELETE FROM termination_started WHERE entity_type = $1 AND entity_record = $2', ['FSU', entity.record]);
     await client.query('DELETE FROM exchange_data WHERE entity_type = $1 AND entity_record = $2', ['FSU', entity.record]);
 
-    // Insert related records
-    if (entity.founders) {
-      for (const founder of entity.founders) {
-        await client.query(
-          'INSERT INTO founders (entity_type, entity_record, founder_info) VALUES ($1, $2, $3)',
-          ['FSU', entity.record, founder]
-        );
-      }
+    // Multi-row INSERTs for related tables
+    if (entity.founders && entity.founders.length > 0) {
+      await this.bulkInsertSimple(client, 'founders', ['entity_type', 'entity_record', 'founder_info'],
+        entity.founders.map(f => ['FSU', entity.record, f]));
     }
 
-    if (entity.beneficiaries) {
-      for (const beneficiary of entity.beneficiaries) {
-        await client.query(
-          'INSERT INTO beneficiaries (entity_type, entity_record, beneficiary_info) VALUES ($1, $2, $3)',
-          ['FSU', entity.record, beneficiary]
-        );
-      }
+    if (entity.beneficiaries && entity.beneficiaries.length > 0) {
+      await this.bulkInsertSimple(client, 'beneficiaries', ['entity_type', 'entity_record', 'beneficiary_info'],
+        entity.beneficiaries.map(b => ['FSU', entity.record, b]));
     }
 
-    if (entity.signers) {
-      for (const signer of entity.signers) {
-        await client.query(
-          'INSERT INTO signers (entity_type, entity_record, signer_info) VALUES ($1, $2, $3)',
-          ['FSU', entity.record, signer]
-        );
-      }
+    if (entity.signers && entity.signers.length > 0) {
+      await this.bulkInsertSimple(client, 'signers', ['entity_type', 'entity_record', 'signer_info'],
+        entity.signers.map(s => ['FSU', entity.record, s]));
     }
 
-    if (entity.predecessors) {
-      for (const predecessor of entity.predecessors) {
-        await client.query(
-          'INSERT INTO predecessors (entity_type, entity_record, predecessor_name, predecessor_code) VALUES ($1, $2, $3, $4)',
-          ['FSU', entity.record, predecessor.name, predecessor.code]
-        );
-      }
+    if (entity.predecessors && entity.predecessors.length > 0) {
+      await this.bulkInsertSimple(client, 'predecessors',
+        ['entity_type', 'entity_record', 'predecessor_name', 'predecessor_code'],
+        entity.predecessors.map(p => ['FSU', entity.record, p.name, p.code]));
     }
 
     if (entity.termination_started) {
@@ -422,14 +504,41 @@ export class DatabaseImporter {
       );
     }
 
-    if (entity.exchange_data) {
-      for (const exchange of entity.exchange_data) {
-        await client.query(
-          'INSERT INTO exchange_data (entity_type, entity_record, tax_payer_type, start_date, start_num, end_date, end_num) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          ['FSU', entity.record, exchange.tax_payer_type, exchange.start_date,
-           exchange.start_num, exchange.end_date, exchange.end_num]
-        );
-      }
+    if (entity.exchange_data && entity.exchange_data.length > 0) {
+      await this.bulkInsertSimple(client, 'exchange_data',
+        ['entity_type', 'entity_record', 'tax_payer_type', 'start_date', 'start_num', 'end_date', 'end_num'],
+        entity.exchange_data.map(e => ['FSU', entity.record, e.tax_payer_type, e.start_date, e.start_num, e.end_date, e.end_num]));
     }
+  }
+
+  /**
+   * Bulk insert rows into a table using multi-row VALUES.
+   * Builds: INSERT INTO table (col1, col2) VALUES ($1,$2), ($3,$4), ...
+   */
+  private async bulkInsertSimple(
+    client: PoolClient,
+    table: string,
+    columns: string[],
+    rows: (string | number | null | undefined)[][]
+  ): Promise<void> {
+    if (rows.length === 0) return;
+
+    const colCount = columns.length;
+    const valuePlaceholders: string[] = [];
+    const params: (string | number | null | undefined)[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const placeholders = [];
+      for (let j = 0; j < colCount; j++) {
+        placeholders.push(`$${i * colCount + j + 1}`);
+        params.push(rows[i][j]);
+      }
+      valuePlaceholders.push(`(${placeholders.join(',')})`);
+    }
+
+    await client.query(
+      `INSERT INTO ${table} (${columns.join(',')}) VALUES ${valuePlaceholders.join(',')}`,
+      params
+    );
   }
 }

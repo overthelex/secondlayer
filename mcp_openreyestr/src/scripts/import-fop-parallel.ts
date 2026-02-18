@@ -1,18 +1,23 @@
 /**
  * Parallel FOP Import — streams FOP.xml from ZIP and imports with N parallel workers.
- * Usage: node dist/scripts/import-fop-parallel.js <zipPath> [workers=10]
+ * Usage: node dist/scripts/import-fop-parallel.js <zipPath> [workers]
+ *
+ * Environment config:
+ *   IMPORT_BATCH_SIZE (default 200)
+ *   IMPORT_WORKERS (default 10)
  */
 import { Pool } from 'pg';
 import unzipper from 'unzipper';
 import dotenv from 'dotenv';
 import { StreamingXMLParser } from '../services/streaming-xml-parser.js';
-import { DatabaseImporter } from '../services/database-importer.js';
+import { DatabaseImporter, ImportStats } from '../services/database-importer.js';
+import { ImportProgress } from '../services/import-progress.js';
 import { ParsedFOPEntity } from '../services/xml-parser.js';
 
 dotenv.config();
 
-const BATCH_SIZE = 200;
-const WORKER_COUNT = parseInt(process.argv[3] || '10');
+const BATCH_SIZE = parseInt(process.env.IMPORT_BATCH_SIZE || '200');
+const WORKER_COUNT = parseInt(process.argv[3] || process.env.IMPORT_WORKERS || '10');
 
 class Semaphore {
   private permits: number;
@@ -55,10 +60,10 @@ async function importFOPParallel(zipFilePath: string) {
   });
 
   const parser = new StreamingXMLParser();
-  const importer = new DatabaseImporter(pool);
+  const importer = new DatabaseImporter(pool, { validate: true });
   const sem = new Semaphore(WORKER_COUNT);
-  let totalImported = 0;
-  let totalErrors = 0;
+  const progress = new ImportProgress('FOP', { estimatedTotal: 2_000_000 });
+  let inflightCount = 0;
   const inflightPromises: Promise<void>[] = [];
 
   try {
@@ -73,7 +78,7 @@ async function importFOPParallel(zipFilePath: string) {
     }
 
     console.log(`Found: ${fopFile.path}`);
-    const startTime = Date.now();
+    progress.start();
 
     const count = await parser.parseBatched<ParsedFOPEntity>(
       fopFile.stream(), 'FOP', BATCH_SIZE,
@@ -82,34 +87,43 @@ async function importFOPParallel(zipFilePath: string) {
 
         const p = (async () => {
           try {
-            await importer.importFOPEntities(entities, entities.length);
-            totalImported += entities.length;
-            if (totalImported % 10000 < BATCH_SIZE) {
-              const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-              console.log(`  Imported ${totalImported} FOP entities (${elapsed}s, ${totalErrors} errors, ${sem.pending} queued)`);
-            }
+            const stats = await importer.importFOPEntities(entities, entities.length);
+            progress.addImported(stats.imported);
+            progress.addErrors(stats.errors);
+            progress.addSkipped(stats.skipped);
+            progress.addUnchanged(stats.unchanged);
           } catch (err) {
-            totalErrors += entities.length;
-            console.error(`Worker error:`, (err as Error).message?.substring(0, 200));
+            progress.addErrors(entities.length);
+            console.error(`\nWorker error:`, (err as Error).message?.substring(0, 200));
           } finally {
             sem.release();
+            inflightCount--;
           }
         })();
+        inflightCount++;
         inflightPromises.push(p);
-      }
+      },
+      (parsed) => progress.addParsed(1)
     );
 
-    console.log(`Parsing done (${count} entities). Waiting for ${inflightPromises.length} workers to finish...`);
+    console.log(`\nParsing done (${count} entities). Waiting for ${inflightCount} workers to finish...`);
     await Promise.all(inflightPromises);
 
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
-    const rate = parseInt(elapsed) > 0 ? (totalImported / parseInt(elapsed)).toFixed(0) : 'N/A';
-    console.log(`\nCompleted: ${count} parsed, ${totalImported} imported, ${totalErrors} errors`);
-    console.log(`Time: ${elapsed}s (${rate} entities/sec)`);
+    progress.stop();
+
+    // Post-import verification
+    const dbCount = await pool.query('SELECT COUNT(*) FROM individual_entrepreneurs');
+    console.log(`\nVerification: ${dbCount.rows[0].count} individual entrepreneurs in database (parsed ${count})`);
+
+    const validationSummary = importer.getValidator()?.getSummary();
+    if (validationSummary) {
+      console.log(`Validation: ${validationSummary.valid} valid, ${validationSummary.skipped} skipped, ${validationSummary.warnings} with warnings`);
+    }
   } catch (error) {
     console.error('Import failed:', error);
     throw error;
   } finally {
+    progress.stop();
     await pool.end();
   }
 }
