@@ -633,6 +633,7 @@ deploy_to_server() {
         fi
         $DC build $NO_CACHE \
             app-stage \
+            migrate-stage \
             rada-migrate-stage \
             migrate-openreyestr-stage \
             document-service-stage \
