@@ -12,6 +12,7 @@ import { PrometheusService } from '../services/prometheus-service.js';
 import { PricingService } from '../services/pricing-service.js';
 import { SubscriptionService } from '../services/subscription-service.js';
 import bcrypt from 'bcryptjs';
+import { ConfigService } from '../services/config-service.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -26,7 +27,8 @@ export function createAdminRoutes(
   db: Database,
   prometheusUrl?: string,
   pricingService?: PricingService,
-  subscriptionService?: SubscriptionService
+  subscriptionService?: SubscriptionService,
+  configService?: ConfigService
 ): express.Router {
   const router = express.Router();
   const billingService = new BillingService(db);
@@ -2759,6 +2761,80 @@ export function createAdminRoutes(
     } catch (error: any) {
       logger.error('Failed to get cost realtime metrics', { error: error.message });
       res.status(500).json({ error: 'Failed to retrieve cost realtime metrics' });
+    }
+  });
+
+  // ========================================
+  // SYSTEM CONFIGURATION
+  // ========================================
+
+  /**
+   * GET /api/admin/config
+   * Get all system configuration grouped by category
+   */
+  router.get('/config', async (req: Request, res: Response) => {
+    try {
+      if (!configService) {
+        return res.status(503).json({ error: 'Config service not available' });
+      }
+      const result = await configService.getAll();
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Failed to get system config', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve configuration' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/config/:key
+   * Update a configuration value (DB override)
+   */
+  router.put('/config/:key', async (req: Request, res: Response) => {
+    try {
+      if (!configService) {
+        return res.status(503).json({ error: 'Config service not available' });
+      }
+      const key = getStringParam(req.params.key);
+      if (!key) return res.status(400).json({ error: 'Key is required' });
+
+      const { value } = req.body;
+      if (value === undefined || value === null) {
+        return res.status(400).json({ error: 'Value is required' });
+      }
+
+      const adminId = (req as any).user?.id;
+      await configService.set(key, String(value), adminId);
+
+      await logAdminAction(adminId, 'config_update', null, key, { value: String(value) }, req);
+
+      res.json({ success: true, key, value: String(value) });
+    } catch (error: any) {
+      logger.error('Failed to update config', { error: error.message });
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  /**
+   * DELETE /api/admin/config/:key
+   * Reset a configuration value (remove DB override, revert to env/default)
+   */
+  router.delete('/config/:key', async (req: Request, res: Response) => {
+    try {
+      if (!configService) {
+        return res.status(503).json({ error: 'Config service not available' });
+      }
+      const key = getStringParam(req.params.key);
+      if (!key) return res.status(400).json({ error: 'Key is required' });
+
+      const adminId = (req as any).user?.id;
+      await configService.delete(key, adminId);
+
+      await logAdminAction(adminId, 'config_reset', null, key, {}, req);
+
+      res.json({ success: true, key });
+    } catch (error: any) {
+      logger.error('Failed to reset config', { error: error.message });
+      res.status(400).json({ error: error.message });
     }
   });
 
