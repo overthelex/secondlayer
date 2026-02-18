@@ -318,6 +318,13 @@ export const api = {
         : apiClient.delete(`/api/admin/users/${userId}/tags/test`),
     createTestUser: (data: { email: string; name?: string; password: string; credits: number }) =>
       apiClient.post('/api/admin/test-users', data),
+
+    // System configuration
+    getConfig: () => apiClient.get('/api/admin/config'),
+    updateConfig: (key: string, value: string) =>
+      apiClient.put(`/api/admin/config/${key}`, { value }),
+    resetConfig: (key: string) =>
+      apiClient.delete(`/api/admin/config/${key}`),
   },
 
   // GDPR

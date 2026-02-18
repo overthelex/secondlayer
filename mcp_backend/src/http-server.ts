@@ -89,6 +89,7 @@ import { getLLMManager } from './utils/llm-client-manager.js';
 import { ChatSearchCacheService } from './services/chat-search-cache-service.js';
 import { PricingService } from './services/pricing-service.js';
 import { SubscriptionService } from './services/subscription-service.js';
+import { ConfigService } from './services/config-service.js';
 
 dotenv.config();
 
@@ -127,6 +128,7 @@ class HTTPMCPServer {
   private timeEntryService: TimeEntryService;
   private matterInvoiceService: MatterInvoiceService;
   private chatService: ChatService;
+  private configService: ConfigService;
 
   constructor() {
     this.app = express();
@@ -266,6 +268,9 @@ class HTTPMCPServer {
       this.services.embeddingService
     );
     logger.info('ChatService initialized with search cache, conversation persistence, shepardization, and embedding');
+
+    // Initialize config service
+    this.configService = new ConfigService(this.services.db);
 
     // Initialize BullMQ upload queue service
     this.uploadQueueService = new UploadQueueService(
@@ -1657,7 +1662,7 @@ class HTTPMCPServer {
     // GET /api/admin/settings - Get system settings
     const pricingService = new PricingService(this.services.db);
     const subscriptionService = new SubscriptionService(this.services.db);
-    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db, process.env.PROMETHEUS_URL, pricingService, subscriptionService));
+    this.app.use('/api/admin', requireJWT as any, createAdminRoutes(this.services.db, process.env.PROMETHEUS_URL, pricingService, subscriptionService, this.configService));
 
     // Upload metrics endpoint (admin)
     this.app.get('/api/admin/upload-metrics', requireJWT as any, (async (_req: DualAuthRequest, res: express.Response) => {
