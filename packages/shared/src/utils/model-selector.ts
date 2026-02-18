@@ -24,8 +24,9 @@ export class ModelSelector {
   private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-4o';
 
   private static readonly ANTHROPIC_QUICK = process.env.ANTHROPIC_MODEL_QUICK || 'claude-haiku-4-5-20251001';
-  private static readonly ANTHROPIC_STANDARD = process.env.ANTHROPIC_MODEL_STANDARD || 'claude-sonnet-4-5-20250929';
-  private static readonly ANTHROPIC_DEEP = process.env.ANTHROPIC_MODEL_DEEP || 'claude-sonnet-4-5-20250929';
+  private static readonly ANTHROPIC_STANDARD = process.env.ANTHROPIC_MODEL_STANDARD || 'claude-sonnet-4-20250514';
+  private static readonly ANTHROPIC_DEEP = process.env.ANTHROPIC_MODEL_DEEP || 'claude-sonnet-4-20250514';
+  private static readonly ANTHROPIC_ANALYSIS = process.env.ANTHROPIC_MODEL_ANALYSIS || 'claude-opus-4-20250514';
 
   private static readonly SINGLE_MODEL = process.env.OPENAI_MODEL;
 
@@ -101,8 +102,12 @@ export class ModelSelector {
     return provider;
   }
 
-  private static getModelForProvider(provider: LLMProvider, budget: BudgetLevel): string {
+  private static getModelForProvider(provider: LLMProvider, budget: BudgetLevel, taskType?: TaskType): string {
     if (provider === 'anthropic') {
+      // Use Opus for analysis tasks with deep budget
+      if (taskType === 'analysis' && budget === 'deep') {
+        return this.ANTHROPIC_ANALYSIS;
+      }
       return {
         quick: this.ANTHROPIC_QUICK,
         standard: this.ANTHROPIC_STANDARD,
@@ -153,7 +158,16 @@ export class ModelSelector {
     const route = routing[taskType] || { provider: 'openai', budget };
     const available = this.getAvailableProviders();
     const provider = available.includes(route.provider) ? route.provider : available[0] || 'openai';
-    return this.getModelSelection(route.budget, provider);
+
+    if (this.SINGLE_MODEL) {
+      return { provider: 'openai', model: this.SINGLE_MODEL, budget: route.budget };
+    }
+
+    return {
+      provider,
+      model: this.getModelForProvider(provider, route.budget, taskType),
+      budget: route.budget,
+    };
   }
 
   static estimateCost(model: string, tokens: number): number {
@@ -166,16 +180,20 @@ export class ModelSelector {
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
       'claude-opus-4.1': { input: 15.00, output: 75.00 },
       'claude-opus-4': { input: 15.00, output: 75.00 },
       'claude-opus-3': { input: 15.00, output: 75.00 },
+      'claude-sonnet-4-20250514': { input: 3.00, output: 15.00 },
       'claude-sonnet-4.5': { input: 3.00, output: 15.00 },
       'claude-sonnet-4': { input: 3.00, output: 15.00 },
       'claude-sonnet-3.7': { input: 3.00, output: 15.00 },
+      'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00 },
       'claude-haiku-4.5': { input: 1.00, output: 5.00 },
       'claude-haiku-3.5': { input: 0.80, output: 4.00 },
       'claude-haiku-3': { input: 0.25, output: 1.25 },
+      'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
       'claude-opus': { input: 5.00, output: 25.00 },
       'claude-sonnet': { input: 3.00, output: 15.00 },
       'claude-haiku': { input: 1.00, output: 5.00 },
@@ -202,16 +220,20 @@ export class ModelSelector {
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
       'claude-opus-4.1': { input: 15.00, output: 75.00 },
       'claude-opus-4': { input: 15.00, output: 75.00 },
       'claude-opus-3': { input: 15.00, output: 75.00 },
+      'claude-sonnet-4-20250514': { input: 3.00, output: 15.00 },
       'claude-sonnet-4.5': { input: 3.00, output: 15.00 },
       'claude-sonnet-4': { input: 3.00, output: 15.00 },
       'claude-sonnet-3.7': { input: 3.00, output: 15.00 },
+      'claude-haiku-4-5-20251001': { input: 1.00, output: 5.00 },
       'claude-haiku-4.5': { input: 1.00, output: 5.00 },
       'claude-haiku-3.5': { input: 0.80, output: 4.00 },
       'claude-haiku-3': { input: 0.25, output: 1.25 },
+      'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
       'claude-opus': { input: 5.00, output: 25.00 },
       'claude-sonnet': { input: 3.00, output: 15.00 },
       'claude-haiku': { input: 1.00, output: 5.00 },
