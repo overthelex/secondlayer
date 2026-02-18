@@ -240,7 +240,7 @@ cd deployment
 ./manage-gateway.sh stop local
 
 # Remote deployment (git pull, migrate, rebuild, restart)
-./manage-gateway.sh deploy stage    # → mail.lexapp.co.ua
+./manage-gateway.sh deploy stage    # → gate.lexapp.co.ua
 
 # Status
 ./manage-gateway.sh status

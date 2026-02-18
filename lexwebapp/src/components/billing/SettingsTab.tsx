@@ -745,7 +745,7 @@ export function SettingsTab() {
           <div>
             <p className="text-sm text-claude-text font-medium mb-0.5">Налаштування поштового сервісу</p>
             <p className="text-xs text-claude-subtext">
-              Листи надсилаються з <strong>billing@legal.org.ua</strong> через SMTP-сервер mail.legal.org.ua.
+              Листи надсилаються з <strong>billing@legal.org.ua</strong> через SMTP-сервер mail.lexapp.co.ua.
             </p>
           </div>
         </div>
