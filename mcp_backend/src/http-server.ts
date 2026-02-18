@@ -1831,6 +1831,23 @@ class HTTPMCPServer {
                 newBalance: deduction.newBalance,
                 requestId,
               });
+
+              // Emit cost_summary SSE event with credit and balance info
+              if (!res.writableEnded) {
+                let balanceUsd: number | undefined;
+                try {
+                  const billingBalance = await this.billingService.getOrCreateUserBilling(userId);
+                  balanceUsd = billingBalance?.balance_usd;
+                } catch (e: any) {
+                  logger.warn('[ChatService] Failed to fetch billing balance for cost_summary', { error: e.message });
+                }
+                res.write(`event: cost_summary\n`);
+                res.write(`data: ${JSON.stringify({
+                  credits_deducted: CHAT_CREDITS,
+                  new_balance_credits: deduction.newBalance,
+                  balance_usd: balanceUsd ?? null,
+                })}\n\n`);
+              }
             }
           } catch (e: any) {
             logger.warn('[ChatService] Failed to deduct credits', { error: e.message, requestId });
