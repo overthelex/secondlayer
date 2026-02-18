@@ -1761,16 +1761,24 @@ class HTTPMCPServer {
           return res.status(400).json({ error: 'query is required' });
         }
 
-        // Pre-flight credit check — use minimum from DB function
-        if (userId && this.creditService) {
-          const minCredits = await this.creditService.calculateCreditsForTool('ai_chat', userId);
-          const balance = await this.creditService.checkBalance(userId, minCredits);
-          if (!balance.hasCredits) {
-            return res.status(402).json({
-              error: 'Insufficient credits',
-              required: minCredits,
-              currentBalance: balance.currentBalance,
+        // Pre-flight balance check — use BillingService (USD-based)
+        if (userId) {
+          const billing = await this.billingService.getOrCreateUserBilling(userId);
+          if (billing.billing_enabled) {
+            const estimatedCost = await this.costTracker.estimateCost({
+              toolName: 'ai_chat',
+              queryLength: JSON.stringify(req.body).length,
+              reasoningBudget: (budget || 'standard') as 'quick' | 'standard' | 'deep',
             });
+            const balanceCheck = await this.billingService.checkBalance(userId, estimatedCost.total_estimated_cost_usd);
+            if (!balanceCheck.hasBalance) {
+              return res.status(402).json({
+                error: 'Insufficient balance',
+                code: 'INSUFFICIENT_BALANCE',
+                required_usd: estimatedCost.total_estimated_cost_usd,
+                current_balance_usd: balanceCheck.currentBalance,
+              });
+            }
           }
         }
 
@@ -1819,46 +1827,35 @@ class HTTPMCPServer {
           clearInterval(heartbeat);
         }
 
-        // Post-execution credit deduction based on actual LLM cost
-        if (chatCompleted && userId && this.creditService) {
+        // Post-execution billing charge based on actual LLM cost
+        if (chatCompleted && userId && chatTotalCostUsd > 0) {
           try {
-            const creditsToDeduct = await this.creditService.usdToCredits(chatTotalCostUsd);
-            const deduction = await this.creditService.deductCredits(
+            const transaction = await this.billingService.chargeUser({
               userId,
-              creditsToDeduct,
-              'ai_chat',
               requestId,
-              `AI chat (cost: $${chatTotalCostUsd.toFixed(4)})`
-            );
-            if (deduction.success) {
-              logger.info('[ChatService] Credits deducted', {
-                userId,
-                creditsDeducted: creditsToDeduct,
-                totalCostUsd: chatTotalCostUsd,
-                newBalance: deduction.newBalance,
-                requestId,
-              });
+              amountUsd: chatTotalCostUsd,
+              description: `AI chat (cost: $${chatTotalCostUsd.toFixed(4)})`,
+            });
 
-              // Emit cost_summary SSE event with credit and balance info
-              if (!res.writableEnded) {
-                let balanceUsd: number | undefined;
-                try {
-                  const billingBalance = await this.billingService.getOrCreateUserBilling(userId);
-                  balanceUsd = billingBalance?.balance_usd;
-                } catch (e: any) {
-                  logger.warn('[ChatService] Failed to fetch billing balance for cost_summary', { error: e.message });
-                }
-                res.write(`event: cost_summary\n`);
-                res.write(`data: ${JSON.stringify({
-                  credits_deducted: creditsToDeduct,
-                  total_cost_usd: chatTotalCostUsd,
-                  new_balance_credits: deduction.newBalance,
-                  balance_usd: balanceUsd ?? null,
-                })}\n\n`);
-              }
+            logger.info('[ChatService] User charged', {
+              userId,
+              totalCostUsd: chatTotalCostUsd,
+              charged: transaction.pricing_details?.price_usd,
+              balanceAfter: transaction.balance_after_usd,
+              requestId,
+            });
+
+            // Emit cost_summary SSE event with balance info
+            if (!res.writableEnded) {
+              res.write(`event: cost_summary\n`);
+              res.write(`data: ${JSON.stringify({
+                total_cost_usd: chatTotalCostUsd,
+                charged_usd: transaction.pricing_details?.price_usd ?? chatTotalCostUsd,
+                balance_usd: transaction.balance_after_usd,
+              })}\n\n`);
             }
           } catch (e: any) {
-            logger.warn('[ChatService] Failed to deduct credits', { error: e.message, requestId });
+            logger.warn('[ChatService] Failed to charge user', { error: e.message, requestId });
           }
         }
 

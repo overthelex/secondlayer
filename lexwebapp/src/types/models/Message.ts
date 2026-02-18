@@ -12,9 +12,12 @@ export interface CitationWarning {
 export interface CostSummary {
   tools_used: string[];
   total_cost_usd: number;
-  credits_deducted: number;
-  new_balance_credits?: number;
+  charged_usd?: number;
   balance_usd?: number | null;
+  /** @deprecated use charged_usd */
+  credits_deducted?: number;
+  /** @deprecated use balance_usd */
+  new_balance_credits?: number;
 }
 
 export interface Message {
