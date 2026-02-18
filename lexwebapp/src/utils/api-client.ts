@@ -209,8 +209,6 @@ export const api = {
       decisions?: any[];
       citations?: any[];
     }) => apiClient.post(`/api/conversations/${conversationId}/messages`, message),
-    getMessages: (conversationId: string, params?: { limit?: number; offset?: number }) =>
-      apiClient.get(`/api/conversations/${conversationId}/messages`, { params }),
   },
 
   // Documents

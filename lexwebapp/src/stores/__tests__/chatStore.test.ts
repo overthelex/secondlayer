@@ -12,7 +12,6 @@ describe('chatStore', () => {
     useChatStore.setState({
       messages: [],
       isStreaming: false,
-      currentSessionId: null,
       streamController: null,
       currentTool: null,
     });
@@ -56,7 +55,6 @@ describe('chatStore', () => {
       useChatStore.getState().clearMessages();
 
       expect(useChatStore.getState().messages).toHaveLength(0);
-      expect(useChatStore.getState().currentSessionId).toBeNull();
     });
 
     it('should set streaming state', () => {
@@ -65,14 +63,6 @@ describe('chatStore', () => {
       useChatStore.getState().setStreaming(true);
 
       expect(useChatStore.getState().isStreaming).toBe(true);
-    });
-
-    it('should set session ID', () => {
-      expect(useChatStore.getState().currentSessionId).toBeNull();
-
-      useChatStore.getState().setSessionId('session-123');
-
-      expect(useChatStore.getState().currentSessionId).toBe('session-123');
     });
   });
 
@@ -240,43 +230,6 @@ describe('chatStore', () => {
     });
   });
 
-  describe('Helper methods', () => {
-    it('should get last message', () => {
-      useChatStore.getState().addMessage({ id: '1', role: 'user', content: 'First' });
-      useChatStore.getState().addMessage({ id: '2', role: 'assistant', content: 'Second' });
-      useChatStore.getState().addMessage({ id: '3', role: 'user', content: 'Third' });
-
-      const last = useChatStore.getState().getLastMessage();
-
-      expect(last?.id).toBe('3');
-      expect(last?.content).toBe('Third');
-    });
-
-    it('should return undefined when no messages', () => {
-      const last = useChatStore.getState().getLastMessage();
-
-      expect(last).toBeUndefined();
-    });
-
-    it('should get message by ID', () => {
-      useChatStore.getState().addMessage({ id: '1', role: 'user', content: 'First' });
-      useChatStore.getState().addMessage({ id: '2', role: 'assistant', content: 'Second' });
-
-      const message = useChatStore.getState().getMessageById('2');
-
-      expect(message?.id).toBe('2');
-      expect(message?.content).toBe('Second');
-    });
-
-    it('should return undefined for non-existent ID', () => {
-      useChatStore.getState().addMessage({ id: '1', role: 'user', content: 'Test' });
-
-      const message = useChatStore.getState().getMessageById('999');
-
-      expect(message).toBeUndefined();
-    });
-  });
-
   describe('Persistence', () => {
     it('should only persist specific fields', () => {
       // This is tested by the middleware configuration
@@ -288,17 +241,14 @@ describe('chatStore', () => {
         isStreaming: true,
         streamController: controller,
         currentTool: 'get_legal_advice',
-        currentSessionId: 'session-123',
       });
 
       // Check what would be persisted (via partialize)
       const persistedState = {
         messages: useChatStore.getState().messages,
-        currentSessionId: useChatStore.getState().currentSessionId,
       };
 
       expect(persistedState.messages).toHaveLength(1);
-      expect(persistedState.currentSessionId).toBe('session-123');
       expect('streamController' in persistedState).toBe(false);
       expect('currentTool' in persistedState).toBe(false);
       expect('isStreaming' in persistedState).toBe(false);

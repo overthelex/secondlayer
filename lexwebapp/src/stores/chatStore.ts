@@ -18,7 +18,6 @@ interface ChatState {
   // State
   messages: Message[];
   isStreaming: boolean;
-  currentSessionId: string | null;
   streamController: AbortController | null;
   currentTool: string | null;
 
@@ -32,7 +31,6 @@ interface ChatState {
   removeMessage: (messageId: string) => void;
   clearMessages: () => void;
   setStreaming: (isStreaming: boolean) => void;
-  setSessionId: (sessionId: string | null) => void;
 
   // Streaming actions
   updateMessage: (messageId: string, updates: Partial<Message>) => void;
@@ -50,9 +48,6 @@ interface ChatState {
   newConversation: () => void;
   syncMessage: (message: Message) => void;
 
-  // Helpers
-  getLastMessage: () => Message | undefined;
-  getMessageById: (messageId: string) => Message | undefined;
 }
 
 function isAuthenticated(): boolean {
@@ -66,7 +61,6 @@ export const useChatStore = create<ChatState>()(
         // Initial state
         messages: [],
         isStreaming: false,
-        currentSessionId: null,
         streamController: null,
         currentTool: null,
         conversationId: null,
@@ -89,15 +83,11 @@ export const useChatStore = create<ChatState>()(
         clearMessages: () =>
           set({
             messages: [],
-            currentSessionId: null,
             conversationId: null,
           }),
 
         // Set streaming state
         setStreaming: (isStreaming) => set({ isStreaming }),
-
-        // Set session ID
-        setSessionId: (sessionId) => set({ currentSessionId: sessionId }),
 
         // Update specific message (for incremental streaming updates)
         updateMessage: (messageId, updates) =>
@@ -195,12 +185,11 @@ export const useChatStore = create<ChatState>()(
             set({
               conversationId,
               messages,
-              currentSessionId: null,
             });
           } catch {
             // Keep conversationId set but preserve existing messages if API fails
             if (get().conversationId !== conversationId) {
-              set({ conversationId, currentSessionId: null });
+              set({ conversationId });
             }
           }
         },
@@ -242,7 +231,6 @@ export const useChatStore = create<ChatState>()(
           set({
             messages: [],
             conversationId: null,
-            currentSessionId: null,
           });
         },
 
@@ -266,24 +254,12 @@ export const useChatStore = create<ChatState>()(
             });
         },
 
-        // Get last message
-        getLastMessage: () => {
-          const { messages } = get();
-          return messages[messages.length - 1];
-        },
-
-        // Get message by ID
-        getMessageById: (messageId) => {
-          const { messages } = get();
-          return messages.find((msg) => msg.id === messageId);
-        },
       }),
       {
         name: 'chat-storage', // localStorage key
         partialize: (state) => ({
           // Only persist messages (not runtime state like streamController)
           messages: state.messages,
-          currentSessionId: state.currentSessionId,
           conversationId: state.conversationId,
         }),
       }

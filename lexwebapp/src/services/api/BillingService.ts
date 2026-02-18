@@ -95,23 +95,6 @@ export class BillingService extends BaseService {
   }
 
   /**
-   * Get payment status
-   */
-  async getPaymentStatus(
-    provider: string,
-    paymentId: string
-  ): Promise<any> {
-    try {
-      const response = await this.client.get(
-        `/api/billing/payment/${provider}/${paymentId}/status`
-      );
-      return response.data;
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
-
-  /**
    * Send test email
    */
   async sendTestEmail(): Promise<void> {
