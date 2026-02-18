@@ -527,12 +527,10 @@ After setting up local environment:
 
 3. **Read architecture docs**
    - `CLAUDE.md` - Project overview
-   - `deployment/ARCHITECTURE.md` - System architecture
    - `docs/MODEL_SELECTION_GUIDE.md` - LLM model selection
 
-4. **Deploy to gateway environments**
+ 4. **Deploy to gateway environments**
    - `deployment/QUICK_START.md` - 5-minute deployment guide
-   - `deployment/GATEWAY_SETUP.md` - Complete setup guide
 
 ## Testing
 
@@ -567,9 +565,8 @@ See `TESTING.md` for complete testing documentation.
 **Documentation**:
 - This guide: `deployment/LOCAL_DEVELOPMENT.md`
 - Testing guide: `deployment/TESTING.md`
-- Recent fixes: `deployment/LOCAL_DEPLOYMENT_FIXES.md`
+- Recent fixes: `deployment/LOCAL_DEVELOPMENT_FIXES.md`
 - Quick start: `deployment/QUICK_START.md`
-- Full guide: `deployment/GATEWAY_SETUP.md`
 
 **Common Issues**:
 - Port conflicts: See "Port Already in Use" above
