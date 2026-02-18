@@ -295,6 +295,10 @@ export const api = {
     getSubscriptionStats: () =>
       apiClient.get('/api/admin/billing/subscription-stats'),
 
+    // Container metrics (cAdvisor)
+    getContainerMetrics: (range: string = '1h') =>
+      apiClient.get('/api/admin/metrics/containers', { params: { range } }),
+
     // Infrastructure dashboards
     getInfrastructureMetrics: (range: string = '1h') =>
       apiClient.get('/api/admin/metrics/infrastructure', { params: { range } }),

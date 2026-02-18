@@ -78,6 +78,12 @@ scrape_configs:
           service: qdrant
           environment: stage
 
+  # cAdvisor (container metrics)
+  - job_name: cadvisor
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['cadvisor-stage:8080']
+
   # Prometheus self-monitoring
   - job_name: prometheus
     scrape_interval: 15s

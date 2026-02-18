@@ -29,7 +29,8 @@ import {
   Activity,
   Database,
   Globe,
-  Server } from
+  Server,
+  Boxes } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,6 +67,7 @@ interface SidebarProps {
   onAdminDataSourcesClick?: () => void;
   onAdminBillingClick?: () => void;
   onAdminInfrastructureClick?: () => void;
+  onAdminContainersClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -99,6 +101,7 @@ export function Sidebar({
   onAdminDataSourcesClick,
   onAdminBillingClick,
   onAdminInfrastructureClick,
+  onAdminContainersClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -231,6 +234,7 @@ export function Sidebar({
     { id: 'admin-users', label: 'Користувачі', icon: Users, onClick: onAdminUsersClick },
     { id: 'api-costs', label: 'Витрати API', icon: DollarSign, onClick: onAdminCostsClick },
     { id: 'infrastructure', label: 'Інфраструктура', icon: Server, onClick: onAdminInfrastructureClick },
+    { id: 'containers', label: 'Контейнери', icon: Boxes, onClick: onAdminContainersClick },
     { id: 'data-sources', label: 'Джерела даних', icon: Globe, onClick: onAdminDataSourcesClick },
     { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, onClick: onAdminBillingClick },
   ];

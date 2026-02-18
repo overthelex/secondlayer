@@ -2083,6 +2083,129 @@ export function createAdminRoutes(
   });
 
   // ========================================
+  // CONTAINER METRICS (cAdvisor)
+  // ========================================
+
+  /**
+   * GET /api/admin/metrics/containers
+   * Per-container CPU, memory, and network usage from cAdvisor
+   */
+  router.get('/metrics/containers', async (req: Request, res: Response) => {
+    try {
+      const range = (req.query.range as string) || '1h';
+      const rangeSeconds: Record<string, number> = { '1h': 3600, '6h': 21600, '24h': 86400 };
+      const seconds = rangeSeconds[range] || 3600;
+      const step = seconds <= 3600 ? '30s' : seconds <= 21600 ? '2m' : '5m';
+      const end = Math.floor(Date.now() / 1000);
+      const start = end - seconds;
+
+      // Filter: real containers only (name=~".+"), exclude POD/pause/cadvisor
+      const nameFilter = 'name=~".+",name!~".*cadvisor.*|.*POD.*|.*pause.*"';
+
+      const [
+        cpuRateResults,
+        memUsageResults,
+        memLimitResults,
+        netRxResults,
+        netTxResults,
+      ] = await Promise.all([
+        prometheus.queryRange(`rate(container_cpu_usage_seconds_total{${nameFilter}}[1m])`, start, end, step),
+        prometheus.queryRange(`container_memory_usage_bytes{${nameFilter}}`, start, end, step),
+        prometheus.queryInstant(`container_spec_memory_limit_bytes{${nameFilter}}`),
+        prometheus.queryRange(`rate(container_network_receive_bytes_total{${nameFilter}}[1m])`, start, end, step),
+        prometheus.queryRange(`rate(container_network_transmit_bytes_total{${nameFilter}}[1m])`, start, end, step),
+      ]);
+
+      // Build memory limit lookup
+      const memLimitMap: Record<string, number> = {};
+      for (const r of memLimitResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        const val = parseFloat(r.value?.[1] || '0');
+        if (val > 0) memLimitMap[name] = val;
+      }
+
+      // Build current snapshot from last data point of range queries
+      const containersMap: Record<string, any> = {};
+
+      for (const r of cpuRateResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        const values = r.values || [];
+        const lastVal = values.length > 0 ? parseFloat(values[values.length - 1][1]) * 100 : 0;
+        if (!containersMap[name]) containersMap[name] = { name };
+        containersMap[name].cpuPercent = Math.round(lastVal * 100) / 100;
+      }
+
+      for (const r of memUsageResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        const values = r.values || [];
+        const lastVal = values.length > 0 ? parseFloat(values[values.length - 1][1]) : 0;
+        if (!containersMap[name]) containersMap[name] = { name };
+        containersMap[name].memoryBytes = Math.round(lastVal);
+        containersMap[name].memoryLimitBytes = memLimitMap[name] || 0;
+        containersMap[name].memoryPercent = memLimitMap[name] > 0
+          ? Math.round((lastVal / memLimitMap[name]) * 10000) / 100
+          : 0;
+      }
+
+      for (const r of netRxResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        const values = r.values || [];
+        const lastVal = values.length > 0 ? parseFloat(values[values.length - 1][1]) : 0;
+        if (!containersMap[name]) containersMap[name] = { name };
+        containersMap[name].networkRxBytesPerSec = Math.round(lastVal);
+      }
+
+      for (const r of netTxResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        const values = r.values || [];
+        const lastVal = values.length > 0 ? parseFloat(values[values.length - 1][1]) : 0;
+        if (!containersMap[name]) containersMap[name] = { name };
+        containersMap[name].networkTxBytesPerSec = Math.round(lastVal);
+      }
+
+      const containers = Object.values(containersMap).map((c: any) => ({
+        name: c.name,
+        cpuPercent: c.cpuPercent || 0,
+        memoryBytes: c.memoryBytes || 0,
+        memoryLimitBytes: c.memoryLimitBytes || 0,
+        memoryPercent: c.memoryPercent || 0,
+        networkRxBytesPerSec: c.networkRxBytesPerSec || 0,
+        networkTxBytesPerSec: c.networkTxBytesPerSec || 0,
+      }));
+
+      // Build CPU history per container
+      const cpuHistory: Record<string, { timestamp: number; value: number }[]> = {};
+      for (const r of cpuRateResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        cpuHistory[name] = (r.values || []).map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          value: (parseFloat(val) || 0) * 100,
+        }));
+      }
+
+      // Build memory history per container
+      const memoryHistory: Record<string, { timestamp: number; value: number }[]> = {};
+      for (const r of memUsageResults) {
+        const name = r.metric.name || r.metric.container_label_com_docker_compose_service || 'unknown';
+        memoryHistory[name] = (r.values || []).map(([ts, val]: [number, string]) => ({
+          timestamp: ts,
+          value: parseFloat(val) || 0,
+        }));
+      }
+
+      res.json({
+        containers,
+        cpuHistory,
+        memoryHistory,
+        range,
+      });
+    } catch (error: any) {
+      logger.error('Failed to get container metrics', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve container metrics' });
+    }
+  });
+
+  // ========================================
   // INFRASTRUCTURE METRICS
   // ========================================
 
