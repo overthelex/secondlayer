@@ -42,7 +42,7 @@ services:
 
   # PgBouncer connection pooler for PostgreSQL
   pgbouncer-stage:
-    image: eturanalern/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: secondlayer-pgbouncer-stage
     ports:
     - "127.0.0.1:5437:5432"
