@@ -21,7 +21,7 @@ export class ModelSelector {
 
   private static readonly OPENAI_QUICK = process.env.OPENAI_MODEL_QUICK || 'gpt-4o-mini';
   private static readonly OPENAI_STANDARD = process.env.OPENAI_MODEL_STANDARD || 'gpt-4o-mini';
-  private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-4o';
+  private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-4.1';
 
   private static readonly ANTHROPIC_QUICK = process.env.ANTHROPIC_MODEL_QUICK || 'claude-haiku-4-5-20251001';
   private static readonly ANTHROPIC_STANDARD = process.env.ANTHROPIC_MODEL_STANDARD || 'claude-sonnet-4-20250514';
@@ -172,6 +172,9 @@ export class ModelSelector {
 
   static estimateCost(model: string, tokens: number): number {
     const costPer1M: Record<string, { input: number; output: number }> = {
+      'gpt-4.1': { input: 2.00, output: 8.00 },
+      'gpt-4.1-mini': { input: 0.40, output: 1.60 },
+      'gpt-4.1-nano': { input: 0.10, output: 0.40 },
       'gpt-4o': { input: 2.50, output: 10.00 },
       'gpt-4o-mini': { input: 0.15, output: 0.60 },
       'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
@@ -212,6 +215,9 @@ export class ModelSelector {
     completionTokens: number
   ): number {
     const costPer1M: Record<string, { input: number; output: number }> = {
+      'gpt-4.1': { input: 2.00, output: 8.00 },
+      'gpt-4.1-mini': { input: 0.40, output: 1.60 },
+      'gpt-4.1-nano': { input: 0.10, output: 0.40 },
       'gpt-4o': { input: 2.50, output: 10.00 },
       'gpt-4o-mini': { input: 0.15, output: 0.60 },
       'gpt-4o-2024-08-06': { input: 2.50, output: 10.00 },
@@ -273,6 +279,9 @@ export class ModelSelector {
 
   static supportsJsonMode(model: string): boolean {
     const jsonModeModels = [
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
       'gpt-4-turbo',
       'gpt-4-turbo-preview',
       'gpt-4-1106-preview',

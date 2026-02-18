@@ -50,6 +50,10 @@ export class OpenAIClientManager {
     return this.clients.length > 0;
   }
 
+  getClientCount(): number {
+    return this.clients.length;
+  }
+
   getClient(): OpenAI {
     if (this.clients.length === 0) {
       throw new Error('No OpenAI API keys configured');

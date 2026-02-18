@@ -394,8 +394,6 @@ export class LLMClientManager {
     model: string,
     signal?: AbortSignal
   ): AsyncGenerator<UnifiedStreamChunk> {
-    const client = this.openaiManager.getClient();
-
     const messages = request.messages.map((m) => {
       if (m.role === 'tool') {
         return {
@@ -451,7 +449,21 @@ export class LLMClientManager {
       }
     }
 
-    const stream = await client.chat.completions.create(params, { signal });
+    // Try current key; on 429/401/403 rotate to next key and retry once
+    let stream: any;
+    try {
+      const client = this.openaiManager.getClient();
+      stream = await client.chat.completions.create(params, { signal });
+    } catch (err: any) {
+      if ((err.status === 429 || err.status === 401 || err.status === 403) && this.openaiManager.getClientCount() > 1) {
+        logger.warn(`OpenAI streaming key ${err.status}, rotating to next key`);
+        this.openaiManager.rotateClient();
+        const retryClient = this.openaiManager.getClient();
+        stream = await retryClient.chat.completions.create(params, { signal });
+      } else {
+        throw err;
+      }
+    }
 
     const toolCallBuffers = new Map<number, { id: string; name: string; args: string }>();
     let finishReason: 'stop' | 'tool_calls' = 'stop';
