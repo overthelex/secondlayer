@@ -21,12 +21,21 @@ import {
 } from '../../types/api/mcp-tools';
 import { StreamingCallbacks } from '../../types/api/sse';
 
+export interface CitationWarning {
+  case_number: string;
+  status: 'explicitly_overruled' | 'limited';
+  confidence: number;
+  affecting_decisions: Array<{ doc_id: string; instance: string; court: string; date?: string; outcome: string; effect: string }>;
+  message: string;
+}
+
 export interface ChatStreamCallbacks {
   onPlan?: (data: { goal: string; steps: Array<{ id: number; tool: string; params: Record<string, any>; purpose: string; depends_on?: number[] }>; expected_iterations: number }) => void;
   onThinking?: (data: { step: number; tool: string; params: any }) => void;
   onToolResult?: (data: { tool: string; result: any }) => void;
   onAnswerDelta?: (data: { text: string }) => void;
   onAnswer?: (data: { text: string; provider: string; model: string }) => void;
+  onCitationWarning?: (data: CitationWarning) => void;
   onComplete?: (data: { iterations: number; elapsed_ms: number }) => void;
   onError?: (data: { message: string }) => void;
 }
@@ -191,6 +200,9 @@ export class MCPService extends BaseService {
                       break;
                     case 'answer':
                       callbacks.onAnswer?.(data);
+                      break;
+                    case 'citation_warning':
+                      callbacks.onCitationWarning?.(data);
                       break;
                     case 'complete':
                       callbacks.onComplete?.(data);

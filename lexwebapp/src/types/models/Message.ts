@@ -2,6 +2,13 @@
  * Message Domain Model
  */
 
+export interface CitationWarning {
+  case_number: string;
+  status: 'explicitly_overruled' | 'limited';
+  confidence: number;
+  message: string;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -12,6 +19,7 @@ export interface Message {
   decisions?: Decision[];
   citations?: Citation[];
   documents?: VaultDocument[];
+  citationWarnings?: CitationWarning[];
 }
 
 export interface ThinkingStep {

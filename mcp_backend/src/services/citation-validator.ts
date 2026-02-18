@@ -1,8 +1,13 @@
 import { Database } from '../database/database.js';
 import { PrecedentStatus, PrecedentStatusType, CitationLink } from '../types/index.js';
+import { ShepardizationService } from './shepardization-service.js';
+import { logger } from '../utils/logger.js';
 
 export class CitationValidator {
-  constructor(private db: Database) {}
+  constructor(
+    private db: Database,
+    private shepardizationService?: ShepardizationService
+  ) {}
 
   async extractCitations(text: string, caseId: string): Promise<CitationLink[]> {
     const citations: CitationLink[] = [];
@@ -38,8 +43,8 @@ export class CitationValidator {
     return citations;
   }
 
-  async validatePrecedentStatus(caseId: string): Promise<PrecedentStatus> {
-    if (!caseId) {
+  async validatePrecedentStatus(caseId: string, caseNumber?: string): Promise<PrecedentStatus> {
+    if (!caseId && !caseNumber) {
       return {
         case_id: '',
         status: 'unknown',
@@ -51,6 +56,46 @@ export class CitationValidator {
       };
     }
 
+    // Delegate to ShepardizationService if available
+    if (this.shepardizationService) {
+      try {
+        const identifier = caseNumber || caseId;
+        const result = await this.shepardizationService.analyze(identifier);
+
+        const overruled = result.affecting_decisions
+          .filter((d) => d.effect === 'overruled' || d.effect === 'remanded')
+          .map((d) => d.doc_id);
+        const distinguished = result.affecting_decisions
+          .filter((d) => d.effect === 'modified')
+          .map((d) => d.doc_id);
+
+        return {
+          case_id: caseId || result.case_number,
+          status: result.status,
+          reversed_by: [],
+          overruled_by: overruled.length > 0 ? overruled : [],
+          distinguished_in: distinguished.length > 0 ? distinguished : [],
+          last_checked: result.checked_at,
+          confidence: result.confidence,
+          shepardization: result,
+        };
+      } catch (err: any) {
+        logger.warn('[CitationValidator] Shepardization failed, falling back to local', {
+          error: err.message,
+        });
+        // Fall through to local analysis
+      }
+    }
+
+    // Fallback: local analysis from citation_links
+    return this.validatePrecedentStatusLocal(caseId);
+  }
+
+  /**
+   * Local-only precedent check (original logic). Used when ShepardizationService
+   * is unavailable or ZakonOnline is down.
+   */
+  private async validatePrecedentStatusLocal(caseId: string): Promise<PrecedentStatus> {
     // Check if status already exists
     const existing = await this.db.query(
       'SELECT * FROM precedent_status WHERE case_id = $1',
@@ -77,10 +122,10 @@ export class CitationValidator {
     );
 
     const status = this.analyzeStatus(citations.rows);
-    
+
     // Save status
     await this.db.query(
-      `INSERT INTO precedent_status 
+      `INSERT INTO precedent_status
        (case_id, status, reversed_by, overruled_by, distinguished_in, confidence, last_checked)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (case_id) DO UPDATE SET

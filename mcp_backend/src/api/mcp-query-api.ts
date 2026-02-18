@@ -288,7 +288,10 @@ export class MCPQueryAPI extends BaseToolHandler {
   }
 
   private async checkPrecedentStatus(args: any) {
-    const status = await this.citationValidator.validatePrecedentStatus(args.case_id);
+    const caseId = args.case_id || args.doc_id || '';
+    const caseNumber = args.case_number || '';
+
+    const status = await this.citationValidator.validatePrecedentStatus(caseId, caseNumber || undefined);
 
     return {
       content: [
@@ -375,16 +378,18 @@ export class MCPQueryAPI extends BaseToolHandler {
       },
       {
         name: 'check_precedent_status',
-        description: `Проверяет актуальность и статус прецедента: действующий, отменённый, сомнительный
+        description: `Перевіряє актуальність судового рішення: чи не скасовано вищою інстанцією. Шукає ланцюг інстанцій у ZakonOnline, визначає статус: valid, explicitly_overruled, limited, unknown.
 
-💰 Примерная стоимость: $0.005-$0.015 USD
-Проверка статуса в базе данных. Минимальная стоимость (только PostgreSQL запросы).`,
+Приймає: case_number (номер справи, наприклад 922/989/18), case_id (UUID документа) або doc_id (zakononline_id).
+
+💰 Вартість: $0.00-$0.02 USD (кешується 24 год у Redis, 7 днів у PostgreSQL)`,
         inputSchema: {
           type: 'object',
           properties: {
-            case_id: { type: 'string' },
+            case_id: { type: 'string', description: 'UUID документа з бази даних' },
+            case_number: { type: 'string', description: 'Номер справи (наприклад: 922/989/18)' },
+            doc_id: { type: 'string', description: 'ZakonOnline document ID' },
           },
-          required: ['case_id'],
         },
       },
     ];
