@@ -1,6 +1,6 @@
 /**
  * Billing Dashboard
- * Main billing interface with tabs for overview, transactions, top-up, invoices, and settings
+ * Main billing interface with 5 tabs: Overview, Tariffs, History, Analytics, Settings
  */
 
 import React, { useState } from 'react';
@@ -9,25 +9,19 @@ import { motion } from 'framer-motion';
 import {
   DollarSign,
   Receipt,
-  CreditCard,
-  FileText,
   Settings,
   ArrowLeft,
   Zap,
   TrendingUp,
-  AlertCircle,
 } from 'lucide-react';
 import { OverviewTab } from './billing/OverviewTab';
-import { TransactionsTab } from './billing/TransactionsTab';
-import { TopUpTab } from './billing/TopUpTab';
-import { InvoicesTab } from './billing/InvoicesTab';
-import { SettingsTab } from './billing/SettingsTab';
 import { TariffsTab } from './billing/TariffsTab';
-import { StatisticsTab } from './billing/StatisticsTab';
-import { PaymentsTab } from './billing/PaymentsTab';
-import { LimitsTab } from './billing/LimitsTab';
+import { HistoryTab } from './billing/HistoryTab';
+import { AnalyticsTab } from './billing/AnalyticsTab';
+import { SettingsTab } from './billing/SettingsTab';
+import { TopUpModal } from './billing/TopUpModal';
 
-type BillingTab = 'overview' | 'transactions' | 'topup' | 'invoices' | 'settings' | 'tariffs' | 'statistics' | 'payments' | 'limits';
+type BillingTab = 'overview' | 'tariffs' | 'history' | 'analytics' | 'settings';
 
 interface BillingDashboardProps {
   onBack?: () => void;
@@ -37,6 +31,7 @@ interface BillingDashboardProps {
 export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDashboardProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<BillingTab>(initialTab);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
 
   const handleBack = () => {
     if (onBack) {
@@ -49,12 +44,8 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
   const tabs = [
     { id: 'overview' as const, label: 'Огляд', icon: DollarSign },
     { id: 'tariffs' as const, label: 'Тарифи', icon: Zap },
-    { id: 'statistics' as const, label: 'Статистика', icon: TrendingUp },
-    { id: 'payments' as const, label: 'Оплати', icon: CreditCard },
-    { id: 'limits' as const, label: 'Ліміти', icon: AlertCircle },
-    { id: 'transactions' as const, label: 'Транзакції', icon: Receipt },
-    { id: 'topup' as const, label: 'Поповнення', icon: CreditCard },
-    { id: 'invoices' as const, label: 'Рахунки', icon: FileText },
+    { id: 'history' as const, label: 'Історія', icon: Receipt },
+    { id: 'analytics' as const, label: 'Аналітика', icon: TrendingUp },
     { id: 'settings' as const, label: 'Налаштування', icon: Settings },
   ];
 
@@ -119,18 +110,20 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}>
-            {activeTab === 'overview' && <OverviewTab />}
+            {activeTab === 'overview' && <OverviewTab onTopUp={() => setShowTopUpModal(true)} />}
             {activeTab === 'tariffs' && <TariffsTab />}
-            {activeTab === 'statistics' && <StatisticsTab />}
-            {activeTab === 'payments' && <PaymentsTab />}
-            {activeTab === 'limits' && <LimitsTab />}
-            {activeTab === 'transactions' && <TransactionsTab />}
-            {activeTab === 'topup' && <TopUpTab />}
-            {activeTab === 'invoices' && <InvoicesTab />}
+            {activeTab === 'history' && <HistoryTab />}
+            {activeTab === 'analytics' && <AnalyticsTab />}
             {activeTab === 'settings' && <SettingsTab />}
           </motion.div>
         </div>
       </div>
+
+      {/* Top-Up Modal */}
+      <TopUpModal
+        isOpen={showTopUpModal}
+        onClose={() => setShowTopUpModal(false)}
+      />
     </div>
   );
 }
