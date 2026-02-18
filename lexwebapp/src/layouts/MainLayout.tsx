@@ -56,6 +56,7 @@ export function MainLayout() {
   const {
     isSidebarOpen,
     isRightPanelOpen,
+    rightPanelWidth,
     toggleSidebar,
     toggleRightPanel,
     setSidebarOpen,
@@ -227,7 +228,7 @@ export function MainLayout() {
 
       {/* Right Panel (hidden on admin routes) */}
       {!isAdminRoute && (
-        <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`}>
+        <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
           <RightPanel
             isOpen={isRightPanelOpen}
             onClose={() => useUIStore.getState().setRightPanelOpen(false)}

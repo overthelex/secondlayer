@@ -16,6 +16,8 @@ interface UIState {
   isRightPanelOpen: boolean;
   toggleRightPanel: () => void;
   setRightPanelOpen: (isOpen: boolean) => void;
+  rightPanelWidth: number;
+  setRightPanelWidth: (width: number) => void;
 
   // Modals
   openModals: Set<string>;
@@ -48,6 +50,8 @@ export const useUIStore = create<UIState>()(
         toggleRightPanel: () =>
           set((state) => ({ isRightPanelOpen: !state.isRightPanelOpen })),
         setRightPanelOpen: (isOpen) => set({ isRightPanelOpen: isOpen }),
+        rightPanelWidth: 400,
+        setRightPanelWidth: (width) => set({ rightPanelWidth: Math.min(800, Math.max(320, width)) }),
 
         // Modals
         openModals: new Set(),
@@ -81,6 +85,7 @@ export const useUIStore = create<UIState>()(
           // Persist sidebar, panel, and theme preferences
           isSidebarOpen: state.isSidebarOpen,
           isRightPanelOpen: state.isRightPanelOpen,
+          rightPanelWidth: state.rightPanelWidth,
           theme: state.theme,
         }),
       }
