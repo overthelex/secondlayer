@@ -1,0 +1,12 @@
+# Court Data Sync Cron Jobs
+# Install: crontab deployment/cron/court-crontab
+# Or merge into existing crontab: crontab -l | cat - deployment/cron/court-crontab | crontab -
+
+# Court data sync — every Tuesday and Friday at 02:00
+0 2 * * 2,5 /opt/secondlayer/deployment/cron/court-data-sync.sh >> /var/log/secondlayer/court-sync-cron.log 2>&1
+
+# Monthly thematic collections — 1st of each month at 04:00
+0 4 1 * * /opt/secondlayer/deployment/cron/court-data-sync.sh --monthly >> /var/log/secondlayer/court-sync-cron.log 2>&1
+
+# Log rotation: keep last 30 days
+0 5 1 * * find /var/log/secondlayer -name "court-sync*.log.*" -mtime +30 -delete
