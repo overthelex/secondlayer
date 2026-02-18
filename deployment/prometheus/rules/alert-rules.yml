@@ -29,16 +29,16 @@ groups:
           description: "Redis memory usage is at {{ $value | humanizePercentage }}."
 
       - alert: RedisEvictedKeys
-        expr: rate(redis_evicted_keys_total[5m]) > 0
+        expr: rate(redis_evicted_keys_total[5m]) > 10
         for: 5m
         labels:
-          severity: critical
+          severity: warning
         annotations:
           summary: "Redis evicting keys"
           description: "Redis is evicting keys due to memory pressure. Rate: {{ $value }}/s"
 
       - alert: PgCacheHitLow
-        expr: pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read) < 0.95
+        expr: (pg_stat_database_blks_hit + pg_stat_database_blks_read) > 0 and pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read) < 0.95
         for: 10m
         labels:
           severity: critical

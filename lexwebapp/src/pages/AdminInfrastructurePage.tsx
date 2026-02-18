@@ -179,7 +179,7 @@ function generateRecommendations(data: any): Recommendation[] {
       recommendations.push({
         severity: 'warning',
         title: 'Redis Key Evictions',
-        description: `Redis is evicting keys. Increase maxmemory or switch to allkeys-lru eviction policy.`,
+        description: `Redis is evicting keys (volatile-lru policy). Consider increasing maxmemory or reviewing TTL coverage on cached keys.`,
       });
     }
   }
