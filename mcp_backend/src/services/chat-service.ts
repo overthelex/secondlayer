@@ -67,7 +67,7 @@ const MAX_TOOL_CALLS = parseInt(process.env.MAX_CHAT_TOOL_CALLS || '5', 10);
 const BUDGET_LIMITS = {
   quick:    { maxResultChars: 6000,   maxContextChars: 48_000,  maxTokens: 4096,  resolutionSlice: 120 },
   standard: { maxResultChars: 8000,   maxContextChars: 64_000,  maxTokens: 4096,  resolutionSlice: 300 },
-  deep:     { maxResultChars: 20_000, maxContextChars: 100_000, maxTokens: 16384, resolutionSlice: 800 },
+  deep:     { maxResultChars: 40_000, maxContextChars: 100_000, maxTokens: 16384, resolutionSlice: 800 },
 } as const;
 type BudgetKey = keyof typeof BUDGET_LIMITS;
 
@@ -950,6 +950,8 @@ ${stepsText}
     const sectionLimit = limits.maxTokens > 4096 ? 3000 : (limits.maxResultChars <= 6000 ? 500 : 1500);
 
     // Case documents chain: { case_number, total_documents, grouped_documents }
+    // For chain results we send ONLY metadata (no key_sections) so that ALL documents
+    // fit within the budget.  The LLM can call load_full_texts for deeper analysis.
     if (parsed.grouped_documents && parsed.total_documents) {
       const compact: any = {
         case_number: parsed.case_number,
@@ -969,8 +971,8 @@ ${stepsText}
             date: d.date,
             resolution: d.resolution ? d.resolution.slice(0, resSlice) : undefined,
           };
-          // Extract key sections instead of full_text
-          entry.key_sections = this.extractKeySections(d.sections, d.full_text, sectionLimit);
+          // Only include snippets for chain results — key_sections are too large
+          // and cause truncation when there are many documents (e.g. 29 docs × 3 sections × 3000 chars)
           if (d.snippets) entry.snippets = d.snippets;
           return entry;
         });
