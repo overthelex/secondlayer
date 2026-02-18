@@ -61,13 +61,11 @@ export interface ChatRequest {
 // Service
 // ============================
 
-const MAX_TOOL_CALLS = parseInt(process.env.MAX_CHAT_TOOL_CALLS || '5', 10);
-
 // Budget-aware limits: deep analysis needs much more context
 const BUDGET_LIMITS = {
-  quick:    { maxResultChars: 6000,   maxContextChars: 48_000,  maxTokens: 4096,  resolutionSlice: 120 },
-  standard: { maxResultChars: 8000,   maxContextChars: 64_000,  maxTokens: 4096,  resolutionSlice: 300 },
-  deep:     { maxResultChars: 40_000, maxContextChars: 100_000, maxTokens: 16384, resolutionSlice: 800 },
+  quick:    { maxResultChars: 6000,   maxContextChars: 48_000,  maxTokens: 4096,  maxToolCalls: 5,  resolutionSlice: 120 },
+  standard: { maxResultChars: 8000,   maxContextChars: 64_000,  maxTokens: 4096,  maxToolCalls: 5,  resolutionSlice: 300 },
+  deep:     { maxResultChars: 40_000, maxContextChars: 100_000, maxTokens: 16384, maxToolCalls: 10, resolutionSlice: 800 },
 } as const;
 type BudgetKey = keyof typeof BUDGET_LIMITS;
 
@@ -180,7 +178,7 @@ export class ChatService {
       const collectedToolCalls: ToolCall[] = [];
       const collectedThinkingSteps: Array<{ tool: string; params: any; result: any }> = [];
 
-      while (iteration < MAX_TOOL_CALLS) {
+      while (iteration < limits.maxToolCalls) {
         if (signal?.aborted) break;
 
         // Stream LLM response
@@ -356,10 +354,10 @@ export class ChatService {
 
       // If loop exhausted MAX_TOOL_CALLS without a final answer, generate fallback
       if (!fullAnswerText && collectedThinkingSteps.length > 0 && !signal?.aborted) {
-        logger.warn('[ChatService] Agentic loop exhausted MAX_TOOL_CALLS without final answer', {
+        logger.warn('[ChatService] Agentic loop exhausted maxToolCalls without final answer', {
           iterations: iteration,
           toolCalls: collectedToolCalls.length,
-          maxToolCalls: MAX_TOOL_CALLS,
+          maxToolCalls: limits.maxToolCalls,
         });
         // Attempt one more LLM call without tools to force a text answer
         try {
