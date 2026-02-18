@@ -170,7 +170,7 @@ export class LLMClientManager {
       };
 
       if (request.max_tokens) {
-        params.max_tokens = request.max_tokens;
+        params.max_completion_tokens = request.max_tokens;
       }
 
       if (request.response_format?.type === 'json_object' && ModelSelector.supportsJsonMode(model)) {
@@ -401,7 +401,7 @@ export class LLMClientManager {
     };
 
     if (request.max_tokens) {
-      params.max_tokens = request.max_tokens;
+      params.max_completion_tokens = request.max_tokens;
     }
 
     if (request.response_format?.type === 'json_object' && ModelSelector.supportsJsonMode(model)) {
