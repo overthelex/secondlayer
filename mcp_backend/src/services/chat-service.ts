@@ -412,7 +412,6 @@ export class ChatService {
           elapsed_ms: elapsed,
           tools_used: toolsUsed,
           total_cost_usd: totalCostUsd,
-          credits_deducted: 3,
         },
       };
 

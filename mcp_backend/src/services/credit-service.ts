@@ -291,6 +291,22 @@ export class CreditService {
   }
 
   /**
+   * Convert USD cost to credits using DB function
+   */
+  async usdToCredits(costUsd: number): Promise<number> {
+    try {
+      const result = await this.pool.query<{ usd_to_credits: number }>(
+        `SELECT usd_to_credits($1)`,
+        [costUsd]
+      );
+      return result.rows[0]?.usd_to_credits || 1;
+    } catch (error: any) {
+      // Fallback: 1 credit per $0.01, minimum 1
+      return Math.max(1, Math.ceil(costUsd / 0.01));
+    }
+  }
+
+  /**
    * Initialize user credits record if not exists
    */
   async initializeUserCredits(userId: string, initialBalance: number = 0): Promise<void> {
