@@ -22,7 +22,7 @@ import {
   ToolDefinitionParam,
   ToolCall,
 } from '@secondlayer/shared';
-import { ModelSelector } from '@secondlayer/shared';
+import { ModelSelector, type TaskType } from '@secondlayer/shared';
 import {
   CHAT_SYSTEM_PROMPT,
   CHAT_INTENT_CLASSIFICATION_PROMPT,
@@ -101,12 +101,18 @@ export class ChatService {
         hasTemplate: !!responseTemplate,
       });
 
-      // 4. Pick LLM provider for the main loop (deep → Anthropic via anthropic-deep strategy)
-      const selection = ModelSelector.getModelSelection(effectiveBudget);
+      // 4. Pick LLM provider for the main loop
+      const taskType = this.classifyTaskType(classification.domains);
+      const isTaskAware = ModelSelector.isTaskAwareStrategy();
+      const selection = isTaskAware
+        ? ModelSelector.getTaskRouting(taskType, effectiveBudget)
+        : ModelSelector.getModelSelection(effectiveBudget);
 
       logger.info('[ChatService] Selected LLM', {
         provider: selection.provider,
         model: selection.model,
+        taskType: isTaskAware ? taskType : undefined,
+        strategy: isTaskAware ? 'task-aware' : 'default',
       });
 
       // 4. Build messages with token-aware context window + injected template
@@ -514,6 +520,17 @@ ${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}`
       });
       return undefined;
     }
+  }
+
+  /**
+   * Map classified domains to a task type for task-aware model routing.
+   */
+  private classifyTaskType(domains: string[]): TaskType {
+    if (domains.includes('legal_advice')) return 'analysis';
+    if (domains.includes('court')) return 'search';
+    if (domains.includes('legislation') && domains.length === 1) return 'lookup';
+    if (domains.every(d => ['registry', 'parliament'].includes(d))) return 'lookup';
+    return 'search';
   }
 
   /**
