@@ -441,8 +441,8 @@ services:
       HTTP_PORT: ${HTTP_PORT:-3000}
       HTTP_HOST: 0.0.0.0
       JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@pgbouncer-stage:5432/${POSTGRES_DB:-secondlayer_stage}
-      POSTGRES_HOST: pgbouncer-stage
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: postgres-stage
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -511,7 +511,7 @@ services:
     ports:
     - "127.0.0.1:3004:3000"
     depends_on:
-      pgbouncer-stage:
+      postgres-stage:
         condition: service_healthy
       qdrant-stage:
         condition: service_healthy
@@ -570,8 +570,8 @@ services:
       HTTP_HOST: 0.0.0.0
 
       # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@pgbouncer-stage:5432/${POSTGRES_DB:-secondlayer_stage}
-      POSTGRES_HOST: pgbouncer-stage
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POSTGRES_HOST: postgres-stage
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
