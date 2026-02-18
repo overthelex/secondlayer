@@ -83,7 +83,7 @@ run_in_container "Backfill court decisions ($START_DATE to $END_DATE)" \
   -e "CONCURRENCY=5" \
   -e "BATCH_DAYS=7" \
   -e "DRY_RUN=${DRY_RUN:-false}" \
-  "$CONTAINER" npm run backfill:decisions
+  "$CONTAINER" node dist/scripts/backfill-court-decisions.js
 
 # ── Step 2: Backfill full texts from reyestr.court.gov.ua ───────────
 
@@ -92,7 +92,7 @@ run_in_container "Backfill full texts (max 500 docs)" \
   -e "DELAY_MS=500" \
   -e "MAX_DOCS=500" \
   -e "DRY_RUN=${DRY_RUN:-false}" \
-  "$CONTAINER" npm run backfill:reyestr
+  "$CONTAINER" node dist/scripts/backfill-fulltext-reyestr.js
 
 # ── Step 3: Thematic collections (monthly only) ─────────────────────
 
@@ -103,14 +103,14 @@ if [ "$MONTHLY" = true ]; then
     -e "DATE_FROM=$DATE_FROM" \
     -e "MAX_DOCS=2000" \
     -e "DRY_RUN=${DRY_RUN:-false}" \
-    "$CONTAINER" npm run load:debt-cases
+    "$CONTAINER" node dist/scripts/load-debt-cases.js
 
   run_in_container "Load civil property cases (from $DATE_FROM, max 2000)" \
     -e "DATE_FROM=$DATE_FROM" \
     -e "MAX_DOCS=2000" \
     -e "CONCURRENCY=5" \
     -e "DRY_RUN=${DRY_RUN:-false}" \
-    "$CONTAINER" npm run load:civil-cases
+    "$CONTAINER" node dist/scripts/load-civil-property-cases.js
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────
