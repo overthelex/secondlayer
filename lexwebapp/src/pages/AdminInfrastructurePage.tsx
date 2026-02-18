@@ -9,13 +9,11 @@ import {
   ChevronDown,
   ChevronUp,
   Server,
-  HardDrive,
   Upload,
   DollarSign,
-  Activity,
-  Database,
   Cpu,
-  Wifi,
+  AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -126,6 +124,112 @@ function GaugeBar({ label, pct, detail }: { label: string; pct: number; detail: 
         <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <div className="text-xs text-claude-subtext">{detail}</div>
+    </div>
+  );
+}
+
+interface Recommendation {
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  description: string;
+}
+
+function generateRecommendations(data: any): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+
+  if (!data) return recommendations;
+
+  const cpuSeries = data?.cpu?.series || [];
+  const memPct = data?.memory?.used_pct || 0;
+  const pgCacheHit = data?.pg?.cache_hit_ratio || 0;
+  const redisEvictedSeries = data?.redis?.evicted_keys?.series || [];
+
+  const lastCpu = cpuSeries.length > 0 ? cpuSeries[cpuSeries.length - 1] : null;
+  const cpuIowait = lastCpu?.iowait || 0;
+
+  if (memPct > 80) {
+    recommendations.push({
+      severity: memPct > 90 ? 'critical' : 'warning',
+      title: 'High Memory Usage',
+      description: `Memory usage is at ${memPct.toFixed(1)}%. Consider adding more RAM or optimizing memory usage.`,
+    });
+  }
+
+  if (pgCacheHit < 0.95 && pgCacheHit > 0) {
+    recommendations.push({
+      severity: pgCacheHit < 0.90 ? 'critical' : 'warning',
+      title: 'Low PostgreSQL Cache Hit Ratio',
+      description: `Cache hit ratio is ${(pgCacheHit * 100).toFixed(1)}%. Increase shared_buffers to 25% of RAM (currently 8GB).`,
+    });
+  }
+
+  if (cpuIowait > 0.2) {
+    recommendations.push({
+      severity: cpuIowait > 0.4 ? 'critical' : 'warning',
+      title: 'High CPU Iowait',
+      description: `CPU iowait is ${(cpuIowait * 100).toFixed(1)}%. Consider using SSD for database or optimizing disk I/O.`,
+    });
+  }
+
+  if (redisEvictedSeries.length > 1) {
+    const lastEvicted = redisEvictedSeries[redisEvictedSeries.length - 1]?.value || 0;
+    const prevEvicted = redisEvictedSeries[redisEvictedSeries.length - 2]?.value || 0;
+    const evictedRate = lastEvicted - prevEvicted;
+    if (evictedRate > 0) {
+      recommendations.push({
+        severity: 'warning',
+        title: 'Redis Key Evictions',
+        description: `Redis is evicting keys. Increase maxmemory or switch to allkeys-lru eviction policy.`,
+      });
+    }
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push({
+      severity: 'info',
+      title: 'All Systems Healthy',
+      description: 'No infrastructure issues detected. Keep monitoring regularly.',
+    });
+  }
+
+  return recommendations;
+}
+
+function RecommendationsSection({ data }: { data: any }) {
+  const recommendations = generateRecommendations(data);
+
+  return (
+    <div className="space-y-3">
+      {recommendations.map((rec, idx) => (
+        <div
+          key={idx}
+          className={`flex items-start gap-3 p-4 rounded-xl border ${
+            rec.severity === 'critical'
+              ? 'bg-red-50 border-red-200'
+              : rec.severity === 'warning'
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-emerald-50 border-emerald-200'
+          }`}
+        >
+          {rec.severity === 'info' ? (
+            <Lightbulb size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+          ) : (
+            <AlertTriangle size={18} className={rec.severity === 'critical' ? 'text-red-600 mt-0.5 flex-shrink-0' : 'text-amber-600 mt-0.5 flex-shrink-0'} />
+          )}
+          <div>
+            <div className={`text-sm font-medium ${
+              rec.severity === 'critical' ? 'text-red-800' : rec.severity === 'warning' ? 'text-amber-800' : 'text-emerald-800'
+            }`}>
+              {rec.title}
+            </div>
+            <div className={`text-xs mt-0.5 ${
+              rec.severity === 'critical' ? 'text-red-600' : rec.severity === 'warning' ? 'text-amber-600' : 'text-emerald-600'
+            }`}>
+              {rec.description}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -345,7 +449,13 @@ export function AdminInfrastructurePage() {
             ) : infrastructure.error ? (
               <ErrorPlaceholder message={infrastructure.error} />
             ) : (
-              <InfrastructureSection data={infrastructure.data} />
+              <>
+                <InfrastructureSection data={infrastructure.data} />
+                <div className="mt-6">
+                  <h3 className="text-sm font-medium text-claude-text mb-3">Рекомендації</h3>
+                  <RecommendationsSection data={infrastructure.data} />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -590,7 +700,6 @@ function InfrastructureSection({ data }: { data: any }) {
   const redisMem = data?.redis?.memory?.series || [];
   const redisClients = data?.redis?.clients?.series || [];
   const redisCommands = data?.redis?.commands_rate?.series || [];
-  const redisEvicted = data?.redis?.evicted_keys?.series || [];
 
   return (
     <div className="space-y-4">
