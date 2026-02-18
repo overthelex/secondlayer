@@ -22,6 +22,7 @@ import {
   UnifiedMessage,
   ToolDefinitionParam,
   ToolCall,
+  type LLMProvider,
 } from '@secondlayer/shared';
 import { ModelSelector, type TaskType } from '@secondlayer/shared';
 import {
@@ -51,6 +52,7 @@ export interface ChatRequest {
   budget?: 'quick' | 'standard' | 'deep';
   conversationId?: string;
   userId?: string;
+  requestId?: string;
   signal?: AbortSignal;
 }
 
@@ -85,16 +87,31 @@ export class ChatService {
    * Run the agentic chat loop. Yields ChatEvents for SSE streaming.
    */
   async *chat(request: ChatRequest): AsyncGenerator<ChatEvent> {
-    const { query, history = [], budget = 'standard', signal } = request;
+    const { query, history = [], budget = 'standard', signal, requestId } = request;
     const startTime = Date.now();
+
+    // Create cost tracking record if requestId provided
+    if (requestId) {
+      try {
+        await this.costTracker.createTrackingRecord({
+          requestId,
+          toolName: 'ai_chat',
+          userId: request.userId,
+          userQuery: query,
+          queryParams: { budget, conversationId: request.conversationId },
+        });
+      } catch (e) {
+        logger.warn('[ChatService] Failed to create tracking record', { error: (e as Error).message });
+      }
+    }
 
     try {
       // 1. Classify intent via LLM → filter tools
-      const classification = await this.classifyChatIntent(query);
+      const classification = await this.classifyChatIntent(query, requestId);
       const toolDefs = await this.filterTools(classification.domains, classification.slots);
 
       // 2. Generate execution plan (replaces old response template)
-      const plan = await this.generateExecutionPlan(query, classification, toolDefs);
+      const plan = await this.generateExecutionPlan(query, classification, toolDefs, requestId);
 
       // 3. Emit plan to client via SSE
       if (plan) {
@@ -133,6 +150,25 @@ export class ChatService {
       const limits = BUDGET_LIMITS[effectiveBudget as BudgetKey] || BUDGET_LIMITS.standard;
       const messages = this.buildContextMessages(history, query, classification.domains, plan, limits.maxContextChars);
 
+      // Log estimated prompt size for rate-limit debugging
+      const totalChars = messages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+      const estimatedTokens = Math.ceil(totalChars / 3.5); // ~3.5 chars per token for multilingual
+      logger.info('[ChatService] Prompt size estimate', {
+        totalChars,
+        estimatedTokens,
+        messageCount: messages.length,
+        systemPromptChars: messages[0]?.content?.length || 0,
+        provider: selection.provider,
+        model: selection.model,
+      });
+
+      if (estimatedTokens > 25000) {
+        logger.warn('[ChatService] Prompt exceeds 25K tokens — risk of Anthropic rate limit', {
+          estimatedTokens,
+          provider: selection.provider,
+        });
+      }
+
       // 4. Convert tool definitions for LLM
       const llmTools = this.convertToolDefs(toolDefs);
 
@@ -151,6 +187,9 @@ export class ChatService {
         let toolCalls: ToolCall[] = [];
         let finishReason: 'stop' | 'tool_calls' = 'stop';
         let hasToolCallDelta = false;
+        let iterationUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+        let iterationModel = '';
+        let iterationProvider: LLMProvider = 'openai';
 
         for await (const chunk of llm.chatCompletionStream(
           {
@@ -177,15 +216,26 @@ export class ChatService {
             hasToolCallDelta = true;
           }
 
+          if (chunk.type === 'usage' && chunk.usage) {
+            iterationUsage = chunk.usage;
+          }
+
           if (chunk.type === 'done') {
             finishReason = chunk.finish_reason || 'stop';
             if (chunk.tool_calls) {
               toolCalls = chunk.tool_calls;
             }
+            if (chunk.model) iterationModel = chunk.model;
+            if (chunk.provider) iterationProvider = chunk.provider;
           }
         }
 
         if (signal?.aborted) break;
+
+        // Record LLM cost for this iteration
+        if (requestId && iterationUsage.total_tokens > 0) {
+          this.recordStreamingCost(requestId, iterationProvider, iterationModel, iterationUsage, `chat_iteration_${iteration}`);
+        }
 
         // Final answer — no tool calls
         if (finishReason === 'stop' || toolCalls.length === 0) {
@@ -294,10 +344,39 @@ export class ChatService {
       }
     } catch (err: any) {
       logger.error('[ChatService] Error in agentic loop', { error: err.message, stack: err.stack });
+
+      // Complete tracking as failed
+      if (requestId) {
+        try {
+          await this.costTracker.completeTrackingRecord({
+            requestId,
+            executionTimeMs: Date.now() - startTime,
+            status: 'failed',
+            errorMessage: err.message,
+          });
+        } catch (e) {
+          logger.warn('[ChatService] Failed to complete tracking record', { error: (e as Error).message });
+        }
+      }
+
       yield {
         type: 'error',
         data: { message: err.message },
       };
+      return;
+    }
+
+    // Complete tracking as successful
+    if (requestId) {
+      try {
+        await this.costTracker.completeTrackingRecord({
+          requestId,
+          executionTimeMs: Date.now() - startTime,
+          status: 'completed',
+        });
+      } catch (e) {
+        logger.warn('[ChatService] Failed to complete tracking record', { error: (e as Error).message });
+      }
     }
   }
 
@@ -367,7 +446,7 @@ ${stepsText}
    * Classify chat intent using a fast LLM call (gpt-4o-mini ~200ms).
    * Falls back to keyword-based QueryPlanner on error.
    */
-  private async classifyChatIntent(query: string): Promise<{
+  private async classifyChatIntent(query: string, requestId?: string): Promise<{
     domains: string[];
     keywords: string;
     slots?: Record<string, any>;
@@ -375,6 +454,13 @@ ${stepsText}
     try {
       const llm = getLLMManager();
       const provider = ModelSelector.getNextProvider();
+
+      const classifyChars = CHAT_INTENT_CLASSIFICATION_PROMPT.length + query.length;
+      logger.debug('[ChatService] Intent classification prompt size', {
+        chars: classifyChars,
+        estimatedTokens: Math.ceil(classifyChars / 3.5),
+        provider,
+      });
 
       const response = await llm.chatCompletion(
         {
@@ -388,6 +474,11 @@ ${stepsText}
         'quick',
         provider
       );
+
+      // Record classification LLM cost
+      if (requestId && response.usage) {
+        this.recordStreamingCost(requestId, response.provider, response.model, response.usage, 'intent_classification');
+      }
 
       const content = response.content || '{}';
 
@@ -453,7 +544,8 @@ ${stepsText}
   private async generateExecutionPlan(
     query: string,
     classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
-    toolDefs: ToolDefinition[]
+    toolDefs: ToolDefinition[],
+    requestId?: string
   ): Promise<ExecutionPlan | undefined> {
     try {
       const llm = getLLMManager();
@@ -465,6 +557,12 @@ ${stepsText}
         .join('\n');
 
       const prompt = buildPlanGenerationPrompt(query, classification, toolDescriptions);
+
+      logger.debug('[ChatService] Execution plan prompt size', {
+        chars: prompt.length,
+        estimatedTokens: Math.ceil(prompt.length / 3.5),
+        provider,
+      });
 
       const startTime = Date.now();
 
@@ -479,6 +577,11 @@ ${stepsText}
         'quick',
         provider
       );
+
+      // Record plan generation LLM cost
+      if (requestId && response.usage) {
+        this.recordStreamingCost(requestId, response.provider, response.model, response.usage, 'plan_generation');
+      }
 
       const content = response.content || '{}';
       const elapsed = Date.now() - startTime;
@@ -718,6 +821,38 @@ ${stepsText}
     }
 
     return null;
+  }
+
+  /**
+   * Record LLM cost for a single call (streaming or non-streaming).
+   * Fire-and-forget — errors are logged but don't break the chat flow.
+   */
+  private recordStreamingCost(
+    requestId: string,
+    provider: LLMProvider,
+    model: string,
+    usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number },
+    task: string
+  ): void {
+    const costUsd = ModelSelector.estimateCostAccurate(model, usage.prompt_tokens, usage.completion_tokens);
+
+    const params = {
+      requestId,
+      model,
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+      costUsd,
+      task,
+    };
+
+    const recordFn = provider === 'anthropic'
+      ? this.costTracker.recordAnthropicCall(params)
+      : this.costTracker.recordOpenAICall(params);
+
+    recordFn.catch((e: Error) => {
+      logger.warn('[ChatService] Failed to record LLM cost', { error: e.message, task });
+    });
   }
 
   /**

@@ -1750,11 +1750,27 @@ class HTTPMCPServer {
     // ============ AI Chat endpoint (agentic LLM loop with SSE) ============
     // POST /api/chat - Streams thinking steps, tool results, and final answer
     this.app.post('/api/chat', chatRateLimit as any, requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      const CHAT_CREDITS = 3;
+      const userId = req.user?.id;
+      const requestId = `chat-${uuidv4()}`;
+
       try {
         const { query, history, budget, conversationId } = req.body;
 
         if (!query || typeof query !== 'string') {
           return res.status(400).json({ error: 'query is required' });
+        }
+
+        // Pre-flight credit check
+        if (userId && this.creditService) {
+          const balance = await this.creditService.checkBalance(userId, CHAT_CREDITS);
+          if (!balance.hasCredits) {
+            return res.status(402).json({
+              error: 'Insufficient credits',
+              required: CHAT_CREDITS,
+              currentBalance: balance.currentBalance,
+            });
+          }
         }
 
         // Set SSE headers
@@ -1776,16 +1792,20 @@ class HTTPMCPServer {
           abortController.abort();
         });
 
+        let chatCompleted = false;
         try {
           for await (const event of this.chatService.chat({
             query,
             history,
             budget: budget || 'standard',
             conversationId,
-            userId: req.user?.id,
+            userId,
+            requestId,
             signal: abortController.signal,
           })) {
             if (abortController.signal.aborted) break;
+
+            if (event.type === 'complete') chatCompleted = true;
 
             res.write(`event: ${event.type}\n`);
             res.write(`data: ${JSON.stringify(event.data)}\n\n`);
@@ -1794,11 +1814,34 @@ class HTTPMCPServer {
           clearInterval(heartbeat);
         }
 
+        // Post-execution credit deduction (only if chat completed successfully)
+        if (chatCompleted && userId && this.creditService) {
+          try {
+            const deduction = await this.creditService.deductCredits(
+              userId,
+              CHAT_CREDITS,
+              'ai_chat',
+              requestId,
+              'AI chat conversation'
+            );
+            if (deduction.success) {
+              logger.info('[ChatService] Credits deducted', {
+                userId,
+                creditsDeducted: CHAT_CREDITS,
+                newBalance: deduction.newBalance,
+                requestId,
+              });
+            }
+          } catch (e: any) {
+            logger.warn('[ChatService] Failed to deduct credits', { error: e.message, requestId });
+          }
+        }
+
         if (!res.writableEnded) {
           res.end();
         }
       } catch (error: any) {
-        logger.error('[ChatService] Endpoint error', { error: error.message });
+        logger.error('[ChatService] Endpoint error', { error: error.message, requestId });
         if (!res.headersSent) {
           res.status(500).json({ error: 'Chat failed', message: error.message });
         } else if (!res.writableEnded) {
