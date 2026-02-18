@@ -30,7 +30,7 @@ export function createPaymentRouter(
 
   router.get('/available-providers', async (req: any, res: Response) => {
     try {
-      const userId = req.user.userId;
+      const userId = req.user?.userId || req.user?.id;
       const tagResult = await db.query('SELECT 1 FROM user_tags WHERE user_id = $1 AND tag = $2', [userId, 'crypto']);
       const hasCryptoTag = tagResult.rows.length > 0;
       return res.json({
@@ -54,8 +54,8 @@ export function createPaymentRouter(
    */
   router.post('/stripe/create', async (req: any, res: Response) => {
     try {
-      const userId = req.user.userId;
-      const email = req.user.email;
+      const userId = req.user?.userId || req.user?.id;
+      const email = req.user?.email;
       const { amount_usd, metadata } = req.body;
 
       if (!amount_usd || typeof amount_usd !== 'number') {
@@ -91,8 +91,8 @@ export function createPaymentRouter(
    */
   router.post('/fondy/create', async (req: any, res: Response) => {
     try {
-      const userId = req.user.userId;
-      const email = req.user.email;
+      const userId = req.user?.userId || req.user?.id;
+      const email = req.user?.email;
       const { amount_uah } = req.body;
 
       if (!amount_uah || typeof amount_uah !== 'number') {
@@ -128,8 +128,8 @@ export function createPaymentRouter(
 
   router.post('/metamask/create', cryptoTagRequired, async (req: any, res: Response) => {
     try {
-      const userId = req.user.userId;
-      const email = req.user.email;
+      const userId = req.user?.userId || req.user?.id;
+      const email = req.user?.email;
       const { amount_usd, network, token } = req.body;
       if (!amount_usd || typeof amount_usd !== 'number') {
         return res.status(400).json({ error: 'Invalid request', message: 'amount_usd is required and must be a number' });
@@ -161,8 +161,8 @@ export function createPaymentRouter(
 
   router.post('/binance-pay/create', cryptoTagRequired, async (req: any, res: Response) => {
     try {
-      const userId = req.user.userId;
-      const email = req.user.email;
+      const userId = req.user?.userId || req.user?.id;
+      const email = req.user?.email;
       const { amount_usd } = req.body;
       if (!amount_usd || typeof amount_usd !== 'number') {
         return res.status(400).json({ error: 'Invalid request', message: 'amount_usd is required and must be a number' });
