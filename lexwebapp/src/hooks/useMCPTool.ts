@@ -1116,19 +1116,3 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
   return { executeChat };
 }
 
-// Specialized hooks for popular tools
-export function useSearchLegalPrecedents(options?: UseMCPToolOptions) {
-  return useMCPTool('search_legal_precedents', options);
-}
-
-export function useSearchLegislation(options?: UseMCPToolOptions) {
-  return useMCPTool('search_legislation', options);
-}
-
-export function useSearchDeputies(options?: UseMCPToolOptions) {
-  return useMCPTool('rada_get_deputy_info', options);
-}
-
-export function useSearchEntities(options?: UseMCPToolOptions) {
-  return useMCPTool('openreyestr_search_entities', options);
-}

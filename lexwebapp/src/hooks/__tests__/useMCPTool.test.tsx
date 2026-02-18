@@ -33,7 +33,6 @@ describe('useMCPTool', () => {
       isStreaming: false,
       streamController: null,
       currentTool: null,
-      currentSessionId: null,
     });
 
     vi.clearAllMocks();

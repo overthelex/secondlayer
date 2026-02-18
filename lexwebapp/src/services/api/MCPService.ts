@@ -12,13 +12,6 @@ import {
   Decision,
   Citation,
 } from '../../types/models';
-import {
-  SearchCourtCasesParams,
-  SearchLegislationParams,
-  MCPToolParams,
-  MCPToolResult,
-  Tool,
-} from '../../types/api/mcp-tools';
 import { StreamingCallbacks } from '../../types/api/sse';
 
 export interface CitationWarning {
@@ -238,104 +231,6 @@ export class MCPService extends BaseService {
     }
 
     return controller;
-  }
-
-  /**
-   * List all available tools
-   */
-  async listAvailableTools(): Promise<Tool[]> {
-    try {
-      const response = await fetch(`${this.API_URL}/tools`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.getAuthToken()}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch tools: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.tools || [];
-    } catch (error) {
-      console.error('Failed to list tools:', error);
-      return [];
-    }
-  }
-
-  // ============================================================================
-  // Type-Safe Wrappers for Popular Tools
-  // ============================================================================
-
-  /**
-   * Get legal advice (most popular tool)
-   */
-  async getLegalAdvice(params: GetLegalAdviceParams): Promise<Message> {
-    try {
-      const response = await this.callTool('get_legal_advice', {
-        query: params.query,
-        max_precedents: params.max_precedents || 5,
-        include_reasoning: params.include_reasoning !== false,
-      });
-
-      const parsedResult = this.parseBackendResponse(response);
-      return this.transformToMessage(parsedResult, 'get_legal_advice');
-    } catch (error) {
-      return this.handleErrorAsMessage(error);
-    }
-  }
-
-  /**
-   * Get legal advice with streaming
-   */
-  async getLegalAdviceStreaming(
-    params: GetLegalAdviceParams,
-    callbacks: StreamingCallbacks
-  ): Promise<AbortController> {
-    return this.streamTool(
-      'get_legal_advice',
-      {
-        query: params.query,
-        max_precedents: params.max_precedents || 5,
-        include_reasoning: params.include_reasoning !== false,
-      },
-      callbacks
-    );
-  }
-
-  /**
-   * Search court cases
-   */
-  async searchCourtCases(params: SearchCourtCasesParams): Promise<any> {
-    return this.callTool('search_legal_precedents', params);
-  }
-
-  /**
-   * Search court cases with streaming
-   */
-  async searchCourtCasesStreaming(
-    params: SearchCourtCasesParams,
-    callbacks: StreamingCallbacks
-  ): Promise<AbortController> {
-    return this.streamTool('search_legal_precedents', params, callbacks);
-  }
-
-  /**
-   * Search legislation
-   */
-  async searchLegislation(params: SearchLegislationParams): Promise<any> {
-    return this.callTool('search_legislation', params);
-  }
-
-  /**
-   * Search legislation with streaming
-   */
-  async searchLegislationStreaming(
-    params: SearchLegislationParams,
-    callbacks: StreamingCallbacks
-  ): Promise<AbortController> {
-    return this.streamTool('search_legislation', params, callbacks);
   }
 
   // ============================================================================
@@ -564,18 +459,6 @@ export class MCPService extends BaseService {
     return JSON.stringify(response, null, 2);
   }
 
-  /**
-   * Handle errors and return error message
-   */
-  private handleErrorAsMessage(error: any): Message {
-    console.error('MCP Service error:', error);
-    return {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: `Вибачте, сталася помилка: ${error.message || 'Невідома помилка'}. Будь ласка, спробуйте пізніше.`,
-      isStreaming: false,
-    };
-  }
 }
 
 // Export singleton instance

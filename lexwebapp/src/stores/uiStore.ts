@@ -18,27 +18,12 @@ interface UIState {
   setRightPanelOpen: (isOpen: boolean) => void;
   rightPanelWidth: number;
   setRightPanelWidth: (width: number) => void;
-
-  // Modals
-  openModals: Set<string>;
-  openModal: (modalId: string) => void;
-  closeModal: (modalId: string) => void;
-  isModalOpen: (modalId: string) => boolean;
-
-  // Theme
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
-  toggleTheme: () => void;
-
-  // Loading states
-  globalLoading: boolean;
-  setGlobalLoading: (loading: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
   devtools(
     persist(
-      (set, get) => ({
+      (set) => ({
         // Sidebar - default open on desktop, closed on mobile
         isSidebarOpen: window.innerWidth >= 1024,
         toggleSidebar: () =>
@@ -52,41 +37,13 @@ export const useUIStore = create<UIState>()(
         setRightPanelOpen: (isOpen) => set({ isRightPanelOpen: isOpen }),
         rightPanelWidth: 400,
         setRightPanelWidth: (width) => set({ rightPanelWidth: Math.min(800, Math.max(320, width)) }),
-
-        // Modals
-        openModals: new Set(),
-        openModal: (modalId) =>
-          set((state) => ({
-            openModals: new Set(state.openModals).add(modalId),
-          })),
-        closeModal: (modalId) =>
-          set((state) => {
-            const newSet = new Set(state.openModals);
-            newSet.delete(modalId);
-            return { openModals: newSet };
-          }),
-        isModalOpen: (modalId) => get().openModals.has(modalId),
-
-        // Theme
-        theme: 'light',
-        setTheme: (theme) => set({ theme }),
-        toggleTheme: () =>
-          set((state) => ({
-            theme: state.theme === 'light' ? 'dark' : 'light',
-          })),
-
-        // Loading
-        globalLoading: false,
-        setGlobalLoading: (loading) => set({ globalLoading: loading }),
       }),
       {
         name: 'ui-storage',
         partialize: (state) => ({
-          // Persist sidebar, panel, and theme preferences
           isSidebarOpen: state.isSidebarOpen,
           isRightPanelOpen: state.isRightPanelOpen,
           rightPanelWidth: state.rightPanelWidth,
-          theme: state.theme,
         }),
       }
     ),

@@ -99,19 +99,6 @@ export class ConversationService extends BaseService {
     }
   }
 
-  async getMessages(
-    conversationId: string,
-    params?: { limit?: number; offset?: number }
-  ): Promise<{ messages: ConversationMessage[] }> {
-    try {
-      const response = await this.client.get(`/api/conversations/${conversationId}/messages`, {
-        params,
-      });
-      return response.data;
-    } catch (error) {
-      return this.handleError(error);
-    }
-  }
 }
 
 export const conversationService = new ConversationService();
