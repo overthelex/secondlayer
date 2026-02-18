@@ -15,10 +15,10 @@ echo "========================================" >> "$LOG_FILE"
 echo "NAIS weekly sync started: $(date)" >> "$LOG_FILE"
 
 # Determine container name based on environment
-if docker ps --format '{{.Names}}' | grep -q 'app-openreyestr-stage'; then
-  CONTAINER="app-openreyestr-stage"
-elif docker ps --format '{{.Names}}' | grep -q 'app-openreyestr-local'; then
-  CONTAINER="app-openreyestr-local"
+if docker ps --format '{{.Names}}' | grep -q 'openreyestr-app-stage'; then
+  CONTAINER="openreyestr-app-stage"
+elif docker ps --format '{{.Names}}' | grep -q 'openreyestr-app-local'; then
+  CONTAINER="openreyestr-app-local"
 else
   echo "ERROR: No openreyestr container running" >> "$LOG_FILE"
   exit 1
