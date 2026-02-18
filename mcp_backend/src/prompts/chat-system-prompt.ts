@@ -34,49 +34,77 @@ export interface PlanStep {
 // Plan Generation Prompt
 // ============================
 
-export function buildPlanGenerationPrompt(
+/**
+ * Build plan generation messages as a system+user pair.
+ * The system message contains rules and a concrete JSON example,
+ * so even weak models (gpt-5-nano) produce valid plans.
+ */
+export function buildPlanGenerationMessages(
   query: string,
   classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
   toolDescriptions: string
-): string {
-  return `Ти — планувальник дій юридичного AI-асистента SecondLayer. Твоя задача — створити план виконання запиту користувача.
+): Array<{ role: 'system' | 'user'; content: string }> {
+  const systemMessage = `You are a plan generator for SecondLayer legal AI assistant. Output ONLY valid JSON — no markdown, no comments, no extra text.
 
-## Запит користувача
-${query}
+## Rules
+1. Max 5 steps
+2. Use ONLY tools from the user's tool list
+3. Each step must have concrete params (no placeholders)
+4. Simple query (1 tool needed) → 1-step plan
+5. If case_number is in slots → start with get_case_documents_chain or get_court_decision
+6. If law_reference is in slots → start with get_legislation_article
+7. depends_on = list of step ids that must complete first
+8. purpose in Ukrainian, max 10 words
+9. NEVER repeat the same tool with same params in different steps
 
-## Класифікація запиту
-- Домени: ${classification.domains.join(', ')}
-- Ключові слова: ${classification.keywords}
-${classification.slots ? `- Слоти: ${JSON.stringify(classification.slots)}` : ''}
-
-## Доступні інструменти
-${toolDescriptions}
-
-## Правила генерації плану
-1. Максимум 5 кроків
-2. Використовуй ТІЛЬКИ інструменти зі списку вище
-3. Для кожного кроку вкажи КОНКРЕТНІ параметри (не плейсхолдери)
-4. Якщо запит простий (потрібен 1 інструмент) — план з 1 кроку
-5. Якщо в слотах є case_number — починай з get_case_documents_chain або get_court_decision
-6. Якщо в слотах є law_reference — починай з get_legislation_article
-7. depends_on — список id кроків, від яких залежить поточний
-8. purpose пиши УКРАЇНСЬКОЮ, коротко (до 10 слів)
-9. Параметри мають бути валідним JSON
-
-## Формат відповіді
-Поверни ТІЛЬКИ валідний JSON (без markdown, без коментарів):
+## JSON schema
 {
-  "goal": "Ціль аналізу одним реченням",
+  "goal": "string — analysis goal in 1 sentence (Ukrainian)",
   "steps": [
     {
       "id": 1,
       "tool": "tool_name",
       "params": {"key": "value"},
-      "purpose": "Мета кроку українською"
+      "purpose": "Мета кроку українською",
+      "depends_on": []
     }
   ],
   "expected_iterations": 3
-}`;
+}
+
+## Example
+Query: "Аналіз справи 922/989/18 через усі інстанції"
+Slots: {"case_number": "922/989/18"}
+
+Response:
+{"goal":"Комплексний аналіз справи 922/989/18 через усі інстанції","steps":[{"id":1,"tool":"get_case_documents_chain","params":{"caseNumber":"922/989/18"},"purpose":"Отримати всі документи справи"},{"id":2,"tool":"load_full_texts","params":{"doc_ids":["from_step_1"]},"purpose":"Завантажити повні тексти рішень","depends_on":[1]}],"expected_iterations":3}`;
+
+  const slotsStr = classification.slots ? `\nСлоти: ${JSON.stringify(classification.slots)}` : '';
+
+  const userMessage = `Запит: ${query}
+Домени: ${classification.domains.join(', ')}
+Ключові слова: ${classification.keywords}${slotsStr}
+
+Інструменти:
+${toolDescriptions}`;
+
+  return [
+    { role: 'system', content: systemMessage },
+    { role: 'user', content: userMessage },
+  ];
+}
+
+/**
+ * Backward-compatible wrapper — returns the plan as a single string.
+ * @deprecated Use buildPlanGenerationMessages() instead.
+ */
+export function buildPlanGenerationPrompt(
+  query: string,
+  classification: { domains: string[]; keywords: string; slots?: Record<string, any> },
+  toolDescriptions: string
+): string {
+  const msgs = buildPlanGenerationMessages(query, classification, toolDescriptions);
+  return msgs.map(m => m.content).join('\n\n');
 }
 
 export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент SecondLayer, який спеціалізується на українському праві.
@@ -163,6 +191,7 @@ export const CHAT_SYSTEM_PROMPT = `Ти — юридичний асистент 
 ЗАВЖДИ використовуй цей формат для зразків юридичних документів. Перед документом додавай короткий вступ з поясненням та правовою основою. Після документа додавай примітки щодо важливих моментів, які потрібно врахувати.
 
 ## Правила
+- НІКОЛИ не викликай один і той самий інструмент двічі з однаковими або схожими параметрами. Якщо дані вже отримано — аналізуй їх.
 - Відповідай УКРАЇНСЬКОЮ мовою
 - Цитуй ТІЛЬКИ результати інструментів — ніколи не вигадуй номери справ або статті
 - Якщо інструмент не повернув результатів — прямо скажи про це

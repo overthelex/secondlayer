@@ -11,6 +11,7 @@
  * 7. Stream token-level events to client via SSE
  */
 
+import { createHash } from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { QueryPlanner } from './query-planner.js';
@@ -31,7 +32,7 @@ import {
   CHAT_INTENT_CLASSIFICATION_PROMPT,
   DOMAIN_TOOL_MAP,
   DEFAULT_TOOLS,
-  buildPlanGenerationPrompt,
+  buildPlanGenerationMessages,
   ExecutionPlan,
 } from '../prompts/chat-system-prompt.js';
 import { buildEnrichedSystemPrompt, SCENARIO_CATALOG } from '../prompts/tool-registry-catalog.js';
@@ -71,6 +72,35 @@ type BudgetKey = keyof typeof BUDGET_LIMITS;
 
 const CITATION_CHECK_TIMEOUT_MS = 5_000;
 const CASE_NUMBER_REGEX = /\d+\/\d+\/\d{2,4}/g;
+
+// Tools where deduplication hashes only on the primary key (e.g. caseNumber),
+// ignoring secondary params like groupByInstance, includeFullText, maxDocs.
+const COARSE_HASH_TOOLS: Record<string, string[]> = {
+  get_case_documents_chain: ['caseNumber'],
+  get_court_decision: ['caseNumber'],
+  load_full_texts: ['doc_ids'],
+};
+
+/**
+ * Compute a deduplication key for a tool call.
+ * For court-chain tools, hash only the primary key to catch "same query, different flags" loops.
+ */
+function toolCallHash(toolName: string, params: Record<string, any>): string {
+  const primaryKeys = COARSE_HASH_TOOLS[toolName];
+  let payload: string;
+  if (primaryKeys) {
+    const subset: Record<string, any> = {};
+    for (const k of primaryKeys) {
+      if (params[k] !== undefined) subset[k] = params[k];
+    }
+    payload = JSON.stringify(subset);
+  } else {
+    // Sort keys for deterministic hashing
+    payload = JSON.stringify(params, Object.keys(params).sort());
+  }
+  const hash = createHash('md5').update(payload).digest('hex').slice(0, 12);
+  return `${toolName}:${hash}`;
+}
 
 export class ChatService {
   /** In-memory cache: conversationId → compressed summary of older history */
@@ -121,8 +151,23 @@ export class ChatService {
         yield { type: 'plan', data: plan };
       }
 
-      // 4. Budget escalation: >= 3 steps → deep, otherwise keep original
-      const effectiveBudget = (plan && plan.steps.length >= 3) ? 'deep' as const : budget;
+      // 4. Budget escalation:
+      //    - Plan with >= 3 steps → deep
+      //    - Complex case analysis (case_number + long query) → deep even without a plan
+      let effectiveBudget: BudgetKey = budget;
+      if (plan && plan.steps.length >= 3) {
+        effectiveBudget = 'deep';
+      } else if (
+        !plan &&
+        classification.slots?.case_number &&
+        query.length > 100
+      ) {
+        effectiveBudget = 'deep';
+        logger.info('[ChatService] Auto-escalated to deep budget (case_number + long query, no plan)', {
+          caseNumber: classification.slots.case_number,
+          queryLength: query.length,
+        });
+      }
 
       logger.info('[ChatService] Starting agentic loop', {
         query: query.slice(0, 100),
@@ -177,6 +222,7 @@ export class ChatService {
       const toolsUsed: string[] = [];
       const collectedToolCalls: ToolCall[] = [];
       const collectedThinkingSteps: Array<{ tool: string; params: any; result: any }> = [];
+      const previousToolCallHashes = new Set<string>();
 
       while (iteration < limits.maxToolCalls) {
         if (signal?.aborted) break;
@@ -266,7 +312,57 @@ export class ChatService {
           break;
         }
 
-        // Tool-calling iteration — execute all tool calls in parallel
+        // Tool-calling iteration — deduplicate before executing
+
+        // Filter out duplicate tool calls (same tool + same/similar params)
+        const uniqueToolCalls: ToolCall[] = [];
+        const duplicateToolCalls: ToolCall[] = [];
+        for (const call of toolCalls) {
+          const hash = toolCallHash(call.name, (call.arguments || {}) as Record<string, any>);
+          if (previousToolCallHashes.has(hash)) {
+            duplicateToolCalls.push(call);
+            logger.warn('[ChatService] Skipping duplicate tool call', {
+              tool: call.name,
+              hash,
+              iteration,
+            });
+          } else {
+            previousToolCallHashes.add(hash);
+            uniqueToolCalls.push(call);
+          }
+        }
+
+        // If ALL tool calls are duplicates, force exit and generate answer from collected data
+        if (uniqueToolCalls.length === 0) {
+          logger.warn('[ChatService] All tool calls are duplicates — forcing answer generation', {
+            iteration,
+            duplicates: duplicateToolCalls.map(c => c.name),
+          });
+          // Push assistant message with the duplicate calls so context is valid,
+          // then inject a nudge to synthesize
+          messages.push({
+            role: 'assistant',
+            content: fullContent || '',
+            tool_calls: toolCalls,
+          });
+          for (const call of toolCalls) {
+            messages.push({
+              role: 'tool',
+              content: JSON.stringify({ note: 'Цей інструмент вже було викликано з такими параметрами. Використай наявні результати.' }),
+              tool_call_id: call.id,
+            });
+          }
+          messages.push({
+            role: 'user',
+            content: 'Дані вже отримано. Перейди до аналізу на основі зібраних результатів. Не повторюй виклики інструментів.',
+          });
+          // Continue to next iteration — the model should now produce a text answer
+          iteration++;
+          continue;
+        }
+
+        // Replace toolCalls with only unique ones for execution
+        toolCalls = uniqueToolCalls;
 
         // Step 1: Emit all thinking events upfront
         for (const call of toolCalls) {
@@ -326,6 +422,14 @@ export class ChatService {
             role: 'tool',
             content: JSON.stringify(summarized),
             tool_call_id: call.id,
+          });
+        }
+
+        // After first tool execution round, nudge the model to synthesize
+        if (iteration === 0 && settled.some(o => o.status === 'fulfilled')) {
+          messages.push({
+            role: 'user',
+            content: 'Дані вже отримано. Перейди до аналізу на основі зібраних результатів. Не повторюй виклики інструментів.',
           });
         }
 
@@ -678,7 +782,7 @@ ${stepsText}
         ? parsed.domains
         : ['court'];
       const keywords = typeof parsed.keywords === 'string' ? parsed.keywords : query;
-      const slots = parsed.slots && typeof parsed.slots === 'object' && Object.keys(parsed.slots).length > 0
+      let slots: Record<string, any> | undefined = parsed.slots && typeof parsed.slots === 'object' && Object.keys(parsed.slots).length > 0
         ? parsed.slots
         : undefined;
 
@@ -691,6 +795,15 @@ ${stepsText}
       }
       if (slots?.law_reference && !domains.includes('legislation')) {
         domains.push('legislation');
+      }
+
+      // Safety net: extract case_number from query if LLM missed it
+      if (!slots?.case_number) {
+        const caseMatch = query.match(/\d+\/\d+\/\d{2,4}/);
+        if (caseMatch) {
+          if (!slots) slots = {};
+          slots.case_number = caseMatch[0];
+        }
       }
 
       // Keyword-based safety net for registry queries
@@ -712,10 +825,20 @@ ${stepsText}
 
       // Fallback to keyword-based classification
       const intent = await this.queryPlanner.classifyIntent(query, 'quick');
+      const fallbackSlots = (intent.slots as Record<string, any>) || {};
+
+      // Extract case_number from query if QueryPlanner didn't
+      if (!fallbackSlots.case_number) {
+        const caseMatch = query.match(/\d+\/\d+\/\d{2,4}/);
+        if (caseMatch) {
+          fallbackSlots.case_number = caseMatch[0];
+        }
+      }
+
       return {
         domains: intent.domains,
         keywords: query,
-        slots: intent.slots as Record<string, any> | undefined,
+        slots: Object.keys(fallbackSlots).length > 0 ? fallbackSlots : undefined,
       };
     }
   }
@@ -739,20 +862,19 @@ ${stepsText}
         .map((d) => `- ${d.name}: ${d.description}`)
         .join('\n');
 
-      const prompt = buildPlanGenerationPrompt(query, classification, toolDescriptions);
+      const planMessages = buildPlanGenerationMessages(query, classification, toolDescriptions);
 
+      const totalChars = planMessages.reduce((s, m) => s + m.content.length, 0);
       logger.debug('[ChatService] Execution plan prompt size', {
-        chars: prompt.length,
-        estimatedTokens: Math.ceil(prompt.length / 3.5),
+        chars: totalChars,
+        estimatedTokens: Math.ceil(totalChars / 3.5),
       });
 
       const startTime = Date.now();
 
       const response = await llm.chatCompletion(
         {
-          messages: [
-            { role: 'user', content: prompt },
-          ],
+          messages: planMessages,
           max_tokens: 800,
           temperature: 0.1,
           response_format: { type: 'json_object' },
