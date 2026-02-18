@@ -3,8 +3,8 @@
 require('dotenv').config();
 
 // Ensure console output is not buffered
-process.stdout.setEncoding('utf8');
-process.stderr.setEncoding('utf8');
+if (typeof process.stdout.setEncoding === 'function') process.stdout.setEncoding('utf8');
+if (typeof process.stderr.setEncoding === 'function') process.stderr.setEncoding('utf8');
 
 // Make console.log output immediately
 const originalLog = console.log;
