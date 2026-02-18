@@ -5,6 +5,11 @@ import { OpenAIClientManager, getOpenAIManager, CostTrackerInterface } from './o
 import { AnthropicClientManager, getAnthropicManager } from './anthropic-client';
 import { ModelSelector, LLMProvider, BudgetLevel, ModelSelection } from './model-selector';
 
+/** GPT-5 models only support temperature=1 (default) */
+function supportsTemperature(model: string): boolean {
+  return !model.startsWith('gpt-5');
+}
+
 export interface ToolDefinitionParam {
   name: string;
   description: string;
@@ -166,7 +171,7 @@ export class LLMClientManager {
       const params: OpenAI.Chat.ChatCompletionCreateParams = {
         model,
         messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
-        temperature: request.temperature ?? 0.3,
+        ...(supportsTemperature(model) ? { temperature: request.temperature ?? 0.3 } : {}),
       };
 
       if (request.max_tokens) {
@@ -395,7 +400,7 @@ export class LLMClientManager {
     const params: any = {
       model,
       messages,
-      temperature: request.temperature ?? 0.3,
+      ...(supportsTemperature(model) ? { temperature: request.temperature ?? 0.3 } : {}),
       stream: true,
       stream_options: { include_usage: true },
     };
