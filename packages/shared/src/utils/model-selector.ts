@@ -22,7 +22,7 @@ export class ModelSelector {
   private static readonly OPENAI_STANDARD = process.env.OPENAI_MODEL_STANDARD || 'gpt-4o-mini';
   private static readonly OPENAI_DEEP = process.env.OPENAI_MODEL_DEEP || 'gpt-4o';
 
-  private static readonly ANTHROPIC_QUICK = process.env.ANTHROPIC_MODEL_QUICK || 'claude-haiku-4-5-20241022';
+  private static readonly ANTHROPIC_QUICK = process.env.ANTHROPIC_MODEL_QUICK || 'claude-haiku-4-5-20251001';
   private static readonly ANTHROPIC_STANDARD = process.env.ANTHROPIC_MODEL_STANDARD || 'claude-sonnet-4-5-20250929';
   private static readonly ANTHROPIC_DEEP = process.env.ANTHROPIC_MODEL_DEEP || 'claude-sonnet-4-5-20250929';
 
