@@ -2,6 +2,7 @@ import { logger } from './logger';
 
 export type LLMProvider = 'openai' | 'anthropic';
 export type BudgetLevel = 'quick' | 'standard' | 'deep';
+export type TaskType = 'search' | 'analysis' | 'lookup';
 
 export interface ModelSelection {
   provider: LLMProvider;
@@ -77,6 +78,9 @@ export class ModelSelector {
       case 'anthropic-deep':
         // Default to OpenAI; deep budget override happens in getModelSelection()
         return 'openai';
+      case 'task-aware':
+        // Default to OpenAI; actual task routing happens in ChatService via getTaskRouting()
+        return 'openai';
       case 'openai-first':
       default:
         return 'openai';
@@ -125,6 +129,31 @@ export class ModelSelector {
     }
 
     return providers;
+  }
+
+  /**
+   * Check if the current strategy is task-aware routing.
+   */
+  static isTaskAwareStrategy(): boolean {
+    return this.PROVIDER_STRATEGY === 'task-aware';
+  }
+
+  /**
+   * Task-aware model routing: maps task types to optimal provider+budget.
+   * - search (recall-heavy): GPT-4o (OpenAI deep)
+   * - analysis (reasoning): Claude (Anthropic deep)
+   * - lookup (simple): gpt-4o-mini (OpenAI quick)
+   */
+  static getTaskRouting(taskType: TaskType, budget: BudgetLevel): ModelSelection {
+    const routing: Record<TaskType, { provider: LLMProvider; budget: BudgetLevel }> = {
+      search:   { provider: 'openai',    budget: 'deep' },
+      analysis: { provider: 'anthropic', budget: 'deep' },
+      lookup:   { provider: 'openai',    budget: 'quick' },
+    };
+    const route = routing[taskType] || { provider: 'openai', budget };
+    const available = this.getAvailableProviders();
+    const provider = available.includes(route.provider) ? route.provider : available[0] || 'openai';
+    return this.getModelSelection(route.budget, provider);
   }
 
   static estimateCost(model: string, tokens: number): number {
