@@ -11,6 +11,7 @@ import { UserPreferencesService } from '../services/user-preferences-service.js'
 import { PrometheusService } from '../services/prometheus-service.js';
 import { PricingService } from '../services/pricing-service.js';
 import { SubscriptionService } from '../services/subscription-service.js';
+import bcrypt from 'bcryptjs';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -280,6 +281,8 @@ export function createAdminRoutes(
         params.push(tier);
       }
 
+      const tag = req.query.tag as string | undefined;
+
       if (status === 'active') {
         whereClause += ` AND EXISTS (
           SELECT 1 FROM cost_tracking ct
@@ -292,6 +295,12 @@ export function createAdminRoutes(
           WHERE ct.user_id = u.id
             AND ct.created_at >= CURRENT_DATE - INTERVAL '30 days'
         )`;
+      }
+
+      if (tag) {
+        paramCount++;
+        whereClause += ` AND EXISTS (SELECT 1 FROM user_tags ut2 WHERE ut2.user_id = u.id AND ut2.tag = $${paramCount})`;
+        params.push(tag);
       }
 
       const result = await db.query(`
@@ -318,7 +327,11 @@ export function createAdminRoutes(
           EXISTS (
             SELECT 1 FROM user_tags ut
             WHERE ut.user_id = u.id AND ut.tag = 'crypto'
-          ) as has_crypto_tag
+          ) as has_crypto_tag,
+          EXISTS (
+            SELECT 1 FROM user_tags ut3
+            WHERE ut3.user_id = u.id AND ut3.tag = 'test'
+          ) as has_test_tag
         FROM users u
         LEFT JOIN user_billing ub ON u.id = ub.user_id
         WHERE ${whereClause}
@@ -347,6 +360,7 @@ export function createAdminRoutes(
           total_requests: parseInt(row.total_requests || 0),
           last_request_at: row.last_request_at,
           has_crypto_tag: row.has_crypto_tag || false,
+          has_test_tag: row.has_test_tag || false,
         })),
         pagination: {
           limit,
@@ -630,6 +644,137 @@ export function createAdminRoutes(
     } catch (error: any) {
       logger.error('Failed to remove crypto tag', { error: error.message });
       res.status(500).json({ error: 'Failed to remove crypto tag' });
+    }
+  });
+
+  // ========================================
+  // USER TAGS (TEST)
+  // ========================================
+
+  router.put('/users/:userId/tags/test', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      const adminId = (req as any).user.id;
+      await db.query(
+        `INSERT INTO user_tags (user_id, tag, assigned_by) VALUES ($1, 'test', $2) ON CONFLICT (user_id, tag) DO NOTHING`,
+        [userId, adminId]
+      );
+      await logAdminAction(adminId, 'assign_test_tag', userId, null, { tag: 'test' }, req);
+      res.json({ success: true, message: 'Test tag assigned' });
+    } catch (error: any) {
+      logger.error('Failed to assign test tag', { error: error.message });
+      res.status(500).json({ error: 'Failed to assign test tag' });
+    }
+  });
+
+  router.delete('/users/:userId/tags/test', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      const adminId = (req as any).user.id;
+      await db.query('DELETE FROM user_tags WHERE user_id = $1 AND tag = $2', [userId, 'test']);
+      await logAdminAction(adminId, 'remove_test_tag', userId, null, { tag: 'test' }, req);
+      res.json({ success: true, message: 'Test tag removed' });
+    } catch (error: any) {
+      logger.error('Failed to remove test tag', { error: error.message });
+      res.status(500).json({ error: 'Failed to remove test tag' });
+    }
+  });
+
+  // ========================================
+  // TEST USER CREATION
+  // ========================================
+
+  /**
+   * POST /api/admin/test-users
+   * Create a test user with password auth, billing, credits, and test tag
+   */
+  router.post('/test-users', async (req: Request, res: Response) => {
+    try {
+      const { email, name, password, credits } = req.body;
+      const adminId = (req as any).user.id;
+
+      // Validation
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email is required' });
+      }
+      if (!password || typeof password !== 'string' || password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      }
+      const creditAmount = Number(credits) || 0;
+      if (creditAmount < 0) {
+        return res.status(400).json({ error: 'Credits must be >= 0' });
+      }
+
+      // Check if user already exists
+      const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'User with this email already exists' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      // Single transaction: user + billing + credits + tag
+      const result = await db.query('BEGIN; SELECT 1');
+      try {
+        // 1. Create user
+        const userResult = await db.query(
+          `INSERT INTO users (email, name, password_hash, email_verified)
+           VALUES ($1, $2, $3, true)
+           RETURNING id`,
+          [email, name || email.split('@')[0], passwordHash]
+        );
+        const userId = userResult.rows[0].id;
+
+        // 2. Create billing record
+        await db.query(
+          `INSERT INTO user_billing (user_id, balance_usd, pricing_tier, is_active, billing_enabled)
+           VALUES ($1, 0, 'free', true, true)`,
+          [userId]
+        );
+
+        // 3. Create credits record
+        await db.query(
+          `INSERT INTO user_credits (user_id, balance) VALUES ($1, $2)`,
+          [userId, creditAmount]
+        );
+
+        // 4. Create credit transaction if credits > 0
+        if (creditAmount > 0) {
+          await db.query(
+            `INSERT INTO credit_transactions (user_id, type, amount, balance_after, description)
+             VALUES ($1, 'bonus', $2, $2, $3)`,
+            [userId, creditAmount, `Admin bonus - test user created by admin`]
+          );
+        }
+
+        // 5. Assign test tag
+        await db.query(
+          `INSERT INTO user_tags (user_id, tag, assigned_by) VALUES ($1, 'test', $2)`,
+          [userId, adminId]
+        );
+
+        await db.query('COMMIT');
+
+        await logAdminAction(adminId, 'create_test_user', userId, null, {
+          email,
+          credits: creditAmount,
+        }, req);
+
+        res.status(201).json({
+          success: true,
+          user: { id: userId, email, name: name || email.split('@')[0] },
+          credits: creditAmount,
+        });
+      } catch (txError) {
+        await db.query('ROLLBACK');
+        throw txError;
+      }
+    } catch (error: any) {
+      logger.error('Failed to create test user', { error: error.message });
+      if (error.message?.includes('already exists')) {
+        return res.status(409).json({ error: error.message });
+      }
+      res.status(500).json({ error: 'Failed to create test user' });
     }
   });
 

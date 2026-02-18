@@ -312,6 +312,12 @@ export const api = {
       enable
         ? apiClient.put(`/api/admin/users/${userId}/tags/crypto`)
         : apiClient.delete(`/api/admin/users/${userId}/tags/crypto`),
+    toggleTestTag: (userId: string, enable: boolean) =>
+      enable
+        ? apiClient.put(`/api/admin/users/${userId}/tags/test`)
+        : apiClient.delete(`/api/admin/users/${userId}/tags/test`),
+    createTestUser: (data: { email: string; name?: string; password: string; credits: number }) =>
+      apiClient.post('/api/admin/test-users', data),
   },
 
   // GDPR

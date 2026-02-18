@@ -27,6 +27,7 @@ interface UserRow {
   total_spent_usd?: number;
   last_request_at: string | null;
   has_crypto_tag?: boolean;
+  has_test_tag?: boolean;
 }
 
 interface UserDetail {
@@ -71,6 +72,7 @@ export function AdminUsersPage() {
   // Filters
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [searchInput, setSearchInput] = useState('');
 
   // Detail panel
@@ -90,6 +92,13 @@ export function AdminUsersPage() {
     daily: string;
     monthly: string;
   } | null>(null);
+  const [createTestUser, setCreateTestUser] = useState<{
+    email: string;
+    name: string;
+    password: string;
+    credits: string;
+  } | null>(null);
+  const [createTestUserLoading, setCreateTestUserLoading] = useState(false);
 
   const fetchUsers = useCallback(async (offset = 0) => {
     setLoading(true);
@@ -98,6 +107,7 @@ export function AdminUsersPage() {
       const params: any = { limit: PAGE_SIZE, offset };
       if (search) params.search = search;
       if (tierFilter) params.tier = tierFilter;
+      if (tagFilter) params.tag = tagFilter;
       const res = await api.admin.getUsers(params);
       setUsers(res.data.users || []);
       setPagination(res.data.pagination || { limit: PAGE_SIZE, offset, total: 0 });
@@ -106,7 +116,7 @@ export function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, tierFilter]);
+  }, [search, tierFilter, tagFilter]);
 
   useEffect(() => {
     fetchUsers(0);
@@ -193,6 +203,46 @@ export function AdminUsersPage() {
     }
   };
 
+  const handleToggleTest = async (userId: string, currentlyEnabled: boolean) => {
+    try {
+      await api.admin.toggleTestTag(userId, !currentlyEnabled);
+      toast.success(currentlyEnabled ? 'Test tag removed' : 'Test tag assigned');
+      fetchUsers(pagination.offset);
+      if (selectedUserId === userId) loadDetail(userId, true);
+    } catch {
+      toast.error('Failed to toggle test tag');
+    }
+  };
+
+  const handleCreateTestUser = async () => {
+    if (!createTestUser) return;
+    const { email, name, password, credits } = createTestUser;
+    if (!email.trim() || !password.trim()) {
+      toast.error('Email and password are required');
+      return;
+    }
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    setCreateTestUserLoading(true);
+    try {
+      await api.admin.createTestUser({
+        email: email.trim(),
+        name: name.trim() || undefined,
+        password,
+        credits: Number(credits) || 0,
+      });
+      toast.success(`Test user ${email} created`);
+      setCreateTestUser(null);
+      fetchUsers(0);
+    } catch {
+      // Error toast handled by interceptor
+    } finally {
+      setCreateTestUserLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(pagination.total / PAGE_SIZE);
   const currentPage = Math.floor(pagination.offset / PAGE_SIZE) + 1;
 
@@ -218,14 +268,23 @@ export function AdminUsersPage() {
           <h1 className="text-2xl font-semibold text-claude-text font-sans">User Management</h1>
           <p className="text-sm text-claude-subtext mt-1">{pagination.total} total users</p>
         </div>
-        <button
-          onClick={() => fetchUsers(pagination.offset)}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50"
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCreateTestUser({ email: '', name: '', password: '', credits: '100' })}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 transition-colors"
+          >
+            <Users size={14} />
+            Create Test User
+          </button>
+          <button
+            onClick={() => fetchUsers(pagination.offset)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -257,6 +316,15 @@ export function AdminUsersPage() {
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </option>
           ))}
+        </select>
+        <select
+          value={tagFilter}
+          onChange={(e) => setTagFilter(e.target.value)}
+          className="px-3 py-2 border border-claude-border rounded-lg text-sm bg-white focus:outline-none"
+        >
+          <option value="">All Tags</option>
+          <option value="test">Test</option>
+          <option value="crypto">Crypto</option>
         </select>
       </div>
 
@@ -298,7 +366,14 @@ export function AdminUsersPage() {
                       onClick={() => loadDetail(u.id)}
                     >
                       <td className="px-4 py-3">
-                        <div className="font-medium text-claude-text">{u.email}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-claude-text">{u.email}</span>
+                          {u.has_test_tag && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
+                              Test
+                            </span>
+                          )}
+                        </div>
                         {u.name && <div className="text-xs text-claude-subtext">{u.name}</div>}
                       </td>
                       <td className="px-4 py-3">
@@ -350,6 +425,16 @@ export function AdminUsersPage() {
                             }`}
                           >
                             Crypto
+                          </button>
+                          <button
+                            onClick={() => handleToggleTest(u.id, !!u.has_test_tag)}
+                            className={`px-2 py-1 text-xs border rounded transition-colors ${
+                              u.has_test_tag
+                                ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                : 'border-claude-border text-claude-subtext hover:bg-gray-100'
+                            }`}
+                          >
+                            Test
                           </button>
                         </div>
                       </td>
@@ -526,6 +611,61 @@ export function AdminUsersPage() {
             />
             <button onClick={handleUpdateLimits} className="w-full px-4 py-2 bg-claude-text text-white rounded-lg text-sm">
               Update Limits
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Test User Modal */}
+      {createTestUser && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setCreateTestUser(null)}>
+          <div className="bg-white rounded-xl border border-claude-border shadow-xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-claude-text">Create Test User</h3>
+              <button onClick={() => setCreateTestUser(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={16} />
+              </button>
+            </div>
+            <label className="block text-xs text-claude-subtext mb-1">Email *</label>
+            <input
+              type="email"
+              placeholder="user@example.com"
+              value={createTestUser.email}
+              onChange={(e) => setCreateTestUser({ ...createTestUser, email: e.target.value })}
+              className="w-full px-3 py-2 border border-claude-border rounded-lg text-sm mb-3"
+            />
+            <label className="block text-xs text-claude-subtext mb-1">Name</label>
+            <input
+              type="text"
+              placeholder="Display name (optional)"
+              value={createTestUser.name}
+              onChange={(e) => setCreateTestUser({ ...createTestUser, name: e.target.value })}
+              className="w-full px-3 py-2 border border-claude-border rounded-lg text-sm mb-3"
+            />
+            <label className="block text-xs text-claude-subtext mb-1">Password * (min 8 chars)</label>
+            <input
+              type="password"
+              placeholder="Password"
+              value={createTestUser.password}
+              onChange={(e) => setCreateTestUser({ ...createTestUser, password: e.target.value })}
+              className="w-full px-3 py-2 border border-claude-border rounded-lg text-sm mb-3"
+            />
+            <label className="block text-xs text-claude-subtext mb-1">Credits</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              placeholder="100"
+              value={createTestUser.credits}
+              onChange={(e) => setCreateTestUser({ ...createTestUser, credits: e.target.value })}
+              className="w-full px-3 py-2 border border-claude-border rounded-lg text-sm mb-4"
+            />
+            <button
+              onClick={handleCreateTestUser}
+              disabled={createTestUserLoading}
+              className="w-full px-4 py-2 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 transition-colors disabled:opacity-50"
+            >
+              {createTestUserLoading ? 'Creating...' : 'Create Test User'}
             </button>
           </div>
         </div>
