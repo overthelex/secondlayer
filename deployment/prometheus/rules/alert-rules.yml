@@ -28,6 +28,24 @@ groups:
           summary: "Redis memory > 95%"
           description: "Redis memory usage is at {{ $value | humanizePercentage }}."
 
+      - alert: RedisEvictedKeys
+        expr: rate(redis_evicted_keys_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis evicting keys"
+          description: "Redis is evicting keys due to memory pressure. Rate: {{ $value }}/s"
+
+      - alert: PgCacheHitLow
+        expr: pg_stat_database_blks_hit / (pg_stat_database_blks_hit + pg_stat_database_blks_read) < 0.95
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL cache hit ratio < 95%"
+          description: "PG cache hit ratio is {{ $value | humanizePercentage }}. Consider increasing shared_buffers."
+
   - name: warning_alerts
     rules:
       - alert: HighErrorRate
@@ -57,6 +75,15 @@ groups:
           summary: "PG pool utilization > 80% on {{ $labels.job }}"
           description: "Pool utilization is {{ $value | humanizePercentage }}."
 
+      - alert: PgIdleInTransaction
+        expr: pg_stat_activity_count{state="idle in transaction"} > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High idle in transaction connections"
+          description: "{{ $value }} connections are idle in transaction for 5+ minutes."
+
       - alert: UploadQueueHigh
         expr: upload_queue_depth > 100
         for: 10m
@@ -75,3 +102,21 @@ groups:
         annotations:
           summary: "Cost spike detected"
           description: "Hourly cost rate is 3x above 24h average."
+
+      - alert: HighCpuIowait
+        expr: avg(rate(node_cpu_seconds_total{mode="iowait"}[5m])) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU iowait"
+          description: "CPU iowait is {{ $value | humanizePercentage }}. Check disk I/O."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage > 80%"
+          description: "System memory usage is {{ $value | humanizePercentage }}."

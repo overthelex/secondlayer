@@ -10,6 +10,10 @@ services:
       -c work_mem=128MB
       -c maintenance_work_mem=2GB
       -c wal_buffers=64MB
+      -c idle_in_transaction_session_timeout=30000
+      -c idle_session_timeout=300000
+      -c statement_timeout=60000
+      -c lock_timeout=10000
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -36,6 +40,42 @@ services:
           memory: 12G
         reservations:
           memory: 8G
+
+  # PgBouncer connection pooler for PostgreSQL
+  pgbouncer-stage:
+    image: pgbouncer/pgbouncer:latest
+    container_name: secondlayer-pgbouncer-stage
+    ports:
+    - "127.0.0.1:5437:5432"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 500
+      DEFAULT_POOL_SIZE: 50
+      MIN_POOL_SIZE: 10
+      RESERVE_POOL_SIZE: 10
+      RESERVE_POOL_TIMEOUT: 5
+      SERVER_ROUND_ROBIN: "true"
+      TZ: Europe/Kiev
+    depends_on:
+      postgres-stage:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - bash -c "echo > /dev/tcp/localhost/5432"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+    - secondlayer-stage-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
   # RADA MCP Database Initialization - creates schema and user in main DB
   rada-db-init-stage:
@@ -72,6 +112,10 @@ services:
       -c effective_cache_size=6GB
       -c work_mem=128MB
       -c maintenance_work_mem=1GB
+      -c idle_in_transaction_session_timeout=30000
+      -c idle_session_timeout=300000
+      -c statement_timeout=60000
+      -c lock_timeout=10000
     environment:
       POSTGRES_USER: ${OPENREYESTR_POSTGRES_USER:-openreyestr}
       POSTGRES_PASSWORD: ${OPENREYESTR_POSTGRES_PASSWORD}
@@ -132,7 +176,7 @@ services:
     - "127.0.0.1:6381:6379"
     volumes:
     - redis_stage_data:/data
-    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy noeviction
+    command: redis-server --appendonly yes --maxmemory 8192mb --maxmemory-policy allkeys-lru
     healthcheck:
       test:
       - CMD

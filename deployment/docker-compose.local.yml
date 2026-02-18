@@ -20,6 +20,10 @@ services:
       -c checkpoint_completion_target=0.9
       -c wal_level=minimal
       -c max_wal_senders=0
+      -c idle_in_transaction_session_timeout=30000
+      -c idle_session_timeout=300000
+      -c statement_timeout=60000
+      -c lock_timeout=10000
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
