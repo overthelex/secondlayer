@@ -12,9 +12,11 @@ interface TopUpModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  initialAmount?: number;
+  upgradeTier?: string;
 }
 
-export function TopUpModal({ isOpen, onClose, onSuccess }: TopUpModalProps) {
+export function TopUpModal({ isOpen, onClose, onSuccess, initialAmount, upgradeTier }: TopUpModalProps) {
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -50,7 +52,14 @@ export function TopUpModal({ isOpen, onClose, onSuccess }: TopUpModalProps) {
             className="relative w-full max-w-3xl my-8 mx-4 bg-claude-bg rounded-2xl shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-claude-border bg-white rounded-t-2xl">
-              <h2 className="text-xl font-semibold text-claude-text">Поповнити баланс</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-claude-text">Поповнити баланс</h2>
+                {upgradeTier && (
+                  <p className="text-sm text-claude-subtext mt-0.5">
+                    Для переходу на тариф <strong>{upgradeTier.charAt(0).toUpperCase() + upgradeTier.slice(1)}</strong> необхідно поповнити баланс на <strong>${initialAmount?.toFixed(2)}</strong>
+                  </p>
+                )}
+              </div>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-claude-bg rounded-lg transition-colors">
@@ -60,7 +69,7 @@ export function TopUpModal({ isOpen, onClose, onSuccess }: TopUpModalProps) {
 
             {/* Content */}
             <div className="p-6">
-              <TopUpTab />
+              <TopUpTab initialAmount={initialAmount} />
             </div>
           </motion.div>
         </motion.div>

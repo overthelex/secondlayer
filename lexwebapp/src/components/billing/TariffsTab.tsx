@@ -85,7 +85,11 @@ const TIER_DESCRIPTIONS: Record<string, string> = {
   enterprise: 'Для великих організацій',
 };
 
-export function TariffsTab() {
+interface TariffsTabProps {
+  onUpgradeTopUp?: (amount: number, targetTier: string) => void;
+}
+
+export function TariffsTab({ onUpgradeTopUp }: TariffsTabProps) {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [expandedFAQ, setExpandedFAQ] = useState<number | null>(null);
   const [isUpgrading, setIsUpgrading] = useState<string | null>(null);
@@ -237,6 +241,34 @@ export function TariffsTab() {
       return;
     }
 
+    const tierOrder = ['free', 'startup', 'business', 'enterprise'];
+    const currentIdx = tierOrder.indexOf(currentTier);
+    const targetIdx = tierOrder.indexOf(tierId);
+    const isUpgrade = targetIdx > currentIdx;
+
+    if (isUpgrade) {
+      // Calculate cost difference
+      const currentTierData = tiers.find((t) => t.tier === currentTier);
+      const targetTierData = tiers.find((t) => t.tier === tierId);
+
+      const currentPrice = billingCycle === 'monthly'
+        ? (currentTierData?.monthly_price_usd || 0)
+        : (currentTierData?.annual_price_usd || 0);
+      const targetPrice = billingCycle === 'monthly'
+        ? (targetTierData?.monthly_price_usd || 0)
+        : (targetTierData?.annual_price_usd || 0);
+
+      const priceDifference = targetPrice - currentPrice;
+
+      if (priceDifference > 0) {
+        if (onUpgradeTopUp) {
+          onUpgradeTopUp(priceDifference, tierId);
+        }
+        return;
+      }
+    }
+
+    // Downgrade or free tier — apply directly
     setIsUpgrading(tierId);
     try {
       await api.billing.upgradePlan(tierId);
@@ -250,14 +282,29 @@ export function TariffsTab() {
     }
   };
 
+  const getUpgradeCost = (tierId: string): number => {
+    const currentTierData = tiers.find((t) => t.tier === currentTier);
+    const targetTierData = tiers.find((t) => t.tier === tierId);
+    const currentPrice = billingCycle === 'monthly'
+      ? (currentTierData?.monthly_price_usd || 0)
+      : (currentTierData?.annual_price_usd || 0);
+    const targetPrice = billingCycle === 'monthly'
+      ? (targetTierData?.monthly_price_usd || 0)
+      : (targetTierData?.annual_price_usd || 0);
+    return targetPrice - currentPrice;
+  };
+
   const getCtaText = (tierId: string): string => {
     if (tierId === currentTier) return 'Поточний план';
     if (tierId === 'enterprise') return "Зв'язатися з нами";
-    // Determine if upgrading or downgrading
     const tierOrder = ['free', 'startup', 'business', 'enterprise'];
     const currentIdx = tierOrder.indexOf(currentTier);
     const targetIdx = tierOrder.indexOf(tierId);
-    if (targetIdx > currentIdx) return `Перейти на ${TIER_LABELS[tierId] || tierId}`;
+    if (targetIdx > currentIdx) {
+      const cost = getUpgradeCost(tierId);
+      if (cost > 0) return `Перейти за $${cost}${billingCycle === 'monthly' ? '/міс' : '/рік'}`;
+      return `Перейти на ${TIER_LABELS[tierId] || tierId}`;
+    }
     return `Знизити до ${TIER_LABELS[tierId] || tierId}`;
   };
 

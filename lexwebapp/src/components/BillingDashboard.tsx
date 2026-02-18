@@ -32,6 +32,20 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<BillingTab>(initialTab);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState<number | undefined>();
+  const [upgradeTier, setUpgradeTier] = useState<string | undefined>();
+
+  const handleUpgradeTopUp = (amount: number, targetTier: string) => {
+    setTopUpAmount(amount);
+    setUpgradeTier(targetTier);
+    setShowTopUpModal(true);
+  };
+
+  const handleCloseTopUp = () => {
+    setShowTopUpModal(false);
+    setTopUpAmount(undefined);
+    setUpgradeTier(undefined);
+  };
 
   const handleBack = () => {
     if (onBack) {
@@ -111,7 +125,7 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}>
             {activeTab === 'overview' && <OverviewTab onTopUp={() => setShowTopUpModal(true)} />}
-            {activeTab === 'tariffs' && <TariffsTab />}
+            {activeTab === 'tariffs' && <TariffsTab onUpgradeTopUp={handleUpgradeTopUp} />}
             {activeTab === 'history' && <HistoryTab />}
             {activeTab === 'analytics' && <AnalyticsTab />}
             {activeTab === 'settings' && <SettingsTab />}
@@ -122,7 +136,9 @@ export function BillingDashboard({ onBack, initialTab = 'overview' }: BillingDas
       {/* Top-Up Modal */}
       <TopUpModal
         isOpen={showTopUpModal}
-        onClose={() => setShowTopUpModal(false)}
+        onClose={handleCloseTopUp}
+        initialAmount={topUpAmount}
+        upgradeTier={upgradeTier}
       />
     </div>
   );
