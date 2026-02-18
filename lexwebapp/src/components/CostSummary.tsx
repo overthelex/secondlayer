@@ -37,8 +37,11 @@ export function CostSummary({ data }: CostSummaryProps) {
       >
         <Coins size={12} strokeWidth={2} />
         <span>
-          {data.credits_deducted} кредитів
-          {data.total_cost_usd > 0 && ` · $${data.total_cost_usd.toFixed(4)}`}
+          {data.charged_usd != null && data.charged_usd > 0
+            ? `$${data.charged_usd.toFixed(4)}`
+            : data.total_cost_usd > 0
+              ? `$${data.total_cost_usd.toFixed(4)}`
+              : '$0.00'}
         </span>
         <ChevronDown
           size={12}
@@ -77,9 +80,8 @@ export function CostSummary({ data }: CostSummaryProps) {
                 {data.total_cost_usd > 0 && (
                   <span>Вартість LLM: ${data.total_cost_usd.toFixed(4)}</span>
                 )}
-                <span>Списано: {data.credits_deducted} кредитів</span>
-                {data.new_balance_credits != null && (
-                  <span>Залишок: {data.new_balance_credits} кредитів</span>
+                {data.charged_usd != null && data.charged_usd > 0 && (
+                  <span>Списано: ${data.charged_usd.toFixed(4)}</span>
                 )}
                 {data.balance_usd != null && (
                   <span>Баланс: ${data.balance_usd.toFixed(2)}</span>

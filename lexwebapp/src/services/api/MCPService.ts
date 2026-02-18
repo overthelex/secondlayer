@@ -36,8 +36,8 @@ export interface ChatStreamCallbacks {
   onAnswerDelta?: (data: { text: string }) => void;
   onAnswer?: (data: { text: string; provider: string; model: string }) => void;
   onCitationWarning?: (data: CitationWarning) => void;
-  onComplete?: (data: { iterations: number; elapsed_ms: number; tools_used?: string[]; total_cost_usd?: number; credits_deducted?: number }) => void;
-  onCostSummary?: (data: { credits_deducted: number; new_balance_credits: number; balance_usd: number | null }) => void;
+  onComplete?: (data: { iterations: number; elapsed_ms: number; tools_used?: string[]; total_cost_usd?: number; charged_usd?: number }) => void;
+  onCostSummary?: (data: { total_cost_usd: number; charged_usd: number; balance_usd: number | null }) => void;
   onError?: (data: { message: string }) => void;
 }
 

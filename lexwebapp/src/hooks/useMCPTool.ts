@@ -1071,12 +1071,12 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
 
           onComplete: (data) => {
             // Store cost data from complete event
-            if (data.tools_used || data.total_cost_usd != null || data.credits_deducted != null) {
+            if (data.tools_used || data.total_cost_usd != null || data.charged_usd != null) {
               costSummaryRef.current = {
                 ...costSummaryRef.current,
                 tools_used: data.tools_used || [],
                 total_cost_usd: data.total_cost_usd || 0,
-                credits_deducted: data.credits_deducted || 3,
+                charged_usd: data.charged_usd || 0,
               };
               updateMessage(assistantMessageId, {
                 costSummary: costSummaryRef.current as CostSummary,
@@ -1089,8 +1089,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
             // Merge balance info from cost_summary event
             costSummaryRef.current = {
               ...costSummaryRef.current,
-              credits_deducted: data.credits_deducted,
-              new_balance_credits: data.new_balance_credits,
+              charged_usd: data.charged_usd,
               balance_usd: data.balance_usd,
             };
             updateMessage(assistantMessageId, {
