@@ -741,9 +741,9 @@ export function createAdminRoutes(
         // 4. Create credit transaction if credits > 0
         if (creditAmount > 0) {
           await db.query(
-            `INSERT INTO credit_transactions (user_id, type, amount, balance_after, description)
-             VALUES ($1, 'bonus', $2, $2, $3)`,
-            [userId, creditAmount, `Admin bonus - test user created by admin`]
+            `INSERT INTO credit_transactions (user_id, transaction_type, amount, balance_before, balance_after, source, description)
+             VALUES ($1, 'bonus', $2, 0, $2, 'admin', $3)`,
+            [userId, creditAmount, `Test user created by admin`]
           );
         }
 
