@@ -939,7 +939,7 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
 
             addThinkingStep(assistantMessageId, {
               id: `step-${data.step}`,
-              title: `🔍 ${getToolLabel(data.tool)}`,
+              title: data.description || `🔍 ${getToolLabel(data.tool)}`,
               content: JSON.stringify(data.params, null, 2),
               isComplete: false,
             });
