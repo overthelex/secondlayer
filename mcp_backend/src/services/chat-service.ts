@@ -240,9 +240,26 @@ export class ChatService {
         if (signal?.aborted) break;
 
         // Record LLM cost for this iteration
+        // Anthropic streaming may not report usage; estimate from content length
         let iterationCostUsd = 0;
-        if (requestId && iterationUsage.total_tokens > 0) {
-          iterationCostUsd = ModelSelector.estimateCostAccurate(iterationModel, iterationUsage.prompt_tokens, iterationUsage.completion_tokens);
+        if (requestId && iterationModel) {
+          if (iterationUsage.total_tokens > 0) {
+            iterationCostUsd = ModelSelector.estimateCostAccurate(iterationModel, iterationUsage.prompt_tokens, iterationUsage.completion_tokens);
+          } else {
+            // Estimate tokens from content length (~3.5 chars/token for multilingual)
+            const estPromptTokens = Math.ceil(messages.reduce((s, m) => s + (m.content?.length || 0), 0) / 3.5);
+            const estCompletionTokens = Math.ceil((fullContent.length + JSON.stringify(toolCalls).length) / 3.5);
+            iterationCostUsd = ModelSelector.estimateCostAccurate(iterationModel, estPromptTokens, estCompletionTokens);
+            iterationUsage = { prompt_tokens: estPromptTokens, completion_tokens: estCompletionTokens, total_tokens: estPromptTokens + estCompletionTokens };
+            logger.warn('[ChatService] No usage from streaming, estimated tokens', {
+              iteration,
+              model: iterationModel,
+              provider: iterationProvider,
+              estPromptTokens,
+              estCompletionTokens,
+              estimatedCost: iterationCostUsd,
+            });
+          }
           totalCostUsd += iterationCostUsd;
           this.recordStreamingCost(requestId, iterationProvider, iterationModel, iterationUsage, `chat_iteration_${iteration}`);
         }
@@ -343,6 +360,44 @@ export class ChatService {
         iteration++;
       }
 
+      // If loop exhausted MAX_TOOL_CALLS without a final answer, generate fallback
+      if (!fullAnswerText && collectedThinkingSteps.length > 0 && !signal?.aborted) {
+        logger.warn('[ChatService] Agentic loop exhausted MAX_TOOL_CALLS without final answer', {
+          iterations: iteration,
+          toolCalls: collectedToolCalls.length,
+          maxToolCalls: MAX_TOOL_CALLS,
+        });
+        // Attempt one more LLM call without tools to force a text answer
+        try {
+          const summaryPrompt = collectedThinkingSteps
+            .map(s => `[${s.tool}]: ${JSON.stringify(s.result).slice(0, 2000)}`)
+            .join('\n\n');
+          messages.push({
+            role: 'user',
+            content: `На основі зібраних даних дай повну аналітичну відповідь. Не викликай інструменти.\n\nЗібрані дані:\n${summaryPrompt.slice(0, limits.maxContextChars / 2)}`,
+          });
+          let fallbackContent = '';
+          for await (const chunk of llm.chatCompletionStream(
+            { messages, max_tokens: limits.maxTokens, temperature: 0.3 },
+            effectiveBudget,
+            selection.provider,
+            signal
+          )) {
+            if (signal?.aborted) break;
+            if (chunk.type === 'text_delta' && chunk.text) {
+              fallbackContent += chunk.text;
+              yield { type: 'answer_delta', data: { text: chunk.text } };
+            }
+          }
+          if (fallbackContent) {
+            fullAnswerText = fallbackContent;
+            yield { type: 'answer', data: { text: fallbackContent, provider: selection.provider, model: selection.model } };
+          }
+        } catch (fallbackErr: any) {
+          logger.warn('[ChatService] Fallback answer generation failed', { error: fallbackErr.message });
+        }
+      }
+
       // Post-answer citation verification (non-blocking, with timeout)
       if (this.shepardizationService && fullAnswerText) {
         yield* this.verifyCitationsInAnswer(fullAnswerText);
@@ -361,8 +416,8 @@ export class ChatService {
         },
       };
 
-      // Server-side message persistence
-      if (this.conversationService && request.conversationId && request.userId) {
+      // Server-side message persistence — skip if client disconnected (aborted)
+      if (this.conversationService && request.conversationId && request.userId && !signal?.aborted) {
         try {
           await this.conversationService.addMessage(request.conversationId, request.userId, {
             role: 'user',
@@ -377,6 +432,13 @@ export class ChatService {
         } catch (e) {
           logger.warn('[ChatService] Failed to persist messages', { error: (e as Error).message });
         }
+      } else if (signal?.aborted) {
+        logger.info('[ChatService] Skipping message persistence — client disconnected', {
+          conversationId: request.conversationId,
+          userId: request.userId,
+          hadAnswer: !!fullAnswerText,
+          toolCallsCount: collectedToolCalls.length,
+        });
       }
     } catch (err: any) {
       logger.error('[ChatService] Error in agentic loop', { error: err.message, stack: err.stack });
