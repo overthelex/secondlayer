@@ -1,16 +1,16 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { EmbeddingChunk, SectionType, PrecedentStatusType } from '../types/index.js';
 import { logger } from '../utils/logger.js';
-import { getOpenAIManager } from '../utils/openai-client.js';
-import { ModelSelector } from '../utils/model-selector.js';
+import { VoyageAIClient } from '../utils/voyage-client.js';
 import { v4 as uuidv4 } from 'uuid';
 
-const EMBEDDING_DIMENSION = 1536; // OpenAI ada-002 and text-embedding-3-small
+const EMBEDDING_DIMENSION = 1024; // VoyageAI voyage-multilingual-2
+const VOYAGE_MODEL = process.env.VOYAGEAI_EMBEDDING_MODEL || 'voyage-multilingual-2';
 const MAX_CHUNK_TOKENS = 512;
 const CHUNK_OVERLAP = 50;
 
 export class EmbeddingService {
-  private openaiManager = getOpenAIManager();
+  private voyageClient = new VoyageAIClient(process.env.VOYAGEAI_API_KEY!);
   private qdrant: QdrantClient;
   private collectionName = 'legal_sections';
   private initialized = false;
@@ -31,7 +31,19 @@ export class EmbeddingService {
         (c) => c.name === this.collectionName
       );
 
-      if (!exists) {
+      if (exists) {
+        // Check if dimension matches — if not, delete and recreate
+        const info = await this.qdrant.getCollection(this.collectionName);
+        const currentSize = (info.config?.params?.vectors as any)?.size;
+        if (currentSize && currentSize !== EMBEDDING_DIMENSION) {
+          logger.warn(`Collection ${this.collectionName} has dimension ${currentSize}, expected ${EMBEDDING_DIMENSION}. Deleting and recreating.`);
+          await this.qdrant.deleteCollection(this.collectionName);
+          await this.qdrant.createCollection(this.collectionName, {
+            vectors: { size: EMBEDDING_DIMENSION, distance: 'Cosine' },
+          });
+          logger.info(`Qdrant collection ${this.collectionName} recreated with dimension ${EMBEDDING_DIMENSION}`);
+        }
+      } else {
         await this.qdrant.createCollection(this.collectionName, {
           vectors: {
             size: EMBEDDING_DIMENSION,
@@ -51,15 +63,7 @@ export class EmbeddingService {
 
   async generateEmbedding(text: string): Promise<number[]> {
     try {
-      const model = ModelSelector.getEmbeddingModel();
-      const response = await this.openaiManager.executeWithRetry(async (client) => {
-        return await client.embeddings.create({
-          model,
-          input: text,
-        });
-      });
-
-      return response.data[0].embedding;
+      return await this.voyageClient.generateEmbedding(text, VOYAGE_MODEL);
     } catch (error) {
       logger.error('Embedding generation error:', error);
       throw error;
@@ -68,15 +72,7 @@ export class EmbeddingService {
 
   async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
     try {
-      const model = ModelSelector.getEmbeddingModel();
-      const response = await this.openaiManager.executeWithRetry(async (client) => {
-        return await client.embeddings.create({
-          model,
-          input: texts,
-        });
-      });
-
-      return response.data.map((item) => item.embedding);
+      return await this.voyageClient.generateEmbeddingsBatch(texts, VOYAGE_MODEL);
     } catch (error) {
       logger.error('Batch embedding generation error:', error);
       throw error;
