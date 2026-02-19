@@ -796,13 +796,17 @@ services:
     restart: unless-stopped
 
   cadvisor-local:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: cadvisor-local
     privileged: true
     devices:
       - /dev/kmsg
     environment:
       - DOCKER_API_VERSION=1.44
+    command:
+      - '-docker_only=true'
+      - '-housekeeping_interval=30s'
+      - '-disable_metrics=cpu_topology,hugetlb,memory_numa,perf_event,referenced_memory,resctrl,sched,tcp,udp'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
