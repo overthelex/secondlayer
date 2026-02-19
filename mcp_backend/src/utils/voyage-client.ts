@@ -1,6 +1,6 @@
 /**
  * VoyageAI embedding client using native fetch (Node 20+).
- * Supports voyage-law-2 and other Voyage embedding models.
+ * Default model: voyage-multilingual-2 (supports Ukrainian and other languages).
  */
 
 const VOYAGE_API_URL = 'https://api.voyageai.com/v1/embeddings';
