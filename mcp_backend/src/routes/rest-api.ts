@@ -10,7 +10,7 @@ export function createRestAPIRouter(db: Database): Router {
   // ==================== DOCUMENTS ====================
 
   // List documents with pagination (user sees own + public)
-  router.get('/documents', (async (req: DualAuthRequest, res: Response) => {
+  router.get('/', (async (req: DualAuthRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const start = parseInt(req.query._start as string) || 0;
@@ -51,7 +51,7 @@ export function createRestAPIRouter(db: Database): Router {
   }) as any);
 
   // Get single document (user sees own + public)
-  router.get('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.get('/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
@@ -76,7 +76,7 @@ export function createRestAPIRouter(db: Database): Router {
   }) as any);
 
   // Create document (assign to current user)
-  router.post('/documents', (async (req: DualAuthRequest, res: Response) => {
+  router.post('/', (async (req: DualAuthRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const { zakononline_id, type, title, date, full_text, full_text_html, metadata } = req.body;
@@ -96,7 +96,7 @@ export function createRestAPIRouter(db: Database): Router {
   }) as any);
 
   // Update document (only own documents)
-  router.patch('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.patch('/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
@@ -131,7 +131,7 @@ export function createRestAPIRouter(db: Database): Router {
   }) as any);
 
   // Delete document (only own documents)
-  router.delete('/documents/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.delete('/:id', (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
@@ -156,7 +156,7 @@ export function createRestAPIRouter(db: Database): Router {
   // ==================== LEGAL PATTERNS ====================
 
   // List patterns
-  router.get('/patterns', async (req: AuthenticatedRequest, res: Response) => {
+  router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const start = parseInt(req.query._start as string) || 0;
       const end = parseInt(req.query._end as string) || 10;
@@ -183,7 +183,7 @@ export function createRestAPIRouter(db: Database): Router {
   });
 
   // Get single pattern
-  router.get('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const result = await db.query(
@@ -204,7 +204,7 @@ export function createRestAPIRouter(db: Database): Router {
   });
 
   // Create pattern
-  router.post('/patterns', async (req: AuthenticatedRequest, res: Response) => {
+  router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const {
         intent,
@@ -245,7 +245,7 @@ export function createRestAPIRouter(db: Database): Router {
   });
 
   // Update pattern
-  router.patch('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  router.patch('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const updates = req.body;
@@ -277,7 +277,7 @@ export function createRestAPIRouter(db: Database): Router {
   });
 
   // Delete pattern
-  router.delete('/patterns/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const result = await db.query(
@@ -300,7 +300,7 @@ export function createRestAPIRouter(db: Database): Router {
   // ==================== QUERIES (Read-only for now) ====================
 
   // List queries from events table
-  router.get('/queries', async (req: AuthenticatedRequest, res: Response) => {
+  router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     try {
       const start = parseInt(req.query._start as string) || 0;
       const end = parseInt(req.query._end as string) || 10;
@@ -331,7 +331,7 @@ export function createRestAPIRouter(db: Database): Router {
   });
 
   // Get single query
-  router.get('/queries/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  router.get('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const result = await db.query(
