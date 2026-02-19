@@ -154,7 +154,7 @@ interface ImportSample {
   source_name: string;
   count: number;
   last_import: string;
-  records: Array<{
+    records: Array<{
     id: string;
     title?: string;
     court?: string;
@@ -163,7 +163,7 @@ interface ImportSample {
     justice_kind?: string;
     date?: string;
     type?: string;
-    number?: string;
+    rada_id?: string;
     status?: string;
     effective_date?: string;
     document_id?: string;
@@ -1042,7 +1042,7 @@ function ImportSamplesSection() {
                             {record.category && <span className="text-blue-600">{record.category}</span>}
                             {record.justice_kind && <span className="text-purple-600">Вид: {record.justice_kind}</span>}
                             {record.type && <span className="text-green-600">{record.type}</span>}
-                            {record.number && <span className="font-mono">№{record.number}</span>}
+                            {record.rada_id && <span className="font-mono">ID: {record.rada_id}</span>}
                             {record.status && <span className="text-orange-600">{record.status}</span>}
                             {record.section_index !== undefined && <span>Секція {record.section_index}</span>}
                             {record.token_count !== undefined && <span className="font-mono">{record.token_count} токенів</span>}
