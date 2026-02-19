@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ExternalLink, Gavel, BookOpen, FileText, Copy, Check } from 'lucide-react';
+import { X, ExternalLink, Gavel, BookOpen, FileText, Copy, Check, Download } from 'lucide-react';
 
 interface DocumentViewerItem {
   type: 'decision' | 'citation' | 'document';
@@ -51,6 +51,17 @@ export function DocumentViewerModal({ isOpen, onClose, item }: DocumentViewerMod
     navigator.clipboard.writeText(item.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = () => {
+    if (!item) return;
+    const blob = new Blob([item.content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${item.title.replace(/[^\wа-яА-ЯёЁa-zA-Z0-9]/g, '_')}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (!item) return null;
@@ -131,6 +142,13 @@ export function DocumentViewerModal({ isOpen, onClose, item }: DocumentViewerMod
                       title="Копіювати"
                     >
                       {copied ? <Check size={16} strokeWidth={2} /> : <Copy size={16} strokeWidth={2} />}
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-all"
+                      title="Зберегти як .txt"
+                    >
+                      <Download size={16} strokeWidth={2} />
                     </button>
                     {item.externalUrl && (
                       <a

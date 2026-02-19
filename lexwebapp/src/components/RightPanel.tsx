@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Gavel, BookOpen, FileText, X, Eye, ChevronDown, ChevronUp, Copy, Check, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { Decision } from './DecisionCard';
 import { DocumentViewerModal } from './DocumentViewerModal';
-import { useUIStore } from '../stores';
+import { useUIStore, useChatStore } from '../stores';
 
 interface Citation {
   text: string;
@@ -33,9 +33,6 @@ interface DocumentViewerItem {
 interface RightPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  decisions?: Decision[];
-  citations?: Citation[];
-  documents?: VaultDocument[];
 }
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -61,14 +58,33 @@ const cardVariants = {
   }),
 };
 
-export function RightPanel({
-  isOpen,
-  onClose,
-  decisions = [],
-  citations = [],
-  documents = [],
-}: RightPanelProps) {
+export function RightPanel({ isOpen, onClose }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<'decisions' | 'regulations' | 'documents'>('decisions');
+
+  const messages = useChatStore(state => state.messages);
+
+  const decisions = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(m => m.decisions ?? []).filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  }, [messages]);
+
+  const citations = useMemo(() =>
+    messages.flatMap(m => m.citations ?? []),
+    [messages]
+  );
+
+  const documents = useMemo(() => {
+    const seen = new Set<string>();
+    return messages.flatMap(m => m.documents ?? []).filter(d => {
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  }, [messages]);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [viewerItem, setViewerItem] = useState<DocumentViewerItem | null>(null);
