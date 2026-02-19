@@ -3435,17 +3435,19 @@ export function createAdminRoutes(
 
       const samples: any[] = [];
 
-      // 1. Court decisions (from load-* scripts)
+      // 1. Court decisions (from load-* scripts and court scraper)
       const courtDecisions = await db.query(`
-        SELECT 
+        SELECT
           id, title, court, case_number, dispute_category, date,
           metadata->>'justice_kind' as justice_kind,
+          GREATEST(created_at, COALESCE(updated_at, created_at)) as loaded_at,
           created_at, type
         FROM documents
         WHERE type = 'court_decision'
           AND user_id IS NULL
-          AND created_at >= NOW() - $1::integer * INTERVAL '1 hour'
-        ORDER BY created_at DESC
+          AND (created_at >= NOW() - $1::integer * INTERVAL '1 hour'
+            OR updated_at >= NOW() - $1::integer * INTERVAL '1 hour')
+        ORDER BY GREATEST(created_at, COALESCE(updated_at, created_at)) DESC
         LIMIT $2
       `, [hours, samplesPerSource]);
 
@@ -3454,7 +3456,7 @@ export function createAdminRoutes(
           source: 'court_decisions',
           source_name: 'Судові рішення',
           count: courtDecisions.rows.length,
-          last_import: courtDecisions.rows[0]?.created_at,
+          last_import: courtDecisions.rows[0]?.loaded_at,
           records: courtDecisions.rows.map((r: any) => ({
             id: r.id,
             title: r.title?.substring(0, 150),
@@ -3463,7 +3465,7 @@ export function createAdminRoutes(
             category: r.dispute_category,
             justice_kind: r.justice_kind,
             date: r.date,
-            created_at: r.created_at,
+            created_at: r.loaded_at,
           })),
         });
       }
@@ -3585,9 +3587,9 @@ export function createAdminRoutes(
 
       // Summary stats
       const summaryResult = await db.query(`
-        SELECT 
-          (SELECT COUNT(*) FROM documents WHERE type = 'court_decision' AND created_at >= NOW() - $1::integer * INTERVAL '1 hour') as court_decisions,
-          (SELECT COUNT(*) FROM legislation WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour') as legislation,
+        SELECT
+          (SELECT COUNT(*) FROM documents WHERE type = 'court_decision' AND user_id IS NULL AND (created_at >= NOW() - $1::integer * INTERVAL '1 hour' OR updated_at >= NOW() - $1::integer * INTERVAL '1 hour')) as court_decisions,
+          (SELECT COUNT(*) FROM legislation WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour' OR updated_at >= NOW() - $1::integer * INTERVAL '1 hour') as legislation,
           (SELECT COUNT(*) FROM embedding_chunks WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour') as embeddings,
           (SELECT COUNT(*) FROM documents WHERE user_id IS NOT NULL AND created_at >= NOW() - $1::integer * INTERVAL '1 hour') as user_uploads
       `, [hours]);
