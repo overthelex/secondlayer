@@ -1922,7 +1922,7 @@ export function createAdminRoutes(
               const caseNumber = parser.getMetadata()?.caseNumber || null;
               const title = parser.getMetadata()?.title || '';
               const shortTitle = title.length > 80 ? title.slice(0, 80) + '...' : title;
-              const logEntry = `[${zoId}] ${caseNumber || 'N/A'} | ${shortTitle || 'N/A'}`;
+              const logEntry = `[${zoId}] https://zakononline.ua/court-decisions/show/${zoId} | ${caseNumber || 'N/A'} | ${shortTitle || 'N/A'}`;
               job.current_logs.unshift(logEntry);
               if (job.current_logs.length > 3) job.current_logs.pop();
 
