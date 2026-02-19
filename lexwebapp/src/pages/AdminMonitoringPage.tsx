@@ -166,10 +166,9 @@ interface ImportSample {
     rada_id?: string;
     status?: string;
     effective_date?: string;
-    document_id?: string;
+    document_section_id?: string;
+    vector_id?: string;
     document_title?: string;
-    section_index?: number;
-    token_count?: number;
     user_email?: string;
     user_name?: string;
     name?: string;
@@ -1044,8 +1043,8 @@ function ImportSamplesSection() {
                             {record.type && <span className="text-green-600">{record.type}</span>}
                             {record.rada_id && <span className="font-mono">ID: {record.rada_id}</span>}
                             {record.status && <span className="text-orange-600">{record.status}</span>}
-                            {record.section_index !== undefined && <span>Секція {record.section_index}</span>}
-                            {record.token_count !== undefined && <span className="font-mono">{record.token_count} токенів</span>}
+                            {record.vector_id && <span className="font-mono text-xs">{record.vector_id.substring(0, 20)}...</span>}
+                            {record.document_section_id && <span className="text-gray-500">Секція</span>}
                             {record.user_email && <span>{record.user_email}</span>}
                             {record.user_name && <span>{record.user_name}</span>}
                             {record.domain && <span className="text-gray-500">{record.domain}</span>}
