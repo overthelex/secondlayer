@@ -294,19 +294,19 @@ build_images() {
 
     # Build backend (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building backend image..."
-    docker build -f deployment/Dockerfile.mono-backend -t secondlayer-app:latest .
+    docker build $NO_CACHE -f deployment/Dockerfile.mono-backend -t secondlayer-app:latest .
 
     # Build RADA MCP (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building RADA MCP image..."
-    docker build -f deployment/Dockerfile.mono-rada -t rada-mcp:latest .
+    docker build $NO_CACHE -f deployment/Dockerfile.mono-rada -t rada-mcp:latest .
 
     # Build OpenReyestr MCP (from root context with mono Dockerfile)
     print_msg "$BLUE" "Building OpenReyestr MCP image..."
-    docker build -f deployment/Dockerfile.mono-openreyestr -t openreyestr-app:latest .
+    docker build $NO_CACHE -f deployment/Dockerfile.mono-openreyestr -t openreyestr-app:latest .
 
     # Build frontend (Dockerfile expects context=repo root)
     print_msg "$BLUE" "Building frontend image..."
-    docker build -f lexwebapp/Dockerfile -t lexwebapp-lexwebapp:latest .
+    docker build $NO_CACHE -f lexwebapp/Dockerfile -t lexwebapp-lexwebapp:latest .
 
     cd deployment
     print_msg "$GREEN" "Images built successfully"
@@ -459,7 +459,16 @@ deploy_local() {
         else
             print_msg "$BLUE" "Building all images (cached)..."
         fi
-        $compose_cmd $compose_args build $NO_CACHE migrate-local rada-migrate-local migrate-openreyestr-local document-service-local
+        $compose_cmd $compose_args build $NO_CACHE \
+            app-local \
+            rada-mcp-app-local \
+            app-openreyestr-local \
+            migrate-local \
+            rada-migrate-local \
+            migrate-openreyestr-local \
+            document-service-local \
+            lexwebapp-local \
+            nginx-local
 
         # Step 5: Ensure infrastructure services are running
         print_msg "$BLUE" "Ensuring infrastructure services are running..."
