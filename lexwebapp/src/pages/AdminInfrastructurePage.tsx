@@ -354,7 +354,8 @@ export function AdminInfrastructurePage() {
   const handleRefresh = () => setRefreshKey((k) => k + 1);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -460,6 +461,7 @@ export function AdminInfrastructurePage() {
           </div>
         )}
       </div>
+      </div>
     </div>
   );
 }
@@ -471,10 +473,10 @@ function BackendDetailSection({ data }: { data: any }) {
   const byRoute = (data?.by_route || []).slice(0, 8); // Top 8 routes
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {/* Status codes stacked area */}
       <ChartCard title="HTTP Status Codes">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={statusCodes}>
             <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -490,7 +492,7 @@ function BackendDetailSection({ data }: { data: any }) {
 
       {/* Request rate by route */}
       <ChartCard title="Request Rate by Route (RPS)">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <LineChart>
             <XAxis
               dataKey="timestamp"
@@ -520,7 +522,7 @@ function BackendDetailSection({ data }: { data: any }) {
       {/* External API calls */}
       {data?.external_apis?.calls?.length > 0 && (
         <ChartCard title="External API Calls (rate/s)">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} type="number" domain={['dataMin', 'dataMax']} />
               <YAxis tick={{ fontSize: 11 }} />
@@ -537,7 +539,7 @@ function BackendDetailSection({ data }: { data: any }) {
       {/* External API latency P95 */}
       {data?.external_apis?.duration_p95?.length > 0 && (
         <ChartCard title="External API Latency P95 (ms)">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} type="number" domain={['dataMin', 'dataMax']} />
               <YAxis tick={{ fontSize: 11 }} />
@@ -563,10 +565,10 @@ function UploadPipelineSection({ data }: { data: any }) {
   const concurrency = data?.concurrency?.series || [];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {/* Jobs by status */}
       <ChartCard title="BullMQ Jobs by Status">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={jobs}>
             <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -583,7 +585,7 @@ function UploadPipelineSection({ data }: { data: any }) {
 
       {/* Processing duration percentiles */}
       <ChartCard title="Processing Duration (ms)">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <LineChart data={duration}>
             <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -598,7 +600,7 @@ function UploadPipelineSection({ data }: { data: any }) {
 
       {/* Queue depth */}
       <ChartCard title="Queue Depth">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={queueDepth}>
             <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -610,7 +612,7 @@ function UploadPipelineSection({ data }: { data: any }) {
 
       {/* Concurrency */}
       <ChartCard title="Concurrency">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={280}>
           <LineChart data={concurrency}>
             <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
@@ -645,10 +647,10 @@ function CostRealtimeSection({ data }: { data: any }) {
         <StatCard label="Вартість / місяць" value={`$${(data?.cost_per_month || 0).toFixed(2)}`} sub="Екстраполяція" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Cost by model trend */}
         <ChartCard title="Cost by Model">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={byModel}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v.toFixed(4)}`} />
@@ -671,7 +673,7 @@ function CostRealtimeSection({ data }: { data: any }) {
 
         {/* Top 10 tools horizontal bar */}
         <ChartCard title="Top 10 Tools by Cost (7d)">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={topTools} layout="vertical">
               <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v.toFixed(2)}`} />
               <YAxis type="category" dataKey="tool" tick={{ fontSize: 10 }} width={150} />
@@ -722,10 +724,10 @@ function InfrastructureSection({ data }: { data: any }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* CPU time series */}
         <ChartCard title="CPU Usage">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={cpuSeries}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
@@ -740,7 +742,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* PG connections */}
         <ChartCard title="PostgreSQL Connections">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={pgConn}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
@@ -755,7 +757,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* PG transactions */}
         <ChartCard title="PostgreSQL Transactions (rate/s)">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={pgTx}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
@@ -769,7 +771,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* Redis memory */}
         <ChartCard title="Redis Memory">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={redisMem}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatBytes(v)} />
@@ -783,7 +785,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* Redis commands + clients */}
         <ChartCard title="Redis Commands Rate (/s)">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={redisCommands}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
@@ -795,7 +797,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* Disk I/O */}
         <ChartCard title="Disk I/O (bytes/s)">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={diskSeries}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatBytes(v)} />
@@ -809,7 +811,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* Network */}
         <ChartCard title="Network (bytes/s)">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={networkSeries}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatBytes(v)} />
@@ -823,7 +825,7 @@ function InfrastructureSection({ data }: { data: any }) {
 
         {/* Redis clients + evicted */}
         <ChartCard title="Redis Clients & Evictions">
-          <ResponsiveContainer width="100%" height={220}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={redisClients}>
               <XAxis dataKey="timestamp" tickFormatter={formatTime} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />

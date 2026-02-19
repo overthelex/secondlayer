@@ -1740,9 +1740,82 @@ export function createAdminRoutes(
     started_at: string;
     completed_at?: string;
     stop_requested?: boolean;
+    current_logs: string[];
   }
 
   const backfillJobs = new Map<string, BackfillJob>();
+
+  async function getLiveCompletenessStats() {
+    const kindNames: Record<string, string> = {};
+    try {
+      const dictResult = await db.query(`
+        SELECT data FROM zo_dictionaries
+        WHERE dictionary_name = 'justiceKinds' AND domain = 'court_decisions'
+        LIMIT 1
+      `);
+      if (dictResult.rows[0]?.data) {
+        const items = dictResult.rows[0].data;
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            if (item.justice_kind != null && item.name) {
+              kindNames[String(item.justice_kind)] = item.name;
+            }
+          }
+        }
+      }
+    } catch { /* dictionary not available */ }
+
+    const result = await db.query(`
+      SELECT
+        COALESCE(metadata->>'justice_kind', 'unknown') AS justice_kind,
+        COUNT(*) AS total,
+        COUNT(full_text) FILTER (WHERE full_text IS NOT NULL AND full_text != '') AS has_plaintext,
+        COUNT(full_text_html) FILTER (WHERE full_text_html IS NOT NULL AND full_text_html != '') AS has_html,
+        COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NULL OR full_text_html = '')) AS missing_both,
+        COUNT(*) FILTER (WHERE full_text IS NOT NULL AND full_text != '' AND full_text_html IS NOT NULL AND full_text_html != '') AS has_both
+      FROM documents
+      WHERE user_id IS NULL
+      GROUP BY COALESCE(metadata->>'justice_kind', 'unknown')
+      ORDER BY total DESC
+    `);
+
+    const byJusticeKind = result.rows.map((row: any) => {
+      const total = parseInt(row.total);
+      const hasBoth = parseInt(row.has_both);
+      const kindCode = row.justice_kind;
+      return {
+        justice_kind: kindNames[kindCode] || (kindCode === 'unknown' ? 'Невідомий' : `Вид ${kindCode}`),
+        justice_kind_code: kindCode,
+        total,
+        has_plaintext: parseInt(row.has_plaintext),
+        has_html: parseInt(row.has_html),
+        has_both: hasBoth,
+        missing_both: parseInt(row.missing_both),
+        completeness_pct: total > 0 ? Math.round((hasBoth / total) * 10000) / 100 : 0,
+      };
+    });
+
+    let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 };
+    for (const row of byJusticeKind) {
+      summary = {
+        total_documents: summary.total_documents + row.total,
+        with_plaintext: summary.with_plaintext + row.has_plaintext,
+        with_html: summary.with_html + row.has_html,
+        with_both: summary.with_both + row.has_both,
+        missing_both: summary.missing_both + row.missing_both,
+      };
+    }
+
+    return {
+      summary: {
+        ...summary,
+        completeness_pct: summary.total_documents > 0
+          ? Math.round((summary.with_both / summary.total_documents) * 10000) / 100
+          : 0,
+      },
+      by_justice_kind: byJusticeKind,
+    };
+  }
 
   /**
    * POST /api/admin/backfill-fulltext
@@ -1803,6 +1876,7 @@ export function createAdminRoutes(
         errors: 0,
         error_details: [],
         started_at: new Date().toISOString(),
+        current_logs: [],
       };
 
       backfillJobs.set(jobId, job);
@@ -1846,6 +1920,12 @@ export function createAdminRoutes(
 
             if (fullText && fullText.length > 100) {
               const caseNumber = parser.getMetadata()?.caseNumber || null;
+              const title = parser.getMetadata()?.title || '';
+              const shortTitle = title.length > 80 ? title.slice(0, 80) + '...' : title;
+              const logEntry = `[${zoId}] ${caseNumber || 'N/A'} | ${shortTitle || 'N/A'}`;
+              job.current_logs.unshift(logEntry);
+              if (job.current_logs.length > 3) job.current_logs.pop();
+
               await db.query(`
                 UPDATE documents
                 SET full_text = $1, full_text_html = $2, case_number = COALESCE(case_number, $3), updated_at = NOW()
@@ -1919,14 +1999,22 @@ export function createAdminRoutes(
    * GET /api/admin/backfill-fulltext/:jobId
    * Get backfill job status
    */
-  router.get('/backfill-fulltext/:jobId', (req: Request, res: Response) => {
+  router.get('/backfill-fulltext/:jobId', async (req: Request, res: Response) => {
     const jobId = getStringParam(req.params.jobId);
     if (!jobId) return res.status(400).json({ error: 'Job ID required' });
 
     const job = backfillJobs.get(jobId);
     if (!job) return res.status(404).json({ error: 'Job not found' });
 
-    res.json(job);
+    const response: Record<string, unknown> = { ...job };
+
+    if (job.status === 'running' || job.status === 'queued') {
+      try {
+        response.completeness = await getLiveCompletenessStats();
+      } catch { /* ignore completeness errors during polling */ }
+    }
+
+    res.json(response);
   });
 
   /**
