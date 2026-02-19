@@ -3238,7 +3238,7 @@ export function createAdminRoutes(
       // 2. Legislation (from sync scripts)
       const legislation = await db.query(`
         SELECT 
-          id, title, legislation_type, number, status,
+          id, title, type, rada_id, status,
           effective_date, created_at, updated_at
         FROM legislation
         WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour'
@@ -3256,8 +3256,8 @@ export function createAdminRoutes(
           records: legislation.rows.map((r: any) => ({
             id: r.id,
             title: r.title?.substring(0, 150),
-            type: r.legislation_type,
-            number: r.number,
+            type: r.type,
+            rada_id: r.rada_id,
             status: r.status,
             effective_date: r.effective_date,
             created_at: r.created_at,
