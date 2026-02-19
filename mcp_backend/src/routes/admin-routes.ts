@@ -6,6 +6,9 @@
 
 import express, { Request, Response } from 'express';
 import axios from 'axios';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { Database } from '../database/database.js';
 import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
@@ -16,6 +19,8 @@ import bcrypt from 'bcryptjs';
 import { ConfigService } from '../services/config-service.js';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
+
+const _adminRoutesDir = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Helper to ensure param is a string (Express can return string | string[])
@@ -2067,6 +2072,174 @@ export function createAdminRoutes(
     }
 
     job.stop_requested = true;
+    res.json({ message: 'Stop requested', job_id: jobId });
+  });
+
+  // ========================================
+  // COURT REGISTRY SCRAPER (Playwright-based, downloads new docs)
+  // ========================================
+
+  interface ScraperJob {
+    job_id: string;
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
+    justice_kind: string;
+    justice_kind_id: string;
+    doc_form: string;
+    date_from: string;
+    max_docs: number;
+    concurrency: number;
+    proxy?: string;
+    pages_processed: number;
+    downloaded: number;
+    saved_to_db: number;
+    skipped: number;
+    errors: number;
+    started_at: string;
+    completed_at?: string;
+    stop_requested?: boolean;
+    current_logs: string[];
+    pid?: number;
+  }
+
+  const scraperJobs = new Map<string, ScraperJob>();
+
+  /**
+   * POST /api/admin/scrape-court-registry
+   * Start a new court registry scraper job (Playwright, headless)
+   */
+  router.post('/scrape-court-registry', async (req: Request, res: Response) => {
+    // Only one scraper at a time
+    for (const job of scraperJobs.values()) {
+      if (job.status === 'running' || job.status === 'queued') {
+        return res.status(409).json({ error: 'Скрапер вже виконується', job_id: job.job_id });
+      }
+    }
+
+    const {
+      justice_kind = 'Кримінальне',
+      justice_kind_id = '5',
+      doc_form = '__all__',
+      date_from = '01.01.2015',
+      max_docs = 10000,
+      concurrency = 4,
+      proxy: proxyKey,
+    } = req.body || {};
+
+    const proxyUrl = proxyKey && proxyKey !== 'none' ? PROXIES[proxyKey as keyof typeof PROXIES] : undefined;
+
+    const jobId = `scrape-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const job: ScraperJob = {
+      job_id: jobId,
+      status: 'queued',
+      justice_kind: String(justice_kind),
+      justice_kind_id: String(justice_kind_id),
+      doc_form: String(doc_form),
+      date_from: String(date_from),
+      max_docs: Math.min(parseInt(String(max_docs)) || 10000, 50000),
+      concurrency: Math.min(Math.max(parseInt(String(concurrency)) || 4, 1), 10),
+      proxy: proxyUrl,
+      pages_processed: 0,
+      downloaded: 0,
+      saved_to_db: 0,
+      skipped: 0,
+      errors: 0,
+      started_at: new Date().toISOString(),
+      current_logs: [],
+    };
+
+    scraperJobs.set(jobId, job);
+    res.json({ job_id: jobId, status: 'queued', message: 'Скрапер запущено' });
+
+    // Spawn scraper as child process
+    const scriptPath = join(_adminRoutesDir, '..', 'scripts', 'scrape-court-registry.js');
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      JUSTICE_KIND: job.justice_kind,
+      JUSTICE_KIND_ID: job.justice_kind_id,
+      DOC_FORM: job.doc_form,
+      DATE_FROM: job.date_from,
+      MAX_DOCS: String(job.max_docs),
+      CONCURRENCY: String(job.concurrency),
+      HEADLESS: 'true',
+      SKIP_EMBEDDINGS: 'false',
+      SCRAPE_DELAY_MIN_MS: '3000',
+      SCRAPE_DELAY_MAX_MS: '6000',
+      ...(proxyUrl && { SCRAPE_PROXY: proxyUrl }),
+    };
+
+    const child = spawn('node', [scriptPath], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    job.status = 'running';
+    job.pid = child.pid;
+
+    const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+    const addLog = (line: string) => {
+      const clean = stripAnsi(line).trim();
+      if (!clean) return;
+      job.current_logs = [...job.current_logs.slice(-49), clean];
+
+      const pageMatch = clean.match(/--- Page (\d+) ---/);
+      if (pageMatch) job.pages_processed = parseInt(pageMatch[1]);
+      if (/\] Saved \([\d.]+ KB\)/.test(clean)) job.downloaded++;
+      if (clean.includes('[PROC') && clean.includes('] Saved to DB')) job.saved_to_db++;
+      if (clean.includes('skipping') || clean.includes('Server overload')) job.skipped++;
+      if (clean.includes('] Error:') || /\[error\]/.test(clean)) job.errors++;
+    };
+
+    child.stdout?.on('data', (data: Buffer) => {
+      data.toString().split('\n').forEach(addLog);
+      if (job.stop_requested) child.kill('SIGTERM');
+    });
+    child.stderr?.on('data', (data: Buffer) => {
+      data.toString().split('\n').forEach(addLog);
+    });
+    child.on('close', (code: number | null) => {
+      job.status = job.stop_requested ? 'stopped' : (code === 0 ? 'completed' : 'failed');
+      job.completed_at = new Date().toISOString();
+      logger.info(`Court scraper ${jobId} ${job.status}: downloaded=${job.downloaded}, saved=${job.saved_to_db}`);
+    });
+  });
+
+  /**
+   * GET /api/admin/scrape-court-registry
+   * Get latest/active scraper job status
+   */
+  router.get('/scrape-court-registry', (_req: Request, res: Response) => {
+    let latest: ScraperJob | null = null;
+    for (const job of scraperJobs.values()) {
+      if (!latest || job.started_at > latest.started_at) latest = job;
+    }
+    res.json({ active: latest ? (latest.status === 'running' || latest.status === 'queued') : false, job: latest });
+  });
+
+  /**
+   * GET /api/admin/scrape-court-registry/:jobId
+   * Get specific scraper job status
+   */
+  router.get('/scrape-court-registry/:jobId', (req: Request, res: Response) => {
+    const jobId = getStringParam(req.params.jobId);
+    if (!jobId) return res.status(400).json({ error: 'Job ID required' });
+    const job = scraperJobs.get(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json(job);
+  });
+
+  /**
+   * POST /api/admin/scrape-court-registry/:jobId/stop
+   * Stop a running scraper job
+   */
+  router.post('/scrape-court-registry/:jobId/stop', (req: Request, res: Response) => {
+    const jobId = getStringParam(req.params.jobId);
+    if (!jobId) return res.status(400).json({ error: 'Job ID required' });
+    const job = scraperJobs.get(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status !== 'running' && job.status !== 'queued') {
+      return res.status(400).json({ error: 'Job is not running' });
+    }
+    job.stop_requested = true;
+    if (job.pid) {
+      try { process.kill(job.pid, 'SIGTERM'); } catch { /* already dead */ }
+    }
     res.json({ message: 'Stop requested', job_id: jobId });
   });
 

@@ -135,14 +135,31 @@ function extractMetadataFromHTML(html: string, docId: string): {
     fullText = inner$('body').text().replace(/\s+/g, ' ').trim();
   }
 
-  // Fallback: try CourtDecisionHTMLParser (works for ZakonOnline-style pages)
+  // Print-version page (after clicking "Версія для друку"): no txtdepository,
+  // text is directly in <body> as <p> tags. Use regex stripping to avoid
+  // cheerio encoding issues with charset-less HTML.
   if (!fullText || fullText.length < 100) {
-    try {
-      const parser = new CourtDecisionHTMLParser(html);
-      fullText = parser.toText('plain');
-    } catch {
-      // Last resort: strip all tags from body
-      fullText = $('body').text().replace(/\s+/g, ' ').trim();
+    if (!html.includes('txtdepository')) {
+      fullText = html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim();
+    } else {
+      // Fallback: try CourtDecisionHTMLParser (works for ZakonOnline-style pages)
+      try {
+        const parser = new CourtDecisionHTMLParser(html);
+        fullText = parser.toText('plain');
+      } catch {
+        // Last resort: strip all tags from body
+        fullText = $('body').text().replace(/\s+/g, ' ').trim();
+      }
     }
   }
 
@@ -533,6 +550,23 @@ async function downloadDecisionDirect(
     const url = `${BASE_URL}Review/${docId}`;
     await tab.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleepWithJitter(1500);
+
+    // Check for overload page — txtdepository absent means junk/error page
+    const rawHtml = await tab.content();
+    if (
+      /Сервер перевантажений запитами/i.test(rawHtml) ||
+      !rawHtml.includes('txtdepository')
+    ) {
+      console.warn(`  [${docId}] Server overload/blocked page detected, skipping`);
+      return null;
+    }
+
+    // Click "Версія для друку" button to render the decoded decision into the page
+    const btnPrint = tab.locator('#btnPrint');
+    if (await btnPrint.count() > 0) {
+      await btnPrint.click();
+      await sleepWithJitter(2000);
+    }
 
     const html = await tab.content();
     fs.writeFileSync(filePath, html, 'utf-8');
