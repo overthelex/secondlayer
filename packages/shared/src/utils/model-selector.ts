@@ -15,7 +15,7 @@ export interface ModelSelection {
  * Supports multiple LLM providers (OpenAI, Anthropic) with automatic fallback
  */
 export class ModelSelector {
-  private static readonly DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
+  private static readonly DEFAULT_EMBEDDING_MODEL = 'voyage-multilingual-2';
 
   private static readonly PROVIDER_STRATEGY = process.env.LLM_PROVIDER_STRATEGY || 'openai-first';
 
@@ -26,8 +26,7 @@ export class ModelSelector {
   private static readonly SINGLE_MODEL = process.env.OPENAI_MODEL;
 
   static getEmbeddingModel(): string {
-    const model = process.env.OPENAI_EMBEDDING_MODEL || this.DEFAULT_EMBEDDING_MODEL;
-    return model;
+    return process.env.VOYAGEAI_EMBEDDING_MODEL || this.DEFAULT_EMBEDDING_MODEL;
   }
 
   /**
@@ -100,10 +99,14 @@ export class ModelSelector {
       // Legacy
       'gpt-4-turbo': { input: 10.00, output: 30.00 },
       'gpt-4': { input: 30.00, output: 60.00 },
-      // Embeddings
+      // Embeddings (OpenAI)
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      // Embeddings (VoyageAI)
+      'voyage-multilingual-2': { input: 0.06, output: 0 },
+      'voyage-law-2': { input: 0.12, output: 0 },
+      'voyage-3-large': { input: 0.18, output: 0 },
       // Claude (historical — kept for cost tracking of past usage)
       'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
@@ -153,10 +156,14 @@ export class ModelSelector {
       // Legacy
       'gpt-4-turbo': { input: 10.00, output: 30.00 },
       'gpt-4': { input: 30.00, output: 60.00 },
-      // Embeddings
+      // Embeddings (OpenAI)
       'text-embedding-ada-002': { input: 0.10, output: 0 },
       'text-embedding-3-small': { input: 0.02, output: 0 },
       'text-embedding-3-large': { input: 0.13, output: 0 },
+      // Embeddings (VoyageAI)
+      'voyage-multilingual-2': { input: 0.06, output: 0 },
+      'voyage-law-2': { input: 0.12, output: 0 },
+      'voyage-3-large': { input: 0.18, output: 0 },
       // Claude (historical — kept for cost tracking of past usage)
       'claude-opus-4-20250514': { input: 15.00, output: 75.00 },
       'claude-opus-4.5': { input: 5.00, output: 25.00 },
