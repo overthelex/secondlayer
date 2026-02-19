@@ -354,6 +354,12 @@ export const api = {
         : apiClient.get('/api/admin/scrape-court-registry'),
     stopCourtScraper: (jobId: string) =>
       apiClient.post(`/api/admin/scrape-court-registry/${jobId}/stop`),
+
+    // Service pricing
+    getServicePricing: () =>
+      apiClient.get('/api/admin/service-pricing'),
+    updateServicePricing: (id: string, data: { price_usd: number; notes?: string; is_active?: boolean }) =>
+      apiClient.put(`/api/admin/service-pricing/${id}`, data),
   },
 
   // GDPR

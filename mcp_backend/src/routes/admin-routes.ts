@@ -3632,5 +3632,81 @@ export function createAdminRoutes(
     }
   });
 
+  // ========================================
+  // SERVICE PRICING
+  // ========================================
+
+  /**
+   * GET /api/admin/service-pricing
+   * Get all service pricing entries grouped by provider
+   */
+  router.get('/service-pricing', async (req: Request, res: Response) => {
+    try {
+      const result = await db.query(`
+        SELECT
+          id, provider, model, display_name, unit_type,
+          price_usd::float AS price_usd, currency,
+          sort_order, notes, is_active,
+          updated_at, updated_by
+        FROM service_pricing
+        ORDER BY provider, sort_order, model, unit_type
+      `);
+      res.json({ pricing: result.rows });
+    } catch (error: any) {
+      logger.error('Failed to fetch service pricing', { error: error.message });
+      res.status(500).json({ error: 'Failed to fetch service pricing' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/service-pricing/:id
+   * Update a single pricing entry
+   */
+  router.put('/service-pricing/:id', async (req: Request, res: Response) => {
+    const id = getStringParam(req.params.id) as string;
+    const { price_usd, notes, is_active } = req.body;
+
+    if (price_usd === undefined || price_usd === null || isNaN(Number(price_usd))) {
+      return res.status(400).json({ error: 'price_usd must be a valid number' });
+    }
+    if (Number(price_usd) < 0) {
+      return res.status(400).json({ error: 'price_usd cannot be negative' });
+    }
+
+    try {
+      const adminUser = (req as any).user;
+      const result = await db.query(`
+        UPDATE service_pricing
+        SET price_usd = $1,
+            notes = $2,
+            is_active = $3,
+            updated_at = NOW(),
+            updated_by = $4
+        WHERE id = $5
+        RETURNING id, provider, model, display_name, unit_type,
+                  price_usd::float AS price_usd, currency,
+                  sort_order, notes, is_active, updated_at, updated_by
+      `, [price_usd, notes ?? null, is_active ?? true, adminUser?.email || adminUser?.id || 'admin', id]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Pricing entry not found' });
+      }
+
+      await logAdminAction(
+        adminUser?.id,
+        'update_service_pricing',
+        null,
+        id,
+        { price_usd, notes, is_active },
+        req
+      );
+
+      res.json({ pricing: result.rows[0] });
+    } catch (error: any) {
+      logger.error('Failed to update service pricing', { error: error.message, id });
+      res.status(500).json({ error: 'Failed to update service pricing' });
+    }
+  });
+
   return router;
 }
