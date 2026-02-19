@@ -24,6 +24,8 @@ import {
   Play,
   Download,
   Square,
+  Eye,
+  X,
 } from 'lucide-react';
 import { api } from '../utils/api-client';
 
