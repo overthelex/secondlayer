@@ -101,6 +101,27 @@ interface BackfillJob {
   error_details: string[];
   started_at: string;
   completed_at?: string;
+  current_logs?: string[];
+  completeness?: {
+    summary: {
+      total_documents: number;
+      with_plaintext: number;
+      with_html: number;
+      with_both: number;
+      missing_both: number;
+      completeness_pct: number;
+    };
+    by_justice_kind: Array<{
+      justice_kind: string;
+      justice_kind_code: string;
+      total: number;
+      has_plaintext: number;
+      has_html: number;
+      has_both: number;
+      missing_both: number;
+      completeness_pct: number;
+    }>;
+  };
 }
 
 interface SectionState<T> {
@@ -459,6 +480,14 @@ function BackfillProgress({ job, onStop, onRefresh }: { job: BackfillJob; onStop
         <span className="text-blue-600">{progressPct}%</span>
       </div>
 
+      {isActive && job.current_logs && job.current_logs.length > 0 && (
+        <div className="mt-3 p-2 bg-slate-900 rounded text-[10px] font-mono text-green-400">
+          {job.current_logs.map((log, i) => (
+            <div key={i} className="truncate">{log}</div>
+          ))}
+        </div>
+      )}
+
       {job.error_details.length > 0 && !isActive && (
         <details className="mt-2">
           <summary className="text-xs text-red-600 cursor-pointer">Деталі помилок ({job.error_details.length})</summary>
@@ -580,6 +609,8 @@ function DocumentCompletenessSection() {
 
   const isBackfillActive = backfillJob && (backfillJob.status === 'running' || backfillJob.status === 'queued');
 
+  const displayData = backfillJob?.completeness ?? result;
+
   return (
     <div>
       {/* Action buttons */}
@@ -632,27 +663,31 @@ function DocumentCompletenessSection() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">{error}</div>
       )}
 
-      {result && (
+      {(result || (backfillJob?.completeness)) && (
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-lg border border-claude-border p-3">
-              <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(result.summary.total_documents)}</div>
+              <div className="text-lg font-semibold text-claude-text font-mono">
+                {formatNumber(backfillJob?.completeness?.summary.total_documents ?? result?.summary.total_documents)}
+              </div>
               <div className="text-[10px] text-claude-subtext">Всього документів</div>
             </div>
-            <div className={`rounded-lg border border-claude-border p-3 ${completenessBg(result.summary.completeness_pct)}`}>
-              <div className={`text-lg font-semibold font-mono ${completenessColor(result.summary.completeness_pct)}`}>
-                {result.summary.completeness_pct}%
+            <div className={`rounded-lg border border-claude-border p-3 ${completenessBg(backfillJob?.completeness?.summary.completeness_pct ?? result?.summary.completeness_pct ?? 0)}`}>
+              <div className={`text-lg font-semibold font-mono ${completenessColor(backfillJob?.completeness?.summary.completeness_pct ?? result?.summary.completeness_pct ?? 0)}`}>
+                {backfillJob?.completeness?.summary.completeness_pct ?? result?.summary.completeness_pct ?? 0}%
               </div>
               <div className="text-[10px] text-claude-subtext">Повнота (обидва поля)</div>
             </div>
             <div className="bg-white rounded-lg border border-claude-border p-3">
-              <div className="text-lg font-semibold text-green-700 font-mono">{formatNumber(result.summary.with_both)}</div>
+              <div className="text-lg font-semibold text-green-700 font-mono">
+                {formatNumber(backfillJob?.completeness?.summary.with_both ?? result?.summary.with_both ?? 0)}
+              </div>
               <div className="text-[10px] text-claude-subtext">З обома полями</div>
             </div>
-            <div className={`rounded-lg border border-claude-border p-3 ${result.summary.missing_both > 0 ? 'bg-red-50' : 'bg-white'}`}>
-              <div className={`text-lg font-semibold font-mono ${result.summary.missing_both > 0 ? 'text-red-600' : 'text-claude-text'}`}>
-                {formatNumber(result.summary.missing_both)}
+            <div className={`rounded-lg border border-claude-border p-3 ${(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0) > 0 ? 'bg-red-50' : 'bg-white'}`}>
+              <div className={`text-lg font-semibold font-mono ${(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0) > 0 ? 'text-red-600' : 'text-claude-text'}`}>
+                {formatNumber(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0)}
               </div>
               <div className="text-[10px] text-claude-subtext">Без обох полів</div>
             </div>
@@ -675,7 +710,7 @@ function DocumentCompletenessSection() {
                   </tr>
                 </thead>
                 <tbody>
-                  {result.by_justice_kind.map((row) => (
+                  {displayData?.by_justice_kind.map((row) => (
                     <tr key={row.justice_kind_code} className="border-b border-claude-border/30 hover:bg-gray-50/50">
                       <td className="px-4 py-2.5">
                         <div className="font-medium text-xs text-claude-text">{row.justice_kind}</div>
@@ -711,16 +746,16 @@ function DocumentCompletenessSection() {
                   {/* Summary row */}
                   <tr className="border-t-2 border-claude-border bg-gray-50 font-semibold">
                     <td className="px-4 py-2.5 text-xs text-claude-text">Всього</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.total_documents)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.with_plaintext)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(result.summary.with_html)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(result.summary.with_both)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.total_documents ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.with_plaintext ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.with_html ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(displayData?.summary.with_both ?? 0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs">
-                      <span className={result.summary.missing_both > 0 ? 'text-red-600' : ''}>{formatNumber(result.summary.missing_both)}</span>
+                      <span className={(displayData?.summary.missing_both ?? 0) > 0 ? 'text-red-600' : ''}>{formatNumber(displayData?.summary.missing_both ?? 0)}</span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${completenessBg(result.summary.completeness_pct)} ${completenessColor(result.summary.completeness_pct)}`}>
-                        {result.summary.completeness_pct}%
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium font-mono ${completenessBg(displayData?.summary.completeness_pct ?? 0)} ${completenessColor(displayData?.summary.completeness_pct ?? 0)}`}>
+                        {displayData?.summary.completeness_pct ?? 0}%
                       </span>
                     </td>
                     <td></td>
