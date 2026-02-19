@@ -35,9 +35,12 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
     }
 
     .logo-wrap {
+      display: block;
       margin: 0 auto 2rem;
       width: 88px;
       height: 88px;
+      border-radius: 50%;
+      object-fit: cover;
       animation: breathe 3.5s ease-in-out infinite;
     }
 
@@ -119,34 +122,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 <body>
   <div class="container">
 
-    <!-- Scales of Justice icon (inline SVG, no external deps) -->
-    <svg class="logo-wrap" viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SecondLayer">
-      <!-- Background circle -->
-      <circle cx="44" cy="44" r="42" fill="#EDECEA" stroke="#E0DDD9" stroke-width="1.5"/>
-
-      <!-- Pole -->
-      <rect x="42.5" y="20" width="3" height="42" rx="1.5" fill="#2D2D2D"/>
-
-      <!-- Pivot cap -->
-      <circle cx="44" cy="20" r="4" fill="#D97757"/>
-
-      <!-- Horizontal beam -->
-      <rect x="18" y="31" width="52" height="3" rx="1.5" fill="#2D2D2D"/>
-
-      <!-- Left suspension line -->
-      <line x1="24" y1="34" x2="24" y2="44" stroke="#2D2D2D" stroke-width="1.8" stroke-linecap="round"/>
-      <!-- Right suspension line (slightly shorter → right pan higher) -->
-      <line x1="64" y1="34" x2="64" y2="41" stroke="#2D2D2D" stroke-width="1.8" stroke-linecap="round"/>
-
-      <!-- Left pan (lower) -->
-      <path d="M 16 46 Q 24 54 32 46" stroke="#D97757" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-      <!-- Right pan (higher) -->
-      <path d="M 56 43 Q 64 51 72 43" stroke="#2D2D2D" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".55"/>
-
-      <!-- Base foot -->
-      <rect x="34" y="62" width="20" height="3.5" rx="1.75" fill="#2D2D2D"/>
-      <rect x="29" y="65.5" width="30" height="2.5" rx="1.25" fill="#2D2D2D"/>
-    </svg>
+    <img class="logo-wrap" src="https://legal.org.ua/Image.jpg" alt="SecondLayer">
 
     <div class="brand">Second<em>Layer</em></div>
     <div class="divider"></div>
