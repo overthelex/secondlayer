@@ -100,9 +100,6 @@ export function MainLayout() {
 
   const pageTitle = getPageTitle();
 
-  // Hide right panel on admin routes
-  const isAdminRoute = location.pathname.startsWith('/admin');
-
   return (
     <div className="flex h-screen bg-claude-bg overflow-hidden">
       {/* Sidebar */}
@@ -171,21 +168,19 @@ export function MainLayout() {
             </h1>
           </div>
 
-          {/* Right: Toggle right panel button (hidden on admin routes) */}
+          {/* Right: Toggle right panel button */}
           <div className="flex items-center justify-end gap-2 w-[200px]">
-            {!isAdminRoute && (
-              <button
-                onClick={toggleRightPanel}
-                className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200"
-                title={isRightPanelOpen ? 'Сховати панель' : 'Показати панель'}
-              >
-                {isRightPanelOpen ? (
-                  <X size={18} strokeWidth={2} />
-                ) : (
-                  <PanelRightOpen size={18} strokeWidth={2} />
-                )}
-              </button>
-            )}
+            <button
+              onClick={toggleRightPanel}
+              className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200"
+              title={isRightPanelOpen ? 'Сховати панель' : 'Показати панель'}
+            >
+              {isRightPanelOpen ? (
+                <X size={18} strokeWidth={2} />
+              ) : (
+                <PanelRightOpen size={18} strokeWidth={2} />
+              )}
+            </button>
           </div>
         </header>
 
@@ -214,14 +209,12 @@ export function MainLayout() {
               />
             )}
           </div>
-          {!isAdminRoute && (
-            <button
-              onClick={() => useUIStore.getState().setRightPanelOpen(true)}
-              className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200"
-            >
-              <PanelRightOpen size={20} strokeWidth={2} />
-            </button>
-          )}
+          <button
+            onClick={() => useUIStore.getState().setRightPanelOpen(true)}
+            className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200"
+          >
+            <PanelRightOpen size={20} strokeWidth={2} />
+          </button>
         </header>
 
         {/* Main Content Area - Outlet renders child routes */}
@@ -230,15 +223,13 @@ export function MainLayout() {
         </div>
       </main>
 
-      {/* Right Panel (hidden on admin routes) */}
-      {!isAdminRoute && (
-        <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
-          <RightPanel
-            isOpen={isRightPanelOpen}
-            onClose={() => useUIStore.getState().setRightPanelOpen(false)}
-          />
-        </div>
-      )}
+      {/* Right Panel */}
+      <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
+        <RightPanel
+          isOpen={isRightPanelOpen}
+          onClose={() => useUIStore.getState().setRightPanelOpen(false)}
+        />
+      </div>
 
       {/* Time Tracker Widget */}
       <TimeTrackerWidget />
