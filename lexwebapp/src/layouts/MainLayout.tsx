@@ -140,6 +140,7 @@ export function MainLayout() {
           onAdminInfrastructureClick={() => navigate(ROUTES.ADMIN_INFRASTRUCTURE)}
           onAdminContainersClick={() => navigate(ROUTES.ADMIN_CONTAINERS)}
           onAdminConfigClick={() => navigate(ROUTES.ADMIN_CONFIG)}
+          onAdminDBCompareClick={() => navigate(ROUTES.ADMIN_DB_COMPARE)}
           onLogout={handleLogout}
         />
       </div>

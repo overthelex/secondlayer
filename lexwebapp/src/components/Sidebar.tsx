@@ -70,6 +70,7 @@ interface SidebarProps {
   onAdminInfrastructureClick?: () => void;
   onAdminContainersClick?: () => void;
   onAdminConfigClick?: () => void;
+  onAdminDBCompareClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -105,6 +106,7 @@ export function Sidebar({
   onAdminInfrastructureClick,
   onAdminContainersClick,
   onAdminConfigClick,
+  onAdminDBCompareClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -241,6 +243,7 @@ export function Sidebar({
     { id: 'data-sources', label: 'Джерела даних', icon: Globe, onClick: onAdminDataSourcesClick },
     { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, onClick: onAdminBillingClick },
     { id: 'system-config', label: 'Конфігурація', icon: Settings, onClick: onAdminConfigClick },
+    { id: 'db-compare', label: 'Порівняння БД', icon: Database, onClick: onAdminDBCompareClick },
   ];
 
   const evidenceSections = [
