@@ -337,6 +337,23 @@ export const api = {
       apiClient.delete(`/api/admin/config/${key}`),
     getDBCompare: () =>
       apiClient.get('/api/admin/db-compare'),
+
+    // Court registry scraper
+    startCourtScraper: (params?: {
+      justice_kind?: string;
+      justice_kind_id?: string;
+      doc_form?: string;
+      date_from?: string;
+      max_docs?: number;
+      concurrency?: number;
+      proxy?: string;
+    }) => apiClient.post('/api/admin/scrape-court-registry', params),
+    getCourtScraperStatus: (jobId?: string) =>
+      jobId
+        ? apiClient.get(`/api/admin/scrape-court-registry/${jobId}`)
+        : apiClient.get('/api/admin/scrape-court-registry'),
+    stopCourtScraper: (jobId: string) =>
+      apiClient.post(`/api/admin/scrape-court-registry/${jobId}/stop`),
   },
 
   // GDPR

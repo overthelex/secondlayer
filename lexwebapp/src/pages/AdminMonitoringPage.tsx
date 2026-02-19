@@ -94,6 +94,26 @@ interface CompletenessResult {
   }>;
 }
 
+interface ScraperJob {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
+  justice_kind: string;
+  justice_kind_id: string;
+  doc_form: string;
+  date_from: string;
+  max_docs: number;
+  concurrency: number;
+  proxy?: string;
+  pages_processed: number;
+  downloaded: number;
+  saved_to_db: number;
+  skipped: number;
+  errors: number;
+  started_at: string;
+  completed_at?: string;
+  current_logs: string[];
+}
+
 interface BackfillJob {
   job_id: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
@@ -546,6 +566,241 @@ function BackfillProgress({ job, onStop, onRefresh }: { job: BackfillJob; onStop
             {job.error_details.map((e, i) => <div key={i}>{e}</div>)}
           </div>
         </details>
+      )}
+    </div>
+  );
+}
+
+const JUSTICE_KINDS = [
+  { label: 'Кримінальне', value: 'Кримінальне', id: '5' },
+  { label: 'Цивільне', value: 'Цивільне', id: '1' },
+  { label: 'Адміністративне', value: 'Адміністративне', id: '2' },
+  { label: 'Господарське', value: 'Господарське', id: '3' },
+];
+
+const DOC_FORMS = [
+  { label: 'Усі форми', value: '__all__' },
+  { label: 'Рішення', value: 'Рішення' },
+  { label: 'Ухвала', value: 'Ухвала' },
+  { label: 'Вирок', value: 'Вирок' },
+  { label: 'Постанова', value: 'Постанова' },
+];
+
+function CourtScraperSection() {
+  const [job, setJob] = useState<ScraperJob | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [config, setConfig] = useState({
+    justice_kind: 'Кримінальне',
+    justice_kind_id: '5',
+    doc_form: '__all__',
+    date_from: '01.01.2015',
+    max_docs: 10000,
+    concurrency: 4,
+    proxy: 'mail',
+  });
+  const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const pollStatus = useCallback((jobId: string) => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.admin.getCourtScraperStatus(jobId);
+        setJob(res.data);
+        if (res.data.status !== 'running' && res.data.status !== 'queued') stopPolling();
+      } catch { stopPolling(); }
+    }, 2000);
+  }, [stopPolling]);
+
+  useEffect(() => {
+    api.admin.getCourtScraperStatus().then(res => {
+      if (res.data.job) {
+        setJob(res.data.job);
+        if (res.data.active) pollStatus(res.data.job.job_id);
+      }
+    }).catch(() => {});
+    return () => stopPolling();
+  }, [pollStatus, stopPolling]);
+
+  const handleStart = async () => {
+    setStarting(true);
+    try {
+      const res = await api.admin.startCourtScraper(config);
+      const newJob: ScraperJob = {
+        ...res.data,
+        justice_kind: config.justice_kind,
+        justice_kind_id: config.justice_kind_id,
+        doc_form: config.doc_form,
+        date_from: config.date_from,
+        max_docs: config.max_docs,
+        concurrency: config.concurrency,
+        proxy: config.proxy !== 'none' ? config.proxy : undefined,
+        pages_processed: 0, downloaded: 0, saved_to_db: 0, skipped: 0, errors: 0,
+        started_at: new Date().toISOString(), current_logs: [],
+      };
+      setJob(newJob);
+      pollStatus(res.data.job_id);
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Помилка запуску';
+      alert(msg);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!job) return;
+    try { await api.admin.stopCourtScraper(job.job_id); } catch { /* ignore */ }
+  };
+
+  const isActive = job && (job.status === 'running' || job.status === 'queued');
+
+  return (
+    <div className="bg-white rounded-xl border border-claude-border p-5">
+      {/* Config panel */}
+      {!isActive && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Вид судочинства</label>
+            <select
+              className="w-full text-sm border border-claude-border rounded px-2 py-1.5 bg-white"
+              value={config.justice_kind}
+              onChange={e => {
+                const found = JUSTICE_KINDS.find(k => k.value === e.target.value);
+                setConfig(c => ({ ...c, justice_kind: e.target.value, justice_kind_id: found?.id || '1' }));
+              }}
+            >
+              {JUSTICE_KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Форма документа</label>
+            <select
+              className="w-full text-sm border border-claude-border rounded px-2 py-1.5 bg-white"
+              value={config.doc_form}
+              onChange={e => setConfig(c => ({ ...c, doc_form: e.target.value }))}
+            >
+              {DOC_FORMS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Дата від</label>
+            <input
+              type="text"
+              className="w-full text-sm border border-claude-border rounded px-2 py-1.5"
+              placeholder="дд.мм.рррр"
+              value={config.date_from}
+              onChange={e => setConfig(c => ({ ...c, date_from: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Макс. документів</label>
+            <input
+              type="number"
+              className="w-full text-sm border border-claude-border rounded px-2 py-1.5"
+              min={100} max={50000} step={100}
+              value={config.max_docs}
+              onChange={e => setConfig(c => ({ ...c, max_docs: parseInt(e.target.value) || 10000 }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Потоків: {config.concurrency}</label>
+            <input
+              type="range" min={1} max={8} step={1}
+              value={config.concurrency}
+              onChange={e => setConfig(c => ({ ...c, concurrency: parseInt(e.target.value) }))}
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-claude-subtext mb-1">Проксі</label>
+            <select
+              className="w-full text-sm border border-claude-border rounded px-2 py-1.5 bg-white"
+              value={config.proxy}
+              onChange={e => setConfig(c => ({ ...c, proxy: e.target.value }))}
+            >
+              <option value="none">Без проксі</option>
+              <option value="mail">Mail Server (mail.legal.org.ua)</option>
+            </select>
+          </div>
+          <div className="flex items-end col-span-2">
+            <button
+              onClick={handleStart}
+              disabled={starting}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              <Play size={14} />
+              {starting ? 'Запуск...' : 'Завантажити документи'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Progress */}
+      {job && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {isActive ? (
+                <RefreshCw size={14} className="text-blue-600 animate-spin" />
+              ) : job.status === 'completed' ? (
+                <CheckCircle size={14} className="text-green-600" />
+              ) : job.status === 'stopped' ? (
+                <Square size={14} className="text-yellow-600" />
+              ) : (
+                <XCircle size={14} className="text-red-600" />
+              )}
+              <span className="text-sm font-medium text-blue-900">
+                {isActive ? 'Скрапінг...' : job.status === 'completed' ? 'Завершено' : job.status === 'stopped' ? 'Зупинено' : 'Помилка'}
+              </span>
+              <span className="text-xs text-blue-700">{job.justice_kind} · {job.date_from} · {job.concurrency} потоки</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {isActive && (
+                <button
+                  onClick={handleStop}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-red-700 bg-red-100 border border-red-200 rounded hover:bg-red-200 transition-colors"
+                >
+                  <Square size={10} />
+                  Зупинити
+                </button>
+              )}
+              {!isActive && (
+                <button onClick={() => setJob(null)} className="text-xs text-blue-600 hover:underline">
+                  Нове завдання
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-5 gap-2 mb-3">
+            {[
+              { label: 'Сторінок', value: job.pages_processed, color: 'text-blue-800' },
+              { label: 'Завантажено', value: job.downloaded, color: 'text-blue-800' },
+              { label: 'Збережено в БД', value: job.saved_to_db, color: 'text-green-700' },
+              { label: 'Пропущено', value: job.skipped, color: 'text-yellow-700' },
+              { label: 'Помилок', value: job.errors, color: job.errors > 0 ? 'text-red-600' : 'text-blue-800' },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded p-2 text-center border border-blue-100">
+                <div className={`text-lg font-mono font-semibold ${s.color}`}>{s.value}</div>
+                <div className="text-[10px] text-claude-subtext">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Logs */}
+          {job.current_logs && job.current_logs.length > 0 && (
+            <div className="p-2 bg-slate-900 rounded text-[10px] font-mono text-green-400 max-h-32 overflow-y-auto">
+              {job.current_logs.map((log, i) => (
+                <div key={i} className="truncate">{log}</div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1374,6 +1629,15 @@ export function AdminMonitoringPage() {
           <h2 className="text-lg font-semibold text-claude-text font-sans">Перевірка повноти документів</h2>
         </div>
         <DocumentCompletenessSection />
+      </section>
+
+      {/* Court Registry Scraper */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Download size={18} className="text-claude-subtext" />
+          <h2 className="text-lg font-semibold text-claude-text font-sans">Докачати документи з реєстру</h2>
+        </div>
+        <CourtScraperSection />
       </section>
 
       {/* Import Samples - Recent Script Uploads */}
