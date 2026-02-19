@@ -1670,6 +1670,7 @@ export function createAdminRoutes(
           COUNT(*) AS total,
           COUNT(full_text) FILTER (WHERE full_text IS NOT NULL AND full_text != '') AS has_plaintext,
           COUNT(full_text_html) FILTER (WHERE full_text_html IS NOT NULL AND full_text_html != '') AS has_html,
+          COUNT(*) FILTER WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NOT NULL AND full_text_html != '') AS has_only_html,
           COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NULL OR full_text_html = '')) AS missing_both,
           COUNT(*) FILTER (WHERE full_text IS NOT NULL AND full_text != '' AND full_text_html IS NOT NULL AND full_text_html != '') AS has_both
         FROM documents
@@ -1688,6 +1689,7 @@ export function createAdminRoutes(
           total,
           has_plaintext: parseInt(row.has_plaintext),
           has_html: parseInt(row.has_html),
+          has_only_html: parseInt(row.has_only_html) || 0,
           has_both: hasBoth,
           missing_both: parseInt(row.missing_both),
           completeness_pct: total > 0 ? Math.round((hasBoth / total) * 10000) / 100 : 0,
@@ -1695,12 +1697,13 @@ export function createAdminRoutes(
       });
 
       // Compute totals
-      let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 };
+      let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_only_html: 0, with_both: 0, missing_both: 0 };
       for (const row of byJusticeKind) {
         summary = {
           total_documents: summary.total_documents + row.total,
           with_plaintext: summary.with_plaintext + row.has_plaintext,
           with_html: summary.with_html + row.has_html,
+          with_only_html: summary.with_only_html + (row.has_only_html || 0),
           with_both: summary.with_both + row.has_both,
           missing_both: summary.missing_both + row.missing_both,
         };
@@ -1777,6 +1780,7 @@ export function createAdminRoutes(
         COUNT(*) AS total,
         COUNT(full_text) FILTER (WHERE full_text IS NOT NULL AND full_text != '') AS has_plaintext,
         COUNT(full_text_html) FILTER (WHERE full_text_html IS NOT NULL AND full_text_html != '') AS has_html,
+        COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NOT NULL AND full_text_html != '')) AS has_only_html,
         COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NULL OR full_text_html = '')) AS missing_both,
         COUNT(*) FILTER (WHERE full_text IS NOT NULL AND full_text != '' AND full_text_html IS NOT NULL AND full_text_html != '') AS has_both
       FROM documents
@@ -1795,18 +1799,20 @@ export function createAdminRoutes(
         total,
         has_plaintext: parseInt(row.has_plaintext),
         has_html: parseInt(row.has_html),
+        has_only_html: parseInt(row.has_only_html) || 0,
         has_both: hasBoth,
         missing_both: parseInt(row.missing_both),
         completeness_pct: total > 0 ? Math.round((hasBoth / total) * 10000) / 100 : 0,
       };
     });
 
-    let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_both: 0, missing_both: 0 };
+    let summary = { total_documents: 0, with_plaintext: 0, with_html: 0, with_only_html: 0, with_both: 0, missing_both: 0 };
     for (const row of byJusticeKind) {
       summary = {
         total_documents: summary.total_documents + row.total,
         with_plaintext: summary.with_plaintext + row.has_plaintext,
         with_html: summary.with_html + row.has_html,
+        with_only_html: summary.with_only_html + (row.has_only_html || 0),
         with_both: summary.with_both + row.has_both,
         missing_both: summary.missing_both + row.missing_both,
       };

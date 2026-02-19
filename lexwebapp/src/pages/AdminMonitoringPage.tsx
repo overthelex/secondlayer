@@ -74,6 +74,7 @@ interface CompletenessResult {
     total_documents: number;
     with_plaintext: number;
     with_html: number;
+    with_only_html: number;
     with_both: number;
     missing_both: number;
     completeness_pct: number;
@@ -84,6 +85,7 @@ interface CompletenessResult {
     total: number;
     has_plaintext: number;
     has_html: number;
+    has_only_html: number;
     has_both: number;
     missing_both: number;
     completeness_pct: number;
@@ -109,6 +111,7 @@ interface BackfillJob {
       total_documents: number;
       with_plaintext: number;
       with_html: number;
+      with_only_html: number;
       with_both: number;
       missing_both: number;
       completeness_pct: number;
@@ -119,6 +122,7 @@ interface BackfillJob {
       total: number;
       has_plaintext: number;
       has_html: number;
+      has_only_html: number;
       has_both: number;
       missing_both: number;
       completeness_pct: number;
@@ -735,7 +739,7 @@ function DocumentCompletenessSection() {
       {(result || (backfillJob?.completeness)) && (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
             <div className="bg-white rounded-lg border border-claude-border p-3">
               <div className="text-lg font-semibold text-claude-text font-mono">
                 {formatNumber(backfillJob?.completeness?.summary.total_documents ?? result?.summary.total_documents)}
@@ -754,6 +758,12 @@ function DocumentCompletenessSection() {
               </div>
               <div className="text-[10px] text-claude-subtext">З обома полями</div>
             </div>
+            <div className="bg-white rounded-lg border border-claude-border p-3">
+              <div className="text-lg font-semibold text-orange-700 font-mono">
+                {formatNumber(backfillJob?.completeness?.summary.with_only_html ?? result?.summary.with_only_html ?? 0)}
+              </div>
+              <div className="text-[10px] text-claude-subtext">Тільки HTML</div>
+            </div>
             <div className={`rounded-lg border border-claude-border p-3 ${(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0) > 0 ? 'bg-red-50' : 'bg-white'}`}>
               <div className={`text-lg font-semibold font-mono ${(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0) > 0 ? 'text-red-600' : 'text-claude-text'}`}>
                 {formatNumber(backfillJob?.completeness?.summary.missing_both ?? result?.summary.missing_both ?? 0)}
@@ -771,7 +781,7 @@ function DocumentCompletenessSection() {
                     <th className="text-left px-4 py-2.5 font-medium text-claude-subtext text-xs">Вид права</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Всього</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Plaintext</th>
-                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">HTML</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Тільки HTML</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Обидва</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Відсутні</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Повнота %</th>
@@ -787,7 +797,7 @@ function DocumentCompletenessSection() {
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.total)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.has_plaintext)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(row.has_html)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-xs text-orange-700">{formatNumber(row.has_only_html ?? 0)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(row.has_both)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-xs">
                         <span className={row.missing_both > 0 ? 'text-red-600' : ''}>{formatNumber(row.missing_both)}</span>
@@ -817,7 +827,7 @@ function DocumentCompletenessSection() {
                     <td className="px-4 py-2.5 text-xs text-claude-text">Всього</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.total_documents ?? 0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.with_plaintext ?? 0)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-xs">{formatNumber(displayData?.summary.with_html ?? 0)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-xs text-orange-700">{formatNumber(displayData?.summary.with_only_html ?? 0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs text-green-700">{formatNumber(displayData?.summary.with_both ?? 0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs">
                       <span className={(displayData?.summary.missing_both ?? 0) > 0 ? 'text-red-600' : ''}>{formatNumber(displayData?.summary.missing_both ?? 0)}</span>
