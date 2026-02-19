@@ -167,6 +167,9 @@ start_env() {
             ;;
     esac
 
+    # Site is up — remove maintenance page
+    disable_cf_maintenance
+
     print_msg "$GREEN" "$env environment started"
 }
 
@@ -212,6 +215,9 @@ stop_env() {
             usage
             ;;
     esac
+
+    # Site is down — show maintenance page
+    enable_cf_maintenance
 
     print_msg "$GREEN" "$env environment stopped"
 }
