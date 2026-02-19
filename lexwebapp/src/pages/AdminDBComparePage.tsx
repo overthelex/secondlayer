@@ -56,20 +56,20 @@ function getDiffLabel(local: number, stage: number | undefined): string {
 
 function getDiffColor(status: DiffStatus): string {
   switch (status) {
-    case 'equal': return 'text-green-400';
-    case 'approx': return 'text-yellow-400/80';
-    case 'stage_bigger': return 'text-yellow-400';
-    case 'missing_local': return 'text-red-400';
-    case 'missing_stage': return 'text-orange-400';
+    case 'equal': return 'text-emerald-600';
+    case 'approx': return 'text-yellow-600';
+    case 'stage_bigger': return 'text-yellow-600';
+    case 'missing_local': return 'text-red-500';
+    case 'missing_stage': return 'text-orange-500';
     case 'both_empty': return 'text-claude-subtext/40';
   }
 }
 
 function getDiffBg(status: DiffStatus): string {
   switch (status) {
-    case 'missing_local': return 'bg-red-500/5';
-    case 'missing_stage': return 'bg-orange-500/5';
-    case 'stage_bigger': return 'bg-yellow-500/5';
+    case 'missing_local': return 'bg-red-50';
+    case 'missing_stage': return 'bg-orange-50';
+    case 'stage_bigger': return 'bg-yellow-50';
     default: return '';
   }
 }
@@ -90,9 +90,9 @@ interface TableRow {
 function CompareTable({ title, rows, loading }: { title: string; rows: TableRow[]; loading: boolean }) {
   if (loading) {
     return (
-      <div className="mb-8">
-        <h3 className="text-sm font-semibold text-claude-subtext uppercase tracking-wider mb-3">{title}</h3>
-        <div className="animate-pulse rounded-lg border border-white/10 bg-white/5 h-40" />
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-claude-subtext uppercase tracking-wider mb-3">{title}</h3>
+        <div className="animate-pulse rounded-xl border border-claude-border bg-claude-bg h-40" />
       </div>
     );
   }
@@ -101,27 +101,27 @@ function CompareTable({ title, rows, loading }: { title: string; rows: TableRow[
   const empty = rows.filter(r => r.local === 0 && (r.stage === undefined || r.stage === 0));
 
   return (
-    <div className="mb-8">
-      <h3 className="text-sm font-semibold text-claude-subtext uppercase tracking-wider mb-3">{title}</h3>
-      <div className="overflow-x-auto rounded-lg border border-white/10">
+    <div className="mb-6">
+      <h3 className="text-xs font-semibold text-claude-subtext uppercase tracking-wider mb-3">{title}</h3>
+      <div className="bg-white rounded-xl border border-claude-border shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="px-4 py-2 text-left font-medium text-claude-subtext">Таблиця</th>
-              <th className="px-4 py-2 text-right font-medium text-claude-subtext w-32">Local</th>
-              <th className="px-4 py-2 text-right font-medium text-claude-subtext w-32">Stage</th>
-              <th className="px-4 py-2 text-left font-medium text-claude-subtext w-48">Різниця</th>
+            <tr className="border-b border-claude-border bg-claude-bg">
+              <th className="px-4 py-2.5 text-left font-medium text-claude-subtext">Таблиця</th>
+              <th className="px-4 py-2.5 text-right font-medium text-claude-subtext w-32">Local</th>
+              <th className="px-4 py-2.5 text-right font-medium text-claude-subtext w-32">Stage</th>
+              <th className="px-4 py-2.5 text-left font-medium text-claude-subtext w-48">Різниця</th>
             </tr>
           </thead>
           <tbody>
             {nonEmpty.map((row, i) => {
               const status = getDiffStatus(row.local, row.stage);
               return (
-                <tr key={row.key} className={`border-b border-white/5 ${getDiffBg(status)} ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}>
-                  <td className="px-4 py-2 font-mono text-xs text-claude-text/80">{row.label}</td>
-                  <td className="px-4 py-2 text-right font-mono text-xs tabular-nums">{fmt(row.local)}</td>
+                <tr key={row.key} className={`border-b border-claude-border/50 ${getDiffBg(status)} ${i % 2 === 0 ? '' : 'bg-claude-bg/40'}`}>
+                  <td className="px-4 py-2 font-mono text-xs text-claude-text">{row.label}</td>
+                  <td className="px-4 py-2 text-right font-mono text-xs tabular-nums text-claude-text">{fmt(row.local)}</td>
                   <td className="px-4 py-2 text-right font-mono text-xs tabular-nums text-claude-subtext">
-                    {row.stage === undefined ? <span className="text-claude-subtext/30">—</span> : fmt(row.stage)}
+                    {row.stage === undefined ? <span className="text-claude-subtext/40">—</span> : fmt(row.stage)}
                   </td>
                   <td className={`px-4 py-2 text-xs font-medium ${getDiffColor(status)}`}>
                     {getDiffLabel(row.local, row.stage)}
@@ -131,7 +131,7 @@ function CompareTable({ title, rows, loading }: { title: string; rows: TableRow[
             })}
             {empty.length > 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-1.5 text-xs text-claude-subtext/30 italic">
+                <td colSpan={4} className="px-4 py-1.5 text-xs text-claude-subtext/50 italic">
                   Порожні: {empty.map(r => r.label).join(', ')}
                 </td>
               </tr>
@@ -230,90 +230,92 @@ export function AdminDBComparePage() {
   const mainRows = buildMainRows(data?.local?.main, data?.stage?.main);
 
   return (
-    <div className="flex-1 overflow-auto p-6">
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <Database className="w-5 h-5 text-claude-accent" />
-            <div>
-              <h1 className="text-lg font-semibold text-claude-text">Порівняння баз даних</h1>
-              <p className="text-xs text-claude-subtext mt-0.5">Local Docker vs Stage — кількість записів у таблицях</p>
-            </div>
+    <div className="h-full overflow-y-auto">
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-claude-accent/10 rounded-lg">
+            <Database className="w-6 h-6 text-claude-accent" />
           </div>
-          <div className="flex items-center gap-3">
-            {lastFetched && (
-              <span className="text-xs text-claude-subtext/60">Оновлено: {lastFetched}</span>
-            )}
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 transition-colors text-sm text-claude-text disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Оновити
-            </button>
+          <div>
+            <h1 className="text-2xl font-semibold text-claude-text font-sans">Порівняння баз даних</h1>
+            <p className="text-sm text-claude-subtext mt-0.5">Local Docker vs Stage — кількість записів у таблицях</p>
           </div>
         </div>
-
-        {/* Stage status banner */}
-        {!loading && data && !stageAvailable && (
-          <div className="flex items-center gap-2 px-4 py-2.5 mb-6 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-sm">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            Stage недоступний або не відповідає. Показано тільки локальні дані.
-          </div>
-        )}
-        {!loading && data && stageAvailable && (
-          <div className="flex items-center gap-2 px-4 py-2.5 mb-6 rounded-lg bg-green-500/10 border border-green-500/20 text-green-300 text-sm">
-            <CheckCircle className="w-4 h-4 shrink-0" />
-            Stage підключено. Порівняння актуальне.
-          </div>
-        )}
-
-        {/* Legend */}
-        <div className="flex items-center gap-5 mb-6 text-xs text-claude-subtext/70">
-          <span className="flex items-center gap-1.5"><span className="text-green-400 font-bold">=</span> рівно</span>
-          <span className="flex items-center gap-1.5"><span className="text-yellow-400/80 font-bold">≈</span> &lt;1% різниця</span>
-          <span className="flex items-center gap-1.5"><span className="text-yellow-400 font-bold">↑</span> stage більше</span>
-          <span className="flex items-center gap-1.5"><span className="text-red-400 font-bold">❗</span> нема локально</span>
-          <span className="flex items-center gap-1.5"><span className="text-orange-400 font-bold">❗</span> нема на stage</span>
+        <div className="flex items-center gap-3">
+          {lastFetched && (
+            <span className="text-xs text-claude-subtext">Оновлено: {lastFetched}</span>
+          )}
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Оновити
+          </button>
         </div>
-
-        {error && (
-          <div className="mb-6 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 text-sm">
-            {error}
-          </div>
-        )}
-
-        {/* OpenReyestr */}
-        <CompareTable
-          title="OpenReyestr — НАІС реєстри (БД openreyestr)"
-          rows={openreyestrRows}
-          loading={loading}
-        />
-
-        {/* RADA */}
-        <CompareTable
-          title="RADA — Верховна Рада (схема rada в secondlayer)"
-          rows={radaRows}
-          loading={loading}
-        />
-
-        {/* Court registry / Main backend */}
-        <CompareTable
-          title="reyestr.court.gov.ua — Судовий реєстр (БД secondlayer)"
-          rows={mainRows}
-          loading={loading}
-        />
-
-        {/* Timestamps */}
-        {data && (
-          <div className="mt-4 text-xs text-claude-subtext/40 space-y-0.5">
-            <div>Local: {data.local.timestamp}</div>
-            {stageAvailable && <div>Stage: {data.stage!.timestamp}</div>}
-          </div>
-        )}
       </div>
+
+      {/* Stage status banner */}
+      {!loading && data && !stageAvailable && (
+        <div className="flex items-center gap-2 px-4 py-2.5 mb-6 rounded-lg bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-yellow-500" />
+          Stage недоступний або не відповідає. Показано тільки локальні дані.
+        </div>
+      )}
+      {!loading && data && stageAvailable && (
+        <div className="flex items-center gap-2 px-4 py-2.5 mb-6 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">
+          <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" />
+          Stage підключено. Порівняння актуальне.
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex items-center gap-5 mb-6 text-xs text-claude-subtext">
+        <span className="flex items-center gap-1.5"><span className="text-emerald-600 font-bold">=</span> рівно</span>
+        <span className="flex items-center gap-1.5"><span className="text-yellow-600 font-bold">≈</span> &lt;1% різниця</span>
+        <span className="flex items-center gap-1.5"><span className="text-yellow-600 font-bold">↑</span> stage більше</span>
+        <span className="flex items-center gap-1.5"><span className="text-red-500 font-bold">❗</span> нема локально</span>
+        <span className="flex items-center gap-1.5"><span className="text-orange-500 font-bold">❗</span> нема на stage</span>
+      </div>
+
+      {error && (
+        <div className="mb-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* OpenReyestr */}
+      <CompareTable
+        title="OpenReyestr — НАІС реєстри (БД openreyestr)"
+        rows={openreyestrRows}
+        loading={loading}
+      />
+
+      {/* RADA */}
+      <CompareTable
+        title="RADA — Верховна Рада (схема rada в secondlayer)"
+        rows={radaRows}
+        loading={loading}
+      />
+
+      {/* Court registry / Main backend */}
+      <CompareTable
+        title="reyestr.court.gov.ua — Судовий реєстр (БД secondlayer)"
+        rows={mainRows}
+        loading={loading}
+      />
+
+      {/* Timestamps */}
+      {data && (
+        <div className="mt-4 text-xs text-claude-subtext/60 space-y-0.5">
+          <div>Local: {data.local.timestamp}</div>
+          {stageAvailable && <div>Stage: {data.stage!.timestamp}</div>}
+        </div>
+      )}
+    </div>
     </div>
   );
 }
