@@ -215,6 +215,7 @@ export const api = {
   documents: {
     getFolders: (prefix?: string) =>
       apiClient.get('/api/documents/folders', { params: { prefix } }),
+    getById: (id: string) => apiClient.get(`/api/documents/${id}`),
   },
 
   // Admin
