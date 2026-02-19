@@ -3186,5 +3186,196 @@ export function createAdminRoutes(
     }
   });
 
+  // ========================================
+  // IMPORT SAMPLES (Recent Script Uploads)
+  // ========================================
+
+  /**
+   * GET /api/admin/import-samples
+   * Returns sample records from recent script imports
+   * Groups by data source type and shows latest samples
+   */
+  router.get('/import-samples', async (req: Request, res: Response) => {
+    try {
+      const hours = Math.min(168, Math.max(1, Number(req.query.hours || 24)));
+      const samplesPerSource = Math.min(10, Math.max(1, Number(req.query.limit || 5)));
+
+      const samples: any[] = [];
+
+      // 1. Court decisions (from load-* scripts)
+      const courtDecisions = await db.query(`
+        SELECT 
+          id, title, court, case_number, dispute_category, date,
+          metadata->>'justice_kind' as justice_kind,
+          created_at, type
+        FROM documents
+        WHERE type = 'court_decision'
+          AND user_id IS NULL
+          AND created_at >= NOW() - $1::integer * INTERVAL '1 hour'
+        ORDER BY created_at DESC
+        LIMIT $2
+      `, [hours, samplesPerSource]);
+
+      if (courtDecisions.rows.length > 0) {
+        samples.push({
+          source: 'court_decisions',
+          source_name: 'Судові рішення',
+          count: courtDecisions.rows.length,
+          last_import: courtDecisions.rows[0]?.created_at,
+          records: courtDecisions.rows.map((r: any) => ({
+            id: r.id,
+            title: r.title?.substring(0, 150),
+            court: r.court,
+            case_number: r.case_number,
+            category: r.dispute_category,
+            justice_kind: r.justice_kind,
+            date: r.date,
+            created_at: r.created_at,
+          })),
+        });
+      }
+
+      // 2. Legislation (from sync scripts)
+      const legislation = await db.query(`
+        SELECT 
+          id, title, legislation_type, number, status,
+          effective_date, created_at, updated_at
+        FROM legislation
+        WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour'
+           OR updated_at >= NOW() - $1::integer * INTERVAL '1 hour'
+        ORDER BY COALESCE(updated_at, created_at) DESC
+        LIMIT $2
+      `, [hours, samplesPerSource]);
+
+      if (legislation.rows.length > 0) {
+        samples.push({
+          source: 'legislation',
+          source_name: 'Законодавство',
+          count: legislation.rows.length,
+          last_import: legislation.rows[0]?.updated_at || legislation.rows[0]?.created_at,
+          records: legislation.rows.map((r: any) => ({
+            id: r.id,
+            title: r.title?.substring(0, 150),
+            type: r.legislation_type,
+            number: r.number,
+            status: r.status,
+            effective_date: r.effective_date,
+            created_at: r.created_at,
+          })),
+        });
+      }
+
+      // 3. Embedding chunks (from processing)
+      const embeddings = await db.query(`
+        SELECT 
+          ec.id, ec.document_id, ec.section_index,
+          ec.token_count, ec.created_at,
+          d.title as document_title
+        FROM embedding_chunks ec
+        LEFT JOIN documents d ON d.id = ec.document_id
+        WHERE ec.created_at >= NOW() - $1::integer * INTERVAL '1 hour'
+        ORDER BY ec.created_at DESC
+        LIMIT $2
+      `, [hours, samplesPerSource]);
+
+      if (embeddings.rows.length > 0) {
+        samples.push({
+          source: 'embeddings',
+          source_name: 'Векторні вкладення',
+          count: embeddings.rows.length,
+          last_import: embeddings.rows[0]?.created_at,
+          records: embeddings.rows.map((r: any) => ({
+            id: r.id,
+            document_id: r.document_id,
+            document_title: r.document_title?.substring(0, 100),
+            section_index: r.section_index,
+            token_count: r.token_count,
+            created_at: r.created_at,
+          })),
+        });
+      }
+
+      // 4. User uploads (documents uploaded by users)
+      const userUploads = await db.query(`
+        SELECT 
+          d.id, d.title, d.type, d.created_at,
+          u.email as user_email, u.name as user_name
+        FROM documents d
+        LEFT JOIN users u ON u.id = d.user_id
+        WHERE d.user_id IS NOT NULL
+          AND d.created_at >= NOW() - $1::integer * INTERVAL '1 hour'
+        ORDER BY d.created_at DESC
+        LIMIT $2
+      `, [hours, samplesPerSource]);
+
+      if (userUploads.rows.length > 0) {
+        samples.push({
+          source: 'user_uploads',
+          source_name: 'Завантаження користувачів',
+          count: userUploads.rows.length,
+          last_import: userUploads.rows[0]?.created_at,
+          records: userUploads.rows.map((r: any) => ({
+            id: r.id,
+            title: r.title?.substring(0, 100),
+            type: r.type,
+            user_email: r.user_email,
+            user_name: r.user_name,
+            created_at: r.created_at,
+          })),
+        });
+      }
+
+      // 5. ZO Dictionaries (from sync-dictionaries script)
+      const dictUpdates = await db.query(`
+        SELECT 
+          id, dictionary_name, domain,
+          updated_at, created_at
+        FROM zo_dictionaries
+        WHERE updated_at >= NOW() - $1::integer * INTERVAL '1 hour'
+        ORDER BY updated_at DESC
+        LIMIT $2
+      `, [hours, samplesPerSource]);
+
+      if (dictUpdates.rows.length > 0) {
+        samples.push({
+          source: 'dictionaries',
+          source_name: 'Довідники',
+          count: dictUpdates.rows.length,
+          last_import: dictUpdates.rows[0]?.updated_at,
+          records: dictUpdates.rows.map((r: any) => ({
+            id: r.id,
+            name: r.dictionary_name,
+            domain: r.domain,
+            updated_at: r.updated_at,
+          })),
+        });
+      }
+
+      // Summary stats
+      const summaryResult = await db.query(`
+        SELECT 
+          (SELECT COUNT(*) FROM documents WHERE type = 'court_decision' AND created_at >= NOW() - $1::integer * INTERVAL '1 hour') as court_decisions,
+          (SELECT COUNT(*) FROM legislation WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour') as legislation,
+          (SELECT COUNT(*) FROM embedding_chunks WHERE created_at >= NOW() - $1::integer * INTERVAL '1 hour') as embeddings,
+          (SELECT COUNT(*) FROM documents WHERE user_id IS NOT NULL AND created_at >= NOW() - $1::integer * INTERVAL '1 hour') as user_uploads
+      `, [hours]);
+
+      res.json({
+        hours,
+        samples,
+        summary: {
+          court_decisions: parseInt(summaryResult.rows[0]?.court_decisions || '0'),
+          legislation: parseInt(summaryResult.rows[0]?.legislation || '0'),
+          embeddings: parseInt(summaryResult.rows[0]?.embeddings || '0'),
+          user_uploads: parseInt(summaryResult.rows[0]?.user_uploads || '0'),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      logger.error('Failed to get import samples', { error: error.message });
+      res.status(500).json({ error: 'Failed to retrieve import samples' });
+    }
+  });
+
   return router;
 }

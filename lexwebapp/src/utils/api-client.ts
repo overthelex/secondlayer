@@ -325,6 +325,9 @@ export const api = {
     createTestUser: (data: { email: string; name?: string; password: string; credits: number }) =>
       apiClient.post('/api/admin/test-users', data),
 
+    getImportSamples: (hours: number = 24, limit: number = 5) =>
+      apiClient.get('/api/admin/import-samples', { params: { hours, limit } }),
+
     // System configuration
     getConfig: () => apiClient.get('/api/admin/config'),
     updateConfig: (key: string, value: string) =>
