@@ -1,4 +1,4 @@
-import React, { useState, Children } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -12,16 +12,21 @@ import {
   MessageSquare,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   X,
-  Zap,
+  Loader2,
   Library,
   ScrollText,
   Building2,
-  Folder } from
-'lucide-react';
+  Folder,
+} from 'lucide-react';
+import { mcpService } from '../services';
+import { showToast } from '../utils/toast';
+
 interface LegalCodesLibraryPageProps {
   onBack?: () => void;
 }
+
 interface Code {
   id: string;
   name: string;
@@ -29,221 +34,429 @@ interface Code {
   icon: string;
   category: string;
 }
+
+interface TOCArticleEntry {
+  article_number: string;
+  title: string;
+  byte_size?: number;
+}
+
+interface TOCChapter {
+  type: 'chapter';
+  number: string;
+  articles: TOCArticleEntry[];
+}
+
+interface TOCSection {
+  type: 'section';
+  number: string;
+  articles: TOCArticleEntry[];
+  chapters?: TOCChapter[];
+}
+
+type TOCEntry = TOCSection | TOCChapter | TOCArticleEntry;
+
+interface LegislationStructure {
+  rada_id: string;
+  title: string;
+  short_title?: string;
+  type?: string;
+  total_articles: number;
+  table_of_contents: TOCEntry[];
+  articles_summary: TOCArticleEntry[];
+}
+
+interface ArticleData {
+  rada_id: string;
+  article_number: string;
+  title: string;
+  full_text: string;
+  url?: string;
+  metadata?: any;
+}
+
+interface SearchResult {
+  rada_id: string;
+  article_number: string;
+  title: string;
+  full_text: string;
+  url?: string;
+}
+
+const FAVORITES_KEY = 'legislation_favorites';
+const COMMENTS_KEY = 'legislation_comments';
+
+function loadFavorites(): Set<string> {
+  try {
+    const stored = localStorage.getItem(FAVORITES_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFavorites(favorites: Set<string>) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+}
+
+function loadComment(radaId: string, articleNumber: string): string {
+  try {
+    const stored = localStorage.getItem(COMMENTS_KEY);
+    const comments = stored ? JSON.parse(stored) : {};
+    return comments[`${radaId}:${articleNumber}`] || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveComment(radaId: string, articleNumber: string, text: string) {
+  try {
+    const stored = localStorage.getItem(COMMENTS_KEY);
+    const comments = stored ? JSON.parse(stored) : {};
+    if (text) {
+      comments[`${radaId}:${articleNumber}`] = text;
+    } else {
+      delete comments[`${radaId}:${articleNumber}`];
+    }
+    localStorage.setItem(COMMENTS_KEY, JSON.stringify(comments));
+  } catch {
+    // ignore
+  }
+}
+
+function parseToolResult(result: any): any {
+  if (result?.result?.content?.[0]?.text) {
+    return JSON.parse(result.result.content[0].text);
+  }
+  return result?.result || result;
+}
+
 const mainCodes: Code[] = [
-{
-  id: 'civil',
-  name: 'Цивільний кодекс',
-  number: '435-15',
-  icon: '⚖️',
-  category: 'main'
-},
-{
-  id: 'criminal',
-  name: 'Кримінальний кодекс',
-  number: '2341-14',
-  icon: '📋',
-  category: 'main'
-},
-{
-  id: 'economic',
-  name: 'Господарський кодекс',
-  number: '436-15',
-  icon: '🏛️',
-  category: 'main'
-},
-{
-  id: 'family',
-  name: 'Сімейний кодекс',
-  number: '2947-14',
-  icon: '👨‍👩‍👧',
-  category: 'main'
-},
-{
-  id: 'land',
-  name: 'Земельний кодекс',
-  number: '2768-14',
-  icon: '🌳',
-  category: 'main'
-},
-{
-  id: 'labor',
-  name: 'Трудовий кодекс',
-  number: '322-08',
-  icon: '💼',
-  category: 'main'
-},
-{
-  id: 'administrative',
-  name: 'Адміністративний кодекс',
-  number: '80731-10',
-  icon: '⚙️',
-  category: 'main'
-},
-{
-  id: 'tax',
-  name: 'Податковий кодекс',
-  number: '2755-17',
-  icon: '💰',
-  category: 'main'
-},
-{
-  id: 'environmental',
-  name: 'Екологічний кодекс',
-  number: '',
-  icon: '🌿',
-  category: 'main'
-}];
+  { id: '435-15', name: 'Цивільний кодекс', number: '435-15', icon: '⚖️', category: 'main' },
+  { id: '2341-14', name: 'Кримінальний кодекс', number: '2341-14', icon: '📋', category: 'main' },
+  { id: '436-15', name: 'Господарський кодекс', number: '436-15', icon: '🏛️', category: 'main' },
+  { id: '2947-14', name: 'Сімейний кодекс', number: '2947-14', icon: '👨‍👩‍👧', category: 'main' },
+  { id: '2768-14', name: 'Земельний кодекс', number: '2768-14', icon: '🌳', category: 'main' },
+  { id: '322-08', name: 'Трудовий кодекс', number: '322-08', icon: '💼', category: 'main' },
+  { id: '80731-10', name: 'Адміністративний кодекс', number: '80731-10', icon: '⚙️', category: 'main' },
+  { id: '2755-17', name: 'Податковий кодекс', number: '2755-17', icon: '💰', category: 'main' },
+];
 
 const proceduralCodes = [
-{
-  name: 'Цивільний процесуальний кодекс (ЦПК)',
-  number: '1618-15'
-},
-{
-  name: 'Господарський процесуальний кодекс (ГПК)',
-  number: '1798-12'
-},
-{
-  name: 'Кримінальний процесуальний кодекс (КПК)',
-  number: '4651-17'
-},
-{
-  name: 'Кодекс адміністративного судочинства (КАС)',
-  number: '2747-15'
-}];
+  { name: 'Цивільний процесуальний кодекс (ЦПК)', number: '1618-15' },
+  { name: 'Господарський процесуальний кодекс (ГПК)', number: '1798-12' },
+  { name: 'Кримінальний процесуальний кодекс (КПК)', number: '4651-17' },
+  { name: 'Кодекс адміністративного судочинства (КАС)', number: '2747-15' },
+];
 
 const categories = [
-'Банківське',
-'Митне',
-'Виборче',
-'Бюджетне',
-'Про освіту',
-"Про охорону здоров'я",
-'Про нотаріат'];
-
-const tableOfContents = [
-{
-  id: 'book1',
-  title: 'Книга перша. ЗАГАЛЬНІ ПОЛОЖЕННЯ',
-  children: [
-  {
-    id: 'section1',
-    title: 'Розділ I. ОСНОВНІ ПОЛОЖЕННЯ',
-    children: []
-  },
-  {
-    id: 'section2',
-    title: 'Розділ II. ОСОБИ',
-    children: []
-  },
-  {
-    id: 'section3',
-    title: "Розділ III. ОБ'ЄКТИ ЦИВІЛЬНИХ ПРАВ",
-    children: [
-    {
-      id: 'para1',
-      title: '§1. Загальні положення',
-      children: []
-    },
-    {
-      id: 'para2',
-      title: '§2. Речі',
-      children: [
-      {
-        id: 'art15',
-        title: 'Стаття 15',
-        children: []
-      },
-      {
-        id: 'art16',
-        title: 'Стаття 16',
-        children: []
-      },
-      {
-        id: 'art17',
-        title: 'Стаття 17',
-        children: []
-      }]
-
-    }]
-
-  },
-  {
-    id: 'section4',
-    title: 'Розділ IV. ПРАВОЧИНИ',
-    children: []
-  }]
-
-},
-{
-  id: 'book2',
-  title: 'Книга друга. ОСОБИСТІ НЕМАЙНОВІ ПРАВА',
-  children: []
-}];
-
-const searchResults = [
-{
-  article: 'Стаття 15. Поняття договору',
-  text: 'Договором є домовленість двох або більше сторін, спрямована на встановлення, зміну або припинення...'
-},
-{
-  article: 'Стаття 626. Договір',
-  text: 'Договір є правочином, тому до договору застосовуються...'
-}];
+  'Банківське',
+  'Митне',
+  'Виборче',
+  'Бюджетне',
+  'Про освіту',
+  "Про охорону здоров'я",
+  'Про нотаріат',
+];
 
 export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [showTableOfContents, setShowTableOfContents] = useState(true);
-  const [expandedSections, setExpandedSections] = useState<string[]>([
-  'book1',
-  'section3',
-  'para2']
-  );
+  const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [showSearch, setShowSearch] = useState(false);
   const [documentSearch, setDocumentSearch] = useState('');
-  const [caseSensitive, setCaseSensitive] = useState(false);
-  const [wholeWord, setWholeWord] = useState(false);
-  const [regex, setRegex] = useState(false);
+
+  // Dynamic data state
+  const [legislationData, setLegislationData] = useState<LegislationStructure | null>(null);
+  const [currentArticle, setCurrentArticle] = useState<ArticleData | null>(null);
+  const [loadingStructure, setLoadingStructure] = useState(false);
+  const [loadingArticle, setLoadingArticle] = useState(false);
+  const [structureError, setStructureError] = useState<string | null>(null);
+  const [selectedArticleNumber, setSelectedArticleNumber] = useState<string | null>(null);
+
+  // Search state
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchTotal, setSearchTotal] = useState(0);
+
+  // Favorites
+  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
+
+  // Comment state
+  const [showComment, setShowComment] = useState(false);
+  const [commentText, setCommentText] = useState('');
+
+  // All articles list for prev/next navigation
+  const allArticles = legislationData?.articles_summary || [];
+
+  // Fetch legislation structure when code is selected
+  useEffect(() => {
+    if (!selectedCode) {
+      setLegislationData(null);
+      setCurrentArticle(null);
+      setSelectedArticleNumber(null);
+      setStructureError(null);
+      setSearchResults([]);
+      setShowComment(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingStructure(true);
+    setStructureError(null);
+    setCurrentArticle(null);
+    setSelectedArticleNumber(null);
+    setSearchResults([]);
+    setShowComment(false);
+
+    (async () => {
+      try {
+        const result = await mcpService.callTool('get_legislation_structure', { rada_id: selectedCode });
+        if (cancelled) return;
+        const data = parseToolResult(result);
+        if (data.error) {
+          setStructureError(data.error);
+        } else {
+          setLegislationData(data);
+          // Expand top-level sections by default
+          const topIds = (data.table_of_contents || [])
+            .filter((e: any) => e.type === 'section' || e.type === 'chapter')
+            .slice(0, 2)
+            .map((_: any, i: number) => `toc-${i}`);
+          setExpandedSections(topIds);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setStructureError(err.message || 'Failed to load structure');
+        }
+      } finally {
+        if (!cancelled) setLoadingStructure(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedCode]);
+
+  // Load comment when article changes
+  useEffect(() => {
+    if (currentArticle && selectedCode) {
+      setCommentText(loadComment(selectedCode, currentArticle.article_number));
+    }
+  }, [currentArticle, selectedCode]);
+
+  const fetchArticle = useCallback(async (articleNumber: string) => {
+    if (!selectedCode) return;
+    setLoadingArticle(true);
+    setSelectedArticleNumber(articleNumber);
+    setShowComment(false);
+    try {
+      const result = await mcpService.callTool('get_legislation_article', {
+        rada_id: selectedCode,
+        article_number: articleNumber,
+      });
+      const data = parseToolResult(result);
+      if (data.error) {
+        showToast.error(data.error);
+        setCurrentArticle(null);
+      } else {
+        setCurrentArticle(data);
+      }
+    } catch (err: any) {
+      showToast.error(err.message || 'Failed to load article');
+      setCurrentArticle(null);
+    } finally {
+      setLoadingArticle(false);
+    }
+  }, [selectedCode]);
+
+  const handleSearch = useCallback(async () => {
+    if (!documentSearch.trim()) return;
+    setSearchLoading(true);
+    setSearchResults([]);
+    try {
+      const params: any = { query: documentSearch.trim(), limit: 20 };
+      if (selectedCode) params.rada_id = selectedCode;
+      const result = await mcpService.callTool('search_legislation', params);
+      const data = parseToolResult(result);
+      setSearchResults(data.articles || []);
+      setSearchTotal(data.total_found || 0);
+    } catch (err: any) {
+      showToast.error(err.message || 'Search failed');
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [documentSearch, selectedCode]);
+
   const toggleSection = (id: string) => {
     setExpandedSections((prev) =>
-    prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
     );
   };
-  const renderTableOfContents = (items: any[], level = 0) => {
-    return items.map((item) => {
-      const isExpanded = expandedSections.includes(item.id);
-      const hasChildren = item.children && item.children.length > 0;
-      return (
-        <div
-          key={item.id}
-          style={{
-            marginLeft: `${level * 12}px`
-          }}>
 
-          <button
-            onClick={() => hasChildren && toggleSection(item.id)}
-            className={`w-full text-left px-2 py-1.5 rounded text-sm font-sans transition-colors flex items-center gap-2 ${item.id === 'art16' ? 'bg-claude-accent/10 text-claude-accent font-medium' : 'text-claude-text hover:bg-claude-bg'}`}>
-
-            {hasChildren && (
-            isExpanded ?
-            <ChevronDown size={14} /> :
-
-            <ChevronRight size={14} />)
-            }
-            {!hasChildren && <span className="w-3.5" />}
-            <span className="truncate">{item.title}</span>
-          </button>
-          {hasChildren && isExpanded &&
-          <div className="mt-1">
-              {renderTableOfContents(item.children, level + 1)}
-            </div>
-          }
-        </div>);
-
+  const toggleFavorite = () => {
+    if (!selectedCode) return;
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(selectedCode)) {
+        next.delete(selectedCode);
+      } else {
+        next.add(selectedCode);
+      }
+      saveFavorites(next);
+      return next;
     });
   };
+
+  const handleCopy = () => {
+    if (!currentArticle) return;
+    const text = `${currentArticle.title}\n\n${currentArticle.full_text}`;
+    navigator.clipboard.writeText(text).then(() => {
+      showToast.success('Скопійовано');
+    }).catch(() => {
+      showToast.error('Не вдалося скопіювати');
+    });
+  };
+
+  const handleCopyLink = () => {
+    if (!currentArticle?.url) {
+      showToast.info('Посилання недоступне');
+      return;
+    }
+    navigator.clipboard.writeText(currentArticle.url).then(() => {
+      showToast.success('Посилання скопійовано');
+    }).catch(() => {
+      showToast.error('Не вдалося скопіювати');
+    });
+  };
+
+  const handleSaveComment = (text: string) => {
+    if (!selectedCode || !currentArticle) return;
+    setCommentText(text);
+    saveComment(selectedCode, currentArticle.article_number, text);
+  };
+
+  const handlePrint = () => {
+    if (!currentArticle) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html><head><title>${currentArticle.title}</title>
+      <style>body { font-family: serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+      h1 { font-size: 18px; } p { line-height: 1.6; white-space: pre-wrap; }</style>
+      </head><body>
+      <h1>${currentArticle.title}</h1>
+      <p>${currentArticle.full_text}</p>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const handleDownload = () => {
+    if (!currentArticle && !legislationData) return;
+    let content: string;
+    let filename: string;
+    if (currentArticle) {
+      content = `${currentArticle.title}\n\n${currentArticle.full_text}`;
+      filename = `${legislationData?.short_title || selectedCode}_ст_${currentArticle.article_number}.txt`;
+    } else {
+      content = `${legislationData?.title || selectedCode}\n\nЗМІСТ\n\n`;
+      content += allArticles.map(a => `Стаття ${a.article_number}. ${a.title}`).join('\n');
+      filename = `${legislationData?.short_title || selectedCode}_зміст.txt`;
+    }
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Navigate to prev/next article
+  const currentArticleIndex = allArticles.findIndex(
+    (a) => a.article_number === selectedArticleNumber
+  );
+  const prevArticle = currentArticleIndex > 0 ? allArticles[currentArticleIndex - 1] : null;
+  const nextArticle = currentArticleIndex < allArticles.length - 1 ? allArticles[currentArticleIndex + 1] : null;
+
+  const renderTOCArticle = (article: TOCArticleEntry, key: string, level: number) => {
+    const isSelected = selectedArticleNumber === article.article_number;
+    return (
+      <div key={key} style={{ marginLeft: `${level * 12}px` }}>
+        <button
+          onClick={() => fetchArticle(article.article_number)}
+          className={`w-full text-left px-2 py-1.5 rounded text-sm font-sans transition-colors flex items-center gap-2 ${
+            isSelected
+              ? 'bg-claude-accent/10 text-claude-accent font-medium'
+              : 'text-claude-text hover:bg-claude-bg'
+          }`}
+        >
+          <span className="w-3.5" />
+          <span className="truncate">
+            Ст. {article.article_number}. {article.title}
+          </span>
+        </button>
+      </div>
+    );
+  };
+
+  const renderTOCItems = (items: TOCEntry[], level = 0, parentKey = 'toc') => {
+    return items.map((item, index) => {
+      const key = `${parentKey}-${index}`;
+
+      // Article entry (no type field, has article_number)
+      if ('article_number' in item && !('type' in item)) {
+        return renderTOCArticle(item as TOCArticleEntry, key, level);
+      }
+
+      // Section or chapter
+      const typed = item as TOCSection | TOCChapter;
+      const isExpanded = expandedSections.includes(key);
+      const label = typed.type === 'section'
+        ? `Розділ ${typed.number}`
+        : `Глава ${typed.number}`;
+
+      const children: React.ReactNode[] = [];
+      if (isExpanded) {
+        // Render chapters if section
+        if (typed.type === 'section' && (typed as TOCSection).chapters) {
+          children.push(
+            ...renderTOCItems((typed as TOCSection).chapters!, level + 1, key)
+          );
+        }
+        // Render articles
+        if (typed.articles && typed.articles.length > 0) {
+          children.push(
+            ...typed.articles.map((a, ai) =>
+              renderTOCArticle(a, `${key}-art-${ai}`, level + 1)
+            )
+          );
+        }
+      }
+
+      return (
+        <div key={key} style={{ marginLeft: `${level * 12}px` }}>
+          <button
+            onClick={() => toggleSection(key)}
+            className="w-full text-left px-2 py-1.5 rounded text-sm font-sans transition-colors flex items-center gap-2 text-claude-text hover:bg-claude-bg font-medium"
+          >
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <span className="truncate">{label}</span>
+          </button>
+          {isExpanded && <div className="mt-1">{children}</div>}
+        </div>
+      );
+    });
+  };
+
+  // Code viewer
   if (selectedCode) {
+    const codeInfo = mainCodes.find((c) => c.id === selectedCode);
+    const isFavorited = favorites.has(selectedCode);
+
     return (
       <div className="flex-1 h-full overflow-hidden bg-claude-bg">
         {/* Header */}
@@ -253,17 +466,20 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setSelectedCode(null)}
-                  className="p-2 hover:bg-claude-bg rounded-lg transition-colors">
-
+                  className="p-2 hover:bg-claude-bg rounded-lg transition-colors"
+                >
                   <ArrowLeft size={20} className="text-claude-text" />
                 </button>
                 <div>
                   <h1 className="text-xl font-serif text-claude-text font-medium">
-                    ⚖️ Цивільний кодекс України
+                    {codeInfo?.icon || '📜'}{' '}
+                    {legislationData?.title || codeInfo?.name || selectedCode}
                   </h1>
                   <p className="text-xs text-claude-subtext font-sans">
-                    № 435-15 від 16.01.2003 • Редакція від 01.01.2024, підстава:
-                    3091-IX
+                    № {selectedCode}
+                    {legislationData?.total_articles
+                      ? ` • ${legislationData.total_articles} статей`
+                      : ''}
                   </p>
                 </div>
               </div>
@@ -271,34 +487,41 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                 <button
                   onClick={() => setShowTableOfContents(!showTableOfContents)}
                   className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
-                  title="Зміст">
-
+                  title="Зміст"
+                >
                   <Menu size={20} />
                 </button>
                 <button
                   onClick={() => setShowSearch(!showSearch)}
                   className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
-                  title="Пошук">
-
+                  title="Пошук"
+                >
                   <Search size={20} />
                 </button>
                 <button
+                  onClick={handleDownload}
                   className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
-                  title="Завантажити">
-
+                  title="Завантажити"
+                >
                   <Download size={20} />
                 </button>
                 <button
-                  className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
-                  title="Друк">
-
+                  onClick={handlePrint}
+                  disabled={!currentArticle}
+                  className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors disabled:opacity-40"
+                  title="Друк"
+                >
                   <Printer size={20} />
                 </button>
                 <button
+                  onClick={toggleFavorite}
                   className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors"
-                  title="В обране">
-
-                  <Star size={20} />
+                  title="В обране"
+                >
+                  <Star
+                    size={20}
+                    className={isFavorited ? 'fill-yellow-400 text-yellow-400' : ''}
+                  />
                 </button>
               </div>
             </div>
@@ -307,251 +530,279 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
 
         {/* Search Panel */}
         <AnimatePresence>
-          {showSearch &&
-          <motion.div
-            initial={{
-              height: 0,
-              opacity: 0
-            }}
-            animate={{
-              height: 'auto',
-              opacity: 1
-            }}
-            exit={{
-              height: 0,
-              opacity: 0
-            }}
-            className="bg-white border-b border-claude-border overflow-hidden">
-
+          {showSearch && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-white border-b border-claude-border overflow-hidden"
+            >
               <div className="max-w-7xl mx-auto p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="flex-1 relative">
                     <input
-                    type="text"
-                    value={documentSearch}
-                    onChange={(e) => setDocumentSearch(e.target.value)}
-                    placeholder="Знайти у документі..."
-                    className="w-full px-4 py-2 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
-                    autoFocus />
-
-                    {documentSearch &&
-                  <button
-                    onClick={() => setDocumentSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-claude-subtext hover:text-claude-text">
-
+                      type="text"
+                      value={documentSearch}
+                      onChange={(e) => setDocumentSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Знайти у документі..."
+                      className="w-full px-4 py-2 bg-white border border-claude-border rounded-lg text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all font-sans"
+                      autoFocus
+                    />
+                    {documentSearch && (
+                      <button
+                        onClick={() => {
+                          setDocumentSearch('');
+                          setSearchResults([]);
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-claude-subtext hover:text-claude-text"
+                      >
                         <X size={16} />
                       </button>
-                  }
+                    )}
                   </div>
-                  <button className="px-4 py-2 bg-claude-accent text-white rounded-lg font-medium hover:bg-[#C66345] transition-colors font-sans">
+                  <button
+                    onClick={handleSearch}
+                    disabled={searchLoading || !documentSearch.trim()}
+                    className="px-4 py-2 bg-claude-accent text-white rounded-lg font-medium hover:bg-[#C66345] transition-colors font-sans disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {searchLoading && <Loader2 size={16} className="animate-spin" />}
                     Пошук
                   </button>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                    type="checkbox"
-                    checked={caseSensitive}
-                    onChange={(e) => setCaseSensitive(e.target.checked)}
-                    className="w-4 h-4 rounded border-claude-border text-claude-accent focus:ring-claude-accent" />
 
-                    <span className="text-claude-text font-sans">
-                      Враховувати регістр
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                    type="checkbox"
-                    checked={wholeWord}
-                    onChange={(e) => setWholeWord(e.target.checked)}
-                    className="w-4 h-4 rounded border-claude-border text-claude-accent focus:ring-claude-accent" />
-
-                    <span className="text-claude-text font-sans">
-                      Ціле слово
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                    type="checkbox"
-                    checked={regex}
-                    onChange={(e) => setRegex(e.target.checked)}
-                    className="w-4 h-4 rounded border-claude-border text-claude-accent focus:ring-claude-accent" />
-
-                    <span className="text-claude-text font-sans">
-                      Регулярний вираз
-                    </span>
-                  </label>
-                </div>
-                {documentSearch &&
-              <div className="space-y-2">
+                {searchResults.length > 0 && (
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-claude-subtext font-sans">
-                        Знайдено: 847 входжень
+                        Знайдено: {searchTotal} результатів
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button className="px-3 py-1 text-claude-text hover:bg-claude-bg rounded transition-colors font-sans">
-                          ▲ Попередній
-                        </button>
-                        <span className="text-claude-subtext font-sans">
-                          (12/847)
-                        </span>
-                        <button className="px-3 py-1 text-claude-text hover:bg-claude-bg rounded transition-colors font-sans">
-                          ▼ Наступний
-                        </button>
-                      </div>
                     </div>
                     <div className="max-h-48 overflow-y-auto space-y-2">
-                      {searchResults.map((result, index) =>
-                  <div
-                    key={index}
-                    className="p-3 bg-claude-bg rounded-lg border border-claude-border">
-
+                      {searchResults.map((result, index) => (
+                        <div
+                          key={index}
+                          className="p-3 bg-claude-bg rounded-lg border border-claude-border"
+                        >
                           <p className="text-sm font-medium text-claude-text font-sans mb-1">
-                            {result.article}
+                            Ст. {result.article_number}. {result.title}
                           </p>
-                          <p className="text-sm text-claude-subtext font-sans mb-2">
-                            {result.text}
+                          <p className="text-sm text-claude-subtext font-sans mb-2 line-clamp-2">
+                            {result.full_text}
                           </p>
-                          <button className="text-xs text-claude-accent hover:text-[#C66345] font-sans font-medium">
-                            Перейти до статті →
+                          <button
+                            onClick={() => {
+                              fetchArticle(result.article_number);
+                              setShowSearch(false);
+                            }}
+                            className="text-xs text-claude-accent hover:text-[#C66345] font-sans font-medium"
+                          >
+                            Перейти до статті &rarr;
                           </button>
                         </div>
-                  )}
+                      ))}
                     </div>
                   </div>
-              }
+                )}
+
+                {!searchLoading && documentSearch && searchResults.length === 0 && searchTotal === 0 && (
+                  <p className="text-sm text-claude-subtext font-sans">
+                    Нічого не знайдено
+                  </p>
+                )}
               </div>
             </motion.div>
-          }
+          )}
         </AnimatePresence>
 
         {/* Content */}
         <div className="flex h-[calc(100vh-120px)]">
           {/* Table of Contents */}
           <AnimatePresence>
-            {showTableOfContents &&
-            <motion.div
-              initial={{
-                width: 0,
-                opacity: 0
-              }}
-              animate={{
-                width: 280,
-                opacity: 1
-              }}
-              exit={{
-                width: 0,
-                opacity: 0
-              }}
-              className="bg-white border-r border-claude-border overflow-hidden">
-
+            {showTableOfContents && (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 300, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                className="bg-white border-r border-claude-border overflow-hidden"
+              >
                 <div className="h-full overflow-y-auto p-4 scrollbar-hide">
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm font-medium text-claude-text font-sans">
                         ЗМІСТ
                       </h3>
-                      <span className="text-xs text-claude-subtext font-sans">
-                        (25%)
-                      </span>
+                      {legislationData && (
+                        <span className="text-xs text-claude-subtext font-sans">
+                          {legislationData.total_articles} статей
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {renderTableOfContents(tableOfContents)}
+
+                  {loadingStructure && (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 size={24} className="animate-spin text-claude-accent" />
+                    </div>
+                  )}
+
+                  {structureError && (
+                    <div className="text-sm text-red-500 font-sans p-2">
+                      {structureError}
+                    </div>
+                  )}
+
+                  {legislationData && !loadingStructure && (
+                    <div className="space-y-0.5">
+                      {renderTOCItems(legislationData.table_of_contents)}
+                    </div>
+                  )}
                 </div>
               </motion.div>
-            }
+            )}
           </AnimatePresence>
 
           {/* Main Content */}
           <div className="flex-1 overflow-y-auto p-8 bg-claude-bg">
             <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-claude-border shadow-sm p-8">
-              <h2 className="text-2xl font-serif font-bold text-claude-text mb-6">
-                Книга перша. ЗАГАЛЬНІ ПОЛОЖЕННЯ
-              </h2>
+              {/* Loading state */}
+              {loadingArticle && (
+                <div className="flex items-center justify-center py-24">
+                  <Loader2 size={32} className="animate-spin text-claude-accent" />
+                </div>
+              )}
 
-              <h3 className="text-xl font-serif font-bold text-claude-text mb-4">
-                Розділ I. ОСНОВНІ ПОЛОЖЕННЯ
-              </h3>
-
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-lg font-serif font-medium text-claude-text mb-3">
-                    Стаття 1. Відносини, що регулюються ЦК
-                  </h4>
-                  <p className="text-base text-claude-text font-sans leading-relaxed mb-4">
-                    Цивільним законодавством регулюються особисті немайнові та
-                    майнові відносини (цивільні відносини), засновані на
-                    юридичній рівності, вільному волевиявленні, майновій
-                    самостійності їх учасників.
-                  </p>
-                  <p className="text-base text-claude-text font-sans leading-relaxed">
-                    До майнових відносин, заснованих на адміністративному або
-                    іншому владному підпорядкуванні однієї сторони іншій
-                    стороні, цивільне законодавство не застосовується, якщо інше
-                    не встановлено законом.
+              {/* No article selected yet */}
+              {!loadingArticle && !currentArticle && (
+                <div className="text-center py-24">
+                  <Library size={48} className="mx-auto text-claude-subtext/30 mb-4" />
+                  <p className="text-claude-subtext font-sans">
+                    {loadingStructure
+                      ? 'Завантаження структури...'
+                      : 'Оберіть статтю зі змісту'}
                   </p>
                 </div>
+              )}
 
-                <div className="border-t border-claude-border pt-6">
-                  <h4 className="text-lg font-serif font-medium text-claude-text mb-3">
-                    Стаття 2. Відносини, на які поширюється дія ЦК
-                  </h4>
-                  <p className="text-base text-claude-text font-sans leading-relaxed">
-                    Цивільне законодавство поширюється на відносини за участю
-                    іноземців, осіб без громадянства та іноземних юридичних
-                    осіб, якщо інше не встановлено законом.
-                  </p>
-                </div>
-              </div>
+              {/* Article content */}
+              {!loadingArticle && currentArticle && (
+                <>
+                  <h2 className="text-2xl font-serif font-bold text-claude-text mb-6">
+                    Стаття {currentArticle.article_number}. {currentArticle.title}
+                  </h2>
 
-              {/* Tools Panel */}
-              <div className="mt-8 pt-6 border-t border-claude-border flex items-center gap-3">
-                <button className="flex items-center gap-2 px-4 py-2 bg-claude-bg hover:bg-claude-border text-claude-text rounded-lg text-sm font-medium font-sans transition-colors">
-                  <Copy size={16} />
-                  Копіювати
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-claude-bg hover:bg-claude-border text-claude-text rounded-lg text-sm font-medium font-sans transition-colors">
-                  <LinkIcon size={16} />
-                  Посилання
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-claude-bg hover:bg-claude-border text-claude-text rounded-lg text-sm font-medium font-sans transition-colors">
-                  <MessageSquare size={16} />
-                  Коментар
-                </button>
-              </div>
+                  <div className="text-base text-claude-text font-sans leading-relaxed whitespace-pre-wrap">
+                    {currentArticle.full_text}
+                  </div>
+
+                  {/* Prev/Next navigation */}
+                  <div className="mt-8 pt-4 border-t border-claude-border flex items-center justify-between">
+                    <button
+                      onClick={() => prevArticle && fetchArticle(prevArticle.article_number)}
+                      disabled={!prevArticle}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-sans text-claude-text hover:bg-claude-bg rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                      {prevArticle
+                        ? `Ст. ${prevArticle.article_number}`
+                        : 'Попередня'}
+                    </button>
+                    <span className="text-xs text-claude-subtext font-sans">
+                      {currentArticleIndex + 1} / {allArticles.length}
+                    </span>
+                    <button
+                      onClick={() => nextArticle && fetchArticle(nextArticle.article_number)}
+                      disabled={!nextArticle}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-sans text-claude-text hover:bg-claude-bg rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      {nextArticle
+                        ? `Ст. ${nextArticle.article_number}`
+                        : 'Наступна'}
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="mt-4 pt-4 border-t border-claude-border flex items-center gap-3">
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-2 px-4 py-2 bg-claude-bg hover:bg-claude-border text-claude-text rounded-lg text-sm font-medium font-sans transition-colors"
+                    >
+                      <Copy size={16} />
+                      Копіювати
+                    </button>
+                    <button
+                      onClick={handleCopyLink}
+                      className="flex items-center gap-2 px-4 py-2 bg-claude-bg hover:bg-claude-border text-claude-text rounded-lg text-sm font-medium font-sans transition-colors"
+                    >
+                      <LinkIcon size={16} />
+                      Посилання
+                    </button>
+                    <button
+                      onClick={() => setShowComment(!showComment)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium font-sans transition-colors ${
+                        showComment || commentText
+                          ? 'bg-claude-accent/10 text-claude-accent'
+                          : 'bg-claude-bg hover:bg-claude-border text-claude-text'
+                      }`}
+                    >
+                      <MessageSquare size={16} />
+                      Коментар
+                    </button>
+                  </div>
+
+                  {/* Comment area */}
+                  <AnimatePresence>
+                    {showComment && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-4">
+                          <textarea
+                            value={commentText}
+                            onChange={(e) => handleSaveComment(e.target.value)}
+                            placeholder="Додати нотатку до статті..."
+                            className="w-full px-4 py-3 bg-claude-bg border border-claude-border rounded-lg text-sm font-sans text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent resize-y min-h-[80px]"
+                            rows={3}
+                          />
+                          <p className="text-xs text-claude-subtext font-sans mt-1">
+                            Нотатка зберігається автоматично в браузері
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
             </div>
           </div>
         </div>
-      </div>);
-
+      </div>
+    );
   }
+
+  // Library listing page
   return (
     <div className="flex-1 h-full overflow-y-auto bg-claude-bg p-4 md:p-8 lg:p-12 pb-32">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <motion.div
-          initial={{
-            opacity: 0,
-            y: 20
-          }}
-          animate={{
-            opacity: 1,
-            y: 0
-          }}
-          transition={{
-            duration: 0.5,
-            ease: [0.22, 1, 0.36, 1]
-          }}>
-
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        >
           <div className="flex items-center gap-4 mb-6">
-            {onBack &&
-            <button
-              onClick={onBack}
-              className="p-2 hover:bg-white rounded-lg transition-colors border border-claude-border">
-
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 hover:bg-white rounded-lg transition-colors border border-claude-border"
+              >
                 <ArrowLeft size={20} className="text-claude-text" />
               </button>
-            }
+            )}
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Library size={32} className="text-claude-accent" />
@@ -581,8 +832,8 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Введіть назву кодексу або закону..."
-                  className="block w-full pl-11 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all shadow-sm font-sans" />
-
+                  className="block w-full pl-11 pr-4 py-3 bg-white border border-claude-border rounded-xl text-claude-text placeholder-claude-subtext/50 focus:outline-none focus:ring-2 focus:ring-claude-accent/20 focus:border-claude-accent transition-all shadow-sm font-sans"
+                />
               </div>
               <button className="px-6 py-3 bg-claude-accent text-white rounded-xl font-medium hover:bg-[#C66345] transition-colors shadow-sm font-sans">
                 Пошук
@@ -590,14 +841,14 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
             </div>
             <div className="flex items-center gap-2 text-sm text-claude-subtext font-sans">
               <span>Популярні запити:</span>
-              {['конституція', 'цпк', 'цк', 'кк', 'зку'].map((query) =>
-              <button
-                key={query}
-                className="text-claude-accent hover:text-[#C66345] font-medium">
-
+              {['конституція', 'цпк', 'цк', 'кк', 'зку'].map((query) => (
+                <button
+                  key={query}
+                  className="text-claude-accent hover:text-[#C66345] font-medium"
+                >
                   {query}
                 </button>
-              )}
+              ))}
             </div>
           </div>
 
@@ -608,22 +859,14 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
               Основні кодекси
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {mainCodes.map((code, index) =>
-              <motion.div
-                key={code.id}
-                initial={{
-                  opacity: 0,
-                  scale: 0.95
-                }}
-                animate={{
-                  opacity: 1,
-                  scale: 1
-                }}
-                transition={{
-                  delay: index * 0.05
-                }}
-                className="bg-white rounded-2xl border border-claude-border shadow-sm p-6 hover:shadow-md hover:border-claude-accent/30 transition-all">
-
+              {mainCodes.map((code, index) => (
+                <motion.div
+                  key={code.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-white rounded-2xl border border-claude-border shadow-sm p-6 hover:shadow-md hover:border-claude-accent/30 transition-all"
+                >
                   <div className="text-4xl mb-3">{code.icon}</div>
                   <h3 className="text-base font-sans font-medium text-claude-text mb-1">
                     {code.name}
@@ -633,9 +876,9 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                   </p>
                   <div className="flex gap-2">
                     <button
-                    onClick={() => setSelectedCode(code.id)}
-                    className="flex-1 px-3 py-2 bg-claude-accent text-white rounded-lg text-sm font-medium hover:bg-[#C66345] transition-colors font-sans">
-
+                      onClick={() => setSelectedCode(code.id)}
+                      className="flex-1 px-3 py-2 bg-claude-accent text-white rounded-lg text-sm font-medium hover:bg-[#C66345] transition-colors font-sans"
+                    >
                       Відкрити
                     </button>
                     <button className="p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-bg rounded-lg transition-colors">
@@ -643,7 +886,7 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                     </button>
                   </div>
                 </motion.div>
-              )}
+              ))}
             </div>
           </div>
 
@@ -654,27 +897,22 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
               Процесуальні кодекси
             </h2>
             <div className="space-y-2">
-              {proceduralCodes.map((code, index) =>
-              <motion.div
-                key={code.number}
-                initial={{
-                  opacity: 0,
-                  x: -20
-                }}
-                animate={{
-                  opacity: 1,
-                  x: 0
-                }}
-                transition={{
-                  delay: index * 0.05
-                }}
-                className="flex items-center justify-between p-3 bg-claude-bg rounded-lg hover:bg-claude-border transition-colors">
-
+              {proceduralCodes.map((code, index) => (
+                <motion.div
+                  key={code.number}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="flex items-center justify-between p-3 bg-claude-bg rounded-lg hover:bg-claude-border transition-colors"
+                >
                   <span className="text-sm font-sans text-claude-text">
                     • {code.name}
                   </span>
                   <div className="flex gap-2">
-                    <button className="px-3 py-1.5 text-sm font-medium font-sans text-claude-text hover:text-claude-accent transition-colors">
+                    <button
+                      onClick={() => setSelectedCode(code.number)}
+                      className="px-3 py-1.5 text-sm font-medium font-sans text-claude-text hover:text-claude-accent transition-colors"
+                    >
                       Відкрити
                     </button>
                     <button className="p-1.5 text-claude-subtext hover:text-claude-text transition-colors">
@@ -682,7 +920,7 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                     </button>
                   </div>
                 </motion.div>
-              )}
+              ))}
             </div>
           </div>
 
@@ -697,7 +935,10 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
                 • Конституція України (254к/96-ВР)
               </span>
               <div className="flex gap-2">
-                <button className="px-3 py-1.5 text-sm font-medium font-sans text-claude-text hover:text-claude-accent transition-colors">
+                <button
+                  onClick={() => setSelectedCode('254к/96-вр')}
+                  className="px-3 py-1.5 text-sm font-medium font-sans text-claude-text hover:text-claude-accent transition-colors"
+                >
                   Відкрити
                 </button>
                 <button className="p-1.5 text-claude-subtext hover:text-claude-text transition-colors">
@@ -714,25 +955,17 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
               Категорії законів
             </h2>
             <div className="flex flex-wrap gap-2">
-              {categories.map((category, index) =>
-              <motion.button
-                key={category}
-                initial={{
-                  opacity: 0,
-                  scale: 0.9
-                }}
-                animate={{
-                  opacity: 1,
-                  scale: 1
-                }}
-                transition={{
-                  delay: index * 0.03
-                }}
-                className="px-4 py-2 bg-claude-bg hover:bg-claude-accent hover:text-white border border-claude-border hover:border-claude-accent rounded-xl text-sm font-medium font-sans transition-all">
-
+              {categories.map((category, index) => (
+                <motion.button
+                  key={category}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: index * 0.03 }}
+                  className="px-4 py-2 bg-claude-bg hover:bg-claude-accent hover:text-white border border-claude-border hover:border-claude-accent rounded-xl text-sm font-medium font-sans transition-all"
+                >
                   {category}
                 </motion.button>
-              )}
+              ))}
               <button className="px-4 py-2 bg-claude-bg hover:bg-claude-border border border-claude-border rounded-xl text-sm font-medium font-sans text-claude-subtext hover:text-claude-text transition-all">
                 Показати всі (47)
               </button>
@@ -740,6 +973,6 @@ export function LegalCodesLibraryPage({ onBack }: LegalCodesLibraryPageProps) {
           </div>
         </motion.div>
       </div>
-    </div>);
-
+    </div>
+  );
 }
