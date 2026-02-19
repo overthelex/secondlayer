@@ -271,6 +271,7 @@ services:
       RADA_API_KEY: ${RADA_API_KEY:-test-key-123}
       OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL:-http://openreyestr-app-local:3004}
       OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY:-test-key-123}
+      STAGE_BACKEND_URL: ${STAGE_BACKEND_URL:-https://stage.legal.org.ua}
 
       # WebAuthn / FIDO2
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localdev.legal.org.ua}

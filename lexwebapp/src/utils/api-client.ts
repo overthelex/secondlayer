@@ -334,6 +334,8 @@ export const api = {
       apiClient.put(`/api/admin/config/${key}`, { value }),
     resetConfig: (key: string) =>
       apiClient.delete(`/api/admin/config/${key}`),
+    getDBCompare: () =>
+      apiClient.get('/api/admin/db-compare'),
   },
 
   // GDPR

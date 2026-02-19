@@ -80,6 +80,7 @@ export const ROUTES = {
   ADMIN_INFRASTRUCTURE: '/admin/infrastructure',
   ADMIN_CONTAINERS: '/admin/containers',
   ADMIN_CONFIG: '/admin/config',
+  ADMIN_DB_COMPARE: '/admin/db-compare',
 } as const;
 
 // Helper function to generate dynamic routes
