@@ -30,6 +30,21 @@ source "$SCRIPT_DIR/lib/backup.sh"
 source "$SCRIPT_DIR/lib/smoke-test.sh"
 source "$SCRIPT_DIR/lib/report.sh"
 
+# ── Cloudflare maintenance helpers ───────────────────────────────────────────
+CF_MAINTENANCE="$SCRIPT_DIR/maintenance/cf-maintenance.sh"
+
+enable_cf_maintenance() {
+    if [ ! -f "$CF_MAINTENANCE" ]; then return 0; fi
+    print_msg "$BLUE" "Enabling Cloudflare maintenance page..."
+    bash "$CF_MAINTENANCE" enable || print_msg "$YELLOW" "Warning: could not enable CF maintenance mode (site stays live during deploy)"
+}
+
+disable_cf_maintenance() {
+    if [ ! -f "$CF_MAINTENANCE" ]; then return 0; fi
+    print_msg "$BLUE" "Disabling Cloudflare maintenance page..."
+    bash "$CF_MAINTENANCE" disable || print_msg "$YELLOW" "Warning: could not disable CF maintenance mode — run manually: $CF_MAINTENANCE disable"
+}
+
 # Print colored message
 print_msg() {
     local color=$1
@@ -425,6 +440,9 @@ deploy_local() {
     local backup_id
     backup_id=$(create_backup "local" "localhost" "$REPO_ROOT")
 
+    # Phase 2b: Show maintenance page while services are rebuilding
+    enable_cf_maintenance
+
     # Phase 3: Deploy
     local deploy_exit=0
     (
@@ -506,9 +524,13 @@ deploy_local() {
     if [ $deploy_exit -ne 0 ]; then
         print_msg "$RED" "Deploy failed, rolling back..."
         rollback_to_backup "local" "localhost" "$compose_file" "$env_file"
+        disable_cf_maintenance
         generate_deploy_report "local" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
+
+    # Services are up — remove maintenance page before smoke tests
+    disable_cf_maintenance
 
     # Phase 4: Smoke tests
     if ! run_smoke_tests "local" "localhost" "$compose_file" "$env_file"; then
@@ -568,6 +590,9 @@ deploy_to_server() {
     # Phase 2: Backup current state
     local backup_id
     backup_id=$(create_backup "stage" "$target_server" "$REPO_ROOT")
+
+    # Phase 2b: Show maintenance page while services are down
+    enable_cf_maintenance
 
     # Repo root on the remote server
     local REMOTE_REPO="/home/${DEPLOY_USER}/SecondLayer"
@@ -735,9 +760,13 @@ EOF
     if [ "$deploy_failed" = true ]; then
         print_msg "$RED" "Remote deploy failed, rolling back..."
         rollback_to_backup "stage" "$target_server" "$compose_file" "$env_file"
+        disable_cf_maintenance
         generate_deploy_report "stage" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
+
+    # Services are up — remove maintenance page before smoke tests
+    disable_cf_maintenance
 
     # Phase 4: Smoke tests
     if ! run_smoke_tests "stage" "$target_server" "$compose_file" "$env_file"; then
