@@ -12,6 +12,8 @@ import {
   XCircle,
   Users,
   X,
+  KeyRound,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../utils/api-client';
 import toast from 'react-hot-toast';
@@ -99,6 +101,11 @@ export function AdminUsersPage() {
     credits: string;
   } | null>(null);
   const [createTestUserLoading, setCreateTestUserLoading] = useState(false);
+
+  // Password reset state
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState<{ userId: string; email: string } | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   const fetchUsers = useCallback(async (offset = 0) => {
     setLoading(true);
@@ -240,6 +247,20 @@ export function AdminUsersPage() {
       // Error toast handled by interceptor
     } finally {
       setCreateTestUserLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPasswordConfirm) return;
+    setResetPasswordLoading(true);
+    try {
+      const res = await api.admin.resetUserPassword(resetPasswordConfirm.userId);
+      setResetPasswordConfirm(null);
+      setResetPasswordResult(res.data.password);
+    } catch {
+      toast.error('Failed to reset password');
+    } finally {
+      setResetPasswordLoading(false);
     }
   };
 
@@ -436,6 +457,13 @@ export function AdminUsersPage() {
                           >
                             Test
                           </button>
+                          <button
+                            onClick={() => setResetPasswordConfirm({ userId: u.id, email: u.email })}
+                            className="px-2 py-1 text-xs border border-claude-border rounded hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-colors"
+                            title="Generate new password"
+                          >
+                            <KeyRound size={12} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -611,6 +639,62 @@ export function AdminUsersPage() {
             />
             <button onClick={handleUpdateLimits} className="w-full px-4 py-2 bg-claude-text text-white rounded-lg text-sm">
               Update Limits
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Confirm Modal */}
+      {resetPasswordConfirm && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setResetPasswordConfirm(null)}>
+          <div className="bg-white rounded-xl border border-claude-border shadow-xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-claude-text">Reset Password</h3>
+              <button onClick={() => setResetPasswordConfirm(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+              <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800">
+                A new secure password will be generated for <strong>{resetPasswordConfirm.email}</strong>. The password will be shown <strong>only once</strong> — copy it immediately.
+              </p>
+            </div>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetPasswordLoading}
+              className="w-full px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50"
+            >
+              {resetPasswordLoading ? 'Generating...' : 'Generate New Password'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Result Modal — shown ONCE */}
+      {resetPasswordResult && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl border border-claude-border shadow-xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-claude-text flex items-center gap-2">
+                <KeyRound size={16} className="text-green-600" />
+                New Password Generated
+              </h3>
+            </div>
+            <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
+              <AlertTriangle size={16} className="text-red-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-red-800">
+                <strong>Save this password now.</strong> It will not be shown again — only the hash is stored.
+              </p>
+            </div>
+            <div className="bg-gray-900 text-green-400 font-mono text-sm px-4 py-3 rounded-lg mb-4 tracking-widest select-all text-center">
+              {resetPasswordResult}
+            </div>
+            <button
+              onClick={() => setResetPasswordResult(null)}
+              className="w-full px-4 py-2 bg-claude-text text-white rounded-lg text-sm"
+            >
+              I have saved the password
             </button>
           </div>
         </div>

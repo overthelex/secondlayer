@@ -325,6 +325,8 @@ export const api = {
         : apiClient.delete(`/api/admin/users/${userId}/tags/test`),
     createTestUser: (data: { email: string; name?: string; password: string; credits: number }) =>
       apiClient.post('/api/admin/test-users', data),
+    resetUserPassword: (id: string) =>
+      apiClient.post(`/api/admin/users/${id}/reset-password`),
 
     getImportSamples: (hours: number = 24, limit: number = 5) =>
       apiClient.get('/api/admin/import-samples', { params: { hours, limit } }),

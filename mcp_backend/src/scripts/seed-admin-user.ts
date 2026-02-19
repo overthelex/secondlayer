@@ -62,7 +62,6 @@ async function seedAdminUser(db: Database, admin: AdminEntry) {
     `INSERT INTO users (email, name, password_hash, email_verified, role, is_admin)
      VALUES ($1, $2, $3, TRUE, 'administrator', TRUE)
      ON CONFLICT (email) DO UPDATE SET
-       password_hash = $3,
        role = 'administrator',
        is_admin = TRUE,
        updated_at = CURRENT_TIMESTAMP

@@ -15,6 +15,7 @@ import { PrometheusService } from '../services/prometheus-service.js';
 import { PricingService } from '../services/pricing-service.js';
 import { SubscriptionService } from '../services/subscription-service.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { ConfigService } from '../services/config-service.js';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
@@ -617,6 +618,67 @@ export function createAdminRoutes(
     } catch (error: any) {
       logger.error('Failed to update limits', { error: error.message });
       res.status(500).json({ error: 'Failed to update limits' });
+    }
+  });
+
+  // ========================================
+  // PASSWORD RESET (ADMIN-GENERATED)
+  // ========================================
+
+  /**
+   * POST /api/admin/users/:userId/reset-password
+   * Generate a new secure random password for a user.
+   * Returns the plaintext password ONCE — only the hash is stored.
+   */
+  router.post('/users/:userId/reset-password', async (req: Request, res: Response) => {
+    try {
+      const userId = getStringParam(req.params.userId);
+      if (!userId) return res.status(400).json({ error: 'Invalid user ID' });
+
+      const userResult = await db.query('SELECT id, email FROM users WHERE id = $1', [userId]);
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Generate a 16-char secure random password: letters + digits + symbols
+      const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*';
+      const bytes = crypto.randomBytes(16);
+      const password = Array.from(bytes)
+        .map((b) => charset[b % charset.length])
+        .join('');
+
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      await db.query(
+        `UPDATE users
+         SET password_hash = $1,
+             failed_login_attempts = 0,
+             locked_until = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [passwordHash, userId]
+      );
+
+      await logAdminAction(
+        (req as any).user.id,
+        'reset_password',
+        userId,
+        null,
+        { email: userResult.rows[0].email },
+        req
+      );
+
+      logger.info('Admin reset password for user', {
+        userId,
+        email: userResult.rows[0].email,
+        admin: (req as any).user?.id,
+      });
+
+      // Return plaintext password — shown ONCE, never stored
+      res.json({ success: true, password });
+    } catch (error: any) {
+      logger.error('Failed to reset user password', { error: error.message });
+      res.status(500).json({ error: 'Failed to reset password' });
     }
   });
 
