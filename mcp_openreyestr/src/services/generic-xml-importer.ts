@@ -354,6 +354,7 @@ async function multiRowUpsert(
     .map(c => `${c} = EXCLUDED.${c}`)
     .concat(['raw_data = EXCLUDED.raw_data', 'updated_at = CURRENT_TIMESTAMP']);
 
+  const sqlExpr = config.columnSqlExpression ?? {};
   const allValues: unknown[] = [];
   const rowPlaceholders: string[] = [];
 
@@ -363,7 +364,8 @@ async function multiRowUpsert(
     const ph: string[] = [];
     for (let c = 0; c < allColumns.length; c++) {
       const col = allColumns[c];
-      ph.push(`$${offset + c + 1}`);
+      const paramN = `$${offset + c + 1}`;
+      ph.push(sqlExpr[col] ? sqlExpr[col].replace('$', paramN) : paramN);
       if (col === 'raw_data') {
         allValues.push(JSON.stringify(records[i]));
       } else if (col === 'source_file') {
@@ -396,7 +398,11 @@ async function multiRowUpsert(
           if (col === 'source_file') return sourceFile;
           return mapped[col] ?? null;
         });
-        const placeholders = values.map((_, idx) => `$${idx + 1}`).join(', ');
+        const placeholders = values.map((_, idx) => {
+          const col = allColumns[idx];
+          const paramN = `$${idx + 1}`;
+          return sqlExpr[col] ? sqlExpr[col].replace('$', paramN) : paramN;
+        }).join(', ');
         const rowSql = `INSERT INTO ${config.tableName} (${allColumns.join(', ')})
           VALUES (${placeholders})
           ON CONFLICT (${conflictTarget}) DO UPDATE SET

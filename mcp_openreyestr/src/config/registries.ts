@@ -30,6 +30,13 @@ export interface RegistryConfig {
   csvDelimiter?: string;
   /** CSV-specific: header row field names (if CSV has no header) */
   csvHeaders?: string[];
+  /**
+   * SQL expressions to wrap specific column values at INSERT time.
+   * Key = DB column name, value = SQL snippet with `$` as placeholder for the param.
+   * Example: { koatuu: 'md5($)' } → INSERT ... VALUES (md5($1), ...) ...
+   * The JS fieldMap still provides the raw value; the DB computes the final value.
+   */
+  columnSqlExpression?: Record<string, string>;
 }
 
 // Helper: extract nested value from object by dot path
@@ -159,14 +166,13 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     uniqueKey: ['series', 'form_number'],
     recordPath: 'DATA.RECORD',
     fieldMap: {
-      series: 'SERIES',
-      form_number: 'NUMBER',
-      issue_date: 'DATE_ISSUE',
-      recipient: 'RECIPIENT',
-      usage_info: 'USAGE_INFO',
-      usage_date: 'DATE_USAGE',
-      document_type: 'DOC_TYPE',
-      status: 'STATUS',
+      // Actual XML tags: SR, NUM, INS_DATE, BLANK_STATE, OPER_DATE, PIB_NOTAR
+      series: 'SR',
+      form_number: 'NUM',
+      issue_date: 'INS_DATE',
+      recipient: 'PIB_NOTAR',
+      document_type: 'BLANK_STATE',
+      usage_date: 'OPER_DATE',
     },
     updateFrequency: 'weekly',
     sizeCategory: 'large',
@@ -274,14 +280,21 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     tableName: 'administrative_units',
     uniqueKey: 'koatuu',
     recordPath: 'DATA.RECORD',
+    // koatuu has no natural key in this XML — pass raw concat string,
+    // let PostgreSQL compute md5() via columnSqlExpression below
+    columnSqlExpression: { koatuu: 'md5($)' },
     fieldMap: {
-      koatuu: 'KOATUU',
-      unit_type: 'UNIT_TYPE',
-      region: 'REGION',
-      district: 'DISTRICT',
-      settlement_name: 'SETTLEMENT',
-      full_name: 'FULL_NAME',
-      parent_koatuu: 'PARENT_KOATUU',
+      // Actual XML tags: OBL_NAME, REGION_NAME, CITY_NAME, CITY_REGION_NAME, STREET_NAME
+      koatuu: (_v: string, r: Record<string, unknown>) =>
+        [r['OBL_NAME'], r['REGION_NAME'], r['CITY_NAME'], r['CITY_REGION_NAME'], r['STREET_NAME']]
+          .map(v => String(v || '')).join('|'),
+      region: 'OBL_NAME',
+      district: 'REGION_NAME',
+      settlement_name: 'CITY_NAME',
+      unit_type: 'CITY_REGION_NAME',
+      full_name: (_v: string, r: Record<string, unknown>) =>
+        [r['OBL_NAME'], r['REGION_NAME'], r['CITY_NAME'], r['CITY_REGION_NAME']]
+          .filter(Boolean).join(', '),
     },
     updateFrequency: 'weekly',
     sizeCategory: 'large',
