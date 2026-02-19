@@ -106,6 +106,12 @@ const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'openreyestr_search_beneficiaries', label: 'Бенефіціари' },
       { name: 'openreyestr_get_by_edrpou', label: 'За ЄДРПОУ' },
       { name: 'openreyestr_get_statistics', label: 'Статистика' },
+      { name: 'openreyestr_search_enforcement_proceedings', label: 'Виконавчі провадження' },
+      { name: 'openreyestr_search_debtors', label: 'Боржники' },
+      { name: 'openreyestr_search_bankruptcy_cases', label: 'Банкрутство' },
+      { name: 'openreyestr_search_notaries', label: 'Нотаріуси' },
+      { name: 'openreyestr_search_court_experts', label: 'Судові експерти' },
+      { name: 'openreyestr_search_arbitration_managers', label: 'Арбітражні керуючі' },
     ],
   },
 ];
