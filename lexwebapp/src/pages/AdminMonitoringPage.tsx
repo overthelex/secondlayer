@@ -149,6 +149,48 @@ interface ServiceData {
   error?: string;
 }
 
+interface ImportSample {
+  source: string;
+  source_name: string;
+  count: number;
+  last_import: string;
+  records: Array<{
+    id: string;
+    title?: string;
+    court?: string;
+    case_number?: string;
+    category?: string;
+    justice_kind?: string;
+    date?: string;
+    type?: string;
+    number?: string;
+    status?: string;
+    effective_date?: string;
+    document_id?: string;
+    document_title?: string;
+    section_index?: number;
+    token_count?: number;
+    user_email?: string;
+    user_name?: string;
+    name?: string;
+    domain?: string;
+    created_at: string;
+    updated_at?: string;
+  }>;
+}
+
+interface ImportSamplesData {
+  hours: number;
+  samples: ImportSample[];
+  summary: {
+    court_decisions: number;
+    legislation: number;
+    embeddings: number;
+    user_uploads: number;
+  };
+  timestamp: string;
+}
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
@@ -849,6 +891,188 @@ function DocumentCompletenessSection() {
   );
 }
 
+function ImportSamplesSection() {
+  const [data, setData] = useState<ImportSamplesData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hours, setHours] = useState(24);
+  const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
+
+  const fetchSamples = useCallback(async (h: number = hours) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.admin.getImportSamples(h, 5);
+      setData(res.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [hours]);
+
+  useEffect(() => {
+    fetchSamples();
+  }, [fetchSamples]);
+
+  const toggleSource = (source: string) => {
+    const newSet = new Set(expandedSources);
+    if (newSet.has(source)) {
+      newSet.delete(source);
+    } else {
+      newSet.add(source);
+    }
+    setExpandedSources(newSet);
+  };
+
+  if (loading && !data) return <SectionLoader />;
+  if (error && !data) return <SectionError message={error} onRetry={() => fetchSamples()} />;
+
+  const hasAnyData = data && data.samples && data.samples.length > 0;
+
+  return (
+    <div>
+      {/* Controls */}
+      <div className="flex items-center gap-3 mb-4">
+        <select
+          value={hours}
+          onChange={(e) => {
+            const h = Number(e.target.value);
+            setHours(h);
+            fetchSamples(h);
+          }}
+          className="text-xs border border-claude-border rounded-lg px-2 py-1.5 bg-white text-claude-text"
+        >
+          <option value={1}>Остання година</option>
+          <option value={6}>Останні 6 годин</option>
+          <option value={12}>Останні 12 годин</option>
+          <option value={24}>Останні 24 години</option>
+          <option value={48}>Останні 2 дні</option>
+          <option value={72}>Останні 3 дні</option>
+          <option value={168}>Останній тиждень</option>
+        </select>
+        <button
+          onClick={() => fetchSamples()}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-claude-border rounded-lg hover:bg-claude-bg transition-colors disabled:opacity-50"
+        >
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          Оновити
+        </button>
+        {data && (
+          <span className="text-xs text-claude-subtext">
+            Знайдено {data.samples.length} джерел
+          </span>
+        )}
+      </div>
+
+      {/* Summary cards */}
+      {data && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-white rounded-lg border border-claude-border p-3">
+            <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(data.summary.court_decisions)}</div>
+            <div className="text-[10px] text-claude-subtext">Судові рішення</div>
+          </div>
+          <div className="bg-white rounded-lg border border-claude-border p-3">
+            <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(data.summary.legislation)}</div>
+            <div className="text-[10px] text-claude-subtext">Законодавство</div>
+          </div>
+          <div className="bg-white rounded-lg border border-claude-border p-3">
+            <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(data.summary.embeddings)}</div>
+            <div className="text-[10px] text-claude-subtext">Вектори</div>
+          </div>
+          <div className="bg-white rounded-lg border border-claude-border p-3">
+            <div className="text-lg font-semibold text-claude-text font-mono">{formatNumber(data.summary.user_uploads)}</div>
+            <div className="text-[10px] text-claude-subtext">Завантаження</div>
+          </div>
+        </div>
+      )}
+
+      {/* Samples by source */}
+      {hasAnyData ? (
+        <div className="space-y-3">
+          {data?.samples.map((sample) => (
+            <div key={sample.source} className="bg-white rounded-xl border border-claude-border overflow-hidden">
+              {/* Header */}
+              <button
+                onClick={() => toggleSource(sample.source)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  {expandedSources.has(sample.source) ? (
+                    <ChevronUp size={14} className="text-claude-subtext" />
+                  ) : (
+                    <ChevronDown size={14} className="text-claude-subtext" />
+                  )}
+                  <span className="font-medium text-sm text-claude-text">{sample.source_name}</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700">
+                    {formatNumber(sample.count)}
+                  </span>
+                </div>
+                <span className="text-[10px] text-claude-subtext">
+                  {formatDate(sample.last_import)}
+                </span>
+              </button>
+
+              {/* Records */}
+              {expandedSources.has(sample.source) && (
+                <div className="border-t border-claude-border/30">
+                  {sample.records.map((record, idx) => (
+                    <div key={`${record.id}-${idx}`} className="px-4 py-2 border-b border-claude-border/20 last:border-b-0 hover:bg-gray-50/30">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          {record.title && (
+                            <div className="text-xs text-claude-text truncate" title={record.title}>
+                              {record.title}
+                            </div>
+                          )}
+                          {record.document_title && (
+                            <div className="text-xs text-claude-text truncate" title={record.document_title}>
+                              {record.document_title}
+                            </div>
+                          )}
+                          {record.name && (
+                            <div className="text-xs text-claude-text truncate">
+                              {record.name}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-claude-subtext">
+                            {record.court && <span>{record.court}</span>}
+                            {record.case_number && <span className="font-mono">{record.case_number}</span>}
+                            {record.category && <span className="text-blue-600">{record.category}</span>}
+                            {record.justice_kind && <span className="text-purple-600">Вид: {record.justice_kind}</span>}
+                            {record.type && <span className="text-green-600">{record.type}</span>}
+                            {record.number && <span className="font-mono">№{record.number}</span>}
+                            {record.status && <span className="text-orange-600">{record.status}</span>}
+                            {record.section_index !== undefined && <span>Секція {record.section_index}</span>}
+                            {record.token_count !== undefined && <span className="font-mono">{record.token_count} токенів</span>}
+                            {record.user_email && <span>{record.user_email}</span>}
+                            {record.user_name && <span>{record.user_name}</span>}
+                            {record.domain && <span className="text-gray-500">{record.domain}</span>}
+                            <span className="text-gray-400">{formatDate(record.created_at)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : data ? (
+        <div className="bg-white rounded-xl border border-claude-border p-8 text-center">
+          <Database size={24} className="mx-auto mb-2 text-claude-subtext" />
+          <p className="text-sm text-claude-subtext">Немає нових даних за обраний період</p>
+          <p className="text-[10px] text-claude-subtext/70 mt-1">
+            Скрипти імпорту не запускалися або не додали нових записів за {hours} год
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminMonitoringPage() {
   const [backend, setBackend] = useState<SectionState<BackendData>>({ data: null, loading: true, error: null });
   const [rada, setRada] = useState<SectionState<ServiceData>>({ data: null, loading: true, error: null });
@@ -1034,6 +1258,15 @@ export function AdminMonitoringPage() {
           <h2 className="text-lg font-semibold text-claude-text font-sans">Перевірка повноти документів</h2>
         </div>
         <DocumentCompletenessSection />
+      </section>
+
+      {/* Import Samples - Recent Script Uploads */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Database size={18} className="text-claude-subtext" />
+          <h2 className="text-lg font-semibold text-claude-text font-sans">Зразки даних з останніх завантажень</h2>
+        </div>
+        <ImportSamplesSection />
       </section>
 
       {/* RADA Sources */}
