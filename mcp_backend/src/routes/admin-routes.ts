@@ -5,6 +5,7 @@
  */
 
 import express, { Request, Response } from 'express';
+import axios from 'axios';
 import { Database } from '../database/database.js';
 import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
@@ -13,6 +14,7 @@ import { PricingService } from '../services/pricing-service.js';
 import { SubscriptionService } from '../services/subscription-service.js';
 import bcrypt from 'bcryptjs';
 import { ConfigService } from '../services/config-service.js';
+import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -1720,6 +1722,229 @@ export function createAdminRoutes(
       logger.error('Failed to run document completeness check', { error: error.message });
       res.status(500).json({ error: 'Failed to run document completeness check' });
     }
+  });
+
+  // ========================================
+  // FULLTEXT BACKFILL (gentle scraping)
+  // ========================================
+
+  interface BackfillJob {
+    job_id: string;
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
+    justice_kind_code: string | null; // null = all
+    total: number;
+    processed: number;
+    scraped: number;
+    errors: number;
+    error_details: string[];
+    started_at: string;
+    completed_at?: string;
+    stop_requested?: boolean;
+  }
+
+  const backfillJobs = new Map<string, BackfillJob>();
+
+  /**
+   * POST /api/admin/backfill-fulltext
+   * Find documents missing fulltext and scrape them gently
+   * Body: { justice_kind_code?: string, limit?: number }
+   */
+  router.post('/backfill-fulltext', async (req: Request, res: Response) => {
+    try {
+      // Only one backfill job at a time
+      for (const job of backfillJobs.values()) {
+        if (job.status === 'running' || job.status === 'queued') {
+          return res.status(409).json({
+            error: 'Backfill вже виконується',
+            job_id: job.job_id,
+          });
+        }
+      }
+
+      const { justice_kind_code, limit: maxDocs } = req.body || {};
+      const docLimit = Math.min(maxDocs || 200, 1000);
+
+      // Query documents missing fulltext
+      let query = `
+        SELECT zakononline_id, title, metadata
+        FROM documents
+        WHERE user_id IS NULL
+          AND zakononline_id ~ '^\\d+$'
+          AND (full_text IS NULL OR length(full_text) < 100)
+      `;
+      const params: any[] = [];
+
+      if (justice_kind_code && justice_kind_code !== 'all') {
+        params.push(justice_kind_code);
+        query += ` AND metadata->>'justice_kind' = $${params.length}`;
+      }
+
+      params.push(docLimit);
+      query += ` ORDER BY created_at DESC LIMIT $${params.length}`;
+
+      const result = await db.query(query, params);
+      const docs = result.rows;
+
+      if (docs.length === 0) {
+        return res.json({
+          message: 'Немає документів для докачування',
+          total: 0,
+        });
+      }
+
+      const jobId = `backfill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const job: BackfillJob = {
+        job_id: jobId,
+        status: 'queued',
+        justice_kind_code: justice_kind_code || null,
+        total: docs.length,
+        processed: 0,
+        scraped: 0,
+        errors: 0,
+        error_details: [],
+        started_at: new Date().toISOString(),
+      };
+
+      backfillJobs.set(jobId, job);
+
+      // Start background processing
+      (async () => {
+        job.status = 'running';
+        const INTERVAL_MS = 500; // gentle: 2 req/sec
+
+        for (const doc of docs) {
+          if (job.stop_requested) {
+            job.status = 'stopped';
+            job.completed_at = new Date().toISOString();
+            logger.info(`Backfill ${jobId} stopped by user at ${job.processed}/${job.total}`);
+            return;
+          }
+
+          const zoId = doc.zakononline_id;
+          try {
+            // Rate limit
+            await new Promise(r => setTimeout(r, INTERVAL_MS));
+
+            // Fetch HTML from zakononline
+            const url = `https://zakononline.ua/court-decisions/show/${zoId}`;
+            const response = await axios.get(url, {
+              timeout: 15000,
+              headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SecondLayerBot/1.0)' },
+            });
+
+            if (response.status !== 200) {
+              job.errors++;
+              job.error_details.push(`${zoId}: HTTP ${response.status}`);
+              if (job.error_details.length > 50) job.error_details.shift();
+              job.processed++;
+              continue;
+            }
+
+            const parser = new CourtDecisionHTMLParser(response.data);
+            const fullText = parser.toText('full');
+            const articleHTML = parser.extractArticleHTML();
+
+            if (fullText && fullText.length > 100) {
+              const caseNumber = parser.getMetadata()?.caseNumber || null;
+              await db.query(`
+                UPDATE documents
+                SET full_text = $1, full_text_html = $2, case_number = COALESCE(case_number, $3), updated_at = NOW()
+                WHERE zakononline_id = $4 AND user_id IS NULL
+              `, [fullText, articleHTML, caseNumber, zoId]);
+              job.scraped++;
+            } else {
+              job.errors++;
+              job.error_details.push(`${zoId}: empty text`);
+              if (job.error_details.length > 50) job.error_details.shift();
+            }
+          } catch (err: any) {
+            job.errors++;
+            job.error_details.push(`${zoId}: ${err.message?.slice(0, 100)}`);
+            if (job.error_details.length > 50) job.error_details.shift();
+          }
+
+          job.processed++;
+          if (job.processed % 10 === 0) {
+            logger.info(`Backfill ${jobId}: ${job.processed}/${job.total} (scraped: ${job.scraped}, errors: ${job.errors})`);
+          }
+        }
+
+        job.status = 'completed';
+        job.completed_at = new Date().toISOString();
+        logger.info(`Backfill ${jobId} completed: ${job.scraped}/${job.total} scraped, ${job.errors} errors`);
+      })().catch(err => {
+        job.status = 'failed';
+        job.error_details.push(`Fatal: ${err.message}`);
+        job.completed_at = new Date().toISOString();
+        logger.error(`Backfill ${jobId} failed:`, err.message);
+      });
+
+      res.json({
+        job_id: jobId,
+        status: 'queued',
+        total: docs.length,
+        message: `Запущено докачування ${docs.length} документів`,
+      });
+    } catch (error: any) {
+      logger.error('Failed to start backfill', { error: error.message });
+      res.status(500).json({ error: 'Failed to start backfill' });
+    }
+  });
+
+  /**
+   * GET /api/admin/backfill-fulltext/:jobId
+   * Get backfill job status
+   */
+  router.get('/backfill-fulltext/:jobId', (req: Request, res: Response) => {
+    const jobId = getStringParam(req.params.jobId);
+    if (!jobId) return res.status(400).json({ error: 'Job ID required' });
+
+    const job = backfillJobs.get(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    res.json(job);
+  });
+
+  /**
+   * POST /api/admin/backfill-fulltext/:jobId/stop
+   * Stop a running backfill job
+   */
+  router.post('/backfill-fulltext/:jobId/stop', (req: Request, res: Response) => {
+    const jobId = getStringParam(req.params.jobId);
+    if (!jobId) return res.status(400).json({ error: 'Job ID required' });
+
+    const job = backfillJobs.get(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+
+    if (job.status !== 'running' && job.status !== 'queued') {
+      return res.status(400).json({ error: 'Job is not running' });
+    }
+
+    job.stop_requested = true;
+    res.json({ message: 'Stop requested', job_id: jobId });
+  });
+
+  /**
+   * GET /api/admin/backfill-fulltext
+   * Get latest/active backfill job status (convenience)
+   */
+  router.get('/backfill-fulltext', (_req: Request, res: Response) => {
+    // Find the most recent job
+    let latest: BackfillJob | null = null;
+    for (const job of backfillJobs.values()) {
+      if (!latest || job.started_at > latest.started_at) {
+        latest = job;
+      }
+    }
+
+    if (!latest) {
+      return res.json({ active: false, job: null });
+    }
+
+    res.json({
+      active: latest.status === 'running' || latest.status === 'queued',
+      job: latest,
+    });
   });
 
   // ========================================

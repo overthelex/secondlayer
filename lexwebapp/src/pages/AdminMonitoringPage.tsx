@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ChevronUp,
   Play,
+  Download,
+  Square,
 } from 'lucide-react';
 import { api } from '../utils/api-client';
 
@@ -86,6 +88,19 @@ interface CompletenessResult {
     missing_both: number;
     completeness_pct: number;
   }>;
+}
+
+interface BackfillJob {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'stopped';
+  justice_kind_code: string | null;
+  total: number;
+  processed: number;
+  scraped: number;
+  errors: number;
+  error_details: string[];
+  started_at: string;
+  completed_at?: string;
 }
 
 interface SectionState<T> {
@@ -387,11 +402,125 @@ function completenessBg(pct: number): string {
   return 'bg-red-50';
 }
 
+function BackfillProgress({ job, onStop, onRefresh }: { job: BackfillJob; onStop: () => void; onRefresh: () => void }) {
+  const isActive = job.status === 'running' || job.status === 'queued';
+  const progressPct = job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {isActive ? (
+            <RefreshCw size={14} className="text-blue-600 animate-spin" />
+          ) : job.status === 'completed' ? (
+            <CheckCircle size={14} className="text-green-600" />
+          ) : job.status === 'stopped' ? (
+            <Square size={14} className="text-yellow-600" />
+          ) : (
+            <XCircle size={14} className="text-red-600" />
+          )}
+          <span className="text-sm font-medium text-blue-900">
+            {isActive ? 'Докачування...' : job.status === 'completed' ? 'Завершено' : job.status === 'stopped' ? 'Зупинено' : 'Помилка'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <button
+              onClick={onStop}
+              className="flex items-center gap-1 px-2 py-1 text-xs text-red-700 bg-red-100 border border-red-200 rounded hover:bg-red-200 transition-colors"
+            >
+              <Square size={10} />
+              Зупинити
+            </button>
+          )}
+          {!isActive && (
+            <button
+              onClick={onRefresh}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Приховати
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+        <div
+          className={`h-2 rounded-full transition-all duration-500 ${job.status === 'completed' ? 'bg-green-500' : job.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-blue-800">
+        <span>{job.processed}/{job.total} оброблено</span>
+        <span className="text-green-700">{job.scraped} докачано</span>
+        {job.errors > 0 && <span className="text-red-600">{job.errors} помилок</span>}
+        <span className="text-blue-600">{progressPct}%</span>
+      </div>
+
+      {job.error_details.length > 0 && !isActive && (
+        <details className="mt-2">
+          <summary className="text-xs text-red-600 cursor-pointer">Деталі помилок ({job.error_details.length})</summary>
+          <div className="mt-1 max-h-32 overflow-y-auto text-[10px] text-red-700 font-mono bg-red-50 p-2 rounded">
+            {job.error_details.map((e, i) => <div key={i}>{e}</div>)}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function DocumentCompletenessSection() {
   const [result, setResult] = useState<CompletenessResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [limitReached, setLimitReached] = useState(false);
+
+  // Backfill state
+  const [backfillJob, setBackfillJob] = useState<BackfillJob | null>(null);
+  const [backfillStarting, setBackfillStarting] = useState(false);
+  const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollBackfillStatus = useCallback((jobId: string) => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.admin.getBackfillStatus(jobId);
+        const job = res.data;
+        setBackfillJob(job);
+        if (job.status !== 'running' && job.status !== 'queued') {
+          stopPolling();
+        }
+      } catch {
+        stopPolling();
+      }
+    }, 2000);
+  }, [stopPolling]);
+
+  // Check for active backfill on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await api.admin.getBackfillStatus();
+        if (res.data.active && res.data.job) {
+          setBackfillJob(res.data.job);
+          pollBackfillStatus(res.data.job.job_id);
+        } else if (res.data.job && res.data.job.status !== 'running' && res.data.job.status !== 'queued') {
+          // Show last completed job briefly
+          setBackfillJob(res.data.job);
+        }
+      } catch { /* no active job */ }
+    })();
+    return stopPolling;
+  }, [pollBackfillStatus, stopPolling]);
 
   const runCheck = async () => {
     setLoading(true);
@@ -414,9 +543,46 @@ function DocumentCompletenessSection() {
     }
   };
 
+  const startBackfill = async (justiceKindCode?: string) => {
+    setBackfillStarting(true);
+    try {
+      const res = await api.admin.startBackfillFulltext({
+        justice_kind_code: justiceKindCode || 'all',
+        limit: 200,
+      });
+      const job = { ...res.data, processed: 0, scraped: 0, errors: 0, error_details: [], started_at: new Date().toISOString() } as BackfillJob;
+      setBackfillJob(job);
+      pollBackfillStatus(res.data.job_id);
+    } catch (err: any) {
+      if (err.response?.status === 409) {
+        // Already running — fetch status
+        try {
+          const statusRes = await api.admin.getBackfillStatus();
+          if (statusRes.data.job) {
+            setBackfillJob(statusRes.data.job);
+            pollBackfillStatus(statusRes.data.job.job_id);
+          }
+        } catch { /* ignore */ }
+      } else {
+        setError(err.response?.data?.error || err.message);
+      }
+    } finally {
+      setBackfillStarting(false);
+    }
+  };
+
+  const stopBackfill = async () => {
+    if (!backfillJob) return;
+    try {
+      await api.admin.stopBackfill(backfillJob.job_id);
+    } catch { /* ignore */ }
+  };
+
+  const isBackfillActive = backfillJob && (backfillJob.status === 'running' || backfillJob.status === 'queued');
+
   return (
     <div>
-      {/* Action button */}
+      {/* Action buttons */}
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={runCheck}
@@ -430,12 +596,37 @@ function DocumentCompletenessSection() {
           )}
           {limitReached ? 'Ліміт вичерпано' : 'Запустити перевірку'}
         </button>
+
+        {result && result.summary.missing_both > 0 && !isBackfillActive && (
+          <button
+            onClick={() => startBackfill()}
+            disabled={backfillStarting}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {backfillStarting ? (
+              <RefreshCw size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
+            Докачати всі ({formatNumber(result.summary.missing_both)})
+          </button>
+        )}
+
         {result && (
           <span className="text-xs text-claude-subtext">
             {result.runs_today}/{result.max_runs_per_day} перевірок сьогодні · {formatDate(result.checked_at)}
           </span>
         )}
       </div>
+
+      {/* Backfill progress */}
+      {backfillJob && (
+        <BackfillProgress
+          job={backfillJob}
+          onStop={stopBackfill}
+          onRefresh={() => setBackfillJob(null)}
+        />
+      )}
 
       {error && !result && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">{error}</div>
@@ -480,6 +671,7 @@ function DocumentCompletenessSection() {
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Обидва</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Відсутні</th>
                     <th className="text-right px-4 py-2.5 font-medium text-claude-subtext text-xs">Повнота %</th>
+                    <th className="text-center px-4 py-2.5 font-medium text-claude-subtext text-xs">Дії</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -501,6 +693,19 @@ function DocumentCompletenessSection() {
                           {row.completeness_pct}%
                         </span>
                       </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {row.missing_both > 0 && !isBackfillActive && (
+                          <button
+                            onClick={() => startBackfill(row.justice_kind_code)}
+                            disabled={backfillStarting}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors disabled:opacity-50"
+                            title={`Докачати ${row.missing_both} документів`}
+                          >
+                            <Download size={10} />
+                            Докачати
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {/* Summary row */}
@@ -518,6 +723,7 @@ function DocumentCompletenessSection() {
                         {result.summary.completeness_pct}%
                       </span>
                     </td>
+                    <td></td>
                   </tr>
                 </tbody>
               </table>

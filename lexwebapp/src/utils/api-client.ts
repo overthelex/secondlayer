@@ -248,6 +248,14 @@ export const api = {
       apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),
     runDocumentCompletenessCheck: () =>
       apiClient.post('/api/admin/document-completeness-check'),
+    startBackfillFulltext: (params?: { justice_kind_code?: string; limit?: number }) =>
+      apiClient.post('/api/admin/backfill-fulltext', params),
+    getBackfillStatus: (jobId?: string) =>
+      jobId
+        ? apiClient.get(`/api/admin/backfill-fulltext/${jobId}`)
+        : apiClient.get('/api/admin/backfill-fulltext'),
+    stopBackfill: (jobId: string) =>
+      apiClient.post(`/api/admin/backfill-fulltext/${jobId}/stop`),
     getTrafficMetrics: (range: string = '1h') =>
       apiClient.get('/api/admin/metrics/traffic', { params: { range } }),
     getLatencyMetrics: (range: string = '1h') =>
