@@ -384,25 +384,30 @@ export const SCENARIO_CATALOG: ScenarioCatalogEntry[] = [
 
   {
     id: 'entity_lookup_edrpou',
-    label: 'Пошук юридичної особи за ЄДРПОУ',
+    label: 'Пошук юридичної особи за ЄДРПОУ або record',
     domains: ['registry'],
     triggerSlots: ['edrpou'],
     exampleQueries: [
       'Інформація про компанію з ЄДРПОУ 12345678',
       'Перевірити підприємство 87654321',
+      'Повна картка компанії (record 14845945)',
     ],
     dataSources: [
-      { name: 'OpenReyestr', provides: 'дані з Єдиного державного реєстру' },
+      { name: 'OpenReyestr', provides: 'дані з Єдиного держреєстру (БЕЗ адреси та КВЕДів — вилучено через воєнний стан)' },
     ],
     toolChain: [
-      { tool: 'openreyestr_get_by_edrpou', purpose: 'отримати дані за кодом ЄДРПОУ' },
+      { tool: 'openreyestr_get_by_edrpou', purpose: 'дані за ЄДРПОУ (або openreyestr_get_entity_details якщо є record)' },
+      { tool: 'openreyestr_search_debtors', purpose: 'перевірка в реєстрі боржників', optional: true },
+      { tool: 'openreyestr_search_enforcement_proceedings', purpose: 'виконавчі провадження', optional: true },
+      { tool: 'openreyestr_search_bankruptcy_cases', purpose: 'перевірка на банкрутство', optional: true },
     ],
     responseTemplate: [
-      { heading: 'Назва / статус', instruction: 'повна назва, організаційна форма, стан реєстрації' },
-      { heading: 'Керівник', instruction: 'ПІБ керівника та посада' },
-      { heading: 'Засновники', instruction: 'перелік засновників та їхні частки' },
-      { heading: 'Адреса', instruction: 'юридична адреса' },
-      { heading: 'Вид діяльності', instruction: 'основний та додаткові КВЕДи' },
+      { heading: 'Картка компанії', instruction: 'компактний блок: назва, ОПФ, ЄДРПОУ, статус, дата реєстрації, статутний капітал' },
+      { heading: 'Керівник', instruction: 'ПІБ та посада' },
+      { heading: 'Засновники', instruction: 'список із частками' },
+      { heading: 'Бенефіціари', instruction: 'кінцеві власники з відсотками' },
+      { heading: 'Реєстри ризиків', instruction: 'результати перевірки: боржники / провадження / банкрутство', optional: true },
+      { heading: 'Примітка', instruction: 'ОДНЕ речення: "Адреса та КВЕДи відсутні у відкритих даних (обмеження воєнного часу)." — більше нічого' },
     ],
   },
 
