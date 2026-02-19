@@ -1892,6 +1892,30 @@ export function createAdminRoutes(
   });
 
   /**
+   * GET /api/admin/backfill-fulltext
+   * Get latest/active backfill job status (convenience)
+   * NOTE: must be registered BEFORE the :jobId route to avoid parameter capture
+   */
+  router.get('/backfill-fulltext', (_req: Request, res: Response) => {
+    // Find the most recent job
+    let latest: BackfillJob | null = null;
+    for (const job of backfillJobs.values()) {
+      if (!latest || job.started_at > latest.started_at) {
+        latest = job;
+      }
+    }
+
+    if (!latest) {
+      return res.json({ active: false, job: null });
+    }
+
+    res.json({
+      active: latest.status === 'running' || latest.status === 'queued',
+      job: latest,
+    });
+  });
+
+  /**
    * GET /api/admin/backfill-fulltext/:jobId
    * Get backfill job status
    */
@@ -1922,29 +1946,6 @@ export function createAdminRoutes(
 
     job.stop_requested = true;
     res.json({ message: 'Stop requested', job_id: jobId });
-  });
-
-  /**
-   * GET /api/admin/backfill-fulltext
-   * Get latest/active backfill job status (convenience)
-   */
-  router.get('/backfill-fulltext', (_req: Request, res: Response) => {
-    // Find the most recent job
-    let latest: BackfillJob | null = null;
-    for (const job of backfillJobs.values()) {
-      if (!latest || job.started_at > latest.started_at) {
-        latest = job;
-      }
-    }
-
-    if (!latest) {
-      return res.json({ active: false, job: null });
-    }
-
-    res.json({
-      active: latest.status === 'running' || latest.status === 'queued',
-      job: latest,
-    });
   });
 
   // ========================================
