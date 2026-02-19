@@ -133,11 +133,14 @@ start_env() {
 
     case $env in
         stage|staging)
-            if [ ! -f ".env.stage" ]; then
-                print_msg "$RED" ".env.stage not found. Copy .env.stage.example and configure it."
-                exit 1
-            fi
-            $compose_cmd -f docker-compose.stage.yml --env-file .env.stage up -d
+            print_msg "$BLUE" "Starting stage services on ${STAGE_SERVER}..."
+            ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+                "cd ${REMOTE_PATH} && docker compose -f docker-compose.stage.yml --env-file .env.stage up -d \
+                    postgres-stage pgbouncer-stage redis-stage qdrant-stage minio-stage postgres-openreyestr-stage \
+                    app-stage rada-mcp-app-stage app-openreyestr-stage document-service-stage lexwebapp-stage \
+                    nginx-stage \
+                    prometheus-stage grafana-stage postgres-exporter-backend postgres-exporter-openreyestr \
+                    redis-exporter node-exporter cadvisor-stage"
             ;;
         local)
             ensure_local_dns
@@ -179,7 +182,13 @@ stop_env() {
 
     case $env in
         stage|staging)
-            $compose_cmd -f docker-compose.stage.yml --env-file .env.stage down
+            print_msg "$BLUE" "Stopping stage services on ${STAGE_SERVER}..."
+            ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+                "cd ${REMOTE_PATH} && docker compose -f docker-compose.stage.yml --env-file .env.stage stop \
+                    nginx-stage \
+                    app-stage rada-mcp-app-stage app-openreyestr-stage document-service-stage lexwebapp-stage \
+                    prometheus-stage grafana-stage postgres-exporter-backend postgres-exporter-openreyestr \
+                    redis-exporter node-exporter cadvisor-stage"
             ;;
         local)
             # Try compose down with env file first (matches how start works)
@@ -228,8 +237,10 @@ restart_env() {
 show_status() {
     print_msg "$BLUE" "Environment Status\n"
 
-    print_msg "$YELLOW" "=== Staging ==="
-    docker ps --filter "name=-stage" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    print_msg "$YELLOW" "=== Staging (${STAGE_SERVER}) ==="
+    ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+        "docker ps --filter 'name=-stage' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" 2>/dev/null \
+        || print_msg "$RED" "  Could not connect to ${STAGE_SERVER}"
     echo ""
 
     print_msg "$YELLOW" "=== Local ==="
@@ -332,20 +343,39 @@ build_images() {
 check_health() {
     print_msg "$BLUE" "Checking health of all services...\n"
 
-    # Staging (gate server) — all domains
-    print_msg "$YELLOW" "\n=== Staging (gate.lexapp.co.ua) ==="
+    # Staging — container-level check via SSH
+    print_msg "$YELLOW" "=== Staging containers (${STAGE_SERVER}) ==="
+    ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+        "docker ps --filter 'name=-stage' --format 'table {{.Names}}\t{{.Status}}'" 2>/dev/null \
+        || print_msg "$RED" "  Could not connect to ${STAGE_SERVER}"
+
+    # Staging — HTTP endpoints via public domains
+    print_msg "$YELLOW" "\n=== Staging HTTP endpoints ==="
     for domain in stage.legal.org.ua legal.org.ua mcp.legal.org.ua; do
-        curl -sf "https://${domain}/health" > /dev/null 2>&1 && print_msg "$GREEN" "Backend ($domain): healthy" || print_msg "$RED" "Backend ($domain): unhealthy"
-        curl -skf "https://${domain}/" > /dev/null 2>&1 && print_msg "$GREEN" "Frontend ($domain): healthy" || print_msg "$RED" "Frontend ($domain): unhealthy"
+        if curl -sf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
+            print_msg "$GREEN" "  Backend  (https://${domain}/health): healthy"
+        else
+            print_msg "$RED" "  Backend  (https://${domain}/health): unhealthy"
+        fi
+        if curl -skf --max-time 10 "https://${domain}/" > /dev/null 2>&1; then
+            print_msg "$GREEN" "  Frontend (https://${domain}/): healthy"
+        else
+            print_msg "$RED" "  Frontend (https://${domain}/): unhealthy"
+        fi
     done
+    # Direct backend health on the gate server (bypasses Cloudflare)
+    print_msg "$YELLOW" "\n=== Staging direct (port 3004 on ${STAGE_SERVER}) ==="
+    ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+        "curl -sf --max-time 5 http://localhost:3004/health && echo '  direct backend: healthy' || echo '  direct backend: unhealthy'" 2>/dev/null \
+        || print_msg "$RED" "  Could not connect to ${STAGE_SERVER}"
 
     # Local
     print_msg "$YELLOW" "\n=== Local (localhost) ==="
-    curl -sf http://localhost:3000/health > /dev/null && print_msg "$GREEN" "Backend: healthy" || print_msg "$RED" "Backend: unhealthy"
-    docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "Nginx: running (443/80)" || print_msg "$RED" "Nginx: stopped"
-    docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "Vite: running (Docker)" || print_msg "$RED" "Vite: stopped"
-    curl -sf https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "Frontend (localdev HTTPS): healthy" || print_msg "$RED" "Frontend (localdev HTTPS): unhealthy"
-    curl -sf https://localdev.mcp.legal.org.ua/health > /dev/null && print_msg "$GREEN" "MCP SSE (localdev.mcp HTTPS): healthy" || print_msg "$RED" "MCP SSE (localdev.mcp HTTPS): unhealthy"
+    curl -sf --max-time 5 http://localhost:3000/health > /dev/null && print_msg "$GREEN" "  Backend (localhost:3000): healthy" || print_msg "$RED" "  Backend (localhost:3000): unhealthy"
+    docker ps --filter "name=nginx-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "  Nginx: running" || print_msg "$RED" "  Nginx: stopped"
+    docker ps --filter "name=lexwebapp-local" --format '{{.Status}}' 2>/dev/null | grep -qi "up" && print_msg "$GREEN" "  Vite (Docker): running" || print_msg "$RED" "  Vite (Docker): stopped"
+    curl -sf --max-time 10 https://localdev.legal.org.ua/ > /dev/null && print_msg "$GREEN" "  Frontend (localdev HTTPS): healthy" || print_msg "$RED" "  Frontend (localdev HTTPS): unhealthy"
+    curl -sf --max-time 10 https://localdev.mcp.legal.org.ua/health > /dev/null && print_msg "$GREEN" "  MCP SSE (localdev.mcp HTTPS): healthy" || print_msg "$RED" "  MCP SSE (localdev.mcp HTTPS): unhealthy"
 
     echo ""
 }
