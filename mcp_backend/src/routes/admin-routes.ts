@@ -1741,9 +1741,15 @@ export function createAdminRoutes(
     completed_at?: string;
     stop_requested?: boolean;
     current_logs: string[];
+    concurrency: number;
+    proxy?: string;
   }
 
   const backfillJobs = new Map<string, BackfillJob>();
+
+  const PROXIES = {
+    mail: 'http://mail-proxy:8888',
+  };
 
   async function getLiveCompletenessStats() {
     const kindNames: Record<string, string> = {};
@@ -1834,8 +1840,10 @@ export function createAdminRoutes(
         }
       }
 
-      const { justice_kind_code, limit: maxDocs } = req.body || {};
+      const { justice_kind_code, limit: maxDocs, concurrency = 1, proxy: proxyKey } = req.body || {};
       const docLimit = Math.min(maxDocs || 200, 1000);
+      const concurrencyLimit = Math.min(Math.max(concurrency, 1), 10);
+      const proxyUrl = proxyKey && proxyKey !== 'none' ? PROXIES[proxyKey as keyof typeof PROXIES] : undefined;
 
       // Query documents missing fulltext
       let query = `
@@ -1877,6 +1885,8 @@ export function createAdminRoutes(
         error_details: [],
         started_at: new Date().toISOString(),
         current_logs: [],
+        concurrency: concurrencyLimit,
+        proxy: proxyUrl,
       };
 
       backfillJobs.set(jobId, job);
@@ -1884,34 +1894,24 @@ export function createAdminRoutes(
       // Start background processing
       (async () => {
         job.status = 'running';
-        const INTERVAL_MS = 500; // gentle: 2 req/sec
+        const DELAY_MS = 1000; // 1 second delay between batches
 
-        for (const doc of docs) {
-          if (job.stop_requested) {
-            job.status = 'stopped';
-            job.completed_at = new Date().toISOString();
-            logger.info(`Backfill ${jobId} stopped by user at ${job.processed}/${job.total}`);
-            return;
-          }
-
+        const processDoc = async (doc: { zakononline_id: string }) => {
           const zoId = doc.zakononline_id;
           try {
-            // Rate limit
-            await new Promise(r => setTimeout(r, INTERVAL_MS));
-
             // Fetch HTML from zakononline
             const url = `https://zakononline.ua/court-decisions/show/${zoId}`;
-            const response = await axios.get(url, {
+            const axiosConfig: any = {
               timeout: 15000,
               headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SecondLayerBot/1.0)' },
-            });
+            };
+            if (job.proxy) {
+              axiosConfig.proxy = { host: new URL(job.proxy).hostname, port: parseInt(new URL(job.proxy).port), protocol: 'http' };
+            }
+            const response = await axios.get(url, axiosConfig);
 
             if (response.status !== 200) {
-              job.errors++;
-              job.error_details.push(`${zoId}: HTTP ${response.status}`);
-              if (job.error_details.length > 50) job.error_details.shift();
-              job.processed++;
-              continue;
+              return { status: 'error', zoId, error: `HTTP ${response.status}` };
             }
 
             const parser = new CourtDecisionHTMLParser(response.data);
@@ -1931,21 +1931,49 @@ export function createAdminRoutes(
                 SET full_text = $1, full_text_html = $2, case_number = COALESCE(case_number, $3), updated_at = NOW()
                 WHERE zakononline_id = $4 AND user_id IS NULL
               `, [fullText, articleHTML, caseNumber, zoId]);
-              job.scraped++;
+              return { status: 'success', zoId };
             } else {
-              job.errors++;
-              job.error_details.push(`${zoId}: empty text`);
-              if (job.error_details.length > 50) job.error_details.shift();
+              return { status: 'empty', zoId };
             }
           } catch (err: any) {
-            job.errors++;
-            job.error_details.push(`${zoId}: ${err.message?.slice(0, 100)}`);
-            if (job.error_details.length > 50) job.error_details.shift();
+            return { status: 'error', zoId, error: err.message?.slice(0, 100) };
+          }
+        };
+
+        // Process in batches based on concurrency
+        for (let i = 0; i < docs.length; i += job.concurrency) {
+          if (job.stop_requested) {
+            job.status = 'stopped';
+            job.completed_at = new Date().toISOString();
+            logger.info(`Backfill ${jobId} stopped by user at ${job.processed}/${job.total}`);
+            return;
           }
 
-          job.processed++;
-          if (job.processed % 10 === 0) {
-            logger.info(`Backfill ${jobId}: ${job.processed}/${job.total} (scraped: ${job.scraped}, errors: ${job.errors})`);
+          const batch = docs.slice(i, i + job.concurrency);
+          const results = await Promise.all(batch.map(processDoc));
+
+          for (const result of results) {
+            job.processed++;
+            if (result.status === 'success') {
+              job.scraped++;
+            } else if (result.status === 'error') {
+              job.errors++;
+              job.error_details.push(result.error ? `${result.zoId}: ${result.error}` : `${result.zoId}: empty text`);
+              if (job.error_details.length > 50) job.error_details.shift();
+            } else if (result.status === 'empty') {
+              job.errors++;
+              job.error_details.push(`${result.zoId}: empty text`);
+              if (job.error_details.length > 50) job.error_details.shift();
+            }
+          }
+
+          // Delay between batches
+          if (i + job.concurrency < docs.length) {
+            await new Promise(r => setTimeout(r, DELAY_MS));
+          }
+
+          if (job.processed % 10 === 0 || job.processed === job.total) {
+            logger.info(`Backfill ${jobId}: ${job.processed}/${job.total} (scraped: ${job.scraped}, errors: ${job.errors}, concurrency: ${job.concurrency})`);
           }
         }
 

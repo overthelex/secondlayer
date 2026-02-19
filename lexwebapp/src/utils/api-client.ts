@@ -248,7 +248,7 @@ export const api = {
       apiClient.get('/api/admin/court-documents/recent', { params: { days, limit } }),
     runDocumentCompletenessCheck: () =>
       apiClient.post('/api/admin/document-completeness-check'),
-    startBackfillFulltext: (params?: { justice_kind_code?: string; limit?: number }) =>
+    startBackfillFulltext: (params?: { justice_kind_code?: string; limit?: number; concurrency?: number; proxy?: string }) =>
       apiClient.post('/api/admin/backfill-fulltext', params),
     getBackfillStatus: (jobId?: string) =>
       jobId
