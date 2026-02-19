@@ -58,6 +58,12 @@ const TOOL_LABELS: Record<string, string> = {
   openreyestr_search_beneficiaries: 'Пошук бенефіціарів',
   openreyestr_get_by_edrpou: 'Пошук за ЄДРПОУ',
   openreyestr_get_statistics: 'Статистика реєстру',
+  openreyestr_search_enforcement_proceedings: 'Виконавчі провадження',
+  openreyestr_search_debtors: 'Боржники',
+  openreyestr_search_bankruptcy_cases: 'Банкрутство',
+  openreyestr_search_notaries: 'Нотаріуси',
+  openreyestr_search_court_experts: 'Судові експерти',
+  openreyestr_search_arbitration_managers: 'Арбітражні керуючі',
 };
 
 function getToolLabel(toolName: string): string {
@@ -406,6 +412,12 @@ function extractEvidenceFromToolResult(
     'openreyestr_search_beneficiaries',
     'openreyestr_get_by_edrpou',
     'openreyestr_get_statistics',
+    'openreyestr_search_enforcement_proceedings',
+    'openreyestr_search_debtors',
+    'openreyestr_search_bankruptcy_cases',
+    'openreyestr_search_notaries',
+    'openreyestr_search_court_experts',
+    'openreyestr_search_arbitration_managers',
   ];
   if (registryTools.some((t) => toolName === t)) {
     // Entity search results
@@ -466,6 +478,134 @@ function extractEvidenceFromToolResult(
           : `Загалом: ${parsed.total_count || 0}. ${parsed.summary || ''}`.trim(),
         source: 'Статистика реєстру',
       });
+    }
+
+    // Enforcement proceedings
+    if (parsed.enforcement_proceedings || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.proceeding_number)) {
+      const proceedings = parsed.enforcement_proceedings || parsed.results || [];
+      if (Array.isArray(proceedings)) {
+        for (const p of proceedings) {
+          documents.push({
+            id: `enforcement-${p.id || p.proceeding_number || Math.random().toString(36).slice(2, 8)}`,
+            title: `Виконавче провадження ${p.proceeding_number || ''}`,
+            type: 'other',
+            metadata: {
+              snippet: [
+                p.debtor_name && `Боржник: ${p.debtor_name}`,
+                p.creditor_name && `Стягувач: ${p.creditor_name}`,
+                p.proceeding_status && `Статус: ${p.proceeding_status}`,
+                p.enforcement_agency && `Виконавець: ${p.enforcement_agency}`,
+              ].filter(Boolean).join(' • '),
+              status: p.proceeding_status,
+            },
+          });
+        }
+      }
+    }
+
+    // Debtors
+    if (parsed.debtors || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.debtor_name)) {
+      const debtors = parsed.debtors || parsed.results || [];
+      if (Array.isArray(debtors)) {
+        for (const d of debtors) {
+          documents.push({
+            id: `debtor-${d.id || d.edrpou || Math.random().toString(36).slice(2, 8)}`,
+            title: d.debtor_name || 'Боржник',
+            type: 'other',
+            metadata: {
+              snippet: [
+                d.edrpou && `ЄДРПОУ: ${d.edrpou}`,
+                d.total_debt && `Загальний борг: ${d.total_debt}`,
+                d.execution_proceedings && `Проваджень: ${d.execution_proceedings}`,
+              ].filter(Boolean).join(' • '),
+            },
+          });
+        }
+      }
+    }
+
+    // Bankruptcy cases
+    if (parsed.bankruptcy_cases || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.case_number)) {
+      const cases = parsed.bankruptcy_cases || parsed.results || [];
+      if (Array.isArray(cases)) {
+        for (const c of cases) {
+          documents.push({
+            id: `bankruptcy-${c.id || c.case_number || Math.random().toString(36).slice(2, 8)}`,
+            title: `Банкрутство ${c.case_number || ''}`,
+            type: 'other',
+            metadata: {
+              snippet: [
+                c.debtor_name && `Боржник: ${c.debtor_name}`,
+                c.case_status && `Статус: ${c.case_status}`,
+                c.sanction && `Санкція: ${c.sanction}`,
+              ].filter(Boolean).join(' • '),
+            },
+          });
+        }
+      }
+    }
+
+    // Notaries
+    if (parsed.notaries || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.notary_name)) {
+      const notaries = parsed.notaries || parsed.results || [];
+      if (Array.isArray(notaries)) {
+        for (const n of notaries) {
+          documents.push({
+            id: `notary-${n.id || n.notary_number || Math.random().toString(36).slice(2, 8)}`,
+            title: n.notary_name || 'Нотаріус',
+            type: 'other',
+            metadata: {
+              snippet: [
+                n.license_number && `Ліцензія: ${n.license_number}`,
+                n.address,
+                n.status,
+              ].filter(Boolean).join(' • '),
+            },
+          });
+        }
+      }
+    }
+
+    // Court experts
+    if (parsed.court_experts || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.expert_name)) {
+      const experts = parsed.court_experts || parsed.results || [];
+      if (Array.isArray(experts)) {
+        for (const e of experts) {
+          documents.push({
+            id: `expert-${e.id || e.registration_number || Math.random().toString(36).slice(2, 8)}`,
+            title: e.expert_name || 'Судовий експерт',
+            type: 'other',
+            metadata: {
+              snippet: [
+                e.registration_number && `Реєстр №: ${e.registration_number}`,
+                e.specialization,
+                e.status,
+              ].filter(Boolean).join(' • '),
+            },
+          });
+        }
+      }
+    }
+
+    // Arbitration managers
+    if (parsed.arbitration_managers || (parsed.results && Array.isArray(parsed.results) && parsed.results[0]?.manager_name)) {
+      const managers = parsed.arbitration_managers || parsed.results || [];
+      if (Array.isArray(managers)) {
+        for (const m of managers) {
+          documents.push({
+            id: `manager-${m.id || m.registration_number || Math.random().toString(36).slice(2, 8)}`,
+            title: m.manager_name || 'Арбітражний керуючий',
+            type: 'other',
+            metadata: {
+              snippet: [
+                m.registration_number && `Реєстр №: ${m.registration_number}`,
+                m.address,
+                m.status,
+              ].filter(Boolean).join(' • '),
+            },
+          });
+        }
+      }
     }
   }
 
