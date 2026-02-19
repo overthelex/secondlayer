@@ -7,8 +7,7 @@
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { Database } from '../database/database.js';
 import { BillingService } from '../services/billing-service.js';
 import { UserPreferencesService } from '../services/user-preferences-service.js';
@@ -20,7 +19,6 @@ import { ConfigService } from '../services/config-service.js';
 import { CourtDecisionHTMLParser } from '../utils/html-parser.js';
 import { logger } from '../utils/logger.js';
 
-const _adminRoutesDir = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Helper to ensure param is a string (Express can return string | string[])
@@ -2151,7 +2149,7 @@ export function createAdminRoutes(
     res.json({ job_id: jobId, status: 'queued', message: 'Скрапер запущено' });
 
     // Spawn scraper as child process
-    const scriptPath = join(_adminRoutesDir, '..', 'scripts', 'scrape-court-registry.js');
+    const scriptPath = join(process.cwd(), 'dist', 'scripts', 'scrape-court-registry.js');
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       JUSTICE_KIND: job.justice_kind,
