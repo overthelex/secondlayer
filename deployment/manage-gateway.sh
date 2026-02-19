@@ -233,7 +233,8 @@ show_logs() {
 
     case $env in
         stage|staging)
-            $compose_cmd -f docker-compose.stage.yml --env-file .env.stage logs -f --tail=100
+            ssh ${DEPLOY_USER}@${STAGE_SERVER} \
+                "cd ${REMOTE_PATH} && docker compose -f docker-compose.stage.yml --env-file .env.stage logs -f --tail=100"
             ;;
         local)
             if [ -f ".env.local" ]; then
@@ -498,6 +499,7 @@ deploy_local() {
             prometheus-local \
             grafana-local \
             redis-exporter-local \
+            cadvisor-local \
             2>/dev/null || echo "  (some monitoring services may not exist)"
     ) || deploy_exit=$?
 
@@ -699,6 +701,7 @@ deploy_to_server() {
             postgres-exporter-openreyestr \
             redis-exporter \
             node-exporter \
+            cadvisor-stage \
             2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
 
         # Step 10: Verify all domains respond
