@@ -102,6 +102,8 @@ interface BackfillJob {
   started_at: string;
   completed_at?: string;
   current_logs?: string[];
+  concurrency?: number;
+  proxy?: string;
   completeness?: {
     summary: {
       total_documents: number;
@@ -478,6 +480,8 @@ function BackfillProgress({ job, onStop, onRefresh }: { job: BackfillJob; onStop
         <span className="text-green-700">{job.scraped} докачано</span>
         {job.errors > 0 && <span className="text-red-600">{job.errors} помилок</span>}
         <span className="text-blue-600">{progressPct}%</span>
+        {(job.concurrency ?? 1) > 1 && <span className="text-purple-700">{job.concurrency} потоків</span>}
+        {job.proxy && <span className="text-orange-700">проксі</span>}
       </div>
 
       {isActive && job.current_logs && job.current_logs.length > 0 && (
@@ -509,6 +513,12 @@ function DocumentCompletenessSection() {
   // Backfill state
   const [backfillJob, setBackfillJob] = useState<BackfillJob | null>(null);
   const [backfillStarting, setBackfillStarting] = useState(false);
+  const [backfillConfig, setBackfillConfig] = useState({
+    justice_kind_code: 'all',
+    limit: 200,
+    concurrency: 1,
+    proxy: 'none',
+  });
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -576,8 +586,10 @@ function DocumentCompletenessSection() {
     setBackfillStarting(true);
     try {
       const res = await api.admin.startBackfillFulltext({
-        justice_kind_code: justiceKindCode || 'all',
-        limit: 200,
+        justice_kind_code: justiceKindCode || backfillConfig.justice_kind_code,
+        limit: backfillConfig.limit,
+        concurrency: backfillConfig.concurrency,
+        proxy: backfillConfig.proxy,
       });
       const job = { ...res.data, processed: 0, scraped: 0, errors: 0, error_details: [], started_at: new Date().toISOString() } as BackfillJob;
       setBackfillJob(job);
@@ -649,6 +661,63 @@ function DocumentCompletenessSection() {
           </span>
         )}
       </div>
+
+      {/* Backfill Configuration */}
+      {!isBackfillActive && (
+        <div className="bg-gray-50 border border-claude-border rounded-lg p-4 mb-4">
+          <div className="text-sm font-medium text-claude-text mb-3">Конфігурація докачування</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-xs text-claude-subtext mb-1">Вид права</label>
+              <select
+                value={backfillConfig.justice_kind_code}
+                onChange={(e) => setBackfillConfig(c => ({ ...c, justice_kind_code: e.target.value }))}
+                className="w-full text-xs border border-claude-border rounded px-2 py-1.5 bg-white text-claude-text"
+              >
+                <option value="all">Всі види</option>
+                {result?.by_justice_kind.map(jk => (
+                  <option key={jk.justice_kind_code} value={jk.justice_kind_code}>
+                    {jk.justice_kind} ({formatNumber(jk.missing_both)})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-claude-subtext mb-1">Лімит документів</label>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={backfillConfig.limit}
+                onChange={(e) => setBackfillConfig(c => ({ ...c, limit: Math.min(1000, Math.max(1, parseInt(e.target.value) || 200)) }))}
+                className="w-full text-xs border border-claude-border rounded px-2 py-1.5 bg-white text-claude-text"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-claude-subtext mb-1">Потоків: {backfillConfig.concurrency}</label>
+              <input
+                type="range"
+                min={1}
+                max={10}
+                value={backfillConfig.concurrency}
+                onChange={(e) => setBackfillConfig(c => ({ ...c, concurrency: parseInt(e.target.value) }))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-claude-subtext mb-1">Проксі</label>
+              <select
+                value={backfillConfig.proxy}
+                onChange={(e) => setBackfillConfig(c => ({ ...c, proxy: e.target.value }))}
+                className="w-full text-xs border border-claude-border rounded px-2 py-1.5 bg-white text-claude-text"
+              >
+                <option value="none">Без проксі</option>
+                <option value="mail">Mail Server (порт 8888)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Backfill progress */}
       {backfillJob && (
