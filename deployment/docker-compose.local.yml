@@ -792,10 +792,18 @@ services:
   cadvisor-local:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: cadvisor-local
+    privileged: true
+    devices:
+      - /dev/kmsg
+    environment:
+      - DOCKER_API_VERSION=1.44
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /etc/machine-id:/etc/machine-id:ro
     networks:
       - secondlayer-local
     restart: unless-stopped
