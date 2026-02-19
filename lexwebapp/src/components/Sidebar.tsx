@@ -21,6 +21,7 @@ import {
   FileCode,
   DollarSign,
   CreditCard,
+  Tag,
   UsersRound,
   Trash2,
   Edit3,
@@ -71,6 +72,7 @@ interface SidebarProps {
   onAdminContainersClick?: () => void;
   onAdminConfigClick?: () => void;
   onAdminDBCompareClick?: () => void;
+  onAdminServicePricingClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -107,6 +109,7 @@ export function Sidebar({
   onAdminContainersClick,
   onAdminConfigClick,
   onAdminDBCompareClick,
+  onAdminServicePricingClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -244,6 +247,7 @@ export function Sidebar({
     { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, onClick: onAdminBillingClick },
     { id: 'system-config', label: 'Конфігурація', icon: Settings, onClick: onAdminConfigClick },
     { id: 'db-compare', label: 'Порівняння БД', icon: Database, onClick: onAdminDBCompareClick },
+    { id: 'service-pricing', label: 'Собівартість сервісів', icon: Tag, onClick: onAdminServicePricingClick },
   ];
 
   const evidenceSections = [
