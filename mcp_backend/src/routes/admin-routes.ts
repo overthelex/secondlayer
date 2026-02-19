@@ -1670,7 +1670,7 @@ export function createAdminRoutes(
           COUNT(*) AS total,
           COUNT(full_text) FILTER (WHERE full_text IS NOT NULL AND full_text != '') AS has_plaintext,
           COUNT(full_text_html) FILTER (WHERE full_text_html IS NOT NULL AND full_text_html != '') AS has_html,
-          COUNT(*) FILTER WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NOT NULL AND full_text_html != '') AS has_only_html,
+          COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NOT NULL AND full_text_html != '')) AS has_only_html,
           COUNT(*) FILTER (WHERE (full_text IS NULL OR full_text = '') AND (full_text_html IS NULL OR full_text_html = '')) AS missing_both,
           COUNT(*) FILTER (WHERE full_text IS NOT NULL AND full_text != '' AND full_text_html IS NOT NULL AND full_text_html != '') AS has_both
         FROM documents

@@ -890,6 +890,12 @@ ${stepsText}
       const content = response.content || '{}';
       const elapsed = Date.now() - startTime;
 
+      logger.debug('[ChatService] Plan generation response', {
+        model: response.model,
+        contentLength: content.length,
+        contentPreview: content.slice(0, 500),
+      });
+
       // Extract JSON from response (may be wrapped in markdown code blocks)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
@@ -900,6 +906,12 @@ ${stepsText}
 
       // Validate plan structure
       if (!parsed.goal || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+        logger.warn('[ChatService] Plan validation failed - invalid structure', {
+          parsed: JSON.stringify(parsed).slice(0, 500),
+          hasGoal: !!parsed.goal,
+          hasSteps: Array.isArray(parsed.steps),
+          stepsLength: parsed.steps?.length,
+        });
         throw new Error('Invalid plan structure: missing goal or steps');
       }
 

@@ -39,6 +39,26 @@ For up-to-date documentation, please refer to the parent `docs/` directory which
 - Deployment and security guides
 - Quick start documentation
 
+## New Archive Structure (Feb 2026)
+
+### `/phases/` - Phase-based documents
+- Implementation phases and testing notes
+- Deployment fixes and planning
+
+### `/implementation/` - Implementation guides
+- Refactoring summaries
+- Architecture and integration documentation
+
+### `/frontend/` - Frontend documentation
+- Phase summaries (Phase 3-5)
+- Guides (migration, state management, service layer, UI kit)
+- Testing and deployment documentation
+
+### `/backend/` - Backend documentation
+- Billing phases 1-3
+- ChatGPT integration guides
+- Legacy infrastructure and deployment
+
 ---
 
 **Note:** This archive was created on 2026-02-12 during documentation refactoring to maintain only current, relevant documentation in the main docs folder.
