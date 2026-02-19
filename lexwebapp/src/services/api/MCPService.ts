@@ -153,6 +153,14 @@ export class MCPService extends BaseService {
       let buffer = '';
 
       const processEvents = async () => {
+        // NOTE: currentEvent/currentData must live OUTSIDE the chunk loop.
+        // Large SSE events (tool_result with many docs, final answer text) are
+        // routinely split across multiple TCP packets. Resetting these inside the
+        // while-loop would discard the event type when the data line arrives in a
+        // later chunk, silently dropping the event.
+        let currentEvent = '';
+        let currentData = '';
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -163,9 +171,6 @@ export class MCPService extends BaseService {
             // Parse SSE events from buffer
             const lines = buffer.split('\n');
             buffer = lines.pop() || ''; // keep incomplete line in buffer
-
-            let currentEvent = '';
-            let currentData = '';
 
             for (const line of lines) {
               // Skip SSE heartbeat comments
