@@ -3268,11 +3268,11 @@ export function createAdminRoutes(
       // 3. Embedding chunks (from processing)
       const embeddings = await db.query(`
         SELECT 
-          ec.id, ec.document_id, ec.section_index,
-          ec.token_count, ec.created_at,
-          d.title as document_title
+          ec.id, ec.document_section_id, ec.vector_id,
+          ec.created_at, d.title as document_title
         FROM embedding_chunks ec
-        LEFT JOIN documents d ON d.id = ec.document_id
+        LEFT JOIN document_sections ds ON ds.id = ec.document_section_id
+        LEFT JOIN documents d ON d.id = ds.document_id
         WHERE ec.created_at >= NOW() - $1::integer * INTERVAL '1 hour'
         ORDER BY ec.created_at DESC
         LIMIT $2
@@ -3286,10 +3286,9 @@ export function createAdminRoutes(
           last_import: embeddings.rows[0]?.created_at,
           records: embeddings.rows.map((r: any) => ({
             id: r.id,
-            document_id: r.document_id,
+            document_section_id: r.document_section_id,
+            vector_id: r.vector_id,
             document_title: r.document_title?.substring(0, 100),
-            section_index: r.section_index,
-            token_count: r.token_count,
             created_at: r.created_at,
           })),
         });
