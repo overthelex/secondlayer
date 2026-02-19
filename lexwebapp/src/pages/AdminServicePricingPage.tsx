@@ -122,22 +122,23 @@ export function AdminServicePricingPage() {
   const providers = PROVIDER_ORDER.filter(p => grouped[p]);
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-100 rounded-lg">
-            <Tag className="w-6 h-6 text-indigo-600" />
+          <div className="p-2 bg-claude-accent/10 rounded-lg">
+            <Tag className="w-6 h-6 text-claude-accent" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Собівартість зовнішніх сервісів</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Управління вартістю API-сервісів для обліку витрат</p>
+            <h1 className="text-2xl font-semibold text-claude-text font-sans">Собівартість зовнішніх сервісів</h1>
+            <p className="text-sm text-claude-subtext mt-0.5">Управління вартістю API-сервісів для обліку витрат</p>
           </div>
         </div>
         <button
           onClick={load}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-claude-border rounded-lg text-sm text-claude-text hover:bg-claude-bg transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Оновити
@@ -152,7 +153,7 @@ export function AdminServicePricingPage() {
       )}
 
       {loading && !pricing.length ? (
-        <div className="flex items-center justify-center py-16 text-gray-400">
+        <div className="flex items-center justify-center py-16 text-claude-subtext">
           <RefreshCw className="w-5 h-5 animate-spin mr-2" />
           Завантаження…
         </div>
@@ -162,23 +163,23 @@ export function AdminServicePricingPage() {
             const entries = grouped[provider] || [];
             const isCollapsed = collapsed.has(provider);
             return (
-              <div key={provider} className="border border-gray-200 rounded-xl overflow-hidden">
+              <div key={provider} className="bg-white rounded-xl border border-claude-border shadow-sm overflow-hidden">
                 {/* Provider header */}
                 <button
                   onClick={() => toggleCollapse(provider)}
-                  className="w-full flex items-center justify-between px-5 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                  className="w-full flex items-center justify-between px-5 py-3 bg-claude-bg hover:bg-claude-sidebar transition-colors text-left"
                 >
-                  <span className="font-medium text-gray-800">{PROVIDER_LABELS[provider] || provider}</span>
-                  <div className="flex items-center gap-2 text-gray-400 text-xs">
+                  <span className="font-medium text-claude-text font-sans">{PROVIDER_LABELS[provider] || provider}</span>
+                  <div className="flex items-center gap-2 text-claude-subtext text-xs">
                     <span>{entries.length} {entries.length === 1 ? 'позиція' : 'позиції'}</span>
                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
                 </button>
 
                 {!isCollapsed && (
-                  <div className="divide-y divide-gray-100">
+                  <div className="divide-y divide-claude-border">
                     {/* Table header */}
-                    <div className="grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-2 bg-white text-xs font-medium text-gray-400 uppercase tracking-wide">
+                    <div className="grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-2 bg-white text-xs font-medium text-claude-subtext uppercase tracking-wide">
                       <span>Модель / Послуга</span>
                       <span>Одиниця</span>
                       <span>Ціна (USD)</span>
@@ -201,26 +202,26 @@ export function AdminServicePricingPage() {
                       return (
                         <div
                           key={entry.id}
-                          className={`grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-3 items-center text-sm hover:bg-gray-50 transition-colors ${!entry.is_active ? 'opacity-50' : ''}`}
+                          className={`grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-3 items-center text-sm hover:bg-claude-bg transition-colors ${!entry.is_active ? 'opacity-50' : ''}`}
                         >
                           {/* Name */}
                           <div>
-                            <div className="font-medium text-gray-800">{entry.display_name}</div>
+                            <div className="font-medium text-claude-text">{entry.display_name}</div>
                             {entry.notes && (
-                              <div className="text-xs text-gray-400 mt-0.5">{entry.notes}</div>
+                              <div className="text-xs text-claude-subtext mt-0.5">{entry.notes}</div>
                             )}
                           </div>
 
                           {/* Unit type */}
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-claude-subtext">
                             {UNIT_LABELS[entry.unit_type] || entry.unit_type}
-                            <div className="text-gray-400">{entry.currency}</div>
+                            <div className="text-claude-subtext/70">{entry.currency}</div>
                           </div>
 
                           {/* Price input */}
                           <div>
                             <div className="flex items-center gap-1">
-                              <span className="text-gray-400 text-xs">$</span>
+                              <span className="text-claude-subtext text-xs">$</span>
                               <input
                                 type="number"
                                 min="0"
@@ -230,7 +231,7 @@ export function AdminServicePricingPage() {
                                   ...prev,
                                   [entry.id]: { ...prev[entry.id], price_usd: e.target.value },
                                 }))}
-                                className="w-full border border-gray-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                                className="w-full border border-claude-border rounded-md px-2 py-1 text-sm text-claude-text bg-white focus:outline-none focus:ring-2 focus:ring-claude-accent/40 focus:border-claude-accent/60"
                               />
                             </div>
                             {entryError && (
@@ -245,28 +246,28 @@ export function AdminServicePricingPage() {
                                 ...prev,
                                 [entry.id]: { ...prev[entry.id], is_active: !prev[entry.id]?.is_active },
                               }))}
-                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${vals?.is_active ? 'bg-indigo-500' : 'bg-gray-300'}`}
+                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${vals?.is_active ? 'bg-claude-accent' : 'bg-claude-border'}`}
                             >
                               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${vals?.is_active ? 'translate-x-4.5' : 'translate-x-0.5'}`} />
                             </button>
                           </div>
 
                           {/* Updated at */}
-                          <div className="text-xs text-gray-400 whitespace-nowrap">
+                          <div className="text-xs text-claude-subtext whitespace-nowrap">
                             {formatDate(entry.updated_at)}
                           </div>
 
                           {/* Save button */}
                           <div className="flex justify-end">
                             {isSaved ? (
-                              <span className="flex items-center gap-1 text-xs text-green-600">
+                              <span className="flex items-center gap-1 text-xs text-emerald-600">
                                 <CheckCircle className="w-3.5 h-3.5" /> Збережено
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleSave(entry)}
                                 disabled={isSaving || !isDirty}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs bg-claude-text text-white rounded-md hover:bg-black/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                               >
                                 {isSaving ? (
                                   <RefreshCw className="w-3 h-3 animate-spin" />
@@ -288,10 +289,11 @@ export function AdminServicePricingPage() {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-gray-400">
-        Ціни зберігаються в таблиці <code className="font-mono bg-gray-100 px-1 rounded">service_pricing</code> та використовуються для обліку собівартості запитів.
+      <p className="mt-6 text-xs text-claude-subtext">
+        Ціни зберігаються в таблиці <code className="font-mono bg-claude-bg px-1 rounded">service_pricing</code> та використовуються для обліку собівартості запитів.
         Значення вказуються в USD (крім ZakonOnline — в UAH).
       </p>
+    </div>
     </div>
   );
 }
