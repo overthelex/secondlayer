@@ -439,8 +439,10 @@ async function fillSearchForm(page: Page, dateFromValue: string): Promise<void> 
   await clickMultiSelectOption(page, JUSTICE_KIND);
   await sleepWithJitter(500);
 
-  await clickMultiSelectOption(page, DOC_FORM);
-  await sleepWithJitter(500);
+  if (DOC_FORM && DOC_FORM !== '__all__') {
+    await clickMultiSelectOption(page, DOC_FORM);
+    await sleepWithJitter(500);
+  }
 
   if (SEARCH_TEXT) {
     const textInput = page.locator('input[name="SearchExpression"], textarea[name="SearchExpression"]');
@@ -801,8 +803,10 @@ async function main() {
       await processWithPool(ctx, items);
     } else {
       const proxy = process.env.SCRAPE_PROXY || process.env.HTTP_PROXY;
+      const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
       const launchOptions: Parameters<typeof chromium.launch>[0] = {
         headless: HEADLESS,
+        ...(executablePath && { executablePath }),
         ...(proxy && { proxy: { server: proxy } }),
       };
       const contextOptions: Parameters<import('playwright').Browser['newContext']>[0] = {
