@@ -850,12 +850,24 @@ services:
     restart: unless-stopped
 
   cadvisor-stage:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
     container_name: cadvisor-stage
+    privileged: true
+    devices:
+      - /dev/kmsg
+    environment:
+      - DOCKER_API_VERSION=1.44
+    command:
+      - '-docker_only=true'
+      - '-housekeeping_interval=30s'
+      - '-disable_metrics=cpu_topology,hugetlb,memory_numa,perf_event,referenced_memory,resctrl,sched,tcp,udp'
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /etc/machine-id:/etc/machine-id:ro
     networks:
       - secondlayer-stage-network
     restart: unless-stopped
