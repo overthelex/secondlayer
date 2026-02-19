@@ -2337,6 +2337,60 @@ class HTTPMCPServer {
       }
     }) as any);
 
+    // Internal service-to-service endpoint for DB stats (used by local→stage db-compare)
+    // Accepts API key auth (dualAuth) so the local backend can call stage without a JWT
+    this.app.get('/api/internal/db-stats', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
+      const tableList = [
+        'documents', 'document_sections', 'legislation', 'legislation_articles',
+        'legislation_chunks', 'users', 'conversations', 'upload_sessions', 'zo_dictionaries',
+      ];
+      const openreyestrUrl = process.env.OPENREYESTR_MCP_URL || 'http://openreyestr-app-local:3004';
+      const openreyestrKey = process.env.OPENREYESTR_API_KEY || 'test-key-123';
+      const radaUrl = process.env.RADA_MCP_URL || 'http://rada-mcp-app-local:3001';
+      const radaKey = process.env.RADA_API_KEY || 'test-key-123';
+
+      async function fetchServiceStats(baseUrl: string, apiKey: string) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 15000);
+          const resp = await fetch(`${baseUrl}/api/stats`, {
+            headers: { 'x-api-key': apiKey },
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          return await resp.json();
+        } catch {
+          return null;
+        }
+      }
+
+      try {
+        const mainTables: Record<string, number> = {};
+        for (const t of tableList) {
+          try {
+            const r = await this.services.db.query(`SELECT COUNT(*) as cnt FROM ${t}`);
+            mainTables[t] = parseInt(r.rows[0]?.cnt || '0');
+          } catch {
+            mainTables[t] = -1;
+          }
+        }
+        const [openreyestrStats, radaStats] = await Promise.all([
+          fetchServiceStats(openreyestrUrl, openreyestrKey),
+          fetchServiceStats(radaUrl, radaKey),
+        ]);
+        res.json({
+          local: {
+            openreyestr: openreyestrStats,
+            rada: radaStats,
+            main: mainTables,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Failed to collect db stats' });
+      }
+    }) as any);
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({

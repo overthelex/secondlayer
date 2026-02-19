@@ -3606,13 +3606,14 @@ export function createAdminRoutes(
         return res.json({ local: localData });
       }
 
-      // Fetch stage data by calling the same endpoint on stage backend
+      // Fetch stage data via internal endpoint (API key auth, avoids JWT cross-env issue)
       const stageBackendUrl = process.env.STAGE_BACKEND_URL || 'https://stage.legal.org.ua';
-      const authHeader = req.headers.authorization || '';
+      const stageApiKey = process.env.STAGE_API_KEY ||
+        process.env.SECONDARY_LAYER_KEYS?.split(',')[0]?.trim() || '';
       let stageData: any = null;
       try {
-        const stageResp = await axios.get(`${stageBackendUrl}/api/admin/db-compare?local_only=true`, {
-          headers: { Authorization: authHeader },
+        const stageResp = await axios.get(`${stageBackendUrl}/api/internal/db-stats`, {
+          headers: { Authorization: `Bearer ${stageApiKey}` },
           timeout: 20000,
         });
         stageData = stageResp.data?.local || null;
