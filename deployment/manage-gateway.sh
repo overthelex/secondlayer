@@ -34,15 +34,17 @@ source "$SCRIPT_DIR/lib/report.sh"
 CF_MAINTENANCE="$SCRIPT_DIR/maintenance/cf-maintenance.sh"
 
 enable_cf_maintenance() {
+    local env="${1:-stage}"
     if [ ! -f "$CF_MAINTENANCE" ]; then return 0; fi
-    print_msg "$BLUE" "Enabling Cloudflare maintenance page..."
-    bash "$CF_MAINTENANCE" enable || print_msg "$YELLOW" "Warning: could not enable CF maintenance mode (site stays live during deploy)"
+    print_msg "$BLUE" "Enabling Cloudflare maintenance page ($env)..."
+    bash "$CF_MAINTENANCE" enable "$env" || print_msg "$YELLOW" "Warning: could not enable CF maintenance mode (site stays live during deploy)"
 }
 
 disable_cf_maintenance() {
+    local env="${1:-stage}"
     if [ ! -f "$CF_MAINTENANCE" ]; then return 0; fi
-    print_msg "$BLUE" "Disabling Cloudflare maintenance page..."
-    bash "$CF_MAINTENANCE" disable || print_msg "$YELLOW" "Warning: could not disable CF maintenance mode — run manually: $CF_MAINTENANCE disable"
+    print_msg "$BLUE" "Disabling Cloudflare maintenance page ($env)..."
+    bash "$CF_MAINTENANCE" disable "$env" || print_msg "$YELLOW" "Warning: could not disable CF maintenance mode — run manually: $CF_MAINTENANCE disable"
 }
 
 # Print colored message
@@ -471,7 +473,7 @@ deploy_local() {
     backup_id=$(create_backup "local" "localhost" "$REPO_ROOT")
 
     # Phase 2b: Show maintenance page while services are rebuilding
-    enable_cf_maintenance
+    enable_cf_maintenance local
 
     # Phase 3: Deploy
     local deploy_exit=0
@@ -555,13 +557,13 @@ deploy_local() {
     if [ $deploy_exit -ne 0 ]; then
         print_msg "$RED" "Deploy failed, rolling back..."
         rollback_to_backup "local" "localhost" "$compose_file" "$env_file"
-        disable_cf_maintenance
+        disable_cf_maintenance local
         generate_deploy_report "local" "rollback" "$backup_id" "$deploy_start" "$REPO_ROOT"
         exit 1
     fi
 
     # Services are up — remove maintenance page before smoke tests
-    disable_cf_maintenance
+    disable_cf_maintenance local
 
     # Phase 4: Smoke tests
     if ! run_smoke_tests "local" "localhost" "$compose_file" "$env_file"; then
