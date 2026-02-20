@@ -142,6 +142,21 @@ check_git_clean_state() {
             local current_branch
             current_branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
             if [ "$current_branch" != "$remote_branch" ]; then
+                # Safety check: refuse to switch if there are uncommitted changes
+                if [ -n "$status" ]; then
+                    print_msg "$RED" "  ERROR: You have uncommitted changes on '$current_branch'."
+                    print_msg "$RED" "  Cannot auto-switch to $remote_branch — your work may be lost."
+                    print_msg "$YELLOW" "  Changed files:"
+                    git -C "$repo_root" status --short 2>/dev/null | while IFS= read -r line; do
+                        print_msg "$YELLOW" "    $line"
+                    done
+                    print_msg "$YELLOW" "  Please resolve before deploying:"
+                    print_msg "$YELLOW" "    git commit -am 'your message'   # commit your changes"
+                    print_msg "$YELLOW" "    git stash                        # or stash them"
+                    print_msg "$YELLOW" "    git checkout -- .                # or discard them"
+                    preflight_record "Git sync (origin/$remote_branch)" "fail" "uncommitted changes on $current_branch — switch to $remote_branch blocked"
+                    return 1
+                fi
                 print_msg "$YELLOW" "  Switching to $remote_branch branch..."
                 git -C "$repo_root" checkout "$remote_branch" 2>/dev/null || true
             fi
