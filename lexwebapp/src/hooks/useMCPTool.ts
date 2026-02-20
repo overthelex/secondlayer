@@ -96,7 +96,7 @@ function extractNormsFromAnswer(answerText: string): Citation[] {
   const norms: Citation[] = [];
   const seen = new Set<string>();
 
-  const CODES = '(?:ЦКУ|ГКУ|КПК|ЦПК|ГПК|КАС|ПКУ|СКУ|ККУ|КЗпП|ЦК|ГК|ПК)';
+  const CODES = '(?:ЦКУ|ГКУ|КПК|ЦПК|ГПК|КАС|ПКУ|СКУ|ККУ|КЗпП|ЗКУ|МКУ|ЦК|ГК|ПК|ЗК|МК)';
   const re = new RegExp(
     '(?:(?:п\\.?\\s*\\d+[,\\s]+)?(?:ч\\.?\\s*\\d+[,\\s]+))?' +
     'ст(?:атт[яі])?\\.?\\s*\\d+(?:[\\u2013\\u2014,-]\\s*\\d+)*\\s+' + CODES + '(?:\\s+України)?' +
@@ -265,6 +265,24 @@ function extractEvidenceFromToolResult(
           source: `Стаття ${a.article_number || ''}`,
         });
       }
+    }
+  }
+
+  // ---- Procedural norm tools (return plain text, not JSON) ----
+  const proceduralNormTools = [
+    'search_procedural_norms',
+    'calculate_procedural_deadlines',
+    'build_procedural_checklist',
+  ];
+  if (proceduralNormTools.some((t) => toolName === t)) {
+    // These tools return { content: [{ type: 'text', text: '...' }] }
+    const textContent = rawResult?.content?.find((b: any) => b.type === 'text')?.text;
+    if (textContent) {
+      const sourceLabel =
+        toolName === 'search_procedural_norms' ? 'Процесуальна норма' :
+        toolName === 'calculate_procedural_deadlines' ? 'Процесуальні строки' :
+        'Процесуальний чеклист';
+      citations.push({ text: textContent, source: sourceLabel });
     }
   }
 
