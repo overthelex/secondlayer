@@ -486,11 +486,11 @@ deploy_local() {
         print_msg "$BLUE" "Stopping app containers (keeping databases running)..."
         $compose_cmd $compose_args stop \
             app-local rada-mcp-app-local app-openreyestr-local \
-            document-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
+            document-service-local terminal-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
             2>/dev/null || true
         $compose_cmd $compose_args rm -f \
             app-local rada-mcp-app-local app-openreyestr-local \
-            document-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
+            document-service-local terminal-service-local nginx-local lexwebapp-local lexwebapp-deps-local \
             migrate-local rada-migrate-local migrate-openreyestr-local \
             rada-db-init-local \
             2>/dev/null || true
@@ -516,6 +516,7 @@ deploy_local() {
             rada-migrate-local \
             migrate-openreyestr-local \
             document-service-local \
+            terminal-service-local \
             lexwebapp-local \
             nginx-local
 
@@ -539,7 +540,7 @@ deploy_local() {
         print_msg "$BLUE" "Installing frontend dependencies..."
         $compose_cmd $compose_args up lexwebapp-deps-local
         print_msg "$BLUE" "Starting application services..."
-        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local lexwebapp-local nginx-local
+        $compose_cmd $compose_args up -d app-local rada-mcp-app-local app-openreyestr-local document-service-local terminal-service-local lexwebapp-local nginx-local
 
         # Step 9: Start monitoring services
         print_msg "$BLUE" "Starting monitoring services..."

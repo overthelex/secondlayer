@@ -1,10 +1,14 @@
 /**
  * Admin Terminal WebSocket Route
  * Provides a real PTY bash terminal for admins over WebSocket (AWS CloudShell style)
+ *
+ * When TERMINAL_SERVICE_URL is set, proxies to a dedicated terminal-service container
+ * (Debian-based, full apt, all env vars). Auth and session tracking always stay here.
  */
 
 import { IncomingMessage } from 'http';
 import { Server as WebSocketServer, WebSocket } from 'ws';
+import { WebSocket as WsClient } from 'ws';
 import * as pty from 'node-pty';
 import jwt from 'jsonwebtoken';
 import { Database } from '../database/database.js';
@@ -124,59 +128,106 @@ export function attachTerminalWebSocket(httpServer: HttpServer, db: Database): v
     sessions.add(ws);
     logger.info('Terminal: admin session opened', { adminId: admin.id, email: admin.email, ip });
 
-    const cwd = process.env.TERMINAL_CWD || '/home/vovkes/SecondLayer';
+    const terminalServiceUrl = process.env.TERMINAL_SERVICE_URL;
 
-    // Spawn PTY
-    const ptyProcess = pty.spawn('bash', [], {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
-      cwd,
-      env: buildPtyEnv(),
-    });
+    if (terminalServiceUrl) {
+      // === Proxy mode: delegate PTY to terminal-service container ===
+      const upstream = new WsClient(terminalServiceUrl);
 
-    // PTY output → WebSocket
-    ptyProcess.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'output', data }));
-      }
-    });
+      upstream.on('open', () => {
+        // Forward all client messages to upstream
+        ws.on('message', (data: Buffer | string) => {
+          if (upstream.readyState === WsClient.OPEN) {
+            upstream.send(data);
+          }
+        });
+      });
 
-    // PTY exit → notify client
-    ptyProcess.onExit(({ exitCode }) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'exit', exitCode }));
-        ws.close();
-      }
-    });
-
-    // WebSocket message → PTY input or resize
-    ws.on('message', (raw: Buffer | string) => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === 'input' && typeof msg.data === 'string') {
-          ptyProcess.write(msg.data);
-        } else if (msg.type === 'resize') {
-          const cols = Math.max(1, Math.min(500, parseInt(msg.cols, 10) || 80));
-          const rows = Math.max(1, Math.min(200, parseInt(msg.rows, 10) || 24));
-          ptyProcess.resize(cols, rows);
+      upstream.on('message', (data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data.toString());
         }
-      } catch {
-        // ignore malformed messages
-      }
-    });
+      });
 
-    // Cleanup on disconnect
-    ws.on('close', () => {
-      sessions.delete(ws);
-      if (sessions.size === 0) activeSessions.delete(admin.id);
-      try { ptyProcess.kill(); } catch { /* already dead */ }
-      logger.info('Terminal: admin session closed', { adminId: admin.id, email: admin.email, ip });
-    });
+      upstream.on('close', () => {
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+      });
 
-    ws.on('error', (err) => {
-      logger.error('Terminal: WebSocket error', { adminId: admin.id, error: err.message });
-    });
+      upstream.on('error', (err) => {
+        logger.error('Terminal: upstream error', { adminId: admin.id, error: err.message });
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Terminal service unavailable' }));
+          ws.close();
+        }
+      });
+
+      ws.on('close', () => {
+        sessions.delete(ws);
+        if (sessions.size === 0) activeSessions.delete(admin.id);
+        if (upstream.readyState === WsClient.OPEN || upstream.readyState === WsClient.CONNECTING) {
+          upstream.close();
+        }
+        logger.info('Terminal: admin session closed (proxy)', { adminId: admin.id, email: admin.email, ip });
+      });
+
+      ws.on('error', (err) => {
+        logger.error('Terminal: WebSocket error (proxy)', { adminId: admin.id, error: err.message });
+      });
+    } else {
+      // === Fallback: direct node-pty (for environments without terminal-service) ===
+      const cwd = process.env.TERMINAL_CWD || '/home/vovkes/SecondLayer';
+
+      const ptyProcess = pty.spawn('bash', [], {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: buildPtyEnv(),
+      });
+
+      // PTY output → WebSocket
+      ptyProcess.onData((data: string) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'output', data }));
+        }
+      });
+
+      // PTY exit → notify client
+      ptyProcess.onExit(({ exitCode }) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'exit', exitCode }));
+          ws.close();
+        }
+      });
+
+      // WebSocket message → PTY input or resize
+      ws.on('message', (raw: Buffer | string) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === 'input' && typeof msg.data === 'string') {
+            ptyProcess.write(msg.data);
+          } else if (msg.type === 'resize') {
+            const cols = Math.max(1, Math.min(500, parseInt(msg.cols, 10) || 80));
+            const rows = Math.max(1, Math.min(200, parseInt(msg.rows, 10) || 24));
+            ptyProcess.resize(cols, rows);
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      });
+
+      // Cleanup on disconnect
+      ws.on('close', () => {
+        sessions.delete(ws);
+        if (sessions.size === 0) activeSessions.delete(admin.id);
+        try { ptyProcess.kill(); } catch { /* already dead */ }
+        logger.info('Terminal: admin session closed', { adminId: admin.id, email: admin.email, ip });
+      });
+
+      ws.on('error', (err) => {
+        logger.error('Terminal: WebSocket error', { adminId: admin.id, error: err.message });
+      });
+    }
   });
 
   logger.info('Terminal: WebSocket server attached at /api/admin/terminal');

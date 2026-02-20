@@ -1,0 +1,18 @@
+FROM node:20-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo git curl wget vim nano jq \
+    postgresql-client redis-tools \
+    python3 make g++ \
+    htop procps ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY terminal-service/package.json ./
+RUN npm install
+
+COPY terminal-service/server.js ./
+
+WORKDIR /workspace
+EXPOSE 3010
+CMD ["node", "/app/server.js"]
