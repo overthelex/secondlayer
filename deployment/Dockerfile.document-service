@@ -29,7 +29,13 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     # Timezone data
     tzdata \
+    # Build tools for native node modules (node-pty requires python3 + node-gyp)
+    python3 \
+    make \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHON=/usr/bin/python3
 
 # Set timezone to EET (Europe/Kiev)
 ENV TZ=Europe/Kiev
