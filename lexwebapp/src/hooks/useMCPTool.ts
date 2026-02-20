@@ -160,11 +160,10 @@ function extractEvidenceFromToolResult(
         number: doc.case_number || parsed.case_number || doc.title || 'N/A',
         court: doc.court || doc.instance || '',
         date: doc.date || '',
-        summary: doc.document_type
-          ? `${doc.document_type}: ${doc.resolution || doc.title || ''}`
-          : doc.title || doc.resolution || '',
+        summary: doc.resolution || doc.title || '',
         relevance: 80,
         status: 'active',
+        documentType: doc.document_type,
       });
     }
 
