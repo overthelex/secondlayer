@@ -4,12 +4,10 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { StripeService } from '../services/stripe-service.js';
-import { FondyService } from '../services/fondy-service.js';
+import { MonobankService } from '../services/monobank-service.js';
 import { MetaMaskService } from '../services/metamask-service.js';
 import { BinancePayService } from '../services/binance-pay-service.js';
-import { MockStripeService } from '../services/__mocks__/stripe-service-mock.js';
-import { MockFondyService } from '../services/__mocks__/fondy-service-mock.js';
+import { MockMonobankService } from '../services/__mocks__/monobank-service-mock.js';
 import { MockMetaMaskService } from '../services/__mocks__/metamask-service-mock.js';
 import { MockBinancePayService } from '../services/__mocks__/binance-pay-service-mock.js';
 import { cryptoTagRequired } from '../middleware/crypto-tag-required.js';
@@ -20,8 +18,7 @@ import { logger } from '../utils/logger.js';
  * Create payment router
  */
 export function createPaymentRouter(
-  stripeService: StripeService | MockStripeService,
-  fondyService: FondyService | MockFondyService,
+  monobankService: MonobankService | MockMonobankService,
   metamaskService: MetaMaskService | MockMetaMaskService,
   binancePayService: BinancePayService | MockBinancePayService,
   db: BaseDatabase
@@ -35,8 +32,7 @@ export function createPaymentRouter(
       const hasCryptoTag = tagResult.rows.length > 0;
       return res.json({
         providers: [
-          { id: 'stripe', name: 'Stripe', enabled: true, currency: 'USD' },
-          { id: 'fondy', name: 'Fondy', enabled: true, currency: 'UAH' },
+          { id: 'monobank', name: 'Monobank', enabled: true, currency: 'UAH' },
           { id: 'metamask', name: 'MetaMask', enabled: hasCryptoTag, currency: 'Crypto' },
           { id: 'binance_pay', name: 'Binance Pay', enabled: hasCryptoTag, currency: 'USDT' },
         ],
@@ -48,52 +44,14 @@ export function createPaymentRouter(
   });
 
   /**
-   * @route   POST /api/billing/payment/stripe/create
-   * @desc    Create Stripe PaymentIntent
+   * @route   POST /api/billing/payment/monobank/create
+   * @desc    Create Monobank invoice (hosted payment page)
    * @access  Protected (JWT required)
    */
-  router.post('/stripe/create', async (req: any, res: Response) => {
+  router.post('/monobank/create', async (req: any, res: Response) => {
     try {
       const userId = req.user?.userId || req.user?.id;
-      const email = req.user?.email;
-      const { amount_usd, metadata } = req.body;
-
-      if (!amount_usd || typeof amount_usd !== 'number') {
-        return res.status(400).json({
-          error: 'Invalid request',
-          message: 'amount_usd is required and must be a number',
-        });
-      }
-
-      const result = await stripeService.createPaymentIntent(
-        userId,
-        amount_usd,
-        email,
-        metadata
-      );
-
-      return res.json(result);
-    } catch (error: any) {
-      logger.error('Failed to create Stripe payment', {
-        error: error.message,
-      });
-      return res.status(500).json({
-        error: 'Payment creation failed',
-        message: error.message,
-      });
-    }
-  });
-
-  /**
-   * @route   POST /api/billing/payment/fondy/create
-   * @desc    Create Fondy payment
-   * @access  Protected (JWT required)
-   */
-  router.post('/fondy/create', async (req: any, res: Response) => {
-    try {
-      const userId = req.user?.userId || req.user?.id;
-      const email = req.user?.email;
-      const { amount_uah } = req.body;
+      const { amount_uah, redirect_url } = req.body;
 
       if (!amount_uah || typeof amount_uah !== 'number') {
         return res.status(400).json({
@@ -102,27 +60,32 @@ export function createPaymentRouter(
         });
       }
 
-      // Generate unique order ID
-      const orderId = `SL-${userId.substring(0, 8)}-${Date.now()}`;
       const description = `SecondLayer balance top-up: ${amount_uah} UAH`;
-
-      const result = await fondyService.createPayment(
-        userId,
-        amount_uah,
-        email,
-        orderId,
-        description
-      );
+      const result = await monobankService.createInvoice(userId, amount_uah, description, redirect_url);
 
       return res.json(result);
     } catch (error: any) {
-      logger.error('Failed to create Fondy payment', {
-        error: error.message,
-      });
+      logger.error('Failed to create Monobank invoice', { error: error.message });
       return res.status(500).json({
         error: 'Payment creation failed',
         message: error.message,
       });
+    }
+  });
+
+  /**
+   * @route   GET /api/billing/payment/monobank/:invoiceId/status
+   * @desc    Get Monobank invoice status
+   * @access  Protected (JWT required)
+   */
+  router.get('/monobank/:invoiceId/status', async (req: any, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const status = await monobankService.getPaymentStatus(invoiceId);
+      return res.json(status);
+    } catch (error: any) {
+      logger.error('Failed to get Monobank payment status', { error: error.message });
+      return res.status(500).json({ error: 'Failed to get payment status', message: error.message });
     }
   });
 
@@ -180,10 +143,8 @@ export function createPaymentRouter(
       const { provider, paymentId } = req.params;
 
       let status;
-      if (provider === 'stripe') {
-        status = await stripeService.getPaymentStatus(paymentId);
-      } else if (provider === 'fondy') {
-        status = await fondyService.getPaymentStatus(paymentId);
+      if (provider === 'monobank') {
+        status = await monobankService.getPaymentStatus(paymentId);
       } else if (provider === 'metamask') {
         status = await metamaskService.getPaymentStatus(paymentId);
       } else if (provider === 'binance_pay') {
@@ -191,15 +152,13 @@ export function createPaymentRouter(
       } else {
         return res.status(400).json({
           error: 'Invalid provider',
-          message: 'Provider must be stripe, fondy, metamask, or binance_pay',
+          message: 'Provider must be monobank, metamask, or binance_pay',
         });
       }
 
       return res.json(status);
     } catch (error: any) {
-      logger.error('Failed to get payment status', {
-        error: error.message,
-      });
+      logger.error('Failed to get payment status', { error: error.message });
       return res.status(500).json({
         error: 'Failed to get payment status',
         message: error.message,
@@ -214,105 +173,25 @@ export function createPaymentRouter(
  * Create webhook router (no JWT, uses signature verification)
  */
 export function createWebhookRouter(
-  stripeService: StripeService | MockStripeService,
-  fondyService: FondyService | MockFondyService,
+  monobankService: MonobankService | MockMonobankService,
   binancePayService: BinancePayService | MockBinancePayService
 ): Router {
   const router = Router();
 
   /**
-   * @route   POST /webhooks/stripe
-   * @desc    Stripe webhook endpoint
-   * @access  Public (signature verified)
-   *
-   * Note: This endpoint requires raw body for signature verification.
-   * Must be mounted BEFORE json() middleware in http-server.ts
-   */
-  router.post(
-    '/stripe',
-    async (req: Request, res: Response) => {
-      try {
-        const signature = req.headers['stripe-signature'] as string;
-
-        if (!signature) {
-          logger.warn('Stripe webhook missing signature');
-          return res.status(400).json({ error: 'Missing signature' });
-        }
-
-        // req.body should be raw buffer here
-        const result = await stripeService.handleWebhook(
-          req.body,
-          signature
-        );
-
-        return res.json(result);
-      } catch (error: any) {
-        logger.error('Stripe webhook failed', {
-          error: error.message,
-        });
-        return res.status(400).json({
-          error: 'Webhook processing failed',
-          message: error.message,
-        });
-      }
-    }
-  );
-
-  /**
-   * @route   POST /webhooks/fondy
-   * @desc    Fondy server callback endpoint
+   * @route   POST /webhooks/monobank
+   * @desc    Monobank webhook endpoint
    * @access  Public (signature verified)
    */
-  router.post('/fondy', async (req: Request, res: Response) => {
+  router.post('/monobank', async (req: Request, res: Response) => {
     try {
-      await fondyService.handleCallback(req.body);
-      res.json({ received: true });
+      const signature = req.headers['x-sign'] as string || '';
+      const result = await monobankService.handleWebhook(req.body, signature);
+      return res.json(result);
     } catch (error: any) {
-      logger.error('Fondy callback failed', {
-        error: error.message,
-      });
-      res.status(400).json({
-        error: 'Callback processing failed',
-        message: error.message,
-      });
-    }
-  });
-
-  /**
-   * @route   POST /webhooks/fondy/subscription
-   * @desc    Fondy subscription callback endpoint
-   * @access  Public (signature verified)
-   */
-  router.post('/fondy/subscription', async (req: Request, res: Response) => {
-    try {
-      await fondyService.handleSubscriptionCallback(req.body);
-      res.json({ received: true });
-    } catch (error: any) {
-      logger.error('Fondy subscription callback failed', {
-        error: error.message,
-      });
-      res.status(400).json({
-        error: 'Subscription callback processing failed',
-        message: error.message,
-      });
-    }
-  });
-
-  /**
-   * @route   POST /webhooks/fondy/chargeback
-   * @desc    Fondy chargeback callback endpoint
-   * @access  Public (signature verified)
-   */
-  router.post('/fondy/chargeback', async (req: Request, res: Response) => {
-    try {
-      await fondyService.handleChargebackCallback(req.body);
-      res.json({ received: true });
-    } catch (error: any) {
-      logger.error('Fondy chargeback callback failed', {
-        error: error.message,
-      });
-      res.status(400).json({
-        error: 'Chargeback callback processing failed',
+      logger.error('Monobank webhook failed', { error: error.message });
+      return res.status(400).json({
+        error: 'Webhook processing failed',
         message: error.message,
       });
     }

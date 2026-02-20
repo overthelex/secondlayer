@@ -1,6 +1,6 @@
 /**
  * Payment Success Page
- * Fondy redirects here (POST) after a successful payment
+ * Monobank redirects here after a successful payment
  */
 
 import { useEffect, useState } from 'react';

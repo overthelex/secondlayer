@@ -69,16 +69,15 @@ export function useUpdateBillingSettings() {
 }
 
 /**
- * Create Stripe payment
+ * Create Monobank invoice
  */
-export function useCreateStripePayment() {
+export function useCreateMonobankInvoice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ amount, metadata }: { amount: number; metadata?: any }) =>
-      billingService.createStripePayment(amount, metadata),
+    mutationFn: ({ amountUah }: { amountUah: number }) =>
+      billingService.createMonobankInvoice(amountUah),
     onSuccess: () => {
-      // Invalidate balance after payment
       queryClient.invalidateQueries({ queryKey: queryKeys.billing.balance });
       queryClient.invalidateQueries({ queryKey: queryKeys.billing.transactions() });
     },

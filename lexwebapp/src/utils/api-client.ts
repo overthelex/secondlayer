@@ -156,8 +156,8 @@ export const api = {
 
   // Payments
   payment: {
-    createStripe: (data: { amount_usd: number; metadata?: any }) =>
-      apiClient.post('/api/billing/payment/stripe/create', data),
+    createMonobank: (data: { amount_uah: number; redirect_url?: string }) =>
+      apiClient.post('/api/billing/payment/monobank/create', data),
     createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
       apiClient.post('/api/billing/payment/metamask/create', data),
     verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>
