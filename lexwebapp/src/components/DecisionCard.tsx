@@ -9,6 +9,7 @@ export interface Decision {
   summary: string;
   relevance: number;
   status: 'active' | 'overturned' | 'modified';
+  documentType?: string;
 }
 interface DecisionCardProps {
   decision: Decision;

@@ -224,7 +224,7 @@ export function MainLayout() {
       </main>
 
       {/* Right Panel */}
-      <div className={`${isRightPanelOpen ? 'block' : 'hidden'}`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
+      <div className={`${isRightPanelOpen ? 'block' : 'hidden'} h-full`} style={{ width: isRightPanelOpen ? rightPanelWidth : 0 }}>
         <RightPanel
           isOpen={isRightPanelOpen}
           onClose={() => useUIStore.getState().setRightPanelOpen(false)}

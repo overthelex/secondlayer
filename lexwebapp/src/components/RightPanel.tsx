@@ -63,7 +63,10 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
 
   const messages = useChatStore(state => state.messages);
 
-  const decisions = useMemo(() => {
+  // "Рішення" and "Постанова" are proper court decisions; everything else goes to documents tab
+  const DECISION_TYPES = new Set(['Рішення', 'Постанова']);
+
+  const allDecisions = useMemo(() => {
     const seen = new Set<string>();
     return messages.flatMap(m => m.decisions ?? []).filter(d => {
       if (seen.has(d.id)) return false;
@@ -72,12 +75,24 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
     });
   }, [messages]);
 
+  // Only proper court decisions (Рішення/Постанова or no documentType = from search results)
+  const decisions = useMemo(() =>
+    allDecisions.filter(d => !d.documentType || DECISION_TYPES.has(d.documentType)),
+    [allDecisions]
+  );
+
+  // Other court documents (Ухвала, Окрема думка, etc.) — shown in documents tab
+  const otherCourtDocs = useMemo(() =>
+    allDecisions.filter(d => d.documentType && !DECISION_TYPES.has(d.documentType)),
+    [allDecisions]
+  );
+
   const citations = useMemo(() =>
     messages.flatMap(m => m.citations ?? []),
     [messages]
   );
 
-  const documents = useMemo(() => {
+  const vaultDocuments = useMemo(() => {
     const seen = new Set<string>();
     return messages.flatMap(m => m.documents ?? []).filter(d => {
       if (seen.has(d.id)) return false;
@@ -184,7 +199,7 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
   const tabs = [
     { id: 'decisions' as const, label: 'Рішення', icon: Gavel, count: decisions.length },
     { id: 'regulations' as const, label: 'Норми', icon: BookOpen, count: citations.length },
-    { id: 'documents' as const, label: 'Документи', icon: FileText, count: documents.length },
+    { id: 'documents' as const, label: 'Документи', icon: FileText, count: vaultDocuments.length + otherCourtDocs.length },
   ];
 
   return <>
@@ -206,7 +221,7 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
       animate={{ x: isOpen ? 0 : rightPanelWidth }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       style={{ width: rightPanelWidth }}
-      className="fixed lg:static inset-y-0 right-0 z-50 bg-white border-l border-claude-border flex flex-col lg:translate-x-0"
+      className="fixed lg:static inset-y-0 right-0 z-50 bg-white border-l border-claude-border flex flex-col lg:translate-x-0 lg:h-full"
     >
       {/* Resize Handle */}
       <div
@@ -477,10 +492,80 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
         {/* ---- Documents Tab ---- */}
         {activeTab === 'documents' && (
           <div className="space-y-2">
-            {documents.length === 0 ? (
+            {/* Other court document types (Ухвала, Окрема думка, etc.) */}
+            {otherCourtDocs.map((d, i) => {
+              const cardId = `other-${d.id}`;
+              const isExpanded = expandedCards.has(cardId);
+              const content = d.summary || 'Немає тексту.';
+              return (
+                <motion.div
+                  key={d.id}
+                  custom={i}
+                  variants={cardVariants}
+                  initial="hidden"
+                  animate="visible"
+                  layout
+                  className="bg-white border border-claude-border rounded-xl overflow-hidden hover:border-claude-subtext/30 hover:shadow-md transition-all duration-200"
+                >
+                  <div onClick={() => toggleCard(cardId)} className="p-3 cursor-pointer group">
+                    <div className="flex items-start gap-2.5">
+                      <div className="p-1 bg-claude-bg rounded-md flex-shrink-0 mt-0.5">
+                        <FileText size={12} className="text-claude-text" strokeWidth={2} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between">
+                          <div className="font-medium text-[13px] text-claude-text mb-1 truncate leading-tight">
+                            {d.number}
+                          </div>
+                          {isExpanded ? <ChevronUp size={14} className="text-claude-subtext flex-shrink-0 ml-2" /> : <ChevronDown size={14} className="text-claude-subtext flex-shrink-0 ml-2" />}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-claude-subtext">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium border bg-amber-50 text-amber-700 border-amber-200">
+                            {d.documentType}
+                          </span>
+                          {d.court && <span>{d.court}</span>}
+                          {d.date && <span>{d.date}</span>}
+                        </div>
+                        {!isExpanded && d.summary && (
+                          <p className="text-[11px] text-claude-subtext leading-relaxed mt-1.5 line-clamp-2">{d.summary}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <div className="px-3 pb-3 border-t border-claude-border/30">
+                          <div className="mt-3 max-h-[300px] overflow-y-auto text-[12px] text-claude-text/90 leading-relaxed prose prose-sm prose-slate">
+                            <ReactMarkdown>{content}</ReactMarkdown>
+                          </div>
+                          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-claude-border/30">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); copyContent(cardId, content); }}
+                              className="flex items-center gap-1 text-[10px] text-claude-subtext hover:text-claude-text px-2 py-1 rounded-md hover:bg-claude-bg transition-colors"
+                            >
+                              {copiedId === cardId ? <Check size={11} /> : <Copy size={11} />}
+                              {copiedId === cardId ? 'Скопійовано' : 'Копіювати'}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+
+            {vaultDocuments.length === 0 && otherCourtDocs.length === 0 ? (
               <EmptyTabState icon={FileText} text="Документи з'являться після пошуку" />
             ) : (
-              documents.map((doc, i) => {
+              vaultDocuments.map((doc, i) => {
                 const cardId = `doc-${doc.id}`;
                 const isExpanded = expandedCards.has(cardId);
                 const content = doc.metadata?.snippet || doc.metadata?.text || doc.metadata?.content || 'Немає вмісту для перегляду.';
