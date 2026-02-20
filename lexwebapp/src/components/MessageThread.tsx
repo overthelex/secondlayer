@@ -4,11 +4,13 @@ import { Message, MessageProps } from './Message';
 interface MessageThreadProps {
   messages: MessageProps[];
   onRegenerate?: (userQuery: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
 }
 
 export function MessageThread({
   messages,
-  onRegenerate
+  onRegenerate,
+  onEdit,
 }: MessageThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,11 +32,16 @@ export function MessageThread({
               handleRegenerate = () => onRegenerate(prevMsg.content);
             }
           }
+          const handleEdit = (message.role === 'user' && onEdit)
+            ? (newContent: string) => onEdit(message.id, newContent)
+            : undefined;
+
           return (
             <Message
               key={message.id}
               {...message}
               onRegenerate={handleRegenerate}
+              onEdit={handleEdit}
             />
           );
         })}
