@@ -235,7 +235,7 @@ export class SemanticSectionizer {
           },
         ],
           temperature: 0.2,
-          max_tokens: 2000,
+          max_completion_tokens: 2000,
           response_format: { type: 'json_object' },
         });
       });

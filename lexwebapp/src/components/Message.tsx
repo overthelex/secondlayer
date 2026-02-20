@@ -3,7 +3,7 @@ import { Copy, RotateCw, Star, ThumbsUp, ThumbsDown, ChevronDown } from 'lucide-
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { DecisionCard, Decision } from './DecisionCard';
+import type { Decision } from './DecisionCard';
 import { AnalyticsBlock } from './AnalyticsBlock';
 import { ThinkingSteps } from './ThinkingSteps';
 import { PlanDisplay } from './PlanDisplay';
@@ -315,59 +315,6 @@ export function Message({
                   ))}
                 </div>
               )}
-
-              {/* Citations */}
-              {citations && citations.length > 0 && <div className="space-y-3 mt-5">
-                  {citations.map((citation, idx) => <motion.div key={idx} initial={{
-              opacity: 0,
-              x: -10
-            }} animate={{
-              opacity: 1,
-              x: 0
-            }} transition={{
-              duration: 0.3,
-              delay: idx * 0.1
-            }} className="bg-claude-bg/80 backdrop-blur-sm border-l-4 border-claude-text/20 pl-5 pr-4 py-4 rounded-r-xl shadow-sm">
-                      <div className="flex items-start gap-4">
-                        <div className="text-5xl leading-none text-claude-subtext/20 font-serif select-none -mt-2">
-                          &ldquo;
-                        </div>
-                        <div className="flex-1 -mt-1">
-                          <p className="font-sans text-[15px] text-claude-text italic leading-relaxed mb-2">
-                            {citation.text}
-                          </p>
-                          <p className="text-[12px] text-claude-subtext font-semibold">
-                            — {citation.source}
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>)}
-                </div>}
-
-              {/* Decision Cards */}
-              {decisions && decisions.length > 0 && <div className="mt-5 space-y-3">
-                  <div className="flex items-center gap-2 text-[13px] font-semibold text-claude-text">
-                    <div className="w-1 h-4 bg-claude-subtext/40 rounded-full" />
-                    Релевантні судові рішення
-                    <span className="text-[11px] font-semibold text-claude-subtext bg-claude-subtext/8 px-2 py-0.5 rounded-full">
-                      {decisions.length}
-                    </span>
-                  </div>
-                  <div className="grid gap-3">
-                    {decisions.map((decision, idx) => <motion.div key={decision.id} initial={{
-                opacity: 0,
-                y: 10
-              }} animate={{
-                opacity: 1,
-                y: 0
-              }} transition={{
-                duration: 0.3,
-                delay: idx * 0.1
-              }}>
-                        <DecisionCard decision={decision} />
-                      </motion.div>)}
-                  </div>
-                </div>}
 
               {/* Analytics Block */}
               {analytics && <AnalyticsBlock data={analytics} />}
