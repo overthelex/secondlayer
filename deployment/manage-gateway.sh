@@ -759,14 +759,14 @@ deploy_to_server() {
             cadvisor-stage \
             2>/dev/null || echo "  (some monitoring services may not exist in this environment)"
 
-        # Step 10: Verify all domains respond
+        # Step 10: Verify nginx routing per domain (bypass Cloudflare — maintenance still active)
         echo "Waiting for nginx and services to initialize..."
         sleep 10
-        echo "Verifying domain health..."
+        echo "Verifying domain health (direct nginx on :8080)..."
         for domain in stage.legal.org.ua legal.org.ua mcp.legal.org.ua; do
             ok=false
             for attempt in 1 2 3; do
-                if curl -skf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
+                if curl -sf --max-time 10 -H "Host: ${domain}" "http://localhost:8080/health" > /dev/null 2>&1; then
                     echo "  [OK] ${domain}"
                     ok=true
                     break
@@ -774,9 +774,9 @@ deploy_to_server() {
                 sleep 5
             done
             if [ "$ok" = false ]; then
-                echo "  [WARN] ${domain} not responding after 3 attempts"
+                echo "  [WARN] ${domain} nginx routing not ready after 3 attempts"
                 echo "    Checking direct backend health..."
-                curl -sf --max-time 5 "http://localhost:3004/health" 2>/dev/null && echo "    Backend is up on :3004 — likely an nginx/SSL issue" || echo "    Backend not responding on :3004 either"
+                curl -sf --max-time 5 "http://localhost:3004/health" 2>/dev/null && echo "    Backend is up on :3004 — nginx config issue" || echo "    Backend not responding on :3004 either"
             fi
         done
 
