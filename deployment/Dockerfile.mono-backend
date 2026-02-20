@@ -40,6 +40,8 @@ RUN cd packages/shared \
   && npm prune --omit=dev
 
 # Install backend deps (will resolve @secondlayer/shared from ../packages/shared)
+# PYTHON env var needed for node-gyp v10 on Alpine to find python3
+ENV PYTHON=/usr/bin/python3
 RUN cd mcp_backend \
   && npm install
 
