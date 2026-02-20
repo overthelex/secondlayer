@@ -20,6 +20,7 @@ export interface ConversationMessage {
   thinking_steps?: any[];
   decisions?: any[];
   citations?: any[];
+  documents?: any[];
   tool_calls?: any[];
   cost_tracking_id?: string;
   created_at: Date;
@@ -98,6 +99,7 @@ export class ConversationService {
       thinking_steps?: any[];
       decisions?: any[];
       citations?: any[];
+      documents?: any[];
       tool_calls?: any[];
       cost_tracking_id?: string;
     }
@@ -109,8 +111,8 @@ export class ConversationService {
     const id = uuidv4();
     const result = await this.db.query(
       `INSERT INTO conversation_messages
-         (id, conversation_id, role, content, thinking_steps, decisions, citations, tool_calls, cost_tracking_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (id, conversation_id, role, content, thinking_steps, decisions, citations, documents, tool_calls, cost_tracking_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         id,
@@ -120,6 +122,7 @@ export class ConversationService {
         message.thinking_steps ? JSON.stringify(message.thinking_steps) : null,
         message.decisions ? JSON.stringify(message.decisions) : null,
         message.citations ? JSON.stringify(message.citations) : null,
+        message.documents ? JSON.stringify(message.documents) : null,
         message.tool_calls ? JSON.stringify(message.tool_calls) : null,
         message.cost_tracking_id || null,
       ]

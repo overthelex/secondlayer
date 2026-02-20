@@ -1832,35 +1832,18 @@ class HTTPMCPServer {
           clearInterval(heartbeat);
         }
 
-        // Post-execution billing charge based on actual LLM cost
-        if (chatCompleted && userId && chatTotalCostUsd > 0) {
+        // Emit cost_summary SSE event — billing was already handled by CostTracker.onTrackingComplete()
+        if (chatCompleted && userId && chatTotalCostUsd > 0 && !res.writableEnded) {
           try {
-            const transaction = await this.billingService.chargeUser({
-              userId,
-              requestId,
-              amountUsd: chatTotalCostUsd,
-              description: `AI chat (cost: $${chatTotalCostUsd.toFixed(4)})`,
-            });
-
-            logger.info('[ChatService] User charged', {
-              userId,
-              totalCostUsd: chatTotalCostUsd,
-              charged: transaction.pricing_details?.price_usd,
-              balanceAfter: transaction.balance_after_usd,
-              requestId,
-            });
-
-            // Emit cost_summary SSE event with balance info
-            if (!res.writableEnded) {
-              res.write(`event: cost_summary\n`);
-              res.write(`data: ${JSON.stringify({
-                total_cost_usd: chatTotalCostUsd,
-                charged_usd: transaction.pricing_details?.price_usd ?? chatTotalCostUsd,
-                balance_usd: transaction.balance_after_usd,
-              })}\n\n`);
-            }
+            const summary = await this.billingService.getBillingSummary(userId);
+            res.write(`event: cost_summary\n`);
+            res.write(`data: ${JSON.stringify({
+              total_cost_usd: chatTotalCostUsd,
+              charged_usd: chatTotalCostUsd,
+              balance_usd: summary?.balance_usd ?? 0,
+            })}\n\n`);
           } catch (e: any) {
-            logger.warn('[ChatService] Failed to charge user', { error: e.message, requestId });
+            logger.warn('[ChatService] Failed to emit cost_summary', { error: e.message, requestId });
           }
         }
 
