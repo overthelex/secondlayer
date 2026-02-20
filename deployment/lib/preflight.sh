@@ -168,6 +168,32 @@ check_env_file() {
     fi
 }
 
+# Check that required env vars are present and non-empty in the env file
+check_required_env_vars() {
+    local env_file=$1
+    shift
+    local required_vars=("$@")
+
+    if [ ! -f "$env_file" ]; then
+        return  # already caught by check_env_file
+    fi
+
+    local missing=()
+    for var in "${required_vars[@]}"; do
+        local val
+        val=$(grep -E "^${var}=" "$env_file" 2>/dev/null | cut -d'=' -f2- | tr -d '[:space:]')
+        if [ -z "$val" ]; then
+            missing+=("$var")
+        fi
+    done
+
+    if [ ${#missing[@]} -eq 0 ]; then
+        preflight_record "Required env vars" "pass" ""
+    else
+        preflight_record "Required env vars" "fail" "Missing or empty: ${missing[*]}"
+    fi
+}
+
 # Check compose file exists
 check_compose_file() {
     local compose_file=$1
@@ -196,6 +222,18 @@ preflight_check() {
     check_compose_file "$compose_file"
     if [ "$env" != "local" ] || [ -f "$env_file" ]; then
         check_env_file "$env_file"
+    fi
+
+    # Validate required env vars for non-local envs (fail early with clear message)
+    if [ "$env" != "local" ]; then
+        check_required_env_vars "$env_file" \
+            POSTGRES_PASSWORD \
+            RADA_POSTGRES_PASSWORD \
+            OPENREYESTR_POSTGRES_PASSWORD \
+            JWT_SECRET \
+            OPENAI_API_KEY \
+            SECONDARY_LAYER_KEYS \
+            ADMIN_USERS
     fi
 
     # Git state
