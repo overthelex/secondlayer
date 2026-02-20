@@ -4,7 +4,7 @@
 # Generates summary reports after deployment (success or failure)
 ##############################################################################
 
-REPORT_DIR="/tmp/secondlayer_deploy_reports"
+REPORT_DIR="${HOME}/.secondlayer/deploy_reports"
 
 generate_deploy_report() {
     local env=$1

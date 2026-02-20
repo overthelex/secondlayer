@@ -55,11 +55,14 @@ PRIMARY_DOMAIN="legal.org.ua"
 
 # Patterns to intercept during maintenance
 # Add/remove entries as needed
-MAINTENANCE_PATTERNS=(
+STAGE_PATTERNS=(
     "legal.org.ua/*"
     "stage.legal.org.ua/*"
     "mcp.legal.org.ua/*"
+)
+LOCAL_PATTERNS=(
     "localdev.legal.org.ua/*"
+    "localdev.mcp.legal.org.ua/*"
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -173,7 +176,15 @@ PYEOF
 
 # ── Enable: create routes for all patterns ────────────────────────────────────
 enable_maintenance() {
-    log "Enabling Cloudflare maintenance mode..."
+    local env="${1:-stage}"  # "local" or "stage" (default: stage)
+
+    if [ "$env" = "local" ]; then
+        local -n MAINTENANCE_PATTERNS=LOCAL_PATTERNS
+        log "Enabling Cloudflare maintenance mode (local: ${LOCAL_PATTERNS[*]})..."
+    else
+        local -n MAINTENANCE_PATTERNS=STAGE_PATTERNS
+        log "Enabling Cloudflare maintenance mode (stage: ${STAGE_PATTERNS[*]})..."
+    fi
 
     local account_id zone_id
     account_id=$(get_account_id)
@@ -227,9 +238,15 @@ enable_maintenance() {
     list_routes "$zone_id"
 }
 
-# ── Disable: delete all maintenance routes ────────────────────────────────────
+# ── Disable: delete maintenance routes (optionally filtered by env) ───────────
 disable_maintenance() {
-    log "Disabling Cloudflare maintenance mode..."
+    local env="${1:-stage}"  # "local" or "stage" (default: stage)
+
+    if [ "$env" = "local" ]; then
+        log "Disabling Cloudflare maintenance mode (local only)..."
+    else
+        log "Disabling Cloudflare maintenance mode (all routes)..."
+    fi
 
     local zone_id
     zone_id=$(get_zone_id)
@@ -238,9 +255,19 @@ disable_maintenance() {
     routes_resp=$(cf_get "/zones/${zone_id}/workers/routes")
 
     local route_ids
-    route_ids=$(python3 -c \
-        "import sys,json; d=json.load(sys.stdin); [print(r['id']) for r in d.get('result',[]) if r.get('script')=='${WORKER_NAME}']" \
-        <<< "$routes_resp")
+    if [ "$env" = "local" ]; then
+        # Only delete routes matching LOCAL_PATTERNS
+        local local_json
+        local_json=$(printf '"%s",' "${LOCAL_PATTERNS[@]}")
+        local_json="[${local_json%,}]"
+        route_ids=$(python3 -c \
+            "import sys,json; d=json.load(sys.stdin); lp=${local_json}; [print(r['id']) for r in d.get('result',[]) if r.get('script')=='${WORKER_NAME}' and r.get('pattern') in lp]" \
+            <<< "$routes_resp")
+    else
+        route_ids=$(python3 -c \
+            "import sys,json; d=json.load(sys.stdin); [print(r['id']) for r in d.get('result',[]) if r.get('script')=='${WORKER_NAME}']" \
+            <<< "$routes_resp")
+    fi
 
     if [ -z "$route_ids" ]; then
         ok "No active maintenance routes found — site already live"
@@ -321,18 +348,19 @@ run_setup() {
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 CMD="${1:-}"
+ENV="${2:-stage}"  # optional: "local" or "stage"
 case "$CMD" in
-    enable)   enable_maintenance  ;;
-    disable)  disable_maintenance ;;
-    status)   show_status         ;;
-    setup)    run_setup           ;;
+    enable)   enable_maintenance  "$ENV" ;;
+    disable)  disable_maintenance "$ENV" ;;
+    status)   show_status                ;;
+    setup)    run_setup                  ;;
     *)
-        echo "Usage: $0 <enable|disable|status|setup>"
+        echo "Usage: $0 <enable|disable|status|setup> [local|stage]"
         echo ""
-        echo "  setup    — deploy worker script to Cloudflare (first-time)"
-        echo "  enable   — activate maintenance page on all domains"
-        echo "  disable  — deactivate maintenance page, site goes live"
-        echo "  status   — show current maintenance routes"
+        echo "  setup           — deploy worker script to Cloudflare (first-time)"
+        echo "  enable [env]    — activate maintenance page (stage: all domains, local: localdev only)"
+        echo "  disable [env]   — deactivate maintenance page"
+        echo "  status          — show current maintenance routes"
         exit 1
         ;;
 esac

@@ -4,7 +4,7 @@
 # Creates snapshots before destructive actions, enables rollback on failure
 ##############################################################################
 
-BACKUP_DIR="/tmp/secondlayer_deploy_backups"
+BACKUP_DIR="${HOME}/.secondlayer/deploy_backups"
 
 # Create backup before deployment
 create_backup() {
