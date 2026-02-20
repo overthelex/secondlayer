@@ -102,12 +102,19 @@ check_http_health() {
 
     case $env in
         local)
+            # Use --resolve to bypass Cloudflare DNS and connect directly to local nginx.
+            # Domains are CF-proxied (orange cloud) but the smoke test must verify local
+            # nginx routing independently of CF cert propagation or CF→origin reachability.
+            local resolve_opts=(
+                "--resolve" "localdev.legal.org.ua:443:127.0.0.1"
+                "--resolve" "localdev.mcp.legal.org.ua:443:127.0.0.1"
+            )
             local urls=("https://localdev.legal.org.ua/health" "https://localdev.mcp.legal.org.ua/health")
             for url in "${urls[@]}"; do
                 local attempt=1
                 local passed=false
                 while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
-                    if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
+                    if curl -skf --max-time 10 "${resolve_opts[@]}" "$url" > /dev/null 2>&1; then
                         smoke_record "HTTP health ($url)" "pass" ""
                         passed=true
                         break
@@ -179,8 +186,16 @@ check_frontend_health() {
             ;;
     esac
 
+    local frontend_resolve_opts=()
+    if [ "$env" = "local" ]; then
+        frontend_resolve_opts=(
+            "--resolve" "localdev.legal.org.ua:443:127.0.0.1"
+            "--resolve" "localdev.mcp.legal.org.ua:443:127.0.0.1"
+        )
+    fi
+
     for url in "${urls[@]}"; do
-        if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
+        if curl -skf --max-time 10 "${frontend_resolve_opts[@]}" "$url" > /dev/null 2>&1; then
             smoke_record "Frontend ($url)" "pass" ""
         else
             smoke_record "Frontend ($url)" "warn" "Not responding (may need DNS propagation)"
