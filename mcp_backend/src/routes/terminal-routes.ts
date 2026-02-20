@@ -27,10 +27,8 @@ const SENSITIVE_ENV_VARS = [
   'JWT_SECRET',
   'POSTGRES_PASSWORD',
   'REDIS_PASSWORD',
-  'STRIPE_SECRET_KEY',
+  'MONOBANK_API_KEY',
   'ANTHROPIC_API_KEY',
-  'STRIPE_WEBHOOK_SECRET',
-  'FONDY_SECRET_KEY',
 ];
 
 function buildPtyEnv(): Record<string, string> {

@@ -19,7 +19,7 @@ const offerContent = {
         heading: '1. Загальні положення',
         content: `1.1. Цей документ є офіційною публічною офертою (далі — «Оферта») платформи SecondLayer (далі — «Виконавець»), адресованою будь-якій фізичній або юридичній особі (далі — «Замовник»), яка приймає умови цієї Оферти.
 
-1.2. Оферта вважається прийнятою (акцептованою) з моменту оплати послуг Замовником через платіжну систему Fondy або іншим доступним способом.
+1.2. Оферта вважається прийнятою (акцептованою) з моменту оплати послуг Замовником через платіжну систему Monobank або іншим доступним способом.
 
 1.3. Виконавець залишає за собою право змінювати умови цієї Оферти без попереднього повідомлення. Актуальна версія Оферти завжди доступна за цією адресою.`,
       },
@@ -35,7 +35,7 @@ const offerContent = {
         heading: '3. Вартість послуг та порядок оплати',
         content: `3.1. Вартість Послуг визначається відповідно до діючих тарифів, опублікованих на платформі.
 
-3.2. Оплата здійснюється шляхом поповнення балансу через платіжну систему Fondy (в гривнях) або Stripe (в доларах США).
+3.2. Оплата здійснюється шляхом поповнення балансу через платіжну систему Monobank (в гривнях) або MetaMask (криптовалюта).
 
 3.3. Кошти списуються з балансу Замовника відповідно до фактичного використання Послуг.
 
@@ -97,7 +97,7 @@ const offerContent = {
         heading: '1. General Provisions',
         content: `1.1. This document constitutes an official public offer (hereinafter — "Offer") of the SecondLayer platform (hereinafter — "Provider"), addressed to any individual or legal entity (hereinafter — "Client") who accepts the terms of this Offer.
 
-1.2. The Offer is considered accepted from the moment of payment by the Client through the Fondy payment system or any other available method.
+1.2. The Offer is considered accepted from the moment of payment by the Client through the Monobank payment system or any other available method.
 
 1.3. The Provider reserves the right to amend the terms of this Offer without prior notice. The current version of the Offer is always available at this address.`,
       },
@@ -113,7 +113,7 @@ const offerContent = {
         heading: '3. Pricing and Payment',
         content: `3.1. The cost of Services is determined according to the current pricing published on the platform.
 
-3.2. Payment is made by topping up the balance through the Fondy payment system (in Ukrainian hryvnias) or Stripe (in US dollars).
+3.2. Payment is made by topping up the balance through the Monobank payment system (in Ukrainian hryvnias) or MetaMask (cryptocurrency).
 
 3.3. Funds are deducted from the Client's balance according to actual usage of Services.
 

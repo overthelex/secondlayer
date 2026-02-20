@@ -144,7 +144,7 @@ export class CreditService {
     source: string,
     sourceId?: string,
     description?: string,
-    stripePaymentIntentId?: string
+    paymentReference?: string
   ): Promise<CreditAddition> {
     try {
       const result = await this.pool.query<CreditAddition>(
@@ -160,7 +160,7 @@ export class CreditService {
           source,
           sourceId || null,
           description || null,
-          stripePaymentIntentId || null,
+          paymentReference || null,
         ]
       );
 

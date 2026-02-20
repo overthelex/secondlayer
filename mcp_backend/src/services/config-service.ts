@@ -95,7 +95,7 @@ const CONFIG_REGISTRY: ConfigEntry[] = [
   // Payments
   { key: 'MOCK_PAYMENTS', category: 'payments', description: 'Use mock payment providers', is_secret: false, value_type: 'boolean', default_value: 'true' },
   { key: 'UAH_TO_USD_RATE', category: 'payments', description: 'UAH to USD exchange rate', is_secret: false, value_type: 'number', default_value: '41.5' },
-  { key: 'FONDY_API_URL', category: 'payments', description: 'Fondy API base URL', is_secret: false, value_type: 'string', default_value: 'https://pay.fondy.eu/api' },
+  { key: 'MONOBANK_REDIRECT_URL', category: 'payments', description: 'Monobank payment redirect URL', is_secret: false, value_type: 'string', default_value: '' },
 
   // Email
   { key: 'SMTP_HOST', category: 'email', description: 'SMTP server host', is_secret: false, value_type: 'string', default_value: '' },
@@ -126,8 +126,7 @@ const CONFIG_REGISTRY: ConfigEntry[] = [
   { key: 'SECONDARY_LAYER_KEYS', category: 'auth', description: 'API authentication keys', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'MINIO_ACCESS_KEY', category: 'storage', description: 'MinIO access key', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'MINIO_SECRET_KEY', category: 'storage', description: 'MinIO secret key', is_secret: true, value_type: 'string', default_value: '' },
-  { key: 'STRIPE_SECRET_KEY', category: 'payments', description: 'Stripe secret key', is_secret: true, value_type: 'string', default_value: '' },
-  { key: 'FONDY_SECRET_KEY', category: 'payments', description: 'Fondy secret key', is_secret: true, value_type: 'string', default_value: '' },
+  { key: 'MONOBANK_API_KEY', category: 'payments', description: 'Monobank Acquiring API key', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'GOOGLE_CLIENT_SECRET', category: 'auth', description: 'Google OAuth client secret', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'SMTP_PASS', category: 'email', description: 'SMTP password', is_secret: true, value_type: 'string', default_value: '' },
 ];

@@ -23,7 +23,7 @@ import showToast from '../../utils/toast';
 
 interface PaymentMethod {
   id: string;
-  provider: 'stripe' | 'metamask' | 'binance_pay';
+  provider: 'monobank' | 'metamask' | 'binance_pay';
   cardLast4: string;
   cardBrand: string;
   cardBank: string;
@@ -228,7 +228,7 @@ export function PaymentsTab() {
             animate={{ opacity: 1, height: 'auto' }}
             className="mb-6 p-4 bg-claude-bg border border-claude-border rounded-lg">
             <p className="text-sm text-claude-subtext mb-4">
-              Для додавання картки скористайтесь вкладкою "Поповнення" — картка буде збережена автоматично під час першої оплати через Stripe.
+              Для додавання картки скористайтесь вкладкою "Поповнення" — картка буде збережена автоматично під час першої оплати через Monobank.
             </p>
             <button
               onClick={() => setShowAddPayment(false)}
@@ -263,14 +263,14 @@ export function PaymentsTab() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 flex-1">
                     <div className="text-4xl font-bold text-claude-accent/30">
-                      {method.provider === 'stripe' ? '💳' : method.provider === 'metamask' ? '🦊' : '🟡'}
+                      {method.provider === 'monobank' ? '🏦' : method.provider === 'metamask' ? '🦊' : '🟡'}
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-claude-text">
                         {method.cardBrand} •••• {method.cardLast4}
                       </p>
                       <p className="text-sm text-claude-subtext">
-                        {method.cardBank} • {method.provider === 'stripe' ? 'Stripe' : method.provider === 'metamask' ? 'MetaMask' : 'Binance Pay'}
+                        {method.cardBank} • {method.provider === 'monobank' ? 'Monobank' : method.provider === 'metamask' ? 'MetaMask' : 'Binance Pay'}
                       </p>
                     </div>
                   </div>

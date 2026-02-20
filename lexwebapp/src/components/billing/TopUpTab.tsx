@@ -1,6 +1,6 @@
 /**
  * Top-up Tab
- * Allows users to add funds via Stripe, MetaMask, or Binance Pay
+ * Allows users to add funds via Monobank, MetaMask, or Binance Pay
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -15,113 +15,19 @@ import {
   QrCode,
   Copy,
 } from 'lucide-react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { api } from '../../utils/api-client';
 import showToast from '../../utils/toast';
 
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
 const MOCK_PAYMENTS = import.meta.env.VITE_MOCK_PAYMENTS === 'true';
+const UAH_TO_USD_RATE = parseFloat(import.meta.env.VITE_UAH_TO_USD_RATE || '41.5');
 
-const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
-
-type PaymentProvider = 'stripe' | 'metamask' | 'binance_pay';
+type PaymentProvider = 'monobank' | 'metamask' | 'binance_pay';
 
 interface ProviderInfo {
   id: string;
   name: string;
   enabled: boolean;
   currency: string;
-}
-
-const cardElementOptions = {
-  style: {
-    base: {
-      fontSize: '16px',
-      color: '#2D2D2D',
-      '::placeholder': { color: '#6B6B6B' },
-    },
-    invalid: { color: '#ff4d4f' },
-  },
-};
-
-function StripePaymentForm({ amount, onSuccess }: { amount: number; onSuccess: () => void }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setIsProcessing(true);
-    setError(null);
-
-    try {
-      const { data } = await api.payment.createStripe({
-        amount_usd: amount,
-        metadata: { source: 'billing_dashboard' },
-      });
-
-      if (MOCK_PAYMENTS) {
-        showToast.success(`Тестова оплата $${amount} успішна!`);
-        setTimeout(onSuccess, 1000);
-        return;
-      }
-
-      const { clientSecret } = data;
-      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: { card: elements.getElement(CardElement)! },
-      });
-
-      if (stripeError) {
-        setError(stripeError.message || 'Помилка оплати');
-        showToast.error(stripeError.message || 'Помилка оплати');
-      } else if (paymentIntent?.status === 'succeeded') {
-        showToast.success('Оплату здійснено! Ваш баланс буде оновлено найближчим часом.');
-        onSuccess();
-      }
-    } catch (err: any) {
-      const message = err.response?.data?.message || 'Помилка оплати. Спробуйте ще раз.';
-      setError(message);
-      showToast.error(message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-claude-text mb-2">Дані картки</label>
-        <div className="p-4 border border-claude-border rounded-lg bg-white">
-          <CardElement options={cardElementOptions} />
-        </div>
-        {error && (
-          <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-            <AlertCircle size={14} />
-            {error}
-          </p>
-        )}
-      </div>
-      <button
-        type="submit"
-        disabled={!stripe || isProcessing}
-        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
-        {isProcessing ? (
-          <><Loader2 size={18} className="animate-spin" /> Обробка...</>
-        ) : (
-          <><CreditCard size={18} /> Сплатити ${amount.toFixed(2)}</>
-        )}
-      </button>
-      {MOCK_PAYMENTS && (
-        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-xs text-yellow-800"><strong>Mock Mode:</strong> Payments are simulated.</p>
-        </div>
-      )}
-    </form>
-  );
 }
 
 const CHAIN_IDS: Record<string, string> = {
@@ -136,6 +42,74 @@ const CHAIN_NAMES: Record<string, string> = {
 
 function truncateAddress(addr: string): string {
   return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
+function MonobankPaymentForm({ amountUah, onSuccess }: { amountUah: number; onSuccess: () => void }) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCreateInvoice = async () => {
+    setIsProcessing(true);
+    setError(null);
+    try {
+      const { data } = await api.payment.createMonobank({ amount_uah: amountUah });
+
+      if (MOCK_PAYMENTS) {
+        showToast.success(`Тестова оплата ${amountUah} UAH успішна!`);
+        setTimeout(onSuccess, 1000);
+        return;
+      }
+
+      // Redirect to Monobank hosted payment page
+      window.location.href = data.pageUrl;
+    } catch (err: any) {
+      const message = err.response?.data?.message || 'Помилка створення рахунку. Спробуйте ще раз.';
+      setError(message);
+      showToast.error(message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+        <p className="text-sm text-green-800">
+          Оплата через Monobank Acquiring. Ви будете перенаправлені на захищену сторінку оплати картою.
+        </p>
+      </div>
+      <div className="p-4 bg-claude-bg rounded-lg">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-claude-subtext">Сума до оплати:</span>
+          <div className="text-right">
+            <span className="text-2xl font-bold text-claude-text">{amountUah.toFixed(0)} ₴</span>
+            <p className="text-xs text-claude-subtext">≈ ${(amountUah / UAH_TO_USD_RATE).toFixed(2)} USD</p>
+          </div>
+        </div>
+      </div>
+      {error && (
+        <p className="text-sm text-red-600 flex items-center gap-1">
+          <AlertCircle size={14} />
+          {error}
+        </p>
+      )}
+      <button
+        onClick={handleCreateInvoice}
+        disabled={isProcessing}
+        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-claude-accent text-white rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+        {isProcessing ? (
+          <><Loader2 size={18} className="animate-spin" /> Створення рахунку...</>
+        ) : (
+          <><CreditCard size={18} /> Оплатити {amountUah.toFixed(0)} ₴ через Monobank</>
+        )}
+      </button>
+      {MOCK_PAYMENTS && (
+        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-xs text-yellow-800"><strong>Mock Mode:</strong> Payments are simulated.</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function MetaMaskPaymentForm({ amount, onSuccess }: { amount: number; onSuccess: () => void }) {
@@ -541,7 +515,7 @@ interface TopUpTabProps {
 }
 
 export function TopUpTab({ initialAmount }: TopUpTabProps) {
-  const [provider, setProvider] = useState<PaymentProvider>('stripe');
+  const [provider, setProvider] = useState<PaymentProvider>('monobank');
   const [amount, setAmount] = useState<number>(initialAmount || 25);
   const [customAmount, setCustomAmount] = useState<string>(initialAmount ? String(initialAmount) : '');
   const [showSuccess, setShowSuccess] = useState(false);
@@ -551,7 +525,7 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
     api.payment.getAvailableProviders()
       .then(({ data }) => setAvailableProviders(data.providers || []))
       .catch(() => setAvailableProviders([
-        { id: 'stripe', name: 'Stripe', enabled: true, currency: 'USD' },
+        { id: 'monobank', name: 'Monobank', enabled: true, currency: 'UAH' },
       ]));
   }, []);
 
@@ -563,6 +537,8 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
   }, [initialAmount]);
 
   const cryptoEnabled = availableProviders.some((p) => p.id === 'metamask' && p.enabled);
+  // Amount in UAH for Monobank; in USD for crypto
+  const amountUah = provider === 'monobank' ? Math.round(amount * UAH_TO_USD_RATE) : 0;
   const presetAmounts = [10, 25, 50, 100];
   const currencySymbol = '$';
 
@@ -596,14 +572,14 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4">Оберіть спосіб оплати</h3>
         <div className={`grid grid-cols-1 gap-4 ${cryptoEnabled ? 'md:grid-cols-3' : 'md:grid-cols-1'}`}>
-          <button onClick={() => handleProviderChange('stripe')}
-            className={`p-4 border-2 rounded-xl transition-all ${provider === 'stripe' ? 'border-claude-accent bg-claude-accent/5' : 'border-claude-border hover:border-claude-accent/50'}`}>
+          <button onClick={() => handleProviderChange('monobank')}
+            className={`p-4 border-2 rounded-xl transition-all ${provider === 'monobank' ? 'border-claude-accent bg-claude-accent/5' : 'border-claude-border hover:border-claude-accent/50'}`}>
             <div className="flex items-center gap-3 mb-2">
-              <CreditCard size={24} className={provider === 'stripe' ? 'text-claude-accent' : 'text-claude-subtext'} />
-              <h4 className="font-semibold text-claude-text">Stripe</h4>
+              <CreditCard size={24} className={provider === 'monobank' ? 'text-claude-accent' : 'text-claude-subtext'} />
+              <h4 className="font-semibold text-claude-text">Monobank</h4>
             </div>
-            <p className="text-sm text-claude-subtext text-left">Кредитні/дебетові картки (міжнародні)</p>
-            <p className="text-xs text-claude-subtext mt-1 text-left">Рекомендовано для оплати в USD</p>
+            <p className="text-sm text-claude-subtext text-left">Оплата карткою через Monobank Acquiring</p>
+            <p className="text-xs text-claude-subtext mt-1 text-left">Оплата в гривнях (UAH)</p>
           </button>
 
           {cryptoEnabled && (
@@ -657,7 +633,12 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
         <div className="mt-4 p-4 bg-claude-bg rounded-lg">
           <div className="flex items-center justify-between">
             <span className="text-sm text-claude-subtext">До оплати:</span>
-            <span className="text-2xl font-bold text-claude-text">{currencySymbol}{amount.toFixed(2)}</span>
+            <div className="text-right">
+              <span className="text-2xl font-bold text-claude-text">{currencySymbol}{amount.toFixed(2)}</span>
+              {provider === 'monobank' && (
+                <p className="text-xs text-claude-subtext">≈ {amountUah} ₴</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -665,14 +646,8 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
       {/* Payment Form */}
       <div className="bg-white border border-claude-border rounded-xl p-6">
         <h3 className="text-lg font-semibold text-claude-text mb-4">Деталі оплати</h3>
-        {provider === 'stripe' ? (
-          stripePromise ? (
-            <Elements stripe={stripePromise}><StripePaymentForm amount={amount} onSuccess={handleSuccess} /></Elements>
-          ) : (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">Stripe не налаштовано. Додайте VITE_STRIPE_PUBLISHABLE_KEY.</p>
-            </div>
-          )
+        {provider === 'monobank' ? (
+          <MonobankPaymentForm amountUah={amountUah} onSuccess={handleSuccess} />
         ) : provider === 'metamask' ? (
           <MetaMaskPaymentForm amount={amount} onSuccess={handleSuccess} />
         ) : provider === 'binance_pay' ? (
@@ -685,7 +660,7 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
         <p className="text-xs text-claude-subtext text-center">
           {provider === 'metamask' ? 'Крипто-платежі верифікуються on-chain. Баланс оновлюється після підтвердження.'
             : provider === 'binance_pay' ? 'Binance Pay оплата обробляється автоматично після підтвердження.'
-            : 'Усі платежі обробляються безпечно через Stripe. Дані картки не зберігаються.'}
+            : 'Усі платежі обробляються безпечно через Monobank Acquiring. Дані картки не зберігаються на наших серверах.'}
         </p>
       </div>
     </div>
