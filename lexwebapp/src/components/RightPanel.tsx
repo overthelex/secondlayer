@@ -333,22 +333,14 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
                         </p>
                       )}
 
-                      <div className="flex items-center justify-between pt-2 border-t border-claude-border/30 mt-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-14 h-1.5 bg-claude-bg rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-claude-subtext/40 to-claude-text/60 rounded-full" style={{ width: `${decision.relevance}%` }} />
-                          </div>
-                          <span className="text-[10px] text-claude-subtext font-medium">
-                            {decision.relevance}%
-                          </span>
-                        </div>
-                        {!isExpanded && (
+                      {!isExpanded && (
+                        <div className="flex items-center justify-end pt-2 border-t border-claude-border/30 mt-2">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Eye size={12} className="text-claude-subtext" strokeWidth={2} />
                             <span className="text-[10px] text-claude-subtext">Розгорнути</span>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Expanded Content */}
@@ -622,24 +614,14 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-claude-border/30">
-                        {doc.metadata?.relevance != null ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-14 h-1.5 bg-claude-bg rounded-full overflow-hidden">
-                              <div className="h-full bg-gradient-to-r from-claude-subtext/40 to-claude-text/60 rounded-full" style={{ width: `${Math.round(doc.metadata.relevance * 100)}%` }} />
-                            </div>
-                            <span className="text-[10px] text-claude-subtext font-medium">
-                              {Math.round(doc.metadata.relevance * 100)}%
-                            </span>
-                          </div>
-                        ) : <div />}
-                        {!isExpanded && (
+                      {!isExpanded && (
+                        <div className="flex items-center justify-end mt-2 pt-2 border-t border-claude-border/30">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <Eye size={12} className="text-claude-subtext" strokeWidth={2} />
                             <span className="text-[10px] text-claude-subtext">Розгорнути</span>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
 
                     <AnimatePresence>
