@@ -646,7 +646,9 @@ deploy_to_server() {
     # Step 3: Build, migrate, and start services
     print_msg "$BLUE" "Updating containers on $server_name..."
 
-    if ! ssh ${DEPLOY_USER}@${target_server} "export REMOTE_REPO='${REMOTE_REPO}'; export NO_CACHE='${NO_CACHE}'; bash -s" << 'EOF'
+    local GIT_SHA
+    GIT_SHA=$(git -C "${REPO_ROOT}" rev-parse HEAD)
+    if ! ssh ${DEPLOY_USER}@${target_server} "export REMOTE_REPO='${REMOTE_REPO}'; export NO_CACHE='${NO_CACHE}'; export GIT_SHA='${GIT_SHA}'; bash -s" << 'EOF'
         set -e
         cd "$REMOTE_REPO/deployment"
 
@@ -697,7 +699,8 @@ deploy_to_server() {
         else
             echo "Building all images (cached)..."
         fi
-        $DC build $NO_CACHE \
+        GIT_SHA_ENV="GIT_SHA=${GIT_SHA:-$(git -C "$REMOTE_REPO" rev-parse HEAD 2>/dev/null || echo unknown)}"
+        $DC build $NO_CACHE --build-arg "$GIT_SHA_ENV" \
             app-stage \
             migrate-stage \
             rada-migrate-stage \

@@ -669,6 +669,7 @@ services:
         - VITE_SHOW_TOOL_SELECTOR=true
         - VITE_ENABLE_THINKING_STEPS=true
         - VITE_AUTO_EXPAND_THINKING=true
+        - GIT_SHA=${GIT_SHA:-unknown}
     image: lexwebapp-lexwebapp:latest
     container_name: lexwebapp-stage
     ports:
