@@ -2,8 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies for native modules (playwright)
-# Playwright requires chromium and dependencies for browser automation
+# Install build dependencies for native modules (playwright, node-pty)
+# node-pty requires python3, make, g++ to compile native bindings
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -11,7 +11,11 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    tzdata
+    tzdata \
+    python3 \
+    make \
+    g++ \
+    linux-headers
 
 # Set timezone to EET (Europe/Kiev)
 ENV TZ=Europe/Kiev
@@ -59,7 +63,7 @@ FROM node:20-alpine
 
 WORKDIR /app/mcp_backend
 
-# Install runtime dependencies for Playwright + PDF tools
+# Install runtime dependencies for Playwright + PDF tools + terminal PTY
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -68,7 +72,8 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont \
     tzdata \
-    poppler-utils
+    poppler-utils \
+    bash
 
 # Set timezone to EET (Europe/Kiev)
 ENV TZ=Europe/Kiev

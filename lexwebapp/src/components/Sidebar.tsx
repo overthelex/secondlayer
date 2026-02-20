@@ -32,7 +32,8 @@ import {
   Globe,
   Server,
   Boxes,
-  Settings } from
+  Settings,
+  Terminal } from
 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
@@ -73,6 +74,7 @@ interface SidebarProps {
   onAdminConfigClick?: () => void;
   onAdminDBCompareClick?: () => void;
   onAdminServicePricingClick?: () => void;
+  onAdminTerminalClick?: () => void;
   onLogout?: () => void;
 }
 export function Sidebar({
@@ -110,6 +112,7 @@ export function Sidebar({
   onAdminConfigClick,
   onAdminDBCompareClick,
   onAdminServicePricingClick,
+  onAdminTerminalClick,
   onLogout
 }: SidebarProps) {
   const { user } = useAuth();
@@ -248,6 +251,7 @@ export function Sidebar({
     { id: 'system-config', label: 'Конфігурація', icon: Settings, onClick: onAdminConfigClick },
     { id: 'db-compare', label: 'Порівняння БД', icon: Database, onClick: onAdminDBCompareClick },
     { id: 'service-pricing', label: 'Собівартість сервісів', icon: Tag, onClick: onAdminServicePricingClick },
+    { id: 'terminal', label: 'Термінал', icon: Terminal, onClick: onAdminTerminalClick },
   ];
 
   const evidenceSections = [
