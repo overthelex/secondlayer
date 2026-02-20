@@ -1,5 +1,26 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useContext, createContext } from 'react';
 import { Copy, RotateCw, Star, ThumbsUp, ThumbsDown, ChevronDown, Pencil, Check, X } from 'lucide-react';
+
+// Context to pass list type (ul/ol) down to li without prop drilling
+const ListTypeContext = createContext<'ul' | 'ol'>('ul');
+
+// Defined outside Message to avoid remounting on each render (react-markdown rule)
+function MdLi({ children }: { children?: React.ReactNode }) {
+  const listType = useContext(ListTypeContext);
+  // Ordered list: rely on CSS list-decimal + marker coloring from parent ol
+  if (listType === 'ol') {
+    return (
+      <li className="leading-[1.7] text-claude-text pl-1">{children}</li>
+    );
+  }
+  // Unordered list: custom dot bullet via flex
+  return (
+    <li className="flex gap-2.5 leading-[1.7] text-claude-text list-none">
+      <span className="flex-shrink-0 mt-[10px] w-[6px] h-[6px] rounded-full bg-claude-accent/65 select-none" aria-hidden />
+      <span className="flex-1">{children}</span>
+    </li>
+  );
+}
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -262,18 +283,8 @@ export function Message({
               {/* Main Content - Markdown */}
               <div className="font-sans text-[16px] text-claude-text prose prose-sm max-w-none
                 prose-headings:font-sans prose-headings:text-claude-text prose-headings:tracking-tight
-                prose-h1:text-[19px] prose-h1:font-bold prose-h1:mt-6 prose-h1:mb-3
-                prose-h2:text-[17px] prose-h2:font-semibold prose-h2:mt-5 prose-h2:mb-2
-                prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-4 prose-h3:mb-2
                 prose-p:leading-[1.7] prose-p:my-2
-                prose-ul:my-2 prose-ol:my-2
-                prose-li:leading-[1.7]
-                prose-code:text-[13px] prose-code:bg-claude-bg prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:border prose-code:border-claude-border prose-code:font-mono prose-code:before:content-none prose-code:after:content-none
-                prose-pre:bg-claude-bg prose-pre:border prose-pre:border-claude-border prose-pre:rounded-lg prose-pre:my-3
-                prose-blockquote:border-l-4 prose-blockquote:border-claude-text/20 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-claude-subtext
-                prose-table:text-[13px]
-                prose-th:bg-claude-bg prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold prose-th:border prose-th:border-claude-border
-                prose-td:px-3 prose-td:py-2 prose-td:border prose-td:border-claude-border
+                prose-code:before:content-none prose-code:after:content-none
                 prose-a:text-claude-text prose-a:underline prose-a:decoration-claude-subtext/30 hover:prose-a:decoration-claude-text
                 prose-strong:text-claude-text prose-strong:font-semibold
               ">
@@ -288,26 +299,31 @@ export function Message({
                       </p>
                     ),
                     h1: ({ children }) => (
-                      <h1 className="text-[19px] font-bold mt-6 mb-3 text-claude-text">{children}</h1>
+                      <h1 className="text-[20px] font-bold mt-7 mb-3 text-claude-text tracking-tight pb-2 border-b border-claude-border">{children}</h1>
                     ),
                     h2: ({ children }) => (
-                      <h2 className="text-[17px] font-semibold mt-5 mb-2 text-claude-text">{children}</h2>
+                      <h2 className="text-[17px] font-semibold mt-6 mb-3 text-claude-text tracking-tight pb-2 border-b border-claude-border/70">{children}</h2>
                     ),
                     h3: ({ children }) => (
-                      <h3 className="text-[15px] font-semibold mt-4 mb-2 text-claude-text">{children}</h3>
+                      <h3 className="flex items-baseline gap-2 text-[15px] font-semibold mt-5 mb-2 text-claude-text">
+                        <span className="flex-shrink-0 w-[3px] h-[14px] self-center rounded-full bg-claude-accent/70" />
+                        <span>{children}</span>
+                      </h3>
                     ),
                     h4: ({ children }) => (
-                      <h4 className="text-[14px] font-semibold mt-3 mb-1 text-claude-text">{children}</h4>
+                      <h4 className="text-[14px] font-semibold mt-4 mb-1.5 text-claude-subtext uppercase tracking-wide">{children}</h4>
                     ),
                     ul: ({ children }) => (
-                      <ul className="my-2 pl-6 list-disc text-claude-text">{children}</ul>
+                      <ListTypeContext.Provider value="ul">
+                        <ul className="my-3 pl-0 space-y-1 list-none text-claude-text">{children}</ul>
+                      </ListTypeContext.Provider>
                     ),
                     ol: ({ children }) => (
-                      <ol className="my-2 pl-6 list-decimal text-claude-text">{children}</ol>
+                      <ListTypeContext.Provider value="ol">
+                        <ol className="my-3 pl-6 space-y-1.5 list-decimal marker:text-claude-accent/80 marker:font-semibold text-claude-text">{children}</ol>
+                      </ListTypeContext.Provider>
                     ),
-                    li: ({ children }) => (
-                      <li className="leading-[1.7] text-claude-text my-0.5">{children}</li>
-                    ),
+                    li: MdLi,
                     strong: ({ children }) => (
                       <strong className="font-semibold text-claude-text">{children}</strong>
                     ),
@@ -315,10 +331,12 @@ export function Message({
                       <em className="italic text-claude-text">{children}</em>
                     ),
                     blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 border-claude-text/20 pl-4 italic text-claude-subtext my-3">{children}</blockquote>
+                      <blockquote className="my-4 pl-4 pr-3 py-3 border-l-[3px] border-claude-accent/60 bg-claude-sidebar rounded-r-lg text-claude-text/85 text-[15px] leading-relaxed">
+                        {children}
+                      </blockquote>
                     ),
                     hr: () => (
-                      <hr className="my-4 border-claude-border" />
+                      <hr className="my-5 border-claude-border" />
                     ),
                     pre: ({ children }) => {
                       // Check if this pre contains a document code block
@@ -338,7 +356,7 @@ export function Message({
                         return <code className={`font-mono text-claude-text ${className || ''}`} {...props}>{children}</code>;
                       }
                       return (
-                        <code className="text-[13px] bg-claude-bg px-1.5 py-0.5 rounded border border-claude-border font-mono text-claude-text" {...props}>
+                        <code className="text-[13px] bg-claude-sidebar px-1.5 py-0.5 rounded border border-claude-border font-mono text-claude-text" {...props}>
                           {children}
                         </code>
                       );
@@ -347,15 +365,24 @@ export function Message({
                       <a href={href} className="text-claude-text underline decoration-claude-subtext/30 hover:decoration-claude-text" target="_blank" rel="noopener noreferrer">{children}</a>
                     ),
                     table: ({ children }) => (
-                      <div className="overflow-x-auto my-3">
-                        <table className="text-[13px] w-full text-claude-text">{children}</table>
+                      <div className="overflow-x-auto my-4 rounded-lg border border-claude-border shadow-sm">
+                        <table className="w-full text-[13px] text-claude-text border-collapse">{children}</table>
                       </div>
                     ),
+                    thead: ({ children }) => (
+                      <thead className="bg-claude-sidebar border-b border-claude-border">{children}</thead>
+                    ),
+                    tbody: ({ children }) => (
+                      <tbody className="divide-y divide-claude-border/60">{children}</tbody>
+                    ),
+                    tr: ({ children }) => (
+                      <tr className="even:bg-claude-bg/40 hover:bg-claude-sidebar/80 transition-colors">{children}</tr>
+                    ),
                     th: ({ children }) => (
-                      <th className="bg-claude-bg px-3 py-2 text-left font-semibold border border-claude-border text-claude-text">{children}</th>
+                      <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-claude-subtext uppercase tracking-wide whitespace-nowrap">{children}</th>
                     ),
                     td: ({ children }) => (
-                      <td className="px-3 py-2 border border-claude-border text-claude-text">{children}</td>
+                      <td className="px-4 py-2.5 text-claude-text align-top">{children}</td>
                     ),
                   }}
                 >
