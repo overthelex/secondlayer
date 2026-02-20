@@ -89,6 +89,40 @@ function parseToolResultContent(result: any): any {
 }
 
 /**
+ * Extract law article references from the AI answer text.
+ * Matches patterns like "ст. 509 ЦКУ", "ч. 1 ст. 626 ЦК", "ст. 124 Конституції України".
+ */
+function extractNormsFromAnswer(answerText: string): Citation[] {
+  const norms: Citation[] = [];
+  const seen = new Set<string>();
+
+  const CODES = '(?:ЦКУ|ГКУ|КПК|ЦПК|ГПК|КАС|ПКУ|СКУ|ККУ|КЗпП|ЦК|ГК|ПК)';
+  const re = new RegExp(
+    '(?:(?:п\\.?\\s*\\d+[,\\s]+)?(?:ч\\.?\\s*\\d+[,\\s]+))?' +
+    'ст(?:атт[яі])?\\.?\\s*\\d+(?:[\\u2013\\u2014,-]\\s*\\d+)*\\s+' + CODES + '(?:\\s+України)?' +
+    '|ст(?:атт[яі])?\\.?\\s*\\d+\\s+Конституц[іи][їи]\\s+України',
+    'gi'
+  );
+
+  const sentences = answerText.split(/\n|(?<=[.;!?])\s+/);
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (!trimmed) continue;
+    re.lastIndex = 0;
+    let match;
+    while ((match = re.exec(trimmed)) !== null) {
+      const ref = match[0].trim();
+      const key = ref.toLowerCase().replace(/\s+/g, ' ');
+      if (!seen.has(key)) {
+        seen.add(key);
+        norms.push({ text: trimmed, source: ref });
+      }
+    }
+  }
+  return norms;
+}
+
+/**
  * Extract Decision[] and Citation[] from a tool_result SSE event.
  * Handles all court-case and legislation tools returned by the agentic loop.
  */
@@ -208,7 +242,7 @@ function extractEvidenceFromToolResult(
       const articleNum = parsed.article_number || parsed.section_name || '';
       const title = parsed.title || parsed.rada_id || parsed.legislation_id || '';
       citations.push({
-        text: (parsed.full_text || parsed.text || parsed.content || '').slice(0, 500),
+        text: parsed.full_text || parsed.text || parsed.content || '',
         source: articleNum ? `${title}, ст. ${articleNum}` : title,
       });
     }
@@ -217,7 +251,7 @@ function extractEvidenceFromToolResult(
     if (parsed.legislation && Array.isArray(parsed.legislation)) {
       for (const l of parsed.legislation) {
         citations.push({
-          text: l.snippet || l.text || l.title || '',
+          text: l.full_text || l.text || l.snippet || l.title || '',
           source: l.title || l.type || 'Нормативний акт',
         });
       }
@@ -227,7 +261,7 @@ function extractEvidenceFromToolResult(
     if (parsed.articles && Array.isArray(parsed.articles)) {
       for (const a of parsed.articles) {
         citations.push({
-          text: (a.text || a.content || '').slice(0, 500),
+          text: a.full_text || a.text || a.content || '',
           source: `Стаття ${a.article_number || ''}`,
         });
       }
@@ -289,14 +323,14 @@ function extractEvidenceFromToolResult(
       const content = parsed.summary || parsed.text || '';
       if (content) {
         citations.push({
-          text: content.slice(0, 500),
+          text: content,
           source: parsed.title || parsed.document_id || toolName,
         });
       }
       if (parsed.clauses && Array.isArray(parsed.clauses)) {
         for (const clause of parsed.clauses) {
           citations.push({
-            text: (clause.text || clause.content || '').slice(0, 500),
+            text: clause.text || clause.content || '',
             source: clause.title || clause.name || 'Ключове положення',
           });
         }
@@ -304,7 +338,7 @@ function extractEvidenceFromToolResult(
       if (parsed.sections && Array.isArray(parsed.sections)) {
         for (const sec of parsed.sections) {
           citations.push({
-            text: (sec.content || sec.text || '').slice(0, 500),
+            text: sec.content || sec.text || '',
             source: sec.name || sec.title || 'Секція',
           });
         }
@@ -316,7 +350,7 @@ function extractEvidenceFromToolResult(
       const compText = parsed.comparison || parsed.summary || '';
       if (compText) {
         citations.push({
-          text: compText.slice(0, 500),
+          text: compText,
           source: 'Порівняння документів',
         });
       }
@@ -1138,6 +1172,13 @@ export function useAIChat(options: UseMCPToolOptions = {}) {
           onAnswer: (data) => {
             // Reconcile with final answer text from server
             contentRef.current = data.text;
+
+            // Extract law norm references mentioned in the answer text
+            const answerNorms = extractNormsFromAnswer(data.text);
+            if (answerNorms.length > 0) {
+              accumulatedCitations.current.push(...answerNorms);
+            }
+
             updateMessage(assistantMessageId, {
               content: data.text,
               isStreaming: false,
