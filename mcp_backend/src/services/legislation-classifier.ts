@@ -144,7 +144,7 @@ ${availableCodes}
           { role: 'user', content: query },
         ],
         temperature: 0.2, // Низкая температура для более детерминированных результатов
-        max_tokens: 300,
+        max_completion_tokens: 300,
       };
 
       if (supportsJsonMode) {

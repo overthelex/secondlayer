@@ -71,7 +71,7 @@ export class QueryPlanner {
             },
           ],
           temperature: 0.3,
-          max_tokens: 500,
+          max_completion_tokens: 500,
         };
 
         if (supportsJsonMode) {
@@ -459,7 +459,7 @@ export class QueryPlanner {
             },
           ],
           temperature: 0.2,
-          max_tokens: 100,
+          max_completion_tokens: 100,
         };
 
         if (supportsJsonMode) {
