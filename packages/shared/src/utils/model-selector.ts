@@ -105,6 +105,9 @@ export class ModelSelector {
       'text-embedding-3-large': { input: 0.13, output: 0 },
       // Embeddings (VoyageAI)
       'voyage-multilingual-2': { input: 0.06, output: 0 },
+      'voyage-3': { input: 0.06, output: 0 },
+      'voyage-3.5': { input: 0.06, output: 0 },
+      'voyage-3.5-lite': { input: 0.02, output: 0 },
       'voyage-law-2': { input: 0.12, output: 0 },
       'voyage-3-large': { input: 0.18, output: 0 },
       // Claude (historical — kept for cost tracking of past usage)
@@ -162,6 +165,9 @@ export class ModelSelector {
       'text-embedding-3-large': { input: 0.13, output: 0 },
       // Embeddings (VoyageAI)
       'voyage-multilingual-2': { input: 0.06, output: 0 },
+      'voyage-3': { input: 0.06, output: 0 },
+      'voyage-3.5': { input: 0.06, output: 0 },
+      'voyage-3.5-lite': { input: 0.02, output: 0 },
       'voyage-law-2': { input: 0.12, output: 0 },
       'voyage-3-large': { input: 0.18, output: 0 },
       // Claude (historical — kept for cost tracking of past usage)
