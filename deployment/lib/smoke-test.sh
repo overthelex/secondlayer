@@ -98,37 +98,69 @@ check_http_health() {
     local env=$1
     local target_server=$2
 
-    local urls=()
+    local all_passed=true
+
     case $env in
         local)
-            urls=("https://localdev.legal.org.ua/health" "https://localdev.mcp.legal.org.ua/health")
+            local urls=("https://localdev.legal.org.ua/health" "https://localdev.mcp.legal.org.ua/health")
+            for url in "${urls[@]}"; do
+                local attempt=1
+                local passed=false
+                while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
+                    if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
+                        smoke_record "HTTP health ($url)" "pass" ""
+                        passed=true
+                        break
+                    fi
+                    if [ $attempt -lt $SMOKE_TEST_RETRIES ]; then
+                        print_msg "$YELLOW" "  Health check attempt $attempt failed for $url, retrying in ${SMOKE_TEST_RETRY_DELAY}s..."
+                        sleep "$SMOKE_TEST_RETRY_DELAY"
+                    fi
+                    attempt=$((attempt + 1))
+                done
+                if [ "$passed" = false ]; then
+                    smoke_record "HTTP health ($url)" "fail" "No response after $SMOKE_TEST_RETRIES attempts"
+                    all_passed=false
+                fi
+            done
             ;;
+
         stage|staging)
-            urls=("https://stage.legal.org.ua/health" "https://legal.org.ua/health" "https://mcp.legal.org.ua/health")
+            # Primary: test directly via nginx on :8080 over SSH (bypasses Cloudflare/DNS)
+            # These are authoritative — if nginx isn't routing, the deploy is broken.
+            local domains=("stage.legal.org.ua" "legal.org.ua" "mcp.legal.org.ua")
+            for domain in "${domains[@]}"; do
+                local attempt=1
+                local passed=false
+                while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
+                    if ssh "${DEPLOY_USER}@${target_server}" \
+                        "curl -sf --max-time 10 -H 'Host: ${domain}' http://localhost:8080/health" > /dev/null 2>&1; then
+                        smoke_record "HTTP health direct ($domain)" "pass" ""
+                        passed=true
+                        break
+                    fi
+                    if [ $attempt -lt $SMOKE_TEST_RETRIES ]; then
+                        print_msg "$YELLOW" "  Direct health check attempt $attempt failed for $domain, retrying in ${SMOKE_TEST_RETRY_DELAY}s..."
+                        sleep "$SMOKE_TEST_RETRY_DELAY"
+                    fi
+                    attempt=$((attempt + 1))
+                done
+                if [ "$passed" = false ]; then
+                    smoke_record "HTTP health direct ($domain)" "fail" "No response on localhost:8080 after $SMOKE_TEST_RETRIES attempts"
+                    all_passed=false
+                fi
+            done
+
+            # Secondary: check public HTTPS URLs (through Cloudflare) — informational only
+            for domain in "${domains[@]}"; do
+                if curl -skf --max-time 10 "https://${domain}/health" > /dev/null 2>&1; then
+                    smoke_record "HTTP health public ($domain)" "pass" ""
+                else
+                    smoke_record "HTTP health public ($domain)" "warn" "Not reachable via public URL (CF/DNS may be slow)"
+                fi
+            done
             ;;
     esac
-
-    local all_passed=true
-    for url in "${urls[@]}"; do
-        local attempt=1
-        local passed=false
-        while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
-            if curl -skf --max-time 10 "$url" > /dev/null 2>&1; then
-                smoke_record "HTTP health ($url)" "pass" ""
-                passed=true
-                break
-            fi
-            if [ $attempt -lt $SMOKE_TEST_RETRIES ]; then
-                print_msg "$YELLOW" "  Health check attempt $attempt failed for $url, retrying in ${SMOKE_TEST_RETRY_DELAY}s..."
-                sleep "$SMOKE_TEST_RETRY_DELAY"
-            fi
-            attempt=$((attempt + 1))
-        done
-        if [ "$passed" = false ]; then
-            smoke_record "HTTP health ($url)" "fail" "No response after $SMOKE_TEST_RETRIES attempts"
-            all_passed=false
-        fi
-    done
 
     $all_passed
 }

@@ -501,6 +501,16 @@ deploy_local() {
         print_msg "$BLUE" "Removing dangling images..."
         docker image prune -f
 
+        # Step 3b: Pre-build shared + all service dists (mirrors stage pre-build; ensures dist/ is fresh before Docker COPY)
+        print_msg "$BLUE" "Building shared package and all service dists..."
+        (
+            cd "$REPO_ROOT"
+            npm --prefix packages/shared install && npm --prefix packages/shared run build
+            npm --prefix mcp_backend install && npm --prefix mcp_backend run build
+            npm --prefix mcp_rada install && npm --prefix mcp_rada run build
+            npm --prefix mcp_openreyestr install && npm --prefix mcp_openreyestr run build
+        )
+
         # Step 4: Rebuild images (use --no-cache flag for full rebuild)
         if [ -n "$NO_CACHE" ]; then
             print_msg "$BLUE" "Building all images without cache..."
