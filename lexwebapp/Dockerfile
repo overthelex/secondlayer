@@ -10,6 +10,9 @@ COPY lexwebapp/package.json lexwebapp/package-lock.json* ./
 # Install dependencies directly in lexwebapp
 RUN npm install --legacy-peer-deps
 
+# Cache-bust: copy git HEAD ref so Docker invalidates cache on every new commit
+COPY .git/HEAD .git/HEAD
+
 # Accept build arguments
 ARG BUILD_ENV=staging
 ARG VITE_API_URL=https://stage.legal.org.ua/api
