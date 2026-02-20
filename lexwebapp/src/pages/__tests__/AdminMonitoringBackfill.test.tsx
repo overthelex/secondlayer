@@ -15,6 +15,8 @@ const mockGetBackfillStatus = vi.fn();
 const mockStopBackfill = vi.fn();
 const mockGetDataSources = vi.fn();
 const mockGetRecentCourtDocs = vi.fn();
+const mockGetCourtScraperStatus = vi.fn();
+const mockGetImportSamples = vi.fn();
 
 vi.mock('../../utils/api-client', () => ({
   default: {},
@@ -26,6 +28,13 @@ vi.mock('../../utils/api-client', () => ({
       startBackfillFulltext: (params: any) => mockStartBackfill(params),
       getBackfillStatus: (jobId?: string) => mockGetBackfillStatus(jobId),
       stopBackfill: (jobId: string) => mockStopBackfill(jobId),
+      getCourtScraperStatus: (...args: any[]) => mockGetCourtScraperStatus(...args),
+      startCourtScraper: vi.fn(),
+      stopCourtScraper: vi.fn(),
+      getImportSamples: (...args: any[]) => mockGetImportSamples(...args),
+    },
+    documents: {
+      getById: vi.fn(),
     },
   },
 }));
@@ -128,6 +137,12 @@ describe('Document Completeness & Backfill', () => {
     mockGetBackfillStatus.mockResolvedValue({
       data: { active: false, job: null },
     });
+    mockGetCourtScraperStatus.mockResolvedValue({
+      data: { active: false, job: null },
+    });
+    mockGetImportSamples.mockResolvedValue({
+      data: { hours: 24, samples: [], summary: { court_decisions: 0, legislation: 0, embeddings: 0, user_uploads: 0 }, timestamp: new Date().toISOString() },
+    });
   });
 
   afterEach(() => {
@@ -159,9 +174,9 @@ describe('Document Completeness & Backfill', () => {
         expect(screen.getByText('Повнота (обидва поля)')).toBeInTheDocument();
       });
 
-      // Table rows
-      expect(screen.getByText('Цивільне')).toBeInTheDocument();
-      expect(screen.getByText('Кримінальне')).toBeInTheDocument();
+      // Table rows (also appears in CourtScraper <option>, so use getAllByText)
+      expect(screen.getAllByText('Цивільне').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Кримінальне').length).toBeGreaterThanOrEqual(1);
       // Summary card labels
       expect(screen.getByText('Всього документів')).toBeInTheDocument();
       expect(screen.getByText('Без обох полів')).toBeInTheDocument();
@@ -224,7 +239,7 @@ describe('Document Completeness & Backfill', () => {
 
       await waitFor(() => {
         // Table rendered with both justice kinds
-        expect(screen.getByText('Цивільне')).toBeInTheDocument();
+        expect(screen.getAllByText('Цивільне').length).toBeGreaterThanOrEqual(1);
       });
 
       expect(screen.queryByText(/Докачати всі/)).not.toBeInTheDocument();
@@ -301,10 +316,12 @@ describe('Document Completeness & Backfill', () => {
         fireEvent.click(screen.getByText(/Докачати всі/));
       });
 
-      expect(mockStartBackfill).toHaveBeenCalledWith({
-        justice_kind_code: 'all',
-        limit: 200,
-      });
+      expect(mockStartBackfill).toHaveBeenCalledWith(
+        expect.objectContaining({
+          justice_kind_code: 'all',
+          limit: 200,
+        })
+      );
     });
 
     it('starts backfill for specific justice kind', async () => {
@@ -337,10 +354,12 @@ describe('Document Completeness & Backfill', () => {
         fireEvent.click(buttons[0]);
       });
 
-      expect(mockStartBackfill).toHaveBeenCalledWith({
-        justice_kind_code: '1',
-        limit: 200,
-      });
+      expect(mockStartBackfill).toHaveBeenCalledWith(
+        expect.objectContaining({
+          justice_kind_code: '1',
+          limit: 200,
+        })
+      );
     });
 
     it('handles 409 conflict (already running) by fetching status', async () => {
@@ -451,7 +470,7 @@ describe('Document Completeness & Backfill', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Цивільне')).toBeInTheDocument();
+        expect(screen.getAllByText('Цивільне').length).toBeGreaterThanOrEqual(1);
       });
 
       // "Докачати всі" and per-row buttons should NOT appear while active
