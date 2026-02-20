@@ -234,7 +234,9 @@ function extractEvidenceFromToolResult(
   const legislationTools = [
     'search_legislation',
     'get_legislation_article',
+    'get_legislation_articles',
     'get_legislation_section',
+    'find_relevant_law_articles',
   ];
   if (legislationTools.some((t) => toolName.includes(t) || toolName === t)) {
     // Single article result
@@ -264,6 +266,21 @@ function extractEvidenceFromToolResult(
           text: a.full_text || a.text || a.content || '',
           source: `Стаття ${a.article_number || ''}`,
         });
+      }
+    }
+
+    // find_relevant_law_articles — returns array of string article refs or objects
+    if (toolName === 'find_relevant_law_articles') {
+      const refs = parsed.relevant_articles || parsed.articles || (Array.isArray(parsed) ? parsed : []);
+      for (const r of refs) {
+        if (typeof r === 'string') {
+          citations.push({ text: r, source: r });
+        } else if (r?.article || r?.reference || r?.norm) {
+          citations.push({
+            text: r.text || r.content || r.description || r.article || r.reference || r.norm || '',
+            source: r.article || r.reference || r.norm || r.title || 'Норма',
+          });
+        }
       }
     }
   }
