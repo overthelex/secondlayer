@@ -478,9 +478,9 @@ deploy_local() {
     (
         set -e
 
-        # Step 1: Pull latest main
-        print_msg "$BLUE" "Pulling latest main branch..."
-        git -C "$REPO_ROOT" fetch origin main && git -C "$REPO_ROOT" checkout main && git -C "$REPO_ROOT" pull origin main
+        # Step 1: Pull latest localdev
+        print_msg "$BLUE" "Pulling latest localdev branch..."
+        git -C "$REPO_ROOT" fetch origin localdev && git -C "$REPO_ROOT" checkout localdev && git -C "$REPO_ROOT" pull origin localdev
 
         # Step 2: Stop app containers only (keep infrastructure: postgres, redis, qdrant, minio)
         print_msg "$BLUE" "Stopping app containers (keeping databases running)..."
