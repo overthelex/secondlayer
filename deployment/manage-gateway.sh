@@ -480,11 +480,8 @@ deploy_local() {
     (
         set -e
 
-        # Step 1: Pull latest localdev
-        print_msg "$BLUE" "Pulling latest localdev branch..."
-        git -C "$REPO_ROOT" fetch origin localdev && git -C "$REPO_ROOT" checkout localdev && git -C "$REPO_ROOT" pull origin localdev
-
-        # Step 2: Stop app containers only (keep infrastructure: postgres, redis, qdrant, minio)
+        # Step 1: Stop app containers only (keep infrastructure: postgres, redis, qdrant, minio)
+        # Note: branch sync (localdev checkout + pull) is handled by preflight check_git_clean_state
         print_msg "$BLUE" "Stopping app containers (keeping databases running)..."
         $compose_cmd $compose_args stop \
             app-local rada-mcp-app-local app-openreyestr-local \

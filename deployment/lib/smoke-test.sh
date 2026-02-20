@@ -101,7 +101,7 @@ check_http_health() {
     local urls=()
     case $env in
         local)
-            urls=("http://localhost:3000/health")
+            urls=("https://localdev.legal.org.ua/health" "https://localdev.mcp.legal.org.ua/health")
             ;;
         stage|staging)
             urls=("https://stage.legal.org.ua/health" "https://legal.org.ua/health" "https://mcp.legal.org.ua/health")

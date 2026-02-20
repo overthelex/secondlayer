@@ -111,6 +111,13 @@ check_docker_daemon() {
 # Check for uncommitted git changes
 check_git_clean_state() {
     local repo_root=$1
+    local env=${2:-stage}
+
+    # Determine which remote branch to track
+    local remote_branch="main"
+    if [ "$env" = "local" ]; then
+        remote_branch="localdev"
+    fi
 
     local status
     status=$(git -C "$repo_root" status --porcelain 2>/dev/null)
@@ -122,15 +129,32 @@ check_git_clean_state() {
         preflight_record "Git clean state" "warn" "${changed_count} uncommitted changes"
     fi
 
-    # Check if local is behind remote
-    git -C "$repo_root" fetch origin main --quiet 2>/dev/null
+    # Check if local is behind remote branch
+    git -C "$repo_root" fetch origin "$remote_branch" --quiet 2>/dev/null
     local local_sha remote_sha
     local_sha=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null)
-    remote_sha=$(git -C "$repo_root" rev-parse origin/main 2>/dev/null)
-    if [ "$local_sha" != "$remote_sha" ]; then
-        preflight_record "Git sync" "warn" "Local HEAD differs from origin/main"
+    remote_sha=$(git -C "$repo_root" rev-parse "origin/${remote_branch}" 2>/dev/null)
+    if [ "$local_sha" = "$remote_sha" ]; then
+        preflight_record "Git sync (origin/$remote_branch)" "pass" ""
     else
-        preflight_record "Git sync" "pass" ""
+        # For local env: auto-switch to localdev and pull if behind
+        if [ "$env" = "local" ]; then
+            local current_branch
+            current_branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+            if [ "$current_branch" != "$remote_branch" ]; then
+                print_msg "$YELLOW" "  Switching to $remote_branch branch..."
+                git -C "$repo_root" checkout "$remote_branch" 2>/dev/null || true
+            fi
+            local behind
+            behind=$(git -C "$repo_root" rev-list --count HEAD..origin/"$remote_branch" 2>/dev/null || echo 0)
+            if [ "$behind" -gt 0 ]; then
+                print_msg "$YELLOW" "  HEAD is $behind commit(s) behind origin/$remote_branch — pulling..."
+                git -C "$repo_root" pull origin "$remote_branch" --ff-only 2>/dev/null || true
+            fi
+            preflight_record "Git sync (origin/$remote_branch)" "pass" "auto-synced to origin/$remote_branch"
+        else
+            preflight_record "Git sync (origin/$remote_branch)" "warn" "Local HEAD differs from origin/$remote_branch"
+        fi
     fi
 }
 
@@ -175,7 +199,7 @@ preflight_check() {
     fi
 
     # Git state
-    check_git_clean_state "$repo_root"
+    check_git_clean_state "$repo_root" "$env"
 
     if [ "$target_server" = "localhost" ]; then
         # Local checks
