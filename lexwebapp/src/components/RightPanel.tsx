@@ -60,6 +60,8 @@ const cardVariants = {
 
 export function RightPanel({ isOpen, onClose }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<'decisions' | 'regulations' | 'documents'>('decisions');
+  // Track whether user manually selected a tab (prevents auto-switch overriding user choice)
+  const userSelectedTab = useRef(false);
 
   const messages = useChatStore(state => state.messages);
 
@@ -100,6 +102,24 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
       return true;
     });
   }, [messages]);
+  // Reset user-selection flag when conversation is cleared (messages go back to 0)
+  useEffect(() => {
+    if (messages.length === 0) {
+      userSelectedTab.current = false;
+      setActiveTab('decisions');
+    }
+  }, [messages.length]);
+
+  // Auto-switch to the most relevant tab when data first arrives
+  useEffect(() => {
+    if (userSelectedTab.current) return;
+    if (citations.length > 0 && decisions.length === 0) {
+      setActiveTab('regulations');
+    } else if (decisions.length > 0) {
+      setActiveTab('decisions');
+    }
+  }, [citations.length, decisions.length]);
+
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [viewerItem, setViewerItem] = useState<DocumentViewerItem | null>(null);
@@ -245,7 +265,7 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { userSelectedTab.current = true; setActiveTab(tab.id); }}
               className={`flex-1 min-w-0 px-2 py-2.5 text-[10px] font-medium uppercase tracking-wider transition-all duration-200 border-b-2 ${
                 activeTab === tab.id
                   ? 'border-claude-text text-claude-text'
