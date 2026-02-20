@@ -1297,12 +1297,22 @@ export function createAdminRoutes(
           AND status = 'completed'
       `, [interval]);
 
+      // VoyageAI totals from monthly_api_usage (global callback writes here without requestId)
+      const voyageTotalsResult = await db.query(`
+        SELECT
+          COALESCE(SUM(voyage_total_tokens), 0) as voyage_tokens,
+          COALESCE(SUM(voyage_total_cost_usd), 0) as voyage_cost
+        FROM monthly_api_usage
+        WHERE year_month >= TO_CHAR(NOW() - $1::interval, 'YYYY-MM')
+      `, [interval]);
+
       const totals = totalsResult.rows[0];
+      const voyageTotals = voyageTotalsResult.rows[0];
 
       // 2. By provider (with token counts from JSONB)
       const openaiTokensResult = await db.query(`
         SELECT
-          COALESCE(SUM((elem->>'tokens')::numeric), 0) as tokens,
+          COALESCE(SUM((elem->>'total_tokens')::numeric), 0) as tokens,
           COUNT(*) as calls
         FROM cost_tracking,
           jsonb_array_elements(CASE WHEN openai_calls IS NOT NULL AND openai_calls != 'null'::jsonb AND jsonb_typeof(openai_calls) = 'array' THEN openai_calls ELSE '[]'::jsonb END) AS elem
@@ -1312,7 +1322,7 @@ export function createAdminRoutes(
 
       const anthropicTokensResult = await db.query(`
         SELECT
-          COALESCE(SUM((elem->>'tokens')::numeric), 0) as tokens,
+          COALESCE(SUM((elem->>'total_tokens')::numeric), 0) as tokens,
           COUNT(*) as calls
         FROM cost_tracking,
           jsonb_array_elements(CASE WHEN anthropic_calls IS NOT NULL AND anthropic_calls != 'null'::jsonb AND jsonb_typeof(anthropic_calls) = 'array' THEN anthropic_calls ELSE '[]'::jsonb END) AS elem
@@ -1341,6 +1351,11 @@ export function createAdminRoutes(
           tokens: parseInt(anthropicTokensResult.rows[0]?.tokens || '0'),
         },
         {
+          provider: 'VoyageAI',
+          cost_usd: parseFloat(voyageTotals.voyage_cost),
+          tokens: parseInt(voyageTotals.voyage_tokens || '0'),
+        },
+        {
           provider: 'ZakonOnline',
           cost_usd: parseFloat(totals.zakononline_cost),
           calls: parseInt(zoCallsResult.rows[0]?.calls || '0'),
@@ -1358,8 +1373,8 @@ export function createAdminRoutes(
           SELECT
             'OpenAI' as provider,
             elem->>'model' as model,
-            COALESCE((elem->>'cost')::numeric, 0) as cost,
-            COALESCE((elem->>'tokens')::numeric, 0) as tokens
+            COALESCE((elem->>'cost_usd')::numeric, 0) as cost,
+            COALESCE((elem->>'total_tokens')::numeric, 0) as tokens
           FROM cost_tracking,
             jsonb_array_elements(CASE WHEN openai_calls IS NOT NULL AND openai_calls != 'null'::jsonb AND jsonb_typeof(openai_calls) = 'array' THEN openai_calls ELSE '[]'::jsonb END) AS elem
           WHERE created_at >= NOW() - $1::interval
@@ -1369,10 +1384,22 @@ export function createAdminRoutes(
           SELECT
             'Anthropic' as provider,
             elem->>'model' as model,
-            COALESCE((elem->>'cost')::numeric, 0) as cost,
-            COALESCE((elem->>'tokens')::numeric, 0) as tokens
+            COALESCE((elem->>'cost_usd')::numeric, 0) as cost,
+            COALESCE((elem->>'total_tokens')::numeric, 0) as tokens
           FROM cost_tracking,
             jsonb_array_elements(CASE WHEN anthropic_calls IS NOT NULL AND anthropic_calls != 'null'::jsonb AND jsonb_typeof(anthropic_calls) = 'array' THEN anthropic_calls ELSE '[]'::jsonb END) AS elem
+          WHERE created_at >= NOW() - $1::interval
+            AND status = 'completed'
+        ),
+        -- Per-request voyage (when requestId-scoped tracking is available)
+        voyage_per_request AS (
+          SELECT
+            'VoyageAI' as provider,
+            elem->>'model' as model,
+            COALESCE((elem->>'cost_usd')::numeric, 0) as cost,
+            COALESCE((elem->>'total_tokens')::numeric, 0) as tokens
+          FROM cost_tracking,
+            jsonb_array_elements(CASE WHEN voyage_calls IS NOT NULL AND voyage_calls != 'null'::jsonb AND jsonb_typeof(voyage_calls) = 'array' THEN voyage_calls ELSE '[]'::jsonb END) AS elem
           WHERE created_at >= NOW() - $1::interval
             AND status = 'completed'
         ),
@@ -1380,6 +1407,8 @@ export function createAdminRoutes(
           SELECT * FROM openai_models
           UNION ALL
           SELECT * FROM anthropic_models
+          UNION ALL
+          SELECT * FROM voyage_per_request
         )
         SELECT
           provider,
@@ -1393,13 +1422,38 @@ export function createAdminRoutes(
         ORDER BY cost_usd DESC
       `, [interval]);
 
-      const byModel = byModelResult.rows.map((row: any) => ({
+      const byModel: Array<{ provider: string; model: string; cost_usd: number; tokens: number; requests: number }> = byModelResult.rows.map((row: any) => ({
         provider: row.provider,
         model: row.model,
         cost_usd: parseFloat(row.cost_usd),
         tokens: parseInt(row.tokens),
         requests: parseInt(row.requests),
       }));
+
+      // Supplement byModel with VoyageAI data from monthly_api_usage
+      // (global callback writes there without requestId scoping)
+      const voyageModel = process.env.VOYAGEAI_EMBEDDING_MODEL || 'voyage-multilingual-2';
+      const voyageHasPerRequest = byModel.some((m) => m.provider === 'VoyageAI');
+      if (!voyageHasPerRequest) {
+        const voyageMonthlyResult = await db.query(`
+          SELECT
+            COALESCE(SUM(voyage_total_tokens), 0) as total_tokens,
+            COALESCE(SUM(voyage_total_cost_usd), 0) as total_cost
+          FROM monthly_api_usage
+          WHERE year_month >= TO_CHAR(NOW() - $1::interval, 'YYYY-MM')
+        `, [interval]);
+        const vRow = voyageMonthlyResult.rows[0];
+        if (parseFloat(vRow?.total_tokens || '0') > 0) {
+          byModel.push({
+            provider: 'VoyageAI',
+            model: voyageModel,
+            cost_usd: parseFloat(vRow.total_cost),
+            tokens: parseInt(vRow.total_tokens),
+            requests: 0, // monthly aggregates don't track individual requests
+          });
+          byModel.sort((a, b) => b.cost_usd - a.cost_usd);
+        }
+      }
 
       // 4. Daily breakdown
       const dailyResult = await db.query(`
@@ -1408,7 +1462,8 @@ export function createAdminRoutes(
           COALESCE(SUM(openai_cost_usd), 0) as openai,
           COALESCE(SUM(anthropic_cost_usd), 0) as anthropic,
           COALESCE(SUM(zakononline_cost_usd), 0) as zakononline,
-          COALESCE(SUM(secondlayer_cost_usd), 0) as secondlayer
+          COALESCE(SUM(secondlayer_cost_usd), 0) as secondlayer,
+          COALESCE(SUM(voyage_cost_usd), 0) as voyage
         FROM cost_tracking
         WHERE created_at >= NOW() - $1::interval
           AND status = 'completed'
@@ -1422,11 +1477,13 @@ export function createAdminRoutes(
         anthropic: parseFloat(row.anthropic),
         zakononline: parseFloat(row.zakononline),
         secondlayer: parseFloat(row.secondlayer),
+        voyage: parseFloat(row.voyage),
       }));
 
       const fromDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const toDate = new Date().toISOString().split('T')[0];
 
+      const voyageCostUsd = parseFloat(voyageTotals.voyage_cost);
       res.json({
         period: { from: fromDate, to: toDate, days },
         totals: {
@@ -1434,7 +1491,8 @@ export function createAdminRoutes(
           anthropic_cost_usd: parseFloat(totals.anthropic_cost),
           zakononline_cost_usd: parseFloat(totals.zakononline_cost),
           secondlayer_cost_usd: parseFloat(totals.secondlayer_cost),
-          total_cost_usd: parseFloat(totals.total_cost),
+          voyage_cost_usd: voyageCostUsd,
+          total_cost_usd: parseFloat(totals.total_cost) + voyageCostUsd,
           total_requests: parseInt(totals.total_requests),
         },
         by_provider: byProvider,

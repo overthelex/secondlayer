@@ -5,6 +5,7 @@ import {
   CostBreakdown,
   OpenAICallRecord,
   AnthropicCallRecord,
+  VoyageCallRecord,
 } from '../types/cost';
 
 export interface CostTrackerConfig {
@@ -189,6 +190,72 @@ export abstract class BaseCostTracker {
       });
     } catch (error) {
       logger.error('Failed to record Anthropic call:', error);
+    }
+  }
+
+  // Cost per token by model (USD)
+  private static VOYAGE_COST_PER_TOKEN: Record<string, number> = {
+    'voyage-multilingual-2': 0.00000012,  // $0.12/1M tokens
+    'voyage-3-multilingual': 0.00000006,  // $0.06/1M tokens
+    'voyage-3': 0.00000006,              // $0.06/1M tokens
+    'voyage-3-lite': 0.00000002,         // $0.02/1M tokens
+    'voyage-finance-2': 0.00000012,      // $0.12/1M tokens
+    'voyage-law-2': 0.00000012,          // $0.12/1M tokens
+  };
+
+  async recordVoyageCall(params: {
+    requestId?: string;
+    model: string;
+    totalTokens: number;
+    task: string;
+  }): Promise<void> {
+    const costPerToken = BaseCostTracker.VOYAGE_COST_PER_TOKEN[params.model] ?? 0.00000012;
+    const costUsd = params.totalTokens * costPerToken;
+
+    try {
+      // If we have a requestId, record at the per-request level too
+      if (params.requestId) {
+        const callRecord: VoyageCallRecord = {
+          model: params.model,
+          total_tokens: params.totalTokens,
+          cost_usd: costUsd,
+          task: params.task,
+          timestamp: new Date().toISOString(),
+        };
+
+        await this.db.query(
+          `UPDATE cost_tracking
+           SET voyage_total_tokens = voyage_total_tokens + $1,
+               voyage_cost_usd = voyage_cost_usd + $2,
+               voyage_calls = voyage_calls || $3::jsonb,
+               total_cost_usd = total_cost_usd + $2
+           WHERE request_id = $4`,
+          [params.totalTokens, costUsd, JSON.stringify([callRecord]), params.requestId]
+        );
+      }
+
+      // Always record in monthly aggregates
+      const now = new Date();
+      const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      await this.db.query(
+        `INSERT INTO monthly_api_usage (year_month, voyage_total_tokens, voyage_total_cost_usd)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (year_month) DO UPDATE
+         SET voyage_total_tokens = monthly_api_usage.voyage_total_tokens + $2,
+             voyage_total_cost_usd = monthly_api_usage.voyage_total_cost_usd + $3,
+             updated_at = NOW()`,
+        [yearMonth, params.totalTokens, costUsd]
+      );
+
+      logger.debug('VoyageAI call recorded', {
+        requestId: params.requestId,
+        model: params.model,
+        tokens: params.totalTokens,
+        cost: `$${costUsd.toFixed(8)}`,
+      });
+    } catch (error) {
+      logger.error('Failed to record VoyageAI call:', error);
     }
   }
 

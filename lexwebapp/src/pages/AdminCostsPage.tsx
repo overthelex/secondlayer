@@ -16,6 +16,7 @@ import {
   Globe,
   Zap,
   Server,
+  Layers,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -41,6 +42,7 @@ interface CostBreakdown {
     anthropic_cost_usd: number;
     zakononline_cost_usd: number;
     secondlayer_cost_usd: number;
+    voyage_cost_usd: number;
     total_cost_usd: number;
     total_requests: number;
   };
@@ -64,6 +66,7 @@ interface CostBreakdown {
     anthropic: number;
     zakononline: number;
     secondlayer: number;
+    voyage: number;
   }>;
 }
 
@@ -135,6 +138,7 @@ const COLORS = {
 const PROVIDER_COLORS: Record<string, string> = {
   OpenAI: COLORS.emerald,
   Anthropic: COLORS.purple,
+  VoyageAI: COLORS.cyan,
   ZakonOnline: COLORS.amber,
   'SecondLayer API': COLORS.blue,
 };
@@ -332,6 +336,7 @@ export function AdminCostsPage() {
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     OpenAI: d.openai,
     Anthropic: d.anthropic,
+    VoyageAI: d.voyage,
     ZakonOnline: d.zakononline,
     SecondLayer: d.secondlayer,
   }));
@@ -388,13 +393,13 @@ export function AdminCostsPage() {
 
       {/* KPI Cards */}
       {costLoading && !costData ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-claude-border p-5 shadow-sm animate-pulse h-28" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
           <KPICard
             label="Total Cost"
             value={formatUSD(costData?.totals.total_cost_usd)}
@@ -414,6 +419,12 @@ export function AdminCostsPage() {
             value={formatUSD(costData?.totals.anthropic_cost_usd)}
             icon={Zap}
             color="bg-purple-50 text-purple-600"
+          />
+          <KPICard
+            label="VoyageAI"
+            value={formatUSD(costData?.totals.voyage_cost_usd)}
+            icon={Layers}
+            color="bg-cyan-50 text-cyan-600"
           />
           <KPICard
             label="ZakonOnline"
@@ -474,6 +485,14 @@ export function AdminCostsPage() {
                     stackId="1"
                     stroke={COLORS.purple}
                     fill={COLORS.purple}
+                    fillOpacity={0.7}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="VoyageAI"
+                    stackId="1"
+                    stroke={COLORS.cyan}
+                    fill={COLORS.cyan}
                     fillOpacity={0.7}
                   />
                   <Area

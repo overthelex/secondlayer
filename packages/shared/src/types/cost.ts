@@ -22,6 +22,14 @@ export interface AnthropicCallRecord {
   timestamp: string;
 }
 
+export interface VoyageCallRecord {
+  model: string;
+  total_tokens: number;
+  cost_usd: number;
+  task: string;
+  timestamp: string;
+}
+
 export interface ZOCallRecord {
   endpoint: string;
   timestamp: string;

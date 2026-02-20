@@ -166,6 +166,13 @@ class HTTPMCPServer {
     this.invoiceService = new InvoiceService();
     this.costTracker.setBillingService(this.billingService);
 
+    // Register VoyageAI token usage callback on EmbeddingService
+    this.services.embeddingService.setTokenUsageCallback((tokens, model, task) => {
+      this.costTracker.recordVoyageCall({ model, totalTokens: tokens, task }).catch((err) => {
+        logger.warn('Failed to record VoyageAI tokens in monthly stats', { error: err.message });
+      });
+    });
+
     // Initialize Phase 2 billing services (API keys & credits)
     this.apiKeyService = new ApiKeyService(this.services.db.getPool());
     this.creditService = new CreditService(this.services.db.getPool());

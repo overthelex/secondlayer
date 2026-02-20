@@ -14,6 +14,12 @@ interface VoyageEmbeddingResponse {
   usage: { total_tokens: number };
 }
 
+export interface VoyageBatchResult {
+  embeddings: number[][];
+  totalTokens: number;
+  model: string;
+}
+
 export class VoyageAIClient {
   constructor(private apiKey: string) {
     if (!apiKey) {
@@ -22,23 +28,30 @@ export class VoyageAIClient {
   }
 
   async generateEmbedding(text: string, model: string = 'voyage-multilingual-2'): Promise<number[]> {
-    const results = await this.generateEmbeddingsBatch([text], model);
-    return results[0];
+    const result = await this.generateEmbeddingsBatchWithUsage([text], model);
+    return result.embeddings[0];
   }
 
   async generateEmbeddingsBatch(texts: string[], model: string = 'voyage-multilingual-2'): Promise<number[][]> {
+    const result = await this.generateEmbeddingsBatchWithUsage(texts, model);
+    return result.embeddings;
+  }
+
+  async generateEmbeddingsBatchWithUsage(texts: string[], model: string = 'voyage-multilingual-2'): Promise<VoyageBatchResult> {
     const allEmbeddings: number[][] = [];
+    let totalTokens = 0;
 
     for (let i = 0; i < texts.length; i += BATCH_SIZE) {
       const batch = texts.slice(i, i + BATCH_SIZE);
-      const embeddings = await this._embedBatchWithRetry(batch, model);
+      const { embeddings, tokens } = await this._embedBatchWithRetry(batch, model);
       allEmbeddings.push(...embeddings);
+      totalTokens += tokens;
     }
 
-    return allEmbeddings;
+    return { embeddings: allEmbeddings, totalTokens, model };
   }
 
-  private async _embedBatchWithRetry(texts: string[], model: string): Promise<number[][]> {
+  private async _embedBatchWithRetry(texts: string[], model: string): Promise<{ embeddings: number[][], tokens: number }> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -62,7 +75,7 @@ export class VoyageAIClient {
     throw lastError ?? new Error('VoyageAI: max retries exceeded');
   }
 
-  private async _embedBatch(texts: string[], model: string): Promise<number[][]> {
+  private async _embedBatch(texts: string[], model: string): Promise<{ embeddings: number[][], tokens: number }> {
     const response = await fetch(VOYAGE_API_URL, {
       method: 'POST',
       headers: {
@@ -81,6 +94,7 @@ export class VoyageAIClient {
 
     const data = (await response.json()) as VoyageEmbeddingResponse;
     // Sort by index to ensure order is preserved
-    return data.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    const embeddings = data.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    return { embeddings, tokens: data.usage?.total_tokens ?? 0 };
   }
 }

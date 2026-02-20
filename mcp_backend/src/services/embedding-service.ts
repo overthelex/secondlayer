@@ -9,16 +9,24 @@ const VOYAGE_MODEL = process.env.VOYAGEAI_EMBEDDING_MODEL || 'voyage-multilingua
 const MAX_CHUNK_TOKENS = 512;
 const CHUNK_OVERLAP = 50;
 
+export type VoyageTokensCallback = (tokens: number, model: string, task: string) => void;
+
 export class EmbeddingService {
   private voyageClient = new VoyageAIClient(process.env.VOYAGEAI_API_KEY!);
   private qdrant: QdrantClient;
   private collectionName = 'legal_sections';
   private initialized = false;
+  private tokenUsageCallback?: VoyageTokensCallback;
 
   constructor() {
 
     const qdrantUrl = process.env.QDRANT_URL || 'http://localhost:6333';
     this.qdrant = new QdrantClient({ url: qdrantUrl });
+  }
+
+  /** Register a callback to receive VoyageAI token usage (for cost tracking). */
+  setTokenUsageCallback(cb: VoyageTokensCallback | undefined): void {
+    this.tokenUsageCallback = cb;
   }
 
   async initialize() {
@@ -61,18 +69,22 @@ export class EmbeddingService {
     }
   }
 
-  async generateEmbedding(text: string): Promise<number[]> {
+  async generateEmbedding(text: string, task: string = 'embedding'): Promise<number[]> {
     try {
-      return await this.voyageClient.generateEmbedding(text, VOYAGE_MODEL);
+      const result = await this.voyageClient.generateEmbeddingsBatchWithUsage([text], VOYAGE_MODEL);
+      this.tokenUsageCallback?.(result.totalTokens, result.model, task);
+      return result.embeddings[0];
     } catch (error) {
       logger.error('Embedding generation error:', error);
       throw error;
     }
   }
 
-  async generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
+  async generateEmbeddingsBatch(texts: string[], task: string = 'batch_embedding'): Promise<number[][]> {
     try {
-      return await this.voyageClient.generateEmbeddingsBatch(texts, VOYAGE_MODEL);
+      const result = await this.voyageClient.generateEmbeddingsBatchWithUsage(texts, VOYAGE_MODEL);
+      this.tokenUsageCallback?.(result.totalTokens, result.model, task);
+      return result.embeddings;
     } catch (error) {
       logger.error('Batch embedding generation error:', error);
       throw error;
