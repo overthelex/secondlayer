@@ -145,8 +145,6 @@ start_env() {
                     redis-exporter node-exporter cadvisor-stage"
             ;;
         local)
-            ensure_local_dns
-
             local local_compose_args="-f docker-compose.local.yml"
             if [ -f ".env.local" ]; then
                 local_compose_args="$local_compose_args --env-file .env.local"
@@ -382,25 +380,6 @@ check_health() {
     echo ""
 }
 
-# Ensure /etc/hosts has entries for localdev domains
-ensure_local_dns() {
-    local domains=("localdev.legal.org.ua" "localdev.mcp.legal.org.ua")
-    local resolved_ip
-    resolved_ip=$(dig +short localdev.legal.org.ua @8.8.8.8 2>/dev/null | head -1)
-
-    if [ -z "$resolved_ip" ]; then
-        print_msg "$YELLOW" "Could not resolve localdev.legal.org.ua via Google DNS"
-        return 0
-    fi
-
-    for domain in "${domains[@]}"; do
-        if ! grep -q "$domain" /etc/hosts 2>/dev/null; then
-            print_msg "$BLUE" "Adding $domain -> $resolved_ip to /etc/hosts"
-            echo "$resolved_ip $domain" | sudo tee -a /etc/hosts > /dev/null
-        fi
-    done
-}
-
 # Manage Let's Encrypt certificates for local environment
 ensure_letsencrypt_certs() {
     local certs_dir="$SCRIPT_DIR/nginx/certs"
@@ -458,8 +437,7 @@ deploy_local() {
 
     print_msg "$BLUE" "Deploying local environment (full rebuild)..."
 
-    # Phase 0: Ensure DNS and TLS
-    ensure_local_dns
+    # Phase 0: Ensure TLS
     ensure_letsencrypt_certs "$compose_args"
 
     # Phase 1: Pre-flight checks
