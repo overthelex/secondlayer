@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
@@ -31,6 +32,7 @@ import { InvoiceService } from './services/invoice-service.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { createBillingRoutes } from './routes/billing-routes.js';
 import { createAdminRoutes } from './routes/admin-routes.js';
+import { attachTerminalWebSocket } from './routes/terminal-routes.js';
 import { createTeamRoutes } from './routes/team-routes.js';
 import { createTeamService } from './services/team-service.js';
 import { createTestEmailRoute } from './routes/test-email-route.js';
@@ -2598,7 +2600,12 @@ class HTTPMCPServer {
     const port = parseInt(process.env.HTTP_PORT || '3000', 10);
     const host = process.env.HTTP_HOST || '0.0.0.0';
 
-    this.app.listen(port, host, () => {
+    const httpServer = createServer(this.app);
+
+    // Attach admin terminal WebSocket
+    attachTerminalWebSocket(httpServer, this.services.db);
+
+    httpServer.listen(port, host, () => {
       logger.info(`HTTP MCP Server started on http://${host}:${port}`);
       logger.info('Available endpoints:');
       logger.info('  GET  /health - Health check');
@@ -2608,6 +2615,7 @@ class HTTPMCPServer {
       logger.info('  POST /api/tools/:toolName - Call a tool (JSON or SSE)');
       logger.info('  POST /api/tools/:toolName/stream - Stream tool execution (SSE)');
       logger.info('  POST /api/tools/batch - Batch tool calls');
+      logger.info('  WS   /api/admin/terminal - Admin bash terminal');
       logger.info('');
       logger.info('ChatGPT Web Integration:');
       logger.info('  - MCP Server URL: https://mcp.legal.org.ua/sse');

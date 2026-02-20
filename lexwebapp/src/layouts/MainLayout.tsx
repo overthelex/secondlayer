@@ -46,6 +46,7 @@ const PAGE_TITLES: Record<string, string> = {
   [ROUTES.ADMIN_INFRASTRUCTURE]: 'Інфраструктура',
   [ROUTES.ADMIN_CONTAINERS]: 'Контейнери',
   [ROUTES.ADMIN_CONFIG]: 'Конфігурація системи',
+  [ROUTES.ADMIN_TERMINAL]: 'Admin Terminal',
 };
 
 export function MainLayout() {
@@ -139,6 +140,7 @@ export function MainLayout() {
           onAdminConfigClick={() => navigate(ROUTES.ADMIN_CONFIG)}
           onAdminDBCompareClick={() => navigate(ROUTES.ADMIN_DB_COMPARE)}
           onAdminServicePricingClick={() => navigate(ROUTES.ADMIN_SERVICE_PRICING)}
+          onAdminTerminalClick={() => navigate(ROUTES.ADMIN_TERMINAL)}
           onLogout={handleLogout}
         />
       </div>
