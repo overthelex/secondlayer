@@ -312,6 +312,9 @@ services:
       ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-admin@legal.org.ua}
       ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-admin123456}
 
+      # Terminal service (dedicated Debian container for admin shell)
+      TERMINAL_SERVICE_URL: ws://terminal-service-local:3010
+
     ports:
       - "3000:3000"  # Standard backend port
 
@@ -648,6 +651,56 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+  # ===== Terminal Service (Debian shell for admins) =====
+
+  terminal-service-local:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.terminal-service
+    image: terminal-service:latest
+    container_name: terminal-service-local
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    environment:
+      TERMINAL_CWD: /workspace/mcp_backend
+      MAX_SESSIONS: "10"
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      POSTGRES_HOST: postgres-local
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
+      REDIS_URL: redis://redis-local:6379
+      REDIS_HOST: redis-local
+      REDIS_PORT: 6379
+      QDRANT_URL: http://qdrant-local:6333
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
+      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
+      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-in-production}
+      LOG_LEVEL: debug
+    volumes:
+      - ../:/workspace
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+      redis-local:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    # NO ports exposed — only accessible via Docker internal network
 
   # MinIO - S3-compatible object storage for media/large files
   minio-local:
