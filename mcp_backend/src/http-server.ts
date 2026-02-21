@@ -17,13 +17,11 @@ import path from 'path';
 // import { createEULARouter } from './routes/eula.js'; // REMOVED: EULA not needed
 import { CostTracker } from './services/cost-tracker.js';
 import { BillingService } from './services/billing-service.js';
-import { StripeService } from './services/stripe-service.js';
-import { FondyService } from './services/fondy-service.js';
+import { MonobankService } from './services/monobank-service.js';
 import { MetaMaskService } from './services/metamask-service.js';
 import { BinancePayService } from './services/binance-pay-service.js';
 import { EmailService } from './services/email-service.js';
-import { MockStripeService } from './services/__mocks__/stripe-service-mock.js';
-import { MockFondyService } from './services/__mocks__/fondy-service-mock.js';
+import { MockMonobankService } from './services/__mocks__/monobank-service-mock.js';
 import { MockMetaMaskService } from './services/__mocks__/metamask-service-mock.js';
 import { MockBinancePayService } from './services/__mocks__/binance-pay-service-mock.js';
 import { initializeCryptoTagMiddleware } from './middleware/crypto-tag-required.js';
@@ -103,8 +101,7 @@ class HTTPMCPServer {
   private batchDocumentTools: BatchDocumentTools;
   private costTracker: CostTracker;
   private billingService: BillingService;
-  private stripeService: StripeService | MockStripeService;
-  private fondyService: FondyService | MockFondyService;
+  private monobankService: MonobankService | MockMonobankService;
   private metamaskService: MetaMaskService | MockMetaMaskService;
   private binancePayService: BinancePayService | MockBinancePayService;
   private emailService: EmailService;
@@ -349,29 +346,17 @@ class HTTPMCPServer {
 
     // Use mock services if MOCK_PAYMENTS=true or keys not configured
     const mockPaymentsEnabled = process.env.MOCK_PAYMENTS === 'true';
-    const useMockStripe = mockPaymentsEnabled ||
-                          !process.env.STRIPE_SECRET_KEY ||
-                          process.env.STRIPE_SECRET_KEY.includes('mock') ||
-                          process.env.STRIPE_SECRET_KEY.includes('test');
-    const useMockFondy = mockPaymentsEnabled ||
-                         !process.env.FONDY_SECRET_KEY ||
-                         process.env.FONDY_SECRET_KEY.includes('mock') ||
-                         process.env.FONDY_SECRET_KEY.includes('test');
 
-    if (useMockStripe) {
-      this.stripeService = new MockStripeService(this.billingService, this.emailService);
-      logger.warn('🧪 Using MOCK Stripe service (no real payments will be processed)');
+    const useMockMonobank = mockPaymentsEnabled ||
+                            !process.env.MONOBANK_API_KEY ||
+                            process.env.MONOBANK_API_KEY.includes('mock') ||
+                            process.env.MONOBANK_API_KEY.includes('test');
+    if (useMockMonobank) {
+      this.monobankService = new MockMonobankService(this.billingService, this.emailService);
+      logger.warn('🧪 Using MOCK Monobank service (no real payments will be processed)');
     } else {
-      this.stripeService = new StripeService(this.billingService, this.emailService);
-      logger.info('💳 Using REAL Stripe service');
-    }
-
-    if (useMockFondy) {
-      this.fondyService = new MockFondyService(this.billingService, this.emailService);
-      logger.warn('🧪 Using MOCK Fondy service (no real payments will be processed)');
-    } else {
-      this.fondyService = new FondyService(this.billingService, this.emailService);
-      logger.info('💳 Using REAL Fondy service');
+      this.monobankService = new MonobankService(this.billingService, this.emailService);
+      logger.info('💳 Using REAL Monobank service');
     }
 
     const useMockMetaMask = mockPaymentsEnabled || !process.env.CRYPTO_RECEIVING_WALLET || !process.env.ETHEREUM_RPC_URL;
@@ -396,8 +381,7 @@ class HTTPMCPServer {
 
     logger.info('Payment services initialized', {
       mockPayments: mockPaymentsEnabled,
-      stripeMode: useMockStripe ? 'MOCK' : 'REAL',
-      fondyMode: useMockFondy ? 'MOCK' : 'REAL',
+      monobankMode: useMockMonobank ? 'MOCK' : 'REAL',
       metamaskMode: useMockMetaMask ? 'MOCK' : 'REAL',
       binancePayMode: useMockBinancePay ? 'MOCK' : 'REAL',
     });
@@ -437,13 +421,13 @@ class HTTPMCPServer {
       exposedHeaders: ['X-Upload-Queue-Depth', 'X-Upload-Throttle', 'Retry-After', 'X-Total-Count'],
     }));
 
-    // IMPORTANT: Stripe webhooks need raw body BEFORE json parsing
+    // Monobank webhooks need raw body BEFORE json parsing for signature verification
     // Mount webhook routes with raw body parser and rate limiting
     this.app.use(
-      '/webhooks/stripe',
+      '/webhooks',
       webhookRateLimit as any,
       express.raw({ type: 'application/json', limit: '10mb' }),
-      createWebhookRouter(this.stripeService, this.fondyService, this.binancePayService)
+      createWebhookRouter(this.monobankService, this.binancePayService)
     );
 
     // JSON parsing with UTF-8 support (for all other routes)
@@ -1591,7 +1575,7 @@ class HTTPMCPServer {
     // POST /api/billing/payment/stripe/create - Create Stripe PaymentIntent
     // POST /api/billing/payment/fondy/create - Create Fondy payment
     // GET /api/billing/payment/:provider/:paymentId/status - Check payment status
-    this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.stripeService, this.fondyService, this.metamaskService, this.binancePayService, this.services.db));
+    this.app.use('/api/billing/payment', requireJWT as any, createPaymentRouter(this.monobankService, this.metamaskService, this.binancePayService, this.services.db));
 
     // Test email route - require JWT (user login)
     // POST /api/billing/test-email - Send test email
@@ -1873,21 +1857,6 @@ class HTTPMCPServer {
     }) as any);
     logger.info('AI Chat endpoint registered at POST /api/chat');
 
-    // Webhook routes - public (signature verified by services, rate limited)
-    // POST /webhooks/stripe - already mounted in setupMiddleware() with raw body
-    // POST /webhooks/fondy - mount here with JSON body
-    this.app.post('/webhooks/fondy', webhookRateLimit as any, (async (req: Request, res: Response) => {
-      try {
-        await this.fondyService.handleCallback(req.body);
-        res.json({ received: true });
-      } catch (error: any) {
-        logger.error('Fondy callback failed', { error: error.message });
-        res.status(400).json({
-          error: 'Callback processing failed',
-          message: error.message,
-        });
-      }
-    }) as any);
 
     // Query history endpoint - require JWT (user login)
     this.app.get('/api/history', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {

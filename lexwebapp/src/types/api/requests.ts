@@ -38,7 +38,7 @@ export interface UpdateBillingSettingsRequest {
 
 export interface CreatePaymentRequest {
   amount_usd?: number;
-  provider: 'stripe' | 'metamask' | 'binance_pay';
+  provider: 'monobank' | 'metamask' | 'binance_pay';
   metadata?: Record<string, any>;
 }
 
