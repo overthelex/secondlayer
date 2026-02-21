@@ -644,10 +644,10 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
           ))}
         </div>
         <div>
-          <label className="block text-sm font-medium text-claude-text mb-2">Інша сума</label>
+          <label htmlFor="topup-custom-amount" className="block text-sm font-medium text-claude-text mb-2">Інша сума</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-claude-subtext font-medium">{currencySymbol}</span>
-            <input type="number" min="1" step="0.01"
+            <input id="topup-custom-amount" name="customAmount" type="number" min="1" step="0.01"
               value={customAmount} onChange={(e) => { setCustomAmount(e.target.value); const p = parseFloat(e.target.value); if (!isNaN(p) && p > 0) setAmount(p); }}
               placeholder="25.00"
               className="w-full pl-8 pr-4 py-3 border border-claude-border rounded-lg focus:outline-none focus:ring-2 focus:ring-claude-accent/20" />
