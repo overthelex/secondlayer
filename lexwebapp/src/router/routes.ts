@@ -41,11 +41,11 @@ export const ROUTES = {
   CASE_ANALYSIS: '/case-analysis',
   DECISIONS_SEARCH: '/decisions',
 
-  // Payment Results (Fondy redirects)
+  // Payment Results (Monobank redirects)
   PAYMENT_SUCCESS: '/payment/success',
   PAYMENT_ERROR: '/payment/error',
 
-  // Public Offer (Fondy requirement)
+  // Public Offer
   OFFER: '/:lang/offer',
 
   // Country-specific public pages
@@ -83,7 +83,6 @@ export const ROUTES = {
   ADMIN_DB_COMPARE: '/admin/db-compare',
   ADMIN_SERVICE_PRICING: '/admin/service-pricing',
   ADMIN_TERMINAL: '/admin/terminal',
-  ADMIN_ZO_STATS: '/admin/zo-stats',
 } as const;
 
 // Helper function to generate dynamic routes

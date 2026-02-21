@@ -1,6 +1,6 @@
 /**
  * Payment Error/Decline Page
- * Fondy redirects here (POST) after a failed or declined payment
+ * Monobank redirects here after a failed or declined payment
  */
 
 import { useEffect, useState } from 'react';

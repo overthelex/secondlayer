@@ -72,23 +72,15 @@ export class BillingService extends BaseService {
   }
 
   /**
-   * Create Stripe payment
+   * Create Monobank invoice
    */
-  async createStripePayment(amount_usd: number, metadata?: any): Promise<PaymentIntent> {
+  async createMonobankInvoice(amount_uah: number): Promise<{ invoiceId: string; pageUrl: string }> {
     try {
-      const response = await this.client.post<CreatePaymentResponse>(
-        '/api/billing/payment/stripe/create',
-        { amount_usd, metadata }
+      const response = await this.client.post<{ invoiceId: string; pageUrl: string }>(
+        '/api/billing/payment/monobank/create',
+        { amount_uah }
       );
-
-      return {
-        id: response.data.payment_id,
-        amount: amount_usd,
-        currency: 'USD',
-        status: response.data.status,
-        provider: 'stripe',
-        createdAt: new Date().toISOString(),
-      };
+      return response.data;
     } catch (error) {
       return this.handleError(error);
     }

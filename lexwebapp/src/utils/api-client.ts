@@ -156,8 +156,8 @@ export const api = {
 
   // Payments
   payment: {
-    createStripe: (data: { amount_usd: number; metadata?: any }) =>
-      apiClient.post('/api/billing/payment/stripe/create', data),
+    createMonobank: (data: { amount_uah: number; redirect_url?: string }) =>
+      apiClient.post('/api/billing/payment/monobank/create', data),
     createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
       apiClient.post('/api/billing/payment/metamask/create', data),
     verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>
@@ -265,8 +265,6 @@ export const api = {
       apiClient.get('/api/admin/metrics/services'),
     getSystemMetrics: () =>
       apiClient.get('/api/admin/metrics/system'),
-    getZOStats: (params: { yearFrom: number; yearTo: number; justiceKind?: string }) =>
-      apiClient.get('/api/admin/zo-stats', { params }),
 
     // Billing management
     getBillingTiers: () =>
@@ -359,19 +357,11 @@ export const api = {
     stopCourtScraper: (jobId: string) =>
       apiClient.post(`/api/admin/scrape-court-registry/${jobId}/stop`),
 
-    // Service pricing (external providers)
+    // Service pricing
     getServicePricing: () =>
       apiClient.get('/api/admin/service-pricing'),
     updateServicePricing: (id: string, data: { price_usd: number; notes?: string; is_active?: boolean }) =>
       apiClient.put(`/api/admin/service-pricing/${id}`, data),
-
-    // Tool pricing (MCP tools per-call cost)
-    getToolPricing: () =>
-      apiClient.get('/api/admin/tool-pricing'),
-    updateToolPricing: (toolName: string, data: { base_cost_usd: number; markup_percent?: number; notes?: string; is_active?: boolean }) =>
-      apiClient.put(`/api/admin/tool-pricing/${toolName}`, data),
-    bulkToolMarkup: (data: { markup_percent: number; service?: string }) =>
-      apiClient.post('/api/admin/tool-pricing/bulk-markup', data),
   },
 
   // GDPR
