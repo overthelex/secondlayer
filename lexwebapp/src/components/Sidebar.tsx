@@ -425,18 +425,6 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                 <NavItem icon={Zap} label="Workflows" route={null} />
               </div>
 
-              {/* Upgrade Card */}
-              <div className="px-3 py-3 border-t border-claude-border/50">
-                <div className="p-3.5 bg-gradient-to-br from-claude-subtext/5 to-claude-subtext/8 rounded-[12px] border border-claude-border">
-                  <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">Оновити до Pro</h4>
-                  <p className="text-[11px] text-claude-subtext/80 mb-3 leading-relaxed font-sans">
-                    Доступ до розширеної бази рішень та аналітики.
-                  </p>
-                  <button className="text-[12px] font-semibold text-white bg-claude-text hover:bg-claude-text/90 px-3 py-1.5 rounded-lg transition-all duration-200 w-full shadow-sm active:scale-[0.98] font-sans">
-                    Оновити
-                  </button>
-                </div>
-              </div>
             </>
           )}
 
