@@ -143,7 +143,7 @@ ${availableCodes}
           { role: 'system', content: systemPrompt },
           { role: 'user', content: query },
         ],
-        temperature: 0.2, // Низкая температура для более детерминированных результатов
+        ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
         max_completion_tokens: 300,
       };
 

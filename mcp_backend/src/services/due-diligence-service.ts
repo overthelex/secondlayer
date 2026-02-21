@@ -367,7 +367,7 @@ ${fullText.slice(0, 8000)}`;
             },
             { role: 'user', content: prompt },
           ],
-          temperature: 0.1,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.1 } : {}),
           response_format: { type: 'json_object' },
         });
       });
@@ -646,7 +646,7 @@ ${criticalFindings}
             },
             { role: 'user', content: prompt },
           ],
-          temperature: 0.2,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
           response_format: { type: 'json_object' },
         });
       });

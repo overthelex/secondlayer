@@ -234,7 +234,7 @@ export class SemanticSectionizer {
             content: text.substring(0, 8000), // Limit to avoid token limits
           },
         ],
-          temperature: 0.2,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
           max_completion_tokens: 2000,
           response_format: { type: 'json_object' },
         });
