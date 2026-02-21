@@ -86,6 +86,7 @@ export class ConversationService extends BaseService {
       citations?: any[];
       tool_calls?: any[];
       cost_tracking_id?: string;
+      cost_summary?: any;
     }
   ): Promise<ConversationMessage> {
     try {

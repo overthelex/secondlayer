@@ -523,6 +523,7 @@ export class ChatService {
             content: fullAnswerText,
             tool_calls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
             thinking_steps: collectedThinkingSteps.length > 0 ? collectedThinkingSteps : undefined,
+            cost_summary: totalCostUsd > 0 ? { total_cost_usd: totalCostUsd, tools_used: toolsUsed } : undefined,
           });
         } catch (e) {
           logger.warn('[ChatService] Failed to persist messages', { error: (e as Error).message });

@@ -97,7 +97,7 @@ export function createConversationRouter(conversationService: ConversationServic
       const userId = req.user?.id;
       if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
-      const { role, content, thinking_steps, decisions, citations, documents, tool_calls, cost_tracking_id } = req.body;
+      const { role, content, thinking_steps, decisions, citations, documents, tool_calls, cost_tracking_id, cost_summary } = req.body;
       if (!role || !content) return res.status(400).json({ error: 'role and content required' });
 
       const message = await conversationService.addMessage(req.params.id as string, userId, {
@@ -109,6 +109,7 @@ export function createConversationRouter(conversationService: ConversationServic
         documents,
         tool_calls,
         cost_tracking_id,
+        cost_summary,
       });
 
       if (!message) return res.status(404).json({ error: 'Conversation not found' });
