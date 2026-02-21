@@ -879,7 +879,8 @@ ${stepsText}
           temperature: 0.1,
           response_format: { type: 'json_object' },
         },
-        'quick'
+        'quick',
+        'openai'
       );
 
       // Record plan generation LLM cost
@@ -911,6 +912,8 @@ ${stepsText}
           hasGoal: !!parsed.goal,
           hasSteps: Array.isArray(parsed.steps),
           stepsLength: parsed.steps?.length,
+          model: response.model,
+          provider: response.provider,
         });
         throw new Error('Invalid plan structure: missing goal or steps');
       }
