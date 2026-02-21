@@ -241,6 +241,33 @@ export class ModelSelector {
     return jsonModeModels.includes(model);
   }
 
+  /**
+   * Returns true if the model accepts a custom temperature parameter.
+   * Reasoning models (o1, o3, o4-mini, gpt-5 family) only support temperature=1 (default)
+   * and will return a 400 error if any other value is passed.
+   */
+  static supportsTemperature(model: string): boolean {
+    const noTemperatureModels = [
+      // GPT-5 family — only default temperature supported
+      'gpt-5',
+      'gpt-5.1',
+      'gpt-5-mini',
+      'gpt-5-nano',
+      // GPT-4.1 family
+      'gpt-4.1',
+      'gpt-4.1-mini',
+      'gpt-4.1-nano',
+      // OpenAI reasoning/o-series models
+      'o1',
+      'o1-mini',
+      'o1-preview',
+      'o3',
+      'o3-mini',
+      'o4-mini',
+    ];
+    return !noTemperatureModels.includes(model);
+  }
+
   static logUsage(params: {
     model: string;
     budget: 'quick' | 'standard' | 'deep';

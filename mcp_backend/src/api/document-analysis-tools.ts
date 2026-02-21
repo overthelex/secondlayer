@@ -250,7 +250,7 @@ ${args.documentText.slice(0, 15000)}`;
             { role: 'system', content: 'Ты юридический эксперт по анализу контрактов.' },
             { role: 'user', content: prompt },
           ],
-          temperature: 0.1,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.1 } : {}),
           response_format: { type: 'json_object' },
         });
       });
@@ -328,7 +328,7 @@ ${args.documentText.slice(0, 20000)}`;
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          temperature: 0.2,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
           response_format: { type: 'json_object' },
         });
       });
@@ -415,7 +415,7 @@ ${changesText}
             { role: 'system', content: 'Ты юридический аналитик.' },
             { role: 'user', content: summaryPrompt },
           ],
-          temperature: 0.2,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
         });
       });
 

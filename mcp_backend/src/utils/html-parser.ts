@@ -235,7 +235,7 @@ export async function extractSearchTermsWithAI(text: string): Promise<{
             content: `Проаналізуй це судове рішення:\n\n${analysisText}`,
           },
         ],
-        temperature: 0.3,
+        ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.3 } : {}),
         max_completion_tokens: 500,
         response_format: { type: 'json_object' },
       });

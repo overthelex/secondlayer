@@ -70,7 +70,7 @@ export class QueryPlanner {
               content: query,
             },
           ],
-          temperature: 0.3,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.3 } : {}),
           max_completion_tokens: 500,
         };
 
@@ -458,7 +458,7 @@ export class QueryPlanner {
               content: userQuery,
             },
           ],
-          temperature: 0.2,
+          ...(ModelSelector.supportsTemperature(model) ? { temperature: 0.2 } : {}),
           max_completion_tokens: 100,
         };
 
