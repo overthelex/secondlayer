@@ -781,6 +781,7 @@ Pipeline:
     tags?: string[];
     limit?: number;
     threshold?: number;
+    userId?: string;
   }): Promise<SemanticSearchResult[]> {
     try {
       logger.info('[Vault] semantic_search started', {
@@ -818,8 +819,10 @@ Pipeline:
             SELECT id, type, title, metadata
             FROM documents
             WHERE id = ANY($1)
+            ${args.userId ? 'AND (user_id = $2 OR user_id IS NULL)' : ''}
           `;
-          const docsResult = await this.documentService['db'].query(docsQuery, [uniqueIds]);
+          const params: any[] = args.userId ? [uniqueIds, args.userId] : [uniqueIds];
+          const docsResult = await this.documentService['db'].query(docsQuery, params);
           const docsMap = new Map(docsResult.rows.map((row: any) => [row.id, row]));
 
           filteredResults = filteredResults.filter((r: any) => {
@@ -856,7 +859,9 @@ Pipeline:
         const sectionType = payload.section_type;
 
         if (docId && !processedDocs.has(docId)) {
-          const doc = await this.documentService.getDocumentById(docId);
+          const doc = args.userId
+            ? await this.documentService.getDocumentForUser(docId, args.userId)
+            : await this.documentService.getDocumentById(docId);
           if (!doc) continue;
 
           const metadata =
