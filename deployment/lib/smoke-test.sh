@@ -126,7 +126,7 @@ check_http_health() {
             ;;
 
         stage|staging)
-            # Primary: test directly via nginx on :8080 over SSH (bypasses Cloudflare/DNS)
+            # Primary: test directly via nginx on :80 over SSH (bypasses Cloudflare/DNS)
             # These are authoritative — if nginx isn't routing, the deploy is broken.
             local domains=("stage.legal.org.ua" "legal.org.ua" "mcp.legal.org.ua")
             for domain in "${domains[@]}"; do
@@ -134,7 +134,7 @@ check_http_health() {
                 local passed=false
                 while [ $attempt -le $SMOKE_TEST_RETRIES ]; do
                     if ssh "${DEPLOY_USER}@${target_server}" \
-                        "curl -sf --max-time 10 -H 'Host: ${domain}' http://localhost:8080/health" > /dev/null 2>&1; then
+                        "curl -sf --max-time 10 -H 'Host: ${domain}' http://localhost:80/health" > /dev/null 2>&1; then
                         smoke_record "HTTP health direct ($domain)" "pass" ""
                         passed=true
                         break
@@ -146,7 +146,7 @@ check_http_health() {
                     attempt=$((attempt + 1))
                 done
                 if [ "$passed" = false ]; then
-                    smoke_record "HTTP health direct ($domain)" "fail" "No response on localhost:8080 after $SMOKE_TEST_RETRIES attempts"
+                    smoke_record "HTTP health direct ($domain)" "fail" "No response on localhost:80 after $SMOKE_TEST_RETRIES attempts"
                     all_passed=false
                 fi
             done
