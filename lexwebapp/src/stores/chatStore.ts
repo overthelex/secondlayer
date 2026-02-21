@@ -26,6 +26,10 @@ interface ChatState {
   conversations: ConversationSummary[];
   conversationsLoading: boolean;
 
+  // Per-conversation message cache (memory-only, not persisted)
+  // Prevents messages from disappearing when switching conversations mid-stream
+  conversationCache: Record<string, Message[]>;
+
   // Actions
   addMessage: (message: Message) => void;
   removeMessage: (messageId: string) => void;
@@ -66,6 +70,7 @@ export const useChatStore = create<ChatState>()(
         conversationId: null,
         conversations: [],
         conversationsLoading: false,
+        conversationCache: {},
 
         // Add message to the end
         addMessage: (message) =>
@@ -170,10 +175,35 @@ export const useChatStore = create<ChatState>()(
         // Switch to existing conversation
         switchConversation: async (conversationId: string) => {
           if (!isAuthenticated()) return;
+          const { conversationId: currentId, messages, isStreaming } = get();
+
+          // Save current conversation messages to cache before switching
+          if (currentId && messages.length > 0) {
+            set((state) => ({
+              conversationCache: { ...state.conversationCache, [currentId]: [...messages] },
+            }));
+          }
+
+          // Restore cached messages for the target conversation immediately
+          const cached = get().conversationCache[conversationId] || [];
+          const targetHasActiveStream = isStreaming && cached.some((m) => m.isStreaming);
+
+          if (cached.length > 0) {
+            set({ conversationId, messages: cached });
+          } else {
+            set({ conversationId, messages: [] });
+          }
+
+          // Skip server fetch if the target conversation is currently being streamed
+          // (stream will continue updating the restored cached messages)
+          if (targetHasActiveStream) return;
+
           try {
             const response = await api.conversations.get(conversationId);
+            // User may have switched again while we were fetching — bail out
+            if (get().conversationId !== conversationId) return;
             const data = response.data;
-            const messages: Message[] = (data.messages || []).map((m: any) => ({
+            const fetchedMessages: Message[] = (data.messages || []).map((m: any) => ({
               id: m.id,
               role: m.role,
               content: m.content,
@@ -192,15 +222,12 @@ export const useChatStore = create<ChatState>()(
               documents: m.documents,
               costSummary: m.cost_summary ?? undefined,
             }));
-            set({
-              conversationId,
-              messages,
-            });
+            set((state) => ({
+              messages: fetchedMessages,
+              conversationCache: { ...state.conversationCache, [conversationId]: fetchedMessages },
+            }));
           } catch {
-            // Keep conversationId set but preserve existing messages if API fails
-            if (get().conversationId !== conversationId) {
-              set({ conversationId });
-            }
+            // Keep the cached messages if server fetch fails
           }
         },
 
@@ -210,12 +237,17 @@ export const useChatStore = create<ChatState>()(
           try {
             await api.conversations.delete(conversationId);
             const { conversationId: currentId } = get();
-            set((state) => ({
-              conversations: state.conversations.filter((c) => c.id !== conversationId),
-              ...(currentId === conversationId
-                ? { conversationId: null, messages: [] }
-                : {}),
-            }));
+            set((state) => {
+              const newCache = { ...state.conversationCache };
+              delete newCache[conversationId];
+              return {
+                conversations: state.conversations.filter((c) => c.id !== conversationId),
+                conversationCache: newCache,
+                ...(currentId === conversationId
+                  ? { conversationId: null, messages: [] }
+                  : {}),
+              };
+            });
           } catch {
             // ignore
           }
@@ -269,7 +301,7 @@ export const useChatStore = create<ChatState>()(
       {
         name: 'chat-storage', // localStorage key
         partialize: (state) => ({
-          // Only persist messages (not runtime state like streamController)
+          // Only persist messages (not runtime state like streamController or conversationCache)
           messages: state.messages,
           conversationId: state.conversationId,
         }),
