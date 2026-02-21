@@ -224,7 +224,7 @@ export class BillingService {
   }
 
   /**
-   * Charge user for a completed request with pricing tier markup
+   * Charge user for a completed request with pricing tier markup + per-tool markup
    */
   async chargeUser(params: {
     userId: string;
@@ -232,6 +232,7 @@ export class BillingService {
     amountUsd: number; // This is the BASE cost (our actual cost)
     amountUah?: number;
     description?: string;
+    toolName?: string;
   }): Promise<BillingTransaction & { pricing_details?: PriceCalculation }> {
     const client = await this.db.getPool().connect();
 
@@ -251,11 +252,31 @@ export class BillingService {
       const billing = billingResult.rows[0];
       const pricingTier: PricingTier = billing.pricing_tier || 'startup';
 
+      // Fetch per-tool markup from tool_pricing table
+      let toolMarkupPercent = 0;
+      if (params.toolName) {
+        try {
+          const toolPricingResult = await client.query(
+            'SELECT markup_percent FROM tool_pricing WHERE tool_name = $1 AND is_active = true',
+            [params.toolName]
+          );
+          if (toolPricingResult.rows.length > 0) {
+            toolMarkupPercent = Number(toolPricingResult.rows[0].markup_percent) || 0;
+          }
+        } catch (err: any) {
+          logger.warn('Failed to fetch tool markup, using 0', { toolName: params.toolName, error: err.message });
+        }
+      }
+
       // Calculate price with markup based on tier
       const priceCalc = this.pricingService.calculatePrice(params.amountUsd, pricingTier);
 
+      // Apply additional per-tool markup on top of tier markup
+      const toolMarkupAmount = params.amountUsd * (toolMarkupPercent / 100);
+      const totalChargeAmount = priceCalc.price_usd + toolMarkupAmount;
+
       // The amount we charge the client
-      const chargeAmount = priceCalc.price_usd;
+      const chargeAmount = totalChargeAmount;
 
       const balanceBefore = parseFloat(billing.balance_usd);
       const balanceAfter = balanceBefore - chargeAmount;
@@ -278,7 +299,10 @@ export class BillingService {
         base_cost_usd: priceCalc.cost_usd,
         markup_percentage: priceCalc.markup_percentage,
         markup_amount_usd: priceCalc.markup_amount_usd,
+        tool_markup_percent: toolMarkupPercent,
+        tool_markup_amount_usd: Number(toolMarkupAmount.toFixed(6)),
         pricing_tier: pricingTier,
+        tool_name: params.toolName,
       };
 
       const transactionResult = await client.query(
@@ -301,7 +325,11 @@ export class BillingService {
         ]
       );
 
-      // Update cost_tracking table with pricing details
+      // Update cost_tracking table with pricing details (including tool markup)
+      const totalMarkupAmount = Number((priceCalc.markup_amount_usd + toolMarkupAmount).toFixed(6));
+      const totalMarkupPercentage = params.amountUsd > 0
+        ? Number(((totalMarkupAmount / params.amountUsd) * 100).toFixed(4))
+        : priceCalc.markup_percentage;
       await client.query(
         `UPDATE cost_tracking
          SET base_cost_usd = $1,
@@ -312,10 +340,10 @@ export class BillingService {
          WHERE request_id = $6`,
         [
           priceCalc.cost_usd,
-          priceCalc.markup_percentage,
-          priceCalc.markup_amount_usd,
+          totalMarkupPercentage,
+          totalMarkupAmount,
           pricingTier,
-          priceCalc.price_usd,
+          chargeAmount,
           params.requestId,
         ]
       );
@@ -327,10 +355,12 @@ export class BillingService {
       logger.info('User charged with markup', {
         userId: params.userId,
         requestId: params.requestId,
+        toolName: params.toolName,
         baseCost: `$${priceCalc.cost_usd.toFixed(6)}`,
-        markup: `${priceCalc.markup_percentage}%`,
+        tierMarkup: `${priceCalc.markup_percentage}%`,
+        toolMarkup: `${toolMarkupPercent}%`,
         charged: `$${chargeAmount.toFixed(6)}`,
-        profit: `$${priceCalc.markup_amount_usd.toFixed(6)}`,
+        profit: `$${(priceCalc.markup_amount_usd + toolMarkupAmount).toFixed(6)}`,
         tier: pricingTier,
         balanceAfter: `$${balanceAfter.toFixed(2)}`,
       });
