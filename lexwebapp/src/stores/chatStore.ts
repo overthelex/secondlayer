@@ -177,10 +177,20 @@ export const useChatStore = create<ChatState>()(
               id: m.id,
               role: m.role,
               content: m.content,
-              thinkingSteps: m.thinking_steps,
+              thinkingSteps: Array.isArray(m.thinking_steps)
+                ? m.thinking_steps.map((s: any, i: number) => ({
+                    id: `step-${i}`,
+                    title: `✓ ${s.tool || 'tool'}`,
+                    content: typeof s.result === 'string'
+                      ? s.result.slice(0, 500)
+                      : JSON.stringify(s.result, null, 2).slice(0, 500),
+                    isComplete: true,
+                  }))
+                : undefined,
               decisions: m.decisions,
               citations: m.citations,
               documents: m.documents,
+              costSummary: m.cost_summary ?? undefined,
             }));
             set({
               conversationId,
@@ -248,6 +258,7 @@ export const useChatStore = create<ChatState>()(
               decisions: message.decisions,
               citations: message.citations,
               documents: message.documents,
+              cost_summary: message.costSummary,
             })
             .catch(() => {
               // Silent fail - localStorage backup remains

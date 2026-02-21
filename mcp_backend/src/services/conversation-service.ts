@@ -23,6 +23,7 @@ export interface ConversationMessage {
   documents?: any[];
   tool_calls?: any[];
   cost_tracking_id?: string;
+  cost_summary?: { total_cost_usd: number; tools_used: string[] } | null;
   created_at: Date;
 }
 
@@ -102,6 +103,7 @@ export class ConversationService {
       documents?: any[];
       tool_calls?: any[];
       cost_tracking_id?: string;
+      cost_summary?: { total_cost_usd: number; tools_used: string[] } | null;
     }
   ): Promise<ConversationMessage | null> {
     // Verify ownership
@@ -111,8 +113,8 @@ export class ConversationService {
     const id = uuidv4();
     const result = await this.db.query(
       `INSERT INTO conversation_messages
-         (id, conversation_id, role, content, thinking_steps, decisions, citations, documents, tool_calls, cost_tracking_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         (id, conversation_id, role, content, thinking_steps, decisions, citations, documents, tool_calls, cost_tracking_id, cost_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         id,
@@ -125,6 +127,7 @@ export class ConversationService {
         message.documents ? JSON.stringify(message.documents) : null,
         message.tool_calls ? JSON.stringify(message.tool_calls) : null,
         message.cost_tracking_id || null,
+        message.cost_summary ? JSON.stringify(message.cost_summary) : null,
       ]
     );
 
