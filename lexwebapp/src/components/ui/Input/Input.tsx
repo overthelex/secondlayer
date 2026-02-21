@@ -24,6 +24,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
+    const inputId = props.id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
+
     const inputClasses = getInputClasses({
       size,
       variant,
@@ -39,7 +41,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className={containerClasses}>
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1">
             {label}
           </label>
         )}
@@ -53,6 +55,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 
           <input
             ref={ref}
+            id={inputId}
             className={inputClasses}
             disabled={disabled}
             {...props}
