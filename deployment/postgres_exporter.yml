@@ -1,0 +1,4 @@
+# postgres_exporter configuration
+# Minimal config to suppress "no such file" warning.
+# DATA_SOURCE_NAME is provided via environment variable.
+auth_modules: {}

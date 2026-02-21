@@ -802,6 +802,9 @@ services:
     container_name: postgres-exporter-backend-stage
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD}@postgres-stage:5432/${POSTGRES_DB:-secondlayer_stage}?sslmode=disable"
+    volumes:
+      - ./postgres_exporter.yml:/etc/postgres_exporter.yml:ro
+    command: ["--config.file=/etc/postgres_exporter.yml"]
     ports:
       - "127.0.0.1:9187:9187"
     networks:
@@ -816,6 +819,9 @@ services:
     container_name: postgres-exporter-openreyestr-stage
     environment:
       DATA_SOURCE_NAME: "postgresql://${OPENREYESTR_POSTGRES_USER:-openreyestr}:${OPENREYESTR_POSTGRES_PASSWORD}@postgres-openreyestr-stage:5432/${OPENREYESTR_POSTGRES_DB:-openreyestr_stage}?sslmode=disable"
+    volumes:
+      - ./postgres_exporter.yml:/etc/postgres_exporter.yml:ro
+    command: ["--config.file=/etc/postgres_exporter.yml"]
     ports:
       - "127.0.0.1:9188:9187"
     networks:
