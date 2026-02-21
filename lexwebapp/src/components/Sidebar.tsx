@@ -443,11 +443,9 @@ export function Sidebar({
                           ? 'bg-claude-accent/10 text-claude-accent'
                           : 'text-claude-text hover:bg-claude-subtext/8'
                       }`}
-                      onClick={() => {
-                        switchConversation(conv.id);
-                        if (location.pathname !== ROUTES.CHAT) {
-                          navigate(ROUTES.CHAT);
-                        }
+                      onClick={async () => {
+                        await switchConversation(conv.id);
+                        navigate(ROUTES.CHAT);
                         if (window.innerWidth < 1024) onClose();
                       }}
                     >
