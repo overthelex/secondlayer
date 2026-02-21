@@ -482,7 +482,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                       showToast.info('Скоро буде доступно');
                     }
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center justify-between group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center justify-between group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                     <div className="flex items-center gap-3 min-w-0">
                       <section.icon
                       size={15}
@@ -532,7 +532,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                       showToast.info('Скоро буде доступно');
                     }
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                     <section.icon
                     size={15}
                     strokeWidth={2}
@@ -575,7 +575,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                       showToast.info('Скоро буде доступно');
                     }
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                     <section.icon
                     size={15}
                     strokeWidth={2}
@@ -610,7 +610,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
               <div className="space-y-0.5">
                 <button
                   onClick={() => handleNavigation(ROUTES.BILLING)}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.BILLING ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                   <CreditCard
                     size={15}
                     strokeWidth={2}
@@ -622,7 +622,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                 {role === 'company' && (
                 <button
                   onClick={() => handleNavigation(ROUTES.TEAM)}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.TEAM ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                   <UsersRound
                     size={15}
                     strokeWidth={2}
@@ -657,7 +657,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
               <div className="space-y-0.5">
                 <button
                   onClick={() => handleNavigation(ROUTES.JUDGES)}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.JUDGES ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                   <Scale
                     size={15}
                     strokeWidth={2}
@@ -668,7 +668,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                 </button>
                 <button
                   onClick={() => handleNavigation(ROUTES.LAWYERS)}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.LAWYERS ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                   <Briefcase
                     size={15}
                     strokeWidth={2}
@@ -708,7 +708,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                       handleNavigation(section.route);
                     }
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
+                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
                     <section.icon
                     size={15}
                     strokeWidth={2}
