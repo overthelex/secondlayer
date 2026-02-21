@@ -36,8 +36,11 @@ import {
   Server,
   Boxes,
   Settings,
-  Terminal } from
-'lucide-react';
+  Terminal,
+  Search,
+  Archive,
+  Zap,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useChatStore } from '../stores/chatStore';
@@ -59,7 +62,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   const [editTitle, setEditTitle] = useState('');
   const [switchingId, setSwitchingId] = useState<string | null>(null);
 
-  const allSectionIds = ['conversations', 'context', 'evidence', 'legislation', 'finance', 'participants', 'monitoring'] as const;
+  const allSectionIds = ['conversations', 'research', 'legislation', 'matters', 'monitoring'] as const;
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const toggleSection = (sectionId: string) => {
@@ -140,70 +143,33 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     }
   };
 
-  // Items hidden for 'user' role (law firm features)
-  const companyOnlyContextIds = ['clients', 'matters', 'time-entries', 'invoices'];
+  // Research section — legal evidence and sources
+  const researchSections = [
+    { id: 'decisions', label: 'Судові рішення', icon: Gavel, route: ROUTES.DECISIONS_SEARCH },
+    { id: 'regulations', label: 'Нормативні акти', icon: BookOpen, route: ROUTES.LEGAL_CODES_LIBRARY },
+    { id: 'commentary', label: 'Коментарі та практика', icon: TrendingUp, route: ROUTES.COURT_PRACTICE_ANALYSIS },
+    { id: 'verification', label: 'Перевірка актуальності', icon: CheckCircle, route: ROUTES.LEGISLATION_MONITORING },
+    { id: 'judges', label: 'Судді', icon: Scale, route: ROUTES.JUDGES },
+    { id: 'lawyers', label: 'Адвокати', icon: Briefcase, route: ROUTES.LAWYERS },
+  ];
 
-  const allContextSections = [
-  {
-    id: 'clients',
-    label: 'Клієнти',
-    icon: Users,
-    count: 12,
-    route: ROUTES.CLIENTS,
-  },
-  {
-    id: 'matters',
-    label: 'Справи (юр.)',
-    icon: Briefcase,
-    count: null,
-    route: ROUTES.MATTERS,
-  },
-  {
-    id: 'time-entries',
-    label: 'Time Entries',
-    icon: Clock,
-    count: null,
-    route: ROUTES.TIME_ENTRIES,
-  },
-  {
-    id: 'invoices',
-    label: 'Invoices',
-    icon: FileText,
-    count: null,
-    route: ROUTES.INVOICES,
-  },
-  {
-    id: 'cases',
-    label: 'Аналіз справ',
-    icon: Briefcase,
-    count: null,
-    route: ROUTES.CASE_ANALYSIS,
-  },
-  {
-    id: 'documents',
-    label: 'Документи',
-    icon: FileText,
-    count: null,
-    route: ROUTES.DOCUMENTS,
-  },
-  {
-    id: 'legal-sources',
-    label: 'Джерела права',
-    icon: Scale,
-    count: null,
-    route: null,
-  },
-  {
-    id: 'history',
-    label: 'Історія запитів',
-    icon: Clock,
-    count: null,
-    route: ROUTES.HISTORY,
-  }];
+  // Legislation section — parliament monitoring and analytics
+  const legislationSections = [
+    { id: 'monitoring', label: 'Моніторинг змін', icon: Bell, route: ROUTES.LEGISLATION_MONITORING },
+    { id: 'initiatives', label: 'Відстеження ініціатив', icon: FileCode, route: ROUTES.LEGAL_INITIATIVES },
+    { id: 'statistics', label: 'Статистика прийняття законів', icon: BarChart3, route: ROUTES.LEGISLATION_STATISTICS },
+    { id: 'voting', label: 'Аналіз голосувань', icon: Vote, route: ROUTES.VOTING_ANALYSIS },
+    { id: 'historical', label: 'Історичний аналіз', icon: History, route: ROUTES.HISTORICAL_ANALYSIS },
+  ];
 
-  const contextSections = role === 'user'
-    ? allContextSections.filter(s => !companyOnlyContextIds.includes(s.id))
-    : allContextSections;
+  // Matters section — company/lawyer roles only
+  const mattersSections = [
+    { id: 'clients', label: 'Клієнти', icon: Users, route: ROUTES.CLIENTS },
+    { id: 'matters', label: 'Справи', icon: Briefcase, route: ROUTES.MATTERS },
+    { id: 'time-entries', label: 'Time Entries', icon: Clock, route: ROUTES.TIME_ENTRIES },
+    { id: 'invoices', label: 'Invoices', icon: FileText, route: ROUTES.INVOICES },
+    { id: 'case-analysis', label: 'Аналіз справ', icon: Search, route: ROUTES.CASE_ANALYSIS },
+  ];
 
   const monitoringSections = [
     { id: 'system-overview', label: 'Огляд системи', icon: Activity, route: ROUTES.ADMIN_OVERVIEW },
@@ -221,76 +187,6 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     { id: 'zo-stats', label: 'Статистика рішень', icon: BarChart3, route: ROUTES.ADMIN_ZO_STATS },
   ];
 
-  const evidenceSections = [
-  {
-    id: 'decisions',
-    label: 'Судові рішення',
-    icon: Gavel,
-    route: ROUTES.DECISIONS_SEARCH,
-  },
-  {
-    id: 'regulations',
-    label: 'Нормативні акти',
-    icon: BookOpen,
-    route: ROUTES.LEGAL_CODES_LIBRARY,
-  },
-  {
-    id: 'commentary',
-    label: 'Коментарі та практика',
-    icon: MessageSquare,
-    route: ROUTES.COURT_PRACTICE_ANALYSIS,
-  },
-  {
-    id: 'verification',
-    label: 'Перевірка актуальності',
-    icon: CheckCircle,
-    route: ROUTES.LEGISLATION_MONITORING,
-  }];
-
-  const legislativeSections = [
-  {
-    id: 'monitoring',
-    label: 'Моніторинг змін законодавства',
-    icon: Bell,
-    route: ROUTES.LEGISLATION_MONITORING,
-  },
-  {
-    id: 'court-analysis',
-    label: 'Аналіз судової практики',
-    icon: TrendingUp,
-    route: ROUTES.COURT_PRACTICE_ANALYSIS,
-  },
-  {
-    id: 'initiatives',
-    label: 'Відстеження ініціатив',
-    icon: FileCode,
-    route: ROUTES.LEGAL_INITIATIVES,
-  },
-  {
-    id: 'statistics',
-    label: 'Статистика прийняття законів',
-    icon: BarChart3,
-    route: ROUTES.LEGISLATION_STATISTICS,
-  },
-  {
-    id: 'voting',
-    label: 'Аналіз голосувань',
-    icon: Vote,
-    route: ROUTES.VOTING_ANALYSIS,
-  },
-  {
-    id: 'codes',
-    label: 'Кодекси та закони',
-    icon: BookOpen,
-    route: ROUTES.LEGAL_CODES_LIBRARY,
-  },
-  {
-    id: 'historical',
-    label: 'Історичний аналіз',
-    icon: History,
-    route: ROUTES.HISTORICAL_ANALYSIS,
-  }];
-
   const handleProfileMenuClick = () => {
     setShowProfileMenu(!showProfileMenu);
   };
@@ -304,6 +200,49 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     setShowProfileMenu(false);
     if (onLogout) onLogout();
   };
+
+  // Reusable nav item button
+  const NavItem = ({ icon: Icon, label, route, onClick }: {
+    icon: React.ElementType;
+    label: string;
+    route?: string | null;
+    onClick?: () => void;
+  }) => {
+    const isActive = route ? location.pathname === route : false;
+    return (
+      <button
+        onClick={onClick ?? (() => {
+          if (route) handleNavigation(route);
+          else showToast.info('Скоро буде доступно');
+        })}
+        className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${isActive ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
+        <Icon size={15} strokeWidth={2} className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+        <span className="truncate font-medium tracking-tight font-sans">{label}</span>
+      </button>
+    );
+  };
+
+  // Reusable collapsible section
+  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
+    <div className="mb-6">
+      <button
+        onClick={() => toggleSection(id)}
+        className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+      >
+        <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+          {title}
+        </h3>
+        <ChevronDown
+          size={12}
+          strokeWidth={2.5}
+          className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has(id) ? '-rotate-90' : ''}`}
+        />
+      </button>
+      {!collapsedSections.has(id) && (
+        <div className="space-y-0.5">{children}</div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -368,376 +307,142 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
             </button>
           </div>
 
-          {/* Conversation History */}
-          {conversations.length > 0 && (
-            <div className="mb-4">
-              <button
-                onClick={() => toggleSection('conversations')}
-                className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-              >
-                <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                  Розмови
-                </h3>
-                <ChevronDown
-                  size={12}
-                  strokeWidth={2.5}
-                  className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('conversations') ? '-rotate-90' : ''}`}
-                />
-              </button>
-              {!collapsedSections.has('conversations') && (
-                <div className="space-y-0.5 max-h-[320px] overflow-y-auto">
-                  {conversations.map((conv) => (
-                    <div
-                      key={conv.id}
-                      className={`group flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-all duration-200 ${
-                        activeConversationId === conv.id
-                          ? 'bg-claude-accent/10 text-claude-accent'
-                          : 'text-claude-text hover:bg-claude-subtext/8'
-                      } ${switchingId === conv.id ? 'opacity-60 pointer-events-none' : ''}`}
-                      onClick={() => handleSwitchConversation(conv.id)}
-                    >
-                      <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
-                      {editingId === conv.id ? (
-                        <input
-                          className="flex-1 min-w-0 bg-white border border-claude-border rounded px-1 py-0.5 text-[13px] outline-none"
-                          value={editTitle}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
+          {/* NON-ADMIN MENU */}
+          {role !== 'administrator' && (
+            <>
+              {/* Assistant — top-level link */}
+              <div className="mb-2">
+                <NavItem icon={MessageSquare} label="Асистент" route={ROUTES.CHAT} />
+              </div>
+
+              {/* Conversation History */}
+              {conversations.length > 0 && (
+                <Section id="conversations" title="Розмови">
+                  <div className="max-h-[280px] overflow-y-auto space-y-0.5">
+                    {conversations.map((conv) => (
+                      <div
+                        key={conv.id}
+                        className={`group flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-all duration-200 ${
+                          activeConversationId === conv.id
+                            ? 'bg-claude-accent/10 text-claude-accent'
+                            : 'text-claude-text hover:bg-claude-subtext/8'
+                        } ${switchingId === conv.id ? 'opacity-60 pointer-events-none' : ''}`}
+                        onClick={() => handleSwitchConversation(conv.id)}
+                      >
+                        <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
+                        {editingId === conv.id ? (
+                          <input
+                            className="flex-1 min-w-0 bg-white border border-claude-border rounded px-1 py-0.5 text-[13px] outline-none"
+                            value={editTitle}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                renameConversation(conv.id, editTitle);
+                                setEditingId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingId(null);
+                              }
+                            }}
+                            onBlur={() => {
                               renameConversation(conv.id, editTitle);
                               setEditingId(null);
-                            } else if (e.key === 'Escape') {
-                              setEditingId(null);
-                            }
-                          }}
-                          onBlur={() => {
-                            renameConversation(conv.id, editTitle);
-                            setEditingId(null);
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <span className="flex-1 truncate font-medium tracking-tight font-sans">
-                          {conv.title}
-                        </span>
-                      )}
-                      {switchingId === conv.id ? (
-                        <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0 opacity-50" />
-                      ) : (
-                        <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingId(conv.id);
-                              setEditTitle(conv.title);
                             }}
-                            className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteConversation(conv.id);
-                            }}
-                            className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="flex-1 truncate font-medium tracking-tight font-sans">
+                            {conv.title}
+                          </span>
+                        )}
+                        {switchingId === conv.id ? (
+                          <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0 opacity-50" />
+                        ) : (
+                          <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(conv.id);
+                                setEditTitle(conv.title);
+                              }}
+                              className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteConversation(conv.id);
+                              }}
+                              className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Section>
               )}
-            </div>
-          )}
 
-          {/* Context Section — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('context')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Контекст роботи
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('context') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('context') && (
-              <div className="space-y-0.5">
-                {contextSections.map((section) =>
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    if (section.route) {
-                      handleNavigation(section.route);
-                    } else {
-                      showToast.info('Скоро буде доступно');
-                    }
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center justify-between group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <section.icon
-                      size={15}
-                      strokeWidth={2}
-                      className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                      <span className="truncate font-medium tracking-tight font-sans">
-                        {section.label}
-                      </span>
-                    </div>
-                    {section.count !== null &&
-                  <span className="text-[11px] text-claude-subtext/50 font-medium px-1.5 py-0.5 bg-claude-subtext/5 rounded flex-shrink-0 font-sans">
-                        {section.count}
-                      </span>
-                  }
+              {/* Research */}
+              <Section id="research" title="Дослідження">
+                {researchSections.map((s) => (
+                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                ))}
+              </Section>
+
+              {/* Legislation */}
+              <Section id="legislation" title="Законодавство">
+                {legislationSections.map((s) => (
+                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                ))}
+              </Section>
+
+              {/* Vault — top-level link */}
+              <div className="mb-2">
+                <NavItem icon={Archive} label="Vault" route={ROUTES.DOCUMENTS} />
+              </div>
+
+              {/* Matters — company/lawyer only */}
+              {role !== 'user' && (
+                <Section id="matters" title="Справи">
+                  {mattersSections.map((s) => (
+                    <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                  ))}
+                </Section>
+              )}
+
+              {/* Workflows — top-level link (placeholder) */}
+              <div className="mb-6">
+                <NavItem icon={Zap} label="Workflows" route={null} />
+              </div>
+
+              {/* Upgrade Card */}
+              <div className="px-3 py-3 border-t border-claude-border/50">
+                <div className="p-3.5 bg-gradient-to-br from-claude-subtext/5 to-claude-subtext/8 rounded-[12px] border border-claude-border">
+                  <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">
+                    Оновити до Pro
+                  </h4>
+                  <p className="text-[11px] text-claude-subtext/80 mb-3 leading-relaxed font-sans">
+                    Доступ до розширеної бази рішень та аналітики.
+                  </p>
+                  <button className="text-[12px] font-semibold text-white bg-claude-text hover:bg-claude-text/90 px-3 py-1.5 rounded-lg transition-all duration-200 w-full shadow-sm active:scale-[0.98] font-sans">
+                    Оновити
                   </button>
-                )}
+                </div>
               </div>
-            )}
-          </div>
+            </>
           )}
 
-          {/* Evidence Section — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('evidence')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Доказова база
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('evidence') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('evidence') && (
-              <div className="space-y-0.5">
-                {evidenceSections.map((section) =>
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    if (section.route) {
-                      handleNavigation(section.route);
-                    } else {
-                      showToast.info('Скоро буде доступно');
-                    }
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                    <section.icon
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                    <span className="truncate font-medium tracking-tight font-sans">
-                      {section.label}
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Legislative Monitoring Section — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('legislation')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Законодавство
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('legislation') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('legislation') && (
-              <div className="space-y-0.5">
-                {legislativeSections.map((section) =>
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    if (section.route) {
-                      handleNavigation(section.route);
-                    } else {
-                      showToast.info('Скоро буде доступно');
-                    }
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                    <section.icon
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                    <span className="truncate font-medium tracking-tight font-sans">
-                      {section.label}
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Finance Section — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('finance')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Фінанси
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('finance') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('finance') && (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handleNavigation(ROUTES.BILLING)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.BILLING ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                  <CreditCard
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    Біллінг
-                  </span>
-                </button>
-                {role === 'company' && (
-                <button
-                  onClick={() => handleNavigation(ROUTES.TEAM)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.TEAM ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                  <UsersRound
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    Команда
-                  </span>
-                </button>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Judges and Lawyers Section — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('participants')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Учасники процесу
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('participants') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('participants') && (
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => handleNavigation(ROUTES.JUDGES)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.JUDGES ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                  <Scale
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    Судді
-                  </span>
-                </button>
-                <button
-                  onClick={() => handleNavigation(ROUTES.LAWYERS)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${location.pathname === ROUTES.LAWYERS ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                  <Briefcase
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                  <span className="truncate font-medium tracking-tight font-sans">
-                    Адвокати
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Admin Monitoring Section — only for administrator */}
+          {/* ADMIN MENU */}
           {role === 'administrator' && (
-          <div className="mb-6">
-            <button
-              onClick={() => toggleSection('monitoring')}
-              className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-            >
-              <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-                Моніторинг
-              </h3>
-              <ChevronDown
-                size={12}
-                strokeWidth={2.5}
-                className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has('monitoring') ? '-rotate-90' : ''}`}
-              />
-            </button>
-            {!collapsedSections.has('monitoring') && (
-              <div className="space-y-0.5">
-                {monitoringSections.map((section) =>
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    if (section.route) {
-                      handleNavigation(section.route);
-                    }
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${section.route && location.pathname === section.route ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-                    <section.icon
-                    size={15}
-                    strokeWidth={2}
-                    className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-                    <span className="truncate font-medium tracking-tight font-sans">
-                      {section.label}
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Upgrade Card — hidden for administrator */}
-          {role !== 'administrator' && (
-          <div className="px-3 py-3 border-t border-claude-border/50">
-            <div className="p-3.5 bg-gradient-to-br from-claude-subtext/5 to-claude-subtext/8 rounded-[12px] border border-claude-border">
-              <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">
-                Оновити до Pro
-              </h4>
-              <p className="text-[11px] text-claude-subtext/80 mb-3 leading-relaxed font-sans">
-                Доступ до розширеної бази рішень та аналітики.
-              </p>
-              <button className="text-[12px] font-semibold text-white bg-claude-text hover:bg-claude-text/90 px-3 py-1.5 rounded-lg transition-all duration-200 w-full shadow-sm active:scale-[0.98] font-sans">
-                Оновити
-              </button>
-            </div>
-          </div>
+            <Section id="monitoring" title="Моніторинг">
+              {monitoringSections.map((s) => (
+                <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+              ))}
+            </Section>
           )}
         </div>
 
@@ -765,6 +470,30 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                     Профіль
                   </span>
                 </button>
+                {role !== 'administrator' && (
+                  <button
+                  onClick={() => { setShowProfileMenu(false); navigate(ROUTES.BILLING); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
+                    <div className="p-1.5 bg-claude-subtext/8 rounded-lg">
+                      <CreditCard size={16} className="text-claude-subtext" />
+                    </div>
+                    <span className="text-[13px] font-medium text-claude-text font-sans">
+                      Біллінг
+                    </span>
+                  </button>
+                )}
+                {role === 'company' && (
+                  <button
+                  onClick={() => { setShowProfileMenu(false); navigate(ROUTES.TEAM); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
+                    <div className="p-1.5 bg-claude-subtext/8 rounded-lg">
+                      <UsersRound size={16} className="text-claude-subtext" />
+                    </div>
+                    <span className="text-[13px] font-medium text-claude-text font-sans">
+                      Команда
+                    </span>
+                  </button>
+                )}
                 <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-red-50 transition-colors">
