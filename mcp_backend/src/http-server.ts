@@ -2385,6 +2385,57 @@ class HTTPMCPServer {
       }
     }) as any);
 
+    // User prompts (save/load)
+    this.app.get('/api/prompts', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        const result = await this.services.db.query(
+          'SELECT id, name, content, created_at FROM user_prompts WHERE user_id = $1 ORDER BY created_at DESC',
+          [userId]
+        );
+        res.json({ prompts: result.rows });
+      } catch (error: any) {
+        logger.error('Failed to list prompts:', error);
+        res.status(500).json({ error: 'Failed to list prompts' });
+      }
+    }) as any);
+
+    this.app.post('/api/prompts', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        const { name, content } = req.body;
+        if (!name || !content) {
+          return res.status(400).json({ error: 'name and content are required' });
+        }
+        const result = await this.services.db.query(
+          'INSERT INTO user_prompts (user_id, name, content) VALUES ($1, $2, $3) RETURNING id, name, content, created_at',
+          [userId, name.trim(), content.trim()]
+        );
+        res.status(201).json({ prompt: result.rows[0] });
+      } catch (error: any) {
+        logger.error('Failed to save prompt:', error);
+        res.status(500).json({ error: 'Failed to save prompt' });
+      }
+    }) as any);
+
+    this.app.delete('/api/prompts/:id', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        const { id } = req.params;
+        const result = await this.services.db.query(
+          'DELETE FROM user_prompts WHERE id = $1 AND user_id = $2 RETURNING id',
+          [id, userId]
+        );
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: 'Prompt not found' });
+        }
+        res.json({ success: true });
+      } catch (error: any) {
+        logger.error('Failed to delete prompt:', error);
+        res.status(500).json({ error: 'Failed to delete prompt' });
+      }
+    }) as any);
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
