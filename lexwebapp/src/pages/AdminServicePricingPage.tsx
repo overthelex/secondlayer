@@ -27,11 +27,20 @@ const PROVIDER_LABELS: Record<string, string> = {
 const PROVIDER_ORDER = ['anthropic', 'openai', 'voyageai', 'zakononline'];
 
 const UNIT_LABELS: Record<string, string> = {
-  per_1m_input_tokens:  'за 1M вхідних токенів',
-  per_1m_output_tokens: 'за 1M вихідних токенів',
-  per_1m_tokens:        'за 1M токенів',
-  per_call:             'за виклик',
+  per_1m_input_tokens:        'за 1M вхідних токенів',
+  per_1m_output_tokens:       'за 1M вихідних токенів',
+  per_1m_tokens:              'за 1M токенів',
+  per_1m_batch_input_tokens:  'Batch: 1M вхідних токенів',
+  per_1m_batch_output_tokens: 'Batch: 1M вихідних токенів',
+  per_1m_batch_tokens:        'Batch: 1M токенів',
+  per_call:                   'за виклик',
 };
+
+const BATCH_UNIT_TYPES = new Set([
+  'per_1m_batch_input_tokens',
+  'per_1m_batch_output_tokens',
+  'per_1m_batch_tokens',
+]);
 
 function formatDate(iso: string) {
   try {
@@ -171,7 +180,10 @@ export function AdminServicePricingPage() {
                 >
                   <span className="font-medium text-claude-text font-sans">{PROVIDER_LABELS[provider] || provider}</span>
                   <div className="flex items-center gap-2 text-claude-subtext text-xs">
-                    <span>{entries.length} {entries.length === 1 ? 'позиція' : 'позиції'}</span>
+                    <span>{entries.filter(e => !BATCH_UNIT_TYPES.has(e.unit_type)).length} стандарт</span>
+                    {entries.some(e => BATCH_UNIT_TYPES.has(e.unit_type)) && (
+                      <span className="text-amber-600">{entries.filter(e => BATCH_UNIT_TYPES.has(e.unit_type)).length} batch</span>
+                    )}
                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
                 </button>
@@ -202,11 +214,12 @@ export function AdminServicePricingPage() {
                       return (
                         <div
                           key={entry.id}
-                          className={`grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-3 items-center text-sm hover:bg-claude-bg transition-colors ${!entry.is_active ? 'opacity-50' : ''}`}
+                          className={`grid grid-cols-[1fr_120px_180px_100px_80px_100px] gap-3 px-5 py-3 items-center text-sm hover:bg-claude-bg transition-colors ${!entry.is_active ? 'opacity-40' : ''} ${BATCH_UNIT_TYPES.has(entry.unit_type) ? 'bg-amber-50/40' : ''}`}
                         >
                           {/* Name */}
                           <div>
                             <div className="font-medium text-claude-text">{entry.display_name}</div>
+                            <div className="text-xs text-claude-subtext/70 font-mono mt-0.5">{entry.model}</div>
                             {entry.notes && (
                               <div className="text-xs text-claude-subtext mt-0.5">{entry.notes}</div>
                             )}
