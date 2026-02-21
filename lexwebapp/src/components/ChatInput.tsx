@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Send, Plus, Square, X, FileText, Loader2, ChevronDown, Sparkles, AlignJustify, Save, Trash2 } from 'lucide-react';
+import { Send, Plus, Square, X, FileText, Loader2, ChevronDown, Sparkles, AlignJustify, Save, Trash2, Star } from 'lucide-react';
 import { uploadService } from '../services/api/UploadService';
 import { promptService, SavedPrompt } from '../services/api/PromptService';
 import showToast from '../utils/toast';
@@ -307,6 +307,19 @@ export function ChatInput({
     }
   };
 
+  const handleToggleFavorite = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const { is_favorite } = await promptService.toggleFavorite(id);
+      setSavedPrompts((prev) => {
+        const updated = prev.map((p) => p.id === id ? { ...p, is_favorite } : p);
+        return [...updated].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      });
+    } catch {
+      showToast.error('Не вдалося оновити обране');
+    }
+  };
+
   const handleSavePrompt = async () => {
     if (!input.trim()) return;
     const autoName = input.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 60);
@@ -557,17 +570,28 @@ export function ChatInput({
                     onClick={() => handleLoadPrompt(p)}
                     className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-claude-bg cursor-pointer group transition-colors"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-medium text-claude-text truncate">{p.name}</p>
                       <p className="text-[11px] text-claude-subtext truncate mt-0.5">{p.content}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeletePrompt(p.id, e)}
-                      className="ml-3 p-1 text-claude-subtext/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div className="ml-3 flex items-center gap-1 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleFavorite(p.id, e)}
+                        className={`p-1 transition-all ${p.is_favorite ? 'text-amber-400' : 'text-claude-subtext/30 opacity-0 group-hover:opacity-100 hover:text-amber-400'}`}
+                        title={p.is_favorite ? 'Прибрати з обраних' : 'Додати до обраних'}
+                      >
+                        <Star size={13} fill={p.is_favorite ? 'currentColor' : 'none'} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeletePrompt(p.id, e)}
+                        className="p-1 text-claude-subtext/30 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Видалити"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

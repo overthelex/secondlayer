@@ -2359,7 +2359,7 @@ class HTTPMCPServer {
       try {
         const userId = req.user?.id;
         const result = await this.services.db.query(
-          'SELECT id, name, content, created_at FROM user_prompts WHERE user_id = $1 ORDER BY created_at DESC',
+          'SELECT id, name, content, is_favorite, created_at FROM user_prompts WHERE user_id = $1 ORDER BY is_favorite DESC, created_at DESC',
           [userId]
         );
         res.json({ prompts: result.rows });
@@ -2384,6 +2384,24 @@ class HTTPMCPServer {
       } catch (error: any) {
         logger.error('Failed to save prompt:', error);
         res.status(500).json({ error: 'Failed to save prompt' });
+      }
+    }) as any);
+
+    this.app.patch('/api/prompts/:id/favorite', requireJWT as any, (async (req: DualAuthRequest, res: Response) => {
+      try {
+        const userId = req.user?.id;
+        const { id } = req.params;
+        const result = await this.services.db.query(
+          'UPDATE user_prompts SET is_favorite = NOT is_favorite WHERE id = $1 AND user_id = $2 RETURNING id, is_favorite',
+          [id, userId]
+        );
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: 'Prompt not found' });
+        }
+        res.json({ prompt: result.rows[0] });
+      } catch (error: any) {
+        logger.error('Failed to toggle favorite:', error);
+        res.status(500).json({ error: 'Failed to toggle favorite' });
       }
     }) as any);
 
