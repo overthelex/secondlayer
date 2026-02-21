@@ -3830,5 +3830,138 @@ export function createAdminRoutes(
     }
   });
 
+  // ========================================
+  // TOOL PRICING
+  // ========================================
+
+  /**
+   * GET /api/admin/tool-pricing
+   * Returns all tool pricing entries, grouped by service
+   */
+  router.get('/tool-pricing', async (req: Request, res: Response) => {
+    try {
+      const result = await db.query(`
+        SELECT
+          id, tool_name, service, display_name,
+          base_cost_usd::float  AS base_cost_usd,
+          markup_percent::float AS markup_percent,
+          is_active, notes, updated_at, updated_by
+        FROM tool_pricing
+        ORDER BY service, display_name
+      `);
+      res.json({ tools: result.rows });
+    } catch (error: any) {
+      logger.error('Failed to fetch tool pricing', { error: error.message });
+      res.status(500).json({ error: 'Failed to fetch tool pricing' });
+    }
+  });
+
+  /**
+   * PUT /api/admin/tool-pricing/:toolName
+   * Update pricing for a single tool
+   */
+  router.put('/tool-pricing/:toolName', async (req: Request, res: Response) => {
+    const toolName = getStringParam(req.params.toolName) as string;
+    const { base_cost_usd, markup_percent, notes, is_active } = req.body;
+
+    if (base_cost_usd === undefined || base_cost_usd === null || isNaN(Number(base_cost_usd))) {
+      return res.status(400).json({ error: 'base_cost_usd must be a valid number' });
+    }
+    if (Number(base_cost_usd) < 0) {
+      return res.status(400).json({ error: 'base_cost_usd cannot be negative' });
+    }
+    if (markup_percent !== undefined && (isNaN(Number(markup_percent)) || Number(markup_percent) < -100)) {
+      return res.status(400).json({ error: 'markup_percent must be a number >= -100' });
+    }
+
+    try {
+      const adminUser = (req as any).user;
+      const result = await db.query(`
+        UPDATE tool_pricing
+        SET base_cost_usd   = $1,
+            markup_percent  = COALESCE($2, markup_percent),
+            notes           = $3,
+            is_active       = COALESCE($4, is_active),
+            updated_at      = NOW(),
+            updated_by      = $5
+        WHERE tool_name = $6
+        RETURNING
+          id, tool_name, service, display_name,
+          base_cost_usd::float  AS base_cost_usd,
+          markup_percent::float AS markup_percent,
+          is_active, notes, updated_at, updated_by
+      `, [
+        base_cost_usd,
+        markup_percent ?? null,
+        notes ?? null,
+        is_active ?? null,
+        adminUser?.email || adminUser?.id || 'admin',
+        toolName,
+      ]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Tool not found' });
+      }
+
+      await logAdminAction(
+        adminUser?.id,
+        'update_tool_pricing',
+        null,
+        toolName,
+        { base_cost_usd, markup_percent, notes, is_active },
+        req
+      );
+
+      res.json({ tool: result.rows[0] });
+    } catch (error: any) {
+      logger.error('Failed to update tool pricing', { error: error.message, toolName });
+      res.status(500).json({ error: 'Failed to update tool pricing' });
+    }
+  });
+
+  /**
+   * POST /api/admin/tool-pricing/bulk-markup
+   * Apply markup_percent to all tools (or filtered by service)
+   */
+  router.post('/tool-pricing/bulk-markup', async (req: Request, res: Response) => {
+    const { markup_percent, service } = req.body;
+
+    if (markup_percent === undefined || isNaN(Number(markup_percent)) || Number(markup_percent) < -100) {
+      return res.status(400).json({ error: 'markup_percent must be a number >= -100' });
+    }
+
+    try {
+      const adminUser = (req as any).user;
+      const params: any[] = [markup_percent, adminUser?.email || adminUser?.id || 'admin'];
+      let query = `
+        UPDATE tool_pricing
+        SET markup_percent = $1,
+            updated_at     = NOW(),
+            updated_by     = $2
+      `;
+      if (service) {
+        params.push(service);
+        query += ` WHERE service = $3`;
+      }
+      query += ` RETURNING tool_name`;
+
+      const result = await db.query(query, params);
+
+      await logAdminAction(
+        adminUser?.id,
+        'bulk_update_tool_markup',
+        null,
+        service || 'all',
+        { markup_percent, service },
+        req
+      );
+
+      res.json({ updated: result.rowCount, markup_percent });
+    } catch (error: any) {
+      logger.error('Failed to bulk update tool markup', { error: error.message });
+      res.status(500).json({ error: 'Failed to bulk update tool markup' });
+    }
+  });
+
   return router;
 }

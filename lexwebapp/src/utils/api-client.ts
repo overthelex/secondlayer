@@ -357,11 +357,19 @@ export const api = {
     stopCourtScraper: (jobId: string) =>
       apiClient.post(`/api/admin/scrape-court-registry/${jobId}/stop`),
 
-    // Service pricing
+    // Service pricing (external providers)
     getServicePricing: () =>
       apiClient.get('/api/admin/service-pricing'),
     updateServicePricing: (id: string, data: { price_usd: number; notes?: string; is_active?: boolean }) =>
       apiClient.put(`/api/admin/service-pricing/${id}`, data),
+
+    // Tool pricing (MCP tools per-call cost)
+    getToolPricing: () =>
+      apiClient.get('/api/admin/tool-pricing'),
+    updateToolPricing: (toolName: string, data: { base_cost_usd: number; markup_percent?: number; notes?: string; is_active?: boolean }) =>
+      apiClient.put(`/api/admin/tool-pricing/${toolName}`, data),
+    bulkToolMarkup: (data: { markup_percent: number; service?: string }) =>
+      apiClient.post('/api/admin/tool-pricing/bulk-markup', data),
   },
 
   // GDPR
