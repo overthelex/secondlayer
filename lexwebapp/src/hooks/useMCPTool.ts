@@ -90,17 +90,24 @@ function parseToolResultContent(result: any): any {
 
 /**
  * Extract law article references from the AI answer text.
- * Matches patterns like "ст. 509 ЦКУ", "ч. 1 ст. 626 ЦК", "ст. 124 Конституції України".
+ * Matches patterns like "ст. 509 ЦКУ", "ч. 1 ст. 626 ЦК", "стаття 509 Цивільного кодексу України",
+ * "ст. 124 Конституції України", "статтями 1046-1053 ЦКУ".
  */
 function extractNormsFromAnswer(answerText: string): Citation[] {
   const norms: Citation[] = [];
   const seen = new Set<string>();
 
+  // Abbreviations for Ukrainian codes
   const CODES = '(?:ЦКУ|ГКУ|КПК|ЦПК|ГПК|КАС|ПКУ|СКУ|ККУ|КЗпП|ЗКУ|МКУ|ЦК|ГК|ПК|ЗК|МК)';
+  // Full Ukrainian law name patterns: e.g. "Цивільного кодексу України", "Закону України 'Про...'"
+  const FULL_LAW = '(?:[А-ЯҐЄІЇа-яґєії]+ого\\s+[Кк]одексу(?:\\s+України)?|[Зз]акону\\s+України(?:\\s+[«""][^»""]{1,80}[»""])?|[Кк]онституції\\s+України|[Кк]онвенції[^,;.]{0,50})';
+  // All Ukrainian grammatical forms of "стаття": стаття/статті/статтю/статтею/статтям/статтями/статтях/статей
+  const ST = 'ст(?:атт[а-яіїєґ]*)?';
+
   const re = new RegExp(
     '(?:(?:п\\.?\\s*\\d+[,\\s]+)?(?:ч\\.?\\s*\\d+[,\\s]+))?' +
-    'ст(?:атт[яі])?\\.?\\s*\\d+(?:[\\u2013\\u2014,-]\\s*\\d+)*\\s+' + CODES + '(?:\\s+України)?' +
-    '|ст(?:атт[яі])?\\.?\\s*\\d+\\s+Конституц[іи][їи]\\s+України',
+    ST + '\\.?\\s*\\d+(?:[\\u2013\\u2014,\\-]\\s*\\d+)*\\s+(?:' + CODES + '|' + FULL_LAW + ')(?:\\s+України)?' +
+    '|' + ST + '\\.?\\s*\\d+\\s+Конституц[іи][їи]\\s+України',
     'gi'
   );
 
@@ -259,17 +266,7 @@ function extractEvidenceFromToolResult(
       }
     }
 
-    // Array of articles
-    if (parsed.articles && Array.isArray(parsed.articles)) {
-      for (const a of parsed.articles) {
-        citations.push({
-          text: a.full_text || a.text || a.content || '',
-          source: `Стаття ${a.article_number || ''}`,
-        });
-      }
-    }
-
-    // find_relevant_law_articles — returns array of string article refs or objects
+    // find_relevant_law_articles — returns array of string refs; handle separately to avoid empty citations
     if (toolName === 'find_relevant_law_articles') {
       const refs = parsed.relevant_articles || parsed.articles || (Array.isArray(parsed) ? parsed : []);
       for (const r of refs) {
@@ -279,6 +276,16 @@ function extractEvidenceFromToolResult(
           citations.push({
             text: r.text || r.content || r.description || r.article || r.reference || r.norm || '',
             source: r.article || r.reference || r.norm || r.title || 'Норма',
+          });
+        }
+      }
+    } else if (parsed.articles && Array.isArray(parsed.articles)) {
+      // Other legislation tools return articles as objects with full_text
+      for (const a of parsed.articles) {
+        if (typeof a === 'object' && a !== null) {
+          citations.push({
+            text: a.full_text || a.text || a.content || '',
+            source: `Стаття ${a.article_number || ''}`,
           });
         }
       }
@@ -387,6 +394,33 @@ function extractEvidenceFromToolResult(
         citations.push({
           text: compText,
           source: 'Порівняння документів',
+        });
+      }
+    }
+  }
+
+  // ---- retrieve_legal_sources (combined court + legislation retrieval) ----
+  if (toolName === 'retrieve_legal_sources') {
+    // Extract court cases from `cases` array
+    if (parsed.cases && Array.isArray(parsed.cases)) {
+      for (const c of parsed.cases) {
+        decisions.push({
+          id: `rls-${c.id || Math.random().toString(36).slice(2, 8)}`,
+          number: c.id || 'N/A',
+          court: c.court || '',
+          date: c.date || '',
+          summary: c.text?.slice(0, 300) || c.title || '',
+          relevance: 70,
+          status: 'active',
+        });
+      }
+    }
+    // Extract legislation from `laws` array
+    if (parsed.laws && Array.isArray(parsed.laws)) {
+      for (const l of parsed.laws) {
+        citations.push({
+          text: l.text || l.full_text || l.title || '',
+          source: l.article ? `${l.title || l.rada_id || ''}, ст. ${l.article}` : (l.title || 'Норма'),
         });
       }
     }
