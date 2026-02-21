@@ -218,6 +218,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     { id: 'db-compare', label: 'Порівняння БД', icon: Database, route: ROUTES.ADMIN_DB_COMPARE },
     { id: 'service-pricing', label: 'Собівартість сервісів', icon: Tag, route: ROUTES.ADMIN_SERVICE_PRICING },
     { id: 'terminal', label: 'Термінал', icon: Terminal, route: ROUTES.ADMIN_TERMINAL },
+    { id: 'zo-stats', label: 'Статистика рішень', icon: BarChart3, route: ROUTES.ADMIN_ZO_STATS },
   ];
 
   const evidenceSections = [

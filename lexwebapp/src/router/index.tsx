@@ -49,6 +49,7 @@ import { AdminConfigPage } from '../pages/AdminConfigPage';
 import { AdminDBComparePage } from '../pages/AdminDBComparePage';
 import { AdminServicePricingPage } from '../pages/AdminServicePricingPage';
 import { AdminTerminalPage } from '../pages/AdminTerminalPage';
+import { AdminZOStatsPage } from '../pages/AdminZOStatsPage';
 import { DocumentsPage } from '../pages/DocumentsPage';
 import { TimeEntriesPage } from '../pages/TimeEntriesPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -282,6 +283,10 @@ export const router = createBrowserRouter([
           {
             path: ROUTES.ADMIN_TERMINAL,
             element: <AdminTerminalPage />,
+          },
+          {
+            path: ROUTES.ADMIN_ZO_STATS,
+            element: <AdminZOStatsPage />,
           },
         ],
       },
