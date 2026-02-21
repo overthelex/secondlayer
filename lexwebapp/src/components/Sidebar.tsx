@@ -1,4 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ROUTES } from '../router/routes';
+import showToast from '../utils/toast';
 import {
   Plus,
   MessageSquare,
@@ -115,6 +118,8 @@ export function Sidebar({
   onAdminTerminalClick,
   onLogout
 }: SidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const role: UserRole = user?.role || 'user';
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -440,6 +445,9 @@ export function Sidebar({
                       }`}
                       onClick={() => {
                         switchConversation(conv.id);
+                        if (location.pathname !== ROUTES.CHAT) {
+                          navigate(ROUTES.CHAT);
+                        }
                         if (window.innerWidth < 1024) onClose();
                       }}
                     >
@@ -522,6 +530,8 @@ export function Sidebar({
                     if (section.onClick) {
                       section.onClick();
                       if (window.innerWidth < 1024) onClose();
+                    } else {
+                      showToast.info('Скоро буде доступно');
                     }
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center justify-between group">
@@ -573,6 +583,8 @@ export function Sidebar({
                     if (section.onClick) {
                       section.onClick();
                       if (window.innerWidth < 1024) onClose();
+                    } else {
+                      showToast.info('Скоро буде доступно');
                     }
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
