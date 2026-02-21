@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { X, Menu, PanelRightOpen } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
 import { RightPanel } from '../components/RightPanel';
@@ -50,7 +50,6 @@ const PAGE_TITLES: Record<string, string> = {
 };
 
 export function MainLayout() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
 
@@ -63,10 +62,6 @@ export function MainLayout() {
     toggleRightPanel,
     setSidebarOpen,
   } = useUIStore();
-
-  const handleNewChat = () => {
-    navigate(ROUTES.CHAT, { replace: true, state: { reset: true } });
-  };
 
   const handleLogout = () => {
     logout();
@@ -108,39 +103,6 @@ export function MainLayout() {
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setSidebarOpen(false)}
-          onNewChat={handleNewChat}
-          onProfileClick={() => navigate(ROUTES.PROFILE)}
-          onJudgesClick={() => navigate(ROUTES.JUDGES)}
-          onLawyersClick={() => navigate(ROUTES.LAWYERS)}
-          onClientsClick={() => navigate(ROUTES.CLIENTS)}
-          onMattersClick={() => navigate(ROUTES.MATTERS)}
-          onTimeEntriesClick={() => navigate(ROUTES.TIME_ENTRIES)}
-          onInvoicesClick={() => navigate(ROUTES.INVOICES)}
-          onDocumentsClick={() => navigate(ROUTES.DOCUMENTS)}
-          onCasesClick={() => navigate(ROUTES.CASE_ANALYSIS)}
-          onHistoryClick={() => navigate(ROUTES.HISTORY)}
-          onDecisionsClick={() => navigate(ROUTES.DECISIONS_SEARCH)}
-          onBillingClick={() => navigate(ROUTES.BILLING)}
-          onTeamClick={() => navigate(ROUTES.TEAM)}
-          onLegislationMonitoringClick={() => navigate(ROUTES.LEGISLATION_MONITORING)}
-          onCourtPracticeAnalysisClick={() => navigate(ROUTES.COURT_PRACTICE_ANALYSIS)}
-          onLegalInitiativesClick={() => navigate(ROUTES.LEGAL_INITIATIVES)}
-          onLegislationStatisticsClick={() => navigate(ROUTES.LEGISLATION_STATISTICS)}
-          onVotingAnalysisClick={() => navigate(ROUTES.VOTING_ANALYSIS)}
-          onLegalCodesLibraryClick={() => navigate(ROUTES.LEGAL_CODES_LIBRARY)}
-          onHistoricalAnalysisClick={() => navigate(ROUTES.HISTORICAL_ANALYSIS)}
-          onAdminOverviewClick={() => navigate(ROUTES.ADMIN_OVERVIEW)}
-          onAdminMonitoringClick={() => navigate(ROUTES.ADMIN_MONITORING)}
-          onAdminUsersClick={() => navigate(ROUTES.ADMIN_USERS)}
-          onAdminCostsClick={() => navigate(ROUTES.ADMIN_COSTS)}
-          onAdminDataSourcesClick={() => navigate(ROUTES.ADMIN_DATA_SOURCES)}
-          onAdminBillingClick={() => navigate(ROUTES.ADMIN_BILLING)}
-          onAdminInfrastructureClick={() => navigate(ROUTES.ADMIN_INFRASTRUCTURE)}
-          onAdminContainersClick={() => navigate(ROUTES.ADMIN_CONTAINERS)}
-          onAdminConfigClick={() => navigate(ROUTES.ADMIN_CONFIG)}
-          onAdminDBCompareClick={() => navigate(ROUTES.ADMIN_DB_COMPARE)}
-          onAdminServicePricingClick={() => navigate(ROUTES.ADMIN_SERVICE_PRICING)}
-          onAdminTerminalClick={() => navigate(ROUTES.ADMIN_TERMINAL)}
           onLogout={handleLogout}
         />
       </div>

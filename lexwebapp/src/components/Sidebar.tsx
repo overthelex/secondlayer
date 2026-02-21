@@ -42,82 +42,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useChatStore } from '../stores/chatStore';
 import type { UserRole } from '../types/models/User';
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onNewChat: () => void;
-  onProfileClick?: () => void;
-  onJudgesClick?: () => void;
-  onLawyersClick?: () => void;
-  onClientsClick?: () => void;
-  onMattersClick?: () => void;
-  onTimeEntriesClick?: () => void;
-  onInvoicesClick?: () => void;
-  onCasesClick?: () => void;
-  onDocumentsClick?: () => void;
-  onHistoryClick?: () => void;
-  onDecisionsClick?: () => void;
-  onBillingClick?: () => void;
-  onTeamClick?: () => void;
-  onLegislationMonitoringClick?: () => void;
-  onCourtPracticeAnalysisClick?: () => void;
-  onLegalInitiativesClick?: () => void;
-  onLegislationStatisticsClick?: () => void;
-  onVotingAnalysisClick?: () => void;
-  onLegalCodesLibraryClick?: () => void;
-  onHistoricalAnalysisClick?: () => void;
-  onAdminOverviewClick?: () => void;
-  onAdminMonitoringClick?: () => void;
-  onAdminUsersClick?: () => void;
-  onAdminCostsClick?: () => void;
-  onAdminDataSourcesClick?: () => void;
-  onAdminBillingClick?: () => void;
-  onAdminInfrastructureClick?: () => void;
-  onAdminContainersClick?: () => void;
-  onAdminConfigClick?: () => void;
-  onAdminDBCompareClick?: () => void;
-  onAdminServicePricingClick?: () => void;
-  onAdminTerminalClick?: () => void;
   onLogout?: () => void;
 }
-export function Sidebar({
-  isOpen,
-  onClose,
-  onNewChat,
-  onProfileClick,
-  onJudgesClick,
-  onLawyersClick,
-  onClientsClick,
-  onMattersClick,
-  onTimeEntriesClick,
-  onInvoicesClick,
-  onCasesClick,
-  onDocumentsClick,
-  onHistoryClick,
-  onDecisionsClick,
-  onBillingClick,
-  onTeamClick,
-  onLegislationMonitoringClick,
-  onCourtPracticeAnalysisClick,
-  onLegalInitiativesClick,
-  onLegislationStatisticsClick,
-  onVotingAnalysisClick,
-  onLegalCodesLibraryClick,
-  onHistoricalAnalysisClick,
-  onAdminOverviewClick,
-  onAdminMonitoringClick,
-  onAdminUsersClick,
-  onAdminCostsClick,
-  onAdminDataSourcesClick,
-  onAdminBillingClick,
-  onAdminInfrastructureClick,
-  onAdminContainersClick,
-  onAdminConfigClick,
-  onAdminDBCompareClick,
-  onAdminServicePricingClick,
-  onAdminTerminalClick,
-  onLogout
-}: SidebarProps) {
+
+export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -125,6 +57,8 @@ export function Sidebar({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
+
   const allSectionIds = ['conversations', 'context', 'evidence', 'legislation', 'finance', 'participants', 'monitoring'] as const;
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
@@ -163,6 +97,7 @@ export function Sidebar({
   useEffect(() => {
     loadConversations();
   }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -179,6 +114,32 @@ export function Sidebar({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showProfileMenu]);
+
+  const handleNavigation = (route: string) => {
+    navigate(route);
+    if (window.innerWidth < 1024) onClose();
+  };
+
+  const handleNewChat = () => {
+    newConversation();
+    navigate(ROUTES.CHAT);
+    if (window.innerWidth < 1024) onClose();
+  };
+
+  const handleSwitchConversation = async (convId: string) => {
+    if (switchingId) return;
+    setSwitchingId(convId);
+    try {
+      await switchConversation(convId);
+      if (location.pathname !== ROUTES.CHAT) {
+        navigate(ROUTES.CHAT);
+      }
+    } finally {
+      setSwitchingId(null);
+      if (window.innerWidth < 1024) onClose();
+    }
+  };
+
   // Items hidden for 'user' role (law firm features)
   const companyOnlyContextIds = ['clients', 'matters', 'time-entries', 'invoices'];
 
@@ -188,75 +149,75 @@ export function Sidebar({
     label: 'Клієнти',
     icon: Users,
     count: 12,
-    onClick: onClientsClick
+    route: ROUTES.CLIENTS,
   },
   {
     id: 'matters',
     label: 'Справи (юр.)',
     icon: Briefcase,
     count: null,
-    onClick: onMattersClick
+    route: ROUTES.MATTERS,
   },
   {
     id: 'time-entries',
     label: 'Time Entries',
     icon: Clock,
     count: null,
-    onClick: onTimeEntriesClick
+    route: ROUTES.TIME_ENTRIES,
   },
   {
     id: 'invoices',
     label: 'Invoices',
     icon: FileText,
     count: null,
-    onClick: onInvoicesClick
+    route: ROUTES.INVOICES,
   },
   {
     id: 'cases',
     label: 'Аналіз справ',
     icon: Briefcase,
     count: null,
-    onClick: onCasesClick
+    route: ROUTES.CASE_ANALYSIS,
   },
   {
     id: 'documents',
     label: 'Документи',
     icon: FileText,
     count: null,
-    onClick: onDocumentsClick
+    route: ROUTES.DOCUMENTS,
   },
   {
     id: 'legal-sources',
     label: 'Джерела права',
     icon: Scale,
-    count: null
+    count: null,
+    route: null,
   },
   {
     id: 'history',
     label: 'Історія запитів',
     icon: Clock,
     count: null,
-    onClick: onHistoryClick
+    route: ROUTES.HISTORY,
   }];
 
   const contextSections = role === 'user'
     ? allContextSections.filter(s => !companyOnlyContextIds.includes(s.id))
     : allContextSections;
 
-  // Admin monitoring sections
   const monitoringSections = [
-    { id: 'system-overview', label: 'Огляд системи', icon: Activity, onClick: onAdminOverviewClick },
-    { id: 'external-sources', label: 'Зовнішні джерела', icon: Database, onClick: onAdminMonitoringClick },
-    { id: 'admin-users', label: 'Користувачі', icon: Users, onClick: onAdminUsersClick },
-    { id: 'api-costs', label: 'Витрати API', icon: DollarSign, onClick: onAdminCostsClick },
-    { id: 'infrastructure', label: 'Інфраструктура', icon: Server, onClick: onAdminInfrastructureClick },
-    { id: 'containers', label: 'Контейнери', icon: Boxes, onClick: onAdminContainersClick },
-    { id: 'data-sources', label: 'Джерела даних', icon: Globe, onClick: onAdminDataSourcesClick },
-    { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, onClick: onAdminBillingClick },
-    { id: 'system-config', label: 'Конфігурація', icon: Settings, onClick: onAdminConfigClick },
-    { id: 'db-compare', label: 'Порівняння БД', icon: Database, onClick: onAdminDBCompareClick },
-    { id: 'service-pricing', label: 'Собівартість сервісів', icon: Tag, onClick: onAdminServicePricingClick },
-    { id: 'terminal', label: 'Термінал', icon: Terminal, onClick: onAdminTerminalClick },
+    { id: 'system-overview', label: 'Огляд системи', icon: Activity, route: ROUTES.ADMIN_OVERVIEW },
+    { id: 'external-sources', label: 'Зовнішні джерела', icon: Database, route: ROUTES.ADMIN_MONITORING },
+    { id: 'admin-users', label: 'Користувачі', icon: Users, route: ROUTES.ADMIN_USERS },
+    { id: 'api-costs', label: 'Витрати API', icon: DollarSign, route: ROUTES.ADMIN_COSTS },
+    { id: 'infrastructure', label: 'Інфраструктура', icon: Server, route: ROUTES.ADMIN_INFRASTRUCTURE },
+    { id: 'containers', label: 'Контейнери', icon: Boxes, route: ROUTES.ADMIN_CONTAINERS },
+    { id: 'data-sources', label: 'Джерела даних', icon: Globe, route: ROUTES.ADMIN_DATA_SOURCES },
+    { id: 'admin-billing', label: 'Біллінг', icon: CreditCard, route: ROUTES.ADMIN_BILLING },
+    { id: 'system-config', label: 'Конфігурація', icon: Settings, route: ROUTES.ADMIN_CONFIG },
+    { id: 'db-compare', label: 'Порівняння БД', icon: Database, route: ROUTES.ADMIN_DB_COMPARE },
+    { id: 'service-pricing', label: 'Собівартість сервісів', icon: Tag, route: ROUTES.ADMIN_SERVICE_PRICING },
+    { id: 'terminal', label: 'Термінал', icon: Terminal, route: ROUTES.ADMIN_TERMINAL },
   ];
 
   const evidenceSections = [
@@ -264,22 +225,25 @@ export function Sidebar({
     id: 'decisions',
     label: 'Судові рішення',
     icon: Gavel,
-    onClick: onDecisionsClick
+    route: ROUTES.DECISIONS_SEARCH,
   },
   {
     id: 'regulations',
     label: 'Нормативні акти',
-    icon: BookOpen
+    icon: BookOpen,
+    route: null,
   },
   {
     id: 'commentary',
     label: 'Коментарі та практика',
-    icon: MessageSquare
+    icon: MessageSquare,
+    route: null,
   },
   {
     id: 'verification',
     label: 'Перевірка актуальності',
-    icon: CheckCircle
+    icon: CheckCircle,
+    route: null,
   }];
 
   const legislativeSections = [
@@ -287,78 +251,71 @@ export function Sidebar({
     id: 'monitoring',
     label: 'Моніторинг змін законодавства',
     icon: Bell,
-    onClick: onLegislationMonitoringClick
+    route: ROUTES.LEGISLATION_MONITORING,
   },
   {
     id: 'court-analysis',
     label: 'Аналіз судової практики',
     icon: TrendingUp,
-    onClick: onCourtPracticeAnalysisClick
+    route: ROUTES.COURT_PRACTICE_ANALYSIS,
   },
   {
     id: 'initiatives',
     label: 'Відстеження ініціатив',
     icon: FileCode,
-    onClick: onLegalInitiativesClick
+    route: ROUTES.LEGAL_INITIATIVES,
   },
   {
     id: 'statistics',
     label: 'Статистика прийняття законів',
     icon: BarChart3,
-    onClick: onLegislationStatisticsClick
+    route: ROUTES.LEGISLATION_STATISTICS,
   },
   {
     id: 'voting',
     label: 'Аналіз голосувань',
     icon: Vote,
-    onClick: onVotingAnalysisClick
+    route: ROUTES.VOTING_ANALYSIS,
   },
   {
     id: 'codes',
     label: 'Кодекси та закони',
     icon: BookOpen,
-    onClick: onLegalCodesLibraryClick
+    route: ROUTES.LEGAL_CODES_LIBRARY,
   },
   {
     id: 'historical',
     label: 'Історичний аналіз',
     icon: History,
-    onClick: onHistoricalAnalysisClick
+    route: ROUTES.HISTORICAL_ANALYSIS,
   }];
 
   const handleProfileMenuClick = () => {
     setShowProfileMenu(!showProfileMenu);
   };
+
   const handleProfileClick = () => {
     setShowProfileMenu(false);
-    if (onProfileClick) onProfileClick();
+    navigate(ROUTES.PROFILE);
   };
+
   const handleLogout = () => {
     setShowProfileMenu(false);
     if (onLogout) onLogout();
   };
+
   return (
     <>
       {/* Mobile Backdrop */}
       <AnimatePresence>
         {isOpen &&
         <motion.div
-          initial={{
-            opacity: 0
-          }}
-          animate={{
-            opacity: 1
-          }}
-          exit={{
-            opacity: 0
-          }}
-          transition={{
-            duration: 0.3,
-            ease: [0.22, 1, 0.36, 1]
-          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           onClick={onClose}
           className="fixed inset-0 bg-black/25 z-40 lg:hidden backdrop-blur-[2px]" />
-
         }
       </AnimatePresence>
 
@@ -374,13 +331,11 @@ export function Sidebar({
                 src="/Image.jpg"
                 alt="Lex"
                 className="h-full w-auto object-contain" />
-
             </div>
           </div>
           <button
             onClick={onClose}
             className="lg:hidden p-2 text-claude-subtext hover:text-claude-text hover:bg-claude-subtext/8 rounded-lg transition-all duration-200">
-
             <X size={18} strokeWidth={2} />
           </button>
         </div>
@@ -388,13 +343,8 @@ export function Sidebar({
         {/* New Chat Button */}
         <div className="p-4 pb-3">
           <button
-            onClick={() => {
-              newConversation();
-              onNewChat();
-              if (window.innerWidth < 1024) onClose();
-            }}
+            onClick={handleNewChat}
             className="w-full flex items-center gap-3 px-4 py-2.5 bg-white border border-claude-border hover:bg-claude-bg hover:border-claude-subtext/30 rounded-[12px] text-claude-text shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 group active:scale-[0.98]">
-
             <div className="p-1 bg-claude-subtext/10 rounded-full group-hover:bg-claude-subtext/15 transition-colors duration-200">
               <Plus size={15} strokeWidth={2.5} className="text-claude-text" />
             </div>
@@ -434,7 +384,7 @@ export function Sidebar({
                 />
               </button>
               {!collapsedSections.has('conversations') && (
-                <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
+                <div className="space-y-0.5 max-h-[320px] overflow-y-auto">
                   {conversations.map((conv) => (
                     <div
                       key={conv.id}
@@ -442,12 +392,8 @@ export function Sidebar({
                         activeConversationId === conv.id
                           ? 'bg-claude-accent/10 text-claude-accent'
                           : 'text-claude-text hover:bg-claude-subtext/8'
-                      }`}
-                      onClick={async () => {
-                        await switchConversation(conv.id);
-                        navigate(ROUTES.CHAT);
-                        if (window.innerWidth < 1024) onClose();
-                      }}
+                      } ${switchingId === conv.id ? 'opacity-60 pointer-events-none' : ''}`}
+                      onClick={() => handleSwitchConversation(conv.id)}
                     >
                       <MessageSquare size={14} strokeWidth={2} className="flex-shrink-0 opacity-60" />
                       {editingId === conv.id ? (
@@ -475,27 +421,31 @@ export function Sidebar({
                           {conv.title}
                         </span>
                       )}
-                      <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(conv.id);
-                            setEditTitle(conv.title);
-                          }}
-                          className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
-                        >
-                          <Edit3 size={12} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteConversation(conv.id);
-                          }}
-                          className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+                      {switchingId === conv.id ? (
+                        <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0 opacity-50" />
+                      ) : (
+                        <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(conv.id);
+                              setEditTitle(conv.title);
+                            }}
+                            className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteConversation(conv.id);
+                            }}
+                            className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -525,21 +475,18 @@ export function Sidebar({
                 <button
                   key={section.id}
                   onClick={() => {
-                    if (section.onClick) {
-                      section.onClick();
-                      if (window.innerWidth < 1024) onClose();
+                    if (section.route) {
+                      handleNavigation(section.route);
                     } else {
                       showToast.info('Скоро буде доступно');
                     }
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center justify-between group">
-
                     <div className="flex items-center gap-3 min-w-0">
                       <section.icon
                       size={15}
                       strokeWidth={2}
                       className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                       <span className="truncate font-medium tracking-tight font-sans">
                         {section.label}
                       </span>
@@ -578,20 +525,17 @@ export function Sidebar({
                 <button
                   key={section.id}
                   onClick={() => {
-                    if (section.onClick) {
-                      section.onClick();
-                      if (window.innerWidth < 1024) onClose();
+                    if (section.route) {
+                      handleNavigation(section.route);
                     } else {
                       showToast.info('Скоро буде доступно');
                     }
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                     <section.icon
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                     <span className="truncate font-medium tracking-tight font-sans">
                       {section.label}
                     </span>
@@ -624,18 +568,17 @@ export function Sidebar({
                 <button
                   key={section.id}
                   onClick={() => {
-                    if (section.onClick) {
-                      section.onClick();
+                    if (section.route) {
+                      handleNavigation(section.route);
+                    } else {
+                      showToast.info('Скоро буде доступно');
                     }
-                    if (window.innerWidth < 1024) onClose();
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                     <section.icon
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                     <span className="truncate font-medium tracking-tight font-sans">
                       {section.label}
                     </span>
@@ -665,34 +608,24 @@ export function Sidebar({
             {!collapsedSections.has('finance') && (
               <div className="space-y-0.5">
                 <button
-                  onClick={() => {
-                    if (onBillingClick) onBillingClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }}
+                  onClick={() => handleNavigation(ROUTES.BILLING)}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                   <CreditCard
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                   <span className="truncate font-medium tracking-tight font-sans">
                     Біллінг
                   </span>
                 </button>
                 {role === 'company' && (
                 <button
-                  onClick={() => {
-                    if (onTeamClick) onTeamClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }}
+                  onClick={() => handleNavigation(ROUTES.TEAM)}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                   <UsersRound
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                   <span className="truncate font-medium tracking-tight font-sans">
                     Команда
                   </span>
@@ -722,33 +655,23 @@ export function Sidebar({
             {!collapsedSections.has('participants') && (
               <div className="space-y-0.5">
                 <button
-                  onClick={() => {
-                    if (onJudgesClick) onJudgesClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }}
+                  onClick={() => handleNavigation(ROUTES.JUDGES)}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                   <Scale
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                   <span className="truncate font-medium tracking-tight font-sans">
                     Судді
                   </span>
                 </button>
                 <button
-                  onClick={() => {
-                    if (onLawyersClick) onLawyersClick();
-                    if (window.innerWidth < 1024) onClose();
-                  }}
+                  onClick={() => handleNavigation(ROUTES.LAWYERS)}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                   <Briefcase
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                   <span className="truncate font-medium tracking-tight font-sans">
                     Адвокати
                   </span>
@@ -780,18 +703,15 @@ export function Sidebar({
                 <button
                   key={section.id}
                   onClick={() => {
-                    if (section.onClick) {
-                      section.onClick();
-                      if (window.innerWidth < 1024) onClose();
+                    if (section.route) {
+                      handleNavigation(section.route);
                     }
                   }}
                   className="w-full text-left px-3 py-2 rounded-lg text-[13px] text-claude-text hover:bg-claude-subtext/8 transition-all duration-200 flex items-center gap-3 group">
-
                     <section.icon
                     size={15}
                     strokeWidth={2}
                     className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-
                     <span className="truncate font-medium tracking-tight font-sans">
                       {section.label}
                     </span>
@@ -829,31 +749,14 @@ export function Sidebar({
           <AnimatePresence>
             {showProfileMenu &&
             <motion.div
-              initial={{
-                opacity: 0,
-                y: 10,
-                scale: 0.95
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-                scale: 1
-              }}
-              exit={{
-                opacity: 0,
-                y: 10,
-                scale: 0.95
-              }}
-              transition={{
-                duration: 0.2,
-                ease: [0.22, 1, 0.36, 1]
-              }}
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl border border-claude-border shadow-xl overflow-hidden z-50">
-
                 <button
                 onClick={handleProfileClick}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
-
                   <div className="p-1.5 bg-claude-accent/10 rounded-lg">
                     <User size={16} className="text-claude-accent" />
                   </div>
@@ -864,7 +767,6 @@ export function Sidebar({
                 <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-red-50 transition-colors">
-
                   <div className="p-1.5 bg-red-50 rounded-lg">
                     <LogOut size={16} className="text-red-600" />
                   </div>
@@ -879,13 +781,11 @@ export function Sidebar({
           <button
             onClick={handleProfileMenuClick}
             className="w-full flex items-center gap-3 px-2 py-2 hover:bg-claude-subtext/8 rounded-lg transition-all duration-200">
-
             {user?.picture ?
             <img
               src={user.picture}
               alt={user.name}
               className="w-8 h-8 rounded-full object-cover" /> :
-
             <div className="w-8 h-8 rounded-full bg-claude-subtext/15 flex items-center justify-center text-claude-subtext text-[11px] font-semibold">
               {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'}
             </div>
@@ -902,5 +802,4 @@ export function Sidebar({
         </div>
       </aside>
     </>);
-
 }
