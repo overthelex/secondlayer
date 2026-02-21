@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Send, Plus, Square, X, FileText, Loader2, ChevronDown, Sparkles } from 'lucide-react';
+import { Send, Plus, Square, X, FileText, Loader2, ChevronDown, Sparkles, AlignJustify, Save, Trash2 } from 'lucide-react';
 import { uploadService } from '../services/api/UploadService';
+import { promptService, SavedPrompt } from '../services/api/PromptService';
 import showToast from '../utils/toast';
 
 const AI_CHAT_MODE = 'ai_chat';
@@ -262,6 +263,15 @@ export function ChatInput({
 
   const [showManualTools, setShowManualTools] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  // Prompt save/load state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
+  const [promptName, setPromptName] = useState('');
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const [savingPrompt, setSavingPrompt] = useState(false);
+
   const activeTool = selectedTool || AI_CHAT_MODE;
   const isAIChat = activeTool === AI_CHAT_MODE;
 
@@ -270,7 +280,52 @@ export function ChatInput({
     cat.tools.some(t => t.name === activeTool)
   );
 
+  const handleOpenLoad = async () => {
+    setPromptsLoading(true);
+    setShowLoadModal(true);
+    try {
+      const prompts = await promptService.list();
+      setSavedPrompts(prompts);
+    } catch {
+      showToast.error('Не вдалося завантажити промпти');
+    } finally {
+      setPromptsLoading(false);
+    }
+  };
+
+  const handleLoadPrompt = (prompt: SavedPrompt) => {
+    setInput(prompt.content);
+    setShowLoadModal(false);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const handleDeletePrompt = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await promptService.delete(id);
+      setSavedPrompts((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      showToast.error('Не вдалося видалити промпт');
+    }
+  };
+
+  const handleSavePrompt = async () => {
+    if (!promptName.trim() || !input.trim()) return;
+    setSavingPrompt(true);
+    try {
+      await promptService.save(promptName.trim(), input.trim());
+      showToast.success('Промпт збережено');
+      setShowSaveModal(false);
+      setPromptName('');
+    } catch {
+      showToast.error('Не вдалося зберегти промпт');
+    } finally {
+      setSavingPrompt(false);
+    }
+  };
+
   return (
+    <>
     <div className="max-w-3xl mx-auto px-4 md:px-6 pb-2">
       {/* Mode Selection: AI Chat + expandable manual tools */}
       {onToolChange && (
@@ -395,6 +450,27 @@ export function ChatInput({
         </div>
       )}
 
+      {/* Load / Save prompt buttons */}
+      <div className="flex items-center gap-3 mb-2">
+        <button
+          type="button"
+          onClick={handleOpenLoad}
+          className="flex items-center gap-1.5 text-[13px] text-claude-subtext hover:text-claude-text transition-colors"
+        >
+          <AlignJustify size={14} />
+          Load prompt
+        </button>
+        <button
+          type="button"
+          onClick={() => { setPromptName(''); setShowSaveModal(true); }}
+          disabled={!input.trim()}
+          className="flex items-center gap-1.5 text-[13px] text-claude-subtext hover:text-claude-text transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <Save size={14} />
+          Save prompt
+        </button>
+      </div>
+
       <div className="relative bg-white rounded-2xl border border-claude-border shadow-sm focus-within:shadow-md focus-within:border-claude-subtext/40 transition-all duration-300">
         <div className="flex items-end gap-2 p-2">
           {/* Plus / Attach button */}
@@ -464,5 +540,88 @@ export function ChatInput({
         </div>
       </div>
     </div>
+
+      {/* Save Prompt Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSaveModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-[15px] font-semibold text-claude-text mb-4">Зберегти промпт</h3>
+            <input
+              autoFocus
+              type="text"
+              value={promptName}
+              onChange={(e) => setPromptName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSavePrompt(); if (e.key === 'Escape') setShowSaveModal(false); }}
+              placeholder="Назва промпту..."
+              className="w-full px-3 py-2 text-[14px] border border-claude-border rounded-lg focus:outline-none focus:border-claude-subtext/50 mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 text-[13px] text-claude-subtext hover:text-claude-text transition-colors"
+              >
+                Скасувати
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePrompt}
+                disabled={!promptName.trim() || savingPrompt}
+                className="px-4 py-2 text-[13px] bg-claude-text text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-claude-text/90 transition-colors"
+              >
+                {savingPrompt ? 'Зберігаю...' : 'Зберегти'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Prompt Modal */}
+      {showLoadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowLoadModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-[15px] font-semibold text-claude-text mb-4">Завантажити промпт</h3>
+            {promptsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-claude-subtext" />
+              </div>
+            ) : savedPrompts.length === 0 ? (
+              <p className="text-[13px] text-claude-subtext text-center py-8">Немає збережених промптів</p>
+            ) : (
+              <ul className="space-y-1 max-h-72 overflow-y-auto -mx-1">
+                {savedPrompts.map((p) => (
+                  <li
+                    key={p.id}
+                    onClick={() => handleLoadPrompt(p)}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-claude-bg cursor-pointer group transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-claude-text truncate">{p.name}</p>
+                      <p className="text-[11px] text-claude-subtext truncate mt-0.5">{p.content}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeletePrompt(p.id, e)}
+                      className="ml-3 p-1 text-claude-subtext/40 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                onClick={() => setShowLoadModal(false)}
+                className="px-4 py-2 text-[13px] text-claude-subtext hover:text-claude-text transition-colors"
+              >
+                Закрити
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
