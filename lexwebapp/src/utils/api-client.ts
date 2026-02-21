@@ -362,6 +362,14 @@ export const api = {
       apiClient.get('/api/admin/service-pricing'),
     updateServicePricing: (id: string, data: { price_usd: number; notes?: string; is_active?: boolean }) =>
       apiClient.put(`/api/admin/service-pricing/${id}`, data),
+
+    // Tool pricing
+    getToolPricing: () =>
+      apiClient.get('/api/admin/tool-pricing'),
+    updateToolPricing: (toolName: string, data: { base_cost_usd?: number; markup_percent?: number; notes?: string; is_active?: boolean }) =>
+      apiClient.put(`/api/admin/tool-pricing/${toolName}`, data),
+    bulkMarkupToolPricing: (data: { markup_percent: number; service?: string }) =>
+      apiClient.post('/api/admin/tool-pricing/bulk-markup', data),
   },
 
   // GDPR
