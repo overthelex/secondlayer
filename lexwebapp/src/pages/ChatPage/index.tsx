@@ -4,25 +4,21 @@
  * Now using MCP streaming with all 43 tools support
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useCallback } from 'react';
 import { ChatInput } from '../../components/ChatInput';
 import { MessageThread } from '../../components/MessageThread';
 import { EmptyState } from '../../components/EmptyState';
 import { useChatStore } from '../../stores';
-import { useSettingsStore } from '../../stores';
 import { useMCPTool, useAIChat } from '../../hooks/useMCPTool';
 import showToast from '../../utils/toast';
 
 const AI_CHAT_MODE = 'ai_chat';
 
 export function ChatPage() {
-  const location = useLocation();
   const [selectedTool, setSelectedTool] = useState(AI_CHAT_MODE);
 
   // Zustand stores
-  const { messages, isStreaming, clearMessages, setStreaming, cancelStream, removeMessage } = useChatStore();
-  const { maxPrecedents } = useSettingsStore();
+  const { messages, isStreaming, cancelStream, removeMessage } = useChatStore();
 
   // MCP Tool hook (for manual tool mode)
   const { executeTool } = useMCPTool(selectedTool === AI_CHAT_MODE ? 'search_legal_precedents' : selectedTool, {
@@ -31,16 +27,6 @@ export function ChatPage() {
 
   // AI Chat hook (agentic mode)
   const { executeChat } = useAIChat();
-
-  // Reset messages when navigating to chat with reset state
-  useEffect(() => {
-    if (location.state?.reset) {
-      clearMessages();
-      setStreaming(false);
-      // Clear the state to prevent reset on subsequent renders
-      window.history.replaceState({}, document.title);
-    }
-  }, [location.state, clearMessages, setStreaming]);
 
   /**
    * Parse content to tool-specific parameters
