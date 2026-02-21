@@ -119,10 +119,11 @@ export function createAdminRoutes(
       const today = new Date().toISOString().split('T')[0];
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      // Today's revenue
+      // Today's revenue — only count requests that went through chargeUser() (base_cost_usd IS NOT NULL)
+      // For those requests: total_cost_usd = charged amount, base_cost_usd = actual API cost, markup_amount_usd = profit
       const todayRevenue = await db.query(`
         SELECT
-          COALESCE(SUM(total_cost_usd), 0) as revenue_usd,
+          COALESCE(SUM(CASE WHEN base_cost_usd IS NOT NULL THEN total_cost_usd ELSE 0 END), 0) as revenue_usd,
           COALESCE(SUM(markup_amount_usd), 0) as profit_usd,
           COUNT(*) as requests
         FROM cost_tracking
@@ -132,7 +133,7 @@ export function createAdminRoutes(
       // This month's revenue
       const monthRevenue = await db.query(`
         SELECT
-          COALESCE(SUM(total_cost_usd), 0) as revenue_usd,
+          COALESCE(SUM(CASE WHEN base_cost_usd IS NOT NULL THEN total_cost_usd ELSE 0 END), 0) as revenue_usd,
           COALESCE(SUM(markup_amount_usd), 0) as profit_usd,
           COUNT(*) as requests
         FROM cost_tracking
@@ -203,9 +204,9 @@ export function createAdminRoutes(
       const result = await db.query(`
         SELECT
           DATE(created_at) as date,
-          COALESCE(SUM(total_cost_usd), 0) as revenue_usd,
-          COALESCE(SUM(CASE WHEN openai_cost_usd IS NOT NULL THEN openai_cost_usd ELSE 0 END), 0) as cost_usd,
-          COALESCE(SUM(total_cost_usd), 0) - COALESCE(SUM(CASE WHEN openai_cost_usd IS NOT NULL THEN openai_cost_usd ELSE 0 END), 0) as profit_usd,
+          COALESCE(SUM(CASE WHEN base_cost_usd IS NOT NULL THEN total_cost_usd ELSE 0 END), 0) as revenue_usd,
+          COALESCE(SUM(base_cost_usd), 0) as cost_usd,
+          COALESCE(SUM(markup_amount_usd), 0) as profit_usd,
           COUNT(*) as requests
         FROM cost_tracking
         WHERE created_at >= CURRENT_DATE - $1::integer * INTERVAL '1 day'

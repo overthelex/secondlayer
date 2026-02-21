@@ -134,10 +134,10 @@ services:
       resources:
         limits:
           cpus: '2'
-          memory: 4G
+          memory: 16G
         reservations:
           cpus: '0.5'
-          memory: 2G
+          memory: 4G
 
   qdrant-stage:
     image: qdrant/qdrant:latest
