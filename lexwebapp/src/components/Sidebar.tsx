@@ -232,19 +232,19 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     id: 'regulations',
     label: 'Нормативні акти',
     icon: BookOpen,
-    route: null,
+    route: ROUTES.LEGAL_CODES_LIBRARY,
   },
   {
     id: 'commentary',
     label: 'Коментарі та практика',
     icon: MessageSquare,
-    route: null,
+    route: ROUTES.COURT_PRACTICE_ANALYSIS,
   },
   {
     id: 'verification',
     label: 'Перевірка актуальності',
     icon: CheckCircle,
-    route: null,
+    route: ROUTES.LEGISLATION_MONITORING,
   }];
 
   const legislativeSections = [
