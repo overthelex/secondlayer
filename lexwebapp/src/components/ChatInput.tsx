@@ -265,9 +265,7 @@ export function ChatInput({
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   // Prompt save/load state
-  const [showSaveModal, setShowSaveModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
-  const [promptName, setPromptName] = useState('');
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
@@ -310,13 +308,12 @@ export function ChatInput({
   };
 
   const handleSavePrompt = async () => {
-    if (!promptName.trim() || !input.trim()) return;
+    if (!input.trim()) return;
+    const autoName = input.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 60);
     setSavingPrompt(true);
     try {
-      await promptService.save(promptName.trim(), input.trim());
+      await promptService.save(autoName, input.trim());
       showToast.success('Промпт збережено');
-      setShowSaveModal(false);
-      setPromptName('');
     } catch {
       showToast.error('Не вдалося зберегти промпт');
     } finally {
@@ -462,12 +459,12 @@ export function ChatInput({
         </button>
         <button
           type="button"
-          onClick={() => { setPromptName(''); setShowSaveModal(true); }}
-          disabled={!input.trim()}
+          onClick={handleSavePrompt}
+          disabled={!input.trim() || savingPrompt}
           className="flex items-center gap-1.5 text-[13px] text-claude-subtext hover:text-claude-text transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <Save size={14} />
-          Save prompt
+          {savingPrompt ? 'Зберігаю...' : 'Save prompt'}
         </button>
       </div>
 
@@ -540,41 +537,6 @@ export function ChatInput({
         </div>
       </div>
     </div>
-
-      {/* Save Prompt Modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSaveModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[15px] font-semibold text-claude-text mb-4">Зберегти промпт</h3>
-            <input
-              autoFocus
-              type="text"
-              value={promptName}
-              onChange={(e) => setPromptName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSavePrompt(); if (e.key === 'Escape') setShowSaveModal(false); }}
-              placeholder="Назва промпту..."
-              className="w-full px-3 py-2 text-[14px] border border-claude-border rounded-lg focus:outline-none focus:border-claude-subtext/50 mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowSaveModal(false)}
-                className="px-4 py-2 text-[13px] text-claude-subtext hover:text-claude-text transition-colors"
-              >
-                Скасувати
-              </button>
-              <button
-                type="button"
-                onClick={handleSavePrompt}
-                disabled={!promptName.trim() || savingPrompt}
-                className="px-4 py-2 text-[13px] bg-claude-text text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-claude-text/90 transition-colors"
-              >
-                {savingPrompt ? 'Зберігаю...' : 'Зберегти'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Load Prompt Modal */}
       {showLoadModal && (
