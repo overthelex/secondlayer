@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../router/routes';
 import showToast from '../utils/toast';
@@ -52,6 +52,73 @@ interface SidebarProps {
   onLogout?: () => void;
 }
 
+// --- NavItem ---
+interface NavItemProps {
+  icon: React.ElementType;
+  label: string;
+  route?: string | null;
+  onClick?: () => void;
+}
+
+function NavItem({ icon: Icon, label, route, onClick }: NavItemProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isActive = route ? location.pathname === route : false;
+
+  const handleClick = onClick ?? (() => {
+    if (route) {
+      navigate(route);
+      if (window.innerWidth < 1024) {
+        // parent will handle close — we fire a custom event
+        window.dispatchEvent(new CustomEvent('sidebar-navigate'));
+      }
+    } else {
+      showToast.info('Скоро буде доступно');
+    }
+  });
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${isActive ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
+      <Icon size={15} strokeWidth={2} className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
+      <span className="truncate font-medium tracking-tight font-sans">{label}</span>
+    </button>
+  );
+}
+
+// --- Section ---
+interface SectionProps {
+  id: string;
+  title: string;
+  collapsed: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}
+
+function Section({ id, title, collapsed, onToggle, children }: SectionProps) {
+  return (
+    <div className="mb-6">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
+      >
+        <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
+          {title}
+        </h3>
+        <ChevronDown
+          size={12}
+          strokeWidth={2.5}
+          className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`}
+        />
+      </button>
+      {!collapsed && (
+        <div className="space-y-0.5">{children}</div>
+      )}
+    </div>
+  );
+}
+
 export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -61,32 +128,8 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [switchingId, setSwitchingId] = useState<string | null>(null);
-
-  const allSectionIds = ['conversations', 'research', 'legislation', 'matters', 'monitoring'] as const;
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
-  const toggleSection = (sectionId: string) => {
-    setCollapsedSections(prev => {
-      const next = new Set(prev);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
-      }
-      return next;
-    });
-  };
-
-  const toggleAllSections = () => {
-    if (collapsedSections.size === allSectionIds.length) {
-      setCollapsedSections(new Set());
-    } else {
-      setCollapsedSections(new Set(allSectionIds));
-    }
-  };
-
-  const allCollapsed = collapsedSections.size === allSectionIds.length;
-  const profileMenuRef = useRef<HTMLDivElement>(null);
   const {
     conversations,
     conversationId: activeConversationId,
@@ -97,25 +140,56 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     newConversation,
   } = useChatStore();
 
+  // Compute which section IDs are actually rendered (for toggle-all)
+  const renderedSectionIds = useMemo(() => {
+    if (role === 'administrator') return ['monitoring'];
+    const ids = ['research', 'legislation'];
+    if (conversations.length > 0) ids.push('conversations');
+    if (role !== 'user') ids.push('matters');
+    return ids;
+  }, [role, conversations.length]);
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  };
+
+  const toggleAllSections = () => {
+    const allCollapsed = renderedSectionIds.every(id => collapsedSections.has(id));
+    if (allCollapsed) {
+      setCollapsedSections(new Set());
+    } else {
+      setCollapsedSections(new Set(renderedSectionIds));
+    }
+  };
+
+  const allCollapsed = renderedSectionIds.length > 0 && renderedSectionIds.every(id => collapsedSections.has(id));
+
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     loadConversations();
   }, []);
 
+  // Listen for navigation events from NavItem (to close mobile sidebar)
+  useEffect(() => {
+    const handler = () => onClose();
+    window.addEventListener('sidebar-navigate', handler);
+    return () => window.removeEventListener('sidebar-navigate', handler);
+  }, [onClose]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-      profileMenuRef.current &&
-      !profileMenuRef.current.contains(event.target as Node))
-      {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false);
       }
     };
-    if (showProfileMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    if (showProfileMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProfileMenu]);
 
   const handleNavigation = (route: string) => {
@@ -134,9 +208,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     setSwitchingId(convId);
     try {
       await switchConversation(convId);
-      if (location.pathname !== ROUTES.CHAT) {
-        navigate(ROUTES.CHAT);
-      }
+      if (location.pathname !== ROUTES.CHAT) navigate(ROUTES.CHAT);
     } finally {
       setSwitchingId(null);
       if (window.innerWidth < 1024) onClose();
@@ -187,9 +259,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     { id: 'zo-stats', label: 'Статистика рішень', icon: BarChart3, route: ROUTES.ADMIN_ZO_STATS },
   ];
 
-  const handleProfileMenuClick = () => {
-    setShowProfileMenu(!showProfileMenu);
-  };
+  const handleProfileMenuClick = () => setShowProfileMenu(!showProfileMenu);
 
   const handleProfileClick = () => {
     setShowProfileMenu(false);
@@ -200,49 +270,6 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
     setShowProfileMenu(false);
     if (onLogout) onLogout();
   };
-
-  // Reusable nav item button
-  const NavItem = ({ icon: Icon, label, route, onClick }: {
-    icon: React.ElementType;
-    label: string;
-    route?: string | null;
-    onClick?: () => void;
-  }) => {
-    const isActive = route ? location.pathname === route : false;
-    return (
-      <button
-        onClick={onClick ?? (() => {
-          if (route) handleNavigation(route);
-          else showToast.info('Скоро буде доступно');
-        })}
-        className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-all duration-200 flex items-center gap-3 group ${isActive ? 'bg-claude-accent/10 text-claude-accent' : 'text-claude-text hover:bg-claude-subtext/8'}`}>
-        <Icon size={15} strokeWidth={2} className="text-claude-subtext/60 group-hover:text-claude-text transition-colors duration-200 flex-shrink-0" />
-        <span className="truncate font-medium tracking-tight font-sans">{label}</span>
-      </button>
-    );
-  };
-
-  // Reusable collapsible section
-  const Section = ({ id, title, children }: { id: string; title: string; children: React.ReactNode }) => (
-    <div className="mb-6">
-      <button
-        onClick={() => toggleSection(id)}
-        className="w-full flex items-center justify-between px-3 py-2 group cursor-pointer"
-      >
-        <h3 className="text-[11px] font-semibold text-claude-subtext/70 uppercase tracking-[0.5px] font-sans">
-          {title}
-        </h3>
-        <ChevronDown
-          size={12}
-          strokeWidth={2.5}
-          className={`text-claude-subtext/40 group-hover:text-claude-subtext/70 transition-transform duration-200 ${collapsedSections.has(id) ? '-rotate-90' : ''}`}
-        />
-      </button>
-      {!collapsedSections.has(id) && (
-        <div className="space-y-0.5">{children}</div>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -267,10 +294,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
         <div className="p-4 flex items-center justify-between border-b border-claude-border/50">
           <div className="flex items-center gap-3 px-1">
             <div className="h-16 flex items-center">
-              <img
-                src="/Image.jpg"
-                alt="Lex"
-                className="h-full w-auto object-contain" />
+              <img src="/Image.jpg" alt="Lex" className="h-full w-auto object-contain" />
             </div>
           </div>
           <button
@@ -288,9 +312,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
             <div className="p-1 bg-claude-subtext/10 rounded-full group-hover:bg-claude-subtext/15 transition-colors duration-200">
               <Plus size={15} strokeWidth={2.5} className="text-claude-text" />
             </div>
-            <span className="font-medium text-[13px] tracking-tight font-sans">
-              Новий запит
-            </span>
+            <span className="font-medium text-[13px] tracking-tight font-sans">Новий запит</span>
           </button>
         </div>
 
@@ -312,12 +334,12 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
             <>
               {/* Assistant — top-level link */}
               <div className="mb-2">
-                <NavItem icon={MessageSquare} label="Асистент" route={ROUTES.CHAT} />
+                <NavItem icon={MessageSquare} label="Асистент" route={ROUTES.CHAT} onClick={() => handleNavigation(ROUTES.CHAT)} />
               </div>
 
               {/* Conversation History */}
               {conversations.length > 0 && (
-                <Section id="conversations" title="Розмови">
+                <Section id="conversations" title="Розмови" collapsed={collapsedSections.has('conversations')} onToggle={toggleSection}>
                   <div className="max-h-[280px] overflow-y-auto space-y-0.5">
                     {conversations.map((conv) => (
                       <div
@@ -337,43 +359,27 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
                             onClick={(e) => e.stopPropagation()}
                             onChange={(e) => setEditTitle(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                renameConversation(conv.id, editTitle);
-                                setEditingId(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingId(null);
-                              }
+                              if (e.key === 'Enter') { renameConversation(conv.id, editTitle); setEditingId(null); }
+                              else if (e.key === 'Escape') setEditingId(null);
                             }}
-                            onBlur={() => {
-                              renameConversation(conv.id, editTitle);
-                              setEditingId(null);
-                            }}
+                            onBlur={() => { renameConversation(conv.id, editTitle); setEditingId(null); }}
                             autoFocus
                           />
                         ) : (
-                          <span className="flex-1 truncate font-medium tracking-tight font-sans">
-                            {conv.title}
-                          </span>
+                          <span className="flex-1 truncate font-medium tracking-tight font-sans">{conv.title}</span>
                         )}
                         {switchingId === conv.id ? (
                           <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin flex-shrink-0 opacity-50" />
                         ) : (
                           <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingId(conv.id);
-                                setEditTitle(conv.title);
-                              }}
+                              onClick={(e) => { e.stopPropagation(); setEditingId(conv.id); setEditTitle(conv.title); }}
                               className="p-1 hover:bg-claude-subtext/15 rounded transition-colors"
                             >
                               <Edit3 size={12} />
                             </button>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteConversation(conv.id);
-                              }}
+                              onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
                               className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"
                             >
                               <Trash2 size={12} />
@@ -387,29 +393,29 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
               )}
 
               {/* Research */}
-              <Section id="research" title="Дослідження">
+              <Section id="research" title="Дослідження" collapsed={collapsedSections.has('research')} onToggle={toggleSection}>
                 {researchSections.map((s) => (
-                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} onClick={() => handleNavigation(s.route)} />
                 ))}
               </Section>
 
               {/* Legislation */}
-              <Section id="legislation" title="Законодавство">
+              <Section id="legislation" title="Законодавство" collapsed={collapsedSections.has('legislation')} onToggle={toggleSection}>
                 {legislationSections.map((s) => (
-                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                  <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} onClick={() => handleNavigation(s.route)} />
                 ))}
               </Section>
 
               {/* Vault — top-level link */}
               <div className="mb-2">
-                <NavItem icon={Archive} label="Vault" route={ROUTES.DOCUMENTS} />
+                <NavItem icon={Archive} label="Vault" route={ROUTES.DOCUMENTS} onClick={() => handleNavigation(ROUTES.DOCUMENTS)} />
               </div>
 
               {/* Matters — company/lawyer only */}
               {role !== 'user' && (
-                <Section id="matters" title="Справи">
+                <Section id="matters" title="Справи" collapsed={collapsedSections.has('matters')} onToggle={toggleSection}>
                   {mattersSections.map((s) => (
-                    <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                    <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} onClick={() => handleNavigation(s.route)} />
                   ))}
                 </Section>
               )}
@@ -422,9 +428,7 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
               {/* Upgrade Card */}
               <div className="px-3 py-3 border-t border-claude-border/50">
                 <div className="p-3.5 bg-gradient-to-br from-claude-subtext/5 to-claude-subtext/8 rounded-[12px] border border-claude-border">
-                  <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">
-                    Оновити до Pro
-                  </h4>
+                  <h4 className="text-[13px] font-semibold text-claude-text mb-1 tracking-tight font-sans">Оновити до Pro</h4>
                   <p className="text-[11px] text-claude-subtext/80 mb-3 leading-relaxed font-sans">
                     Доступ до розширеної бази рішень та аналітики.
                   </p>
@@ -438,18 +442,16 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
 
           {/* ADMIN MENU */}
           {role === 'administrator' && (
-            <Section id="monitoring" title="Моніторинг">
+            <Section id="monitoring" title="Моніторинг" collapsed={collapsedSections.has('monitoring')} onToggle={toggleSection}>
               {monitoringSections.map((s) => (
-                <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} />
+                <NavItem key={s.id} icon={s.icon} label={s.label} route={s.route} onClick={() => handleNavigation(s.route)} />
               ))}
             </Section>
           )}
         </div>
 
         {/* User Profile */}
-        <div
-          className="p-4 border-t border-claude-border relative"
-          ref={profileMenuRef}>
+        <div className="p-4 border-t border-claude-border relative" ref={profileMenuRef}>
 
           {/* Profile Menu Dropdown */}
           <AnimatePresence>
@@ -461,48 +463,40 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-xl border border-claude-border shadow-xl overflow-hidden z-50">
                 <button
-                onClick={handleProfileClick}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
+                  onClick={handleProfileClick}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
                   <div className="p-1.5 bg-claude-accent/10 rounded-lg">
                     <User size={16} className="text-claude-accent" />
                   </div>
-                  <span className="text-[13px] font-medium text-claude-text font-sans">
-                    Профіль
-                  </span>
+                  <span className="text-[13px] font-medium text-claude-text font-sans">Профіль</span>
                 </button>
                 {role !== 'administrator' && (
                   <button
-                  onClick={() => { setShowProfileMenu(false); navigate(ROUTES.BILLING); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
+                    onClick={() => { setShowProfileMenu(false); navigate(ROUTES.BILLING); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
                     <div className="p-1.5 bg-claude-subtext/8 rounded-lg">
                       <CreditCard size={16} className="text-claude-subtext" />
                     </div>
-                    <span className="text-[13px] font-medium text-claude-text font-sans">
-                      Біллінг
-                    </span>
+                    <span className="text-[13px] font-medium text-claude-text font-sans">Біллінг</span>
                   </button>
                 )}
                 {role === 'company' && (
                   <button
-                  onClick={() => { setShowProfileMenu(false); navigate(ROUTES.TEAM); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
+                    onClick={() => { setShowProfileMenu(false); navigate(ROUTES.TEAM); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-claude-bg transition-colors border-b border-claude-border/50">
                     <div className="p-1.5 bg-claude-subtext/8 rounded-lg">
                       <UsersRound size={16} className="text-claude-subtext" />
                     </div>
-                    <span className="text-[13px] font-medium text-claude-text font-sans">
-                      Команда
-                    </span>
+                    <span className="text-[13px] font-medium text-claude-text font-sans">Команда</span>
                   </button>
                 )}
                 <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-red-50 transition-colors">
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-red-50 transition-colors">
                   <div className="p-1.5 bg-red-50 rounded-lg">
                     <LogOut size={16} className="text-red-600" />
                   </div>
-                  <span className="text-[13px] font-medium text-red-600 font-sans">
-                    Вихід
-                  </span>
+                  <span className="text-[13px] font-medium text-red-600 font-sans">Вихід</span>
                 </button>
               </motion.div>
             }
@@ -512,24 +506,20 @@ export function Sidebar({ isOpen, onClose, onLogout }: SidebarProps) {
             onClick={handleProfileMenuClick}
             className="w-full flex items-center gap-3 px-2 py-2 hover:bg-claude-subtext/8 rounded-lg transition-all duration-200">
             {user?.picture ?
-            <img
-              src={user.picture}
-              alt={user.name}
-              className="w-8 h-8 rounded-full object-cover" /> :
-            <div className="w-8 h-8 rounded-full bg-claude-subtext/15 flex items-center justify-center text-claude-subtext text-[11px] font-semibold">
-              {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'}
-            </div>
+              <img src={user.picture} alt={user.name} className="w-8 h-8 rounded-full object-cover" /> :
+              <div className="w-8 h-8 rounded-full bg-claude-subtext/15 flex items-center justify-center text-claude-subtext text-[11px] font-semibold">
+                {user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || '?'}
+              </div>
             }
             <div className="flex-1 text-left">
               <div className="text-[13px] font-semibold text-claude-text tracking-tight font-sans">
                 {user?.name || 'Користувач'}
               </div>
-              <div className="text-[11px] text-claude-subtext/70 font-sans">
-                {user?.email || ''}
-              </div>
+              <div className="text-[11px] text-claude-subtext/70 font-sans">{user?.email || ''}</div>
             </div>
           </button>
         </div>
       </aside>
-    </>);
+    </>
+  );
 }
