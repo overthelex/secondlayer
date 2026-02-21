@@ -265,6 +265,8 @@ export const api = {
       apiClient.get('/api/admin/metrics/services'),
     getSystemMetrics: () =>
       apiClient.get('/api/admin/metrics/system'),
+    getZOStats: (params: { yearFrom: number; yearTo: number; justiceKind?: string }) =>
+      apiClient.get('/api/admin/zo-stats', { params }),
 
     // Billing management
     getBillingTiers: () =>

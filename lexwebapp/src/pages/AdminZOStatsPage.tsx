@@ -104,13 +104,12 @@ export function AdminZOStatsPage() {
     setError(null);
     setData(null);
     try {
-      const params = new URLSearchParams({
-        yearFrom: String(yearFrom),
-        yearTo:   String(yearTo),
+      const resp = await api.admin.getZOStats({
+        yearFrom,
+        yearTo,
         justiceKind: selectedKinds.join(','),
       });
-      const resp = await api.get<ZOStatsResponse>(`/api/admin/zo-stats?${params}`);
-      setData(resp.data);
+      setData(resp.data as ZOStatsResponse);
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Помилка запиту';
       setError(msg);
