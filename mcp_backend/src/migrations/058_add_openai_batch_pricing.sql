@@ -53,8 +53,8 @@ INSERT INTO service_pricing (provider, model, display_name, unit_type, price_usd
   ('openai', 'o3', 'o3', 'per_1m_batch_output_tokens', 4.00, 'USD', 123, 'Batch API — 50% знижка'),
 
   -- embeddings (batch = same price, no extra discount)
-  ('openai', 'text-embedding-3-small', 'Text Embedding 3 Small', 'per_1m_batch_tokens', 0.010, 'USD', 142, 'Batch API — 50% знижка'),
-  ('openai', 'text-embedding-3-large', 'Text Embedding 3 Large', 'per_1m_batch_tokens', 0.065, 'USD', 152, 'Batch API — 50% знижка')
+  ('openai', 'text-embedding-3-small', 'Text Embedding 3 Small', 'per_1m_batch_tokens', 0.010, 'USD', 142, 'Batch API — базова ціна (без знижки)'),
+  ('openai', 'text-embedding-3-large', 'Text Embedding 3 Large', 'per_1m_batch_tokens', 0.065, 'USD', 152, 'Batch API — базова ціна (без знижки)')
 
 ON CONFLICT (provider, model, unit_type) DO UPDATE SET
   price_usd  = EXCLUDED.price_usd,

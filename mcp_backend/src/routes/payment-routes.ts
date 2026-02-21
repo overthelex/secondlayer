@@ -143,16 +143,14 @@ export function createPaymentRouter(
       const { provider, paymentId } = req.params;
 
       let status;
-      if (provider === 'monobank') {
-        status = await monobankService.getPaymentStatus(paymentId);
-      } else if (provider === 'metamask') {
+      if (provider === 'metamask') {
         status = await metamaskService.getPaymentStatus(paymentId);
       } else if (provider === 'binance_pay') {
         status = await binancePayService.getPaymentStatus(paymentId);
       } else {
         return res.status(400).json({
           error: 'Invalid provider',
-          message: 'Provider must be monobank, metamask, or binance_pay',
+          message: 'Provider must be metamask or binance_pay',
         });
       }
 
@@ -185,8 +183,12 @@ export function createWebhookRouter(
    */
   router.post('/monobank', async (req: Request, res: Response) => {
     try {
-      const signature = req.headers['x-sign'] as string || '';
-      const result = await monobankService.handleWebhook(req.body, signature);
+      const signature = req.headers['x-sign'] as string;
+      if (!signature) {
+        return res.status(400).json({ error: 'Missing X-Sign header' });
+      }
+      const rawBody = (req as any).rawBody as string;
+      const result = await monobankService.handleWebhook(req.body, signature, rawBody);
       return res.json(result);
     } catch (error: any) {
       logger.error('Monobank webhook failed', { error: error.message });

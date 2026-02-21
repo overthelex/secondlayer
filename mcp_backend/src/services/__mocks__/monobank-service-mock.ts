@@ -21,7 +21,7 @@ export class MockMonobankService extends MonobankService {
     return { invoiceId, pageUrl };
   }
 
-  async handleWebhook(body: MonobankWebhookBody, signature: string): Promise<{ received: boolean }> {
+  async handleWebhook(body: MonobankWebhookBody, signature: string, rawBody: string): Promise<{ received: boolean }> {
     logger.info('[MockMonobankService] Mock webhook received', { invoiceId: body.invoiceId, status: body.status });
     return { received: true };
   }

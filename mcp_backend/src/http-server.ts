@@ -347,7 +347,7 @@ class HTTPMCPServer {
     // Use mock services if MOCK_PAYMENTS=true or keys not configured
     const mockPaymentsEnabled = process.env.MOCK_PAYMENTS === 'true';
 
-    const useMockMonobank = mockPaymentsEnabled || !process.env.MONOBANK_API_KEY;
+    const useMockMonobank = mockPaymentsEnabled || !process.env.MONOBANK_API_KEY || process.env.MONOBANK_API_KEY === 'mock';
     if (useMockMonobank) {
       this.monobankService = new MockMonobankService(this.billingService, this.emailService);
       logger.warn('🧪 Using MOCK Monobank service (no real payments will be processed)');

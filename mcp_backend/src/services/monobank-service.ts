@@ -1,9 +1,10 @@
 /**
  * MonobankService
- * Stub implementation for Monobank Acquiring payment integration.
+ * Monobank Acquiring payment integration.
  * Configure MONOBANK_API_KEY to enable real payments.
  */
 
+import { createVerify, createPublicKey } from 'crypto';
 import { logger } from '../utils/logger.js';
 import { BillingService } from './billing-service.js';
 import { EmailService } from './email-service.js';
@@ -30,10 +31,28 @@ export interface MonobankWebhookBody {
 }
 
 export class MonobankService {
+  private cachedPublicKey: ReturnType<typeof createPublicKey> | null = null;
+
   constructor(
     protected billingService: BillingService,
     protected emailService: EmailService
   ) {}
+
+  private async getMonobankPublicKey(): Promise<ReturnType<typeof createPublicKey>> {
+    if (this.cachedPublicKey) return this.cachedPublicKey;
+
+    const response = await fetch('https://api.monobank.ua/api/merchant/pubkey');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Monobank public key: ${response.status}`);
+    }
+    const data = (await response.json()) as { key: string };
+    this.cachedPublicKey = createPublicKey({
+      key: Buffer.from(data.key, 'base64'),
+      format: 'der',
+      type: 'spki',
+    });
+    return this.cachedPublicKey;
+  }
 
   private get apiKey(): string {
     const key = process.env.MONOBANK_API_KEY;
@@ -98,12 +117,21 @@ export class MonobankService {
 
   /**
    * Handle Monobank webhook callback.
+   * rawBody must be the raw request body string (before JSON parsing) for signature verification.
    */
-  async handleWebhook(body: MonobankWebhookBody, signature: string): Promise<{ received: boolean }> {
+  async handleWebhook(body: MonobankWebhookBody, signature: string, rawBody: string): Promise<{ received: boolean }> {
     const key = this.apiKey; // throws if not configured
 
-    // Signature validation: Monobank signs the raw body with HMAC-SHA256
-    // For now we log and process; full validation should use crypto.createHmac
+    // Signature validation: Monobank signs the raw JSON body with RSA-SHA256
+    const publicKey = await this.getMonobankPublicKey();
+    const verifier = createVerify('SHA256');
+    verifier.update(rawBody, 'utf8');
+    const isValid = verifier.verify(publicKey, signature, 'base64');
+    if (!isValid) {
+      logger.warn('[MonobankService] Invalid webhook signature', { invoiceId: body.invoiceId });
+      throw new Error('Invalid Monobank webhook signature');
+    }
+
     logger.info('[MonobankService] Webhook received', {
       invoiceId: body.invoiceId,
       status: body.status,
