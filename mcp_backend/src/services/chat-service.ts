@@ -382,7 +382,7 @@ export class ChatService {
 
         // Step 2: Execute all tools in parallel
         const settled = await Promise.allSettled(
-          toolCalls.map(call => this.executeToolWithCache(call))
+          toolCalls.map(call => this.executeToolWithCache(call, request.userId))
         );
 
         // Step 3: Build correct message format — ONE assistant message with ALL tool_calls
@@ -1329,7 +1329,8 @@ ${stepsText}
    * Extracted to enable parallel execution via Promise.allSettled().
    */
   private async executeToolWithCache(
-    call: ToolCall
+    call: ToolCall,
+    userId?: string
   ): Promise<{ call: ToolCall; result: any; cached: boolean }> {
     let toolResult: any;
     let cached = false;
@@ -1346,7 +1347,11 @@ ${stepsText}
 
     if (!cached) {
       try {
-        toolResult = await this.toolRegistry.executeTool(call.name, call.arguments);
+        const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders']);
+        const toolArgs = (userId && VAULT_TOOLS.has(call.name))
+          ? { ...call.arguments, userId }
+          : call.arguments;
+        toolResult = await this.toolRegistry.executeTool(call.name, toolArgs);
       } catch (err: any) {
         toolResult = { error: err.message };
       }

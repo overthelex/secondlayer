@@ -923,8 +923,9 @@ class HTTPMCPServer {
               { requestId, task: toolName },
               async () => {
                 // Route to appropriate tool handler via centralized registry
-                // Special case: list_documents needs userId injection
-                const toolArgs = toolName === 'list_documents' ? { ...args, userId } : args;
+                // Inject userId for all vault tools (user isolation)
+                const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders']);
+                const toolArgs = VAULT_TOOLS.has(toolName) ? { ...args, userId } : args;
                 const registryResult = await this.toolRegistry.executeTool(toolName, toolArgs);
                 if (registryResult) {
                   return registryResult;
@@ -2137,8 +2138,9 @@ class HTTPMCPServer {
             { requestId, task: toolName },
             async () => {
               // Route to appropriate tool handler via centralized registry
-              // Special case: list_documents needs userId injection
-              const httpToolArgs = toolName === 'list_documents' ? { ...args, userId: req.user?.id } : args;
+              // Inject userId for all vault tools (user isolation)
+              const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders']);
+              const httpToolArgs = VAULT_TOOLS.has(toolName) ? { ...args, userId: req.user?.id } : args;
               return await this.toolRegistry.executeTool(toolName, httpToolArgs);
             }
           );
