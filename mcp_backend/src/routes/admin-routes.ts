@@ -3963,5 +3963,158 @@ export function createAdminRoutes(
     }
   });
 
+  // ========================================
+  // ZAKONONLINE DOCUMENT STATISTICS
+  // ========================================
+
+  const ZO_BASE_URL = 'https://court.searcher.api.zakononline.com.ua';
+  const ZO_SEARCH_ENDPOINT = '/v1/search';
+  const ZO_JUDGMENT_FORMS_ENDPOINT = '/v1/judgment_forms';
+  const ZO_JUSTICE_KINDS_ENDPOINT = '/v1/justice_kinds';
+
+  const JUSTICE_KINDS: Record<number, string> = {
+    1: 'Цивільне',
+    2: 'Кримінальне',
+    3: 'Господарське',
+    4: 'Адміністративне',
+  };
+
+  async function zoQueryCount(
+    year: number,
+    justiceKind: number | null,
+    judgmentForm: number | null,
+    token: string
+  ): Promise<number> {
+    const params: Record<string, any> = {
+      target: 'text',
+      mode: 'sph04',
+      limit: 1,
+      'where[adjudication_date][op]': 'between',
+      'where[adjudication_date][value][0]': `${year}-01-01`,
+      'where[adjudication_date][value][1]': `${year}-12-31`,
+    };
+    if (justiceKind !== null) {
+      params['where[justice_kind][op]'] = '$eq';
+      params['where[justice_kind][value]'] = justiceKind;
+    }
+    if (judgmentForm !== null) {
+      params['where[judgment_form][op]'] = '$eq';
+      params['where[judgment_form][value]'] = judgmentForm;
+    }
+    const response = await axios.get(`${ZO_BASE_URL}${ZO_SEARCH_ENDPOINT}`, {
+      params,
+      headers: { 'X-App-Token': token },
+      timeout: 15000,
+    });
+    return response.data?.total ?? 0;
+  }
+
+  async function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * GET /api/admin/zo-stats
+   * Returns document count statistics from ZakonOnline by year and justice kind.
+   * Optionally includes judgment form breakdown when a single justice kind is selected.
+   *
+   * Query params:
+   *   yearFrom  - start year (default 2020)
+   *   yearTo    - end year (default 2025)
+   *   justiceKind - comma-separated list of justice kind IDs (1-4), default all
+   */
+  router.get('/zo-stats', async (req: Request, res: Response) => {
+    const token = process.env.ZAKONONLINE_API_TOKEN || '';
+    if (!token) {
+      return res.status(503).json({ error: 'ZAKONONLINE_API_TOKEN not configured' });
+    }
+
+    const yearFrom = Math.max(2000, Math.min(2030, parseInt(req.query.yearFrom as string) || 2020));
+    const yearTo   = Math.max(yearFrom, Math.min(2030, parseInt(req.query.yearTo as string) || 2025));
+
+    const requestedKindsParam = req.query.justiceKind as string | undefined;
+    const requestedKinds: number[] = requestedKindsParam
+      ? requestedKindsParam.split(',').map(Number).filter(n => n >= 1 && n <= 4)
+      : [1, 2, 3, 4];
+
+    // Fetch judgment forms dictionary for breakdown
+    let judgmentForms: Array<{ id: number; name: string }> = [];
+    try {
+      const fmResp = await axios.get(`${ZO_BASE_URL}${ZO_JUDGMENT_FORMS_ENDPOINT}`, {
+        headers: { 'X-App-Token': token },
+        timeout: 10000,
+      });
+      const rawForms = fmResp.data?.data || fmResp.data || [];
+      judgmentForms = Array.isArray(rawForms)
+        ? rawForms.map((f: any) => ({ id: Number(f.id), name: String(f.name || f.title || f.value || f.id) }))
+        : [];
+    } catch (err: any) {
+      logger.warn('Failed to fetch judgment forms dictionary', { error: err.message });
+    }
+
+    const years: number[] = [];
+    for (let y = yearFrom; y <= yearTo; y++) years.push(y);
+
+    // Build matrix: year → { total, byKind: { [kindId]: count } }
+    const matrix: Array<{
+      year: number;
+      total: number;
+      byKind: Record<number, number>;
+      byForm?: Record<number, number>; // only when single kind selected
+    }> = [];
+
+    const DELAY_MS = 220; // stay under 5 req/sec per token
+
+    for (const year of years) {
+      const byKind: Record<number, number> = {};
+
+      // Fetch count for each requested justice kind
+      for (const kind of requestedKinds) {
+        try {
+          byKind[kind] = await zoQueryCount(year, kind, null, token);
+        } catch (err: any) {
+          logger.warn('ZO stats query failed', { year, kind, error: err.message });
+          byKind[kind] = -1;
+        }
+        await sleep(DELAY_MS);
+      }
+
+      // Fetch overall total for the year (no justice_kind filter)
+      let total = 0;
+      try {
+        total = await zoQueryCount(year, null, null, token);
+      } catch (err: any) {
+        logger.warn('ZO stats total query failed', { year, error: err.message });
+        total = -1;
+      }
+      await sleep(DELAY_MS);
+
+      // If single justice kind requested, also fetch judgment form breakdown
+      let byForm: Record<number, number> | undefined;
+      if (requestedKinds.length === 1 && judgmentForms.length > 0) {
+        byForm = {};
+        const singleKind = requestedKinds[0];
+        for (const form of judgmentForms) {
+          try {
+            byForm[form.id] = await zoQueryCount(year, singleKind, form.id, token);
+          } catch (err: any) {
+            byForm[form.id] = -1;
+          }
+          await sleep(DELAY_MS);
+        }
+      }
+
+      matrix.push({ year, total, byKind, ...(byForm ? { byForm } : {}) });
+    }
+
+    res.json({
+      matrix,
+      years,
+      justiceKinds: requestedKinds.map(id => ({ id, label: JUSTICE_KINDS[id] || `Kind ${id}` })),
+      judgmentForms: requestedKinds.length === 1 ? judgmentForms : [],
+      params: { yearFrom, yearTo, justiceKinds: requestedKinds },
+    });
+  });
+
   return router;
 }
