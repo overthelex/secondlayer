@@ -905,6 +905,11 @@ ${stepsText}
 
       const parsed = JSON.parse(jsonMatch[0]);
 
+      // Empty object means model decided no plan is needed (simple/conversational query)
+      if (Object.keys(parsed).length === 0) {
+        return undefined;
+      }
+
       // Validate plan structure
       if (!parsed.goal || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
         logger.warn('[ChatService] Plan validation failed - invalid structure', {
