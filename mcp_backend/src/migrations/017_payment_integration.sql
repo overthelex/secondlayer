@@ -116,7 +116,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION get_or_create_payment_intent IS 'Get existing or create new payment intent for idempotency';
+COMMENT ON FUNCTION get_or_create_payment_intent(UUID, VARCHAR(50), VARCHAR(255), DECIMAL(10,2), DECIMAL(10,2), VARCHAR(50), JSONB) IS 'Get existing or create new payment intent for idempotency';
 
 -- 6. Grant appropriate permissions (adjust as needed)
 -- GRANT SELECT, INSERT, UPDATE ON payment_intents TO secondlayer_app;

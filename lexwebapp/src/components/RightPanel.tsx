@@ -102,20 +102,28 @@ export function RightPanel({ isOpen, onClose }: RightPanelProps) {
       return true;
     });
   }, [messages]);
+  // Track previous citations length to detect when citations first arrive
+  const prevCitationsLength = useRef(0);
+
   // Reset user-selection flag when conversation is cleared (messages go back to 0)
   useEffect(() => {
     if (messages.length === 0) {
       userSelectedTab.current = false;
+      prevCitationsLength.current = 0;
       setActiveTab('decisions');
     }
   }, [messages.length]);
 
-  // Auto-switch to the most relevant tab when data first arrives
+  // Auto-switch to the most relevant tab when data arrives
   useEffect(() => {
     if (userSelectedTab.current) return;
-    if (citations.length > 0 && decisions.length === 0) {
+    const citationsJustArrived = citations.length > 0 && prevCitationsLength.current === 0;
+    prevCitationsLength.current = citations.length;
+    if (citationsJustArrived) {
+      // Citations just appeared — switch to Норми regardless of decisions
       setActiveTab('regulations');
-    } else if (decisions.length > 0) {
+    } else if (decisions.length > 0 && citations.length === 0) {
+      // Only decisions, no citations — switch to Рішення
       setActiveTab('decisions');
     }
   }, [citations.length, decisions.length]);
