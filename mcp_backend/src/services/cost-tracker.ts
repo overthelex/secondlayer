@@ -295,6 +295,7 @@ export class CostTracker extends BaseCostTracker {
           userId: record.user_id,
           requestId: record.request_id,
           amountUsd: totalCostUsd,
+          toolName: record.tool_name,
           description: `${record.tool_name}: ${record.user_query?.substring(0, 100) || 'N/A'}`,
         });
         logger.debug('User automatically charged', {
