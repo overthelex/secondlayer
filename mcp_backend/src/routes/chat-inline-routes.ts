@@ -22,12 +22,32 @@ import { runWithABUser } from '../infrastructure/adapters/llm-adapter.js';
  * not the requested budget. Keying it on the requested budget aborted
  * escalated runs mid-VERIFY at 240s (chat-f6e736b9, 2026-07-03).
  */
+export const DEEP_TIMEOUT_MS = 600_000;
+export const CAPPED_TIMEOUT_MS = 240_000;
+
+/** Reads a positive-integer millisecond override, ignoring junk, zero and negatives:
+ *  a typo in the deploy env must not turn the backstop into an instant abort. */
+function envTimeoutMs(name: string, fallbackMs: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallbackMs;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+}
+
 export function resolveChatTimeoutMs(budget?: string, maxBudget?: string): number {
   const escalationCeiling = maxBudget || 'deep';
-  // 360s: heavy composite runs vary — chat-a79fffe7 spent 260s in EXECUTE alone
-  // (22 tool calls), leaving VERIFY + LLM repair no room inside 300s. This is a
-  // runaway backstop, not QoS: SSE heartbeats keep proxies alive either way.
-  return escalationCeiling === 'deep' ? 360_000 : 240_000;
+  // 600s (was 360s): a runaway backstop, not QoS — SSE heartbeats keep proxies
+  // alive either way, and nginx `location /api` reads with a 300s idle timeout
+  // that the 15s heartbeat already covers. 360s was set from chat-a79fffe7,
+  // which spent 260s in EXECUTE alone (22 tool calls). Production then outgrew
+  // it: on 2026-08-19 three of twelve runs (361s, 457s, 497s) were killed by the
+  // backstop and persisted the "не завершена" stub, while every run that did
+  // finish landed within 315s — i.e. 360s cut into the spread of a normal heavy
+  // run instead of sitting outside it. Retune via CHAT_DEEP_TIMEOUT_MS rather
+  // than by editing this line.
+  return escalationCeiling === 'deep'
+    ? envTimeoutMs('CHAT_DEEP_TIMEOUT_MS', DEEP_TIMEOUT_MS)
+    : envTimeoutMs('CHAT_CAPPED_TIMEOUT_MS', CAPPED_TIMEOUT_MS);
 }
 
 /**

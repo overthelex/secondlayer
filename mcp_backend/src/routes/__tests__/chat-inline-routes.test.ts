@@ -7,20 +7,56 @@ describe('resolveChatTimeoutMs', () => {
   // requested budget. Repro: chat-f6e736b9 (2026-07-03) — standard request
   // auto-escalated to deep (plan >= 8 steps) was aborted mid-VERIFY at 240s.
 
+  // Raised 360s -> 600s on 2026-08-19: three of that day's twelve prod runs died
+  // on the backstop (361s, 457s, 497s) and returned the "не завершена" stub, while
+  // every run that finished did so within 315s. 360s was landing inside the spread
+  // of a normal heavy run, not outside it.
+
   it('gives the deep timeout when no maxBudget caps escalation', () => {
-    expect(resolveChatTimeoutMs('standard', undefined)).toBe(360_000);
-    expect(resolveChatTimeoutMs('quick', undefined)).toBe(360_000);
-    expect(resolveChatTimeoutMs(undefined, undefined)).toBe(360_000);
-    expect(resolveChatTimeoutMs('deep', undefined)).toBe(360_000);
+    expect(resolveChatTimeoutMs('standard', undefined)).toBe(600_000);
+    expect(resolveChatTimeoutMs('quick', undefined)).toBe(600_000);
+    expect(resolveChatTimeoutMs(undefined, undefined)).toBe(600_000);
+    expect(resolveChatTimeoutMs('deep', undefined)).toBe(600_000);
   });
 
   it('gives the deep timeout when maxBudget is deep', () => {
-    expect(resolveChatTimeoutMs('standard', 'deep')).toBe(360_000);
+    expect(resolveChatTimeoutMs('standard', 'deep')).toBe(600_000);
   });
 
   it('gives the standard timeout when maxBudget caps escalation below deep', () => {
     expect(resolveChatTimeoutMs('standard', 'standard')).toBe(240_000);
     expect(resolveChatTimeoutMs('quick', 'quick')).toBe(240_000);
+  });
+
+  // Tunable without a deploy: the backstop is a runaway guard whose right value is
+  // only learnable from production, and the last retune cost three paid-for answers.
+  describe('env overrides', () => {
+    const saved = { deep: process.env.CHAT_DEEP_TIMEOUT_MS, capped: process.env.CHAT_CAPPED_TIMEOUT_MS };
+    afterEach(() => {
+      process.env.CHAT_DEEP_TIMEOUT_MS = saved.deep;
+      process.env.CHAT_CAPPED_TIMEOUT_MS = saved.capped;
+      if (saved.deep === undefined) delete process.env.CHAT_DEEP_TIMEOUT_MS;
+      if (saved.capped === undefined) delete process.env.CHAT_CAPPED_TIMEOUT_MS;
+    });
+
+    it('honours CHAT_DEEP_TIMEOUT_MS', () => {
+      process.env.CHAT_DEEP_TIMEOUT_MS = '900000';
+      expect(resolveChatTimeoutMs('standard', undefined)).toBe(900_000);
+    });
+
+    it('honours CHAT_CAPPED_TIMEOUT_MS', () => {
+      process.env.CHAT_CAPPED_TIMEOUT_MS = '180000';
+      expect(resolveChatTimeoutMs('standard', 'standard')).toBe(180_000);
+    });
+
+    it('ignores junk and zero, so a typo cannot abort every run instantly', () => {
+      process.env.CHAT_DEEP_TIMEOUT_MS = 'нісенітниця';
+      expect(resolveChatTimeoutMs('standard', undefined)).toBe(600_000);
+      process.env.CHAT_DEEP_TIMEOUT_MS = '0';
+      expect(resolveChatTimeoutMs('standard', undefined)).toBe(600_000);
+      process.env.CHAT_DEEP_TIMEOUT_MS = '-5000';
+      expect(resolveChatTimeoutMs('standard', undefined)).toBe(600_000);
+    });
   });
 });
 
