@@ -83,9 +83,13 @@ async function fetchERAUPage(
 
   const data = await response.json() as any;
   const page: any[] = Array.isArray(data) ? data : (data?.items || []);
+  // ERAU reports the match count as a string ("291"), and ids likewise. Coerce rather
+  // than type-check: treating a string total as absent silently reduced the whole result
+  // set to its first page.
+  const total = Number(data?.total);
   return {
     items: page.map(normaliseLawyer).filter((l) => Number.isFinite(l.id)),
-    total: typeof data?.total === 'number' ? data.total : 0,
+    total: Number.isFinite(total) && total > 0 ? total : 0,
   };
 }
 
@@ -93,8 +97,10 @@ async function fetchAllFromERAU(
   surname: string
 ): Promise<{ items: ERAULawyer[]; total: number; truncated: boolean }> {
   const first = await fetchERAUPage(surname, ERAU_PAGE_SIZE, 0);
-  const total = first.total || first.items.length;
-  const truncated = total > ERAU_MAX_RESULTS;
+  // 0 when the registry omits the count; paging then runs until a short page arrives.
+  const reportedTotal = first.total;
+  const total = reportedTotal || first.items.length;
+  const truncated = reportedTotal > ERAU_MAX_RESULTS;
 
   // ERAU accepts no sort parameter and orders by ascending registry id, i.e. by order of
   // admission, so the most recent advocates sit at the end of the result set. A broad
@@ -114,17 +120,22 @@ async function fetchAllFromERAU(
   };
 
   let offset = startOffset;
+  let exhausted = false;
   if (!truncated) {
     collect(first.items);
     offset = first.items.length;
+    exhausted = first.items.length < ERAU_PAGE_SIZE;
   }
 
-  while (offset < total && items.length < ERAU_MAX_RESULTS) {
+  while (
+    !exhausted
+    && items.length < ERAU_MAX_RESULTS
+    && (!reportedTotal || offset < reportedTotal)
+  ) {
     const page = await fetchERAUPage(surname, ERAU_PAGE_SIZE, offset);
-    if (page.items.length === 0) break;
     collect(page.items);
     offset += page.items.length;
-    if (page.items.length < ERAU_PAGE_SIZE) break;
+    exhausted = page.items.length < ERAU_PAGE_SIZE;
   }
 
   if (truncated) {

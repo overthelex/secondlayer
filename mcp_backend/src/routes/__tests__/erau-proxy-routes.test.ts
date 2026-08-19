@@ -35,18 +35,26 @@ function makeUpstreamRows(count: number) {
   }));
 }
 
-/** Mock fetch that honours limit/offset over a fixed corpus. */
-function mockPagedFetch(rows: any[]) {
+/**
+ * Mock fetch that honours limit/offset over a fixed corpus.
+ *
+ * The registry reports `total` as a *string* ("291"), and ids likewise. An earlier
+ * version of this mock returned a number, which let a `typeof total === 'number'` check
+ * in the proxy silently collapse the total to 0 and stop paging after the first page —
+ * the fixture hid the bug from the suite and it reached production. Keep the string.
+ */
+function mockPagedFetch(rows: any[], options: { omitTotal?: boolean } = {}) {
   const calls: Array<{ limit: number; offset: number }> = [];
   const fn = jest.fn(async (url: string) => {
     const parsed = new URL(url);
     const limit = Number(parsed.searchParams.get('limit') ?? 10);
     const offset = Number(parsed.searchParams.get('offset') ?? 0);
     calls.push({ limit, offset });
+    const items = rows.slice(offset, offset + limit);
     return {
       ok: true,
       status: 200,
-      json: async () => ({ items: rows.slice(offset, offset + limit), total: rows.length }),
+      json: async () => (options.omitTotal ? { items } : { items, total: String(rows.length) }),
     };
   });
   (global as any).fetch = fn;
@@ -139,6 +147,26 @@ describe('GET /search', () => {
     const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
     expect(res.body).toHaveLength(5);
     expect(calls).toHaveLength(1);
+  });
+
+  it('keeps paging when the registry reports the total as a string', async () => {
+    // Regression: a numeric type-check on `total` reduced every search to its first page.
+    const calls = mockPagedFetch(makeUpstreamRows(291));
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
+
+    expect(res.body).toHaveLength(291);
+    expect(res.body.length).toBeGreaterThan(PAGE_SIZE);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('keeps paging when the registry omits the total entirely', async () => {
+    const calls = mockPagedFetch(makeUpstreamRows(291), { omitTotal: true });
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
+
+    expect(res.body).toHaveLength(291);
+    expect(calls).toHaveLength(2);
   });
 
   it('reads the tail of an oversized result set, where the recent admissions are', async () => {
