@@ -13,8 +13,9 @@ export interface ERAULawyer {
   certcalc?: string;
 }
 
-// v2: the v1 keyspace holds truncated ten-row result sets from before pagination.
-const REDIS_PREFIX = 'erau:search:v2:';
+// v3: earlier keyspaces hold truncated result sets — ten rows before pagination, then
+// one 200-row page while the registry's string `total` was being read as absent.
+const REDIS_PREFIX = 'erau:search:v3:';
 const REDIS_TTL = 86400; // 24 hours
 const PG_TTL_HOURS = 24;
 
