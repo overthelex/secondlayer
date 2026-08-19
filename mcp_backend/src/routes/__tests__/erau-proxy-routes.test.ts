@@ -19,6 +19,7 @@ jest.mock('../../utils/redis-client.js', () => ({
 }));
 
 const PAGE_SIZE = 200;
+const MAX_RESULTS = 2000;
 
 /** Build `count` upstream rows; certificate dates run from 1994 forward. */
 function makeUpstreamRows(count: number) {
@@ -100,15 +101,37 @@ describe('GET /search', () => {
 
     const years = res.body.map((l: any) => Number(String(l.certat).slice(0, 4)));
     expect(Math.max(...years)).toBeGreaterThanOrEqual(2019);
-    // Only the oldest ten would have surfaced before the fix.
-    expect(res.body.slice(0, 10).every((l: any) => Number(String(l.certat).slice(0, 4)) < 2019)).toBe(true);
+    // Before the fix only the ten lowest ids came back, all of them pre-2019.
+    const oldestTen = rows.slice(0, 10).map((r) => r.certat);
+    expect(oldestTen.every((d) => Number(d.slice(0, 4)) < 2019)).toBe(true);
+  });
+
+  it('orders the result set by certificate date, newest first', async () => {
+    mockPagedFetch(makeUpstreamRows(291));
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
+
+    const dates = res.body.map((l: any) => l.certat);
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(Number(dates[0].slice(0, 4))).toBeGreaterThan(Number(dates[dates.length - 1].slice(0, 4)));
+  });
+
+  it('puts rows without a certificate date last', async () => {
+    const rows = makeUpstreamRows(3);
+    rows[0].certat = '';
+    mockPagedFetch(rows);
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
+
+    expect(res.body).toHaveLength(3);
+    expect(res.body[res.body.length - 1].certat).toBeFalsy();
   });
 
   it('coerces the upstream string id to a number', async () => {
     mockPagedFetch(makeUpstreamRows(3));
     const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
-    expect(typeof res.body[0].id).toBe('number');
-    expect(res.body[0].id).toBe(8000);
+    expect(res.body.every((l: any) => typeof l.id === 'number')).toBe(true);
+    expect(res.body.map((l: any) => l.id).sort()).toEqual([8000, 8001, 8002]);
   });
 
   it('stops paging when a short page comes back', async () => {
@@ -116,6 +139,33 @@ describe('GET /search', () => {
     const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
     expect(res.body).toHaveLength(5);
     expect(calls).toHaveLength(1);
+  });
+
+  it('reads the tail of an oversized result set, where the recent admissions are', async () => {
+    // A two-character query such as "ко" matches over 22000 advocates upstream. ERAU
+    // orders by ascending registry id and offers no sort parameter, so capping from the
+    // head would return the oldest 2000 and make "newest first" meaningless.
+    const rows = makeUpstreamRows(22071);
+    const calls = mockPagedFetch(rows);
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'ко' });
+
+    expect(res.body).toHaveLength(MAX_RESULTS);
+    // The probe reads the head only to learn the total; collection starts at the tail.
+    expect(calls[0]).toEqual({ limit: PAGE_SIZE, offset: 0 });
+    expect(calls[1]).toEqual({ limit: PAGE_SIZE, offset: rows.length - MAX_RESULTS });
+
+    const lowestReturnedId = Math.min(...res.body.map((l: any) => l.id));
+    expect(lowestReturnedId).toBe(Number(rows[rows.length - MAX_RESULTS].id));
+  });
+
+  it('does not truncate a result set that fits under the cap', async () => {
+    const rows = makeUpstreamRows(MAX_RESULTS);
+    mockPagedFetch(rows);
+
+    const res = await request(makeApp()).get('/search').query({ surname: 'Мельник' });
+
+    expect(res.body).toHaveLength(MAX_RESULTS);
   });
 
   it('passes the upstream total to the cache alongside the rows', async () => {

@@ -45,48 +45,95 @@ function normaliseLawyer(raw: any): ERAULawyer {
   };
 }
 
-async function fetchAllFromERAU(surname: string): Promise<{ items: ERAULawyer[]; total: number }> {
-  const items: ERAULawyer[] = [];
+/**
+ * Newest certificate first. ERAU dates arrive as "YYYY-MM-DD HH:MM:SS", which sorts
+ * correctly as plain strings; rows without a date go last, and ties fall back to
+ * descending registry id so the order is stable.
+ */
+function sortNewestFirst(items: ERAULawyer[]): ERAULawyer[] {
+  return [...items].sort((a, b) => {
+    const da = a.certat || '';
+    const db = b.certat || '';
+    if (da !== db) {
+      if (!da) return 1;
+      if (!db) return -1;
+      return da < db ? 1 : -1;
+    }
+    return b.id - a.id;
+  });
+}
+
+async function fetchERAUPage(
+  surname: string,
+  limit: number,
+  offset: number
+): Promise<{ items: ERAULawyer[]; total: number }> {
+  const url = `${ERAU_BASE_URL}/search?surname=${encodeURIComponent(surname)}`
+    + `&limit=${limit}&offset=${offset}`;
+
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': 'SecondLayer/1.0',
+    },
+    signal: AbortSignal.timeout(20000),
+  });
+
+  if (!response.ok) throw new ERAUUpstreamError(response.status);
+
+  const data = await response.json() as any;
+  const page: any[] = Array.isArray(data) ? data : (data?.items || []);
+  return {
+    items: page.map(normaliseLawyer).filter((l) => Number.isFinite(l.id)),
+    total: typeof data?.total === 'number' ? data.total : 0,
+  };
+}
+
+async function fetchAllFromERAU(
+  surname: string
+): Promise<{ items: ERAULawyer[]; total: number; truncated: boolean }> {
+  const first = await fetchERAUPage(surname, ERAU_PAGE_SIZE, 0);
+  const total = first.total || first.items.length;
+  const truncated = total > ERAU_MAX_RESULTS;
+
+  // ERAU accepts no sort parameter and orders by ascending registry id, i.e. by order of
+  // admission, so the most recent advocates sit at the end of the result set. A broad
+  // query such as "ко" matches over 22000 of them; reading its head under the cap would
+  // make "newest first" mean "newest among the oldest few", so read its tail instead.
+  const startOffset = truncated ? total - ERAU_MAX_RESULTS : 0;
+
   const seen = new Set<number>();
-  let total = 0;
-  let offset = 0;
-
-  for (;;) {
-    const url = `${ERAU_BASE_URL}/search?surname=${encodeURIComponent(surname)}`
-      + `&limit=${ERAU_PAGE_SIZE}&offset=${offset}`;
-
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'SecondLayer/1.0',
-      },
-      signal: AbortSignal.timeout(20000),
-    });
-
-    if (!response.ok) throw new ERAUUpstreamError(response.status);
-
-    const data = await response.json() as any;
-    const page: any[] = Array.isArray(data) ? data : (data?.items || []);
-    if (typeof data?.total === 'number') total = data.total;
-
-    for (const raw of page) {
-      const lawyer = normaliseLawyer(raw);
-      if (Number.isFinite(lawyer.id) && !seen.has(lawyer.id)) {
+  const items: ERAULawyer[] = [];
+  const collect = (page: ERAULawyer[]) => {
+    for (const lawyer of page) {
+      if (!seen.has(lawyer.id)) {
         seen.add(lawyer.id);
         items.push(lawyer);
       }
     }
+  };
 
-    offset += page.length;
-    if (page.length < ERAU_PAGE_SIZE) break;
-    if (total > 0 && offset >= total) break;
-    if (items.length >= ERAU_MAX_RESULTS) {
-      logger.warn(`[ERAU] Result set for "${surname}" capped at ${items.length} of ${total}`);
-      break;
-    }
+  let offset = startOffset;
+  if (!truncated) {
+    collect(first.items);
+    offset = first.items.length;
   }
 
-  return { items, total: total || items.length };
+  while (offset < total && items.length < ERAU_MAX_RESULTS) {
+    const page = await fetchERAUPage(surname, ERAU_PAGE_SIZE, offset);
+    if (page.items.length === 0) break;
+    collect(page.items);
+    offset += page.items.length;
+    if (page.items.length < ERAU_PAGE_SIZE) break;
+  }
+
+  if (truncated) {
+    logger.warn(
+      `[ERAU] "${surname}" matched ${total} advocates; returning the ${items.length} most recently admitted`
+    );
+  }
+
+  return { items: sortNewestFirst(items), total, truncated };
 }
 
 export interface ERAUProfile {
