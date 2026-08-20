@@ -667,11 +667,29 @@ export class EdsrFtsService {
     }
     const uniqCandidates = [...new Set(candidates)];
     try {
-      // Prefix-df for every candidate in one round-trip. The text_pattern_ops index
-      // (migration 166) turns each `lexeme LIKE cand||'%'` into an index range scan.
+      // Prefix-df for every candidate in one round-trip, as an explicit range so
+      // edrsr_lexeme_df_lexeme_prefix (btree text_pattern_ops, migration 166) can serve it.
+      //
+      // This used to read `lexeme LIKE u.cand || '%'` on the belief that the index would
+      // turn it into a range scan. It does not: Postgres derives range bounds from a LIKE
+      // only when the pattern is known at plan time, and here it is built from an unnest
+      // column, so every candidate fell back to a Seq Scan of all 987k rows. One chat
+      // search sends 40-50 candidates, so that was 40-50 full table scans per search:
+      // measured on prod 2026-08-20 at 398,544 shared-buffer hits and 4.0s warm, 90-120s
+      // cold. That is what pushed search_court_decisions and find_similar_fact_pattern_cases
+      // past the 120s tool timeout on long queries. The range form plans as a Bitmap Index
+      // Scan: 18 buffers, 0.5ms.
+      //
+      // `~>=~`/`~<~` are the text_pattern_ops comparison operators — byte-wise, matching
+      // LIKE 'x%' semantics regardless of collation, which plain >=/< would not guarantee.
+      // The LIKE stays as a redundant filter so the rewrite cannot change which lexemes
+      // match (verified against prod data: 20 candidates, 0 mismatches).
       const res = await dbPool.query(
         `SELECT u.cand AS cand,
-                (SELECT COALESCE(sum(df), 0) FROM edrsr_lexeme_df WHERE lexeme LIKE u.cand || '%') AS df
+                (SELECT COALESCE(sum(d.df), 0) FROM edrsr_lexeme_df d
+                  WHERE d.lexeme ~>=~ u.cand
+                    AND d.lexeme ~<~ (u.cand || chr(1114111))
+                    AND d.lexeme LIKE u.cand || '%') AS df
          FROM unnest($1::text[]) AS u(cand)`,
         [uniqCandidates],
       );
