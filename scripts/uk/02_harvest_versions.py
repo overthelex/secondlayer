@@ -206,9 +206,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--types", default="")
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "8")))
-    ap.add_argument("--threads", type=int, default=8)
+    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "9")))
+    # 32, not 8: measured on prod, 8 threads sustain 3.2 items/s and 32 sustain
+    # 8.0 against the same 9/s politeness ceiling. Response latency is only
+    # 0.13-0.28s, so the pool depth was the constraint, not the source.
+    ap.add_argument("--threads", type=int, default=32)
     ap.add_argument("--batch", type=int, default=200)
+    ap.add_argument("--chunk", type=int, default=4000,
+                    help="worklist block size handed to the pool at a time")
     ap.add_argument("--no-raw", action="store_true")
     args = ap.parse_args()
 
@@ -280,39 +285,52 @@ def main():
 
     t0 = time.time()
     done = 0
+
+    # Feed the pool in blocks rather than handing it the whole worklist. Measured:
+    # the same code over a 5k slice runs at 8.0 items/s, and over the full 147k
+    # worklist at 2.5, because ThreadPoolExecutor.map materialises every future up
+    # front. Chunking keeps the queue the size the fast configuration had.
+    def chunks(seq, n):
+        for i in range(0, len(seq), n):
+            yield seq[i:i + n]
+
     with ThreadPoolExecutor(max_workers=args.threads) as pool:
-        for leg_id, rec, verdict in pool.map(one, work):
-            done += 1
-            if rec is None:
-                stats["failed"] += 1
-                by_status[verdict] = by_status.get(verdict, 0) + 1
-                with lock:
-                    cur.execute(MARK_BAD, (f"fetch-{verdict}", leg_id))
-            else:
-                stats["ok"] += 1
-                vers = [(lbl, href) for lbl, href in rec["versions"]
-                        if lbl and DATE_RE.match(lbl)]
-                dates = sorted(lbl for lbl, _ in vers)
-                current = rec["valid_date"]
-                for lbl, href in vers:
-                    vers_batch.append((rec["id"], lbl, lbl, href, lbl == current))
-                # 'enacted' / 'made' / 'prospective' carry no date of their own;
-                # they are reachable from the item URI and are not point-in-time rows.
-                stats["versions"] += len(vers)
-                items_batch.append((
-                    rec["id"], rec["title"], rec["long_title"], rec["document_status"],
-                    rec["extent"], rec["enactment_date"], rec["made_date"],
-                    rec["coming_into_force"], rec["valid_date"],
-                    rec["restrict_start_date"], rec["unapplied_effects"],
-                    len(vers), dates[0] if dates else None, dates[-1] if dates else None,
-                ))
-            if len(items_batch) >= args.batch or len(vers_batch) >= args.batch * 10:
-                with lock:
-                    flush()
-            if done % 2000 == 0:
-                el = time.time() - t0
-                print(f"  {done}/{len(work)} ok={stats['ok']} failed={stats['failed']} "
-                      f"versions={stats['versions']} {done / el:.1f} items/s", flush=True)
+        for block in chunks(work, args.chunk):
+            for leg_id, rec, verdict in pool.map(one, block):
+                done += 1
+                if rec is None:
+                    stats["failed"] += 1
+                    by_status[verdict] = by_status.get(verdict, 0) + 1
+                    with lock:
+                        cur.execute(MARK_BAD, (f"fetch-{verdict}", leg_id))
+                else:
+                    stats["ok"] += 1
+                    vers = [(lbl, href) for lbl, href in rec["versions"]
+                            if lbl and DATE_RE.match(lbl)]
+                    dates = sorted(lbl for lbl, _ in vers)
+                    current = rec["valid_date"]
+                    for lbl, href in vers:
+                        vers_batch.append((rec["id"], lbl, lbl, href, lbl == current))
+                    # 'enacted' / 'made' / 'prospective' carry no date of their own;
+                    # they are reachable from the item URI and are not point-in-time
+                    # rows.
+                    stats["versions"] += len(vers)
+                    items_batch.append((
+                        rec["id"], rec["title"], rec["long_title"],
+                        rec["document_status"], rec["extent"], rec["enactment_date"],
+                        rec["made_date"], rec["coming_into_force"], rec["valid_date"],
+                        rec["restrict_start_date"], rec["unapplied_effects"],
+                        len(vers), dates[0] if dates else None,
+                        dates[-1] if dates else None,
+                    ))
+                if len(items_batch) >= args.batch or len(vers_batch) >= args.batch * 10:
+                    with lock:
+                        flush()
+                if done % 2000 == 0:
+                    el = time.time() - t0
+                    print(f"  {done}/{len(work)} ok={stats['ok']} "
+                          f"failed={stats['failed']} versions={stats['versions']} "
+                          f"{done / el:.1f} items/s", flush=True)
     with lock:
         flush()
 
