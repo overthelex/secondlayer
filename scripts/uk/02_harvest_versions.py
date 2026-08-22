@@ -24,8 +24,13 @@ document_status is NULL, so the job is resumable and idempotent by construction.
 Raw XML is kept gzipped on disk so that fixing the parser later costs no re-crawl
 (the lesson from scripts/uae/leg/fetch_modifications.py).
 
-Rate: the documented fair-use ceiling is 3,000 requests / 5 minutes per IP
-(10/s), User-Agent mandatory, no key. Default here is 8/s across all threads.
+Rate: the real ceiling is 1,500 requests / 5 minutes per IP, i.e. 5/s. The
+developer docs say 3,000 / 5 minutes; the server disagrees, and the server wins.
+Running at 9/s got us 429s whose body states the 1,500 figure verbatim, and
+because the retry path absorbs 429 as backpressure the throttling never showed
+up in the failure counters: throughput just sat at 3.3 items/s no matter how
+many threads were used. Default here is 4/s, leaving headroom for retries.
+More than that needs Legislation@nationalarchives.gov.uk.
 
 Usage:
   python3 02_harvest_versions.py --limit 200          # smoke test
@@ -93,7 +98,12 @@ def fetch(session, limiter, url, tries=4):
     for attempt in range(tries):
         limiter.wait()
         try:
-            r = session.get(url, timeout=90)
+            # Separate connect and read timeouts. A single large timeout parks a
+            # thread on a wedged socket for its whole duration: observed on prod
+            # with all 32 workers sitting in do_select while the machine was idle
+            # and a fresh curl to the same host answered in 0.07s. Failing fast and
+            # retrying beats waiting on a connection that will never deliver.
+            r = session.get(url, timeout=(10, 30))
         except requests.RequestException:
             time.sleep(3 * (attempt + 1))
             continue
@@ -206,11 +216,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--types", default="")
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "9")))
-    # 32, not 8: measured on prod, 8 threads sustain 3.2 items/s and 32 sustain
-    # 8.0 against the same 9/s politeness ceiling. Response latency is only
-    # 0.13-0.28s, so the pool depth was the constraint, not the source.
-    ap.add_argument("--threads", type=int, default=32)
+    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "4")))
+    # 8 is ample: at the real 5/s ceiling and ~0.2s response times the pool is
+    # never the constraint. An earlier reading that 32 threads were faster was an
+    # artefact of measuring during a throttled window.
+    ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--batch", type=int, default=200)
     ap.add_argument("--chunk", type=int, default=4000,
                     help="worklist block size handed to the pool at a time")
