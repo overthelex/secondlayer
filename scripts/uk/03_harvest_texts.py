@@ -283,8 +283,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--types", default="")
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "8")))
-    ap.add_argument("--threads", type=int, default=8)
+    ap.add_argument("--rate", type=float, default=float(os.environ.get("UK_RATE", "9")))
+    # 32, not 8: measured on prod, 8 threads sustain 3.2 items/s and 32 sustain
+    # 8.0 against the same 9/s politeness ceiling. Response latency is only
+    # 0.13-0.28s, so the pool depth was the constraint, not the source.
+    ap.add_argument("--threads", type=int, default=32)
+    ap.add_argument("--chunk", type=int, default=4000,
+                    help="worklist block size handed to the pool at a time")
     ap.add_argument("--no-raw", action="store_true")
     args = ap.parse_args()
 
@@ -351,44 +356,52 @@ def main():
     batch = []
     t0 = time.time()
     done = 0
+
+    # Blocks, not the whole worklist: measured on stage 2, handing
+    # ThreadPoolExecutor.map all 147k items drops throughput from 8.0 to 2.5
+    # items/s because every future is materialised up front.
+    def chunks(seq, n):
+        for i in range(0, len(seq), n):
+            yield seq[i:i + n]
+
     with ThreadPoolExecutor(max_workers=args.threads) as pool:
-        for leg_id, valid_from, rows, verdict, nbytes in pool.map(one, work):
-            done += 1
-            stats["bytes"] += nbytes
-            if rows is None:
-                stats["failed"] += 1
-                verdicts[verdict] = verdicts.get(verdict, 0) + 1
+        for block in chunks(work, args.chunk):
+            for leg_id, valid_from, rows, verdict, nbytes in pool.map(one, block):
+                done += 1
+                stats["bytes"] += nbytes
+                if rows is None:
+                    stats["failed"] += 1
+                    verdicts[verdict] = verdicts.get(verdict, 0) + 1
+                    with lock:
+                        cur.execute(MARK_VER, (0, 0, None, verdict, leg_id, valid_from))
+                    continue
+                if not rows:
+                    stats["empty"] += 1
+                stats["ok"] += 1
+                stats["provisions"] += len(rows)
+                full = "\n".join(r["text"] for r in rows)
                 with lock:
-                    cur.execute(MARK_VER, (0, 0, None, verdict, leg_id, valid_from))
-                    conn.commit()
-                continue
-            if not rows:
-                stats["empty"] += 1
-            stats["ok"] += 1
-            stats["provisions"] += len(rows)
-            full = "\n".join(r["text"] for r in rows)
-            with lock:
-                for r in rows:
-                    batch.append((leg_id, valid_from, r["ord"], r["provision_label"],
-                                  r["provision_type"], r["provision_uri"], r["part"],
-                                  r["chapter"], r["schedule_no"], r["title"],
-                                  r["text"], r["n_chars"]))
-                if len(batch) >= 2000:
-                    execute_values(cur, INS_PROV, batch, page_size=1000)
-                    batch.clear()
-                cur.execute(MARK_VER, (len(rows), len(full),
-                                       hashlib.sha256(full.encode()).hexdigest(),
-                                       200 if rows else 900, leg_id, valid_from))
-                conn.commit()
-            if done % 1000 == 0:
-                el = time.time() - t0
-                print(f"  {done}/{len(work)} ok={stats['ok']} failed={stats['failed']} "
-                      f"prov={stats['provisions']} {stats['bytes'] / 1e9:.1f}GB "
-                      f"{done / el:.1f} items/s", flush=True)
+                    for r in rows:
+                        batch.append((leg_id, valid_from, r["ord"],
+                                      r["provision_label"], r["provision_type"],
+                                      r["provision_uri"], r["part"], r["chapter"],
+                                      r["schedule_no"], r["title"], r["text"],
+                                      r["n_chars"]))
+                    if len(batch) >= 2000:
+                        execute_values(cur, INS_PROV, batch, page_size=1000)
+                        batch.clear()
+                    cur.execute(MARK_VER, (len(rows), len(full),
+                                           hashlib.sha256(full.encode()).hexdigest(),
+                                           200 if rows else 900, leg_id, valid_from))
+                if done % 1000 == 0:
+                    el = time.time() - t0
+                    print(f"  {done}/{len(work)} ok={stats['ok']} "
+                          f"failed={stats['failed']} prov={stats['provisions']} "
+                          f"{stats['bytes'] / 1e9:.1f}GB {done / el:.1f} items/s",
+                          flush=True)
     with lock:
         if batch:
             execute_values(cur, INS_PROV, batch, page_size=1000)
-        conn.commit()
 
     print("\n=== summary ===")
     for k, v in stats.items():
