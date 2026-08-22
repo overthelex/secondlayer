@@ -60,7 +60,13 @@ IN_SCOPE = ["ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla"]
 RATE = float(os.environ.get("UK_RATE", "5"))
 MIN_INTERVAL = 1.0 / RATE
 
-ID_RE = re.compile(r"/id/([a-z]+)/(\d{4})/([^/]+)$")
+# Ids come in two shapes and the second one is easy to miss:
+#   modern:  /id/ukpga/2006/46
+#   regnal:  /id/ukpga/Eliz2/6-7/9   (pre-1963 Acts are cited by regnal year)
+# Requiring a 4-digit year drops every Act before 1963 - about 14,000 of the
+# 17,560 ukpga items - so the path is taken whole and the calendar year comes
+# from ukm:Year instead.
+ID_RE = re.compile(r"/id/([a-z]+)/(.+)$")
 
 
 class Fetcher:
@@ -99,26 +105,54 @@ class Fetcher:
 
 
 def parse_feed_page(xml_text):
-    """Return (rows, next_url). A page that fails to parse raises, so it is retried
-    rather than being mistaken for the end of the feed - the exact failure mode that
-    silently truncated the TNA case-law harvest at April 2016."""
+    """Return (rows, n_entries, next_url).
+
+    n_entries is reported separately from len(rows) on purpose. "the page held no
+    entries" and "the page held entries I could not parse" are different facts, and
+    treating the second as the first is exactly how this harvester lost every
+    pre-1963 Act on its first run, and how the TNA case-law harvest silently
+    truncated ewhc/admin at April 2016. A page that fails to parse raises, so it is
+    retried rather than being mistaken for the end of the feed.
+    """
     root = ET.fromstring(xml_text)
     rows = []
-    for e in root.findall(f"{ATOM}entry"):
+    entries = root.findall(f"{ATOM}entry")
+    for e in entries:
         ident = e.findtext(f"{ATOM}id") or ""
         m = ID_RE.search(ident)
         if not m:
             continue
-        leg_type, year, number = m.group(1), int(m.group(2)), m.group(3)
-        title = (e.findtext(f"{ATOM}title") or "").strip() or None
+        leg_type, tail = m.group(1), m.group(2).strip("/")
+        path = f"{leg_type}/{tail}"
+
+        # Prefer the publisher's own metadata over parsing the URI: regnal-year
+        # items still carry a calendar year here.
+        year = None
+        y_el = e.find(f".//{UKM}Year")
+        if y_el is not None and (y_el.get("Value") or "").isdigit():
+            year = int(y_el.get("Value"))
+        number = None
+        n_el = e.find(f".//{UKM}Number")
+        if n_el is not None:
+            number = (n_el.get("Value") or "").strip() or None
+        if number is None:
+            number = tail.rsplit("/", 1)[-1]
+
+        # Welsh SIs (and a handful of others) use <title type="xhtml"> with the
+        # bilingual title in nested markup, so findtext returns whitespace. Flatten
+        # instead: this is what left 6,460 of 6,649 wsi rows titleless on the first run.
+        t_el = e.find(f"{ATOM}title")
+        title = None
+        if t_el is not None:
+            title = re.sub(r"\s+", " ", "".join(t_el.itertext())).strip() or None
         updated = (e.findtext(f"{ATOM}updated") or "").strip() or None
         rows.append({
-            "id": f"{leg_type}/{year}/{number}",
+            "id": path,
             "leg_type": leg_type,
             "year": year,
             "number": number,
             "title": title,
-            "source_url": f"{BASE}/{leg_type}/{year}/{number}",
+            "source_url": f"{BASE}/{path}",
             "updated": updated,
         })
     next_url = None
@@ -128,7 +162,7 @@ def parse_feed_page(xml_text):
             break
     if next_url and next_url.startswith("http://"):
         next_url = "https://" + next_url[len("http://"):]
-    return rows, next_url
+    return rows, len(entries), next_url
 
 
 UPSERT = """
@@ -175,6 +209,7 @@ def main():
             url += "&sort=modified"
         page = 0
         seen = 0
+        unparsed = 0
         batch = []
         print(f"\n=== {leg_type} ===", flush=True)
         while url:
@@ -190,13 +225,21 @@ def main():
                       f"Register for this type is INCOMPLETE.", flush=True)
                 break
             try:
-                rows, next_url = parse_feed_page(xml_text)
+                rows, n_entries, next_url = parse_feed_page(xml_text)
             except ET.ParseError as e:
                 print(f"  ABORT {leg_type}: page {page} malformed ({e}). INCOMPLETE.",
                       flush=True)
                 break
-            if not rows:
+            if n_entries == 0:
                 break
+            if not rows:
+                # Entries were present but none were understood. Keep going, and say
+                # so, rather than reading it as the end of the feed.
+                unparsed += n_entries
+                print(f"  WARNING {leg_type} page {page}: {n_entries} entries, "
+                      f"0 parsed", flush=True)
+            elif len(rows) < n_entries:
+                unparsed += n_entries - len(rows)
             seen += len(rows)
             if args.since and all((r["updated"] or "") < args.since for r in rows):
                 print(f"  reached --since {args.since} at page {page}", flush=True)
@@ -216,7 +259,8 @@ def main():
                            [(r["id"], r["leg_type"], r["year"], r["number"],
                              r["title"], r["source_url"]) for r in batch])
             conn.commit()
-        print(f"  {leg_type}: {seen} items over {page} pages", flush=True)
+        print(f"  {leg_type}: {seen} items over {page} pages"
+              + (f", {unparsed} entries UNPARSED" if unparsed else ""), flush=True)
         grand += seen
 
     print(f"\ntotal items: {grand}")
