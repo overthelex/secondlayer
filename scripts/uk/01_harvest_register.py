@@ -55,9 +55,9 @@ UKM = "{http://www.legislation.gov.uk/namespaces/metadata}"
 # Northern Ireland (nia, nisr) are deliberately out of scope for this pass.
 IN_SCOPE = ["ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla"]
 
-# Politeness: the documented ceiling is 10 req/s. Half of it leaves headroom for
-# the other stages, which run against the same IP.
-RATE = float(os.environ.get("UK_RATE", "5"))
+# The real ceiling is 1,500 requests / 5 minutes per IP (5/s), stated in the body
+# of the 429 the server returns. The developer docs claim 3,000; they are wrong.
+RATE = float(os.environ.get("UK_RATE", "4"))
 MIN_INTERVAL = 1.0 / RATE
 
 # Ids come in two shapes and the second one is easy to miss:
