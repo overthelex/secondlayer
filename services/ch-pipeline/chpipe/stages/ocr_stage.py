@@ -16,13 +16,14 @@ import os
 import time
 from dataclasses import dataclass
 
-from .. import db, ocr, text_quality
+from .. import db, ocr, text_quality, throttle
 from ..config import Settings
+from ..throttle import should_pause
 from .fetch_stage import raw_path
 
 log = logging.getLogger(__name__)
 
-PAUSE_SECONDS = 60
+PAUSE_SECONDS = throttle.PAUSE_SECONDS
 
 
 @dataclass
@@ -33,19 +34,6 @@ class OcrReport:
     seconds: float = 0.0
 
 
-def should_pause(load_ceiling: float, load1: float) -> bool:
-    if load_ceiling <= 0:
-        return False
-    return load1 >= load_ceiling
-
-
-def _renice() -> None:
-    try:
-        os.nice(19)
-    except (AttributeError, OSError):
-        log.warning("could not renice; OCR will compete with live traffic")
-
-
 def _ocr_one(settings: Settings, row) -> tuple[str, float]:
     path = raw_path(settings.raw_dir, row["spider"], row["doc_id"], "pdf")
     text = ocr.ocr_pdf(path, list(row.get("languages") or []))
@@ -54,7 +42,6 @@ def _ocr_one(settings: Settings, row) -> tuple[str, float]:
 
 def run(settings: Settings, limit: int | None = None,
         spider: str | None = None) -> OcrReport:
-    _renice()
     report = OcrReport()
     conn = db.connect(settings)
     started = time.monotonic()
@@ -68,12 +55,7 @@ def run(settings: Settings, limit: int | None = None,
     try:
         with concurrent.futures.ThreadPoolExecutor(settings.ocr_workers) as pool:
             while True:
-                load1 = os.getloadavg()[0]
-                if should_pause(settings.load_ceiling, load1):
-                    log.info("load %.2f >= %.2f, pausing %ds",
-                             load1, settings.load_ceiling, PAUSE_SECONDS)
-                    time.sleep(PAUSE_SECONDS)
-                    continue
+                throttle.wait_for_capacity(settings.load_ceiling, "ocr")
                 size = settings.ocr_workers * 4
                 if remaining is not None:
                     size = min(size, remaining)
@@ -141,9 +123,15 @@ def run(settings: Settings, limit: int | None = None,
 
 def main() -> OcrReport:
     """Entry point. A function, not an `if __name__` block, so the
-    CHPIPE_SPIDER contract every stage shares is reachable from a test."""
+    CHPIPE_SPIDER contract every stage shares is reachable from a test.
+
+    renice lives here rather than in run(): os.nice() is irreversible for a
+    non-root process, so doing it inside run() permanently drags down every
+    caller that imports the module -- including the test suite, which is
+    exactly what the previous placement did."""
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_OCR)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)

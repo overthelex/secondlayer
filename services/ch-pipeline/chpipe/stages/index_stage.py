@@ -11,7 +11,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from .. import db, es_document, es_listing
+from .. import db, es_document, es_listing, throttle
 from ..config import Settings
 from ..http import FetchError, Fetcher
 
@@ -188,6 +188,7 @@ def main(argv: list[str] | None = None) -> IndexReport:
     import sys
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_IO)
     args = sys.argv[1:] if argv is None else argv
     if args:
         selected = list(args)

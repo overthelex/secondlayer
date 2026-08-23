@@ -14,7 +14,7 @@ import pathlib
 import re
 from dataclasses import dataclass
 
-from .. import db, text_extract
+from .. import db, text_extract, throttle
 from ..config import Settings
 from ..http import FetchError, Fetcher
 
@@ -199,6 +199,7 @@ def main() -> FetchReport:
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)

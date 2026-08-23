@@ -17,7 +17,7 @@ import concurrent.futures
 import logging
 from dataclasses import dataclass
 
-from .. import db, text_extract, text_quality
+from .. import db, text_extract, text_quality, throttle
 from ..config import Settings
 from .fetch_stage import raw_path
 
@@ -66,6 +66,13 @@ def run(settings: Settings, limit: int | None = None,
     try:
         with concurrent.futures.ThreadPoolExecutor(settings.cpu_workers) as pool:
             while True:
+                # The multi-hour CPU stage on a box that is also serving live
+                # traffic: measured ~17 CPU-hours for 800,000 documents, and
+                # roughly 4 of 8 cores occupied at cpu_workers=3. Renicing
+                # alone does not stop three worker threads filling those
+                # cores, so extract stops CLAIMING while the box is busy --
+                # the same guard ocr has had from the start.
+                throttle.wait_for_capacity(settings.load_ceiling, "extract")
                 size = 200 if remaining is None else min(200, remaining)
                 if size <= 0:
                     break
@@ -141,6 +148,7 @@ def main() -> ExtractReport:
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_CPU)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)

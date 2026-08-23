@@ -5,8 +5,41 @@ on prod. Design: `docs/superpowers/specs/2026-08-23-ch-corpus-pipeline-design.md
 
 ## Where it runs
 
-On prod, always. 8 cores shared with live traffic, so stages are throttled by
-`CHPIPE_CPU_WORKERS`, `CHPIPE_OCR_WORKERS` and `CHPIPE_LOAD_CEILING`.
+On prod, always. 8 cores shared with live traffic. What each stage actually
+does about that, as the code does it (`chpipe/throttle.py`):
+
+| stage     | workers                  | priority | `CHPIPE_LOAD_CEILING` |
+|-----------|--------------------------|----------|-----------------------|
+| `index`   | `CHPIPE_HTTP_CONCURRENCY` (12) | `nice 10` | not checked — I/O bound |
+| `fetch`   | `CHPIPE_HTTP_CONCURRENCY` (12) | `nice 10` | not checked — I/O bound |
+| `extract` | `CHPIPE_CPU_WORKERS` (3) | `nice 10` | **checked before each batch** |
+| `ocr`     | `CHPIPE_OCR_WORKERS` (2) | `nice 19` | **checked before each batch** |
+| `load`    | 1                        | inherited | not checked — one UPDATE per row |
+
+The ceiling is a *claiming* guard, not a preemption: a stage that finds the
+one-minute load average at or above `CHPIPE_LOAD_CEILING` (default 6.0) stops
+taking on new work and sleeps 60s at a time, while work already in flight
+finishes rather than being abandoned half-done. Set the ceiling to `0` to
+disable it — an explicit opt-out for a maintenance window, not the default.
+
+`extract` is the one that most needs it: measured at roughly 17 CPU-hours for
+800,000 documents, it occupies about 4 of 8 cores at `cpu_workers=3` and runs
+for hours. `nice` alone only decides who wins a contended core; it does not
+stop three worker threads filling every core in the first place.
+
+Renicing happens in each stage's `main()`, never in `run()`: `os.nice()` is
+irreversible for a non-root process, so a `run()` that renices permanently
+drags down anything that calls it.
+
+### Why `CHPIPE_CPU_WORKERS` above 3 buys nothing
+
+`extract` spends about 50 ms per document inside `pdftotext`, which is a
+subprocess and releases the GIL, and about 28 ms in pure Python (lxml text
+extraction, control-character stripping, tokenising and scoring), which holds
+it. The GIL-held portion is the ceiling: at `cpu_workers=3` throughput is
+already ~36 documents/second against an ideal of ~38, so a fourth worker adds
+contention and roughly nothing else. Raise `CHPIPE_HTTP_CONCURRENCY` if you
+want the pipeline to go faster; `CHPIPE_CPU_WORKERS` is not the lever.
 
 ## Stages
 

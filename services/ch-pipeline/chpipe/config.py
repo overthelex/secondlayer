@@ -1,8 +1,17 @@
 """Settings, all from the environment so the same code runs under supervise.
 
 Defaults are sized for the prod box: 8 cores shared with live traffic, so CPU
-stages get 3 workers, OCR gets 2 at nice 19, and the HTTP stages are I/O bound
-and can afford more.
+stages get 3 workers at nice 10, OCR gets 2 at nice 19, and the HTTP stages
+are I/O bound and can afford more. See chpipe/throttle.py for what each stage
+actually does with these.
+
+CHPIPE_CPU_WORKERS above 3 buys nothing. `extract` spends about 50 ms per
+document inside pdftotext -- a subprocess, so the GIL is released -- and
+about 28 ms in pure Python (lxml text extraction, control-character
+stripping, tokenising, scoring), which holds it. The GIL-held portion is the
+ceiling: at 3 workers throughput is already ~36 documents/second against an
+ideal of ~38. A fourth worker adds contention and roughly nothing else.
+CHPIPE_HTTP_CONCURRENCY is the lever that actually moves the wall clock.
 """
 from __future__ import annotations
 
