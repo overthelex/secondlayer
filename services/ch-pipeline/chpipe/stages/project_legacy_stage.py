@@ -54,7 +54,7 @@ import logging
 
 from psycopg.rows import tuple_row
 
-from .. import db
+from .. import db, throttle
 from ..config import Settings
 
 log = logging.getLogger(__name__)
@@ -252,7 +252,24 @@ def run(settings: Settings, batch_size: int = BATCH_SIZE,
         conn.close()
 
 
-if __name__ == "__main__":
+def main() -> int:
+    """Entry point. A function, not an `if __name__` block -- see
+    tests/test_entry_points.py.
+
+    nice 10 per spec section 8. The work is Postgres-side, but the batches
+    move ~15,000 full documents through a GIN-indexed table on a box serving
+    live traffic, so this process yields the core it holds while doing it.
+    No capacity wait: the load this stage creates is on the database, which
+    its own per-statement timeout and batch size bound, and pausing the
+    client would not relieve it.
+    """
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    print(run(Settings.from_env()))
+    throttle.renice(throttle.NICE_IO)
+    written = run(Settings.from_env())
+    log.info("projected=%d", written)
+    return written
+
+
+if __name__ == "__main__":
+    main()

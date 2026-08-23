@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 
 from lxml import etree
 
-from .. import akn, db
+from .. import akn, db, throttle
 from ..config import Settings
 from ..http import FetchError, Fetcher
 
@@ -161,8 +161,16 @@ async def _run_async(settings: Settings, limit: int | None) -> FetchXmlReport:
                 size = 200 if remaining is None else min(200, remaining)
                 if size <= 0:
                     break
-                rows = db.claim_versions(conn, "discovered", limit=size,
-                                         max_attempts=settings.max_attempts)
+                # backoff_minutes is passed explicitly, exactly as
+                # fetch_stage does: without it this stage silently ran on
+                # db.RETRY_BACKOFF_MINUTES's module default and
+                # CHPIPE_RETRY_BACKOFF_MINUTES did nothing at all -- including
+                # the empty value config.py documents as "no wait", which the
+                # tests and a maintenance window both rely on.
+                rows = db.claim_versions(
+                    conn, "discovered", limit=size,
+                    max_attempts=settings.max_attempts,
+                    backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
 
@@ -179,11 +187,26 @@ def run(settings: Settings, limit: int | None = None) -> FetchXmlReport:
     return asyncio.run(_run_async(settings, limit))
 
 
-if __name__ == "__main__":
+def main() -> FetchXmlReport:
+    """Entry point. A function, not an `if __name__` block, so what the
+    entry point decides -- the limit it reads, the priority it sets -- is
+    reachable from a test. See tests/test_entry_points.py for the shipped
+    bug that argument comes from.
+
+    nice 10 per spec section 8: I/O bound, but it still holds the GIL and a
+    connection pool while pulling ~12,000 files onto a box serving live
+    traffic. No capacity wait -- the work is network-bound, not CPU-bound.
+    """
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
     log.info("fetched=%d failed=%d bytes=%d", result.fetched, result.failed,
              result.bytes_written)
+    return result
+
+
+if __name__ == "__main__":
+    main()

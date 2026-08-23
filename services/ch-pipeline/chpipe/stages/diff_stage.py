@@ -41,7 +41,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from .. import db, diff_articles
+from .. import db, diff_articles, throttle
 from ..config import Settings
 
 log = logging.getLogger(__name__)
@@ -128,6 +128,14 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
         acts = [r["act_id"] for r in conn.execute(sql, params).fetchall()]
 
         for current_act in acts:
+            # Spec section 8's dynamic backpressure. This stage walks the
+            # whole corpus holding two article sets per comparison, on the
+            # same eight cores as live traffic, so it takes the same guard
+            # as parse-akn. Checked before starting an act rather than
+            # before each comparison: an act is this stage's unit of work,
+            # and abandoning one half-diffed is what the per-act guard
+            # below exists to avoid.
+            throttle.wait_for_capacity(settings.load_ceiling, "diff")
             # The whole per-act body is guarded, not just one query inside
             # it: a malformed row can surface from the versions SELECT, from
             # _articles(), from diff_articles.diff() itself, or from the
@@ -180,11 +188,19 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
     return report
 
 
-if __name__ == "__main__":
+def main() -> DiffReport:
+    """Entry point. A function, not an `if __name__` block -- see
+    tests/test_entry_points.py.
+
+    nice 10 per spec section 8: CPU-bound, and it runs over the whole
+    corpus. The capacity wait is in run(), before each act; renice is here,
+    because os.nice() is irreversible for a non-root process.
+    """
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    result = run(Settings.from_env(), lang=os.environ.get("CHPIPE_LANG", "de"))
+    throttle.renice(throttle.NICE_CPU)
+    result = run(Settings.from_env(), lang=os.environ.get("CHPIPE_LANG") or "de")
     log.info("acts=%d comparisons=%d changes=%d (added=%d modified=%d repealed=%d) "
              "orphaned=%d errors=%d", result.acts, result.comparisons,
              result.changes, result.added, result.modified, result.repealed,
@@ -195,3 +211,8 @@ if __name__ == "__main__":
                     "the differ changed its mind about those articles. Not an "
                     "error, but the number to read after any parser change.",
                     result.orphaned)
+    return result
+
+
+if __name__ == "__main__":
+    main()

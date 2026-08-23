@@ -522,3 +522,96 @@ def test_a_version_with_no_akn_xml_is_recorded_as_failed_not_silently_skipped(co
     assert "no akn_xml" in row[2]
     assert report.failed == 1
     assert report.parsed == 0
+
+
+# --- Finding 6: CHPIPE_RETRY_BACKOFF_MINUTES was dead for both stages ---
+# fetch_xml_stage and parse_akn_stage called claim_versions() without
+# backoff_minutes=settings.retry_backoff_minutes, so both silently ran on
+# db.RETRY_BACKOFF_MINUTES's module default whatever the environment said.
+# fetch_stage.py passes it; config.py's docstring promises an empty value
+# disables the wait entirely -- for tests, and for a maintenance window
+# where the source is known to be healthy.
+
+def _settings_no_backoff(raw_dir):
+    return Settings(
+        dsn=os.environ.get("CHPIPE_TEST_DSN", "unused"), raw_dir=raw_dir,
+        http_concurrency=2, cpu_workers=1, ocr_workers=1, load_ceiling=6.0,
+        max_attempts=3, retry_backoff_minutes=())
+
+
+def test_parse_honours_a_disabled_backoff_from_settings(conn, tmp_path):
+    """With the wait disabled a durably-broken edition spends its whole
+    budget inside one run and retires. Under the module default it stops
+    after one attempt no matter what the setting says -- which is what
+    made CHPIPE_RETRY_BACKOFF_MINUTES a no-op for this stage."""
+    vid = _version(conn)
+    _seed_fetched(conn, vid, "<not even well-formed xml")
+
+    report = parse_akn_stage.run(_settings_no_backoff(tmp_path), limit=None)
+
+    row = conn.execute(
+        "SELECT stage, attempts FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()
+    assert row[0] == "failed"
+    assert row[1] == 3
+    assert report.failed == 3
+
+
+def test_fetch_xml_honours_a_disabled_backoff_from_settings(conn, tmp_path):
+    """Same for the fetch side: a version with no xml_url fails every
+    claim, and with the wait disabled that is three attempts in one run."""
+    vid = _version(conn)
+    conn.execute("UPDATE ch_act_version SET xml_url = NULL WHERE version_id=%s",
+                 (vid,))
+
+    report = fetch_xml_stage.run(_settings_no_backoff(tmp_path), limit=None)
+
+    row = conn.execute(
+        "SELECT stage, attempts FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()
+    assert row[0] == "failed"
+    assert row[1] == 3
+    assert report.failed == 3
+
+
+# --- Finding 7: spec section 8's backpressure on the CPU stage ---
+# parse-akn does 12,033 lxml parses on the eight cores that also serve live
+# traffic, and had no ceiling at all. throttle.py's own docstring records
+# that running a multi-hour CPU stage at normal priority was already a
+# shipped defect once.
+
+def test_parse_waits_for_capacity_before_claiming(conn, tmp_path, monkeypatch):
+    """Before CLAIMING, not before each edition: the point is to stop taking
+    on new work while the box is busy, letting work in flight finish."""
+    seen = []
+    monkeypatch.setattr(parse_akn_stage.throttle, "wait_for_capacity",
+                        lambda ceiling, stage, **kw: seen.append((ceiling, stage)))
+    vid = _version(conn)
+    _seed_fetched(conn, vid, FIXTURE.read_text(encoding="utf-8"))
+
+    parse_akn_stage.run(_settings(tmp_path), limit=None)
+
+    assert seen and seen[0] == (6.0, "parse-akn")
+
+
+def test_parse_uses_one_document_parse_for_both_products(conn, tmp_path,
+                                                         monkeypatch):
+    """parse_articles() and plain_text() each ran their own fromstring()
+    and note-strip walk over the same edition, roughly doubling the cost of
+    the stage with the least headroom."""
+    calls = []
+    real = akn.parse_edition
+    monkeypatch.setattr(akn, "parse_edition",
+                        lambda payload: (calls.append(payload), real(payload))[1])
+    monkeypatch.setattr(akn, "parse_articles",
+                        lambda payload: pytest.fail("parsed the document twice"))
+    monkeypatch.setattr(akn, "plain_text",
+                        lambda payload: pytest.fail("parsed the document twice"))
+    vid = _version(conn)
+    _seed_fetched(conn, vid, FIXTURE.read_text(encoding="utf-8"))
+
+    report = parse_akn_stage.run(_settings(tmp_path), limit=None)
+
+    assert len(calls) == 1
+    assert report.parsed == 1
+    assert report.articles > 0

@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 
 from psycopg.rows import dict_row
 
-from .. import db
+from .. import db, throttle
 from .. import fedlex_queries as fq
 from ..config import Settings
 from ..sparql import DEFAULT_PAGE_SIZE, SparqlClient
@@ -275,9 +275,18 @@ def run(settings: Settings, page_size: int = DEFAULT_PAGE_SIZE,
     return report
 
 
-if __name__ == "__main__":
+def main() -> ActsReport:
+    """Entry point. A function, not an `if __name__` block -- see
+    tests/test_entry_points.py for the bug that argument comes from.
+
+    nice 10 per spec section 8: this is a network walk of 17,293 works, but
+    it still holds the GIL and a database connection for the whole pass on a
+    box serving live traffic. No capacity wait -- it is bounded by Fedlex's
+    response times, not by this machine's cores.
+    """
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env())
     log.info("discovered=%d with_sr=%d in_force=%d titled=%d unmatched_titles=%d "
              "conflicts=%d errors=%d", result.discovered, result.with_sr,
@@ -285,3 +294,8 @@ if __name__ == "__main__":
              result.conflicts, result.errors)
     if result.conflicting_works:
         log.info("conflicting works: %s", ", ".join(result.conflicting_works))
+    return result
+
+
+if __name__ == "__main__":
+    main()

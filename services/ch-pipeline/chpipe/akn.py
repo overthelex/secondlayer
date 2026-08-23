@@ -208,7 +208,10 @@ def normalise_number(raw: str | None) -> str | None:
 
 
 def parse_articles(xml: bytes) -> list[Article]:
-    root = _root(xml)
+    return _articles_of(_root(xml))
+
+
+def _articles_of(root) -> list[Article]:
     articles: list[Article] = []
     for ordinal, element in enumerate(root.iter(_AKN + "article"), start=1):
         e_id = element.get("eId")
@@ -282,7 +285,10 @@ def plain_text(xml: bytes) -> str:
     separator instead of " " -- one paragraph/item/p per line, same
     inline-vs-block distinction, same word boundaries.
     """
-    root = _root(xml)
+    return _plain_text_of(_root(xml))
+
+
+def _plain_text_of(root) -> str:
     body = root.find(".//" + _AKN + "body")
     if body is None:
         return ""
@@ -290,6 +296,33 @@ def plain_text(xml: bytes) -> str:
     raw = "".join(_walk_pieces(body, _LINE_BREAK))
     lines = [_WS.sub(" ", segment).strip() for segment in raw.split(_LINE_BREAK)]
     return "\n".join(line for line in lines if line)
+
+
+def parse_edition(xml: bytes) -> tuple[list[Article], str]:
+    """Both products of ONE parse: the articles and the plain text.
+
+    parse_articles() and plain_text() each did their own etree.fromstring()
+    and their own note-stripping walk over the same document, which roughly
+    doubled the cost of parse_akn_stage -- 12,033 editions, the stage with
+    the least headroom on a box serving live traffic.
+
+    THE ORDER HERE IS LOAD-BEARING, and it is why this is a function rather
+    than two calls at the call site. _strip_notes() removes <authorialNote>
+    subtrees IN PLACE and returns their text. _articles_of() uses that return
+    value to populate Article.notes; _plain_text_of() only wants them gone.
+    So articles must be read first: doing it the other way round strips every
+    note out of the body before the articles are walked, and each Article
+    comes back with notes=() -- the amendment provenance migration 197's
+    ch_act_article.notes column exists to hold, lost in silence.
+
+    Running them in this order over one tree is otherwise identical to two
+    independent parses: _strip_notes() is idempotent (a second call finds
+    nothing left to remove), and neither reader depends on the notes still
+    being in the tree.
+    """
+    root = _root(xml)
+    articles = _articles_of(root)
+    return articles, _plain_text_of(root)
 
 
 def frbr_dates(xml: bytes) -> dict[str, str]:

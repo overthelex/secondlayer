@@ -278,3 +278,36 @@ def test_adjacent_paragraph_siblings_always_get_a_real_separator():
     art = akn.parse_articles(xml)[0]
     assert "Arbeitnehmers)Artikel" not in art.text
     assert "Arbeitnehmers) Artikel" in art.text
+
+
+# --- Finding 7, second half: one parse, both products ---
+# parse_articles() and plain_text() each did their own etree.fromstring()
+# and their own note-strip walk over the same document. That is roughly
+# double the cost of parse_akn_stage, which does 12,033 of them on a box
+# serving live traffic and had no throttling at all.
+
+def test_parse_edition_returns_exactly_what_the_two_calls_returned():
+    payload = FIXTURE.read_bytes()
+    articles, text = akn.parse_edition(payload)
+    assert [(a.e_id, a.article_number, a.marginal_note, a.text, a.ordinal,
+             a.parent_e_id, a.notes) for a in articles] == \
+        [(a.e_id, a.article_number, a.marginal_note, a.text, a.ordinal,
+          a.parent_e_id, a.notes) for a in akn.parse_articles(payload)]
+    assert text == akn.plain_text(payload)
+
+
+def test_parse_edition_keeps_the_articles_notes():
+    """The ordering constraint, made a test rather than a comment.
+    _strip_notes() removes the <authorialNote> subtrees in place and returns
+    their text; only parse_articles() keeps that return value. Reading the
+    plain text first strips every note out of the body before the articles
+    are walked, and every Article comes back with notes=() -- the amendment
+    provenance ch_act_article.notes exists to hold, lost in silence."""
+    articles, _ = akn.parse_edition(FIXTURE.read_bytes())
+    assert any(a.notes for a in articles), \
+        "the plain-text walk stripped the notes before the articles were read"
+
+
+def test_parse_edition_produces_text_for_a_real_edition():
+    _, text = akn.parse_edition(FIXTURE.read_bytes())
+    assert len(text) > 1000

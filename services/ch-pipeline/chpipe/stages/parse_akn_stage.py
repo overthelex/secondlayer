@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from .. import akn, db
+from .. import akn, db, throttle
 from ..config import Settings
 
 log = logging.getLogger(__name__)
@@ -66,8 +66,20 @@ def run(settings: Settings, limit: int | None = None) -> ParseReport:
             size = 100 if remaining is None else min(100, remaining)
             if size <= 0:
                 break
-            rows = db.claim_versions(conn, "fetched", limit=size,
-                                     max_attempts=settings.max_attempts)
+            # Spec section 8's dynamic backpressure, on the CPU stage of
+            # the legislation half: 12,033 lxml parses on eight cores shared
+            # with live traffic. Renicing alone only decides who wins a
+            # contended core; it does not stop this loop taking on new work
+            # while the box is already busy. Checked before CLAIMING, not
+            # per edition, so work in flight finishes rather than being
+            # abandoned half-done.
+            throttle.wait_for_capacity(settings.load_ceiling, "parse-akn")
+            # backoff_minutes passed explicitly -- see fetch_xml_stage's
+            # claim for what its absence silently disabled.
+            rows = db.claim_versions(
+                conn, "fetched", limit=size,
+                max_attempts=settings.max_attempts,
+                backoff_minutes=settings.retry_backoff_minutes)
             if not rows:
                 break
             for row in rows:
@@ -90,8 +102,11 @@ def run(settings: Settings, limit: int | None = None) -> ParseReport:
                     # here is safe given how fetch_xml_stage normalised the
                     # document before writing this column.
                     payload = stored.encode("utf-8")
-                    articles = akn.parse_articles(payload)
-                    text = akn.plain_text(payload)
+                    # One parse, both products. parse_articles() and
+                    # plain_text() each ran their own fromstring() and their
+                    # own note-strip walk over the same document, roughly
+                    # doubling the cost of the stage with the least headroom.
+                    articles, text = akn.parse_edition(payload)
                     store_articles(conn, row["version_id"], articles)
                     db.complete_version(conn, row["version_id"], "parsed",
                                         full_text=text)
@@ -118,11 +133,26 @@ def run(settings: Settings, limit: int | None = None) -> ParseReport:
     return report
 
 
-if __name__ == "__main__":
+def main() -> ParseReport:
+    """Entry point. A function, not an `if __name__` block -- see
+    tests/test_entry_points.py.
+
+    nice 10 per spec section 8: this is a CPU stage, 12,033 lxml parses. The
+    capacity wait lives in run(), before each claim; renice lives here,
+    because os.nice() is irreversible for a non-root process and a run()
+    that reniced would permanently drag down every caller that imports the
+    module -- the test suite included.
+    """
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_CPU)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
     log.info("parsed=%d articles=%d empty=%d failed=%d", result.parsed,
              result.articles, result.empty, result.failed)
+    return result
+
+
+if __name__ == "__main__":
+    main()

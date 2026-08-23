@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(
 def settings():
     return Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
                     http_concurrency=1, cpu_workers=1, ocr_workers=1,
-                    load_ceiling=0.0, max_attempts=3)
+                    load_ceiling=6.0, max_attempts=3)
 
 
 @pytest.fixture
@@ -267,3 +267,22 @@ def test_a_removed_orphan_does_not_take_another_editions_rows_with_it(conn, sett
     diff_stage.run(settings)
     assert {r[0] for r in conn.execute(
         "SELECT to_version_id FROM ch_act_change").fetchall()} == {v2, v3}
+
+
+# --- Finding 7: spec section 8's backpressure on the other CPU stage ---
+# diff walks the corpus holding two article sets per comparison, on the
+# eight cores that also serve live traffic, and had no ceiling at all.
+
+def test_diff_waits_for_capacity_before_each_act(conn, settings, monkeypatch):
+    """An act is this stage's unit of work: checking before starting one
+    (rather than before each comparison) is what lets a claimed act finish
+    instead of being abandoned half-diffed."""
+    seen = []
+    monkeypatch.setattr(diff_stage.throttle, "wait_for_capacity",
+                        lambda ceiling, stage, **kw: seen.append((ceiling, stage)))
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    _edition(conn, "2022-01-01", [("art_1", "b")])
+
+    diff_stage.run(settings)
+
+    assert seen == [(settings.load_ceiling, "diff")]

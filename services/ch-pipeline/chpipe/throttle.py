@@ -6,6 +6,9 @@ Two mechanisms, both from spec section 8:
               nice 10 (I/O bound, but they still hold the GIL and a
               connection pool); ocr at nice 19, the lowest thing on the box;
               extract at nice 10, because it is the multi-hour CPU stage.
+              The legislation stages take the same treatment: acts,
+              versions, fetch-xml and project-legacy at NICE_IO, parse-akn
+              and diff at NICE_CPU.
 
   wait_for_capacity
               dynamic backpressure: stop CLAIMING new work while the
@@ -20,6 +23,13 @@ else, while the README claimed all stages were throttled. `extract` is the
 one that most needed the ceiling: measured at ~17 CPU-hours for 800,000
 documents, it occupies roughly 4 of 8 cores at cpu_workers=3 and it was
 running at normal priority.
+
+That defect then shipped a second time, on the legislation half: all six of
+its stages ran at normal priority with no ceiling, `parse-akn` (12,033 lxml
+parses) and `diff` (a corpus walk holding two article sets per comparison)
+among them. Both of those now wait_for_capacity() before claiming, and all
+six renice in main(). A stage added later belongs in that list too -- this
+module exists because "it is only a few hours" was already wrong once.
 
 renice() is deliberately called from each stage's main(), not from run().
 os.nice() is irreversible for a non-root process, so a library function that

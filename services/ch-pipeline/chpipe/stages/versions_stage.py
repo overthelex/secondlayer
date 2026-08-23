@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 
 from psycopg.rows import tuple_row
 
-from .. import db
+from .. import db, throttle
 from .. import fedlex_queries as fq
 from ..config import Settings
 from ..sparql import SparqlClient
@@ -203,9 +203,16 @@ def run(settings: Settings,
     return report
 
 
-if __name__ == "__main__":
+def main() -> VersionsReport:
+    """Entry point. A function, not an `if __name__` block -- see
+    tests/test_entry_points.py.
+
+    nice 10 per spec section 8, same reasoning as acts: a network walk that
+    nonetheless holds the GIL and a connection for the whole pass.
+    """
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env())
     log.info("discovered=%d orphaned=%d skipped_language=%d errors=%d by_lang=%s",
              result.discovered, result.orphaned, result.skipped_language,
@@ -222,3 +229,8 @@ if __name__ == "__main__":
         log.warning("SKIPPED LANGUAGE: %d version(s) in a language "
                     "fedlex_queries.LANGUAGE_MAP does not cover. Sample: %s",
                     result.skipped_language, ", ".join(result.skipped_langs))
+    return result
+
+
+if __name__ == "__main__":
+    main()
