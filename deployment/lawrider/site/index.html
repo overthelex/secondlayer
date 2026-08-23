@@ -1,4 +1,9 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FAF8F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1A1917" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Lawrider builds legal research systems where grounding in primary sources is a measured number, logged on every answer.">
 <title>Lawrider</title>
 <style>
   :root{
@@ -30,11 +35,14 @@
   }
 
   *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   body{
     margin:0;background:var(--paper);color:var(--ink);
     font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;
+    overflow-wrap:break-word;-webkit-tap-highlight-color:rgba(201,146,49,.18);
   }
-  .wrap{max-width:var(--col);margin:0 auto;padding:0 24px}
+  img{max-width:100%}
+  .wrap{max-width:var(--col);margin:0 auto;padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}
   .bleed{border-top:1px solid var(--rule)}
 
   header{padding:22px 0}
@@ -43,12 +51,12 @@
   .brand img{width:26px;height:26px;display:block}
   .brand b{font-family:var(--serif);font-weight:600;font-size:19px;letter-spacing:-.01em}
   .headright{display:flex;align-items:center;gap:18px}
-  nav{display:flex;gap:18px}
-  nav a{font-size:13px;color:var(--muted);text-decoration:none;padding-bottom:2px;border-bottom:1px solid transparent}
+  nav{display:flex;gap:10px 18px;flex-wrap:wrap;min-width:0}
+  nav a{white-space:nowrap;font-size:13px;color:var(--muted);text-decoration:none;padding-bottom:2px;border-bottom:1px solid transparent}
   nav a:hover,nav a:focus-visible{color:var(--ink);border-bottom-color:var(--gold)}
 
   /* language switcher */
-  .lang{display:flex;align-items:center;gap:0;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+  .lang{display:flex;align-items:center;gap:0;flex:0 0 auto;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
   .lang button{
     appearance:none;background:transparent;border:0;cursor:pointer;
     font-family:var(--sans);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
@@ -84,7 +92,7 @@
   .specs{width:100%;border-collapse:collapse;font-size:15px;margin-top:6px}
   .specs td{padding:11px 0;border-bottom:1px solid var(--rule);vertical-align:baseline}
   .specs tr:last-child td{border-bottom:0}
-  .specs td:first-child{color:var(--muted);padding-right:20px}
+  .specs td:first-child{color:var(--muted);padding-right:20px;hyphens:auto}
   .specs td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .note{font-size:13.5px;color:var(--muted);margin-top:14px}
 
@@ -116,10 +124,41 @@
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   @media (max-width:560px){
     body{font-size:16px}
-    .hero{padding:56px 0 46px}
-    section{padding:44px 0}
+    header{padding:16px 0}
+    .head{gap:12px}
+    .hero{padding:52px 0 44px}
+    section{padding:42px 0}
+    .band{padding:52px 0}
+    h1{hyphens:auto}
+    .lede{font-size:17.5px}
+    h2{font-size:23px}
+    /* nav and the language switcher drop to their own row, thumb-sized */
     .headright{gap:12px;width:100%;justify-content:space-between}
-    nav{gap:14px}
+    nav{gap:16px}
+    nav a{font-size:14px;padding:7px 0}
+    .lang button{padding:8px 11px;font-size:11.5px}
+    .steps li{padding-bottom:16px}
+    .contact{gap:14px 26px}
+    .contact div{min-width:132px}
+    footer{flex-direction:column;gap:6px;padding:28px 0 40px}
+  }
+  @media (max-width:430px){
+    .wrap{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+    /* switcher moves up beside the logo, nav takes a full row of its own:
+       three links plus the switcher on one line do not fit 320px */
+    .headright{display:contents}
+    .head{gap:10px 12px}
+    .lang{order:2;margin-left:auto}
+    nav{order:3;flex:1 1 100%;gap:10px 18px}
+    /* label above value: a two-column table with a nowrap number cannot fit 360px */
+    .specs{font-size:15px}
+    .specs tr{display:block;padding:11px 0;border-bottom:1px solid var(--rule)}
+    .specs tr:last-child{border-bottom:0}
+    .specs td{display:block;padding:0;border-bottom:0}
+    .specs td:first-child{padding-right:0;font-size:13px;letter-spacing:.02em}
+    .specs td:last-child{text-align:left;margin-top:2px}
+    .contact{gap:16px 22px}
+    .contact div{min-width:0;flex:1 1 100%}
   }
 </style>
 
