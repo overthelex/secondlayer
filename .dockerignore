@@ -64,6 +64,18 @@ deployment/hudoc-storage/pgdata
 data
 data/**
 
+# Subpackage lockfiles were deliberately removed from git (22c6ab3b) and the
+# Dockerfiles fall back to `npm install` when they are absent. A developer
+# machine that ran `npm install` locally leaves stale ones behind, and
+# `COPY packages/shared/package-lock.json*` then drags them into the build,
+# where `npm ci` rejects them as out of sync. Keep the context matching git.
+# lexwebapp/ and platform/ locks ARE tracked and must stay.
+/package-lock.json
+packages/*/package-lock.json
+mcp_backend/package-lock.json
+mcp_rada/package-lock.json
+mcp_openreyestr/package-lock.json
+
 # Misc
 *.md
 !packages/shared/README.md
