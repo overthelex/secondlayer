@@ -44,16 +44,21 @@ ON CONFLICT (ecli) DO UPDATE SET
     docket_number = COALESCE(EXCLUDED.docket_number, ch_court_decisions.docket_number),
     abstract      = COALESCE(EXCLUDED.abstract, ch_court_decisions.abstract),
     languages     = COALESCE(EXCLUDED.languages, ch_court_decisions.languages),
-    html_url      = EXCLUDED.html_url,
+    html_url      = COALESCE(EXCLUDED.html_url, ch_court_decisions.html_url),
     pdf_url       = COALESCE(EXCLUDED.pdf_url, ch_court_decisions.pdf_url),
     json_url      = EXCLUDED.json_url,
     metadata_json = EXCLUDED.metadata_json,
     -- A row that already finished stays finished. Anything else re-enters the
-    -- queue at the stage this run assigns.
+    -- queue at the stage this run assigns. last_error must key on the SAME
+    -- final-stage expression as `stage` above, not on EXCLUDED.stage alone —
+    -- otherwise a protected 'loaded' row can be stamped with an error message
+    -- that describes a stage it never actually entered, and a row recovering
+    -- from 'failed' never gets its stale error cleared.
     stage         = CASE WHEN ch_court_decisions.stage = 'loaded'
                          THEN 'loaded' ELSE EXCLUDED.stage END,
-    last_error    = CASE WHEN EXCLUDED.stage = 'failed'
-                         THEN %(error)s ELSE ch_court_decisions.last_error END,
+    last_error    = CASE WHEN (CASE WHEN ch_court_decisions.stage = 'loaded'
+                                    THEN 'loaded' ELSE EXCLUDED.stage END) = 'failed'
+                         THEN %(error)s ELSE NULL END,
     stage_updated_at = now(),
     updated_at    = now()
 RETURNING (xmax = 0) AS inserted
@@ -107,8 +112,17 @@ async def _index_spider(fetcher: Fetcher, conn, spider: str, report: IndexReport
             log.warning("%s/%s: %s", spider, doc_id, exc)
             report.failed += 1
             return
-        fields = es_document.parse(spider, doc_id, data)
-        outcome = upsert(conn, fields, available)
+        # A malformed payload or a write error (e.g. a collision the ON CONFLICT
+        # target does not cover) must not cancel the other 499 documents in this
+        # slice, let alone the rest of the spider or the run. Log it — doc id and
+        # exception both — and move on.
+        try:
+            fields = es_document.parse(spider, doc_id, data)
+            outcome = upsert(conn, fields, available)
+        except Exception as exc:
+            log.error("%s/%s: %s", spider, doc_id, exc)
+            report.failed += 1
+            return
         if outcome == "inserted":
             report.inserted += 1
         else:

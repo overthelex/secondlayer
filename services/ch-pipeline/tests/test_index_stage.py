@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import os
@@ -101,3 +102,91 @@ def test_upsert_is_idempotent(conn):
     index_stage.upsert(conn, _fields(), {"json", "pdf"})
     index_stage.upsert(conn, _fields(), {"json", "pdf"})
     assert conn.execute("SELECT count(*) FROM ch_court_decisions").fetchone()[0] == 1
+
+
+def test_a_loaded_row_reindexed_with_no_body_keeps_stage_and_clears_no_error(conn):
+    """Finding 1a: a finished row must not be stamped with a failure message
+    that describes a stage it never actually entered."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text, stage) "
+        "VALUES (%s,%s,%s,'loaded')", (f.ecli, f.spider, "existing text " * 50),
+    )
+    assert index_stage.upsert(conn, f, set()) == "updated"
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "loaded"
+    assert row[1] is None
+
+
+def test_a_failed_row_recovering_a_body_clears_its_stale_error(conn):
+    """Finding 1b: a row coming back from 'failed' must not keep carrying the
+    error message that put it there."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage, last_error) "
+        "VALUES (%s,%s,'failed','no body: listing offers neither html nor pdf')",
+        (f.ecli, f.spider),
+    )
+    assert index_stage.upsert(conn, f, {"json", "pdf"}) == "updated"
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] is None
+
+
+def test_html_url_survives_a_reindex_where_the_listing_transiently_drops_html(conn):
+    """Finding 2: html_url is the one optional column that was not protected
+    by COALESCE — a transient listing gap must not null out a working URL."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    before = conn.execute(
+        "SELECT html_url FROM ch_court_decisions").fetchone()[0]
+    assert before.endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.html")
+
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT html_url, pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] == before, "html_url must not be nulled by a body-bearing re-index"
+    assert row[1].endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.pdf")
+
+
+def test_one_bad_document_does_not_abort_the_rest_of_the_batch(conn, monkeypatch):
+    """Finding 3: a raise from parse() or upsert() for one document must not
+    cancel the sibling tasks in the same asyncio.gather slice."""
+    listing_html = (
+        '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.json">a</a>'
+        '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.pdf">a</a>'
+        '<a href="BAD_DOC.json">b</a>'
+        '<a href="BAD_DOC.pdf">b</a>'
+    )
+    good_data = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    class FakeFetcher:
+        async def text(self, url):
+            return listing_html
+
+        async def json(self, url):
+            return good_data
+
+    real_upsert = index_stage.upsert
+
+    def flaky_upsert(conn, fields, available):
+        if fields.doc_id == "BAD_DOC":
+            raise RuntimeError("simulated write failure")
+        return real_upsert(conn, fields, available)
+
+    monkeypatch.setattr(index_stage, "upsert", flaky_upsert)
+
+    report = index_stage.IndexReport()
+    asyncio.run(
+        index_stage._index_spider(FakeFetcher(), conn, "ZG_Obergericht", report))
+
+    doc_ids = {
+        row[0] for row in
+        conn.execute("SELECT doc_id FROM ch_court_decisions").fetchall()
+    }
+    assert "ZG_OG_001_Z1-2020-5_2022-02-18" in doc_ids, \
+        "the good document in the same slice must still be written"
+    assert "BAD_DOC" not in doc_ids
+    assert report.failed == 1
