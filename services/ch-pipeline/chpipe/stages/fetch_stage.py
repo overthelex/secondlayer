@@ -33,9 +33,39 @@ class FetchReport:
 
 def raw_path(raw_dir: pathlib.Path, spider: str, doc_id: str,
              extension: str) -> pathlib.Path:
+    """Never trust a doc id or spider name from a remote directory listing to
+    describe its own path safely.
+
+    _SAFE_NAME is a cheap first line -- it rejects '/' and null bytes -- but
+    it is not enough on its own: it accepts a bare '..', a bare '.', and any
+    run of dots, spaces and hyphens, so ".." passes it outright. For doc_id
+    that is masked in THIS module because the caller always appends a
+    non-empty '.{extension}', so a bare '..' never surfaces as a literal path
+    segment here -- but raw_path and write_body are general, exported
+    helpers, and spider is used bare (raw_dir / spider). So the path is also
+    validated by construction: build each segment, resolve it, and confirm it
+    is still strictly inside its parent. That check does not depend on the
+    extension-append accident and holds regardless of how a caller combines
+    these arguments.
+    """
     if not _SAFE_NAME.match(doc_id) or not _SAFE_NAME.match(spider):
         raise ValueError(f"unsafe path component: {spider}/{doc_id}")
-    return raw_dir / spider / f"{doc_id}.{extension}"
+
+    base = raw_dir.resolve()
+    spider_dir = (raw_dir / spider).resolve()
+    if spider_dir == base or not spider_dir.is_relative_to(base):
+        raise ValueError(
+            f"unsafe path component: spider={spider!r} escapes {raw_dir}")
+
+    doc_dir = (spider_dir / doc_id).resolve()
+    if doc_dir == spider_dir or not doc_dir.is_relative_to(spider_dir):
+        raise ValueError(
+            f"unsafe path component: doc_id={doc_id!r} escapes {spider_dir}")
+
+    path = raw_dir / spider / f"{doc_id}.{extension}"
+    if not path.resolve().is_relative_to(base):
+        raise ValueError(f"unsafe path component: {spider}/{doc_id} escapes {raw_dir}")
+    return path
 
 
 def choose_body(row) -> tuple[str, str] | None:
@@ -63,40 +93,50 @@ def write_body(raw_dir: pathlib.Path, spider: str, doc_id: str, extension: str,
 async def _fetch_batch(fetcher: Fetcher, conn, rows: list[dict], settings: Settings,
                        report: FetchReport) -> None:
     async def one(row) -> None:
-        choice = choose_body(row)
-        if choice is None:
-            db.fail(conn, row["doc_id"], "no body url", settings.max_attempts)
-            report.failed += 1
-            return
-        extension, url = choice
+        # No path through this task may raise into asyncio.gather: a fetch
+        # failure, a write failure (full disk, a permission problem, an
+        # unsafe path component), a database error completing the row, and
+        # even a database error while RECORDING one of those failures must
+        # all stay inside this function. Anything that escapes cancels the
+        # sibling tasks in the batch and unwinds out of the whole stage run
+        # -- round 1 guarded write_body()/db.complete() but left its own
+        # three db.fail() calls unguarded, which is exactly this bug. One
+        # outer guard around the whole body, rather than one per call site,
+        # is what actually closes it -- the same ruling as _index_spider's
+        # one(). except Exception, not bare except, so CancelledError and
+        # KeyboardInterrupt still propagate.
         try:
-            payload = await fetcher.bytes(url)
-        except FetchError as exc:
-            db.fail(conn, row["doc_id"], str(exc), settings.max_attempts)
-            report.failed += 1
-            return
-        # write_body() can raise on a full disk, a permission problem, or an
-        # unsafe path component; db.complete() can raise on any database
-        # error. Either raising inside this asyncio.gather cancels the sibling
-        # tasks in the batch and unwinds out of the whole stage run. Log the
-        # spider, the document id and the exception, count the document as
-        # failed, and move on — the same ruling as _index_spider's one().
-        try:
+            choice = choose_body(row)
+            if choice is None:
+                db.fail(conn, row["doc_id"], "no body url", settings.max_attempts)
+                report.failed += 1
+                return
+            extension, url = choice
+            try:
+                payload = await fetcher.bytes(url)
+            except FetchError as exc:
+                db.fail(conn, row["doc_id"], str(exc), settings.max_attempts)
+                report.failed += 1
+                return
+
             _, digest = write_body(settings.raw_dir, row["spider"],
                                    row["doc_id"], extension, payload)
             db.complete(conn, row["doc_id"], "fetched",
                         text_source=extension,
                         pdf_sha256=digest if extension == "pdf" else None)
+            report.bytes_written += len(payload)
+            if extension == "html":
+                report.fetched_html += 1
+            else:
+                report.fetched_pdf += 1
         except Exception as exc:
             log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
-            db.fail(conn, row["doc_id"], str(exc), settings.max_attempts)
+            try:
+                db.fail(conn, row["doc_id"], str(exc), settings.max_attempts)
+            except Exception as fail_exc:
+                log.error("%s/%s: also failed recording the failure: %s",
+                         row["spider"], row["doc_id"], fail_exc)
             report.failed += 1
-            return
-        report.bytes_written += len(payload)
-        if extension == "html":
-            report.fetched_html += 1
-        else:
-            report.fetched_pdf += 1
 
     await asyncio.gather(*(one(r) for r in rows))
 

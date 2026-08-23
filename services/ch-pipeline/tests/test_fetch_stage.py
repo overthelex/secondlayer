@@ -8,6 +8,7 @@ import pytest
 
 from chpipe import db
 from chpipe.config import Settings
+from chpipe.http import FetchError
 from chpipe.stages import fetch_stage
 
 
@@ -21,6 +22,30 @@ def test_raw_path_refuses_a_doc_id_that_escapes_the_directory():
     outside raw_dir."""
     with pytest.raises(ValueError, match="unsafe"):
         fetch_stage.raw_path(pathlib.Path("/data/raw"), "S", "../../etc/passwd", "pdf")
+
+
+def test_raw_path_refuses_a_spider_that_is_bare_dotdot():
+    """Round 1 finding: _SAFE_NAME alone accepts a bare '..' -- it only
+    rejects '/' and null bytes. spider is used bare (raw_dir / spider), so
+    this must be caught by construction: resolve the path and confirm it is
+    still inside raw_dir, not by pattern-guessing at the string."""
+    with pytest.raises(ValueError, match="unsafe"):
+        fetch_stage.raw_path(pathlib.Path("/data/raw"), "..", "d1", "pdf")
+
+
+def test_raw_path_refuses_a_doc_id_that_is_bare_dotdot(tmp_path):
+    """Round 1 finding: for doc_id specifically, appending '.{extension}'
+    happens to mask a bare '..' from ever landing as a literal path segment
+    in the filename this call produces -- but raw_path is a general, exported
+    helper and must not depend on that accident to stay safe."""
+    with pytest.raises(ValueError, match="unsafe"):
+        fetch_stage.raw_path(tmp_path, "S", "..", "pdf")
+
+
+def test_raw_path_accepts_a_legitimate_swiss_document_id(tmp_path):
+    p = fetch_stage.raw_path(tmp_path, "CH_BGer",
+                             "CH_BGer_001_1A-1-2000_2000-05-08", "html")
+    assert p == tmp_path / "CH_BGer" / "CH_BGer_001_1A-1-2000_2000-05-08.html"
 
 
 def test_choose_body_prefers_html():
@@ -135,4 +160,48 @@ def test_a_write_failure_for_one_row_does_not_abort_the_rest_of_the_batch(
     assert bad[1] == 1
     assert "simulated disk failure" in bad[2]
     assert report.fetched_html == 2
+    assert report.failed == 1
+
+
+def test_a_failure_while_recording_a_failure_does_not_abort_the_batch(
+        conn, monkeypatch, tmp_path):
+    """Round 1 finding: db.fail() itself is unguarded in three places inside
+    one() -- including the one that records a fetch failure. If Postgres
+    hiccups at exactly that moment, the exception must still not escape
+    asyncio.gather and cancel the sibling tasks in the batch."""
+    _seed(conn, "GOOD", html_url="https://x/GOOD.html")
+    _seed(conn, "BAD", html_url="https://x/BAD.html")
+
+    class FetcherFailsOn:
+        def __init__(self, bad_url):
+            self._bad_url = bad_url
+
+        async def bytes(self, url):
+            if url == self._bad_url:
+                raise FetchError("simulated fetch failure")
+            return f"body:{url}".encode()
+
+    real_fail = db.fail
+
+    def flaky_fail(conn_, doc_id, error, max_attempts):
+        if doc_id == "BAD":
+            raise RuntimeError("simulated connection drop while recording failure")
+        return real_fail(conn_, doc_id, error, max_attempts)
+
+    monkeypatch.setattr(db, "fail", flaky_fail)
+
+    settings = Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=4,
+                         cpu_workers=1, ocr_workers=1, load_ceiling=6.0,
+                         max_attempts=3)
+    rows = db.claim(conn, "indexed", limit=10)
+    report = fetch_stage.FetchReport()
+    fetcher = FetcherFailsOn("https://x/BAD.html")
+
+    # Must complete without raising.
+    asyncio.run(fetch_stage._fetch_batch(fetcher, conn, rows, settings, report))
+
+    good = conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='GOOD'").fetchone()
+    assert good[0] == "fetched"
+    assert report.fetched_html == 1
     assert report.failed == 1
