@@ -1,8 +1,10 @@
 import os
 import pathlib
+import urllib.parse
 import httpx
 import psycopg
 import pytest
+from chpipe import fedlex_queries as fq
 from chpipe import reports_leg
 from chpipe.sparql import SparqlClient
 from chpipe.stages import acts_stage, versions_stage
@@ -54,7 +56,7 @@ def test_gate_e_counts_editions_articles_and_changes(conn):
                      "'modified',%s)", (act_id, vid, date))
     row = reports_leg.gate_e(conn, ["220"])[0]
     assert row["found"] is True
-    assert row["editions_de"] == 2
+    assert row["editions"] == 2
     assert row["articles_latest"] == 3
     assert row["changes"] == 2
 
@@ -119,13 +121,124 @@ def test_fedlex_edition_count_counts_rows_not_a_sparql_aggregate():
     assert reports_leg.fedlex_edition_count(client, "220") == 14
 
 
-def test_cross_check_fedlex_annotates_only_found_rows(conn):
+def _query_of(request) -> str:
+    """The SPARQL text out of a form-encoded POST body. SparqlClient posts
+    `data={"query": ...}`, so the raw body is percent-encoded and matching
+    an IRI against it directly silently never matches."""
+    return urllib.parse.parse_qs(request.content.decode())["query"][0]
+
+
+def _capture_queries(sent: list, count: int = 1):
+    """A transport that records every query it is asked to run."""
+    def handler(request):
+        sent.append(_query_of(request))
+        return httpx.Response(200, json=_fedlex_rows_fixture(count))
+    return httpx.MockTransport(handler)
+
+
+# --- Finding 3: the language split inside one comparison ---
+# fedlex_edition_count() took Fedlex's "DEU" while gate_e() hardcoded 'de'.
+# Passing the ISO code the rest of the package uses built
+# .../authority/language/de -- a well-formed IRI binding nothing -- and the
+# call returned 0 in silence. Reproduced live on 2026-08-23:
+# fedlex_edition_count(c, "220") = 14, the same call with lang="de" = 0.
+
+def test_fedlex_edition_count_takes_the_iso_code_the_rest_of_the_package_uses():
+    """'de' must reach the endpoint as the authority code DEU, not as 'de'."""
+    sent: list = []
+    client = SparqlClient("https://fake/sparql", transport=_capture_queries(sent, 14))
+    assert reports_leg.fedlex_edition_count(client, "220", lang="de") == 14
+    assert "language/DEU" in sent[0]
+    assert "language/de>" not in sent[0], (
+        "an unmapped code builds a well-formed IRI that binds nothing and "
+        "silently answers 0 -- the exact defect this signature closes")
+
+
+def test_an_unknown_language_raises_instead_of_counting_zero():
+    """In a gate, 0 does not read as a broken call -- it reads as a finding."""
+    client = SparqlClient("https://fake/sparql", transport=_capture_queries([], 14))
+    with pytest.raises(fq.UnknownLanguage):
+        reports_leg.fedlex_edition_count(client, "220", lang="xx")
+
+
+def test_fedlexs_own_authority_code_is_rejected_too():
+    """One vocabulary at the boundary. Accepting both is how the two halves
+    of one comparison came to be configured in two of them."""
+    client = SparqlClient("https://fake/sparql", transport=_capture_queries([], 14))
+    with pytest.raises(fq.UnknownLanguage):
+        reports_leg.fedlex_edition_count(client, "220", lang="DEU")
+
+
+def test_gate_e_echoes_the_language_it_counted_with(conn):
+    """cross_check_fedlex() drives its query from this, so the local and
+    network halves cannot be configured separately."""
+    assert reports_leg.gate_e(conn, ["220"])[0]["lang"] == "de"
+
+
+def test_gate_e_counts_the_language_it_was_asked_for(conn):
+    """The local half used to hardcode 'de' regardless of the caller."""
+    act_id = acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
+    for lang in ("DEU", "FRA"):
+        vid = versions_stage.upsert_version(conn, {
+            "work": WORK, "consolidation": f"{WORK}/2026-01-01/{lang}",
+            "dateApplicability": "2026-01-01", "lang": L + lang,
+            "fileUrl": "https://x/x.xml"})
+        conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=%s "
+                     "WHERE version_id=%s", (7 if lang == "FRA" else 3, vid))
+    assert act_id
+    assert reports_leg.gate_e(conn, ["220"], lang="fr")[0]["articles_latest"] == 7
+
+
+# --- Finding 1: the gate could not show its own ceiling ---
+# Both sides of the fedlex_editions comparison are constrained to XML, so it
+# can only confirm we fetched what we chose to look for. Measured live on
+# 2026-08-24: SR 220 is 14 of 14 XML editions and 14 of 100 consolidations.
+
+def test_cross_check_reports_the_ceiling_not_only_the_xml_subset(conn):
+    _seed_one_parsed_edition(conn)
+    rows = reports_leg.gate_e(conn, ["220"])
+    sent: list = []
+    # The XML query answers 1 row, the ceiling query 5 -- distinguished by
+    # the userFormat clause only the first one carries.
+    def handler(request):
+        body = _query_of(request)
+        sent.append(body)
+        n = 1 if "user-format/xml" in body else 5
+        return httpx.Response(200, json=_fedlex_rows_fixture(n))
+
+    client = SparqlClient("https://fake/sparql",
+                          transport=httpx.MockTransport(handler))
+    row = reports_leg.cross_check_fedlex(rows, client)[0]
+    assert row["fedlex_editions"] == 1
+    assert row["fedlex_consolidations"] == 5
+    assert any("user-format/xml" not in q for q in sent), (
+        "the ceiling query must not carry the very filter it exists to lift")
+
+
+def test_cross_check_renders_both_pairs_in_one_line(conn):
+    _seed_one_parsed_edition(conn)
+    rows = reports_leg.gate_e(conn, ["220"])
+    client = SparqlClient(
+        "https://fake/sparql",
+        transport=httpx.MockTransport(lambda request: httpx.Response(
+            200, json=_fedlex_rows_fixture(
+                1 if "user-format/xml" in _query_of(request) else 5))))
+    row = reports_leg.cross_check_fedlex(rows, client)[0]
+    assert row["coverage"] == "220: 1 of 5 (XML: 1 of 1)"
+
+
+def _seed_one_parsed_edition(conn):
     acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
     vid = versions_stage.upsert_version(conn, {
         "work": WORK, "consolidation": f"{WORK}/2026-01-01",
         "dateApplicability": "2026-01-01", "lang": L + "DEU",
         "fileUrl": "https://x/x.xml"})
     conn.execute("UPDATE ch_act_version SET stage='parsed' WHERE version_id=%s", (vid,))
+    return vid
+
+
+def test_cross_check_fedlex_annotates_only_found_rows(conn):
+    _seed_one_parsed_edition(conn)
 
     rows = reports_leg.gate_e(conn, ["220", "999"])   # 220 found, 999 not loaded
     transport = httpx.MockTransport(
@@ -136,3 +249,4 @@ def test_cross_check_fedlex_annotates_only_found_rows(conn):
     found, missing = annotated
     assert found["sr_number"] == "220" and found["fedlex_editions"] == 1
     assert missing["sr_number"] == "999" and "fedlex_editions" not in missing
+    assert "fedlex_consolidations" not in missing and "coverage" not in missing

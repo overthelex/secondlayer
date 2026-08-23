@@ -1,4 +1,5 @@
 import httpx
+import pytest
 
 from chpipe import fedlex_queries as q
 from chpipe.sparql import SparqlClient
@@ -250,3 +251,83 @@ def test_a_work_with_two_conflicting_statuses_returns_both_rows_not_one():
     assert all(r["work"] == "https://fedlex.data.admin.ch/eli/cc/2003/31" for r in rows)
     statuses = {q.status_code(r["inForce"]) for r in rows}
     assert statuses == {0, 3}
+
+
+# --- Finding 1: CONSOLIDATIONS_BY_SR, the ceiling EDITIONS_BY_SR cannot see ---
+# EDITIONS_BY_SR constrains the Fedlex side to userFormat/xml, which is the
+# same limitation the local side of Gate E has (the corpus can only be built
+# from XML editions). Both sides sharing one constraint means the comparison
+# can only confirm we fetched what we chose to look for. Measured live on
+# 2026-08-24: SR 220 = 14 XML editions but 100 consolidations, SR 210 =
+# 11/70, SR 311.0 = 20/120 -- so a "14 of 14" green tick was 14% coverage.
+
+def test_the_ceiling_query_does_not_carry_the_filter_it_exists_to_lift():
+    assert "user-format/xml" not in q.CONSOLIDATIONS_BY_SR
+    assert "userFormat" not in q.CONSOLIDATIONS_BY_SR
+
+
+def test_the_ceiling_query_counts_consolidations_of_the_work():
+    """Spec section 9 asked for the count against jolux:Consolidation."""
+    assert "SELECT DISTINCT" in q.CONSOLIDATIONS_BY_SR
+    assert "?c a jolux:Consolidation" in q.CONSOLIDATIONS_BY_SR
+    assert "jolux:isMemberOf ?work" in q.CONSOLIDATIONS_BY_SR
+    assert "id-systematique" in q.CONSOLIDATIONS_BY_SR
+
+
+def test_the_ceiling_query_binds_no_language():
+    """A jolux:Consolidation is the edition; language lives on the
+    expressions realising it. Binding one here would re-narrow the very
+    denominator this query exists to widen."""
+    assert "%(lang)s" not in q.CONSOLIDATIONS_BY_SR
+    assert "authority/language" not in q.CONSOLIDATIONS_BY_SR
+
+
+def test_the_ceiling_query_takes_the_sr_notation_as_a_parameter():
+    assert "%(sr)s" in q.CONSOLIDATIONS_BY_SR
+    assert '"220"' not in q.CONSOLIDATIONS_BY_SR
+
+
+def test_the_ceiling_query_walks_no_offset():
+    assert "OFFSET" not in q.CONSOLIDATIONS_BY_SR.upper()
+
+
+# --- Finding 3: one language vocabulary, translated in exactly one place ---
+
+def test_the_iso_map_is_the_reverse_of_language_map():
+    """Derived, not restated: two hand-written tables drift."""
+    assert q.ISO_TO_AUTHORITY == {
+        "de": "DEU", "fr": "FRA", "it": "ITA", "en": "ENG", "rm": "ROH"}
+    for uri, iso in q.LANGUAGE_MAP.items():
+        assert uri.endswith("/" + q.ISO_TO_AUTHORITY[iso])
+
+
+def test_authority_language_maps_the_iso_code_the_package_speaks():
+    assert q.authority_language("de") == "DEU"
+    assert q.authority_language("rm") == "ROH"
+
+
+def test_authority_language_raises_on_a_code_it_cannot_map():
+    """An unmappable language must be an exception, never a count: the IRI
+    interpolation makes ANY string a well-formed query that binds nothing,
+    and a gate reads the resulting 0 as a finding rather than as an error."""
+    for bad in ("DEU", "xx", "", "german"):
+        with pytest.raises(q.UnknownLanguage):
+            q.authority_language(bad)
+
+
+def test_editions_by_sr_builder_is_the_only_place_the_language_is_filled_in():
+    built = q.editions_by_sr("311.0", "fr")
+    assert "authority/language/FRA>" in built
+    assert '"311.0"' in built
+    assert "%(" not in built
+
+
+def test_the_editions_builder_refuses_an_unmappable_language():
+    with pytest.raises(q.UnknownLanguage):
+        q.editions_by_sr("220", "de-CH")
+
+
+def test_the_ceiling_builder_needs_no_language():
+    built = q.consolidations_by_sr("210")
+    assert '"210"' in built
+    assert "%(" not in built

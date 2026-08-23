@@ -7,6 +7,17 @@ in the same ballpark is fine; ordinary drift is expected:
   jolux:Consolidation           56,326 (only 12,033 of them carry an
                                 XML manifestation, which is what VERSIONS
                                 requires -- see stages/versions_stage.py)
+
+56,326 is THE measured number for the consolidation total, and it is the one
+every file in this pipeline quotes. Three files used to disagree with each
+other about it -- migration 197 and stages/fetch_xml_stage.py said 56,328,
+this module and stages/versions_stage.py said 56,326 -- which is exactly the
+shape of a number nobody re-derived. Re-measured live on 2026-08-24 by a
+keyset walk of `SELECT DISTINCT ?c WHERE { ?c a jolux:Consolidation }` at
+10,000 rows per page, counting the distinct URIs in Python (never a
+SPARQL-side COUNT; see this module's warning about that below): 56,326 in
+about six seconds over six requests. 56,328 was simply wrong. It remains a
+snapshot of 2026-08-24 all the same, not an invariant.
   jolux:Act (AS + BBl)         369,181
   enforcement-status 0 (in force)  5,087 works
   enforcement-status 3 (repealed)  7,863 works
@@ -184,6 +195,25 @@ ORDER BY ?work ?dateApplicability ?lang
 # Counted as SELECT DISTINCT rows in Python (len(client.select(...))), never
 # as a SPARQL-side COUNT(DISTINCT ...) -- see this module's own warning
 # above about COUNT(DISTINCT ?x) being unreliable on this endpoint.
+#
+# WHAT THIS QUERY CANNOT SEE, AND WHY CONSOLIDATIONS_BY_SR EXISTS. The
+# userFormat/xml clause below is the same limitation the local side of Gate
+# E has: this pipeline builds a corpus only from consolidations that carry
+# an XML manifestation, so ch_act_version can only ever hold XML editions.
+# Comparing the two therefore compares two halves of one constraint, and a
+# green tick means "we fetched what we chose to look for", never "we have
+# the act's editions". Measured live on 2026-08-24, German:
+#
+#   SR      this query   all consolidations   share
+#   220     14           100                  14%
+#   210     11            70                  16%
+#   311.0   20           120                  17%
+#
+# Spec section 9 asked for the count against jolux:Consolidation, which is
+# the second column. Narrowing to XML is defensible engineering -- there is
+# nothing to parse in a PDF-only edition -- but it must not be what the gate
+# REPORTS, or a 14%-covered act reads as complete. So both queries ship, and
+# reports_leg.cross_check_fedlex() renders both: "14 of 100 (XML: 14 of 14)".
 EDITIONS_BY_SR = _PREFIXES + """
 SELECT DISTINCT ?c WHERE {
   ?work a jolux:ConsolidationAbstract ;
@@ -197,6 +227,29 @@ SELECT DISTINCT ?c WHERE {
 }
 """
 
+# Gate E's ceiling: every consolidated edition Fedlex publishes for an SR
+# number, in any format and any language -- the denominator EDITIONS_BY_SR
+# above cannot see. This is the count spec section 9 actually asked for.
+#
+# Deliberately carries NO language clause. A jolux:Consolidation is the
+# edition itself; language lives one level down, on the expressions that
+# realise it, so an act's edition count is language-independent and binding
+# a language here would just re-narrow the very denominator this query
+# exists to widen. Measured live on 2026-08-24: SR 220 = 100, SR 210 = 70,
+# SR 311.0 = 120 -- against 14, 11 and 20 XML editions in German
+# respectively.
+#
+# Counted as SELECT DISTINCT rows in Python, for the same reason as every
+# other number in this module -- never a SPARQL-side COUNT(DISTINCT ...).
+CONSOLIDATIONS_BY_SR = _PREFIXES + """
+SELECT DISTINCT ?c WHERE {
+  ?work a jolux:ConsolidationAbstract ;
+        jolux:classifiedByTaxonomyEntry/skos:notation
+            "%(sr)s"^^<https://fedlex.data.admin.ch/vocabulary/notation-type/id-systematique> .
+  ?c a jolux:Consolidation ; jolux:isMemberOf ?work .
+}
+"""
+
 LANGUAGE_MAP = {
     "http://publications.europa.eu/resource/authority/language/DEU": "de",
     "http://publications.europa.eu/resource/authority/language/FRA": "fr",
@@ -204,6 +257,64 @@ LANGUAGE_MAP = {
     "http://publications.europa.eu/resource/authority/language/ENG": "en",
     "http://publications.europa.eu/resource/authority/language/ROH": "rm",
 }
+
+# The reverse of LANGUAGE_MAP: the ISO code every other module in this
+# package speaks ("de", the value in ch_act_version.lang and the one
+# reports_leg.gate_e() queries the local tables with) to the EU authority
+# code the graph is keyed on ("DEU"). Derived from LANGUAGE_MAP rather than
+# written out a second time, so the two cannot drift apart.
+ISO_TO_AUTHORITY = {iso: uri.rsplit("/", 1)[-1] for uri, iso in LANGUAGE_MAP.items()}
+
+
+class UnknownLanguage(ValueError):
+    """A language code no Fedlex query can be built from.
+
+    This is an exception rather than a query returning nothing because of
+    what the alternative did. EDITIONS_BY_SR interpolates its language into
+    an IRI (.../authority/language/%(lang)s), so ANY string produces a
+    well-formed query -- and one that binds a language the graph does not
+    use returns zero rows rather than an error. Reproduced live on
+    2026-08-23: fedlex_edition_count(c, "220") returned 14 and the same call
+    with lang="de" -- the code the whole rest of this package uses -- returned
+    0, in silence.
+
+    In a gate, 0 is the single worst value to return by accident: it does not
+    read as a broken call, it reads as a finding. A reviewer chasing that
+    zero spent real time believing an act had lost every edition. So an
+    unmappable code raises here, and the only strings that map are the ISO
+    codes in ISO_TO_AUTHORITY.
+    """
+
+
+def authority_language(code: str) -> str:
+    """ISO code ("de") -> Fedlex's EU authority code ("DEU").
+
+    Raises UnknownLanguage for anything else -- including "DEU" itself.
+    Accepting both vocabularies is what let the two halves of one Gate E
+    comparison drift apart in the first place (the local half hardcoded
+    'de', the network half defaulted to "DEU"), so this package speaks ISO
+    everywhere and translates in exactly this one place.
+    """
+    try:
+        return ISO_TO_AUTHORITY[code]
+    except KeyError:
+        raise UnknownLanguage(
+            f"{code!r} is not a language this pipeline knows. Pass an ISO "
+            f"code -- one of {sorted(ISO_TO_AUTHORITY)} -- not Fedlex's own "
+            "authority code ('DEU'); authority_language() adds that.") from None
+
+
+def editions_by_sr(sr_number: str, lang: str = "de") -> str:
+    """EDITIONS_BY_SR, ready to send. The ONLY place %(lang)s is filled in,
+    so an unmappable language cannot reach the endpoint as a query that
+    binds nothing and answers 0."""
+    return EDITIONS_BY_SR % {"sr": sr_number,
+                             "lang": authority_language(lang)}
+
+
+def consolidations_by_sr(sr_number: str) -> str:
+    """CONSOLIDATIONS_BY_SR, ready to send. No language: see the query."""
+    return CONSOLIDATIONS_BY_SR % {"sr": sr_number}
 
 
 def status_code(uri: str | None) -> int | None:
