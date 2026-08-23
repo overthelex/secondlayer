@@ -390,27 +390,83 @@ def test_a_move_across_unrelated_containers_with_a_wording_change_stays_two_rows
     ]
 
 
-def test_ambiguous_moves_are_paired_off_deterministically_by_sorted_e_id():
-    """Decision: when a removed eId's text matches more than one added
-    candidate (or vice versa), the shorter candidate list is paired
-    against the other in SORTED eId order, and any excess on the longer
-    side is judged on its own as a genuine repeal or addition. Three
-    unrelated removed articles and two unrelated added articles all share
-    the identical text "SAME" (distinct suffixes so none of them collide
-    in container-level pairing first). Sorted removed order is
-    disp_u30/art_x, disp_u31/art_y, disp_u32/art_z; sorted added order is
-    disp_u40/art_p, disp_u41/art_q. The first two of each pair off (no
-    rows); the third removed eId has no added counterpart left and is a
-    genuine repeal -- deterministically, the SAME one every time, because
-    the pairing depends only on sorted string order, never on dict or set
-    iteration."""
-    before = [
-        _a("disp_u30/art_x", "SAME"), _a("disp_u31/art_y", "SAME"),
-        _a("disp_u32/art_z", "SAME"),
+def test_coincidental_boilerplate_is_not_evidence_of_a_move():
+    """The finding that closed this sequence: fingerprint identity ALONE
+    is not evidence of a move -- it is evidence of identical text, which a
+    generic delegation clause ("Der Bundesrat regelt die Einzelheiten.",
+    exactly the kind of sentence Swiss transitional provisions repeat
+    verbatim) produces routinely between containers that have nothing to
+    do with each other. Container 10 vanishes entirely; container 30 is
+    brand new; they share no suffix and never come near
+    _match_containers(). Verified this is not hypothetical: this exact
+    input produced [] against an earlier version of this function that
+    matched on identity alone, silently erasing a genuine repeal AND a
+    genuine, unrelated addition with no trace -- the inverse of every
+    other defect in this module's history, and worse: a fabricated row is
+    auditable, a suppressed one is invisible. With no corroboration (the
+    two containers share no other suffix, and there is only one match
+    connecting them), the fix correctly falls back to reporting both."""
+    before = [_a("disp_u10/art_1", "Der Bundesrat regelt die Einzelheiten.")]
+    after = [_a("disp_u30/art_9", "Der Bundesrat regelt die Einzelheiten.")]
+    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == [
+        ("disp_u10/art_1", "repealed"),
+        ("disp_u30/art_9", "added"),
     ]
-    after = [_a("disp_u40/art_p", "SAME"), _a("disp_u41/art_q", "SAME")]
-    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == \
-        [("disp_u32/art_z", "repealed")]
+
+
+def test_boilerplate_collision_is_rejected_even_with_a_stable_sibling():
+    """Rules out the narrower theory that the bug above only fires when a
+    container disappears/appears wholesale: container 10 here keeps an
+    unrelated, unchanged article ("/art_5") on both sides, ruling out any
+    "whole container vanished" coincidence, and the boilerplate match
+    (container 10's "/art_1" vs container 30's "/art_9") still has no
+    corroboration of its own -- the two containers share no suffix NAME at
+    all ("/art_1"/"/art_5" vs "/art_9"), and only one sentence connects
+    them. Still rejected, still two rows."""
+    before = [
+        _a("disp_u10/art_1", "Der Bundesrat regelt die Einzelheiten."),
+        _a("disp_u10/art_5", "Stabiler Text."),
+    ]
+    after = [
+        _a("disp_u10/art_5", "Stabiler Text."),
+        _a("disp_u30/art_9", "Der Bundesrat regelt die Einzelheiten."),
+    ]
+    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == [
+        ("disp_u10/art_1", "repealed"),
+        ("disp_u30/art_9", "added"),
+    ]
+
+
+def test_ambiguous_moves_are_paired_off_deterministically_when_corroborated():
+    """Decision: when a removed eId's text matches more than one added
+    candidate, the shorter candidate list is paired against the other in
+    SORTED eId order -- but each individual pairing still needs its own
+    corroboration (see _reconcile_moved_disp_articles()'s docstring); an
+    ambiguous match that happens to lack it is rejected like any other
+    uncorroborated one, not waved through because some OTHER candidate
+    with the same text was legitimate.
+
+    Two candidate pairings share the text "SAME": containers 30 -> 40 and
+    31 -> 41. 30 -> 40 also share a SECOND, independent match ("OTHER"),
+    corroborating them via two matches connecting the same two containers
+    -- both moves accepted, no rows. 31 -> 41 have only the one "SAME"
+    match, share no suffix name, and are corroborated by nothing -- that
+    pairing is rejected, and both sides fall back to a genuine repeal and
+    a genuine addition, exactly the safe-direction behaviour the
+    coincidental-boilerplate tests above establish, now shown alongside a
+    pairing that IS legitimately reconciled in the same call."""
+    before = [
+        _a("disp_u30/art_x", "SAME"), _a("disp_u30/art_y", "OTHER"),
+        _a("disp_u31/art_m", "SAME"),
+    ]
+    after = [
+        _a("disp_u40/art_p", "SAME"), _a("disp_u40/art_q", "OTHER"),
+        _a("disp_u41/art_r", "SAME"),
+    ]
+    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == [
+        ("disp_u31/art_m", "repealed"),
+        ("disp_u41/art_r", "added"),
+    ]
 
 
 

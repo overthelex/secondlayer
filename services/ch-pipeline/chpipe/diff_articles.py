@@ -352,26 +352,23 @@ def _index_by_fingerprint(articles: dict[str, dict]) -> dict[str, list[str]]:
 
 def _reconcile_moved_disp_articles(
         removed_candidates: dict[str, dict],
-        added_candidates: dict[str, dict]) -> tuple[set[str], set[str]]:
+        added_candidates: dict[str, dict],
+        old_disp: dict[int, dict[str, dict]],
+        new_disp: dict[int, dict[str, dict]]) -> tuple[set[str], set[str]]:
     """Beyond a single container's renumbering (see _match_containers), a
     provision can move to a container that never pairs with its origin at
     all: a container splits, sending part of its content elsewhere while
     the rest stays; two containers merge into one. In either shape the
     moved content's destination is not its origin container's structural
     continuation, so _match_containers() correctly declines to pair them
-    (they are not the same container renumbered) -- and without this
-    function, the moved content would be read as an unrelated repeal and
-    an unrelated addition. Measured on a content-preserving split: one
-    repealed row plus one added row where the correct answer is zero; on a
-    content-preserving merge: two added plus two repealed where the
-    correct answer is zero.
+    (they are not the same container renumbered) -- and without the move
+    reconciliation below, the moved content would be read as an unrelated
+    repeal and an unrelated addition. Measured on a content-preserving
+    split: one repealed row plus one added row where the correct answer is
+    zero; on a content-preserving merge: two added plus two repealed where
+    the correct answer is zero.
 
-    The general rule, deliberately not scoped to "within one container
-    pair": if a removed disp-scoped eId's normalised text reappears
-    anywhere among the added disp-scoped candidates in the SAME diff()
-    call, the provision moved -- no repeal, no addition, regardless of
-    which containers are involved or whether any two of them pair.
-    `removed_candidates`/`added_candidates` are therefore the FULL pool of
+    `removed_candidates`/`added_candidates` are the FULL pool of
     "old-only"/"new-only" disp articles this diff() call has produced so
     far, from every source: a confirmed container pair's own old-only/
     new-only suffixes (a merge's moved half surfaces exactly there, as a
@@ -384,22 +381,62 @@ def _reconcile_moved_disp_articles(
     content's "added" candidate is generated from INSIDE a pair, never
     reaching the fallback at all.
 
-    Fingerprint identity, not similarity, is the signal: it is the exact
-    value diff() already computes for every article to decide "did this
-    change at all", so reusing it here costs nothing extra and, unlike a
-    similarity threshold, can never merge two provisions that merely read
-    alike.
+    FINGERPRINT IDENTITY ALONE IS NOT EVIDENCE OF A MOVE -- this is the
+    correction to an earlier version of this function, which matched on
+    identity across the ENTIRE pool with no requirement that the two
+    containers be related at all. Measured: a generic delegation clause
+    ("Der Bundesrat regelt die Einzelheiten.") repeated verbatim in two
+    completely unrelated transitional containers made that version call
+    it a move and silently erase BOTH a genuine repeal and a genuine,
+    unrelated addition -- worse than every earlier defect in this module,
+    because a suppressed row leaves no trace to audit, where a fabricated
+    one at least invites scrutiny. Boilerplate sentences are exactly what
+    Swiss transitional provisions repeat; identical text is common, a
+    genuine renumbering relationship between two specific containers is
+    not, and conflating the two was the bug.
+
+    A fingerprint match is now accepted as move evidence only with
+    CORROBORATION -- independent evidence that the two containers
+    involved are actually related, not just that one sentence happens to
+    read alike:
+
+      (a) the two containers already score above (0, 0) under
+          _container_score() -- i.e. they share at least one OTHER suffix
+          NAME structurally (see _match_containers()), which two
+          containers that split/merged from/into each other routinely do
+          even where _match_containers() itself declined to pair them
+          outright (that decision is about being confident enough to
+          treat the WHOLE container as a continuation; a single shared
+          suffix name is a much lower bar, and exactly what corroboration
+          needs); or
+      (b) at least two INDEPENDENT fingerprint matches connect the SAME
+          two containers -- two separate sentences each moving between
+          the same origin and destination is not the kind of thing
+          coincidental boilerplate produces twice in a row.
+
+    Absent either, the match is rejected and both sides fall back to a
+    genuine repeal and a genuine addition. That is the safe direction: an
+    over-reported move across genuinely unrelated containers is visible to
+    a reader and can be disputed; an under-reported repeal is invisible.
+
+    EMPTY OR MARKER-ONLY TEXT CAN NEVER BE MOVE EVIDENCE, corroborated or
+    not: an empty body or a bare "Aufgehoben"/"Abrogé"/"Abrogato" (see
+    _is_repealed()) matches every other empty or marker body in the same
+    comparison, so treating it as move evidence would pair up unrelated
+    repeals by coincidence just as surely as boilerplate prose does.
+    Filtered out of both indexes before any matching happens -- not relied
+    upon to be harmless via _added_change()/_repealed_change()'s own
+    already-empty suppression downstream, which happens to produce the
+    same silence today but is a coincidence this function does not lean
+    on.
 
     SCOPE: both sides are filtered to disp-scoped eIds only (see
     _disp_container()), never ordinary top-level articles. Matching
     content alone across top-level articles risks exactly what
     test_unrelated_articles_with_identical_new_text_are_not_merged_into_a_rename
-    guards against -- two unrelated articles that happen to share
-    coincidentally identical text (most plausibly a bare repeal marker)
-    being silently merged into a false "nothing happened". Disp containers
-    are the ones Fedlex is known, structurally, to reshuffle; ordinary
-    articles are not, so this stays inside the boundary the rest of the
-    module already draws.
+    guards against. Disp containers are the ones Fedlex is known,
+    structurally, to reshuffle; ordinary articles are not, so this stays
+    inside the boundary the rest of the module already draws.
 
     A MOVE THAT ALSO CARRIES A WORDING CHANGE is deliberately NOT caught
     here: its fingerprint changes, so it will not reappear verbatim on the
@@ -413,7 +450,7 @@ def _reconcile_moved_disp_articles(
     non-corresponding container -- a split or merge, not a renumber -- is
     a compound, much rarer event this function does not attempt to guess
     at by similarity: doing so would reopen the exact false-positive risk
-    the disp-only scoping above exists to avoid (two DIFFERENT,
+    the corroboration requirement above exists to close (two DIFFERENT,
     similarly-but-not-identically-worded provisions merged). Left as a
     repeal and an addition -- conservative, but it never asserts a
     continuity this function cannot verify by exact content.
@@ -422,30 +459,51 @@ def _reconcile_moved_disp_articles(
     or several removed eIds share the same text, the shorter of the two
     candidate lists for that fingerprint is paired off against the other
     in SORTED eId order, deterministically, regardless of dict/set
-    iteration order (the exact defect class the last two rounds of this
+    iteration order (the exact defect class two earlier rounds of this
     module were sent back for). No judgement call is needed about WHICH
     physical eId "really" continues which: every eId sharing one
     fingerprint carries byte-identical (post-normalisation) text by
     definition, so which specific string labels which is genuinely
-    arbitrary -- only the COUNT absorbed as "moved" (min of the two list
-    lengths) matters, and any excess on the longer side is left to be
-    judged a genuine repeal or addition on its own, exactly as if it had
-    never had a same-text sibling at all.
+    arbitrary -- only the COUNT absorbed as "moved" matters, and each
+    pairing still individually needs its own corroboration above; an
+    excess candidate, or a pairing that fails corroboration, is judged a
+    genuine repeal or addition on its own.
 
     Returns the eIds consumed on each side, NOT Change objects: a moved
     provision produces no Change at all.
     """
     old_index = _index_by_fingerprint(
         {e_id: a for e_id, a in removed_candidates.items()
-         if _disp_container(e_id) is not None})
+         if _disp_container(e_id) is not None
+         and not _is_repealed(a.get("text", ""))})
     new_index = _index_by_fingerprint(
         {e_id: a for e_id, a in added_candidates.items()
-         if _disp_container(e_id) is not None})
+         if _disp_container(e_id) is not None
+         and not _is_repealed(a.get("text", ""))})
+
+    candidate_pairs: list[tuple[str, str]] = []
+    for fp in sorted(old_index.keys() & new_index.keys()):
+        for old_e_id, new_e_id in zip(old_index[fp], new_index[fp]):
+            candidate_pairs.append((old_e_id, new_e_id))
+
+    # How many candidate pairs connect each SPECIFIC (origin, destination)
+    # container pair -- corroboration (b) needs at least two independent
+    # ones, so this is computed once up front rather than per-candidate.
+    pair_counts: dict[tuple[int, int], int] = {}
+    for old_e_id, new_e_id in candidate_pairs:
+        old_n = _disp_container(old_e_id)[0]
+        new_n = _disp_container(new_e_id)[0]
+        pair_counts[(old_n, new_n)] = pair_counts.get((old_n, new_n), 0) + 1
 
     moved_old: set[str] = set()
     moved_new: set[str] = set()
-    for fp in sorted(old_index.keys() & new_index.keys()):
-        for old_e_id, new_e_id in zip(old_index[fp], new_index[fp]):
+    for old_e_id, new_e_id in candidate_pairs:
+        old_n = _disp_container(old_e_id)[0]
+        new_n = _disp_container(new_e_id)[0]
+        structurally_related = _container_score(
+            old_disp.get(old_n, {}), new_disp.get(new_n, {})) != (0, 0)
+        multiply_corroborated = pair_counts[(old_n, new_n)] >= 2
+        if structurally_related or multiply_corroborated:
             moved_old.add(old_e_id)
             moved_new.add(new_e_id)
 
@@ -509,7 +567,7 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
         removed_candidates[e_id] = old_remaining[e_id]
 
     moved_old, moved_new = _reconcile_moved_disp_articles(
-        removed_candidates, added_candidates)
+        removed_candidates, added_candidates, old_disp, new_disp)
 
     for e_id in sorted(removed_candidates.keys() - moved_old):
         change = _repealed_change(removed_candidates[e_id])
