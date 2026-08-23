@@ -85,7 +85,14 @@ CREATE TABLE IF NOT EXISTS public.ch_act_article (
     marginal_note   text,
     text            text NOT NULL,
     ordinal         integer NOT NULL,
-    parent_e_id     text
+    parent_e_id     text,
+    -- Footnotes and amendment-effective-date citations Fedlex embeds inline
+    -- as <authorialNote> ("Fassung gemäss ...", "in Kraft seit ...") --
+    -- stripped out of `text` so a footnote-only correction does not read as
+    -- an amendment to the provision (see chpipe/akn.py), but kept here
+    -- rather than discarded: this is the amendment provenance a future
+    -- stage needs to explain WHY an article changed, not just that it did.
+    notes           text[] NOT NULL DEFAULT '{}'::text[]
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_article

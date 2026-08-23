@@ -51,6 +51,36 @@ def test_plain_text_contains_article_bodies_and_no_tags():
     assert "<" not in text
 
 
+def test_plain_text_excludes_authorial_note_text():
+    """ch_act_version.full_text (plain_text()'s output) and
+    ch_act_article.text (Article.text) must agree about what an article
+    says. Article.text stopped carrying <authorialNote> footnote text; if
+    plain_text() still did, the two would describe the same edition
+    differently."""
+    xml = (b'<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+           b'<act><body><article eId="art_1"><num>Art. 1</num>'
+           b'<content><p>Der Vertrag gilt'
+           b'<authorialNote><p>Fassung gemaess BBl 1999 2829</p></authorialNote>'
+           b'.</p></content></article></body></act></akomaNtoso>')
+    text = akn.plain_text(xml)
+    assert "BBl 1999 2829" not in text
+    assert "Der Vertrag gilt" in text
+
+
+def test_plain_text_does_not_split_a_word_across_inline_markup():
+    """Same defect class as _text_of()'s "nic ht" bug -- plain_text() used
+    to strip and rejoin every raw text() fragment independently, which
+    would turn a <b> splitting a word into two separate LINES, not just
+    two words."""
+    xml = (b'<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+           b'<act><body><article eId="art_1"><num>Art. 1</num>'
+           b'<content><p>Es ist <b>nic</b>ht gueltig.</p></content>'
+           b'</article></body></act></akomaNtoso>')
+    text = akn.plain_text(xml)
+    assert "nic ht" not in text
+    assert "nicht" in text
+
+
 def test_frbr_dates_are_read_from_the_document_itself():
     dates = akn.frbr_dates(XML)
     assert dates["jolux:dateApplicability"] == "2026-01-01"

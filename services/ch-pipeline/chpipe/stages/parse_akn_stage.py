@@ -48,10 +48,10 @@ def store_articles(conn, version_id: int, articles: list[akn.Article]) -> int:
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO ch_act_article (version_id, e_id, article_number, "
-            "marginal_note, text, ordinal, parent_e_id) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            "marginal_note, text, ordinal, parent_e_id, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             [(version_id, a.e_id, a.article_number, a.marginal_note, a.text,
-              a.ordinal, a.parent_e_id) for a in articles])
+              a.ordinal, a.parent_e_id, list(a.notes)) for a in articles])
     conn.execute("UPDATE ch_act_version SET article_count = %s WHERE version_id = %s",
                  (len(articles), version_id))
     return len(articles)

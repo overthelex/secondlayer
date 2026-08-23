@@ -52,6 +52,11 @@ _DASHES = str.maketrans({
     "–": "-", "—": "-", "‐": "-", "‑": "-", "−": "-", " ": " ",
 })
 _WS = re.compile(r"\s+")
+# A sentinel block-boundary separator for plain_text(), safe to split on
+# afterward: not whitespace (so _WS never touches it while it's still in
+# the pieces list) and not a character any real AKN document text would
+# ever contain.
+_LINE_BREAK = "\x00"
 
 # Structural (block-level) AKN elements: a numbered paragraph, a list item, a
 # list, the num/heading label on either of those. Crossing one of these is
@@ -155,23 +160,28 @@ def _text_of(element) -> str:
         _BLOCK_TAGS boundary therefore always counts as a separator,
         independent of the source's own whitespace right at that edge.
     """
+    return _WS.sub(" ", "".join(_walk_pieces(element, " "))).strip()
+
+
+def _walk_pieces(element, block_sep: str) -> list[str]:
+    """The recursive walk _text_of() runs, factored out so plain_text() can
+    reuse the exact same inline-vs-block logic with a different separator
+    (a sentinel that becomes a real newline, rather than a space) -- see
+    plain_text()'s docstring for why the two must not diverge."""
     pieces: list[str] = []
-
-    def walk(el) -> None:
-        if el.text:
-            pieces.append(el.text)
-        for child in el:
-            local = etree.QName(child).localname
-            if local in _BLOCK_TAGS:
-                pieces.append(" ")
-            walk(child)
-            if local in _BLOCK_TAGS:
-                pieces.append(" ")
-            if child.tail:
-                pieces.append(child.tail)
-
-    walk(element)
-    return _WS.sub(" ", "".join(pieces)).strip()
+    if element.text:
+        pieces.append(element.text)
+    for child in element:
+        local = etree.QName(child).localname
+        is_block = local in _BLOCK_TAGS
+        if is_block:
+            pieces.append(block_sep)
+        pieces.extend(_walk_pieces(child, block_sep))
+        if is_block:
+            pieces.append(block_sep)
+        if child.tail:
+            pieces.append(child.tail)
+    return pieces
 
 
 def _strip_notes(element) -> tuple[str, ...]:
@@ -257,13 +267,29 @@ def plain_text(xml: bytes) -> str:
     It is recorded honestly instead: empty text, same as parse_articles()
     already returns zero articles for a body-less document with no
     <article> elements to find.
+
+    Kept consistent with Article.text by construction, not just by intent:
+    this used to strip and join every raw itertext() fragment independently
+    (one fragment per line), which both re-introduced the inline-markup
+    word-splitting defect _text_of() exists to avoid (a <b> splitting a
+    word would come back as two separate LINES, not just two words) and
+    left <authorialNote> footnote text in the output after Article.text
+    stopped carrying it -- so ch_act_version.full_text and
+    ch_act_article.text disagreed about what an article actually says.
+    Notes are stripped the same way parse_articles() strips them (see
+    _strip_notes()), and the same _walk_pieces() logic that builds
+    Article.text builds this too, with "\\n" as the block-boundary
+    separator instead of " " -- one paragraph/item/p per line, same
+    inline-vs-block distinction, same word boundaries.
     """
     root = _root(xml)
     body = root.find(".//" + _AKN + "body")
     if body is None:
         return ""
-    lines = [t.strip() for t in body.itertext() if t and t.strip()]
-    return "\n".join(lines)
+    _strip_notes(body)
+    raw = "".join(_walk_pieces(body, _LINE_BREAK))
+    lines = [_WS.sub(" ", segment).strip() for segment in raw.split(_LINE_BREAK)]
+    return "\n".join(line for line in lines if line)
 
 
 def frbr_dates(xml: bytes) -> dict[str, str]:

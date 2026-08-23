@@ -100,6 +100,29 @@ def test_nested_e_ids_survive_the_round_trip(conn):
     assert nested >= 1
 
 
+def test_notes_survive_the_round_trip(conn):
+    """akn.Article.notes exists precisely so a future amendment-provenance
+    stage can read the "Fassung gemäss ..."/"in Kraft seit ..." citations
+    Fedlex embeds inline -- storing articles without it would compute the
+    provenance and then throw it away at the database boundary."""
+    vid = _version(conn)
+    articles = akn.parse_articles(FIXTURE.read_bytes())
+    with_notes = [a for a in articles if a.notes]
+    assert with_notes, "fixture must contain at least one article with notes"
+    parse_akn_stage.store_articles(conn, vid, articles)
+
+    stored_notes = conn.execute(
+        "SELECT notes FROM ch_act_article WHERE version_id=%s AND e_id=%s",
+        (vid, with_notes[0].e_id)).fetchone()[0]
+    assert stored_notes == list(with_notes[0].notes)
+
+    without_notes = [a for a in articles if not a.notes][0]
+    stored_empty = conn.execute(
+        "SELECT notes FROM ch_act_article WHERE version_id=%s AND e_id=%s",
+        (vid, without_notes.e_id)).fetchone()[0]
+    assert stored_empty == []
+
+
 # --- Decision 1: the version queue must carry the same discipline as the
 # decisions queue -- a column allowlist, a loud QueueWriteMissed, attempts
 # reset on a forward move, and failed_stage recorded. ---
