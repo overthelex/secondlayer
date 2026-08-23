@@ -91,3 +91,79 @@ def test_fail_moves_to_failed_on_the_last_attempt(conn):
     row = conn.execute(
         "SELECT stage, attempts FROM ch_court_decisions WHERE doc_id='a'").fetchone()
     assert row == ("failed", 3)
+
+
+def test_complete_rejects_reserved_column_last_error(conn):
+    _seed(conn, "a", "fetched")
+    with pytest.raises(ValueError, match="last_error"):
+        db.complete(conn, "a", "extracted", last_error="should not work")
+
+
+def test_complete_rejects_reserved_column_stage(conn):
+    _seed(conn, "a", "fetched")
+    with pytest.raises(ValueError, match="stage"):
+        db.complete(conn, "a", "extracted", stage="should not work")
+
+
+def test_complete_rejects_unknown_column(conn):
+    _seed(conn, "a", "fetched")
+    with pytest.raises(ValueError, match="unknown_col"):
+        db.complete(conn, "a", "extracted", unknown_col="should not work")
+
+
+def test_complete_still_works_with_allowed_columns(conn):
+    _seed(conn, "a", "fetched")
+    db.complete(conn, "a", "extracted", text_source="pdf", text_quality=0.91)
+    row = conn.execute(
+        "SELECT stage, text_source, text_quality FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row[0] == "extracted"
+    assert row[1] == "pdf"
+    assert abs(row[2] - 0.91) < 1e-6
+
+
+def test_retry_failed_restores_failed_row(conn):
+    _seed(conn, "a", "fetched", attempts=2)
+    db.fail(conn, "a", "network error", max_attempts=3)
+    row = conn.execute(
+        "SELECT stage, attempts, last_error FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row == ("failed", 3, "network error")
+
+    count = db.retry_failed(conn, "fetched")
+    row = conn.execute(
+        "SELECT stage, attempts, last_error FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row == ("fetched", 0, None)
+    assert count == 1
+
+
+def test_retry_failed_respects_spider_filter(conn):
+    _seed(conn, "a", "fetched", spider="ZG_Obergericht", attempts=2)
+    _seed(conn, "b", "fetched", spider="CH_BVGer", attempts=2)
+    db.fail(conn, "a", "error", max_attempts=3)
+    db.fail(conn, "b", "error", max_attempts=3)
+
+    count = db.retry_failed(conn, "fetched", spider="CH_BVGer")
+    assert count == 1
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='b'").fetchone()[0] == "fetched"
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] == "failed"
+
+
+def test_retry_failed_leaves_non_failed_rows_untouched(conn):
+    _seed(conn, "a", "indexed")
+    _seed(conn, "b", "fetched", attempts=2)
+    db.fail(conn, "b", "error", max_attempts=3)
+
+    count = db.retry_failed(conn, "fetched")
+    assert count == 1
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] == "indexed"
+
+
+def test_retry_failed_returns_row_count(conn):
+    for i in range(3):
+        _seed(conn, f"doc{i}", "fetched", attempts=2)
+        db.fail(conn, f"doc{i}", "error", max_attempts=3)
+
+    count = db.retry_failed(conn, "fetched")
+    assert count == 3

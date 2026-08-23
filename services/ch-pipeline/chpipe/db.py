@@ -16,6 +16,16 @@ _CLAIM_COLUMNS = (
     "languages, text_source, text_quality, pdf_sha256, attempts"
 )
 
+# Columns that complete() is allowed to write through **fields.
+# Reserved columns (stage, last_error, stage_updated_at, updated_at) are managed
+# by complete() itself and cannot be passed in **fields.
+_COMPLETE_ALLOWED_COLUMNS = frozenset({
+    "full_text", "text_source", "text_quality", "pdf_sha256",
+    "decision_date", "abstract", "docket_number", "canton",
+    "html_url", "pdf_url", "json_url", "chamber", "court_code",
+    "languages", "metadata_json"
+})
+
 
 def connect(settings: Settings) -> psycopg.Connection:
     return psycopg.connect(settings.dsn, autocommit=True, row_factory=dict_row)
@@ -47,6 +57,11 @@ def claim(conn, stage: str, limit: int, spider: str | None = None,
 def complete(conn, doc_id: str, next_stage: str, **fields) -> None:
     """Move a row to its next stage, writing any produced fields in the same
     statement so a crash cannot leave the stage ahead of the data."""
+    # Guard against reserved columns and injection via unknown column names.
+    for column in fields:
+        if column not in _COMPLETE_ALLOWED_COLUMNS:
+            raise ValueError(f"complete() does not allow column '{column}'")
+
     assignments = ["stage = %s", "last_error = NULL", "stage_updated_at = now()",
                    "updated_at = now()"]
     params: list = [next_stage]
