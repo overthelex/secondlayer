@@ -193,7 +193,9 @@ def run(settings: Settings, limit: int | None = None,
     return asyncio.run(_run_async(settings, limit, spider))
 
 
-if __name__ == "__main__":
+def main() -> FetchReport:
+    """Entry point. A function, not an `if __name__` block, so the
+    CHPIPE_SPIDER contract every stage shares is reachable from a test."""
     import os
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -202,3 +204,8 @@ if __name__ == "__main__":
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
     log.info("html=%d pdf=%d failed=%d bytes=%d", result.fetched_html,
              result.fetched_pdf, result.failed, result.bytes_written)
+    return result
+
+
+if __name__ == "__main__":
+    main()

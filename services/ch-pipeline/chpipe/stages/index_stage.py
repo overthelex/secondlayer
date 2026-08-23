@@ -170,22 +170,27 @@ ALL_SPIDERS = [
 ]
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> IndexReport:
+    """Entry point. Kept as a function, not an `if __name__` block, so the
+    spider-selection rule below is reachable from a test.
+
+    argv wins when given, since it is the only way to pass more than one
+    spider ("python -m chpipe.stages.index_stage A B C" -- genuinely useful
+    and kept). Otherwise fall back to CHPIPE_SPIDER, the single-spider env
+    var every other stage honours and the one run-stage.sh sets. Without
+    that fallback, `./run-stage.sh index <spider>` silently ran over all 54
+    spiders, because run-stage.sh invokes `python3 -m
+    chpipe.stages.index_stage` with no extra argv at all -- it only ever
+    exported CHPIPE_SPIDER, which the old block never read. That bug shipped
+    once already and walked the whole corpus; it now has a test.
+    """
     import os
     import sys
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    # argv wins when given, since it is the only way to pass more than one
-    # spider ("python -m chpipe.stages.index_stage A B C" -- genuinely
-    # useful and kept). Otherwise fall back to CHPIPE_SPIDER, the
-    # single-spider env var fetch_stage/extract_stage/ocr_stage/load_stage's
-    # __main__ blocks already honour and the one run-stage.sh sets. Without
-    # this fallback, `./run-stage.sh index <spider>` silently ran over all
-    # 54 spiders regardless of the argument, because run-stage.sh invokes
-    # `python3 -m chpipe.stages.index_stage` with no extra argv at all --
-    # it only ever exported CHPIPE_SPIDER, which this block never read.
-    if len(sys.argv) > 1:
-        selected = sys.argv[1:]
+    args = sys.argv[1:] if argv is None else argv
+    if args:
+        selected = list(args)
     elif os.environ.get("CHPIPE_SPIDER"):
         selected = [os.environ["CHPIPE_SPIDER"]]
     else:
@@ -193,3 +198,8 @@ if __name__ == "__main__":
     result = run(Settings.from_env(), selected)
     log.info("inserted=%d updated=%d failed=%d", result.inserted, result.updated,
              result.failed)
+    return result
+
+
+if __name__ == "__main__":
+    main()

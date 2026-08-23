@@ -139,7 +139,9 @@ def run(settings: Settings, limit: int | None = None,
     return report
 
 
-if __name__ == "__main__":
+def main() -> OcrReport:
+    """Entry point. A function, not an `if __name__` block, so the
+    CHPIPE_SPIDER contract every stage shares is reachable from a test."""
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     result = run(Settings.from_env(),
@@ -147,3 +149,8 @@ if __name__ == "__main__":
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
     log.info("recovered=%d still_bad=%d failed=%d in %.0fs", result.recovered,
              result.still_bad, result.failed, result.seconds)
+    return result
+
+
+if __name__ == "__main__":
+    main()
