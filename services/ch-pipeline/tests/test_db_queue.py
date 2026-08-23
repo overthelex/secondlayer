@@ -5,7 +5,10 @@ import psycopg
 import pytest
 from chpipe import db
 
-MIGRATION = pathlib.Path("mcp_backend/src/migrations/196_ch_court_pipeline.sql")
+# Derive repo root from this file's location: services/ch-pipeline/tests/test_db_queue.py
+# is 3 levels down from the repo root
+_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
+MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set"
