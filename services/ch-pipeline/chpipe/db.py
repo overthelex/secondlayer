@@ -251,3 +251,107 @@ def retry_failed(conn, stage: str | None = None, spider: str | None = None) -> i
         sql += " AND spider = %s"
         params.append(spider)
     return conn.execute(sql, params).rowcount
+
+
+# ---------------------------------------------------------------------------
+# ch_act_version queue: the fetch-xml / parse-akn pipeline's queue, over a
+# second table. Same discipline as the ch_court_decisions queue above -- a
+# column allowlist on the dynamic SET, and a loud QueueWriteMissed on any
+# keyed write that matches no row -- because both defects were found, the
+# hard way, in the decisions pipeline first (see claim()'s and complete()'s
+# docstrings above) and there is no reason this table gets to relearn them.
+#
+# One thing this queue does NOT need that the decisions queue does: an
+# unkeyed-row guard and a retry backoff. version_id is a bigserial primary
+# key every row has by construction (there is no legacy population claimed
+# but never written back, unlike doc_id on ch_court_decisions), and
+# ch_act_version carries no stage_updated_at column for a backoff predicate
+# to key off -- see migration 197. Both omissions are deliberate, not
+# oversights carried over from a copy-paste.
+# ---------------------------------------------------------------------------
+
+_CLAIM_VERSION_COLUMNS = (
+    "version_id, act_id, lang, date_applicability, xml_url, attempts"
+)
+
+# Columns complete_version() is allowed to write through **fields. Reserved
+# columns (stage, last_error, attempts, failed_stage, updated_at) are managed
+# by complete_version() itself and cannot be passed in **fields -- see
+# _COMPLETE_ALLOWED_COLUMNS above for why an allowlist exists at all: without
+# one, a caller passing a column complete_version() already sets
+# unconditionally produces two assignments to the same column and Postgres
+# rejects the whole UPDATE.
+_COMPLETE_VERSION_ALLOWED_COLUMNS = frozenset({
+    "akn_xml", "fetched_at", "full_text",
+})
+
+
+def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3) -> list[dict]:
+    """The same queue discipline as claim(), against ch_act_version."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"SELECT {_CLAIM_VERSION_COLUMNS} FROM ch_act_version "
+            "WHERE stage = %s AND attempts < %s "
+            "ORDER BY act_id, date_applicability, lang LIMIT %s FOR UPDATE SKIP LOCKED",
+            (stage, max_attempts, limit))
+        return cur.fetchall()
+
+
+def _require_one_version(cursor, version_id: int, operation: str) -> None:
+    """The version-queue twin of _require_one() above: a keyed write that
+    matches no row is not a quiet no-op. Without this, claim_versions()
+    could hand out a row that complete_version()/fail_version() silently
+    fail to write back, and the stage would re-claim it forever while
+    counting every non-write as a success -- the exact Critical finding
+    _require_one() exists to close on the decisions queue."""
+    if cursor.rowcount != 1:
+        raise QueueWriteMissed(
+            f"{operation} matched {cursor.rowcount} rows for "
+            f"version_id={version_id!r}; the row is gone or was never keyed")
+
+
+def complete_version(conn, version_id: int, next_stage: str, **fields) -> None:
+    """Move a version to its next stage, writing any produced fields in the
+    same UPDATE statement -- see complete()'s docstring for why a single
+    statement matters (a crash cannot leave the stage ahead of the data) and
+    why the attempt budget resets on every forward move (a row that survived
+    a transient fetch retry must not arrive at parse with its budget already
+    spent). failed_stage is cleared alongside attempts for the same reason:
+    a row that just moved forward is no longer failed."""
+    for column in fields:
+        if column not in _COMPLETE_VERSION_ALLOWED_COLUMNS:
+            raise ValueError(f"complete_version() does not allow column '{column}'")
+
+    assignments = ["stage = %s", "last_error = NULL", "attempts = 0",
+                   "failed_stage = NULL", "updated_at = now()"]
+    params: list = [next_stage]
+    for column, value in fields.items():
+        assignments.append(f"{column} = %s")
+        params.append(value)
+    params.append(version_id)
+    cursor = conn.execute(
+        f"UPDATE ch_act_version SET {', '.join(assignments)} WHERE version_id = %s",
+        params)
+    _require_one_version(cursor, version_id, f"complete_version(-> {next_stage})")
+
+
+def fail_version(conn, version_id: int, error: str, max_attempts: int) -> None:
+    """Record a failed attempt, and -- once attempts run out -- which stage
+    the row died in. Same shape as fail(): the row keeps its stage while
+    attempts remain (a transient error retries) and moves to 'failed' only
+    on the last one (a permanent error stops consuming the queue).
+    failed_stage lets db.retry_failed()'s sibling send the row back to where
+    it actually died instead of to the front of the queue."""
+    cursor = conn.execute(
+        """
+        UPDATE ch_act_version
+           SET attempts = attempts + 1,
+               last_error = %s,
+               failed_stage = CASE WHEN attempts + 1 >= %s AND stage <> 'failed'
+                                   THEN stage ELSE failed_stage END,
+               stage = CASE WHEN attempts + 1 >= %s THEN 'failed' ELSE stage END,
+               updated_at = now()
+         WHERE version_id = %s
+        """,
+        (error[:2000], max_attempts, max_attempts, version_id))
+    _require_one_version(cursor, version_id, "fail_version()")
