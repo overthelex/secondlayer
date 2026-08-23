@@ -11,6 +11,13 @@ import pathlib
 from dataclasses import dataclass
 
 
+def _backoff(raw: str | None) -> tuple[int, ...]:
+    """"1,5,30" -> (1, 5, 30). An empty value means no wait at all."""
+    if raw is None:
+        return (1, 5, 30)
+    return tuple(int(part) for part in raw.split(",") if part.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     dsn: str
@@ -20,6 +27,11 @@ class Settings:
     ocr_workers: int
     load_ceiling: float
     max_attempts: int
+    # Spec section 8: a failed row waits this many minutes before it is
+    # offered again, indexed by attempt number. Set CHPIPE_RETRY_BACKOFF_MINUTES
+    # to an empty string to disable the wait entirely (tests, and a
+    # maintenance window where the source is known to be healthy).
+    retry_backoff_minutes: tuple[int, ...] = (1, 5, 30)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -34,4 +46,6 @@ class Settings:
             ocr_workers=int(os.environ.get("CHPIPE_OCR_WORKERS", "2")),
             load_ceiling=float(os.environ.get("CHPIPE_LOAD_CEILING", "6.0")),
             max_attempts=int(os.environ.get("CHPIPE_MAX_ATTEMPTS", "3")),
+            retry_backoff_minutes=_backoff(
+                os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
         )

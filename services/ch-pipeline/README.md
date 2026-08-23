@@ -57,15 +57,49 @@ a healthy one:
 
 ## Retrying failures
 
-Failed rows keep their `last_error`. Read it before retrying:
+`failed` is reachable from five places, so a failed row records both WHY
+(`last_error`) and WHERE (`failed_stage`). Read both before retrying:
 
-    psql -c "SELECT last_error, count(*) FROM ch_court_decisions
-             WHERE stage='failed' GROUP BY 1 ORDER BY 2 DESC LIMIT 20"
+    psql -c "SELECT failed_stage, count(*) FROM ch_court_decisions
+             WHERE stage='failed' GROUP BY 1 ORDER BY 2 DESC"
+
+    psql -c "SELECT failed_stage, last_error, count(*) FROM ch_court_decisions
+             WHERE stage='failed' GROUP BY 1,2 ORDER BY 3 DESC LIMIT 20"
+
+(`chpipe.db.failed_by_stage(conn)` is the first of those as a function.)
 
 Then, once the cause is understood:
 
     python3 -c "from chpipe.config import Settings; from chpipe import db; \
-                c=db.connect(Settings.from_env()); print(db.retry_failed(c,'indexed'))"
+                c=db.connect(Settings.from_env()); print(db.retry_failed(c))"
+
+`retry_failed()` with no stage returns **each row to the stage it actually
+failed in**. Do not pass a stage unless you mean it: the earlier version of
+this section hardcoded `'indexed'`, which sends an OCR-terminal row back to
+the front of the queue and re-runs days of OCR on a document that has
+already been read twice.
+
+`last_error` is preserved across a retry — it is the evidence the decision
+to retry was based on, and clearing it on the way out would destroy it.
+`stage_updated_at` IS touched, so a retried row does not look stale to the
+progress checks below. Rows whose `failed_stage` is NULL are skipped: they
+never entered a queue stage (`index` found neither HTML nor PDF for them),
+so they need another `index` run, not another `fetch`.
+
+### Retry timing
+
+A failed row is not offered again immediately. Per spec section 8 it waits
+**1 minute after the first failure, 5 after the second, 30 after the third**
+(`CHPIPE_RETRY_BACKOFF_MINUTES`, default `1,5,30`; set it to an empty value
+to disable). This is enforced in `db.claim` against `stage_updated_at`,
+which `db.fail` already stamps — no extra column. Without it a 30-second
+source hiccup burns a document's whole retry budget within seconds of the
+same run and retires it as permanently broken.
+
+A consequence worth knowing at the keyboard: a row does not exhaust its
+three attempts inside one `run()` any more. It fails, the run drains, and
+the row is picked up by a later run. Schedule stages to be re-run rather
+than expecting one invocation to finish everything.
 
 ## Gates
 

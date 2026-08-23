@@ -70,7 +70,8 @@ def run(settings: Settings, limit: int | None = None,
                 if size <= 0:
                     break
                 rows = db.claim(conn, "fetched", limit=size, spider=spider,
-                                max_attempts=settings.max_attempts)
+                                max_attempts=settings.max_attempts,
+                                backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
                 futures = {pool.submit(extract_one, settings, r): r for r in rows}
@@ -91,10 +92,24 @@ def run(settings: Settings, limit: int | None = None,
                     row = futures[future]
                     try:
                         text, quality, next_stage = future.result()
-                        fields = {"text_quality": quality}
-                        if next_stage == "extracted":
-                            fields["full_text"] = text
-                        db.complete(conn, row["doc_id"], next_stage, **fields)
+                        if next_stage == "failed":
+                            # Bad-quality HTML with no scan behind it: there
+                            # is nothing left to try, so this is terminal --
+                            # but the score that condemned it is the whole
+                            # diagnosis and must survive. db.complete()
+                            # clears last_error as part of its own SET list,
+                            # so it cannot be used here.
+                            db.mark_failed(
+                                conn, row["doc_id"],
+                                f"html quality {quality:.4f} below "
+                                f"{text_quality.ACCEPT_THRESHOLD} and there is "
+                                "no scan behind an HTML page to OCR",
+                                from_stage="fetched", text_quality=quality)
+                        else:
+                            fields = {"text_quality": quality}
+                            if next_stage == "extracted":
+                                fields["full_text"] = text
+                            db.complete(conn, row["doc_id"], next_stage, **fields)
                     except Exception as exc:                    # noqa: BLE001
                         log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
                         try:

@@ -34,3 +34,23 @@ def test_defaults_match_the_eight_core_prod_box(monkeypatch):
     assert s.cpu_workers == 3
     assert s.ocr_workers == 2
     assert s.load_ceiling == 6.0
+
+
+def test_retry_backoff_defaults_to_the_spec_schedule(monkeypatch):
+    """Spec section 8: 1 minute, then 5, then 30."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.delenv("CHPIPE_RETRY_BACKOFF_MINUTES", raising=False)
+    assert Settings.from_env().retry_backoff_minutes == (1, 5, 30)
+
+
+def test_retry_backoff_can_be_overridden(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_RETRY_BACKOFF_MINUTES", "2,10")
+    assert Settings.from_env().retry_backoff_minutes == (2, 10)
+
+
+def test_retry_backoff_can_be_disabled(monkeypatch):
+    """An explicit opt-out for a maintenance window, not the default."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_RETRY_BACKOFF_MINUTES", "")
+    assert Settings.from_env().retry_backoff_minutes == ()

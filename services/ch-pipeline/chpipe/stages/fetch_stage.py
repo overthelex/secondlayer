@@ -173,7 +173,8 @@ async def _run_async(settings: Settings, limit: int | None,
                 if size <= 0:
                     break
                 rows = db.claim(conn, "indexed", limit=size, spider=spider,
-                                max_attempts=settings.max_attempts)
+                                max_attempts=settings.max_attempts,
+                                backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
 

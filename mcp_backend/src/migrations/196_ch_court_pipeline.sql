@@ -15,6 +15,7 @@ ALTER TABLE public.ch_court_decisions
     ADD COLUMN IF NOT EXISTS stage             text,
     ADD COLUMN IF NOT EXISTS attempts          smallint NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS last_error        text,
+    ADD COLUMN IF NOT EXISTS failed_stage      text,
     ADD COLUMN IF NOT EXISTS stage_updated_at  timestamptz;
 
 DO $$ BEGIN
@@ -29,6 +30,14 @@ DO $$ BEGIN
         ADD CONSTRAINT ch_court_stage_chk
         CHECK (stage IS NULL OR stage IN
                ('indexed','fetched','extracted','ocr_pending','loaded','failed'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+    ALTER TABLE public.ch_court_decisions
+        ADD CONSTRAINT ch_court_failed_stage_chk
+        CHECK (failed_stage IS NULL OR failed_stage IN
+               ('indexed','fetched','extracted','ocr_pending'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -80,6 +89,12 @@ CREATE INDEX IF NOT EXISTS idx_ch_court_stage
 CREATE INDEX IF NOT EXISTS idx_ch_court_quality
     ON public.ch_court_decisions (text_quality) WHERE text_quality IS NOT NULL;
 
+COMMENT ON COLUMN public.ch_court_decisions.failed_stage IS
+    'the stage a failed row was in when it failed; NULL means it never entered '
+    'a queue stage (index found no body). db.retry_failed() returns a row to '
+    'this stage, so recovery is targeted instead of sending every failure back '
+    'to the front of the queue -- which for an OCR-terminal row would re-run '
+    'days of OCR.';
 COMMENT ON COLUMN public.ch_court_decisions.doc_id IS
     'entscheidsuche document id, e.g. ZG_OG_001_Z1-2020-5_2022-02-18';
 COMMENT ON COLUMN public.ch_court_decisions.text_source IS

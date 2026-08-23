@@ -64,10 +64,13 @@ def _seed_unkeyed(conn, n, stage, spider="S"):
              f"https://x/legacy{i}.pdf", "x" * 500))
 
 
-def _settings(tmp_path):
+def _settings(tmp_path, backoff=()):
+    """backoff defaults to () so a single run() call can exercise a row's
+    whole retry budget; production keeps the spec's 1/5/30-minute wait."""
     return Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=tmp_path,
                     http_concurrency=2, cpu_workers=1, ocr_workers=1,
-                    load_ceiling=0.0, max_attempts=3)
+                    load_ceiling=0.0, max_attempts=3,
+                    retry_backoff_minutes=backoff)
 
 
 @pytest.fixture
@@ -126,7 +129,12 @@ def test_a_keyed_row_that_cannot_be_written_still_terminates(conn, tmp_path,
                                                              counted_claim):
     """The other half of the same rule: a row that IS claimable but whose
     write keeps failing must burn its attempts budget and leave the stage,
-    not be re-claimed forever. Three attempts, three claims, then done."""
+    not be re-claimed forever. Three attempts, three claims, then done.
+
+    The retry backoff is disabled here so the whole budget is spent inside
+    one run(); with the production 1/5/30-minute wait the row would simply
+    not be re-offered until the next run, which is the point of the wait.
+    """
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, full_text) "
         "VALUES ('e:k','S','k','extracted',%s)", ("x" * 500,))

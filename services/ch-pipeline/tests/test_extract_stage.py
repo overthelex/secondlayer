@@ -169,3 +169,33 @@ def test_a_db_complete_failure_for_one_row_does_not_abort_the_rest_of_the_batch(
 
     assert report.extracted == 2
     assert report.failed == 1
+
+
+def test_a_terminal_html_failure_keeps_its_diagnosis_and_its_origin(
+        conn, tmp_path):
+    """extract_stage used db.complete(..., "failed"), which clears
+    last_error as part of its own SET list -- so the quality score that
+    condemned the document, and the fact that it died in extraction at all,
+    both vanished. Bad-quality HTML is one of the two most diagnostically
+    interesting failure classes in the pipeline and it was landing in the
+    README triage query as an anonymous NULL bucket."""
+    spider = "S"
+    (tmp_path / spider).mkdir()
+    (tmp_path / spider / "junk.html").write_text("<html><body>...</body></html>")
+    _seed_fetched(conn, "junk", spider, "html")
+
+    settings = Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=tmp_path,
+                        http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                        load_ceiling=99.0, max_attempts=3,
+                        retry_backoff_minutes=())
+    report = extract_stage.run(settings, spider=spider, limit=1)
+
+    row = conn.execute(
+        "SELECT stage, failed_stage, last_error, text_quality, attempts "
+        "FROM ch_court_decisions WHERE doc_id='junk'").fetchone()
+    assert row["stage"] == "failed"
+    assert row["failed_stage"] == "fetched"
+    assert row["last_error"] and "quality" in row["last_error"]
+    assert row["text_quality"] is not None
+    assert row["attempts"] == 0, "a terminal verdict is not a spent retry"
+    assert report.failed == 1

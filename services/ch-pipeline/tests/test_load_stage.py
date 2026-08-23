@@ -66,9 +66,13 @@ def test_refuses_to_load_a_row_whose_text_vanished(conn, settings):
     assert report.loaded == 0
     assert report.skipped_empty == 1
     row = conn.execute(
-        "SELECT stage, last_error FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+        "SELECT stage, last_error, failed_stage FROM ch_court_decisions "
+        "WHERE doc_id='a'").fetchone()
     assert row["stage"] == "failed"
     assert row["last_error"]
+    # And the origin, so retry_failed can send it back to 'extracted' rather
+    # than to the front of the queue.
+    assert row["failed_stage"] == "extracted"
 
 
 def test_leaves_other_stages_alone(conn, settings):

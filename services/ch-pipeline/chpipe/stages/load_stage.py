@@ -46,15 +46,15 @@ def run(settings: Settings, limit: int | None = None,
             if size <= 0:
                 break
             rows = db.claim(conn, "extracted", limit=size, spider=spider,
-                            max_attempts=settings.max_attempts)
+                            max_attempts=settings.max_attempts,
+                            backoff_minutes=settings.retry_backoff_minutes)
             if not rows:
                 break
             # Each row is resolved independently. load_stage does a per-row
-            # length query and two writes (db.complete, and -- for the
-            # empty-text case -- a follow-up UPDATE of last_error); any one
-            # of those raising for a single row (e.g. a dropped connection,
-            # or a value that trips a constraint) must not abort the rest of
-            # the batch. This is the same defect class already fixed in
+            # length query and one write (db.complete for the good case,
+            # db.mark_failed for the empty-text case); either raising for a
+            # single row (e.g. a dropped connection, or a value that trips a
+            # constraint) must not abort the rest of the batch. This is the same defect class already fixed in
             # index_stage, fetch_stage and extract_stage: an exception
             # escaping the per-row work via the loop body would kill the
             # whole run. Genuine exceptions are routed to db.fail() -- which
@@ -76,15 +76,14 @@ def run(settings: Settings, limit: int | None = None,
                         # has none by the time load claims it, something
                         # upstream is broken, and marking it loaded would
                         # hide that -- fail it immediately and record why.
-                        # db.complete() clears last_error as part of its own
-                        # SET list, so the explicit UPDATE below MUST run
-                        # after it, or the error text it just wrote would be
-                        # wiped out immediately.
-                        db.complete(conn, row["doc_id"], "failed")
-                        conn.execute(
-                            "UPDATE ch_court_decisions SET last_error = %s "
-                            "WHERE doc_id = %s",
-                            (f"extracted but text is {length} chars", row["doc_id"]))
+                        # This used to be db.complete(..., "failed") plus a
+                        # follow-up UPDATE, because complete() clears
+                        # last_error; db.mark_failed() is the one helper all
+                        # three terminal call sites now share.
+                        db.mark_failed(
+                            conn, row["doc_id"],
+                            f"extracted but text is {length} chars",
+                            from_stage="extracted")
                         report.skipped_empty += 1
                         continue
                     db.complete(conn, row["doc_id"], "loaded")

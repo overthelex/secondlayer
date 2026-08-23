@@ -157,3 +157,27 @@ def test_a_render_failure_keeps_the_document_queued_instead_of_closing_it_failed
     assert report.failed == 1
     assert report.still_bad == 0
     assert report.recovered == 0
+
+
+def test_an_unreadable_scan_keeps_its_diagnosis_and_its_origin(
+        conn, tmp_path, monkeypatch):
+    """The other call site that used db.complete(..., "failed") and so lost
+    last_error: a document OCR read and still could not make sense of."""
+    spider = "S"
+    (tmp_path / spider).mkdir()
+    (tmp_path / spider / "d.pdf").write_bytes(b"%PDF-1.4 fake")
+    _seed_ocr_pending(conn, "d", spider)
+
+    monkeypatch.setattr(ocr_stage, "_ocr_one", lambda s, r: ("noise", 0.11))
+
+    report = ocr_stage.run(_settings(os.environ["CHPIPE_TEST_DSN"], tmp_path),
+                           spider=spider, limit=1)
+
+    row = conn.execute(
+        "SELECT stage, failed_stage, last_error, text_quality, text_source "
+        "FROM ch_court_decisions WHERE doc_id='d'").fetchone()
+    assert row["stage"] == "failed"
+    assert row["failed_stage"] == "ocr_pending"
+    assert row["last_error"] and "quality" in row["last_error"]
+    assert row["text_source"] == "ocr"
+    assert report.still_bad == 1

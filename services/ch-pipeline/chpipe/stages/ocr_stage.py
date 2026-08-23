@@ -80,7 +80,8 @@ def run(settings: Settings, limit: int | None = None,
                 if size <= 0:
                     break
                 rows = db.claim(conn, "ocr_pending", limit=size, spider=spider,
-                                max_attempts=settings.max_attempts)
+                                max_attempts=settings.max_attempts,
+                                backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
                 futures = {pool.submit(_ocr_one, settings, r): r for r in rows}
@@ -107,9 +108,16 @@ def run(settings: Settings, limit: int | None = None,
                             # OCR had its turn and the result is still
                             # unusable. Keep the score so the corpus can be
                             # honest about which documents it failed to
-                            # read, rather than silently dropping them.
-                            db.complete(conn, row["doc_id"], "failed",
-                                        text_quality=quality, text_source="ocr")
+                            # read, rather than silently dropping them --
+                            # and keep the reason, which db.complete() would
+                            # have wiped along with last_error.
+                            db.mark_failed(
+                                conn, row["doc_id"],
+                                f"ocr quality {quality:.4f} below "
+                                f"{text_quality.ACCEPT_THRESHOLD}; the scan is "
+                                "not readable",
+                                from_stage="ocr_pending",
+                                text_quality=quality, text_source="ocr")
                             report.still_bad += 1
                     except Exception as exc:                    # noqa: BLE001
                         log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)

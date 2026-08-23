@@ -133,8 +133,15 @@ def test_retry_failed_restores_failed_row(conn):
 
     count = db.retry_failed(conn, "fetched")
     row = conn.execute(
-        "SELECT stage, attempts, last_error FROM ch_court_decisions WHERE doc_id='a'").fetchone()
-    assert row == ("fetched", 0, None)
+        "SELECT stage, attempts, last_error, stage_updated_at "
+        "FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row[0] == "fetched"
+    assert row[1] == 0
+    # last_error is deliberately preserved. The README tells the operator to
+    # read it before retrying; clearing it on the way out destroys the very
+    # evidence that decision was based on. complete() clears it on success.
+    assert row[2] == "network error"
+    assert row[3] is not None, "a retried row must not look stale to monitoring"
     assert count == 1
 
 
@@ -235,3 +242,163 @@ def test_complete_and_fail_still_succeed_for_a_real_row(conn):
     row = conn.execute(
         "SELECT stage, attempts FROM ch_court_decisions WHERE doc_id='a'").fetchone()
     assert row == ("extracted", 1)
+
+
+# --- Retry budget, retry delay, and where a row failed ---
+
+def test_complete_resets_the_attempt_budget_for_the_next_stage(conn):
+    """attempts is a per-stage budget, not a lifetime one. A row that
+    survived two transient fetch retries used to arrive at extract with one
+    attempt left for the remaining three stages."""
+    _seed(conn, "a", "indexed")
+    db.fail(conn, "a", "connection reset", max_attempts=3)
+    db.fail(conn, "a", "connection reset", max_attempts=3)
+    assert conn.execute(
+        "SELECT attempts FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] == 2
+
+    db.complete(conn, "a", "fetched", text_source="pdf")
+    assert conn.execute(
+        "SELECT attempts FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] == 0
+
+
+def test_a_row_that_just_failed_is_not_offered_again_immediately(conn):
+    """Spec section 8's 1/5/30-minute backoff. Without a time predicate the
+    same run re-claims a failed row on its very next iteration, so a
+    30-second source hiccup burns all three attempts within seconds."""
+    _seed(conn, "a", "indexed")
+    db.fail(conn, "a", "connection reset", max_attempts=3)
+    assert db.claim(conn, "indexed", limit=10) == []
+
+
+def test_the_row_comes_back_once_the_backoff_has_elapsed(conn):
+    _seed(conn, "a", "indexed")
+    db.fail(conn, "a", "connection reset", max_attempts=3)
+    conn.execute("UPDATE ch_court_decisions SET stage_updated_at = "
+                 "now() - interval '2 minutes' WHERE doc_id='a'")
+    assert [r["doc_id"] for r in db.claim(conn, "indexed", limit=10)] == ["a"]
+
+
+def test_the_second_attempt_waits_longer_than_the_first(conn):
+    """1 minute, then 5. Two minutes is enough after one failure and not
+    enough after two."""
+    _seed(conn, "a", "indexed", attempts=1)
+    db.fail(conn, "a", "connection reset", max_attempts=5)   # attempts -> 2
+    conn.execute("UPDATE ch_court_decisions SET stage_updated_at = "
+                 "now() - interval '2 minutes' WHERE doc_id='a'")
+    assert db.claim(conn, "indexed", limit=10, max_attempts=5) == []
+    conn.execute("UPDATE ch_court_decisions SET stage_updated_at = "
+                 "now() - interval '6 minutes' WHERE doc_id='a'")
+    assert len(db.claim(conn, "indexed", limit=10, max_attempts=5)) == 1
+
+
+def test_the_backoff_can_be_switched_off(conn):
+    _seed(conn, "a", "indexed")
+    db.fail(conn, "a", "connection reset", max_attempts=3)
+    assert len(db.claim(conn, "indexed", limit=10, backoff_minutes=())) == 1
+
+
+def test_a_row_that_never_failed_is_never_delayed(conn):
+    _seed(conn, "a", "indexed")
+    assert len(db.claim(conn, "indexed", limit=10)) == 1
+
+
+def test_fail_records_the_stage_the_row_died_in(conn):
+    """'failed' is reachable from five places and nothing recorded which, so
+    recovery could only send every failure to one caller-chosen stage."""
+    _seed(conn, "a", "ocr_pending", attempts=2)
+    db.fail(conn, "a", "tesseract crashed", max_attempts=3)
+    row = conn.execute(
+        "SELECT stage, failed_stage FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row == ("failed", "ocr_pending")
+
+
+def test_fail_does_not_record_an_origin_while_attempts_remain(conn):
+    _seed(conn, "a", "ocr_pending")
+    db.fail(conn, "a", "tesseract crashed", max_attempts=3)
+    assert conn.execute(
+        "SELECT failed_stage FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] is None
+
+
+def test_mark_failed_keeps_the_error_and_the_origin(conn):
+    """complete(..., 'failed') cleared last_error as part of its own SET
+    list, so two of the three terminal call sites lost the diagnosis."""
+    _seed(conn, "a", "fetched")
+    db.mark_failed(conn, "a", "html quality 0.31 below 0.55",
+                   from_stage="fetched", text_quality=0.31)
+    row = conn.execute(
+        "SELECT stage, failed_stage, last_error, text_quality "
+        "FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row[0] == "failed"
+    assert row[1] == "fetched"
+    assert "html quality 0.31" in row[2]
+    assert abs(row[3] - 0.31) < 1e-6
+
+
+def test_mark_failed_rejects_a_reserved_column(conn):
+    _seed(conn, "a", "fetched")
+    with pytest.raises(ValueError, match="last_error"):
+        db.mark_failed(conn, "a", "x", from_stage="fetched", last_error="no")
+
+
+def test_mark_failed_raises_when_it_updates_nothing(conn):
+    with pytest.raises(db.QueueWriteMissed, match="ghost"):
+        db.mark_failed(conn, "ghost", "x", from_stage="fetched")
+
+
+def test_retry_failed_sends_each_row_back_where_it_came_from(conn):
+    """The README's copy-paste example hardcoded 'indexed', which pushes an
+    OCR-terminal row back to the front of the queue and re-runs days of OCR
+    on a document that was already read twice."""
+    _seed(conn, "fetchfail", "indexed", attempts=2)
+    _seed(conn, "ocrfail", "ocr_pending", attempts=2)
+    db.fail(conn, "fetchfail", "404", max_attempts=3)
+    db.fail(conn, "ocrfail", "tesseract crashed", max_attempts=3)
+
+    assert db.retry_failed(conn) == 2
+    stages = dict(conn.execute(
+        "SELECT doc_id, stage FROM ch_court_decisions").fetchall())
+    assert stages["fetchfail"] == "indexed"
+    assert stages["ocrfail"] == "ocr_pending", \
+        "an OCR failure must not be sent back to the front of the queue"
+
+
+def test_retry_failed_clears_the_origin_once_the_row_is_requeued(conn):
+    _seed(conn, "a", "fetched", attempts=2)
+    db.fail(conn, "a", "boom", max_attempts=3)
+    db.retry_failed(conn)
+    assert conn.execute(
+        "SELECT failed_stage FROM ch_court_decisions WHERE doc_id='a'").fetchone()[0] is None
+
+
+def test_retry_failed_leaves_rows_with_no_origin_alone(conn):
+    """index marks a row failed when the listing offers neither HTML nor
+    PDF. It never entered a queue stage, so there is nowhere to send it
+    back to -- re-queueing just burns three more attempts against a listing
+    that still offers nothing. Re-run `index` for those."""
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, last_error) "
+        "VALUES ('e:n','S','n','failed','no body: listing offers neither html nor pdf')")
+    assert db.retry_failed(conn) == 0
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='n'").fetchone()[0] == "failed"
+
+
+def test_retry_failed_still_honours_an_explicit_stage(conn):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage) "
+        "VALUES ('e:n','S','n','failed')")
+    assert db.retry_failed(conn, "indexed") == 1
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions WHERE doc_id='n'").fetchone()[0] == "indexed"
+
+
+def test_failed_by_stage_groups_the_triage_query(conn):
+    _seed(conn, "a", "indexed", attempts=2)
+    _seed(conn, "b", "indexed", attempts=2)
+    _seed(conn, "c", "ocr_pending", attempts=2)
+    for doc_id in ("a", "b", "c"):
+        db.fail(conn, doc_id, "boom", max_attempts=3)
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage) "
+        "VALUES ('e:n','S','n','failed')")
+    assert dict(db.failed_by_stage(conn)) == {"indexed": 2, "ocr_pending": 1, None: 1}
