@@ -69,6 +69,21 @@ def test_an_empty_document_yields_no_articles():
     assert akn.parse_articles(empty) == []
 
 
+def test_a_real_en_dash_numbered_article_normalises_to_a_plain_hyphen():
+    """art_637_639 is a real repealed OR article whose <num> reads
+    'Art. 637–639' with an actual en dash (U+2013) in the source, not a
+    hand-typed one. article_number must come back with a plain hyphen."""
+    arts = akn.parse_articles(XML)
+    dashed = [a for a in arts if a.e_id == "art_637_639"]
+    assert dashed, "fixture must contain the real dash-numbered article"
+    assert dashed[0].article_number == "637-639"
+
+
+def test_normalise_number_folds_en_and_em_dashes():
+    assert akn.normalise_number("Art. 111–14") == "111-14"
+    assert akn.normalise_number("Art. 111—14") == "111-14"
+
+
 def test_plain_text_raises_rather_than_falling_back_to_the_whole_document():
     """A missing <body> must not silently pull <meta> (FRBR dates,
     identifiers) into what a later stage stores as the edition's text."""
