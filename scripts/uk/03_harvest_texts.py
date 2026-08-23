@@ -290,7 +290,7 @@ SELECT id,
   FROM uk_legislation
  WHERE version_count = 0
    AND document_status IS NOT NULL
-   AND document_status NOT LIKE 'fetch-%'
+   AND left(document_status, 6) <> 'fetch-'
    AND year IS NOT NULL
 ON CONFLICT (leg_id, valid_from) DO NOTHING
 """
@@ -302,7 +302,7 @@ SELECT l.id, v.valid_from
     ON v.leg_id = l.id AND v.is_current
  WHERE v.provision_count IS NULL
    AND l.document_status IS NOT NULL
-   AND l.document_status NOT LIKE 'fetch-%'
+   AND left(l.document_status, 6) <> 'fetch-'
 """
 
 INS_PROV = """
@@ -369,9 +369,11 @@ def main():
     q += " ORDER BY l.id"
     if args.limit:
         q += f" LIMIT {int(args.limit)}"
-    # params must be None, not [], when there are no binds: the worklist contains a
-    # literal % from LIKE 'fetch-%', which psycopg2 reads as a placeholder the moment
-    # any parameter sequence is passed.
+    # The worklist no longer contains a literal %. It used to, in LIKE 'fetch-%',
+    # and psycopg2 reads that as a placeholder the moment any parameter sequence is
+    # passed: passing None when there were no binds covered the plain case but the
+    # run still died with IndexError as soon as --types was used. left(...) <> is
+    # equivalent and has nothing for the driver to interpolate.
     cur.execute(q, params or None)
     work = cur.fetchall()
     print(f"outstanding items: {len(work)}", flush=True)
