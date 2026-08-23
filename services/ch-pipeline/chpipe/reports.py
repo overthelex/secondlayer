@@ -29,6 +29,8 @@ def gate_a(conn) -> dict:
 
       total, by_source, ocr_pending, failed, mean_quality
           -- rows that reached extraction (text_quality IS NOT NULL).
+             mean_quality is None when `total` is 0: nothing was measured,
+             which is not the same claim as "the quality was zero".
              by_source/ocr_pending/failed are shares OF `total`; `failed`
              here means bad-quality HTML with nothing left to try.
 
@@ -56,7 +58,15 @@ def gate_a(conn) -> dict:
         "ocr_pending": row["ocr_pending"],
         "failed": row["extraction_failed"],
         "pre_extraction_failed": row["pre_extraction_failed"],
-        "mean_quality": float(row["mean_quality"]) if row["mean_quality"] else 0.0,
+        # None, never 0.0. A gate whose population is empty has not measured
+        # anything, and "mean_quality: 0.0" reads as "we measured, and the
+        # quality was zero" -- the single worst thing a verification gate can
+        # say. avg() over no rows is SQL NULL for exactly this reason; passing
+        # it through is the honest answer. (The old `if row["mean_quality"]`
+        # also mapped a genuine measured 0.0 to 0.0, which was harmless, and
+        # an empty population to 0.0, which was not.)
+        "mean_quality": (None if row["mean_quality"] is None
+                         else float(row["mean_quality"])),
     }
 
 

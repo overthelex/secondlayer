@@ -144,3 +144,25 @@ def test_completeness_reports_snapshot_keys_that_match_no_spider_as_uncovered(co
     # the matched key is unaffected -- it shows up in per_spider, not folded
     # into uncovered
     assert {r["spider"] for r in result["per_spider"]} == {"GE_Gerichte"}
+
+
+def test_gate_a_reports_no_mean_quality_when_nothing_was_measured(conn):
+    """A gate with an empty population must return None, not a number that
+    reads as "we measured, and the quality was zero" -- which is the single
+    worst thing a verification gate can say. avg() over no rows is SQL NULL
+    for exactly this reason."""
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage) "
+        "VALUES ('e:a','S','a','indexed')")
+    g = reports.gate_a(conn)
+    assert g["total"] == 0
+    assert g["mean_quality"] is None
+
+
+def test_gate_a_reports_a_genuine_zero_as_zero(conn):
+    """The other direction: a measured 0.0 is a real finding and must not be
+    confused with an absent one."""
+    _row(conn, "a", "S", "pdf", 0.0, "failed")
+    g = reports.gate_a(conn)
+    assert g["total"] == 1
+    assert g["mean_quality"] == 0.0

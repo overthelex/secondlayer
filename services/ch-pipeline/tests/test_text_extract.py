@@ -222,3 +222,25 @@ def test_the_real_page_stripped_of_its_declaration_is_still_not_mojibake():
     assert "Graubünden" in text
     assert "GraubÃ¼nden" not in text
     assert not text_quality.is_mojibake(text)
+
+
+def test_the_control_character_strip_is_equivalent_to_the_category_check():
+    """The regex replaced a per-character `unicodedata.category(c) != "Cc"`
+    loop (10.576 ms/doc -> 0.444 ms/doc on the real fixture, 23.8x). Cc is
+    exactly U+0000..U+001F plus U+007F..U+009F, so the two must agree on
+    every one of those 160 code points, and TAB/LF/CR must survive both."""
+    import unicodedata
+    sample = "".join(chr(c) for c in range(0x00, 0xA1))
+    expected = "".join(
+        c for c in sample
+        if c in "\n\r\t" or unicodedata.category(c) != "Cc")
+    assert text_extract._strip_control_characters(sample) == expected
+    for keeper in ("\t", "\n", "\r"):
+        assert keeper in text_extract._strip_control_characters(sample)
+
+
+def test_the_strip_leaves_accented_letters_alone():
+    """U+0080..U+009F is C1, but U+00A0 and up are printable Latin-1 and
+    include every accent this corpus depends on."""
+    text = "Beschwerdeführer, société, però, ÂGE, § 5"
+    assert text_extract._strip_control_characters(text) == text

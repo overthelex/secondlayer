@@ -10,7 +10,6 @@ import codecs
 import pathlib
 import re
 import subprocess
-import unicodedata
 
 from lxml import etree, html as lxml_html
 
@@ -68,6 +67,24 @@ class PdfToolMissing(RuntimeError):
     pass
 
 
+# Unicode category Cc is exactly U+0000..U+001F plus U+007F..U+009F, so this
+# class is character-for-character equivalent to the per-character loop it
+# replaces -- minus TAB, LF and CR, which are kept.
+#
+# Measured on the real 140,884-character PDF fixture, 20 repeats:
+#
+#     per-character loop (was)   10.576 ms/doc   2.35 CPU-hours over 800,000
+#     str.translate               10.019 ms/doc   2.23 CPU-hours
+#     this regex                   0.444 ms/doc   0.10 CPU-hours
+#
+# 23.8x, and it reclaims ~2.2 of the 2.3 CPU-hours this function costs across
+# the corpus. str.translate, the obvious alternative, buys 5%: the cost is
+# building a 140,000-element result string one character at a time, not the
+# category lookup, and only re.sub avoids that.
+_CONTROL_CHARACTERS = re.compile(
+    "[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]")
+
+
 def _strip_control_characters(text: str) -> str:
     """Drop NUL and other C0/C1 control characters from decoded pdftotext
     output, keeping \n, \r and \t.
@@ -81,10 +98,7 @@ def _strip_control_characters(text: str) -> str:
     bytes stripped was not usable text to begin with -- text_quality.score
     still judges what remains after they are gone.
     """
-    return "".join(
-        c for c in text
-        if c in "\n\r\t" or unicodedata.category(c) != "Cc"
-    )
+    return _CONTROL_CHARACTERS.sub("", text)
 
 
 def _usable_codec(name: str | None) -> str | None:
