@@ -163,3 +163,124 @@ def test_empty_latest_editions_is_zero_when_the_latest_edition_has_articles(
     conn.execute("UPDATE ch_act_version SET article_count = 3 WHERE version_id = %s",
                  (vid,))
     assert project_legacy_stage.empty_latest_editions(conn) == 0
+
+
+# --- Finding 4: one unbatched, unbounded statement against production ---
+# _PROJECT was a single INSERT ... SELECT over the whole corpus: no LIMIT, no
+# batching, no statement timeout, no progress output. ~15,000 rows each
+# carrying full akn_xml (2.2 MB for SR 220 alone) and full_text into a table
+# with a GIN FTS index. Interrupted, it wrote nothing and left nothing to
+# resume from -- the opposite of the queue discipline this branch applies
+# everywhere else, and against CLAUDE.md's rule for large Postgres
+# operations.
+
+def _three_editions(conn):
+    for lang in ("DEU", "FRA", "ITA"):
+        _edition(conn, "2026-01-01", f"{lang} text", lang=lang)
+
+
+def test_the_projection_is_written_in_batches_not_one_statement(conn, settings):
+    sizes = []
+    real = project_legacy_stage._write_batch
+    _three_editions(conn)
+
+    def spy(c, ids):
+        sizes.append(len(ids))
+        return real(c, ids)
+
+    import unittest.mock as _mock
+    with _mock.patch.object(project_legacy_stage, "_write_batch", spy):
+        assert project_legacy_stage.run(settings, batch_size=2) == 3
+    assert sizes == [2, 1], "the whole corpus went out in one statement"
+
+
+def test_an_interrupted_run_keeps_the_batches_it_already_wrote(conn, settings):
+    """The property the single statement could not have: partial progress
+    survives, and a re-run finishes the job because every write is an
+    upsert. Under one statement an interrupt left zero rows behind."""
+    _three_editions(conn)
+    real = project_legacy_stage._write_batch
+    calls = {"n": 0}
+
+    def flaky(c, ids):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("interrupted mid-projection")
+        return real(c, ids)
+
+    import unittest.mock as _mock
+    with _mock.patch.object(project_legacy_stage, "_write_batch", flaky):
+        with pytest.raises(RuntimeError):
+            project_legacy_stage.run(settings, batch_size=1)
+
+    assert conn.execute("SELECT count(*) FROM ch_legislation").fetchone()[0] == 1
+    # And the run that follows it completes the corpus.
+    assert project_legacy_stage.run(settings, batch_size=1) == 3
+    assert conn.execute("SELECT count(*) FROM ch_legislation").fetchone()[0] == 3
+
+
+def test_a_batch_runs_under_a_statement_timeout(conn, settings):
+    """A pathological batch must become a failed batch, not a session
+    holding locks on a live table indefinitely."""
+    _three_editions(conn)
+    seen = []
+    real = project_legacy_stage._write_batch
+
+    def spy(c, ids):
+        # db.connect() hands out dict rows; SHOW keys them by setting name.
+        seen.append(c.execute("SHOW statement_timeout").fetchone()["statement_timeout"])
+        return real(c, ids)
+
+    import unittest.mock as _mock
+    with _mock.patch.object(project_legacy_stage, "_write_batch", spy):
+        project_legacy_stage.run(settings, batch_size=2, statement_timeout="7min")
+    assert seen and all(t == "7min" for t in seen)
+
+
+def test_the_timeout_can_be_disabled_for_a_maintenance_window(conn, settings):
+    _three_editions(conn)
+    seen = []
+    real = project_legacy_stage._write_batch
+
+    def spy(c, ids):
+        # db.connect() hands out dict rows; SHOW keys them by setting name.
+        seen.append(c.execute("SHOW statement_timeout").fetchone()["statement_timeout"])
+        return real(c, ids)
+
+    import unittest.mock as _mock
+    with _mock.patch.object(project_legacy_stage, "_write_batch", spy):
+        project_legacy_stage.run(settings, statement_timeout="0")
+    assert seen == ["0"]
+
+
+def test_batching_does_not_change_what_is_projected(conn, settings):
+    """Every edition still lands, whatever the batch size."""
+    _three_editions(conn)
+    assert project_legacy_stage.run(settings, batch_size=1) == 3
+    langs = {r[0] for r in conn.execute("SELECT lang FROM ch_legislation").fetchall()}
+    assert langs == {"de", "fr", "it"}
+
+
+# --- Finding 8: one jsonb key ---
+# "Some of these rows are empty, see the log" becomes a queryable fact.
+# ch_legislation is the surface external notebooks read, and empty text that
+# looks like text is the failure mode this whole branch exists to correct.
+
+def test_a_projected_row_records_its_article_count(conn, settings):
+    vid = _edition(conn, "2026-01-01", "x")
+    conn.execute("UPDATE ch_act_version SET article_count = 42 WHERE version_id = %s",
+                 (vid,))
+    project_legacy_stage.run(settings)
+    meta = conn.execute("SELECT metadata_json FROM ch_legislation").fetchone()[0]
+    assert meta["article_count"] == 42
+
+
+def test_a_body_less_edition_is_findable_by_query_not_only_by_log(conn, settings):
+    vid = _edition(conn, "2026-01-01", "")
+    conn.execute("UPDATE ch_act_version SET article_count = 0 WHERE version_id = %s",
+                 (vid,))
+    project_legacy_stage.run(settings)
+    empty = conn.execute(
+        "SELECT count(*) FROM ch_legislation "
+        "WHERE (metadata_json ->> 'article_count')::int = 0").fetchone()[0]
+    assert empty == 1

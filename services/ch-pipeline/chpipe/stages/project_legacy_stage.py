@@ -26,11 +26,18 @@ looked at would just trade one silent defect for another. Instead:
   * every row this projection writes carries
     metadata_json ->> 'projected_from' = 'ch_act_version', so a real row is
     distinguishable from a survivor by one query instead of by re-parsing
-    5,594 akn_xml blobs by hand;
+    5,594 akn_xml blobs by hand -- alongside 'article_count', so "this row
+    is empty" is a queryable fact rather than a line in a run log somebody
+    has to still have;
   * unaccounted_rows() counts, and run() logs, how many pre-existing rows
     this pass did NOT write or update -- so the decision to remove them can
     be made on that evidence, by a human, deliberately, not by a DELETE
     nobody reviewed.
+
+The write itself is batched and bounded -- see run(). It used to be a single
+INSERT ... SELECT over the whole corpus with no LIMIT, no statement timeout
+and no progress output, so an interrupt discarded every one of ~15,000 rows
+and left nothing to resume from.
 
 Separately: stage='parsed' on ch_act_version is not the same claim as
 "usable". A parsed edition with article_count = 0 is real data, not a
@@ -71,6 +78,23 @@ _LATEST_PARSED_VERSION = """
      ORDER BY act_id, lang, date_applicability DESC
 """
 
+# The editions this run will project, oldest version_id first. Read as a
+# list up front, then written in batches -- see run() for why the write is
+# not one statement.
+_LATEST_IDS = f"""
+SELECT version_id FROM ({_LATEST_PARSED_VERSION}) v ORDER BY version_id
+"""
+
+# How many editions one INSERT ... SELECT covers. Each row carries the
+# edition's full akn_xml (2.2 MB for SR 220 alone) and full_text into a table
+# with a GIN full-text index, so a batch is sized in rows, not in acts.
+BATCH_SIZE = 250
+
+# Per-statement ceiling for a batch. CLAUDE.md's rule for large Postgres
+# operations, and the thing that turns a pathological batch into a failed
+# batch instead of a session that holds locks on a live table indefinitely.
+STATEMENT_TIMEOUT = "10min"
+
 _PROJECT = f"""
 INSERT INTO ch_legislation
     (eli_uri, lang, sr_number, title, short_title, version_date, in_force,
@@ -91,11 +115,20 @@ SELECT a.eli_work_uri,
        v.full_text,
        v.xml_url,
        'fedlex',
+       -- article_count is here so "this projected row is empty" is a
+       -- queryable fact rather than a line in a run log somebody has to
+       -- still have. A body-less Fedlex act is genuine data (see
+       -- empty_latest_editions() and the module docstring), and
+       -- ch_legislation is the surface external notebooks read -- empty
+       -- text that looks like text is the failure mode this whole branch
+       -- exists to correct.
        jsonb_build_object('act_id', a.act_id, 'version_id', v.version_id,
+                          'article_count', v.article_count,
                           'projected_from', 'ch_act_version'),
        now()
   FROM ch_act a
   JOIN ({_LATEST_PARSED_VERSION}) v ON v.act_id = a.act_id
+ WHERE v.version_id = ANY(%s)
 ON CONFLICT (eli_uri, lang) DO UPDATE SET
     sr_number         = EXCLUDED.sr_number,
     title             = EXCLUDED.title,
@@ -149,10 +182,56 @@ def empty_latest_editions(conn) -> int:
         return cur.fetchone()[0]
 
 
-def run(settings: Settings) -> int:
+def _pending(conn) -> list[int]:
+    """The version_ids to project, in a stable order."""
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(_LATEST_IDS)
+        return [r[0] for r in cur.fetchall()]
+
+
+def _write_batch(conn, version_ids: list[int]) -> int:
+    """One batch, one statement. Factored out so a run can be interrupted
+    between batches in a test, which is the property that matters."""
+    return conn.execute(_PROJECT, (version_ids,)).rowcount
+
+
+def run(settings: Settings, batch_size: int = BATCH_SIZE,
+        statement_timeout: str = STATEMENT_TIMEOUT) -> int:
+    """Project every latest parsed edition into ch_legislation, in batches.
+
+    Batched, not one INSERT ... SELECT over the whole corpus. The single
+    statement wrote on the order of 15,000 rows, each carrying the full
+    akn_xml (2.2 MB for SR 220 alone) and full_text, into a table with a GIN
+    full-text index -- with no LIMIT, no statement timeout and no progress
+    output, so an interrupt threw away every row and left nothing to resume
+    from. That is the opposite of the queue discipline this branch applies
+    everywhere else, and it is what CLAUDE.md's rule for large Postgres
+    operations exists to prevent.
+
+    db.connect() opens the connection with autocommit=True, so each batch
+    commits on its own: an interrupted run keeps the batches it finished,
+    and re-running is safe because every write is an upsert on (eli_uri,
+    lang). Progress is logged per batch, so a multi-minute run is visible
+    while it happens rather than only in its return value.
+
+    `statement_timeout` bounds one batch. Set it to "0" to disable, which is
+    a maintenance-window choice, not a default.
+    """
     conn = db.connect(settings)
     try:
-        written = conn.execute(_PROJECT).rowcount
+        # set_config() rather than a SET statement: SET does not take bound
+        # parameters, and building the value into the SQL string is how a
+        # setting turns into an injection point.
+        conn.execute("SELECT set_config('statement_timeout', %s, false)",
+                     (statement_timeout,))
+        pending = _pending(conn)
+        total = len(pending)
+        log.info("projecting %d edition(s) into ch_legislation in batches of %d",
+                 total, batch_size)
+        written = 0
+        for start in range(0, total, batch_size):
+            written += _write_batch(conn, pending[start:start + batch_size])
+            log.info("projected %d/%d", min(start + batch_size, total), total)
         unaccounted = unaccounted_rows(conn)
         empty = empty_latest_editions(conn)
         log.info("projected %d rows into ch_legislation", written)
