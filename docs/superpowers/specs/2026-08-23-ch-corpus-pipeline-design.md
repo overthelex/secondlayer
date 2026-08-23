@@ -132,8 +132,14 @@ SPARQL-ендпойнт `https://fedlex.data.admin.ch/sparqlendpoint`, онто�
 
 ## 6. Схема даних
 
-Міграція `mcp_backend/src/migrations/196_ch_corpus.sql`, ідемпотентна
-(`IF NOT EXISTS` / `CREATE OR REPLACE` / `DO $$ … EXCEPTION …`).
+Три ідемпотентні міграції (`IF NOT EXISTS` / `CREATE OR REPLACE` / `DO $$ … EXCEPTION …`),
+розділені так, щоб три плани реалізації лягали незалежно:
+
+- `196_ch_court_pipeline.sql` — черга на `ch_court_decisions`
+- `197_ch_legislation_corpus.sql` — `ch_act`, `ch_act_version`, `ch_act_article`, `ch_act_change`
+- `198_ch_as_bbl.sql` — `ch_as_act`, `ch_act_amendment_link`, `ch_article_provenance`
+
+Номери 193–195 зайняті незакоміченою роботою по ЄРАУ і UK на інших гілках; `main` стоїть на 192.
 
 ### 6.1 Судові рішення — розширення на місці
 
@@ -166,7 +172,8 @@ SPARQL-ендпойнт `https://fedlex.data.admin.ch/sparqlendpoint`, онто�
 
 **`ch_act`** — акт Систематичної збірки.
 `act_id` (surrogate), `sr_number` (справжній, з `skos:notation`), `eli_work_uri`, `act_type`,
-`date_document`, `in_force`, `date_entry_force`, `date_no_longer_in_force`, `taxonomy_path`,
+`date_document`, `enforcement_status`, `in_force`, `date_entry_force`,
+`date_no_longer_in_force`, `taxonomy_path`,
 `title_de`, `title_fr`, `title_it`, `abbreviation`.
 Унікальність по `eli_work_uri`; індекс по `sr_number`.
 
@@ -174,6 +181,10 @@ SPARQL-ендпойнт `https://fedlex.data.admin.ch/sparqlendpoint`, онто�
 `version_id`, `act_id`, `eli_consolidation_uri`, `date_applicability`, `date_end_applicability`,
 `lang`, `xml_url`, `html_url`, `pdf_url`, `akn_xml`, `full_text`, `fetched_at`, `stage`.
 Унікальність по `(eli_consolidation_uri, lang)`. Очікуваний обсяг ≈ 56 328 × 3 ≈ 170 000 рядків.
+
+Мов насправді пʼять, а не три: `jolux:isRealizedBy` віддає DEU, FRA, ITA і, для багатьох актів,
+ENG та ROH; `jolux:titleShort` несе абревіатуру («OR», «CO»). Тому `ch_act` має ще `title_en`
+і `title_rm`.
 
 **`ch_act_article`** — стаття всередині редакції, з AKN.
 `article_id`, `version_id`, `e_id` (AKN `eId`), `article_number` (нормалізований),
@@ -189,8 +200,25 @@ SPARQL-ендпойнт `https://fedlex.data.admin.ch/sparqlendpoint`, онто�
 `as_id`, `eli_uri`, `collection` (`AS` \| `BBl`), `publication_date`, `title_{de,fr,it}`,
 `pdf_url`, `xml_url`, `metadata_json`.
 
-**`ch_act_amendment_link`** — зв'язок акта-правки з актом СЗ, який він змінює.
+**`ch_act_amendment_link`** — зв'язок акта AS з актом СЗ.
 `as_id`, `act_id`, `relation_type`.
+
+⚠⚠ **Заміряно 23.08.2026: у jolux немає предиката «змінює».** Перелічив усі предикати
+`jolux:Act` і `jolux:ConsolidationAbstract` — немає ні `amends`, ні `changes`, ні `modifies`.
+Є тільки `jolux:basicAct` (69 190 звʼязків: запис СЗ → акт AS, яким його запроваджено;
+перевірено на SR 220: `eli/cc/27/317_321_377 → eli/oc/27/317_321_377`), `jolux:rectifies` (343)
+і `jolux:isFollowingAct` (414). Тому ця таблиця відповідає на питання «яким актом AS
+запроваджено цей запис СЗ», і не більше. Ланцюг правок дає обчислений `ch_act_change`
+плюс таблиця нижче.
+
+**`ch_article_provenance`** — провенанс правки, витягнутий з приміток AKN.
+`version_id`, `e_id`, `action` (`inserted` | `amended` | `repealed`), `as_reference`,
+`bbl_reference`, `effective_date`, `source_act_date`, `raw_note`.
+Швейцарські акти носять провенанс прозою у виносках: «Eingefügt durch Ziff. I des BG vom
+5. Okt. 1990, in Kraft seit 1. Juli 1991 (AS 1991 846; BBl 1986 II 354).» У ЦК зобовʼязань
+944 таких примітки, 836 з них привʼязані до конкретної статті, 889 містять посилання на AS.
+Розбір прози ненадійний за визначенням, тому `raw_note` зберігається завжди — інакше
+помилку розбору неможливо буде виявити.
 
 ### 6.3 Сумісність
 
@@ -320,7 +348,13 @@ HTML → текст. PDF → `pdftotext -layout`.
 **Гейт D — повнота проти джерела.** Кількість рядків по спайдерах звіряється з `total_alle`
 у `Snapshots/{дата}.json`; розбіжність понад 1% розслідується, а не списується.
 
-**Гейт E — законодавство.** Контрольні акти з відомим результатом: SR 220 (Кодекс зобов'язань),
+**Гейт E — законодавство.** ⚠ `jolux:inForceStatus` — це URI, не булеве значення, і
+заміряні значення такі: `enforcement-status/0` = «In Kraft» (5 087 актів),
+`/1` = «Nicht mehr in der SR publiziert» (47), `/3` = «Nicht mehr in Kraft» (7 863),
+ще 4 296 актів статусу не мають узагалі. Записувати відсутній статус як «не чинний» —
+це стверджувати те, чого Fedlex не казав; там має бути NULL.
+
+Контрольні акти з відомим результатом: SR 220 (Кодекс зобов'язань),
 SR 210 (Цивільний кодекс), SR 311.0 (Кримінальний кодекс) — для кожного перевіряється, що
 число редакцій у `ch_act_version` збігається з числом `jolux:Consolidation` у Fedlex, що
 `ch_act_change` не порожня, і що остання редакція має розумну кількість статей.
