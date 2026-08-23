@@ -24,6 +24,11 @@ class IndexReport:
     inserted: int = 0
     updated: int = 0
     failed: int = 0
+    # Spiders whose listing could not be read at all. Kept apart from
+    # `failed`, which counts individual documents: "3 documents failed" and
+    # "a whole court was never enumerated" are not the same finding, and
+    # folding them together would hide the second inside the first.
+    failed_spiders: list[str] = field(default_factory=list)
 
 
 _UPSERT = """
@@ -98,9 +103,29 @@ def upsert(conn, fields: es_document.DocumentFields, available: set[str]) -> str
     return "inserted" if inserted else "updated"
 
 
+async def _listing_inventory(fetcher: Fetcher, spider: str) -> dict[str, frozenset[str]]:
+    """doc_id -> available extensions, streamed rather than buffered.
+
+    Measured: the CH_BGer listing is 116,000,062 bytes and takes 132.9 s.
+    Fetcher.text() holds all of it as one string and _HREF.findall then
+    materialises ~400,000 more strings on top of that. Streaming holds one
+    64 KB chunk plus the inventory itself, and the inventory's extension
+    sets are interned down to eight shared frozensets.
+    """
+    bits: dict[str, int] = {}
+    buffer = ""
+    async for chunk in fetcher.stream_text(es_listing.listing_url(spider)):
+        buffer += chunk
+        for doc_id, bit in es_listing.iter_listing_entries([buffer]):
+            bits[doc_id] = bits.get(doc_id, 0) | bit
+        buffer = es_listing.carry_over(buffer)
+    for doc_id, bit in es_listing.iter_listing_entries([buffer]):
+        bits[doc_id] = bits.get(doc_id, 0) | bit
+    return {doc_id: es_listing.extension_set(value) for doc_id, value in bits.items()}
+
+
 async def _index_spider(fetcher: Fetcher, conn, spider: str, report: IndexReport) -> None:
-    listing = await fetcher.text(es_listing.listing_url(spider))
-    inventory = es_listing.parse_listing(listing)
+    inventory = await _listing_inventory(fetcher, spider)
     log.info("%s: %d documents in the listing", spider, len(inventory))
     report.per_spider[spider] = len(inventory)
 
@@ -142,7 +167,17 @@ async def _run_async(settings: Settings, spiders: list[str]) -> IndexReport:
     try:
         async with Fetcher(concurrency=settings.http_concurrency) as fetcher:
             for spider in spiders:
-                await _index_spider(fetcher, conn, spider, report)
+                # One failed listing must not discard the work already done
+                # on the other 53. The listing fetch was bare and this loop
+                # was unguarded, so a single FetchError -- on a 116 MB
+                # download that takes 132.9 s and would be re-downloaded
+                # from byte zero on a retry -- aborted the entire run.
+                try:
+                    await _index_spider(fetcher, conn, spider, report)
+                except Exception as exc:               # noqa: BLE001
+                    log.error("%s: listing failed, skipping this spider: %s",
+                              spider, exc)
+                    report.failed_spiders.append(spider)
     finally:
         conn.close()
     return report
@@ -197,8 +232,9 @@ def main(argv: list[str] | None = None) -> IndexReport:
     else:
         selected = None
     result = run(Settings.from_env(), selected)
-    log.info("inserted=%d updated=%d failed=%d", result.inserted, result.updated,
-             result.failed)
+    log.info("inserted=%d updated=%d failed=%d failed_spiders=%s",
+             result.inserted, result.updated, result.failed,
+             ",".join(result.failed_spiders) or "none")
     return result
 
 

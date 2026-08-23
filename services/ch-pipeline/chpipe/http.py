@@ -78,3 +78,29 @@ class Fetcher:
 
     async def json(self, url: str) -> dict:
         return (await self._get(url)).json()
+
+    async def stream_text(self, url: str, chunk_size: int = 1 << 16):
+        """Decoded chunks of a response, without ever holding it whole.
+
+        text() buffers the entire body: the CH_BGer directory listing is
+        116,000,062 bytes and takes 132.9 s to download, so one call costs
+        ~116 MB of resident string before anything has been parsed. This
+        yields str chunks instead, so the peak is one chunk plus whatever
+        the caller keeps.
+
+        Retries are deliberately NOT applied here. _get() can retry because
+        it holds the whole response; a stream that failed halfway has
+        already handed part of the body to the caller, and silently
+        restarting from byte zero would duplicate it. A failure mid-stream
+        raises FetchError and the caller decides -- for `index` that means
+        one spider's listing is abandoned and the other 53 continue.
+        """
+        try:
+            async with self._sem:
+                async with self._client.stream("GET", url) as response:
+                    if response.status_code != 200:
+                        raise FetchError(f"{response.status_code} for {url}")
+                    async for chunk in response.aiter_text(chunk_size):
+                        yield chunk
+        except httpx.HTTPError as exc:
+            raise FetchError(f"{url} failed mid-stream: {exc}") from exc

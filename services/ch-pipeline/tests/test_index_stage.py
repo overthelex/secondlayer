@@ -163,8 +163,12 @@ def test_one_bad_document_does_not_abort_the_rest_of_the_batch(conn, monkeypatch
     good_data = json.loads((FIX / "doc_zg_og_001.json").read_text())
 
     class FakeFetcher:
-        async def text(self, url):
-            return listing_html
+        async def stream_text(self, url, chunk_size=1 << 16):
+            # Deliberately handed over in small pieces: the real listing is
+            # streamed, so a double that returns it whole would not exercise
+            # the boundary handling the parser depends on.
+            for start in range(0, len(listing_html), 17):
+                yield listing_html[start:start + 17]
 
         async def json(self, url):
             return good_data
@@ -190,3 +194,62 @@ def test_one_bad_document_does_not_abort_the_rest_of_the_batch(conn, monkeypatch
         "the good document in the same slice must still be written"
     assert "BAD_DOC" not in doc_ids
     assert report.failed == 1
+
+
+# --- One failed listing must not discard the other 53 spiders ---
+#
+# _index_spider's listing fetch was bare and the `for spider in spiders` loop
+# had no try/except, so a single FetchError aborted the whole run. That is
+# expensive in a way the other failure paths are not: the CH_BGer listing is
+# 116,000,062 bytes and takes 132.9 s, and a retry starts again from byte
+# zero. Losing 53 spiders' progress to one flaky listing is not acceptable.
+
+def test_one_failed_listing_does_not_abort_the_other_spiders(conn, monkeypatch):
+    from chpipe.config import Settings
+    from chpipe.http import FetchError
+
+    listing_html = ('<a href="ZG_OG_001_Z1-2020-5_2022-02-18.json">a</a>'
+                    '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.pdf">a</a>')
+    good_data = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    class Fetcher:
+        async def stream_text(self, url, chunk_size=1 << 16):
+            if "BROKEN" in url:
+                raise FetchError("500 for the listing")
+            yield listing_html
+
+        async def json(self, url):
+            return good_data
+
+    class FetcherContext:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return Fetcher()
+
+        async def __aexit__(self, *exc):
+            return None
+
+    monkeypatch.setattr(index_stage, "Fetcher", FetcherContext)
+    monkeypatch.setattr(index_stage.db, "connect", lambda s: conn)
+    monkeypatch.setattr(conn, "close", lambda: None, raising=False)
+
+    settings = Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
+                        http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                        load_ceiling=0.0, max_attempts=3)
+
+    report = index_stage.run(settings, ["BROKEN_Spider", "ZG_Obergericht"])
+
+    assert report.failed_spiders == ["BROKEN_Spider"]
+    assert report.inserted == 1, "the healthy spider must still have been indexed"
+    assert conn.execute(
+        "SELECT count(*) FROM ch_court_decisions").fetchone()[0] == 1
+
+
+def test_a_failed_spider_is_counted_apart_from_failed_documents(conn, monkeypatch):
+    """"3 documents failed" and "a whole court was never enumerated" are not
+    the same finding, and folding them together hides the second."""
+    report = index_stage.IndexReport()
+    assert report.failed == 0
+    assert report.failed_spiders == []
