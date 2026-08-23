@@ -1043,7 +1043,9 @@ services:
     ports:
       - "127.0.0.1:5436:5432"
     volumes:
-      - ${HUDOC_DATA_PATH:-./hudoc-storage/pgdata}:/var/lib/postgresql/data
+      # a bind mount here lands inside the build context, and postgres chowns it
+      # to its own uid — every subsequent `compose build` then dies with EACCES
+      - postgres_hudoc_local_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${HUDOC_POSTGRES_USER:-hudoc} -d ${HUDOC_POSTGRES_DB:-hudoc_local}"]
       interval: 5s
@@ -1089,6 +1091,8 @@ volumes:
   minio_local_data:
     driver: local
   lexwebapp_node_modules:
+    driver: local
+  postgres_hudoc_local_data:
     driver: local
   postgres_openreyestr_local_data:
     driver: local
