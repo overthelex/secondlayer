@@ -135,7 +135,7 @@ def test_a_render_failure_keeps_the_document_queued_instead_of_closing_it_failed
     (tmp_path / spider / "d.pdf").write_bytes(b"%PDF-1.4 fake")
     _seed_ocr_pending(conn, "d", spider)
 
-    def crashing_ocr_pdf(path, languages, timeout=900):
+    def crashing_ocr_pdf(path, languages, timeout=900, tmp_root=None):
         raise ocr_stage.ocr.OcrRenderFailed("simulated pdftoppm crash rendering d.pdf")
 
     monkeypatch.setattr(ocr_stage.ocr, "ocr_pdf", crashing_ocr_pdf)

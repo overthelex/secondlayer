@@ -34,10 +34,18 @@ class OcrReport:
     seconds: float = 0.0
 
 
+# Page images go next to the raw corpus, not in the system temp directory.
+# tempfile's default is /tmp, which on prod is the root filesystem; the spec
+# sizes this workload against the 994 GB volume raw_dir lives on.
+OCR_TMP_DIRNAME = ".ocr-tmp"
+
+
 def _ocr_one(settings: Settings, row) -> tuple[str, float]:
     path = raw_path(settings.raw_dir, row["spider"], row["doc_id"], "pdf")
-    text = ocr.ocr_pdf(path, list(row.get("languages") or []))
-    return text, text_quality.score(text, list(row.get("languages") or []))
+    languages = list(row.get("languages") or [])
+    text = ocr.ocr_pdf(path, languages,
+                       tmp_root=settings.raw_dir / OCR_TMP_DIRNAME)
+    return text, text_quality.score(text, languages)
 
 
 def run(settings: Settings, limit: int | None = None,

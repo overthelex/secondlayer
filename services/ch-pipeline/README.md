@@ -292,7 +292,19 @@ save time before a full run.
       box.** `ocr_stage` will silently produce garbage (or fail every row)
       if a pack is missing. `tesseract --list-langs` before the first real
       `ocr` run; install any of `tesseract-ocr-deu`, `tesseract-ocr-fra`,
-      `tesseract-ocr-ita` that are absent.
+      `tesseract-ocr-ita` that are absent. Confirm `pdfinfo` is there too
+      (`pdfinfo -v`): it ships in the same `poppler-utils` package as
+      `pdftoppm` and `pdftotext`, and `ocr` uses it to get a page count so
+      it can render one page at a time.
+
+- [ ] **Watch `$CHPIPE_RAW_DIR/.ocr-tmp` during the `ocr` run.** Page images
+      go there, on the raw corpus volume, not in `/tmp` on the root
+      filesystem. One page at 300 dpi is ~8 MB and is deleted as soon as
+      tesseract has read it, so at `ocr_workers=2` the steady state is tens
+      of megabytes. If that directory grows into gigabytes, a run died
+      without cleaning up; `find $CHPIPE_RAW_DIR/.ocr-tmp -name
+      'chpipe-ocr-*' -mmin +120` finds the orphans, and nothing may delete
+      them while an `ocr` process is alive (`pgrep -af chpipe.stages.ocr`).
 - [ ] **Gate A on a 2,000-document sample.** Run `index` -> `fetch` ->
       `extract` for a handful of spiders capped around 2,000 documents
       total, then read `chpipe.reports.gate_a(conn)`. Look specifically at
