@@ -377,6 +377,19 @@ jobs:
           fi
           echo "Переменных в .env.local: $(grep -cE '^[A-Z_]+=' "$ENV_FILE")"
 
+      - name: Guard against unreadable paths in the checkout
+        run: |
+          set -euo pipefail
+          cd "$HOME/SecondLayer"
+          UNREADABLE=$(find . -type d ! -readable 2>/dev/null || true)
+          if [ -n "$UNREADABLE" ]; then
+            echo "::error::каталоги, которые не прочитает сборщик контекста (обычно pgdata под uid postgres):"
+            echo "$UNREADABLE"
+            echo "Их надо вынести из репозитория: .dockerignore не спасает, из-за !-паттернов сборщик всё равно обходит дерево."
+            exit 1
+          fi
+          echo "нечитаемых путей нет"
+
       - name: Overlay proprietary source
         env:
           CORE_REPO_SSH_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
