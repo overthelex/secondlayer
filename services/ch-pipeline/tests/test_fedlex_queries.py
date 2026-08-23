@@ -167,6 +167,61 @@ def test_acts_orders_by_status_too_for_full_determinism():
     assert "ORDER BY ?work ?inForce" in q.ACTS
 
 
+# --- EDITIONS_BY_SR: Gate E's live cross-check against Fedlex (reports_leg.py) ---
+
+def test_editions_by_sr_is_select_distinct():
+    assert "SELECT DISTINCT" in q.EDITIONS_BY_SR
+
+
+def test_editions_by_sr_binds_language_and_manifestation_through_one_expression():
+    """Two independent property paths off ?c -- isRealizedBy/language and
+    isRealizedBy/isEmbodiedBy/userFormat -- do not require the same
+    expression node to satisfy both: a consolidation with a French XML
+    edition and a German PDF-only edition would match both paths at once,
+    silently counting a German XML edition that does not exist. Verified
+    live against SR 220 on 2026-08-23: the independent-path form returns 100
+    (any XML manifestation in any language, joined against a German
+    realization in any format); the shared-node form returns 14, matching
+    this pipeline's own VERSIONS-driven discovery exactly. isRealizedBy must
+    therefore be traversed exactly once, into one ?expr that both the
+    language and the manifestation hang off of."""
+    text = q.EDITIONS_BY_SR
+    assert text.count("jolux:isRealizedBy") == 1, (
+        "isRealizedBy must be traversed once, into a shared ?expr -- a "
+        "second occurrence means language and manifestation are independent "
+        "paths again")
+    assert "?expr jolux:language" in text
+    assert "jolux:isEmbodiedBy" in text
+    # Both the language and the manifestation must hang off the SAME ?expr:
+    # one occurrence binds it (object of isRealizedBy), the rest must reuse
+    # it as their subject rather than re-deriving it via a second path.
+    assert text.count("?expr") >= 2
+
+
+def test_editions_by_sr_takes_the_sr_notation_and_language_as_parameters():
+    """A hardcoded SR number would make this query only ever answer for one
+    act; %(sr)s and %(lang)s are what let reports_leg.fedlex_edition_count()
+    reuse it for all three control acts (and any other SR)."""
+    assert "%(sr)s" in q.EDITIONS_BY_SR
+    assert "%(lang)s" in q.EDITIONS_BY_SR
+    assert '"220"' not in q.EDITIONS_BY_SR
+    assert "/DEU>" not in q.EDITIONS_BY_SR
+
+
+def test_editions_by_sr_filters_the_sr_notation_by_its_datatype():
+    assert "id-systematique" in q.EDITIONS_BY_SR
+
+
+def test_editions_by_sr_does_not_require_a_retrievable_file():
+    """Deliberately broader than VERSIONS: this counts what Fedlex's graph
+    claims is an XML edition, not what actually has a file behind it --
+    otherwise it would just re-derive VERSIONS's own filter and could never
+    catch the metadata gap this query exists to surface. See EDITIONS_BY_SR's
+    own comment for the diagnosed SR 311.0 case (20 claimed vs. 19 with a
+    real file, traced to one manifestation with no isExemplifiedBy triple)."""
+    assert "isExemplifiedBy" not in q.EDITIONS_BY_SR
+
+
 def test_a_work_with_two_conflicting_statuses_returns_both_rows_not_one():
     """Twelve works in the live Fedlex graph assert BOTH inForceStatus 0 (in
     force) and 3 (no longer in force) at once, e.g. cc/2003/31. SELECT

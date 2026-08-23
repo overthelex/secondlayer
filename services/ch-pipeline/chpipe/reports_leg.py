@@ -9,12 +9,24 @@ its own edition count, its latest edition's article count, and how many
 changes were computed for it. That is only half of Gate E: the count is
 meaningless as a completeness check unless it is also compared against
 Fedlex's own SPARQL count for the same SR number, which needs a live network
-round trip this module deliberately does not make on its own (a report
-function should not depend on network reachability to run against a
-database that already has the data). That comparison is done by the
-operator running this gate, using chpipe.sparql.SparqlClient against
-chpipe.fedlex_queries.ENDPOINT with each row's sr_number -- see the
-pipeline's Gate E run log for the query and the numbers it produced.
+round trip gate_e() itself deliberately does not make (a report function
+should not depend on network reachability to run against a database that
+already has the data). fedlex_edition_count() and cross_check_fedlex() below
+are that network half, kept as a companion pair rather than folded into
+gate_e() itself: fedlex_edition_count(client, sr) runs
+chpipe.fedlex_queries.EDITIONS_BY_SR -- see that query's own comment for why
+its language/manifestation binding and its choice not to require a
+retrievable file matter -- and cross_check_fedlex(rows, client) is the
+one-call convenience that takes gate_e()'s own output and adds each found
+row's live count. A caller who wants Gate E's full picture in one shot does:
+
+    client = SparqlClient(fq.ENDPOINT)
+    rows = reports_leg.cross_check_fedlex(reports_leg.gate_e(conn), client)
+
+which lands the exact query this task's own Gate E run used to produce
+14/14, 11/11 and the diagnosed 19-versus-20 for the three control acts (see
+EDITIONS_BY_SR's comment for that diagnosis) -- so the next run does not
+have to re-derive it from a scratch script or a report.
 
 `found: False` on a control act is a legitimate, expected outcome on a
 partially-seeded (or scratch) database -- it means "not loaded into this
@@ -31,6 +43,9 @@ unkeyed_count() uses for the same reason.
 from __future__ import annotations
 
 from psycopg.rows import dict_row
+
+from . import fedlex_queries as fq
+from .sparql import SparqlClient
 
 # SR 220 Code of Obligations, SR 210 Civil Code, SR 311.0 Criminal Code.
 CONTROL_ACTS = ["220", "210", "311.0"]
@@ -78,6 +93,35 @@ def gate_e(conn, sr_numbers: list[str] | None = None) -> list[dict]:
             "articles_latest": latest["article_count"] if latest else None,
             "changes": changes,
         })
+    return out
+
+
+def fedlex_edition_count(client: SparqlClient, sr_number: str, lang: str = "DEU") -> int:
+    """How many editions of `sr_number` Fedlex's own graph claims to publish
+    as an XML manifestation in `lang` -- the network half of Gate E. See
+    chpipe.fedlex_queries.EDITIONS_BY_SR for the query and why it counts
+    Python-side len() rather than a SPARQL COUNT(DISTINCT ...), and for what
+    a mismatch against gate_e()'s local `editions_de` does and does not
+    mean."""
+    return len(client.select(fq.EDITIONS_BY_SR % {"sr": sr_number, "lang": lang}))
+
+
+def cross_check_fedlex(rows: list[dict], client: SparqlClient,
+                       lang: str = "DEU") -> list[dict]:
+    """Annotate gate_e()'s output with each found row's live Fedlex edition
+    count, under the key `fedlex_editions` -- one call instead of a
+    hand-assembled script. With the default lang="DEU" this is the number to
+    compare against the row's own `editions_de`. A row with found=False is
+    returned unchanged: there is nothing in ch_act to cross-check for a
+    control act this database never loaded (see gate_e()'s `note` on that
+    row for why that is not itself a finding)."""
+    out = []
+    for row in rows:
+        row = dict(row)
+        if row.get("found"):
+            row["fedlex_editions"] = fedlex_edition_count(
+                client, row["sr_number"], lang)
+        out.append(row)
     return out
 
 

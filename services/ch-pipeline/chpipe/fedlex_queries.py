@@ -136,6 +136,67 @@ SELECT DISTINCT ?work ?consolidation ?dateApplicability ?dateEndApplicability
 ORDER BY ?work ?dateApplicability ?lang
 """
 
+# Gate E's live cross-check (chpipe/reports_leg.py): how many consolidated
+# editions of a work identified by SR number Fedlex itself claims to publish
+# as an XML manifestation, in a given language -- independent of what this
+# pipeline has actually discovered and stored. This is the only part of Gate
+# E that can catch an edition the corpus silently missed (see reports_leg.py
+# and Task 8's Decision 4): gate_e() itself only counts what already made it
+# into ch_act_version, so a walk that skipped a work, dropped a row at a
+# batch boundary, or lost one to a swallowed exception would look clean by
+# gate_e()'s own count alone.
+#
+# ?lang and ?manifestation are bound through the SAME expression node
+# (?expr), exactly as VERSIONS above does -- NOT as two independent property
+# paths off ?c. `?c jolux:isRealizedBy/jolux:language ?lang` and
+# `?c jolux:isRealizedBy/jolux:isEmbodiedBy/jolux:userFormat ?format` as two
+# separate paths do NOT require the same ?expr to satisfy both: a
+# consolidation with (say) a French XML edition and a German PDF-only
+# edition matches both paths independently, which silently counts a German
+# XML edition that does not exist. Verified live against SR 220 on
+# 2026-08-23: the independent-path form returns 100 (any consolidation with
+# an XML manifestation in ANY language, joined against any German
+# realization in any format); the shared-?expr form here returns 14 --
+# exactly this pipeline's own VERSIONS-driven discovery for SR 220's German
+# editions.
+#
+# Deliberately does NOT require `jolux:isExemplifiedBy` (a retrievable file
+# URL), unlike VERSIONS -- this counts what Fedlex's graph *claims* is an
+# XML edition, not what is actually downloadable. That is intentional: it
+# is what surfaces Fedlex-side metadata gaps rather than silently absorbing
+# them into "close enough". Measured live on 2026-08-23, German, this exact
+# query: SR 220 (Code of Obligations) = 14, matching VERSIONS-driven
+# discovery exactly; SR 210 (Civil Code) = 11, also exact; SR 311.0
+# (Criminal Code) = 20 against this pipeline's own count of 19 -- diagnosed
+# directly against the graph: consolidation .../20190101's German expression
+# has a manifestation node typed userFormat=xml with NO isExemplifiedBy
+# triple at all (its four sibling manifestations -- pdf-a, html, doc, docx
+# -- all carry a file; the xml one carries none), so there is genuinely
+# nothing for VERSIONS/fetch_xml_stage to retrieve. A mismatch here is a
+# prompt to diagnose exactly like that, not proof of a bug in this pipeline
+# -- but it must never be silently reconciled away by requiring
+# isExemplifiedBy here too, which would just make this query re-derive
+# VERSIONS's own filter and lose its power as an independent check. A run
+# producing figures wildly different from 14 / 11 / 20 for these three acts
+# is a signal something changed -- in Fedlex's data, in this query, or in
+# this pipeline -- not routine drift.
+#
+# Counted as SELECT DISTINCT rows in Python (len(client.select(...))), never
+# as a SPARQL-side COUNT(DISTINCT ...) -- see this module's own warning
+# above about COUNT(DISTINCT ?x) being unreliable on this endpoint.
+EDITIONS_BY_SR = _PREFIXES + """
+SELECT DISTINCT ?c WHERE {
+  ?work a jolux:ConsolidationAbstract ;
+        jolux:classifiedByTaxonomyEntry/skos:notation
+            "%(sr)s"^^<https://fedlex.data.admin.ch/vocabulary/notation-type/id-systematique> .
+  ?c a jolux:Consolidation ; jolux:isMemberOf ?work ;
+     jolux:isRealizedBy ?expr .
+  ?expr jolux:language <http://publications.europa.eu/resource/authority/language/%(lang)s> ;
+        jolux:isEmbodiedBy ?manifestation .
+  ?manifestation jolux:userFormat <https://fedlex.data.admin.ch/vocabulary/user-format/xml> .
+}
+"""
+
 LANGUAGE_MAP = {
     "http://publications.europa.eu/resource/authority/language/DEU": "de",
     "http://publications.europa.eu/resource/authority/language/FRA": "fr",

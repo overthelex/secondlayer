@@ -1,8 +1,10 @@
 import os
 import pathlib
+import httpx
 import psycopg
 import pytest
 from chpipe import reports_leg
+from chpipe.sparql import SparqlClient
 from chpipe.stages import acts_stage, versions_stage
 
 # Derive repo root from this file's location -- see test_project_legacy_stage.py
@@ -84,3 +86,53 @@ def test_corpus_summary_counts_each_table(conn):
     assert summary["parsed"] == 0
     assert summary["articles"] == 0
     assert summary["changes"] == 0
+
+
+# --- The network half of Gate E (fix round 1's finding): landed as a named
+# query in fedlex_queries.py plus these two companion functions, rather than
+# living only as prose in a report and a scratch script. Mocked here with
+# httpx.MockTransport, same pattern as test_fedlex_queries.py's dual-status
+# test -- no live network call belongs in the unit suite. The live numbers
+# these functions actually produced against Fedlex (14/14, 11/11, 19-vs-20)
+# are reported in the task report, not asserted here: this endpoint is a
+# live government dataset, and pinning today's counts into the suite would
+# make ordinary drift a test failure.
+
+def _fedlex_rows_fixture(count: int):
+    return {
+        "head": {"vars": ["c"]},
+        "results": {"bindings": [
+            {"c": {"type": "uri",
+                   "value": f"https://fedlex.data.admin.ch/eli/cc/x/{i}"}}
+            for i in range(count)
+        ]},
+    }
+
+
+def test_fedlex_edition_count_counts_rows_not_a_sparql_aggregate():
+    """EDITIONS_BY_SR is SELECT DISTINCT ?c, not COUNT(DISTINCT ?c) -- see
+    fedlex_queries.py's own warning that COUNT(DISTINCT ...) is unreliable
+    on this endpoint. fedlex_edition_count() must count the rows itself."""
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, json=_fedlex_rows_fixture(14)))
+    client = SparqlClient("https://fake/sparql", transport=transport)
+    assert reports_leg.fedlex_edition_count(client, "220") == 14
+
+
+def test_cross_check_fedlex_annotates_only_found_rows(conn):
+    acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
+    vid = versions_stage.upsert_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/2026-01-01",
+        "dateApplicability": "2026-01-01", "lang": L + "DEU",
+        "fileUrl": "https://x/x.xml"})
+    conn.execute("UPDATE ch_act_version SET stage='parsed' WHERE version_id=%s", (vid,))
+
+    rows = reports_leg.gate_e(conn, ["220", "999"])   # 220 found, 999 not loaded
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, json=_fedlex_rows_fixture(1)))
+    client = SparqlClient("https://fake/sparql", transport=transport)
+
+    annotated = reports_leg.cross_check_fedlex(rows, client)
+    found, missing = annotated
+    assert found["sr_number"] == "220" and found["fedlex_editions"] == 1
+    assert missing["sr_number"] == "999" and "fedlex_editions" not in missing
