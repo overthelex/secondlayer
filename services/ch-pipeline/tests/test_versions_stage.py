@@ -63,23 +63,37 @@ def _row(date="2026-01-01", lang="DEU", end=None, work=WORK):
 
 class _FakeSparqlClient:
     """Stands in for chpipe.sparql.SparqlClient so run() can be exercised
-    without ever touching the live Fedlex endpoint. paged() ignores the
-    query text and page_size and just replays the rows it was built with."""
+    without ever touching the live Fedlex endpoint. batched() records the
+    driving set it was handed -- which is the thing under test, since the
+    walk is now driven by ch_act rather than by an offset -- and replays the
+    rows it was built with."""
 
     def __init__(self, rows):
         self._rows = rows
         self.closed = False
+        self.batches: list[list[str]] = []
 
-    def paged(self, query_template, page_size=5000):
-        yield from self._rows
+    def batched(self, query_template, uris, batch_size=20):
+        batch: list[str] = []
+        for uri in uris:
+            batch.append(uri)
+            if len(batch) >= batch_size:
+                self.batches.append(batch)
+                batch = []
+        if batch:
+            self.batches.append(batch)
+        if self.batches:
+            yield from self._rows
 
     def close(self):
         self.closed = True
 
 
-def _run_with_rows(monkeypatch, settings, rows):
-    monkeypatch.setattr(versions_stage, "SparqlClient",
-                         lambda endpoint: _FakeSparqlClient(rows))
+def _run_with_rows(monkeypatch, settings, rows, capture=None):
+    fake = _FakeSparqlClient(rows)
+    if capture is not None:
+        capture.append(fake)
+    monkeypatch.setattr(versions_stage, "SparqlClient", lambda endpoint: fake)
     return versions_stage.run(settings)
 
 
@@ -204,3 +218,54 @@ def test_run_closes_the_client_even_after_a_bad_row(conn, settings, monkeypatch)
     monkeypatch.setattr(versions_stage, "SparqlClient", lambda endpoint: fake)
     versions_stage.run(settings)
     assert fake.closed is True
+
+
+# --- the driving set: batches of works read from ch_act, never an offset ---
+
+def test_run_is_driven_by_the_works_in_ch_act(conn, settings, monkeypatch):
+    """The whole point of the fix. An offset walk of ~170,000 version rows
+    dies on Virtuoso's SR353 ceiling at row 10,001; this walk asks only for
+    the editions of works ch_act already holds, a batch of works at a time."""
+    for i in range(45):
+        acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/x/{i:03d}"})
+    seen: list = []
+    _run_with_rows(monkeypatch, settings, [], capture=seen)
+    fake = seen[0]
+
+    driven = [u for b in fake.batches for u in b]
+    stored = [r[0] for r in conn.execute(
+        "SELECT eli_work_uri FROM ch_act ORDER BY eli_work_uri").fetchall()]
+    assert driven == stored, "every discovered work must drive the walk, in order"
+    assert len(fake.batches) == 3, "46 works in batches of 20 is three batches"
+    assert [len(b) for b in fake.batches] == [20, 20, 6]
+
+
+def test_run_uses_the_measured_batch_size_by_default(conn, settings, monkeypatch):
+    """20 is not arbitrary: the twenty heaviest works in the corpus sum to
+    8,692 title rows and the top twenty-five to 10,021, so 20 is the largest
+    batch whose worst case still clears Virtuoso's 10,000-row ceiling."""
+    from chpipe import fedlex_queries as fq
+    for i in range(25):
+        acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/y/{i:03d}"})
+    seen: list = []
+    _run_with_rows(monkeypatch, settings, [], capture=seen)
+    assert [len(b) for b in seen[0].batches] == [fq.WORK_BATCH_SIZE, 6]
+
+
+def test_run_asks_fedlex_nothing_when_ch_act_is_empty(conn, settings, monkeypatch):
+    """An empty driving set must mean no queries at all, not a blind walk of
+    the whole graph. Run the acts stage first."""
+    conn.execute("DELETE FROM ch_act")
+    seen: list = []
+    report = _run_with_rows(monkeypatch, settings, [_row()], capture=seen)
+    assert seen[0].batches == []
+    assert report.discovered == 0
+
+
+def test_work_uris_returns_the_driving_set_in_a_stable_order(conn):
+    for w in ("https://fedlex.data.admin.ch/eli/cc/b/1",
+              "https://fedlex.data.admin.ch/eli/cc/a/1"):
+        acts_stage.upsert_act(conn, {"work": w})
+    uris = versions_stage.work_uris(conn)
+    assert uris == sorted(uris)
+    assert "https://fedlex.data.admin.ch/eli/cc/a/1" in uris

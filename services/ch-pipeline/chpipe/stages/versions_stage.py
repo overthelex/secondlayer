@@ -10,6 +10,14 @@ in DEU, FRA and ITA is three rows, not one row overwritten twice.
 
 Two further properties of the source data shape this module:
 
+  * The walk is driven by batches of work URIs read from ch_act rather than
+    by a position in a ~170,000-row global ordering. That is what keeps every
+    query far below Virtuoso's SR353 ceiling (see chpipe/sparql.py), makes the
+    walk resumable act by act, and has the side effect that a version cannot
+    be orphaned by construction -- its parent work is by definition already in
+    ch_act. The orphan reporting below is kept all the same: it is now a
+    consistency check on that claim rather than the expected outcome, and a
+    non-zero count means something is wrong that a silent zero would hide.
   * Fedlex returns the same consolidation from more than one named graph, so
     the same row is walked more than once. The second write of a row must
     update the first, not duplicate it -- see the ON CONFLICT clause below.
@@ -29,6 +37,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from psycopg.rows import tuple_row
+
 from .. import db
 from .. import fedlex_queries as fq
 from ..config import Settings
@@ -45,10 +55,12 @@ _SAMPLE_CAP = 12
 @dataclass
 class VersionsReport:
     discovered: int = 0
-    # orphaned: a version whose parent work is not in ch_act yet. Zero is the
-    # only value that should ever survive a full run against a fully-seeded
-    # ch_act -- anything above that means the acts stage and the versions
-    # query disagree about what exists. See orphaned_works below.
+    # orphaned: a version whose parent work is not in ch_act. Now that the
+    # walk is driven BY ch_act, this should be structurally impossible, which
+    # makes a non-zero value a louder signal than before rather than a quieter
+    # one: it would mean a work vanished from ch_act mid-run, or that Fedlex
+    # answered a VALUES batch with a work that was not in it. See
+    # orphaned_works below.
     orphaned: int = 0
     orphaned_works: list[str] = field(default_factory=list)
     # skipped_language: a language Fedlex serves that fedlex_queries.LANGUAGE_MAP
@@ -105,12 +117,38 @@ def upsert_version(conn, row: dict) -> int | None:
     return result["version_id"] if isinstance(result, dict) else result[0]
 
 
-def run(settings: Settings, page_size: int = 5000) -> VersionsReport:
+_SELECT_WORKS = "SELECT eli_work_uri FROM ch_act ORDER BY eli_work_uri"
+
+
+def work_uris(conn) -> list[str]:
+    """The driving set: every work the acts stage has discovered.
+
+    Ordered so a run is reproducible and so an interrupted run's batches line
+    up with the next one's. 17,293 URIs is about 1.5 MB -- small enough to
+    hold, and holding it keeps the cursor from being open across the whole
+    walk.
+    """
+    # An explicit row factory: db.connect() hands out dict rows, the tests'
+    # own fixture hands out tuples, and this must read the same either way.
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(_SELECT_WORKS)
+        return [r[0] for r in cur.fetchall()]
+
+
+def run(settings: Settings,
+        batch_size: int = fq.WORK_BATCH_SIZE) -> VersionsReport:
+    """Walk the editions of every work in ch_act, a batch of works at a time.
+
+    Run the acts stage first: an empty ch_act means an empty driving set, and
+    this issues no queries at all rather than walking the graph blind.
+    """
     report = VersionsReport()
     client = SparqlClient(fq.ENDPOINT)
     conn = db.connect(settings)
     try:
-        for row in client.paged(fq.VERSIONS, page_size=page_size):
+        works = work_uris(conn)
+        log.info("versions: driving from %d works in ch_act", len(works))
+        for row in client.batched(fq.VERSIONS, works, batch_size=batch_size):
             # A single malformed row (or a write error on it) must not abort
             # a walk of ~170,000 rows -- log it, count it, move on. Follows
             # the same shape as acts_stage.run()'s per-row guard.

@@ -38,7 +38,7 @@ from psycopg.rows import dict_row
 from .. import db
 from .. import fedlex_queries as fq
 from ..config import Settings
-from ..sparql import SparqlClient
+from ..sparql import DEFAULT_PAGE_SIZE, SparqlClient
 
 log = logging.getLogger(__name__)
 
@@ -185,12 +185,26 @@ def apply_titles(conn, rows: list[dict]) -> int:
     return affected
 
 
-def run(settings: Settings, page_size: int = 5000) -> ActsReport:
+def run(settings: Settings, page_size: int = DEFAULT_PAGE_SIZE,
+        batch_size: int = fq.WORK_BATCH_SIZE) -> ActsReport:
+    """Walk every SC work by key, then title the works just discovered.
+
+    Neither pass uses an offset. The acts walk is a keyset walk (page N+1
+    resumes past the last work of page N); the titles pass is driven by
+    batches of the work URIs this run has just discovered, so it is bounded by
+    the batch rather than by a position in a 52,000-row global ordering. See
+    chpipe/sparql.py for the SR353 ceiling both shapes exist to stay under.
+    """
     report = ActsReport()
     client = SparqlClient(fq.ENDPOINT)
     conn = db.connect(settings)
     try:
-        for row in client.paged(fq.ACTS, page_size=page_size):
+        # The works this run saw, in walk order and without repeats: the twelve
+        # dual-status works occupy two ACTS rows each, and binding a work into
+        # a VALUES batch twice would just make Fedlex answer for it twice.
+        works: dict[str, None] = {}
+
+        for row in client.keyset(fq.ACTS, key="work", page_size=page_size):
             # A single malformed row (or a write error on it) must not
             # abort the walk of 17,293 works -- log it, count it, move on.
             try:
@@ -200,8 +214,11 @@ def run(settings: Settings, page_size: int = 5000) -> ActsReport:
                 report.errors += 1
                 continue
             report.discovered += 1
+            work = row.get("work")
+            if work:
+                works[work] = None
             if report.discovered % 2000 == 0:
-                log.info("acts discovered=%d", report.discovered)
+                log.info("acts discovered=%d works=%d", report.discovered, len(works))
 
         batch: list[dict] = []
         attempted = 0
@@ -215,11 +232,15 @@ def run(settings: Settings, page_size: int = 5000) -> ActsReport:
             batch = []
             log.info("titles applied=%d", report.titled)
 
-        for row in client.paged(fq.TITLES, page_size=page_size):
+        for row in client.batched(fq.TITLES, works, batch_size=batch_size):
             batch.append(row)
             if len(batch) >= 1000:
                 _flush()
         _flush()
+        # Still reported even though the titles pass is now driven by the works
+        # this very run discovered: a work can carry a title in a language the
+        # schema has no column for, and a non-zero count here remains the only
+        # visible sign of a title row that reached the stage and went nowhere.
         report.unmatched_titles = attempted - report.titled
 
         # Authoritative counts and the conflict list come from the table
