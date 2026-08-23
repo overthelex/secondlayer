@@ -107,9 +107,13 @@ Never report coverage without these. See `chpipe/reports.py`.
 
 - **Gate A** (`reports.gate_a`) — HTML/PDF/OCR split and mean quality on a
   sample, before committing to a full run.
-- **Gate B** — `trg_jstats` fires correctly on the mass NULL -> text `UPDATE`
-  that `load` performs. Not automated; verify by hand against
-  `v_jurisdiction_fulltext_stats` before and after a `load` run.
+- **Gate B** — `trg_jstats` counts the mass NULL -> text `UPDATE` correctly.
+  That transition is performed by **`extract`**, not by `load`: migration 156
+  attaches the trigger `AFTER INSERT OR DELETE OR UPDATE OF full_text`, and
+  `load` only writes `stage`. Measuring Gate B around a `load` run reports a
+  delta of exactly zero and reads as a dead trigger. See
+  `tests/test_jstats_trigger.py`, which measures both directions against the
+  real trigger function.
 - **Gate C** (`reports.quality_distribution`) — the distribution of the
   quality score itself, never a bare count of "rows with text".
 - **Gate D** (`reports.completeness`) — our counts against entscheidsuche's
@@ -224,12 +228,33 @@ save time before a full run.
       declaring the backfill complete.
 
 - [ ] **Gate B: confirm `trg_jstats` on the mass NULL -> text `UPDATE`.**
-      `load` is the only stage that flips rows to `'loaded'`, which is the
-      transition the trigger watches. Snapshot
-      `v_jurisdiction_fulltext_stats` before running `load` on a small
-      batch (`CHPIPE_LIMIT=500`), run it, and confirm the delta matches the
-      number of rows actually promoted (`LoadReport.loaded`), not the
-      number claimed.
+      Measure it around **`extract`**, not `load`. The trigger is
+      `AFTER INSERT OR DELETE OR UPDATE OF full_text` (migration 156);
+      `load` writes only `stage`, so a Gate B run against `load` measures a
+      delta of exactly zero and looks like a broken trigger.
+
+      Snapshot both numbers before a small `extract` run
+      (`CHPIPE_LIMIT=500`):
+
+          SELECT fulltext_decisions FROM v_jurisdiction_fulltext_stats
+           WHERE jurisdiction_code = 'CH';
+          SELECT count(*) FROM ch_court_decisions WHERE full_text IS NOT NULL;
+
+      Run `extract`, then take both again. **The delta to expect is the
+      number of extracted rows whose `full_text` was NULL beforehand, not
+      `ExtractReport.extracted`.** The 165,363 CH_BGer rows already carry
+      (mojibake) text, so re-extracting them is text -> text:
+      `(OLD.full_text IS NULL) <> (NEW.full_text IS NULL)` is false and the
+      counter correctly does not move. Count the NULLs first if you want an
+      exact expectation:
+
+          SELECT count(*) FROM ch_court_decisions
+           WHERE stage = 'fetched' AND full_text IS NULL;
+
+      The check that always holds, and the one spec section 9 actually
+      asks for, is that the two numbers above **agree with each other**
+      afterwards. If they diverge, the trigger has drifted and
+      `v_jurisdiction_fulltext_stats` cannot be trusted for CH.
 - [ ] **Confirm tesseract's `deu`/`fra`/`ita` language packs on the prod
       box.** `ocr_stage` will silently produce garbage (or fail every row)
       if a pack is missing. `tesseract --list-langs` before the first real

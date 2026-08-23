@@ -127,30 +127,13 @@ def test_stage_index_is_partial_on_unfinished_work(conn):
     assert "WHERE" in definition and "loaded" in definition
 
 
-def test_jstats_trigger_counts_null_to_text_transition(conn):
-    """Guards the delta trigger against the mass UPDATE this pipeline performs.
-
-    Skipped on a scratch DB that has no jurisdiction_fulltext_stats; run it on a
-    prod-shaped copy for the real answer.
-    """
-    exists = conn.execute(
-        "SELECT to_regclass('public.jurisdiction_fulltext_stats') IS NOT NULL"
-    ).fetchone()[0]
-    if not exists:
-        pytest.skip("jurisdiction_fulltext_stats not present in this database")
-
-    before = conn.execute(
-        "SELECT fulltext_count FROM jurisdiction_fulltext_stats WHERE jurisdiction = 'CH'"
-    ).fetchone()[0]
-    conn.execute("INSERT INTO ch_court_decisions (ecli, spider) VALUES ('t1','S')")
-    conn.execute("UPDATE ch_court_decisions SET full_text = %s WHERE ecli = 't1'", ("x" * 500,))
-    after = conn.execute(
-        "SELECT fulltext_count FROM jurisdiction_fulltext_stats WHERE jurisdiction = 'CH'"
-    ).fetchone()[0]
-    assert after == before + 1, (
-        "delta trigger did not count NULL -> text; the mass UPDATE would corrupt "
-        "v_jurisdiction_fulltext_stats"
-    )
+# trg_jstats used to be "tested" here by a permanently skipped test. It could
+# never have passed: it queried fulltext_count/jurisdiction where migration 156
+# defines fulltext_decisions/jurisdiction_code, and its fixture DROP TABLEs
+# ch_court_decisions, which drops the trigger along with it. The real coverage
+# -- including which stage actually fires the trigger, which is extract and not
+# load -- lives in tests/test_jstats_trigger.py, where the trigger function is
+# executed verbatim out of 156_jurisdiction_fulltext_stats.sql.
 
 
 # --- Enrolment across the three national languages ---

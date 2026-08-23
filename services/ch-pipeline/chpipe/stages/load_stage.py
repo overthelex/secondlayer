@@ -1,14 +1,25 @@
 """Stage 5: promote extracted rows to loaded.
 
-Separate from extract on purpose. `extract` already writes `full_text`; this
-stage does nothing but a final sanity check and a stage flip. It is kept
-separate because the `UPDATE ... SET stage = 'loaded'` here is the statement
-that moves roughly 500,000 rows from NULL to text on the production table,
-and that transition fires trg_jstats, the delta trigger behind
-v_jurisdiction_fulltext_stats. Folding this into extract would mean that
-trigger fires interleaved with fetch/extract concurrency instead of in one
-resumable, single-purpose pass -- keeping it here means the trigger's
-behaviour is verified once (Gate B) and exercised in exactly one known way.
+What this stage is NOT: it is not the statement that moves rows from NULL to
+text, and it does not fire trg_jstats. That claim stood here through several
+rounds and was wrong. Migration 156 attaches the trigger as
+`AFTER INSERT OR DELETE OR UPDATE OF full_text`, and this stage writes only
+`stage` and its bookkeeping columns -- `full_text` is written by
+extract_stage (and by ocr_stage for a recovered scan), which is where the
+NULL -> text transition actually happens and where Gate B has to be
+measured. tests/test_jstats_trigger.py measures both directions.
+
+What it IS, and the reason it stays a separate stage: a read-back. `extract`
+writes `full_text` from memory and moves on; `load` claims the row again,
+asks the DATABASE how long the text it stored actually is, and only then
+marks the document done. A row that reached 'extracted' with no text --
+a write that silently did not land, a value trimmed by something downstream
+-- is caught here rather than counted as corpus. 'loaded' therefore means
+"verified present in the destination table", which is a different and
+stronger claim than "we called UPDATE", and it is the state the coverage
+gates count. Keeping it as its own resumable pass also means the final
+sweep over ~500,000 rows can be run, interrupted and re-run without
+touching the extraction work.
 """
 from __future__ import annotations
 
