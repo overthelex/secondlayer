@@ -31,15 +31,41 @@ Renicing happens in each stage's `main()`, never in `run()`: `os.nice()` is
 irreversible for a non-root process, so a `run()` that renices permanently
 drags down anything that calls it.
 
-### Why `CHPIPE_CPU_WORKERS` above 3 buys nothing
+### What `CHPIPE_CPU_WORKERS` actually buys
 
-`extract` spends about 50 ms per document inside `pdftotext`, which is a
-subprocess and releases the GIL, and about 28 ms in pure Python (lxml text
-extraction, control-character stripping, tokenising and scoring), which holds
-it. The GIL-held portion is the ceiling: at `cpu_workers=3` throughput is
-already ~36 documents/second against an ideal of ~38, so a fourth worker adds
-contention and roughly nothing else. Raise `CHPIPE_HTTP_CONCURRENCY` if you
-want the pipeline to go faster; `CHPIPE_CPU_WORKERS` is not the lever.
+Measured per document on the real 39-page Zug PDF fixture, 15 repeats
+(Apple Silicon laptop, not the prod box — read the ratios, not the absolute
+milliseconds):
+
+    pdftotext subprocess (GIL RELEASED)          58.82 ms
+    decode + strip control characters (held)      0.45 ms
+    text_quality.score (held)                    18.33 ms
+    ------------------------------------------------------
+    GIL-held per PDF document                    18.78 ms
+    GIL-free per PDF document                    58.82 ms
+
+Total 77.6 ms of CPU per document, which is where the ~17 CPU-hours for
+800,000 documents comes from (800,000 x 0.0776 s = 17.2 CPU-hours).
+
+The GIL-held share is the parallelism ceiling: however many threads run,
+they cannot overlap those 18.78 ms. That caps `extract` at roughly 53
+documents/second no matter what, and the knee is at about **4** workers
+(~51/s), not 3 (~39/s).
+
+**The default stays 3 anyway, and it is a policy choice, not a throughput
+one.** The box has 8 cores and is serving live traffic; three workers plus
+their `pdftotext` children is already about half of it. Raise
+`CHPIPE_CPU_WORKERS` only in a window where nothing else needs the machine,
+and expect no more than ~35% over the default before the GIL flattens the
+curve.
+
+(This is one of the numbers the control-character fix moved: before it, the
+GIL-held share was ~29 ms and the ceiling really was at 3 workers. Anything
+that shifts work between the two columns moves the knee, so re-measure
+before changing this rather than trusting the table above.)
+
+HTML documents are an order of magnitude cheaper: 0.16 ms to extract and
+1.22 ms to score, all of it GIL-held, no subprocess at all.
 
 ## Stages
 

@@ -18,12 +18,15 @@ from dataclasses import dataclass
 
 from .. import db, ocr, text_quality, throttle
 from ..config import Settings
-from ..throttle import should_pause
+# Re-exported: ocr_stage.should_pause was this module's own function
+# before the throttling moved to chpipe.throttle, and it is part of the
+# surface the stage's tests address.
+from ..throttle import should_pause  # noqa: F401
 from .fetch_stage import raw_path
 
 log = logging.getLogger(__name__)
 
-PAUSE_SECONDS = throttle.PAUSE_SECONDS
+PAUSE_SECONDS = throttle.PAUSE_SECONDS   # kept as an alias for the same reason
 
 
 @dataclass

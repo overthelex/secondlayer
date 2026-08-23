@@ -5,13 +5,19 @@ stages get 3 workers at nice 10, OCR gets 2 at nice 19, and the HTTP stages
 are I/O bound and can afford more. See chpipe/throttle.py for what each stage
 actually does with these.
 
-CHPIPE_CPU_WORKERS above 3 buys nothing. `extract` spends about 50 ms per
-document inside pdftotext -- a subprocess, so the GIL is released -- and
-about 28 ms in pure Python (lxml text extraction, control-character
-stripping, tokenising, scoring), which holds it. The GIL-held portion is the
-ceiling: at 3 workers throughput is already ~36 documents/second against an
-ideal of ~38. A fourth worker adds contention and roughly nothing else.
-CHPIPE_HTTP_CONCURRENCY is the lever that actually moves the wall clock.
+CHPIPE_CPU_WORKERS = 3 is a neighbourliness choice, not a throughput one.
+Measured per document on the real PDF fixture (15 repeats): 58.82 ms inside
+pdftotext, which is a subprocess and releases the GIL, and 18.78 ms of pure
+Python that holds it (0.45 ms decode + control-character strip, 18.33 ms
+text_quality.score). The GIL-held share caps extract at roughly 53
+documents/second however many threads run, with the knee at about 4 workers
+(~51/s) rather than 3 (~39/s) -- so a fourth worker would buy something, at
+the cost of a core the box needs for live traffic. Raise it only in a window
+where nothing else needs the machine.
+
+Re-measure before changing it: the control-character fix moved the GIL-held
+share from ~29 ms to 18.78 ms and shifted the knee from 3 workers to 4.
+Anything that moves work between the two columns moves it again.
 """
 from __future__ import annotations
 
