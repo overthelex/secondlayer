@@ -216,6 +216,12 @@ def run(settings: Settings, batch_size: int = BATCH_SIZE,
 
     `statement_timeout` bounds one batch. Set it to "0" to disable, which is
     a maintenance-window choice, not a default.
+
+    The pending ids are snapshotted once, while _PROJECT re-derives "latest"
+    per batch. If parse-akn promotes a newer edition of an act mid-run, that
+    act's snapshotted id is no longer latest and its batch row matches
+    nothing, so the act is skipped until the next projection. A skip, never
+    a wrong write or a duplicate -- and the next run picks it up.
     """
     conn = db.connect(settings)
     try:

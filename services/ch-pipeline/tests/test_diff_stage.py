@@ -23,7 +23,13 @@ pytestmark = pytest.mark.skipif(
 def settings():
     return Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
                     http_concurrency=1, cpu_workers=1, ocr_workers=1,
-                    load_ceiling=6.0, max_attempts=3)
+                    # 0.0 disables the guard (throttle.should_pause). The
+                    # capacity test monkeypatches wait_for_capacity, so it
+                    # still sees the call; a real ceiling here would instead
+                    # park every other test in this file in a 60s sleep loop
+                    # whenever the box's load is high -- a hung suite, not a
+                    # failing one.
+                    load_ceiling=0.0, max_attempts=3)
 
 
 @pytest.fixture
@@ -286,3 +292,45 @@ def test_diff_waits_for_capacity_before_each_act(conn, settings, monkeypatch):
     diff_stage.run(settings)
 
     assert seen == [(settings.load_ceiling, "diff")]
+
+
+def test_a_crash_between_the_delete_and_the_writes_keeps_the_old_rows(
+        conn, settings, monkeypatch):
+    """The connection is autocommit, so an unguarded delete would commit on
+    its own: a kill before the writes would leave the edition's change log
+    empty and committed -- a state the pre-batch code could not reach. The
+    explicit transaction makes the replacement atomic, so a failed run
+    leaves the previous rows exactly where they were."""
+    _edition(conn, "2020-01-01", [("art_1", "a"), ("art_2", "a")])
+    v2 = _edition(conn, "2022-01-01", [("art_1", "b"), ("art_2", "b")])
+    diff_stage.run(settings)
+    before = {r[0] for r in conn.execute(
+        "SELECT e_id FROM ch_act_change WHERE to_version_id=%s", (v2,)).fetchall()}
+    assert before == {"art_1", "art_2"}
+
+    real_execute = diff_stage.diff_articles.diff
+
+    def _explode_on_write(*args, **kwargs):
+        changes = real_execute(*args, **kwargs)
+        monkeypatch.setattr(diff_stage, "_UPSERT_CHANGE", "SELECT 1/0")
+        return changes
+
+    monkeypatch.setattr(diff_stage.diff_articles, "diff", _explode_on_write)
+    report = diff_stage.run(settings)
+
+    assert report.errors == 1, "the per-act guard still counts one failed act"
+    assert {r[0] for r in conn.execute(
+        "SELECT e_id FROM ch_act_change WHERE to_version_id=%s",
+        (v2,)).fetchall()} == before, "the delete must have rolled back with it"
+
+
+def test_a_rolled_back_pair_does_not_inflate_the_report(conn, settings,
+                                                        monkeypatch):
+    """Counters move only once the replacement is durable."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    _edition(conn, "2022-01-01", [("art_1", "b")])
+    monkeypatch.setattr(diff_stage, "_UPSERT_CHANGE", "SELECT 1/0")
+    report = diff_stage.run(settings)
+    assert report.errors == 1
+    assert report.changes == 0
+    assert report.orphaned == 0

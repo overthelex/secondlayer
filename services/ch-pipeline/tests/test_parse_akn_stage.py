@@ -47,7 +47,8 @@ def _settings(raw_dir):
     return Settings(
         dsn=os.environ.get("CHPIPE_TEST_DSN", "unused"),
         raw_dir=raw_dir, http_concurrency=2, cpu_workers=1, ocr_workers=1,
-        load_ceiling=6.0, max_attempts=3)
+        # 0.0 disables the guard -- see the note in test_diff_stage.py.
+        load_ceiling=0.0, max_attempts=3)
 
 
 # --- Step 2 of the brief: the five prescribed parse_akn_stage tests ---
@@ -535,7 +536,7 @@ def test_a_version_with_no_akn_xml_is_recorded_as_failed_not_silently_skipped(co
 def _settings_no_backoff(raw_dir):
     return Settings(
         dsn=os.environ.get("CHPIPE_TEST_DSN", "unused"), raw_dir=raw_dir,
-        http_concurrency=2, cpu_workers=1, ocr_workers=1, load_ceiling=6.0,
+        http_concurrency=2, cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
         max_attempts=3, retry_backoff_minutes=())
 
 
@@ -589,9 +590,10 @@ def test_parse_waits_for_capacity_before_claiming(conn, tmp_path, monkeypatch):
     vid = _version(conn)
     _seed_fetched(conn, vid, FIXTURE.read_text(encoding="utf-8"))
 
-    parse_akn_stage.run(_settings(tmp_path), limit=None)
+    settings = _settings(tmp_path)
+    parse_akn_stage.run(settings, limit=None)
 
-    assert seen and seen[0] == (6.0, "parse-akn")
+    assert seen and seen[0] == (settings.load_ceiling, "parse-akn")
 
 
 def test_parse_uses_one_document_parse_for_both_products(conn, tmp_path,

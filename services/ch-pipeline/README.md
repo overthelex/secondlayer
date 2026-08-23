@@ -454,6 +454,14 @@ as the decisions half above:
 article sets per comparison) are the CPU stages; they get the ceiling for the
 same reason `extract` does.
 
+**`CHPIPE_CPU_WORKERS` is not read by any legislation stage.** All six are
+single-threaded, so setting it before a parse-akn run changes nothing — the
+knob belongs to `extract` and `ocr` on the decisions half. Threading a
+per-item Postgres writer needs its own measurement, and the decisions half's
+`CHPIPE_CPU_WORKERS=3` rests on a GIL-share number that does not transfer to
+lxml. Turn the throughput of these two stages up with `CHPIPE_LOAD_CEILING`
+and a quiet window, not with worker counts.
+
 ## Running one
 
     ./run-stage.sh acts

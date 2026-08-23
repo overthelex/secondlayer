@@ -157,19 +157,26 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
                         _articles(conn, previous["version_id"]),
                         _articles(conn, version["version_id"]))
                     report.comparisons += 1
-                    # Inside the same per-act guard as everything else: a
-                    # failure between the delete and the writes counts as
-                    # one failed act and is retried by the next run, which
-                    # recomputes the whole set anyway.
-                    stale = {r["e_id"] for r in conn.execute(
-                        _CLEAR_CHANGES, (version["version_id"],)).fetchall()}
+                    # The connection is autocommit, so without this block
+                    # the delete would commit on its own and a hard kill
+                    # before the writes would leave the edition's change log
+                    # empty and committed -- a state the pre-batch code
+                    # could not reach. One explicit transaction makes the
+                    # replacement atomic; the surrounding per-act guard
+                    # still turns any failure into one failed act.
+                    with conn.transaction():
+                        stale = {r["e_id"] for r in conn.execute(
+                            _CLEAR_CHANGES, (version["version_id"],)).fetchall()}
+                        for change in changes:
+                            conn.execute(_UPSERT_CHANGE, (
+                                current_act, lang, previous["version_id"],
+                                version["version_id"], change.e_id,
+                                change.article_number, change.change_type,
+                                version["date_applicability"]))
+                    # Counted only once the replacement is durable: a
+                    # rolled-back pair must not inflate the report.
                     report.orphaned += len(stale - {c.e_id for c in changes})
                     for change in changes:
-                        conn.execute(_UPSERT_CHANGE, (
-                            current_act, lang, previous["version_id"],
-                            version["version_id"], change.e_id,
-                            change.article_number, change.change_type,
-                            version["date_applicability"]))
                         report.changes += 1
                         setattr(report, change.change_type,
                                 getattr(report, change.change_type) + 1)
