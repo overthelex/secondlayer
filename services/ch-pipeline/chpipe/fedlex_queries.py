@@ -1,6 +1,8 @@
 """The Fedlex SPARQL queries, verified against the live endpoint on 2026-08-23.
 
-Counts observed that day, for reference when a run's numbers look wrong:
+Counts observed that day. Fedlex is a live government dataset, so treat these
+as a point-in-time snapshot, not invariants -- a later run measuring numbers
+in the same ballpark is fine; ordinary drift is expected:
   jolux:ConsolidationAbstract   17,293 distinct works
   jolux:Consolidation           56,328
   jolux:Act (AS + BBl)         369,181
@@ -25,8 +27,20 @@ PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 """
 
-# One row per work. srNotation, dateDocument and inForce are all OPTIONAL because
-# roughly 4,300 works carry no status and some carry no SR notation at all.
+# One row per (work, distinct inForceStatus binding) -- NOT one row per work.
+# srNotation, dateDocument and inForce are all OPTIONAL because roughly 4,300
+# works carry no status and some carry no SR notation at all.
+#
+# Twelve works in the live graph assert BOTH inForceStatus 0 (in force) and 3
+# (no longer in force) at the same time -- always that exact pattern, 0 and 3
+# together, never any other combination: cc/2003/31, cc/2010/724, cc/2018/335,
+# cc/2018/615, cc/2020/711, cc/2020/982, cc/2020/1073, cc/2021/217,
+# cc/2021/302, cc/2022/278, cc/2022/544, cc/2023/135. For each of them this
+# query returns two rows, identical except for ?inForce. That is correct:
+# SELECT DISTINCT is not deduplicating a work, it is reporting two genuinely
+# different triples the source graph actually asserts. Resolving which status
+# is true -- or whether to keep both -- is the ingesting task's job, not this
+# query's or the client's; nothing here merges, drops, or prefers one.
 ACTS = _PREFIXES + """
 SELECT DISTINCT ?work ?srNotation ?dateDocument ?dateEntryForce
                 ?dateNoLongerInForce ?inForce WHERE {
@@ -41,7 +55,7 @@ SELECT DISTINCT ?work ?srNotation ?dateDocument ?dateEntryForce
   OPTIONAL { ?work jolux:dateNoLongerInForce ?dateNoLongerInForce }
   OPTIONAL { ?work jolux:inForceStatus ?inForce }
 }
-ORDER BY ?work
+ORDER BY ?work ?inForce
 LIMIT %(limit)d OFFSET %(offset)d
 """
 
