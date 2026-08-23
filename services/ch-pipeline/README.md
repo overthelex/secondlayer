@@ -151,6 +151,44 @@ save time before a full run.
       runner picked it up and check `SELECT stage, count(*) FROM
       ch_court_decisions GROUP BY 1` afterwards against the numbers the
       migration comment predicts.
+- [ ] **Verify the legacy `ecli` format BEFORE running `index`.** Every
+      upsert keys on `ON CONFLICT (ecli)` and builds its key as
+      `ECLI:CH:{spider}:{doc_id}` (`es_document.parse`). If the 678,165 rows
+      already on prod use any other shape, `index` inserts 678,165 duplicates
+      instead of healing the existing rows, and `doc_id` stays NULL on the
+      originals — which means `db.claim` will never hand them out and the
+      backfill silently covers only the new copies. Run:
+
+          SELECT count(*) AS total,
+                 count(*) FILTER (WHERE ecli LIKE 'ECLI:CH:%')            AS ch_prefixed,
+                 count(*) FILTER (WHERE ecli = 'ECLI:CH:' || spider || ':' ||
+                                         split_part(ecli, ':', 4))        AS spider_shaped
+            FROM ch_court_decisions;
+
+          SELECT spider, min(ecli), max(ecli) FROM ch_court_decisions
+           GROUP BY 1 ORDER BY 1;
+
+      Read the second query's samples by eye against
+      `ECLI:CH:{spider}:{doc_id}` — do not accept the first query's counts
+      alone. **`tests/test_es_document.py::test_ecli_is_stable_with_the_existing_678k_rows`
+      is not evidence for this**: it asserts the format against the very
+      function that produces it, so it is a tautology. Nothing in this repo
+      has ever read a real `ecli` off prod.
+
+- [ ] **Check how many rows `index` failed to key.** After `index`, before
+      `fetch`:
+
+          SELECT stage, count(*) FROM ch_court_decisions
+           WHERE doc_id IS NULL GROUP BY 1;
+
+      `db.claim` refuses rows with a NULL `doc_id` (it cannot write them
+      back, so claiming them is an endless loop), and every claiming stage
+      logs this count at start-up. A non-zero number here is work that will
+      never be done: either the `ecli` shapes did not match, or those
+      documents have been withdrawn from the entscheidsuche listing and
+      cannot be re-indexed at all. Decide which, in writing, before
+      declaring the backfill complete.
+
 - [ ] **Gate B: confirm `trg_jstats` on the mass NULL -> text `UPDATE`.**
       `load` is the only stage that flips rows to `'loaded'`, which is the
       transition the trigger watches. Snapshot

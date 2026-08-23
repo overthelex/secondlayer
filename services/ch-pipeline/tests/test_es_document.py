@@ -55,7 +55,16 @@ def test_languages_come_from_the_kopfzeile_entries():
 
 def test_ecli_is_stable_with_the_existing_678k_rows():
     """Existing rows were keyed ECLI:CH:{spider}:{doc_id}; changing that would
-    duplicate every row already in the table."""
+    duplicate every row already in the table.
+
+    NOT evidence about production. This asserts the format against the code
+    that produces it -- a tautology. Nothing in this repository has ever read
+    a real `ecli` off prod, so whether the 678,165 rows there actually use
+    this shape is an open question that only a query against prod can
+    settle. It is on the README's deferred checklist, and it has to be
+    answered BEFORE `index` runs: if the shapes differ, every upsert inserts
+    a duplicate instead of healing the existing row.
+    """
     f = es_document.parse("ZG_Obergericht", "ZG_OG_001_Z1-2020-5_2022-02-18", ZG)
     assert f.ecli == "ECLI:CH:ZG_Obergericht:ZG_OG_001_Z1-2020-5_2022-02-18"
 

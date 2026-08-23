@@ -34,6 +34,12 @@ def run(settings: Settings, limit: int | None = None,
     report = LoadReport()
     conn = db.connect(settings)
     remaining = limit
+    # Rows without a doc_id cannot be claimed (see db.claim); say how many
+    # are being skipped rather than letting them sit invisibly at this stage.
+    unkeyed = db.unkeyed_count(conn, "extracted", spider)
+    if unkeyed:
+        log.warning("%d rows at stage 'extracted' have no doc_id and cannot be "
+                    "claimed; run `index` to key them", unkeyed)
     try:
         while True:
             size = 1000 if remaining is None else min(1000, remaining)

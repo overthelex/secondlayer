@@ -159,6 +159,12 @@ async def _run_async(settings: Settings, limit: int | None,
     report = FetchReport()
     conn = db.connect(settings)
     batch = 500
+    # Rows without a doc_id cannot be claimed (see db.claim); say how many
+    # are being skipped rather than letting them sit invisibly at this stage.
+    unkeyed = db.unkeyed_count(conn, "indexed", spider)
+    if unkeyed:
+        log.warning("%d rows at stage 'indexed' have no doc_id and cannot be "
+                    "claimed; run `index` to key them", unkeyed)
     remaining = limit
     try:
         async with Fetcher(concurrency=settings.http_concurrency) as fetcher:

@@ -58,6 +58,12 @@ def run(settings: Settings, limit: int | None = None,
     report = OcrReport()
     conn = db.connect(settings)
     started = time.monotonic()
+    # Rows without a doc_id cannot be claimed (see db.claim); say how many
+    # are being skipped rather than letting them sit invisibly at this stage.
+    unkeyed = db.unkeyed_count(conn, "ocr_pending", spider)
+    if unkeyed:
+        log.warning("%d rows at stage 'ocr_pending' have no doc_id and cannot be "
+                    "claimed; run `index` to key them", unkeyed)
     remaining = limit
     try:
         with concurrent.futures.ThreadPoolExecutor(settings.ocr_workers) as pool:

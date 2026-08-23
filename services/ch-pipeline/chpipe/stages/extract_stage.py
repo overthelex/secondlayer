@@ -57,6 +57,12 @@ def run(settings: Settings, limit: int | None = None,
     report = ExtractReport()
     conn = db.connect(settings)
     remaining = limit
+    # Rows without a doc_id cannot be claimed (see db.claim); say how many
+    # are being skipped rather than letting them sit invisibly at this stage.
+    unkeyed = db.unkeyed_count(conn, "fetched", spider)
+    if unkeyed:
+        log.warning("%d rows at stage 'fetched' have no doc_id and cannot be "
+                    "claimed; run `index` to key them", unkeyed)
     try:
         with concurrent.futures.ThreadPoolExecutor(settings.cpu_workers) as pool:
             while True:

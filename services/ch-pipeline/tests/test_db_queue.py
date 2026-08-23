@@ -170,3 +170,68 @@ def test_retry_failed_returns_row_count(conn):
 
     count = db.retry_failed(conn, "fetched")
     assert count == 3
+
+
+# --- The rows the queue could hand out but never update ---
+#
+# claim() had no `doc_id IS NOT NULL` predicate while complete() and fail()
+# both key on `WHERE doc_id = %s`, which never matches NULL. Reproduced on a
+# scratch database with a legacy-shaped row (ecli set, doc_id NULL): the row
+# was claimed, db.fail() was a silent no-op (attempts still 0, last_error
+# still NULL, stage still 'indexed'), and the very next claim returned the
+# same row again. With no `limit`, `while True` never terminates and the same
+# documents are re-fetched forever from a volunteer-run mirror.
+#
+# This is not hypothetical for legacy rows only: documents withdrawn from the
+# entscheidsuche listing are never re-indexed, so they keep doc_id NULL and
+# sit at 'indexed' indefinitely.
+
+def _seed_legacy(conn, ecli, stage, spider="CH_BGer"):
+    """A row shaped like the 678,165 already on prod: keyed by ecli, no doc_id."""
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) VALUES (%s,%s,%s)",
+        (ecli, spider, stage))
+
+
+def test_claim_never_hands_out_a_row_it_could_not_update(conn):
+    _seed_legacy(conn, "ECLI:CH:CH_BGer:1C_100_2020", "indexed")
+    assert db.claim(conn, "indexed", limit=10) == [], (
+        "a row with no doc_id cannot be completed or failed, so claiming it "
+        "produces an endless re-fetch loop")
+
+
+def test_claim_still_returns_keyed_rows_alongside_unkeyed_ones(conn):
+    _seed_legacy(conn, "ECLI:CH:CH_BGer:legacy", "indexed")
+    _seed(conn, "keyed", "indexed")
+    assert [r["doc_id"] for r in db.claim(conn, "indexed", limit=10)] == ["keyed"]
+
+
+def test_unkeyed_count_makes_the_skipped_population_visible(conn):
+    """Skipping them silently would trade one invisible failure for another."""
+    _seed_legacy(conn, "ECLI:CH:CH_BGer:a", "indexed")
+    _seed_legacy(conn, "ECLI:CH:CH_BGer:b", "indexed")
+    _seed_legacy(conn, "ECLI:CH:CH_BGer:c", "fetched")
+    _seed(conn, "keyed", "indexed")
+    assert db.unkeyed_count(conn, "indexed") == 2
+    assert db.unkeyed_count(conn, "fetched") == 1
+    assert db.unkeyed_count(conn, "indexed", spider="ZG_Obergericht") == 0
+
+
+def test_complete_raises_when_it_updates_nothing(conn):
+    """A keyed write that matches no row is a bug, not a success."""
+    with pytest.raises(db.QueueWriteMissed, match="ghost"):
+        db.complete(conn, "ghost", "extracted", text_quality=0.9)
+
+
+def test_fail_raises_when_it_updates_nothing(conn):
+    with pytest.raises(db.QueueWriteMissed, match="ghost"):
+        db.fail(conn, "ghost", "connection reset", max_attempts=3)
+
+
+def test_complete_and_fail_still_succeed_for_a_real_row(conn):
+    _seed(conn, "a", "fetched")
+    db.complete(conn, "a", "extracted", text_quality=0.9)
+    db.fail(conn, "a", "boom", max_attempts=3)
+    row = conn.execute(
+        "SELECT stage, attempts FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row == ("extracted", 1)
