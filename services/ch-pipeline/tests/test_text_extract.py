@@ -26,6 +26,16 @@ def test_html_to_text_preserves_paragraph_breaks():
     assert "\n" in text_extract.from_html(html)
 
 
+def test_html_to_text_splits_br_separated_lines():
+    """entscheidsuche HTML uses <br> heavily inside a single <p> for party
+    blocks and case captions. <br> is a void element, so its .tail is the
+    text that FOLLOWS it — a break appended there lands one run late and the
+    break before it is lost. Each line must come out separated."""
+    html = b"<p>Beschwerdefuehrer:<br>Herr Muller<br>Zug</p>"
+    lines = text_extract.from_html(html).splitlines()
+    assert lines == ["Beschwerdefuehrer:", "Herr Muller", "Zug"]
+
+
 def test_html_to_text_handles_a_broken_encoding_declaration():
     html = "<html><meta charset='iso-8859-1'><p>Beschwerdeführer</p></html>".encode("utf-8")
     assert "Beschwerde" in text_extract.from_html(html)

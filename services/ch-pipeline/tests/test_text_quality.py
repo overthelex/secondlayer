@@ -1,3 +1,5 @@
+import random
+
 from chpipe import text_quality
 
 GOOD_DE = (
@@ -26,6 +28,27 @@ def test_replacement_characters_drag_the_score_down():
 
 def test_a_page_of_digits_and_punctuation_scores_low():
     assert text_quality.score("12.3 45,6 78/9 " * 100, ["de"]) < text_quality.ACCEPT_THRESHOLD
+
+
+def test_zero_content_noise_does_not_reach_the_accept_band():
+    """300 random six-letter tokens are all-alpha, land exactly on the
+    mean_word_length peak, and contain no U+FFFD or control characters — every
+    component except dictionary_hit_rate maxes out, yet there isn't a single
+    real word in it. Before the MIN_RAW_HIT_RATE floor this landed EXACTLY on
+    ACCEPT_THRESHOLD (0.55); tidiness alone must not buy acceptance."""
+    rng = random.Random(42)
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    noise = " ".join("".join(rng.choice(letters) for _ in range(6)) for _ in range(300))
+    assert text_quality.score(noise, ["de"]) <= text_quality.NO_DICTIONARY_SCORE_CAP
+
+
+def test_a_question_mark_glyph_failure_scores_well_below_threshold():
+    """A broken font CMap that renders every missing glyph as a literal "?"
+    must not slip through replacement_ratio, which used to catch only U+FFFD
+    and control characters and let this case land at 0.5585 — just above
+    ACCEPT_THRESHOLD (0.55)."""
+    broken = GOOD_DE.replace("e", "?")
+    assert text_quality.score(broken, ["de"]) < text_quality.ACCEPT_THRESHOLD - 0.1
 
 
 def test_empty_text_scores_zero():

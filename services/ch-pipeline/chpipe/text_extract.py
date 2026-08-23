@@ -17,9 +17,18 @@ PDFTOTEXT_TIMEOUT_SECONDS = 120
 # just concatenates text nodes with no separator, so two adjacent <p> tags
 # collapse into one run-on line unless we inject the break ourselves.
 _BLOCK_TAGS = frozenset({
-    "p", "div", "br", "li", "tr", "table", "section", "article",
+    "p", "div", "li", "tr", "table", "section", "article",
     "h1", "h2", "h3", "h4", "h5", "h6",
 })
+
+# Void elements have no content of their own, so `.tail` is the text that
+# FOLLOWS them, not text they contain. Appending "\n" to that tail (as we do
+# for container tags) pushes the break past the run it should precede, which
+# both drops the break before the void element and misplaces it one run late.
+# entscheidsuche HTML leans on <br> heavily for party blocks and case
+# captions ("Beschwerdefuehrer:<br>Herr Mueller<br>Zug"), so the separator
+# must be inserted at the FRONT of the tail instead.
+_VOID_BLOCK_TAGS = frozenset({"br"})
 
 
 class PdfToolMissing(RuntimeError):
@@ -41,6 +50,8 @@ def from_html(payload: bytes) -> str:
     for el in tree.iter():
         if el.tag in _BLOCK_TAGS:
             el.tail = (el.tail or "") + "\n"
+        elif el.tag in _VOID_BLOCK_TAGS:
+            el.tail = "\n" + (el.tail or "")
     text = tree.text_content()
     lines = [line.strip() for line in text.splitlines()]
     return "\n".join(line for line in lines if line)
