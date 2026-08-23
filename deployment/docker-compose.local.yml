@@ -35,6 +35,9 @@ services:
       - "127.0.0.1:5432:5432"  # Standard PostgreSQL port
     volumes:
       - postgres_local_data:/var/lib/postgresql/data
+      # Tablespace on the 20 TB spindle for the cold bulk — EDRSR full texts are
+      # 1.5 TB of sequentially-read TOAST and have no business on the nvme.
+      - /mnt/bulk_storage/pg_local_ts:/mnt/bulk_ts
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_local}"]
       interval: 5s
