@@ -336,6 +336,122 @@ def _deduplicate(changes: list[Change], old: dict[str, dict],
     return resolved
 
 
+def _index_by_fingerprint(articles: dict[str, dict]) -> dict[str, list[str]]:
+    """fingerprint(text) -> the eIds carrying that exact (normalised) text
+    among `articles`, sorted. Sorted so that any consumer matching against
+    this index is deterministic regardless of dict iteration order --
+    never trust a bare dict/set walk to be stable across processes; see
+    _match_containers()'s docstring for why that matters here."""
+    index: dict[str, list[str]] = {}
+    for e_id, article in articles.items():
+        index.setdefault(fingerprint(article.get("text", "")), []).append(e_id)
+    for e_ids in index.values():
+        e_ids.sort()
+    return index
+
+
+def _reconcile_moved_disp_articles(
+        removed_candidates: dict[str, dict],
+        added_candidates: dict[str, dict]) -> tuple[set[str], set[str]]:
+    """Beyond a single container's renumbering (see _match_containers), a
+    provision can move to a container that never pairs with its origin at
+    all: a container splits, sending part of its content elsewhere while
+    the rest stays; two containers merge into one. In either shape the
+    moved content's destination is not its origin container's structural
+    continuation, so _match_containers() correctly declines to pair them
+    (they are not the same container renumbered) -- and without this
+    function, the moved content would be read as an unrelated repeal and
+    an unrelated addition. Measured on a content-preserving split: one
+    repealed row plus one added row where the correct answer is zero; on a
+    content-preserving merge: two added plus two repealed where the
+    correct answer is zero.
+
+    The general rule, deliberately not scoped to "within one container
+    pair": if a removed disp-scoped eId's normalised text reappears
+    anywhere among the added disp-scoped candidates in the SAME diff()
+    call, the provision moved -- no repeal, no addition, regardless of
+    which containers are involved or whether any two of them pair.
+    `removed_candidates`/`added_candidates` are therefore the FULL pool of
+    "old-only"/"new-only" disp articles this diff() call has produced so
+    far, from every source: a confirmed container pair's own old-only/
+    new-only suffixes (a merge's moved half surfaces exactly there, as a
+    new-only suffix of the container it lands in) AND the plain fallback
+    for containers with no pairing at all (a split's moved half surfaces
+    exactly there, since its destination container has no old-side
+    counterpart to pair with). Reconciling only one of those two sources
+    -- as an earlier version of this function did, checking solely the
+    fallback remainder -- misses exactly the merge shape, where the moved
+    content's "added" candidate is generated from INSIDE a pair, never
+    reaching the fallback at all.
+
+    Fingerprint identity, not similarity, is the signal: it is the exact
+    value diff() already computes for every article to decide "did this
+    change at all", so reusing it here costs nothing extra and, unlike a
+    similarity threshold, can never merge two provisions that merely read
+    alike.
+
+    SCOPE: both sides are filtered to disp-scoped eIds only (see
+    _disp_container()), never ordinary top-level articles. Matching
+    content alone across top-level articles risks exactly what
+    test_unrelated_articles_with_identical_new_text_are_not_merged_into_a_rename
+    guards against -- two unrelated articles that happen to share
+    coincidentally identical text (most plausibly a bare repeal marker)
+    being silently merged into a false "nothing happened". Disp containers
+    are the ones Fedlex is known, structurally, to reshuffle; ordinary
+    articles are not, so this stays inside the boundary the rest of the
+    module already draws.
+
+    A MOVE THAT ALSO CARRIES A WORDING CHANGE is deliberately NOT caught
+    here: its fingerprint changes, so it will not reappear verbatim on the
+    other side. This module already has a mechanism for "moved and
+    reworded" -- container-pairing itself (_match_containers() plus
+    _compare() on the intersection suffixes), which is exactly how Fedlex
+    actually produces that combination: the SAME container's content,
+    whole, landing in a new container number, possibly with some articles
+    reworded along the way (see test_disp_container_renumbering_with_a_wording_change_is_one_modified_row).
+    A wording change riding along with a move to an entirely different,
+    non-corresponding container -- a split or merge, not a renumber -- is
+    a compound, much rarer event this function does not attempt to guess
+    at by similarity: doing so would reopen the exact false-positive risk
+    the disp-only scoping above exists to avoid (two DIFFERENT,
+    similarly-but-not-identically-worded provisions merged). Left as a
+    repeal and an addition -- conservative, but it never asserts a
+    continuity this function cannot verify by exact content.
+
+    AMBIGUITY: if a removed eId's text matches several added candidates,
+    or several removed eIds share the same text, the shorter of the two
+    candidate lists for that fingerprint is paired off against the other
+    in SORTED eId order, deterministically, regardless of dict/set
+    iteration order (the exact defect class the last two rounds of this
+    module were sent back for). No judgement call is needed about WHICH
+    physical eId "really" continues which: every eId sharing one
+    fingerprint carries byte-identical (post-normalisation) text by
+    definition, so which specific string labels which is genuinely
+    arbitrary -- only the COUNT absorbed as "moved" (min of the two list
+    lengths) matters, and any excess on the longer side is left to be
+    judged a genuine repeal or addition on its own, exactly as if it had
+    never had a same-text sibling at all.
+
+    Returns the eIds consumed on each side, NOT Change objects: a moved
+    provision produces no Change at all.
+    """
+    old_index = _index_by_fingerprint(
+        {e_id: a for e_id, a in removed_candidates.items()
+         if _disp_container(e_id) is not None})
+    new_index = _index_by_fingerprint(
+        {e_id: a for e_id, a in added_candidates.items()
+         if _disp_container(e_id) is not None})
+
+    moved_old: set[str] = set()
+    moved_new: set[str] = set()
+    for fp in sorted(old_index.keys() & new_index.keys()):
+        for old_e_id, new_e_id in zip(old_index[fp], new_index[fp]):
+            moved_old.add(old_e_id)
+            moved_new.add(new_e_id)
+
+    return moved_old, moved_new
+
+
 def diff(before: list[dict], after: list[dict]) -> list[Change]:
     """Changes that turn `before` into `after`, ordered by eId for stability."""
     old = {a["e_id"]: a for a in before}
@@ -348,6 +464,16 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
 
     matched_old_ids: set[str] = set()
     matched_new_ids: set[str] = set()
+    # Every "old-only" / "new-only" disp article this call produces, from
+    # EVERY source (a confirmed pair's own old-only/new-only suffixes, and
+    # the plain fallback below) -- collected rather than turned into
+    # Change objects immediately, so _reconcile_moved_disp_articles() can
+    # see the full pool and catch a split or merge whose two halves come
+    # from different sources. See that function's docstring for why a
+    # merge specifically requires this: its "added" half is generated
+    # from inside a pair, never reaching the fallback on its own.
+    removed_candidates: dict[str, dict] = {}
+    added_candidates: dict[str, dict] = {}
 
     for n_b, n_a in container_pairs:
         old_group, new_group = old_disp[n_b], new_disp[n_a]
@@ -355,14 +481,12 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
         matched_new_ids.update(a["e_id"] for a in new_group.values())
 
         for suffix in sorted(old_group.keys() - new_group.keys()):
-            change = _repealed_change(old_group[suffix])
-            if change is not None:
-                changes.append(change)
+            article = old_group[suffix]
+            removed_candidates[article["e_id"]] = article
 
         for suffix in sorted(new_group.keys() - old_group.keys()):
-            change = _added_change(new_group[suffix])
-            if change is not None:
-                changes.append(change)
+            article = new_group[suffix]
+            added_candidates[article["e_id"]] = article
 
         for suffix in sorted(old_group.keys() & new_group.keys()):
             old_a, new_a = old_group[suffix], new_group[suffix]
@@ -378,16 +502,22 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
     old_remaining = {e_id: a for e_id, a in old.items() if e_id not in matched_old_ids}
     new_remaining = {e_id: a for e_id, a in new.items() if e_id not in matched_new_ids}
 
-    added_ids = new_remaining.keys() - old_remaining.keys()
-    removed_ids = old_remaining.keys() - new_remaining.keys()
+    for e_id in sorted(new_remaining.keys() - old_remaining.keys()):
+        added_candidates[e_id] = new_remaining[e_id]
 
-    for e_id in sorted(added_ids):
-        change = _added_change(new_remaining[e_id])
+    for e_id in sorted(old_remaining.keys() - new_remaining.keys()):
+        removed_candidates[e_id] = old_remaining[e_id]
+
+    moved_old, moved_new = _reconcile_moved_disp_articles(
+        removed_candidates, added_candidates)
+
+    for e_id in sorted(removed_candidates.keys() - moved_old):
+        change = _repealed_change(removed_candidates[e_id])
         if change is not None:
             changes.append(change)
 
-    for e_id in sorted(removed_ids):
-        change = _repealed_change(old_remaining[e_id])
+    for e_id in sorted(added_candidates.keys() - moved_new):
+        change = _added_change(added_candidates[e_id])
         if change is not None:
             changes.append(change)
 

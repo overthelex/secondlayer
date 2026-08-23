@@ -329,6 +329,91 @@ print([(c.e_id, c.change_type) for c in changes])
 """
 
 
+def test_a_content_preserving_split_produces_no_change():
+    """A container split where the moved half's content is UNCHANGED --
+    not the reworded-and-shifted shape covered above, but a plain
+    relocation -- must produce no rows at all. "disp_u11" keeps "/art_1"
+    and loses "/art_2" to a brand-new "disp_u12"; the content itself never
+    changed, only which container number holds it. Verified this is not
+    hypothetical: this exact input produces
+    [('disp_u11/art_2', 'repealed'), ('disp_u12/art_2', 'added')] against
+    the code as committed before this fix (confirmed by checking that
+    version out and running it in isolation) -- fabricated rows, not
+    contradictory ones (_deduplicate had nothing to catch here), which is
+    why this needed the cross-candidate move reconciliation, not just the
+    de-duplication safety net."""
+    before = [_a("disp_u11/art_1", "X"), _a("disp_u11/art_2", "Y")]
+    after = [_a("disp_u11/art_1", "X"), _a("disp_u12/art_2", "Y")]
+    assert d.diff(before, after) == []
+
+
+def test_a_content_preserving_merge_produces_no_change():
+    """The mirror shape: two containers merge into one, and the joining
+    half's content is unchanged. "disp_u11" keeps "/art_1" and gains
+    "/art_5" (unchanged content moved in from "disp_u12", which then has
+    nothing left). Verified this is not hypothetical: this exact input
+    produces [('disp_u11/art_5', 'added'), ('disp_u12/art_1', 'repealed')]
+    against the pre-fix code. This shape specifically needs the moved-
+    article pool to include candidates generated FROM INSIDE a confirmed
+    container pair (here, "disp_u11/art_5" is a new-only suffix of the
+    pair that already matched "disp_u11" to itself) -- reconciling only
+    the plain fallback remainder, as an earlier version of this
+    mechanism did, would never see it, since it never reaches the
+    fallback at all."""
+    before = [_a("disp_u11/art_1", "X"), _a("disp_u12/art_1", "Y")]
+    after = [_a("disp_u11/art_1", "X"), _a("disp_u11/art_5", "Y")]
+    assert d.diff(before, after) == []
+
+
+def test_a_move_across_unrelated_containers_with_a_wording_change_stays_two_rows():
+    """Decision, not a regression fix: this input already produced these
+    same two rows before this round's change (nothing prior ever merged
+    unmatched, differently-worded content), so this locks the DECISION in
+    rather than demonstrating a bug fix. A provision that moves AND is
+    reworded in the same edition, landing in a container with no
+    structural correspondence to its origin (not a renumbered continuation
+    of the same container -- see
+    test_disp_container_renumbering_with_a_wording_change_is_one_modified_row
+    for that case, which already produces one "modified" row via
+    container-pairing), is NOT collapsed into one row here. Its
+    fingerprint changed, so exact-identity matching correctly does not
+    claim it moved; pairing it by similarity instead would risk merging
+    two DIFFERENT, merely similarly-worded provisions elsewhere in a
+    17,293-act corpus, which is a worse failure than the conservative
+    answer: a real repeal of the old identifier and a real addition of
+    the new one, asserting no continuity this module cannot verify."""
+    before = [_a("disp_u50/art_m", "Old wording")]
+    after = [_a("disp_u60/art_n", "New wording")]
+    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == [
+        ("disp_u50/art_m", "repealed"),
+        ("disp_u60/art_n", "added"),
+    ]
+
+
+def test_ambiguous_moves_are_paired_off_deterministically_by_sorted_e_id():
+    """Decision: when a removed eId's text matches more than one added
+    candidate (or vice versa), the shorter candidate list is paired
+    against the other in SORTED eId order, and any excess on the longer
+    side is judged on its own as a genuine repeal or addition. Three
+    unrelated removed articles and two unrelated added articles all share
+    the identical text "SAME" (distinct suffixes so none of them collide
+    in container-level pairing first). Sorted removed order is
+    disp_u30/art_x, disp_u31/art_y, disp_u32/art_z; sorted added order is
+    disp_u40/art_p, disp_u41/art_q. The first two of each pair off (no
+    rows); the third removed eId has no added counterpart left and is a
+    genuine repeal -- deterministically, the SAME one every time, because
+    the pairing depends only on sorted string order, never on dict or set
+    iteration."""
+    before = [
+        _a("disp_u30/art_x", "SAME"), _a("disp_u31/art_y", "SAME"),
+        _a("disp_u32/art_z", "SAME"),
+    ]
+    after = [_a("disp_u40/art_p", "SAME"), _a("disp_u41/art_q", "SAME")]
+    assert [(c.e_id, c.change_type) for c in d.diff(before, after)] == \
+        [("disp_u32/art_z", "repealed")]
+
+
+
 def test_diff_is_deterministic_across_process_hash_seeds():
     """round 2's per-eId reconciliation filled removed_by_suffix by
     iterating removed_ids, a set of strings; Python randomises string
