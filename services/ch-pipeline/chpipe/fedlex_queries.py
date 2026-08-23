@@ -17,6 +17,28 @@ import re
 
 ENDPOINT = "https://fedlex.data.admin.ch/sparqlendpoint"
 
+# Works bound into one VALUES block by the TITLES and VERSIONS walks.
+#
+# Fedlex's Virtuoso raises SR353 once a sorted TOP asks for more than 10,000
+# rows, so a batch's whole result set must stay under that even in the worst
+# case. Measured against the live endpoint on 2026-08-23, by grouping each
+# query by ?work and summing the heaviest works in the corpus:
+#
+#   TITLES  heaviest single work 770 rows; top-15 sum 7,216; top-20 sum 8,692;
+#           top-25 sum 10,021  <-- over the ceiling
+#   VERSIONS heaviest single work 282 rows; top-25 sum 2,796; top-50 sum 4,094
+#
+# TITLES is the binding constraint, so 20 is the largest batch whose absolute
+# worst case -- the twenty heaviest works in the entire corpus all landing in
+# one batch, which the eli_work_uri ordering makes wildly unlikely -- still
+# comes in under 10,000. Typical batches are far smaller: 52,491 title rows and
+# ~170,000 version rows over 17,293 works average 3 and 10 rows per work, so a
+# batch of 20 usually returns 60 and 200 rows respectively.
+#
+# It is also large enough not to be chatty against a public government service:
+# 17,293 works is roughly 865 requests per pass rather than 17,293.
+WORK_BATCH_SIZE = 20
+
 # 0 = "In force" / "In Kraft". Confirmed from the vocabulary's own skos:prefLabel.
 ENFORCEMENT_STATUS_IN_FORCE = 0
 
@@ -45,6 +67,12 @@ ACTS = _PREFIXES + """
 SELECT DISTINCT ?work ?srNotation ?dateDocument ?dateEntryForce
                 ?dateNoLongerInForce ?inForce WHERE {
   ?work a jolux:ConsolidationAbstract .
+  # Keyset paging: page N+1 resumes at the last work of page N instead of
+  # counting rows skipped. `>=`, not `>`, so the dual-status works below can
+  # never lose their second row at a page boundary; SparqlClient.keyset()
+  # suppresses the rows the overlap re-fetches. Deliberately no row-skipping
+  # clause here -- see chpipe/sparql.py for the SR353 ceiling one would hit.
+  FILTER(STR(?work) >= "%(after)s")
   OPTIONAL {
     ?work jolux:classifiedByTaxonomyEntry/skos:notation ?srNotation .
     FILTER(datatype(?srNotation) =
@@ -56,20 +84,20 @@ SELECT DISTINCT ?work ?srNotation ?dateDocument ?dateEntryForce
   OPTIONAL { ?work jolux:inForceStatus ?inForce }
 }
 ORDER BY ?work ?inForce
-LIMIT %(limit)d OFFSET %(offset)d
+LIMIT %(limit)d
 """
 
 # Titles, one row per (work, language). Five languages occur: DEU, FRA, ITA and,
 # for many acts, ENG and ROH. titleShort carries the abbreviation ("OR", "CO").
 TITLES = _PREFIXES + """
 SELECT DISTINCT ?work ?lang ?title ?titleShort WHERE {
+  VALUES ?work { %(values)s }
   ?work a jolux:ConsolidationAbstract ;
         jolux:isRealizedBy ?expr .
   ?expr jolux:language ?lang ; jolux:title ?title .
   OPTIONAL { ?expr jolux:titleShort ?titleShort }
 }
 ORDER BY ?work ?lang
-LIMIT %(limit)d OFFSET %(offset)d
 """
 
 # One row per (consolidation, language) with the direct file URL. The file URL
@@ -78,6 +106,7 @@ LIMIT %(limit)d OFFSET %(offset)d
 VERSIONS = _PREFIXES + """
 SELECT DISTINCT ?work ?consolidation ?dateApplicability ?dateEndApplicability
                 ?lang ?fileUrl WHERE {
+  VALUES ?work { %(values)s }
   ?consolidation a jolux:Consolidation ;
                  jolux:isMemberOf ?work ;
                  jolux:dateApplicability ?dateApplicability .
@@ -89,7 +118,6 @@ SELECT DISTINCT ?work ?consolidation ?dateApplicability ?dateEndApplicability
                  jolux:userFormat <https://fedlex.data.admin.ch/vocabulary/user-format/xml> .
 }
 ORDER BY ?work ?dateApplicability ?lang
-LIMIT %(limit)d OFFSET %(offset)d
 """
 
 LANGUAGE_MAP = {
