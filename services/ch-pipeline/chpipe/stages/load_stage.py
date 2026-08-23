@@ -82,7 +82,7 @@ def run(settings: Settings, limit: int | None = None,
             # 'failed'. This is deliberately distinct from the empty-text
             # branch below, which is not a transient failure: a row that
             # reached 'extracted' with no text can never gain text on retry,
-            # so it is failed immediately via db.complete() rather than
+            # so it is failed immediately via db.mark_failed() rather than
             # spending its attempts budget.
             for row in rows:
                 try:

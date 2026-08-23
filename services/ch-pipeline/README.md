@@ -342,6 +342,15 @@ save time before a full run.
       asks for, is that the two numbers above **agree with each other**
       afterwards. If they diverge, the trigger has drifted and
       `v_jurisdiction_fulltext_stats` cannot be trusted for CH.
+- [ ] **A resumed `extract` over HTML written before the fetch-stage UTF-8
+      guarantee will retire it, not just re-extract it.** `from_html()`
+      requires `payload` to already be UTF-8; a non-UTF-8 body raises
+      `UnicodeDecodeError` (see `chpipe/text_extract.py:192-201`), which
+      `extract_stage`'s per-document guard turns into `db.fail()`. On a
+      resumed run over raw HTML a pre-fix version of this pipeline wrote to
+      `$CHPIPE_RAW_DIR`, that burns all three attempts and retires the
+      document as `failed`, with no path back except deleting the file and
+      re-fetching it.
 - [ ] **Confirm tesseract's `deu`/`fra`/`ita` language packs on the prod
       box.** `ocr_stage` will silently produce garbage (or fail every row)
       if a pack is missing. `tesseract --list-langs` before the first real

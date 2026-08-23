@@ -193,10 +193,15 @@ def from_html(payload: bytes) -> str:
     """Text of an HTML document, with block-level breaks preserved.
 
     `payload` must be UTF-8 -- fetch_stage guarantees that for everything it
-    writes. Bytes that are not valid UTF-8 are decoded with replacement
-    characters, which text_quality scores down rather than silently
-    accepting; that is deliberate, because a body that is not UTF-8 here did
-    not come through the fetch stage.
+    writes. Bytes that are not valid UTF-8 raise UnicodeDecodeError out of
+    tree.text_content(), outside any try/except in this function, because a
+    body that is not UTF-8 here did not come through the fetch stage. The
+    call site in extract_stage wraps this per-document, so the practical
+    effect is db.fail() rather than a crashed run -- but on a resumed run
+    over raw HTML a pre-fix version of this pipeline wrote to disk (see the
+    README), that means three burned attempts and the document retired as
+    permanently failed, with no path back except deleting the file and
+    re-fetching it.
     """
     if not payload.strip():
         return ""
