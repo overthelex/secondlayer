@@ -40,6 +40,7 @@ Usage:
 
 import argparse
 import gzip
+import itertools
 import os
 import re
 import sys
@@ -88,6 +89,48 @@ class Limiter:
             self.next_at += self.interval
         if delay > 0:
             time.sleep(delay)
+
+
+class SourceAddressAdapter(requests.adapters.HTTPAdapter):
+    """Bind outgoing connections to one local address, so each session leaves the
+    box from a different public IP."""
+
+    def __init__(self, source_address, **kwargs):
+        self._source_address = source_address
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        kwargs["source_address"] = (self._source_address, 0)
+        super().init_poolmanager(*args, **kwargs)
+
+
+def detect_source_ips():
+    """Secondary private addresses on the main interface. On this host each one is
+    associated with its own Elastic IP, verified by binding curl to each and asking
+    checkip.amazonaws.com: nine addresses, nine distinct public IPs."""
+    import subprocess
+
+    def run(cmd):
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10).stdout
+
+    try:
+        # Only the interface that carries the default route. Picking every address
+        # on the box would hand back docker bridges (172.17/172.18) and the
+        # WireGuard address, none of which can reach the internet.
+        route = run(["ip", "-4", "route", "show", "default"])
+        m = re.search(r"\bdev\s+(\S+)", route)
+        if not m:
+            return []
+        dev = m.group(1)
+        out = run(["ip", "-4", "-o", "addr", "show", "dev", dev])
+    except Exception:
+        return []
+    ips = []
+    for line in out.splitlines():
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/", line)
+        if m:
+            ips.append(m.group(1))
+    return ips
 
 
 def fetch(session, limiter, url, tries=4):
@@ -222,6 +265,11 @@ def main():
     # artefact of measuring during a throttled window.
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--batch", type=int, default=200)
+    ap.add_argument("--source-ips", default="",
+                    help="comma-separated local addresses to bind to, or 'auto'. "
+                         "The 1,500/5min ceiling is per IP, so each address adds a "
+                         "budget. 'auto' uses every non-loopback, non-WireGuard "
+                         "address on the box.")
     ap.add_argument("--chunk", type=int, default=4000,
                     help="worklist block size handed to the pool at a time")
     ap.add_argument("--no-raw", action="store_true")
@@ -251,22 +299,45 @@ def main():
     if not work:
         return
 
-    limiter = Limiter(args.rate)
+    if args.source_ips == "auto":
+        source_ips = detect_source_ips()
+    elif args.source_ips:
+        source_ips = [x.strip() for x in args.source_ips.split(",") if x.strip()]
+    else:
+        source_ips = []
+    if source_ips:
+        print(f"source IPs: {len(source_ips)} -> {', '.join(source_ips)}", flush=True)
+        print(f"aggregate ceiling: {len(source_ips) * args.rate:.0f} req/s", flush=True)
+    limiters = [Limiter(args.rate) for _ in range(max(1, len(source_ips)))]
+    limiter = limiters[0]
+    ip_counter = itertools.count()
     local = threading.local()
     lock = threading.Lock()
     stats = {"ok": 0, "versions": 0, "failed": 0, "no_meta": 0}
     by_status = {}
 
     def session():
+        """One session per thread, pinned to one source IP, with that IP's own
+        limiter. The rate ceiling is per IP, so N addresses give N budgets."""
         if not hasattr(local, "s"):
-            local.s = requests.Session()
-            local.s.headers["User-Agent"] = UA
+            idx = next(ip_counter)
+            ip = source_ips[idx % len(source_ips)] if source_ips else None
+            s = requests.Session()
+            s.headers["User-Agent"] = UA
+            if ip:
+                ad = SourceAddressAdapter(source_address=ip)
+                s.mount("https://", ad)
+                s.mount("http://", ad)
+            local.s = s
+            local.lim = limiters[idx % len(limiters)]
+            local.ip = ip
         return local.s
 
     def one(item):
         leg_id, leg_type = item
         url = f"{BASE}/{leg_id}/contents/data.xml"
-        body, verdict = fetch(session(), limiter, url)
+        sess = session()
+        body, verdict = fetch(sess, local.lim, url)
         if body is None:
             return leg_id, None, verdict
         if not args.no_raw:
