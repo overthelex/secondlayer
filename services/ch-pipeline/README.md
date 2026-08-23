@@ -32,7 +32,17 @@ different `stage` values.
 
     chmod +x run-stage.sh
     ./run-stage.sh index                # all 54 spiders
+    ./run-stage.sh index CH_BVGer       # one spider
     ./run-stage.sh fetch CH_BVGer       # one spider
+
+`index`'s spider filter went through `CHPIPE_SPIDER` from the start for
+`fetch`/`extract`/`ocr`/`load`, but `index_stage.py`'s `__main__` originally
+read `sys.argv` instead and never looked at the env var — so
+`./run-stage.sh index CH_BVGer` silently walked all 54 spiders. Fixed: its
+`__main__` now honours `CHPIPE_SPIDER` (used by `run-stage.sh`, which never
+passes argv) and still accepts multiple spiders via argv for a direct
+invocation (`python -m chpipe.stages.index_stage SpiderA SpiderB`, useful
+when driving `index` by hand instead of through the wrapper).
 
 Under supervision, so it survives a disconnect and is visible:
 
@@ -68,15 +78,12 @@ Never report coverage without these. See `chpipe/reports.py`.
   `v_jurisdiction_fulltext_stats` before and after a `load` run.
 - **Gate C** (`reports.quality_distribution`) — the distribution of the
   quality score itself, never a bare count of "rows with text".
-- **Gate D** (`reports.completeness`) — our per-spider counts against
-  entscheidsuche's own daily snapshot (`/docs/Snapshots/{date}.json`,
-  `total` key). Read the caveat below before trusting its output.
+- **Gate D** (`reports.completeness`) — our counts against entscheidsuche's
+  own daily snapshot (`/docs/Snapshots/{date}.json`: `total` map and
+  `total_alle` grand total). Returns three independently-scoped pieces —
+  read `corpus` first. See the section below for why.
 
-### Gate D: the snapshot key mismatch is real and material
-
-`reports.completeness()` matches snapshot keys to our `spider` values by
-exact string equality. That undercounts badly, and the shape of the mismatch
-matters:
+### Gate D: read `corpus`, not just `per_spider`
 
 `Snapshots.total` is not a flat per-spider count. Checked against the
 2026-08-20 snapshot (`total_alle: 793,500`), it is three nested views of the
@@ -99,35 +106,37 @@ have no matching key at all**, because entscheidsuche's court-level keys use
 a different, shorter naming convention (`ZH_OG` vs. our `ZH_Obergericht`,
 `GE_CJ` vs. our `GE_Gerichte`, `VD_TC` vs. our `VD_FindInfo`/`VD_Omni`,
 `BE_VG` vs. our `BE_Verwaltungsgericht`, `TI_TRAC`/`TI_TCAS` vs. our
-`TI_Gerichte`, and so on).
+`TI_Gerichte`, and so on). At the correct like-for-like level (the 131
+mid-level, one-per-court keys, which alone sum to `total_alle`), the 7
+name-matched courts account for 216,963 of 793,500 documents — **27.3%** of
+the corpus. A gate that only reported the 7 matched spiders would be worse
+than no gate: a clean result would read as "the backfill is done" while
+actually covering about a quarter of the corpus, and the other 72.7% would
+never surface.
 
-At the correct like-for-like level (the 131 mid-level, one-per-court keys,
-which alone sum to `total_alle`), the 7 name-matched courts account for
-216,963 of 793,500 documents — **27.3%** of the corpus. The remaining 124
-mid-level keys — **576,537 documents, 72.7% of `total_alle`** — have no
-name match and are therefore invisible to `reports.completeness()` as a
-credit to any of our spiders.
+Rather than guess a `spider -> snapshot key` mapping across that nested
+structure (fragile — a new naming quirk fails silently), `reports.completeness()`
+now returns three pieces so the gate states its own coverage instead of
+hiding it:
 
-Worse: `reports.completeness()` as written does not stop at the mid level —
-it iterates every one of the 519 keys in `total` (top, mid, and leaf mixed
-together) and treats each one as if it were a spider name. Run against a
-real snapshot, every single key comes back `needs_investigation: True`
-(verified locally with an empty table, where every key trivially reports a
-100% gap; against real prod counts the 7 name-matched keys will show a real
-number, but the other 512 will still all read as "100% missing", because
-`ours.get(that_key, 0)` is always 0 for a string that is never a `spider`
-value in our table).
+- **`corpus`** — `{ours, theirs, gap_pct, needs_investigation}`, our total
+  row count against `total_alle`. Exact, level-independent, does not depend
+  on any name match. **This is the number that actually answers "did we get
+  everything" — always check it first.**
+- **`per_spider`** — one row per snapshot key that matches a known spider
+  name, unchanged in meaning from before (still `{spider, ours, theirs,
+  gap_pct, needs_investigation}`, still a >1% gap flags
+  `needs_investigation`). Only covers those 7-ish name-matched spiders — a
+  clean `per_spider` on its own proves nothing about the rest.
+- **`uncovered`** — `{key_count, docs, share_pct}` for the snapshot keys
+  that match no known spider name at all — the gate's own blind spot,
+  stated rather than dropped. Because `total` mixes the three nested levels
+  above, `uncovered.share_pct` sums values from more than one level at once
+  and can legitimately read over 100% — that is the nested structure
+  showing through, not a bug. Do not read it as "percent of the corpus
+  missing"; read `corpus.gap_pct` for that.
 
-**Conclusion: do not run Gate D as `reports.completeness()` is currently
-written and read the "spiders short by >1%" count as a real number** — as
-written it will report on the order of ~500 false failures out of 519,
-dominated by keys that were never meant to match a spider name 1:1 (canton
-rollups, chamber leaves) plus 47 real courts that need a name mapping this
-codebase does not yet have. Before Gate D is trustworthy, someone needs to
-build a `spider -> {matching snapshot key(s)}` table for the 47 unmapped
-spiders and change `reports.completeness()` to compare against it instead of
-raw string equality — out of scope for this task; this section exists so the
-gap is visible before anyone relies on the gate's raw output.
+Call it as `reports.completeness(conn, snap["total"], snap["total_alle"])`.
 
 ## Deferred to the supervised operations phase
 
@@ -160,11 +169,15 @@ save time before a full run.
       `by_source`, `ocr_pending` and `mean_quality` before committing to the
       full backfill — this is the cheap check that catches a systemic
       extraction problem before it burns hours on the full corpus.
-- [ ] **Gate D against real production counts**, with the caveat above in
-      hand: at minimum, check the 7 name-matched spiders directly (they are
-      trustworthy as written), and treat any "spiders short by >1%" number
-      from the unmodified `reports.completeness()` as noise, not signal,
-      until the court-code mapping is built.
+- [ ] **Gate D against real production counts.** Run
+      `reports.completeness(conn, snap["total"], snap["total_alle"])`
+      against a fresh `/docs/Snapshots/{date}.json` and prod's real
+      `ch_court_decisions`. Check `result["corpus"]` first — that is the
+      real completeness number. `result["per_spider"]` is only trustworthy
+      for the ~7 name-matched spiders; `result["uncovered"]` tells you how
+      much of the raw snapshot dict still has no spider mapping (expect a
+      large, possibly >100%, number per the nested-hierarchy note above —
+      that is expected, not a new bug).
 - [ ] **The full stage runs themselves**, in order, under `tmux`, one stage
       at a time per the "Running one" section above: `index`, `fetch`,
       `extract`, `ocr`, `load`. Confirm liveness with `pgrep -af

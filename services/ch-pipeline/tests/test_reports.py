@@ -91,9 +91,13 @@ def test_quality_distribution_buckets_by_tenth(conn):
 
 
 def test_completeness_flags_a_spider_more_than_one_percent_short(conn):
+    """Per-spider behaviour, unchanged in meaning: still one row per snapshot
+    key that matches a real spider name, now returned under result["per_spider"]
+    alongside the corpus-level and uncovered pieces."""
     for i in range(90):
         _row(conn, f"g{i}", "GE_Gerichte", "html", 0.9, "loaded")
-    rows = {r["spider"]: r for r in reports.completeness(conn, {"GE_Gerichte": 100})}
+    result = reports.completeness(conn, {"GE_Gerichte": 100}, total_alle=100)
+    rows = {r["spider"]: r for r in result["per_spider"]}
     assert rows["GE_Gerichte"]["ours"] == 90
     assert rows["GE_Gerichte"]["theirs"] == 100
     assert rows["GE_Gerichte"]["needs_investigation"] is True
@@ -102,5 +106,41 @@ def test_completeness_flags_a_spider_more_than_one_percent_short(conn):
 def test_completeness_accepts_a_spider_within_one_percent(conn):
     for i in range(100):
         _row(conn, f"g{i}", "GE_Gerichte", "html", 0.9, "loaded")
-    rows = {r["spider"]: r for r in reports.completeness(conn, {"GE_Gerichte": 100})}
+    result = reports.completeness(conn, {"GE_Gerichte": 100}, total_alle=100)
+    rows = {r["spider"]: r for r in result["per_spider"]}
     assert rows["GE_Gerichte"]["needs_investigation"] is False
+
+
+def test_completeness_reports_the_corpus_level_gap(conn):
+    """Round 2 finding: the per-spider comparison only ever covers the
+    spiders whose name happens to match a snapshot key (7 of 54 against a
+    real entscheidsuche snapshot). The corpus-level number is exact and
+    level-independent -- it is the one figure that actually answers "did we
+    get everything" -- so it must be reported on its own, not derived by the
+    caller from the per-spider rows."""
+    for i in range(80):
+        _row(conn, f"g{i}", "GE_Gerichte", "html", 0.9, "loaded")
+    result = reports.completeness(conn, {"GE_Gerichte": 80}, total_alle=100)
+    assert result["corpus"]["ours"] == 80
+    assert result["corpus"]["theirs"] == 100
+    assert result["corpus"]["gap_pct"] == 20.0
+    assert result["corpus"]["needs_investigation"] is True
+
+
+def test_completeness_reports_snapshot_keys_that_match_no_spider_as_uncovered(conn):
+    """The gate must state its own blind spot instead of silently dropping a
+    snapshot key that names no spider we know about (entscheidsuche's
+    court-code naming, e.g. "ZH_OG", differs from our spider names, e.g.
+    "ZH_Obergericht"). A clean per-spider result must not read as "the
+    backfill is done" while keys like these sit uncounted."""
+    for i in range(80):
+        _row(conn, f"g{i}", "GE_Gerichte", "html", 0.9, "loaded")
+    result = reports.completeness(
+        conn, {"GE_Gerichte": 80, "ZH_OG": 15, "not_a_spider_at_all": 5},
+        total_alle=100)
+    assert result["uncovered"]["key_count"] == 2
+    assert result["uncovered"]["docs"] == 20
+    assert result["uncovered"]["share_pct"] == 20.0
+    # the matched key is unaffected -- it shows up in per_spider, not folded
+    # into uncovered
+    assert {r["spider"] for r in result["per_spider"]} == {"GE_Gerichte"}

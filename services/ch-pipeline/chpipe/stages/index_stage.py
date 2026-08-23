@@ -171,10 +171,25 @@ ALL_SPIDERS = [
 
 
 if __name__ == "__main__":
+    import os
     import sys
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
-    selected = sys.argv[1:] or None
+    # argv wins when given, since it is the only way to pass more than one
+    # spider ("python -m chpipe.stages.index_stage A B C" -- genuinely
+    # useful and kept). Otherwise fall back to CHPIPE_SPIDER, the
+    # single-spider env var fetch_stage/extract_stage/ocr_stage/load_stage's
+    # __main__ blocks already honour and the one run-stage.sh sets. Without
+    # this fallback, `./run-stage.sh index <spider>` silently ran over all
+    # 54 spiders regardless of the argument, because run-stage.sh invokes
+    # `python3 -m chpipe.stages.index_stage` with no extra argv at all --
+    # it only ever exported CHPIPE_SPIDER, which this block never read.
+    if len(sys.argv) > 1:
+        selected = sys.argv[1:]
+    elif os.environ.get("CHPIPE_SPIDER"):
+        selected = [os.environ["CHPIPE_SPIDER"]]
+    else:
+        selected = None
     result = run(Settings.from_env(), selected)
     log.info("inserted=%d updated=%d failed=%d", result.inserted, result.updated,
              result.failed)
