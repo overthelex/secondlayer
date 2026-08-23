@@ -1,3 +1,8 @@
+import os
+import pathlib
+import subprocess
+import sys
+
 from chpipe import diff_articles as d
 
 
@@ -171,3 +176,100 @@ def test_a_new_e_id_already_empty_at_first_appearance_produces_no_change():
     changes = d.diff([_a("art_1", "x")],
                      [_a("art_1", "x"), _a("art_9", "Aufgehoben"), _a("art_10", "")])
     assert changes == []
+
+
+def test_an_already_empty_article_that_disappears_is_not_repealed_again():
+    """Symmetric with the already-empty-at-birth rule for "added": an eId
+    that was already carrying no operative text (an earlier repeal marker,
+    or a genuinely empty body) and later disappears entirely was never in
+    force under that identifier at the moment it vanished -- there is
+    nothing left to take out of force a second time."""
+    assert d.diff([_a("art_9", "Aufgehoben")], []) == []
+    assert d.diff([_a("art_9", "")], []) == []
+
+
+def test_a_wholesale_container_shift_with_suffix_collisions_aligns_correctly():
+    """Reproduces the real defect class measured on the live OR
+    (2021-07-01 -> 2022-01-01): container 11's content moves wholesale into
+    container 12, 12's into 13, 13's into 14 (Fedlex inserted a new block
+    before 11), while container 10 keeps its own number and has exactly
+    one real change inside it. Every one of these containers shares the
+    same internal suffixes ("/art_1", "/art_2"), so a removed eId and an
+    added eId collide on suffix alone with more than one candidate on each
+    side -- a per-eId-suffix dictionary cannot resolve this (whichever
+    candidate a dict iteration happens to visit last wins, and that order
+    is not stable across processes). Whole-container alignment, scored on
+    how much of EACH container's content matches, resolves it
+    deterministically: every container finds its real predecessor/successor
+    by content, and the single genuine change surfaces as exactly one row."""
+    def art(container, suffix, text):
+        return _a(f"disp_u{container}{suffix}", text)
+
+    before = [
+        art(10, "/art_1", "C10-A"), art(10, "/art_2", "C10-B"),
+        art(11, "/art_1", "C11-A"), art(11, "/art_2", "C11-B"),
+        art(12, "/art_1", "C12-A"), art(12, "/art_2", "C12-B"),
+        art(13, "/art_1", "C13-A"), art(13, "/art_2", "C13-B"),
+    ]
+    after = [
+        art(10, "/art_1", "C10-A-changed"), art(10, "/art_2", "C10-B"),
+        art(12, "/art_1", "C11-A"), art(12, "/art_2", "C11-B"),
+        art(13, "/art_1", "C12-A"), art(13, "/art_2", "C12-B"),
+        art(14, "/art_1", "C13-A"), art(14, "/art_2", "C13-B"),
+    ]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == [("disp_u10/art_1", "modified")]
+
+
+_DETERMINISM_SCRIPT = """
+import sys
+sys.path.insert(0, sys.argv[1])
+from chpipe import diff_articles as d
+
+
+def _a(e_id, text):
+    return {"e_id": e_id, "article_number": e_id.split("_")[-1], "text": text}
+
+
+def art(container, suffix, text):
+    return _a("disp_u%s%s" % (container, suffix), text)
+
+
+before = [
+    art(10, "/art_1", "C10-A"), art(10, "/art_2", "C10-B"),
+    art(11, "/art_1", "C11-A"), art(11, "/art_2", "C11-B"),
+    art(12, "/art_1", "C12-A"), art(12, "/art_2", "C12-B"),
+    art(13, "/art_1", "C13-A"), art(13, "/art_2", "C13-B"),
+]
+after = [
+    art(10, "/art_1", "C10-A-changed"), art(10, "/art_2", "C10-B"),
+    art(12, "/art_1", "C11-A"), art(12, "/art_2", "C11-B"),
+    art(13, "/art_1", "C12-A"), art(13, "/art_2", "C12-B"),
+    art(14, "/art_1", "C13-A"), art(14, "/art_2", "C13-B"),
+]
+changes = d.diff(before, after)
+print([(c.e_id, c.change_type) for c in changes])
+"""
+
+
+def test_diff_is_deterministic_across_process_hash_seeds():
+    """The predecessor of round 2's per-eId reconciliation filled a dict by
+    iterating a set of strings; Python randomises string hashing per
+    process, so which predecessor won a suffix collision changed run to
+    run -- measured on the real 2021-07-01 -> 2022-01-01 transition, 354 or
+    355 total rows depending on PYTHONHASHSEED. This reruns the same
+    collision shape as the container-shift test above under three
+    different process hash seeds and checks the actual stdout is
+    byte-identical -- not just "this test happens to pass in this
+    process", which would prove nothing about the bug it exists to catch."""
+    chpipe_dir = str(pathlib.Path(__file__).parent.parent)
+    outputs = set()
+    for seed in ("0", "1", "42"):
+        env = dict(os.environ)
+        env["PYTHONHASHSEED"] = seed
+        result = subprocess.run(
+            [sys.executable, "-c", _DETERMINISM_SCRIPT, chpipe_dir],
+            env=env, capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stderr
+        outputs.add(result.stdout.strip())
+    assert len(outputs) == 1, f"diff() output differs across hash seeds: {outputs}"
