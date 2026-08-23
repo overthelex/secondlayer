@@ -58,6 +58,12 @@ deployment/hudoc-storage
 deployment/hudoc-storage/**
 deployment/hudoc-storage/pgdata
 
+# Local data staging (pgdata dirs here are owned by the postgres uid inside
+# containers, so packing them into the build context fails with EACCES).
+# Nothing is tracked in git here and no Dockerfile copies from it.
+data
+data/**
+
 # Misc
 *.md
 !packages/shared/README.md
