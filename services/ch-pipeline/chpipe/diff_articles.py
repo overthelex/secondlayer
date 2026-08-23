@@ -170,10 +170,24 @@ def _group_disp_containers(articles: dict[str, dict]) -> dict[int, dict[str, dic
 
 def _container_score(old_group: dict[str, dict],
                      new_group: dict[str, dict]) -> tuple[int, int]:
-    """(shared suffix count, of those, how many are fingerprint-identical).
-    Compared as a tuple: more shared suffixes always wins first; among
-    candidates that share the same number of suffixes, the one with more
-    unchanged content wins. Zero shared suffixes is never a match."""
+    """(how many shared suffixes are fingerprint-IDENTICAL, total shared
+    suffix count). Compared as a tuple with identical-content count FIRST,
+    not shared-suffix count first: two disp containers routinely reuse the
+    same small set of suffix names ("/art_1", "/art_2", ...) for entirely
+    unrelated provisions, so a coincidental name-only overlap with zero
+    matching content must never outscore a smaller but genuinely
+    content-identical overlap. Measured: scoring shared-count first let a
+    container that merely happened to share MORE suffix NAMES (but matched
+    NONE of their content) beat the container that actually was the
+    renumbered continuation -- the exact mechanism behind a real container
+    losing an article (a genuine repeal riding along with a shift) being
+    mismatched entirely, because losing that one suffix was enough for an
+    unrelated same-named-but-different-content container to win on raw
+    count. Prioritising identical content is robust to that: a container
+    that lost one of several articles still has every OTHER article
+    matching byte-for-byte, which no coincidental name collision can beat
+    unless it is ALSO substantively identical. Zero shared suffixes is
+    never a match."""
     shared = old_group.keys() & new_group.keys()
     if not shared:
         return (0, 0)
@@ -181,7 +195,7 @@ def _container_score(old_group: dict[str, dict],
         1 for suffix in shared
         if fingerprint(old_group[suffix].get("text", "")) ==
            fingerprint(new_group[suffix].get("text", "")))
-    return (len(shared), identical)
+    return (identical, len(shared))
 
 
 def _match_containers(old_disp: dict[int, dict[str, dict]],
@@ -266,6 +280,62 @@ def _repealed_change(article: dict) -> Change | None:
     return Change(article["e_id"], article.get("article_number"), "repealed")
 
 
+def _deduplicate(changes: list[Change], old: dict[str, dict],
+                 new: dict[str, dict]) -> list[Change]:
+    """No eId may appear twice in diff()'s output.
+
+    It can, in principle, despite _match_containers()'s mutual-best-match:
+    a container split or merge can pair OLD container A with NEW container
+    B (producing a "repealed" row for a suffix A had that B does not)
+    while SEPARATELY pairing some OTHER old container with NEW container A
+    -- the SAME container NUMBER, now holding different, re-pointed
+    content (producing an "added" row for a suffix that number gained).
+    Both rows can legitimately name the exact same eId string, because the
+    string itself never moved -- only what each side's alignment thinks it
+    means did.
+
+    When that happens, both container-derived guesses are discarded and
+    the literal ground truth wins: the eId string exists in both `old` and
+    `new` in exactly this scenario (it never stopped being a real key in
+    either dict; the container grouping just routed it two different
+    ways), so the two contradictory rows collapse into ONE direct
+    _compare() of what that exact identifier held before and after,
+    ignoring which container each side happened to be grouped into. That
+    is always well-defined -- it never needs an arbitrary "repealed wins
+    over added" rule, because there is a real answer sitting right there
+    in `old`/`new`. Nothing else can produce a duplicate under this
+    module's design (verified: within one confirmed pair each suffix maps
+    to exactly one row and one eId; across pairs, each container number is
+    claimed by at most one pair; the plain eId fallback only ever sees eIds
+    excluded from every confirmed pair) -- but this runs unconditionally
+    rather than trusting that proof to stay true as the module evolves.
+    """
+    by_id: dict[str, list[Change]] = {}
+    for change in changes:
+        by_id.setdefault(change.e_id, []).append(change)
+
+    resolved: list[Change] = []
+    for e_id, candidates in by_id.items():
+        if len(candidates) == 1:
+            resolved.append(candidates[0])
+            continue
+        old_article, new_article = old.get(e_id), new.get(e_id)
+        if old_article is not None and new_article is not None:
+            change = _compare(e_id, new_article.get("article_number"),
+                              old_article.get("text", ""),
+                              new_article.get("text", ""))
+        elif new_article is not None:
+            change = _added_change(new_article)
+        elif old_article is not None:
+            change = _repealed_change(old_article)
+        else:
+            change = None
+        if change is not None:
+            resolved.append(change)
+
+    return resolved
+
+
 def diff(before: list[dict], after: list[dict]) -> list[Change]:
     """Changes that turn `before` into `after`, ordered by eId for stability."""
     old = {a["e_id"]: a for a in before}
@@ -328,4 +398,4 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
         if change is not None:
             changes.append(change)
 
-    return sorted(changes, key=lambda c: (c.e_id,))
+    return sorted(_deduplicate(changes, old, new), key=lambda c: (c.e_id,))

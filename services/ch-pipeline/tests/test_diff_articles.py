@@ -221,6 +221,79 @@ def test_a_wholesale_container_shift_with_suffix_collisions_aligns_correctly():
     assert [(c.e_id, c.change_type) for c in changes] == [("disp_u10/art_1", "modified")]
 
 
+def test_a_shift_that_also_loses_one_article_is_not_derailed():
+    """A container shift and a genuine repeal inside the shifted container
+    can land in the same edition: container 12's content moves wholesale
+    into 13, but one of its articles ("/art_5") is not carried over.
+    Scoring on HOW MANY suffixes two containers share (rather than how
+    much of their CONTENT actually matches) lets an entirely unrelated
+    decoy container that coincidentally reuses the same two suffix NAMES
+    (but matches none of their content) outscore the container that lost
+    one article yet still matches its remaining content byte-for-byte --
+    verified this is not hypothetical: this exact input produces THREE
+    fabricated rows against the code as committed before this fix
+    (('disp_u13/art_1', 'added'), ('disp_u20/art_1', 'modified'),
+    ('disp_u20/art_5', 'modified') -- the shift not recognised at all, and
+    the decoy container diffed against unrelated content), confirmed by
+    checking that version out and running it in isolation. The right
+    answer is exactly one row: the genuine repeal, keyed on its eId under
+    the shifted-FROM container number (the identifier it still had at the
+    moment it was taken out of force) -- and the decoy container, once it
+    is no longer stealing the real match, is correctly read as a brand-new,
+    unrelated container in its own right."""
+    before = [
+        _a("disp_u12/art_1", "P"), _a("disp_u12/art_5", "Q"),
+    ]
+    after = [
+        _a("disp_u13/art_1", "P"),  # shifted, "/art_5" genuinely repealed
+        _a("disp_u20/art_1", "Z1"), _a("disp_u20/art_5", "Z2"),  # unrelated
+    ]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == [
+        ("disp_u12/art_5", "repealed"),
+        ("disp_u20/art_1", "added"),
+        ("disp_u20/art_5", "added"),
+    ]
+
+
+def test_a_container_split_does_not_produce_a_contradictory_duplicate():
+    """A container split (or merge) can pair OLD container A with NEW
+    container B (a rename, producing a "repealed" row for a suffix A had
+    that B does not) while SEPARATELY pairing some OTHER old container
+    with NEW container A -- the SAME container NUMBER, now holding
+    different, re-pointed content (producing an "added" row for a suffix
+    that number gained). Reproduced here: old "disp_u11" (four articles)
+    shifts into "disp_u12", losing "/art_9" along the way; separately, old
+    "disp_u10" (one article) shifts into "disp_u11", which happens to gain
+    a brand-new "/art_9" of its own. Both rows legitimately name the
+    identical eId string "disp_u11/art_9" -- verified this is not
+    hypothetical: this EXACT input produces
+    [('disp_u11/art_9', 'added'), ('disp_u11/art_9', 'repealed')] against
+    the code as committed before this fix (confirmed by checking that
+    version out and running it in isolation). One classification is not
+    simply wrong; both are individually defensible from their own pair's
+    point of view, which is exactly why this cannot be prevented by
+    "picking a better pairing" alone -- the string itself is shared
+    ground, not a mispairing. No eId may appear twice in the output; here
+    it collapses to a single direct comparison of what "disp_u11/art_9"
+    itself held before and after, which is a real "modified" (its
+    departing content differs from what the number gained)."""
+    before = [
+        _a("disp_u10/art_1", "W"),
+        _a("disp_u11/art_1", "X"), _a("disp_u11/art_2", "X2"),
+        _a("disp_u11/art_3", "X3"), _a("disp_u11/art_9", "Y"),
+    ]
+    after = [
+        _a("disp_u11/art_1", "W"), _a("disp_u11/art_9", "Z"),
+        _a("disp_u12/art_1", "X"), _a("disp_u12/art_2", "X2"),
+        _a("disp_u12/art_3", "X3"),
+    ]
+    changes = d.diff(before, after)
+    ids = [c.e_id for c in changes]
+    assert len(ids) == len(set(ids)), f"duplicate eId in output: {changes}"
+    assert [(c.e_id, c.change_type) for c in changes] == [("disp_u11/art_9", "modified")]
+
+
 _DETERMINISM_SCRIPT = """
 import sys
 sys.path.insert(0, sys.argv[1])
@@ -235,33 +308,49 @@ def art(container, suffix, text):
     return _a("disp_u%s%s" % (container, suffix), text)
 
 
-before = [
-    art(10, "/art_1", "C10-A"), art(10, "/art_2", "C10-B"),
-    art(11, "/art_1", "C11-A"), art(11, "/art_2", "C11-B"),
-    art(12, "/art_1", "C12-A"), art(12, "/art_2", "C12-B"),
-    art(13, "/art_1", "C13-A"), art(13, "/art_2", "C13-B"),
-]
-after = [
-    art(10, "/art_1", "C10-A-changed"), art(10, "/art_2", "C10-B"),
-    art(12, "/art_1", "C11-A"), art(12, "/art_2", "C11-B"),
-    art(13, "/art_1", "C12-A"), art(13, "/art_2", "C12-B"),
-    art(14, "/art_1", "C13-A"), art(14, "/art_2", "C13-B"),
-]
+# Two OLD containers (20, 21) disappear entirely -- neither container
+# NUMBER survives into the after edition under any name -- while two NEW
+# containers (30, 31) appear entirely fresh, and both pairs share the
+# identical suffix "/art_1". This is deliberately NOT a shift chain where
+# some container numbers persist (10, 12, 13 staying put, only 11 leaving
+# and 14 arriving) -- that shape gives the old per-eId-suffix mechanism
+# exactly one candidate per suffix, so its collision path never fires and
+# a test built on it cannot be RED against the bug it claims to catch.
+# Verified directly against round 2's actual removed_by_suffix dict (built
+# from a bare set of removed eIds): this exact shape produces
+# ('disp_u20/art_1', 'repealed') + ('disp_u30/art_1', 'modified') under one
+# PYTHONHASHSEED and ('disp_u21/art_1', 'repealed') +
+# ('disp_u31/art_1', 'modified') under another -- genuinely different
+# output, not just a different row order.
+before = [art(20, "/art_1", "A"), art(21, "/art_1", "B")]
+after = [art(30, "/art_1", "A"), art(31, "/art_1", "B")]
 changes = d.diff(before, after)
 print([(c.e_id, c.change_type) for c in changes])
 """
 
 
 def test_diff_is_deterministic_across_process_hash_seeds():
-    """The predecessor of round 2's per-eId reconciliation filled a dict by
-    iterating a set of strings; Python randomises string hashing per
-    process, so which predecessor won a suffix collision changed run to
-    run -- measured on the real 2021-07-01 -> 2022-01-01 transition, 354 or
-    355 total rows depending on PYTHONHASHSEED. This reruns the same
-    collision shape as the container-shift test above under three
-    different process hash seeds and checks the actual stdout is
-    byte-identical -- not just "this test happens to pass in this
-    process", which would prove nothing about the bug it exists to catch."""
+    """round 2's per-eId reconciliation filled removed_by_suffix by
+    iterating removed_ids, a set of strings; Python randomises string
+    hashing per process, so which of several same-suffix candidates won a
+    collision was not the same run to run -- measured on the real
+    2021-07-01 -> 2022-01-01 transition, 354 or 355 total rows depending on
+    PYTHONHASHSEED.
+
+    A round-3 version of this test used a shift-chain input (containers
+    10-13 shifting to 12-14, container 10 staying put) that turned out to
+    give round 2's mechanism only one candidate per suffix -- its
+    collision path never fired, so the test passed against round 2's
+    actual buggy code and proved nothing. Corrected: the script above uses
+    two containers that disappear entirely and two that appear entirely,
+    verified DIRECTLY against round 2's code (checked out from git,
+    imported in isolation) to produce different output under different
+    hash seeds before this test existed to catch it -- real RED evidence,
+    not an assumption.
+
+    Runs the same script under three different process hash seeds against
+    the CURRENT code and checks the actual stdout is byte-identical -- not
+    just "this test happens to pass in this process"."""
     chpipe_dir = str(pathlib.Path(__file__).parent.parent)
     outputs = set()
     for seed in ("0", "1", "42"):
