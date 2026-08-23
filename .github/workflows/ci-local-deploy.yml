@@ -377,6 +377,27 @@ jobs:
           fi
           echo "Переменных в .env.local: $(grep -cE '^[A-Z_]+=' "$ENV_FILE")"
 
+      - name: Overlay proprietary source
+        env:
+          CORE_REPO_SSH_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          REPO="$HOME/SecondLayer"
+          CORE_TMP=$(mktemp -d)
+          KEY_FILE=$(mktemp)
+          trap 'shred -u "$KEY_FILE" 2>/dev/null || rm -f "$KEY_FILE"; rm -rf "$CORE_TMP"' EXIT
+          printf '%s\n' "$CORE_REPO_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          GIT_SSH_COMMAND="ssh -i $KEY_FILE -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes" \
+            git clone --depth 1 git@github.com:overthelex/secondlayer-core.git "$CORE_TMP"
+          test -s "$CORE_TMP/src/services/chat-execution-loop.ts" && test -s "$CORE_TMP/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core clone incomplete — key files missing in $CORE_TMP"; exit 1; }
+          find "$CORE_TMP"/src/services -maxdepth 1 -name '*.ts' -exec cp -f {} "$REPO/mcp_backend/src/services/" \;
+          cp -rf "$CORE_TMP"/src/prompts/* "$REPO/mcp_backend/src/prompts/"
+          test -s "$REPO/mcp_backend/src/services/chat-execution-loop.ts" && test -s "$REPO/mcp_backend/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core overlay failed — key files missing after copy"; exit 1; }
+          echo "Оверлей на месте: $(find "$REPO/mcp_backend/src/services" -maxdepth 1 -name '*.ts' | wc -l) файлов в services"
+
       - name: Deploy stack
         run: |
           set -euo pipefail
