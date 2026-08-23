@@ -27,6 +27,13 @@ def test_html_body_extracts_and_goes_straight_to_extracted(tmp_path):
     text, quality, nxt = extract_stage.extract_one(
         s, {"doc_id": "d", "spider": "S", "text_source": "html", "languages": ["de"]})
     assert "Bundesgericht" in text
+    # The accented characters are the point. "Bundesgericht" alone is pure
+    # ASCII, so it is equally present in the mojibake this branch exists to
+    # repair ("BeschwerdefÃ¼hrers"): the old assertion passed against a
+    # corrupted extraction, and so did the quality gate (measured 0.9850 for
+    # mojibake versus 0.9820 for the same document clean).
+    assert "Beschwerdeführers" in text
+    assert "Ã" not in text and "Â" not in text
     assert quality > text_quality.ACCEPT_THRESHOLD
     assert nxt == "extracted"
 

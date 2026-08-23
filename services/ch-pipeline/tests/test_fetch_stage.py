@@ -115,8 +115,8 @@ def _seed(conn, doc_id, spider="ZG_Obergericht", html_url=None, pdf_url=None):
 
 
 class FakeFetcher:
-    async def bytes(self, url):
-        return f"body:{url}".encode()
+    async def body(self, url):
+        return f"body:{url}".encode(), "text/html"
 
 
 def test_a_write_failure_for_one_row_does_not_abort_the_rest_of_the_batch(
@@ -176,10 +176,10 @@ def test_a_failure_while_recording_a_failure_does_not_abort_the_batch(
         def __init__(self, bad_url):
             self._bad_url = bad_url
 
-        async def bytes(self, url):
+        async def body(self, url):
             if url == self._bad_url:
                 raise FetchError("simulated fetch failure")
-            return f"body:{url}".encode()
+            return f"body:{url}".encode(), "text/html"
 
     real_fail = db.fail
 
@@ -205,3 +205,71 @@ def test_a_failure_while_recording_a_failure_does_not_abort_the_batch(
     assert good[0] == "fetched"
     assert report.fetched_html == 1
     assert report.failed == 1
+
+
+# --- The mojibake defect, closed at the point where the charset still exists ---
+
+def test_an_html_body_is_transcoded_to_utf8_before_it_reaches_the_disk(
+        conn, tmp_path):
+    """http.py returned raw bytes and fetch_stage wrote them straight to
+    disk, discarding the Content-Type charset -- the only authoritative
+    statement of the body's encoding, and the one thing a resumed run
+    cannot recover. The extractor then had to guess, and lxml's guess for
+    an undeclared document is ISO-8859-1, which is exactly the corruption
+    this pipeline exists to repair.
+
+    The body below is real ISO-8859-1 with a real charset header. What
+    lands on disk must be UTF-8, so that extract -- which sees the file and
+    no response at all -- reads it correctly without knowing anything."""
+    _seed(conn, "LATIN", html_url="https://x/LATIN.html")
+
+    latin_body = ("<html><body><p>Beschwerdeführer, Eidgenössisches "
+                  "Versicherungsgericht</p></body></html>").encode("iso-8859-1")
+
+    class LatinFetcher:
+        async def body(self, url):
+            return latin_body, "text/html; charset=iso-8859-1"
+
+    settings = Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=1,
+                        cpu_workers=1, ocr_workers=1, load_ceiling=6.0,
+                        max_attempts=3)
+    rows = db.claim(conn, "indexed", limit=10)
+    report = fetch_stage.FetchReport()
+    asyncio.run(fetch_stage._fetch_batch(LatinFetcher(), conn, rows, settings, report))
+
+    written = (tmp_path / "ZG_Obergericht" / "LATIN.html").read_bytes()
+    assert written.decode("utf-8"), "the file on disk must be valid UTF-8"
+
+    from chpipe import text_extract
+    text = text_extract.from_html(written)
+    assert "Beschwerdeführer" in text
+    assert "Eidgenössisches" in text
+    assert "Ã" not in text
+    assert report.fetched_html == 1
+
+
+def test_an_undeclared_utf8_body_survives_the_round_trip(conn, tmp_path):
+    """Measured 2026-08-23: entscheidsuche answers document requests with a
+    bare `Content-Type: text/html` and no charset parameter, so the header
+    cannot be the only source. An undeclared body must still come back
+    with its accents."""
+    _seed(conn, "PLAIN", html_url="https://x/PLAIN.html")
+    utf8_body = ("<html><body><p>Graubünden, Grundsätze, "
+                 "Beschwerdeführer</p></body></html>").encode("utf-8")
+
+    class PlainFetcher:
+        async def body(self, url):
+            return utf8_body, "text/html"
+
+    settings = Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=1,
+                        cpu_workers=1, ocr_workers=1, load_ceiling=6.0,
+                        max_attempts=3)
+    rows = db.claim(conn, "indexed", limit=10)
+    asyncio.run(fetch_stage._fetch_batch(PlainFetcher(), conn, rows,
+                                         settings, fetch_stage.FetchReport()))
+
+    from chpipe import text_extract
+    text = text_extract.from_html(
+        (tmp_path / "ZG_Obergericht" / "PLAIN.html").read_bytes())
+    assert "Graubünden" in text and "Grundsätze" in text
+    assert "Ã" not in text

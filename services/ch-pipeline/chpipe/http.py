@@ -64,5 +64,17 @@ class Fetcher:
     async def bytes(self, url: str) -> bytes:
         return (await self._get(url)).content
 
+    async def body(self, url: str) -> tuple[bytes, str | None]:
+        """Raw bytes AND the Content-Type header that describes them.
+
+        Separate from bytes() because the header is the only authoritative
+        statement of an HTML body's charset, and it exists only here -- the
+        file that fetch_stage writes to disk has no headers. Discarding it
+        and letting the parser guess later is what produced the mojibake
+        this pipeline exists to repair.
+        """
+        response = await self._get(url)
+        return response.content, response.headers.get("content-type")
+
     async def json(self, url: str) -> dict:
         return (await self._get(url)).json()

@@ -84,10 +84,16 @@ def test_existing_rows_are_preserved_and_marked_indexed(conn):
         "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s, %s, %s)",
         ("ECLI:CH:CH_BGer:mojibake_a", "CH_BGer", "EidgenÃ¶ssisches" + ("a" * 485)),
     )
-    # Case 3: long text with mojibake marker Â → indexed (needs re-fetch)
+    # Case 3: long text carrying the Â-family marker PAIR → indexed.
+    # The original fixture here was "VersicherungsgerichtÂ" + "a"*480 -- a bare
+    # Â followed by an ASCII letter, which is not mojibake at all and is
+    # exactly the shape of the legitimate French "ÂGE" the old bare-marker
+    # LIKE false-positived on. Real Â-family mojibake is a C2 lead byte
+    # followed by a continuation byte: "§" (C2 A7) read as Latin-1 is "Â§".
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s, %s, %s)",
-        ("ECLI:CH:CH_BGer:mojibake_b", "CH_BGer", "VersicherungsgerichtÂ" + ("a" * 480)),
+        ("ECLI:CH:CH_BGer:mojibake_b", "CH_BGer",
+         "Versicherungsgericht, Art. 5 \u00c2\u00a7 2 " + ("a" * 460)),
     )
     # Case 4: NULL or short text → indexed (needs fetch)
     conn.execute(
@@ -99,7 +105,8 @@ def test_existing_rows_are_preserved_and_marked_indexed(conn):
     # Only clean long text is marked loaded; everything else is indexed for re-processing
     assert rows["ECLI:CH:CH_BGer:clean"] == "loaded", "clean long text should be loaded"
     assert rows["ECLI:CH:CH_BGer:mojibake_a"] == "indexed", "text with Ã should be re-fetched"
-    assert rows["ECLI:CH:CH_BGer:mojibake_b"] == "indexed", "text with Â should be re-fetched"
+    assert rows["ECLI:CH:CH_BGer:mojibake_b"] == "indexed", \
+        "a C2-lead marker pair should be re-fetched"
     assert rows["ECLI:CH:ZH_Obergericht:empty"] == "indexed", "NULL/short text should be indexed"
 
 
@@ -144,3 +151,78 @@ def test_jstats_trigger_counts_null_to_text_transition(conn):
         "delta trigger did not count NULL -> text; the mass UPDATE would corrupt "
         "v_jurisdiction_fulltext_stats"
     )
+
+
+# --- Enrolment across the three national languages ---
+#
+# The enrolment UPDATE decides the fate of 678,165 rows, and until now it was
+# tested only against ASCII "a" * 500 and two synthetic German mojibake
+# strings. There was no French or Italian text in these tests at all, and no
+# test that legitimate accented text survives into 'loaded' -- which is the
+# regression guard on the whole decision.
+
+def _insert(conn, ecli, spider, full_text):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s,%s,%s)",
+        (ecli, spider, full_text))
+
+
+def _stages(conn) -> dict[str, str]:
+    return dict(conn.execute("SELECT ecli, stage FROM ch_court_decisions").fetchall())
+
+
+def test_legitimate_umlaut_text_still_reaches_loaded(conn):
+    """The regression guard on the 678,165-row decision: real German with
+    real umlauts is NOT mojibake and must not be thrown back into the
+    queue for a re-fetch it does not need."""
+    _insert(conn, "de:clean", "CH_BGer",
+            "Das Bundesgericht hat die Beschwerde des Beschwerdeführers gegen "
+            "das Urteil des Obergerichts des Kantons Graubünden abgewiesen. " * 6)
+    _apply(conn)
+    assert _stages(conn)["de:clean"] == "loaded"
+
+
+def test_legitimate_french_all_caps_age_is_not_mistaken_for_mojibake(conn):
+    """The known false positive of the old `NOT LIKE '%Â%'` marker: "ÂGE" is
+    ordinary French all-caps, and a bare Â test re-queues a perfectly good
+    row for a pointless re-download."""
+    _insert(conn, "fr:age", "GE_Gerichte",
+            "ARRÊT DE LA COUR DE JUSTICE. LIMITE D'ÂGE DES MAGISTRATS. Le "
+            "recourant, âgé de soixante-cinq ans, conteste la décision du "
+            "Conseil d'État relative à l'ÂGE de la retraite. " * 4)
+    _apply(conn)
+    assert _stages(conn)["fr:age"] == "loaded"
+
+
+def test_legitimate_italian_text_reaches_loaded(conn):
+    _insert(conn, "it:clean", "TI_Gerichte",
+            "LA CORTE D'APPELLO. Il ricorrente è stato condannato perché la "
+            "società non ha più diritto all'indennità prevista dalla legge. " * 5)
+    _apply(conn)
+    assert _stages(conn)["it:clean"] == "loaded"
+
+
+def test_french_mojibake_is_requeued(conn):
+    """The same French passage, corrupted the way the 165,363 CH_BGer rows
+    were: UTF-8 bytes read as Latin-1."""
+    clean = ("ARRÊT DE LA COUR DE JUSTICE. Le recourant, âgé de soixante-cinq "
+             "ans, conteste la décision du Conseil d'État. " * 6)
+    _insert(conn, "fr:moji", "GE_Gerichte", clean.encode("utf-8").decode("latin-1"))
+    _apply(conn)
+    assert _stages(conn)["fr:moji"] == "indexed"
+
+
+def test_italian_mojibake_is_requeued(conn):
+    clean = ("Il ricorrente è stato condannato perché la società non ha più "
+             "diritto all'indennità prevista dalla legge federale. " * 6)
+    _insert(conn, "it:moji", "TI_Gerichte", clean.encode("utf-8").decode("latin-1"))
+    _apply(conn)
+    assert _stages(conn)["it:moji"] == "indexed"
+
+
+def test_german_mojibake_is_still_requeued(conn):
+    clean = ("Das Bundesgericht hat die Beschwerde des Beschwerdeführers gegen "
+             "das Urteil des Obergerichts von Graubünden abgewiesen. " * 6)
+    _insert(conn, "de:moji", "CH_BGer", clean.encode("utf-8").decode("latin-1"))
+    _apply(conn)
+    assert _stages(conn)["de:moji"] == "indexed"

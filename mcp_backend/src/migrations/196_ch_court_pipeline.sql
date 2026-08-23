@@ -36,15 +36,32 @@ END $$;
 -- done; everything else goes back to the front of the queue. length() > 200 is
 -- the same threshold used to measure coverage, so the two numbers agree.
 -- CRITICAL: As of 2026-08-23, all 165,363 CH_BGer rows carry mojibake (UTF-8
--- decoded as Latin-1 in the original import). Every row contains Ã and Â markers.
--- Rows with mojibake must be re-queued for re-fetching, even if length > 200.
--- Only clean text without these markers is marked 'loaded'.
+-- decoded as Latin-1 in the original import). Rows with mojibake must be
+-- re-queued for re-fetching, even if length > 200. Only clean text is
+-- marked 'loaded'.
+--
+-- The marker is the PAIR, not the letter. A bare `LIKE '%Â%'` false-positives
+-- on legitimate French all-caps -- "LIMITE D'ÂGE DES MAGISTRATS" is ordinary
+-- Genevan judgment prose, and a 2,568-character French sample measured 24
+-- bare 'Â' with no damage at all. What mojibake actually looks like is a
+-- UTF-8 lead byte read as Latin-1 ('Ã' from C3, 'Â' from C2) IMMEDIATELY
+-- FOLLOWED by a continuation byte read as Latin-1 (U+0080..U+00BF):
+-- 'Graubünden' becomes 'GraubÃ¼nden'. Verified on this database:
+--
+--   'Graubünden'                    ~ '[\u00c3\u00c2][\u0080-\u00bf]'  -> false
+--   'LIMITE D''ÂGE DES MAGISTRATS'  ~ ...                              -> false
+--   'La società è più'              ~ ...                              -> false
+--   'GraubÃ¼nden'                   ~ ...                              -> true
+--
+-- The same rule lives in chpipe.text_quality.MOJIBAKE_MARKER, so the
+-- migration and the extractor agree on what damaged text is. One marker pair
+-- is enough to re-queue here: the cost of a false re-queue is one re-fetch,
+-- the cost of a false 'loaded' is a corrupted row nobody looks at again.
 UPDATE public.ch_court_decisions
    SET stage = CASE
                  WHEN full_text IS NOT NULL
                       AND length(full_text) > 200
-                      AND full_text NOT LIKE '%Ã%'
-                      AND full_text NOT LIKE '%Â%'
+                      AND full_text !~ '[\u00c3\u00c2][\u0080-\u00bf]'
                  THEN 'loaded'
                  ELSE 'indexed'
                END,

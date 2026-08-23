@@ -1,4 +1,7 @@
+import pathlib
 import random
+
+import pytest
 
 from chpipe import text_quality
 
@@ -73,4 +76,93 @@ def test_an_unknown_language_falls_back_to_all_lists():
 def test_breakdown_exposes_every_component():
     b = text_quality.breakdown(GOOD_DE, ["de"])
     assert set(b) == {"alpha_ratio", "mean_word_length", "dictionary_hit_rate",
-                      "replacement_ratio", "score"}
+                      "replacement_ratio", "mojibake_density", "score"}
+
+
+# --- Mojibake guard: UTF-8 read as Latin-1 ---
+#
+# This is the exact damage that put 165,363 CH_BGer rows into this pipeline,
+# and not one of the four weighted components can see it: mojibake is
+# all-alpha, correctly word-lengthed, and contains no U+FFFD, no Cc and no
+# "?", so it maxes every component the score measures. Measured on the real
+# fixtures, mojibake scored HIGHER than the clean original (0.9850 vs
+# 0.9820). Against the pre-fix code every assertion below fails.
+
+FIXTURE_HTML = pathlib.Path(__file__).parent / "fixtures" / "decision_ch_bge.html"
+
+# Legitimate French all-caps, which is the known false positive for a bare
+# "Â" test: measured 24 bare "Â" in 2,568 characters and zero marker pairs.
+LEGIT_FR = (
+    "ARRÊT DE LA COUR DE JUSTICE. LIMITE D'ÂGE DES MAGISTRATS. "
+    "Le recourant, âgé de soixante-cinq ans, conteste la décision du "
+    "Conseil d'État relative à l'ÂGE de la retraite et à la nature de "
+    "l'intérêt public en cause. "
+) * 12
+
+LEGIT_IT = (
+    "LA CORTE D'APPELLO. Il ricorrente è stato condannato perché la "
+    "società non ha più diritto all'indennità prevista dalla legge. "
+) * 20
+
+
+def _as_mojibake(text: str) -> str:
+    """Exactly the corruption in the 165,363 rows: UTF-8 bytes read as Latin-1."""
+    return text.encode("utf-8").decode("latin-1")
+
+
+def test_clean_german_has_no_mojibake_markers():
+    assert text_quality.mojibake_density(GOOD_DE) == 0.0
+    assert text_quality.is_mojibake(GOOD_DE) is False
+
+
+def test_legitimate_french_all_caps_age_is_not_flagged():
+    """The known false positive. "ÂGE" puts a bare "Â" into perfectly good
+    French, which is why the migration's bare-marker LIKE is not enough on
+    its own: measured 24 bare "Â" here, and zero marker pairs."""
+    assert LEGIT_FR.count("Â") >= 20, "the false-positive case must actually be present"
+    assert text_quality.mojibake_density(LEGIT_FR) == 0.0
+    assert text_quality.is_mojibake(LEGIT_FR) is False
+    assert text_quality.score(LEGIT_FR, ["fr"]) > text_quality.ACCEPT_THRESHOLD
+
+
+def test_legitimate_italian_is_not_flagged():
+    assert text_quality.is_mojibake(LEGIT_IT) is False
+    assert text_quality.score(LEGIT_IT, ["it"]) > text_quality.ACCEPT_THRESHOLD
+
+
+def test_mojibake_german_is_detected_and_refused():
+    damaged = _as_mojibake(GOOD_DE)
+    assert "BeschwerdefÃ¼hrer" in damaged
+    assert text_quality.is_mojibake(damaged) is True
+    assert text_quality.score(damaged, ["de"]) < text_quality.ACCEPT_THRESHOLD
+
+
+def test_mojibake_french_is_detected_and_refused():
+    damaged = _as_mojibake(LEGIT_FR)
+    assert text_quality.is_mojibake(damaged) is True
+    assert text_quality.score(damaged, ["fr"]) < text_quality.ACCEPT_THRESHOLD
+
+
+def test_a_single_stray_marker_pair_is_not_enough_to_condemn_a_document():
+    """MOJIBAKE_MIN_MARKERS. One pair in a long clean document is noise, not
+    a systematically mis-decoded body."""
+    stray = GOOD_DE + "Ã©"
+    assert text_quality.is_mojibake(stray) is False
+
+
+@pytest.mark.skipif(not FIXTURE_HTML.exists(),
+                    reason="decision_ch_bge.html fixture not captured")
+def test_the_real_fixture_scores_high_clean_and_is_refused_as_mojibake():
+    """The measurement that justifies the guard, on a real document: clean
+    0.9820, mojibake 0.9850 -- the corrupted version scored HIGHER. Without
+    the guard the threshold cannot tell them apart in either direction."""
+    from lxml import html as lxml_html
+    clean = lxml_html.fromstring(
+        FIXTURE_HTML.read_bytes(),
+        parser=lxml_html.HTMLParser(encoding="utf-8")).text_content()
+    damaged = _as_mojibake(clean)
+
+    assert text_quality.score(clean, ["de"]) > text_quality.ACCEPT_THRESHOLD
+    assert text_quality.mojibake_density(clean) == 0.0
+    assert text_quality.mojibake_density(damaged) > text_quality.MOJIBAKE_DENSITY
+    assert text_quality.score(damaged, ["de"]) < text_quality.ACCEPT_THRESHOLD

@@ -14,7 +14,7 @@ import pathlib
 import re
 from dataclasses import dataclass
 
-from .. import db
+from .. import db, text_extract
 from ..config import Settings
 from ..http import FetchError, Fetcher
 
@@ -113,11 +113,24 @@ async def _fetch_batch(fetcher: Fetcher, conn, rows: list[dict], settings: Setti
                 return
             extension, url = choice
             try:
-                payload = await fetcher.bytes(url)
+                payload, content_type = await fetcher.body(url)
             except FetchError as exc:
+                # The highest-volume failure path in the whole pipeline: a
+                # volunteer-run mirror, 800,000 requests. Logging nothing
+                # here left the operator with a `last_error` column and no
+                # log line to correlate it against.
+                log.warning("%s/%s: fetch failed: %s",
+                            row["spider"], row["doc_id"], exc)
                 db.fail(conn, row["doc_id"], str(exc), settings.max_attempts)
                 report.failed += 1
                 return
+
+            if extension == "html":
+                # Transcode NOW, while the Content-Type header still exists.
+                # After this the file on disk is UTF-8 by construction, so a
+                # resumed run -- which has the file but no response -- needs
+                # no charset from anywhere. See text_extract.to_utf8().
+                payload = text_extract.to_utf8(payload, content_type)
 
             _, digest = write_body(settings.raw_dir, row["spider"],
                                    row["doc_id"], extension, payload)
