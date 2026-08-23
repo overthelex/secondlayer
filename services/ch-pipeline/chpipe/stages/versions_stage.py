@@ -1,6 +1,7 @@
 """Discovery of consolidated editions into ch_act_version.
 
-56,326 consolidations as of 2026-08-23, but only 12,033 of them carry the XML
+56,326 consolidations (re-measured 2026-08-24; see chpipe/fedlex_queries.py
+for the method and for why it is a snapshot), but only 12,033 carry the XML
 manifestation this stage's query requires, so a full pass discovers on the
 order of 38,000 (consolidation, lang) rows -- measured by running the shipped
 VERSIONS query over a random sample of 2,000 works, not by COUNT (see the

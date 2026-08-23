@@ -212,3 +212,29 @@ def test_change_table_allows_different_to_version_ids_or_e_ids(conn):
                  "VALUES (1, 2, 3, 'art_1', 'modified', '2022-01-01')")
 
     assert conn.execute("SELECT count(*) FROM ch_act_change").fetchone()[0] == 3
+
+
+# --- Finding 8: two columns nothing writes and nothing reads ---
+# ch_act_version.html_url and .pdf_url were never written by any stage and
+# never read by any query -- VERSIONS selects the XML manifestation's fileUrl
+# and nothing else. Migration 197 is unapplied, so dropping them is clean now
+# and would not be later. Widening VERSIONS to capture Fedlex's sibling
+# manifestations was the alternative: rejected, because it multiplies every
+# discovery batch by the four other formats for URLs no stage would use.
+
+def test_the_version_table_ships_no_columns_nothing_writes(conn):
+    """An empty url column reads as an absent format, not as a column
+    nobody wired up -- the same class of quiet untruth this migration
+    exists to correct."""
+    cols = _cols(conn, "ch_act_version")
+    assert "xml_url" in cols
+    assert "html_url" not in cols
+    assert "pdf_url" not in cols
+
+
+def test_the_version_table_still_carries_everything_a_stage_does_write(conn):
+    assert {"version_id", "act_id", "eli_consolidation_uri", "lang",
+            "date_applicability", "date_end_applicability", "xml_url",
+            "akn_xml", "full_text", "article_count", "stage", "attempts",
+            "last_error", "failed_stage", "fetched_at", "stage_updated_at"} \
+        <= _cols(conn, "ch_act_version")

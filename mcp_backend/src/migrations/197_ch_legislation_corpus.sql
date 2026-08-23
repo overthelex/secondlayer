@@ -4,8 +4,11 @@
 -- Replaces the shape of migration 135, which could hold exactly one edition per
 -- (eli_uri, lang) and therefore no amendment history at all. As of 2026-08-23
 -- ch_legislation holds 1,901 acts of the 17,293 Fedlex publishes and 0 of its
--- 56,328 consolidated editions. ch_legislation itself is kept and becomes a
--- projection of these tables — see 197's companion stage project_legacy_stage.
+-- 56,326 consolidated editions (measured 2026-08-24; see
+-- services/ch-pipeline/chpipe/fedlex_queries.py for how, and for why it is a
+-- point-in-time snapshot rather than an invariant). ch_legislation itself is
+-- kept and becomes a projection of these tables — see 197's companion stage
+-- project_legacy_stage.
 
 CREATE TABLE IF NOT EXISTS public.ch_act (
     act_id                  bigserial PRIMARY KEY,
@@ -47,9 +50,17 @@ CREATE TABLE IF NOT EXISTS public.ch_act_version (
     lang                    text NOT NULL,
     date_applicability      date NOT NULL,
     date_end_applicability  date,
+    -- xml_url only. There is deliberately no html_url/pdf_url pair here:
+    -- the VERSIONS query reads the file URL off the XML manifestation, and
+    -- nothing in this pipeline fetches, parses or projects any other
+    -- format. Two columns nothing writes and nothing reads are not
+    -- harmless -- they read as coverage the corpus does not have, which is
+    -- the same class of quiet untruth this whole migration exists to
+    -- correct. Widening VERSIONS to capture the sibling manifestations was
+    -- the alternative and was rejected: it multiplies every discovery
+    -- batch's row count by the four other formats Fedlex serves, for URLs
+    -- no stage would use. Add them back the day something needs them.
     xml_url                 text,
-    html_url                text,
-    pdf_url                 text,
     akn_xml                 text,
     full_text               text,
     article_count           integer,

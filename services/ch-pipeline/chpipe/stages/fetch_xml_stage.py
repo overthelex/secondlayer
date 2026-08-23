@@ -1,10 +1,14 @@
 """Download the Akoma Ntoso XML named by each discovered version.
 
-~170,000 files (56,328 consolidations across three to five languages, of
+~170,000 files (56,326 consolidations across three to five languages, of
 which about 12,033 carry the XML manifestation versions_stage's query
-requires). The XML is written to disk AND kept in ch_act_version.akn_xml:
-the column is what parse_akn_stage (and any future re-parse) reads, and what
-a resumed run depends on. The file under raw_dir is the audit copy, kept so
+requires). 56,326 is the measured figure -- see chpipe/fedlex_queries.py,
+which is the one place it is derived and the one place it is dated; this
+file used to say 56,328, and so did migration 197.
+
+The XML is written to disk AND kept in ch_act_version.akn_xml: the column is
+what parse_akn_stage (and any future re-parse) reads, and what a resumed run
+depends on. The file under raw_dir is the audit copy, kept so
 a human can open exactly what Fedlex returned -- no other stage ever reads
 it back off disk, and a run must not depend on it still being there.
 
