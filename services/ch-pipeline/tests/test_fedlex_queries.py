@@ -22,8 +22,9 @@ def test_no_query_walks_by_offset():
     asks for more than 10,000 rows -- and the limit is on OFFSET + LIMIT
     together, so a bigger page size only moves the wall. Verified live on
     2026-08-23: OFFSET 9990 LIMIT 10 returns rows, OFFSET 10000 LIMIT 10 does
-    not. ACTS must cover 17,293 works, TITLES ~52,000 rows and VERSIONS
-    ~170,000, so an OFFSET walk cannot reach most of the corpus at all. Every
+    not. ACTS must cover 17,293 works, and TITLES and VERSIONS tens of
+    thousands of rows each, so an OFFSET walk cannot reach most of the corpus
+    at all. Every
     one of these three queries used to end in `LIMIT %(limit)d OFFSET
     %(offset)d`; none of them may again."""
     for name in ("ACTS", "TITLES", "VERSIONS"):
@@ -51,7 +52,7 @@ def test_acts_pages_by_key_not_by_a_row_counter():
 def test_titles_and_versions_are_driven_by_a_values_batch():
     """Once ch_act is populated both are driven by batches of known work URIs
     rather than walked globally. That bounds every query far below the
-    ceiling, makes the walk resumable act by act, and -- for VERSIONS -- makes
+    ceiling, makes each batch an independent query, and -- for VERSIONS -- makes
     an orphaned version impossible by construction, because the parent work is
     by definition already in ch_act."""
     for name in ("TITLES", "VERSIONS"):
@@ -60,15 +61,79 @@ def test_titles_and_versions_are_driven_by_a_values_batch():
         assert "%(limit)d" not in text, f"{name} should be bounded by its batch"
 
 
+# The worst case a batch can produce, measured on 2026-08-23 by running the
+# SHIPPED queries (the ones with SELECT DISTINCT) over the heaviest works in
+# the corpus and counting returned rows. VERSIONS is the constraint; TITLES is
+# nowhere near it, because exactly five languages exist and a work carries one
+# title per language.
+WORST_CASE_VERSION_ROWS_PER_WORK = 282        # cc/2022/151, the largest act
+WORST_CASE_VERSION_ROWS_PER_BATCH = 2461      # the twenty heaviest works
+WORST_CASE_TITLE_ROWS_PER_WORK = 5            # de/fr/it/en/rm, one title each
+SR353_CEILING = 10000
+
+
 def test_the_work_batch_size_keeps_the_worst_case_under_the_ceiling():
-    """Measured against the live endpoint on 2026-08-23 by grouping each query
-    by ?work: the heaviest single work returns 770 title rows and 282 version
-    rows, and the twenty heaviest works in the corpus sum to 8,692 title rows
-    (the top twenty-five sum to 10,021, over the ceiling). TITLES is the
-    binding constraint, so 20 is the largest batch whose absolute worst case
-    still clears 10,000."""
+    """20 is justified by measurement, not by taste.
+
+    Earlier revisions of this comment cited 770 title rows for the heaviest
+    work and a top-20 sum of 8,692. Those came from the query pattern WITHOUT
+    its SELECT DISTINCT, and were wrong by up to 150x: Fedlex serves the same
+    triples from many named graphs, and DISTINCT collapses that duplication
+    before any row reaches a stage. Measured through the shipped queries, the
+    heaviest work returns 5 title rows, not 770."""
     assert q.WORK_BATCH_SIZE == 20
-    assert q.WORK_BATCH_SIZE * 770 < 20000     # sanity: one heavy work per slot
+    worst = (WORST_CASE_VERSION_ROWS_PER_BATCH
+             + WORST_CASE_TITLE_ROWS_PER_WORK * q.WORK_BATCH_SIZE)
+    assert worst < SR353_CEILING, "a batch could exceed the sorted-TOP ceiling"
+    # And the margin is real, not marginal: roughly 4x.
+    assert worst < SR353_CEILING // 3
+
+
+def test_versions_not_titles_is_what_constrains_the_batch_size():
+    """The comment must name the right constraint. A work has at most five
+    titles ever, but the largest act has 282 editions across five languages."""
+    assert WORST_CASE_TITLE_ROWS_PER_WORK < WORST_CASE_VERSION_ROWS_PER_WORK
+    assert (WORST_CASE_TITLE_ROWS_PER_WORK * q.WORK_BATCH_SIZE
+            < WORST_CASE_VERSION_ROWS_PER_BATCH)
+    assert len(q.LANGUAGE_MAP) == WORST_CASE_TITLE_ROWS_PER_WORK, \
+        "five languages exist on SC expressions, and all five are mapped"
+
+
+def _batch_size_comment() -> str:
+    """The comment block that justifies WORK_BATCH_SIZE."""
+    import inspect
+    source = inspect.getsource(q)
+    start = source.index("# Works bound into one VALUES block")
+    return source[start:source.index("WORK_BATCH_SIZE = 20")]
+
+
+def test_the_batch_size_comment_does_not_cite_the_discredited_numbers():
+    """These figures came from the query pattern WITHOUT its SELECT DISTINCT
+    and are wrong by up to 150x -- the 'heaviest work, 770 title rows' is 5
+    rows through the shipped query. A comment that states a measurement of a
+    query the pipeline does not ship is exactly the kind of unearned claim
+    this branch exists to stop shipping."""
+    comment = _batch_size_comment()
+    for discredited in ("770", "8,692", "10,021", "7,216", "15,549"):
+        assert discredited not in comment, \
+            f"{discredited} is a non-DISTINCT measurement and is not true"
+
+
+def test_the_batch_size_comment_names_versions_as_the_constraint():
+    """It used to name TITLES, which is off by a factor of 25."""
+    comment = _batch_size_comment()
+    assert "VERSIONS is what constrains the batch size" in comment
+    assert "282" in comment and "2,461" in comment
+
+
+def test_the_batch_size_comment_warns_about_count_distinct():
+    """COUNT(DISTINCT ?x) returned a nineteen-digit number on this endpoint
+    where the answer was 1, and COUNT(*) over a subselect with an inner
+    DISTINCT returned 22,675 against a true 17,305. Anyone re-measuring these
+    numbers must be told before they trust a COUNT."""
+    import inspect
+    source = inspect.getsource(q)
+    assert "COUNT(DISTINCT" in source and "unreliable" in source
 
 
 def test_status_code_extracts_the_trailing_integer():

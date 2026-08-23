@@ -1,6 +1,6 @@
 import httpx
 import pytest
-from chpipe.sparql import SparqlClient, SparqlError
+from chpipe.sparql import MAX_PAGE_SIZE, SparqlClient, SparqlError
 
 RESULT = {
     "head": {"vars": ["work", "sr"]},
@@ -157,6 +157,38 @@ def test_keyset_raises_instead_of_looping_when_a_page_cannot_advance():
     c = _client(_replay([_bindings("a", "a")], seen))
     with pytest.raises(SparqlError, match="cannot advance"):
         list(c.keyset(KEYSET_Q, page_size=2))
+
+
+def test_the_cannot_advance_message_does_not_advise_raising_the_page_size():
+    """The obvious advice is the one move that reintroduces the bug: page_size
+    is already capped by the very ceiling this walker exists to avoid, so
+    'raise page_size' is a dead end at best and SR353 at worst. The message
+    must point at a finer key instead."""
+    seen = []
+    c = _client(_replay([_bindings("a", "a")], seen))
+    with pytest.raises(SparqlError) as exc:
+        list(c.keyset(KEYSET_Q, page_size=2))
+    message = str(exc.value)
+    assert "raise page_size" not in message
+    assert "finer key" in message
+    assert str(MAX_PAGE_SIZE) in message
+
+
+def test_keyset_refuses_a_page_size_that_would_hit_the_ceiling_on_its_own():
+    """Measured live on 2026-08-23: LIMIT 10000 returns rows, LIMIT 10001
+    raises SR353 -- with no OFFSET anywhere. An unbounded page size is the
+    same bug wearing a different hat, so the cap is enforced, not advised."""
+    c = _client(lambda r: httpx.Response(200, json=RESULT))
+    assert MAX_PAGE_SIZE == 10000
+    for bad in (MAX_PAGE_SIZE + 1, 20000, 0, -1):
+        with pytest.raises(ValueError, match="page_size"):
+            list(c.keyset(KEYSET_Q, page_size=bad))
+
+
+def test_keyset_accepts_a_page_size_exactly_at_the_cap():
+    seen = []
+    c = _client(_replay([_bindings("a")], seen))
+    assert [r["work"] for r in c.keyset(KEYSET_Q, page_size=MAX_PAGE_SIZE)] == ["a"]
 
 
 def test_keyset_raises_when_the_key_is_not_bound():

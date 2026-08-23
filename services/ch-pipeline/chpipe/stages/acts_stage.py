@@ -192,8 +192,17 @@ def run(settings: Settings, page_size: int = DEFAULT_PAGE_SIZE,
     Neither pass uses an offset. The acts walk is a keyset walk (page N+1
     resumes past the last work of page N); the titles pass is driven by
     batches of the work URIs this run has just discovered, so it is bounded by
-    the batch rather than by a position in a 52,000-row global ordering. See
-    chpipe/sparql.py for the SR353 ceiling both shapes exist to stay under.
+    the batch rather than by a position in a global ordering of every title
+    row. See chpipe/sparql.py for the SR353 ceiling both shapes exist to stay
+    under.
+
+    Restartable and idempotent, NOT resumable: keyset() always starts from the
+    beginning, so an interrupted run redoes the acts walk from the first work
+    (about 165s for the whole corpus). The titles pass is weaker than that --
+    it accumulates its work set in memory DURING the acts walk, so an
+    interruption before the titles pass runs loses that pass entirely, with
+    nothing on disk to resume from. A run that dies between the two passes
+    must be repeated in full; the upserts make that safe, only not free.
     """
     report = ActsReport()
     client = SparqlClient(fq.ENDPOINT)

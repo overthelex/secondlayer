@@ -1,7 +1,13 @@
 """Discovery of consolidated editions into ch_act_version.
 
-56,328 consolidations as of 2026-08-23, each realised in three to five
-languages -- roughly 170,000 (consolidation, lang) rows. This is the table
+56,326 consolidations as of 2026-08-23, but only 12,033 of them carry the XML
+manifestation this stage's query requires, so a full pass discovers on the
+order of 38,000 (consolidation, lang) rows -- measured by running the shipped
+VERSIONS query over a random sample of 2,000 works, not by COUNT (see the
+warning in fedlex_queries.py about COUNT on this endpoint). Two thirds of
+works return no version at all for want of an XML edition; that is a coverage
+question about the query, not about paging, and it is deliberately left alone
+here. This is the table
 the old flat ch_legislation could not express at all: its primary key was
 (eli_uri, lang), which allows exactly one edition per act, so production
 holds no amendment history whatsoever. The uniqueness this stage writes
@@ -11,13 +17,23 @@ in DEU, FRA and ITA is three rows, not one row overwritten twice.
 Two further properties of the source data shape this module:
 
   * The walk is driven by batches of work URIs read from ch_act rather than
-    by a position in a ~170,000-row global ordering. That is what keeps every
-    query far below Virtuoso's SR353 ceiling (see chpipe/sparql.py), makes the
-    walk resumable act by act, and has the side effect that a version cannot
-    be orphaned by construction -- its parent work is by definition already in
+    by a position in a global ordering of every version row. That is what
+    keeps every query far below Virtuoso's SR353 ceiling (see
+    chpipe/sparql.py), and it has the side effect that a version cannot be
+    orphaned by construction -- its parent work is by definition already in
     ch_act. The orphan reporting below is kept all the same: it is now a
     consistency check on that claim rather than the expected outcome, and a
     non-zero count means something is wrong that a silent zero would hide.
+
+    The walk is restartable and idempotent, NOT resumable: _SELECT_WORKS reads
+    all of ch_act unconditionally, with no filter for works already walked, so
+    an interrupted run redoes the whole pass from the first work. That is
+    cheap (about 865 requests) and correct (every write is an upsert), and it
+    is also the right default for a live government dataset, where a work's
+    edition set can change between runs and skipping already-walked works
+    would quietly freeze the ones walked earliest. Making it truly resumable
+    would be a one-line `WHERE eli_work_uri > %s`; it is deliberately not
+    there, so that a re-run re-discovers rather than resumes.
   * Fedlex returns the same consolidation from more than one named graph, so
     the same row is walked more than once. The second write of a row must
     update the first, not duplicate it -- see the ON CONFLICT clause below.
@@ -71,7 +87,8 @@ class VersionsReport:
     skipped_langs: list[str] = field(default_factory=list)
     by_lang: dict[str, int] = field(default_factory=dict)
     # One bad row (a malformed binding, a write error) must not abort a walk
-    # of ~170,000 rows. Counted here instead, same shape as acts_stage.
+    # of tens of thousands of rows. Counted here instead, same shape as
+    # acts_stage.
     errors: int = 0
 
 
@@ -141,6 +158,10 @@ def run(settings: Settings,
 
     Run the acts stage first: an empty ch_act means an empty driving set, and
     this issues no queries at all rather than walking the graph blind.
+
+    Restartable and idempotent rather than resumable -- an interrupted run
+    starts again from the first work in ch_act and redoes the whole pass. See
+    the module docstring for why that is the intended behaviour.
     """
     report = VersionsReport()
     client = SparqlClient(fq.ENDPOINT)
@@ -150,7 +171,8 @@ def run(settings: Settings,
         log.info("versions: driving from %d works in ch_act", len(works))
         for row in client.batched(fq.VERSIONS, works, batch_size=batch_size):
             # A single malformed row (or a write error on it) must not abort
-            # a walk of ~170,000 rows -- log it, count it, move on. Follows
+            # a walk of tens of thousands of rows -- log it, count it, move
+            # on. Follows
             # the same shape as acts_stage.run()'s per-row guard.
             try:
                 lang = fq.language_code(row.get("lang"))

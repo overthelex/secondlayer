@@ -22,7 +22,8 @@ Two walkers replace the OFFSET walk:
     past the last key seen instead of counting rows skipped.
   * batched() -- for a query driven by a set of subject URIs we already hold,
     bound through a VALUES block. Every such query is bounded by the batch,
-    so it never approaches the ceiling, and the walk is resumable per batch.
+    so it never approaches the ceiling, and each batch is an independent
+    query rather than a position in a global ordering.
 """
 from __future__ import annotations
 
@@ -38,6 +39,13 @@ log = logging.getLogger(__name__)
 # and give the endpoint operator a contact address.
 USER_AGENT = ("SecondLayer-CH-Pipeline/1.0 (+https://legal.org.ua; "
               "legal research corpus; contact: mcvovkes@gmail.com)")
+
+# Even with no OFFSET at all, a sorted TOP is still capped: measured against
+# the live endpoint on 2026-08-23, LIMIT 10000 returns rows and LIMIT 10001
+# raises SR353. A keyset page is therefore hard-bounded here, so that no
+# caller -- and no well-meaning fix to the "cannot advance" case below -- can
+# set a page size that walks straight back into the wall.
+MAX_PAGE_SIZE = 10000
 
 # Rows per keyset page. Only LIMIT is sent (never OFFSET), so the sorted TOP
 # stays at this size for every page no matter how deep the walk goes.
@@ -113,11 +121,19 @@ class SparqlClient:
         Progress therefore depends on the boundary subject having fewer rows
         than a page. If a whole page turns out to be one subject the walk cannot
         advance, and this raises rather than looping forever or skipping ahead.
+
+        page_size is capped at MAX_PAGE_SIZE: a sorted TOP larger than 10,000
+        raises SR353 even with no OFFSET, so an unbounded page size is the same
+        bug wearing a different hat.
         """
         if "%(after)s" not in query_template or "%(limit)d" not in query_template:
             raise ValueError(
                 'keyset() needs FILTER(STR(?key) >= "%(after)s") and LIMIT %(limit)d')
         _reject_offset(query_template, "keyset")
+        if not 1 <= page_size <= MAX_PAGE_SIZE:
+            raise ValueError(
+                f"keyset() page_size must be between 1 and {MAX_PAGE_SIZE}: a "
+                "sorted TOP above 10,000 rows raises SR353 even with no offset")
 
         after = ""
         boundary: set[tuple] = set()
@@ -138,10 +154,18 @@ class SparqlClient:
                     f"keyset(): the last row of a full page has no ?{key} to "
                     "page on; the walked query must always bind its key")
             if last == after:
+                # Deliberately does NOT say "raise page_size". page_size is
+                # already capped at 10,000 by the very ceiling this walker
+                # exists to avoid, so that advice is a dead end at best and a
+                # reintroduction of the bug at worst. The real fix is a more
+                # selective key.
                 raise SparqlError(
                     f"keyset(): a full page of {page_size} rows all share "
                     f"?{key} = {last!r}, so the walk cannot advance without "
-                    "skipping rows -- raise page_size")
+                    f"skipping rows. Page size cannot exceed {MAX_PAGE_SIZE} "
+                    "(SR353), so page on a finer key instead: add a tiebreaker "
+                    "to the ORDER BY and walk the composite, or split this "
+                    "subject into a batched() walk of its own.")
             after = last
             boundary = {_fingerprint(r) for r in rows if r.get(key) == last}
 

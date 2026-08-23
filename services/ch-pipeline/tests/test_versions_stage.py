@@ -223,9 +223,9 @@ def test_run_closes_the_client_even_after_a_bad_row(conn, settings, monkeypatch)
 # --- the driving set: batches of works read from ch_act, never an offset ---
 
 def test_run_is_driven_by_the_works_in_ch_act(conn, settings, monkeypatch):
-    """The whole point of the fix. An offset walk of ~170,000 version rows
-    dies on Virtuoso's SR353 ceiling at row 10,001; this walk asks only for
-    the editions of works ch_act already holds, a batch of works at a time."""
+    """The whole point of the fix. An offset walk of the tens of thousands of
+    version rows dies on Virtuoso's SR353 ceiling at row 10,001; this walk asks
+    only for the editions of works ch_act already holds, a batch at a time."""
     for i in range(45):
         acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/x/{i:03d}"})
     seen: list = []
@@ -241,9 +241,11 @@ def test_run_is_driven_by_the_works_in_ch_act(conn, settings, monkeypatch):
 
 
 def test_run_uses_the_measured_batch_size_by_default(conn, settings, monkeypatch):
-    """20 is not arbitrary: the twenty heaviest works in the corpus sum to
-    8,692 title rows and the top twenty-five to 10,021, so 20 is the largest
-    batch whose worst case still clears Virtuoso's 10,000-row ceiling."""
+    """20 is not arbitrary. Measured through the shipped queries (with their
+    SELECT DISTINCT), the twenty heaviest works in the corpus return 2,461
+    version rows and 100 title rows -- a 4x margin under Virtuoso's 10,000-row
+    ceiling. VERSIONS is the constraint; TITLES tops out at five rows per work
+    because exactly five languages exist."""
     from chpipe import fedlex_queries as fq
     for i in range(25):
         acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/y/{i:03d}"})
@@ -260,6 +262,43 @@ def test_run_asks_fedlex_nothing_when_ch_act_is_empty(conn, settings, monkeypatc
     report = _run_with_rows(monkeypatch, settings, [_row()], capture=seen)
     assert seen[0].batches == []
     assert report.discovered == 0
+
+
+def test_the_module_does_not_claim_to_be_resumable():
+    """_SELECT_WORKS reads all of ch_act with no filter for works already
+    walked, and keyset() always starts from the beginning, so nothing here
+    resumes. Saying 'resumable act by act' described behaviour the code does
+    not have."""
+    doc = versions_stage.__doc__ or ""
+    assert "resumable act by act" not in doc
+    assert "restartable and idempotent" in doc.lower()
+    assert "NOT resumable" in doc
+    run_doc = versions_stage.run.__doc__ or ""
+    assert "Restartable and idempotent rather than resumable" in run_doc
+
+
+def test_the_titles_pass_documents_that_it_cannot_be_resumed_at_all():
+    """The weaker half: acts_stage accumulates its title work set in memory
+    during the acts walk, so an interruption before the titles pass loses it
+    with nothing on disk to resume from. That has to be written down."""
+    doc = acts_stage.run.__doc__ or ""
+    assert "in memory" in doc and "loses that pass entirely" in doc
+
+
+def test_the_walk_restarts_from_the_beginning_rather_than_resuming(conn, settings,
+                                                                   monkeypatch):
+    """The docstring says restartable, not resumable, and this pins it: the
+    driving set is read unconditionally, so a second run re-walks every work
+    rather than picking up after the last one. That is intended -- a work's
+    edition set can change between runs -- and the upserts make it safe."""
+    for i in range(3):
+        acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/r/{i}"})
+    first: list = []
+    _run_with_rows(monkeypatch, settings, [], capture=first)
+    second: list = []
+    _run_with_rows(monkeypatch, settings, [], capture=second)
+    assert first[0].batches == second[0].batches, \
+        "a re-run must redo the whole pass, not resume past what it already walked"
 
 
 def test_work_uris_returns_the_driving_set_in_a_stable_order(conn):

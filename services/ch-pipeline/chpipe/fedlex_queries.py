@@ -4,7 +4,9 @@ Counts observed that day. Fedlex is a live government dataset, so treat these
 as a point-in-time snapshot, not invariants -- a later run measuring numbers
 in the same ballpark is fine; ordinary drift is expected:
   jolux:ConsolidationAbstract   17,293 distinct works
-  jolux:Consolidation           56,328
+  jolux:Consolidation           56,326 (only 12,033 of them carry an
+                                XML manifestation, which is what VERSIONS
+                                requires -- see stages/versions_stage.py)
   jolux:Act (AS + BBl)         369,181
   enforcement-status 0 (in force)  5,087 works
   enforcement-status 3 (repealed)  7,863 works
@@ -19,24 +21,38 @@ ENDPOINT = "https://fedlex.data.admin.ch/sparqlendpoint"
 
 # Works bound into one VALUES block by the TITLES and VERSIONS walks.
 #
-# Fedlex's Virtuoso raises SR353 once a sorted TOP asks for more than 10,000
-# rows, so a batch's whole result set must stay under that even in the worst
-# case. Measured against the live endpoint on 2026-08-23, by grouping each
-# query by ?work and summing the heaviest works in the corpus:
+# Measured on 2026-08-23 by running the SHIPPED queries below -- the ones with
+# SELECT DISTINCT -- over batches of real works and counting the rows that came
+# back. Measuring the same query patterns WITHOUT their DISTINCT gives numbers
+# up to 150x too large, because Fedlex serves the same triples from many named
+# graphs; DISTINCT collapses that before a single row reaches a stage.
 #
-#   TITLES  heaviest single work 770 rows; top-15 sum 7,216; top-20 sum 8,692;
-#           top-25 sum 10,021  <-- over the ceiling
-#   VERSIONS heaviest single work 282 rows; top-25 sum 2,796; top-50 sum 4,094
+#   VERSIONS  largest act in the corpus 282 rows (cc/2022/151); the twenty
+#             heaviest works together 2,461 rows
+#   TITLES    5 rows for any work, ever: exactly five languages exist on SC
+#             expressions (DEU/FRA/ITA/ENG/ROH, all mapped by LANGUAGE_MAP)
+#             and a work carries one title per language. The twenty heaviest
+#             works together are 100 rows.
 #
-# TITLES is the binding constraint, so 20 is the largest batch whose absolute
-# worst case -- the twenty heaviest works in the entire corpus all landing in
-# one batch, which the eli_work_uri ordering makes wildly unlikely -- still
-# comes in under 10,000. Typical batches are far smaller: 52,491 title rows and
-# ~170,000 version rows over 17,293 works average 3 and 10 rows per work, so a
-# batch of 20 usually returns 60 and 200 rows respectively.
+# So VERSIONS is what constrains the batch size and TITLES is nowhere near it.
+# A batch of 20 tops out around 2,461 rows even in the adversarial case where
+# the twenty heaviest works in the whole corpus land in one batch -- a 4x
+# margin under the 10,000 ceiling described in chpipe/sparql.py. Typical
+# batches are far smaller: sampled over 2,000 random works, VERSIONS averages
+# 2.2 rows per work (65% of works return none, having no XML edition) and
+# TITLES 3.0, so a batch of 20 usually returns about 44 and 60 rows.
 #
-# It is also large enough not to be chatty against a public government service:
-# 17,293 works is roughly 865 requests per pass rather than 17,293.
+# Strictly, the ceiling cannot fire on either query at all: both are bound by
+# their VALUES block and carry no LIMIT and no OFFSET, and SR353 is raised only
+# by a sorted TOP clause. The margin above is therefore about politeness and
+# memory, not survival. 20 is also large enough not to be chatty against a
+# public government service: ~865 requests per pass rather than 17,293.
+#
+# A warning for whoever re-measures this. COUNT(DISTINCT ?x) is unreliable on
+# this endpoint -- it returned a nineteen-digit number where the true answer
+# was 1 -- and so is COUNT(*) over a subselect containing an inner DISTINCT,
+# which returned 22,675 against a true 17,305. Count the ROWS of an explicit
+# SELECT DISTINCT projection instead, which is what every number above is.
 WORK_BATCH_SIZE = 20
 
 # 0 = "In force" / "In Kraft". Confirmed from the vocabulary's own skos:prefLabel.
