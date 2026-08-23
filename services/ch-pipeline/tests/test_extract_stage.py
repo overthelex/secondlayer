@@ -199,3 +199,96 @@ def test_a_terminal_html_failure_keeps_its_diagnosis_and_its_origin(
     assert row["text_quality"] is not None
     assert row["attempts"] == 0, "a terminal verdict is not a spent retry"
     assert report.failed == 1
+
+
+# --- Spec section 8: the PDF is deleted after a successful extraction ---
+
+def _pdf_row(conn, doc_id, spider="S"):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, text_source, "
+        "languages) VALUES (%s,%s,%s,'fetched','pdf',%s)",
+        (f"ECLI:CH:{spider}:{doc_id}", spider, doc_id, ["de"]))
+
+
+def _pdf_settings(tmp_path, keep=False):
+    return Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=tmp_path,
+                    http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                    load_ceiling=99.0, max_attempts=3,
+                    retry_backoff_minutes=(), keep_raw_pdf=keep)
+
+
+GOOD_DE_TEXT = ("Das Bundesgericht hat die Beschwerde des Beschwerdeführers "
+                "gegen das Urteil des Obergerichts abgewiesen, soweit darauf "
+                "einzutreten ist. ") * 8
+
+
+def test_a_successfully_extracted_pdf_is_deleted(conn, tmp_path, monkeypatch):
+    """Spec section 8's disk rule, which was never implemented anywhere."""
+    (tmp_path / "S").mkdir()
+    pdf = tmp_path / "S" / "d.pdf"
+    pdf.write_bytes(b"%PDF-1.4 scan")
+    _pdf_row(conn, "d")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
+                        lambda p: GOOD_DE_TEXT)
+
+    report = extract_stage.run(_pdf_settings(tmp_path), spider="S", limit=1)
+
+    assert report.extracted == 1
+    assert not pdf.exists()
+
+
+def test_a_pdf_sent_to_ocr_is_kept(conn, tmp_path, monkeypatch):
+    """"except when text_quality is below the threshold or OCR was involved"
+    -- the whole point of ocr_pending is that the file gets read again."""
+    (tmp_path / "S").mkdir()
+    pdf = tmp_path / "S" / "d.pdf"
+    pdf.write_bytes(b"%PDF-1.4 scan")
+    _pdf_row(conn, "d")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf", lambda p: "")
+
+    report = extract_stage.run(_pdf_settings(tmp_path), spider="S", limit=1)
+
+    assert report.queued_for_ocr == 1
+    assert pdf.exists(), "a document still to be OCR'd must keep its PDF"
+
+
+def test_an_html_body_is_never_deleted(conn, tmp_path):
+    """HTML is small, and it is the input to the one extraction path with no
+    second chance -- bad-quality HTML is terminal."""
+    (tmp_path / "S").mkdir()
+    html = tmp_path / "S" / "d.html"
+    html.write_text(GOOD_DE_HTML)
+    _seed_fetched(conn, "d", "S", "html")
+
+    extract_stage.run(_pdf_settings(tmp_path), spider="S", limit=1)
+    assert html.exists()
+
+
+def test_keep_raw_pdf_switches_the_deletion_off(conn, tmp_path, monkeypatch):
+    """What Gate A needs: the sample's PDFs must survive for inspection."""
+    (tmp_path / "S").mkdir()
+    pdf = tmp_path / "S" / "d.pdf"
+    pdf.write_bytes(b"%PDF-1.4 scan")
+    _pdf_row(conn, "d")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
+                        lambda p: GOOD_DE_TEXT)
+
+    extract_stage.run(_pdf_settings(tmp_path, keep=True), spider="S", limit=1)
+    assert pdf.exists()
+
+
+def test_a_failed_write_never_costs_the_source_file(conn, tmp_path, monkeypatch):
+    """Deletion happens after the database write, never before: a row that
+    is going to be retried must still have something to retry from."""
+    (tmp_path / "S").mkdir()
+    pdf = tmp_path / "S" / "d.pdf"
+    pdf.write_bytes(b"%PDF-1.4 scan")
+    _pdf_row(conn, "d")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
+                        lambda p: GOOD_DE_TEXT)
+    monkeypatch.setattr(extract_stage.db, "complete",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("simulated write failure")))
+
+    extract_stage.run(_pdf_settings(tmp_path), spider="S", limit=1)
+    assert pdf.exists()

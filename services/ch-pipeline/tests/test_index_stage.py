@@ -253,3 +253,69 @@ def test_a_failed_spider_is_counted_apart_from_failed_documents(conn, monkeypatc
     report = index_stage.IndexReport()
     assert report.failed == 0
     assert report.failed_spiders == []
+
+
+# --- Re-running index must not rewind work in progress ---
+#
+# Spec section 10 makes delta runs of `index` the normal ongoing operation, so
+# this is a live path, not a corner case. Only 'loaded' was protected: a row
+# sitting at 'fetched', 'extracted' or 'ocr_pending' was thrown back to
+# 'indexed' and re-downloaded in full. write_body short-circuits the WRITE on
+# a matching sha256 but never the fetch, so the bytes come off the
+# volunteer-run mirror again either way.
+
+@pytest.mark.parametrize("stage", ["fetched", "extracted", "ocr_pending"])
+def test_reindexing_does_not_rewind_a_row_that_has_already_done_work(conn, stage):
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) VALUES (%s,%s,%s)",
+        (f.ecli, f.spider, stage))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions").fetchone()[0] == stage
+
+
+def test_reindexing_still_fills_the_metadata_of_a_row_it_does_not_rewind(conn):
+    """Protecting the stage must not stop `index` doing the job it exists
+    for: filling in decision_date and doc_id on the legacy rows."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) "
+        "VALUES (%s,%s,'ocr_pending')", (f.ecli, f.spider))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, decision_date, doc_id FROM ch_court_decisions").fetchone()
+    assert row[0] == "ocr_pending"
+    assert row[1] == datetime.date(2022, 2, 18)
+    assert row[2] == "ZG_OG_001_Z1-2020-5_2022-02-18"
+
+
+@pytest.mark.parametrize("stage", ["indexed", "failed"])
+def test_reindexing_does_requeue_a_row_that_has_done_no_work(conn, stage):
+    """'failed' and 'indexed' are deliberately not protected: a re-index is
+    exactly the event that can give a failed row a body it did not have."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage, last_error) "
+        "VALUES (%s,%s,%s,'no body: listing offers neither html nor pdf')",
+        (f.ecli, f.spider, stage))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] is None
+
+
+def test_a_protected_row_is_not_stamped_with_an_error_it_never_hit(conn):
+    """The same rule finding 1a established for 'loaded', now for the other
+    protected stages: a row whose listing transiently loses its body must
+    not be labelled with a failure it never experienced."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) "
+        "VALUES (%s,%s,'extracted')", (f.ecli, f.spider))
+    index_stage.upsert(conn, f, set())
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "extracted"
+    assert row[1] is None

@@ -53,16 +53,27 @@ ON CONFLICT (ecli) DO UPDATE SET
     pdf_url       = COALESCE(EXCLUDED.pdf_url, ch_court_decisions.pdf_url),
     json_url      = EXCLUDED.json_url,
     metadata_json = EXCLUDED.metadata_json,
-    -- A row that already finished stays finished. Anything else re-enters the
-    -- queue at the stage this run assigns. last_error must key on the SAME
-    -- final-stage expression as `stage` above, not on EXCLUDED.stage alone —
-    -- otherwise a protected 'loaded' row can be stamped with an error message
-    -- that describes a stage it never actually entered, and a row recovering
-    -- from 'failed' never gets its stale error cleared.
-    stage         = CASE WHEN ch_court_decisions.stage = 'loaded'
-                         THEN 'loaded' ELSE EXCLUDED.stage END,
-    last_error    = CASE WHEN (CASE WHEN ch_court_decisions.stage = 'loaded'
-                                    THEN 'loaded' ELSE EXCLUDED.stage END) = 'failed'
+    -- A row that has already done work keeps it. Only 'loaded' was protected
+    -- before, so re-running `index` -- which spec section 10 makes the normal
+    -- ongoing operation for deltas -- threw every row at 'fetched',
+    -- 'extracted' or 'ocr_pending' back to 'indexed' and forced a full
+    -- re-download. write_body short-circuits the WRITE on a matching sha256
+    -- but never the fetch, so the bytes come off the volunteer-run mirror
+    -- again regardless. 'failed' and 'indexed' are deliberately NOT protected:
+    -- a re-index is exactly the event that can give a failed row a body it
+    -- did not have before.
+    --
+    -- last_error must key on the SAME final-stage expression as `stage`
+    -- above, not on EXCLUDED.stage alone — otherwise a protected row can be
+    -- stamped with an error message describing a stage it never entered, and
+    -- a row recovering from 'failed' never gets its stale error cleared.
+    stage         = CASE WHEN ch_court_decisions.stage IN
+                              ('loaded','fetched','extracted','ocr_pending')
+                         THEN ch_court_decisions.stage ELSE EXCLUDED.stage END,
+    last_error    = CASE WHEN (CASE WHEN ch_court_decisions.stage IN
+                                         ('loaded','fetched','extracted','ocr_pending')
+                                    THEN ch_court_decisions.stage
+                                    ELSE EXCLUDED.stage END) = 'failed'
                          THEN %(error)s ELSE NULL END,
     stage_updated_at = now(),
     updated_at    = now()

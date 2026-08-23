@@ -37,7 +37,15 @@ MIN_TEXT_LENGTH = 200          # same threshold the coverage numbers use
 @dataclass
 class LoadReport:
     loaded: int = 0
+    # A measured finding: the row reached 'extracted' with less than
+    # MIN_TEXT_LENGTH characters of text. Something upstream is broken.
     skipped_empty: int = 0
+    # An exception -- a dropped connection, a constraint violation, anything.
+    # Kept apart from skipped_empty, which used to be incremented from both
+    # branches: "skipped_empty=1200" then asserted a cause the stage had not
+    # measured, and every other stage in this pipeline already reports these
+    # two populations separately.
+    failed: int = 0
 
 
 def run(settings: Settings, limit: int | None = None,
@@ -107,10 +115,11 @@ def run(settings: Settings, limit: int | None = None,
                     except Exception as fail_exc:
                         log.error("%s/%s: also failed recording the failure: %s",
                                  row["spider"], row["doc_id"], fail_exc)
-                    report.skipped_empty += 1
+                    report.failed += 1
             if remaining is not None:
                 remaining -= len(rows)
-            log.info("loaded=%d skipped_empty=%d", report.loaded, report.skipped_empty)
+            log.info("loaded=%d skipped_empty=%d failed=%d", report.loaded,
+                     report.skipped_empty, report.failed)
     finally:
         conn.close()
     return report
@@ -125,7 +134,8 @@ def main() -> LoadReport:
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
-    log.info("loaded=%d skipped_empty=%d", result.loaded, result.skipped_empty)
+    log.info("loaded=%d skipped_empty=%d failed=%d", result.loaded,
+             result.skipped_empty, result.failed)
     return result
 
 

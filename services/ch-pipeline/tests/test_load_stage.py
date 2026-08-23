@@ -119,3 +119,27 @@ def test_a_db_complete_failure_for_one_row_does_not_abort_the_rest_of_the_batch(
     assert rows["bad"]["attempts"] == 1
     assert rows["bad"]["last_error"]
     assert report.loaded == 2
+
+
+def test_a_crash_is_counted_apart_from_a_measured_empty_row(conn, settings,
+                                                            monkeypatch):
+    """skipped_empty was incremented from both the genuine short-text branch
+    and the generic exception handler, so "skipped_empty=1200" asserted a
+    cause the stage had not measured. Every other stage in this pipeline
+    already reports these two populations separately."""
+    _row(conn, "empty", None, 0.8)
+    _row(conn, "boom", "x" * 500, 0.8)
+
+    real_complete = load_stage.db.complete
+
+    def flaky_complete(conn_, doc_id, next_stage, **fields):
+        if doc_id == "boom":
+            raise RuntimeError("simulated connection drop")
+        return real_complete(conn_, doc_id, next_stage, **fields)
+
+    monkeypatch.setattr(load_stage.db, "complete", flaky_complete)
+    report = load_stage.run(settings, limit=2)
+
+    assert report.skipped_empty == 1, "the measured finding"
+    assert report.failed == 1, "the crash, not folded into the measured finding"
+    assert report.loaded == 0

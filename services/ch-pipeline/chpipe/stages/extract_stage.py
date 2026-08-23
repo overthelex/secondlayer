@@ -1,5 +1,16 @@
 """Stage 3: raw body -> plain text, with a measured quality score.
 
+Spec section 8: after a SUCCESSFUL extraction the PDF is deleted, except
+when the quality was below the threshold or OCR was involved -- those are
+kept so the document can be read again. That rule was never implemented;
+it is implemented here, in discard_extracted_pdf(), and only after the
+database write has succeeded, so a failed write never costs the source
+file. CHPIPE_KEEP_RAW_PDF=1 turns it off, which is what Gate A wants: the
+sample's PDFs have to survive for inspection, and re-tuning the extractor
+without them means re-downloading ~160 GB from a volunteer-run mirror.
+HTML bodies are always kept; they are small and they are the input to the
+one extraction path with no second chance.
+
 Routing:
   html, good quality -> extracted
   html, bad quality  -> failed        (there is no scan behind an HTML page,
@@ -50,6 +61,25 @@ def extract_one(settings: Settings, row) -> tuple[str, float, str]:
     if source == "pdf":
         return text, quality, "ocr_pending"
     return text, quality, "failed"
+
+
+def discard_extracted_pdf(settings: Settings, row, source: str) -> None:
+    """Spec section 8's disk rule, applied only where the spec allows it.
+
+    Called only on the 'extracted' branch, and only for a PDF: a document
+    routed to ocr_pending or failed keeps its file, because the whole point
+    of those states is that it may be read again. Never raises -- a file
+    that cannot be removed is a disk-space problem, not a reason to fail a
+    document whose text is already safely in the database.
+    """
+    if settings.keep_raw_pdf or source != "pdf":
+        return
+    try:
+        raw_path(settings.raw_dir, row["spider"], row["doc_id"], "pdf").unlink(
+            missing_ok=True)
+    except OSError as exc:
+        log.warning("%s/%s: could not remove the extracted pdf: %s",
+                    row["spider"], row["doc_id"], exc)
 
 
 def run(settings: Settings, limit: int | None = None,
@@ -117,6 +147,11 @@ def run(settings: Settings, limit: int | None = None,
                             if next_stage == "extracted":
                                 fields["full_text"] = text
                             db.complete(conn, row["doc_id"], next_stage, **fields)
+                            if next_stage == "extracted":
+                                # After the write, never before: a failed
+                                # write must not cost us the source file.
+                                discard_extracted_pdf(
+                                    settings, row, row["text_source"] or "pdf")
                     except Exception as exc:                    # noqa: BLE001
                         log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
                         try:

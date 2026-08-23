@@ -47,7 +47,19 @@ want the pipeline to go faster; `CHPIPE_CPU_WORKERS` is not the lever.
     fetch   download the body (html preferred, pdf otherwise)
     extract body -> text, with a measured quality score
     ocr     re-read the pdfs whose text layer failed the gate
-    load    promote extracted rows to loaded
+    load    read the stored text back and promote the row to loaded
+
+Re-running `index` is the normal ongoing operation (spec section 10) and is
+safe: a row already at `fetched`, `extracted`, `ocr_pending` or `loaded`
+keeps its stage and only has its metadata refreshed. Rows at `indexed` or
+`failed` are re-queued, which is the point — a re-index is exactly the event
+that can give a failed row a body it did not have before.
+
+`extract` deletes a PDF once its text is stored, per spec section 8, unless
+the document was routed to OCR or the quality was below the threshold.
+`CHPIPE_KEEP_RAW_PDF=1` keeps everything: use it for Gate A, and any time
+you might want to re-run extraction without re-downloading ~160 GB from a
+volunteer-run mirror. HTML bodies are always kept.
 
 Each stage claims rows from the `stage` column with `FOR UPDATE SKIP LOCKED`.
 That reduces overlap between concurrent processes, but it is **not** a
@@ -215,13 +227,29 @@ Everything below requires a human at the keyboard watching prod, not another
 `chpipe` commit. Work through it in order; do not skip Gate A or Gate B to
 save time before a full run.
 
-- [ ] **Apply migration 196 to prod.** `mcp_backend/src/migrations/196_ch_court_pipeline.sql`
-      adds the queue columns and re-enrolls all 678,165 existing rows (most
-      of them back into `indexed`, since the existing CH_BGer text is
-      mojibake — see the migration's own comment). Confirm the migration
-      runner picked it up and check `SELECT stage, count(*) FROM
-      ch_court_decisions GROUP BY 1` afterwards against the numbers the
-      migration comment predicts.
+- [ ] **Apply migration 196 to prod BY HAND, in a maintenance window.**
+      `mcp_backend/src/migrations/196_ch_court_pipeline.sql` adds the queue
+      columns and re-enrols all 678,165 existing rows (most of them back
+      into `indexed`, since the existing CH_BGer text is mojibake — see the
+      migration's own comment). Do **not** leave this to the migration
+      runner on a normal deploy: the enrolment `UPDATE` runs a regex over
+      `full_text`, which detoasts roughly 165,000 full judgment texts on a
+      2,229 MB table, and the three `CREATE INDEX` statements take locks on
+      a table serving live queries. Together that is minutes of heavy I/O
+      and lock contention in the middle of whatever else the deploy is
+      doing.
+
+      Run it in a window, with a statement timeout, and watch it:
+
+          SET statement_timeout = '30min';
+          \i 196_ch_court_pipeline.sql
+
+      Consider running the three `CREATE INDEX` statements separately with
+      `CONCURRENTLY` (they cannot be `CONCURRENTLY` inside the file, since
+      that cannot run in a transaction block). Afterwards check the
+      enrolment against what the migration comment predicts:
+
+          SELECT stage, count(*) FROM ch_court_decisions GROUP BY 1;
 - [ ] **Verify the legacy `ecli` format BEFORE running `index`.** Every
       upsert keys on `ON CONFLICT (ecli)` and builds its key as
       `ECLI:CH:{spider}:{doc_id}` (`es_document.parse`). If the 678,165 rows
@@ -305,12 +333,18 @@ save time before a full run.
       without cleaning up; `find $CHPIPE_RAW_DIR/.ocr-tmp -name
       'chpipe-ocr-*' -mmin +120` finds the orphans, and nothing may delete
       them while an `ocr` process is alive (`pgrep -af chpipe.stages.ocr`).
-- [ ] **Gate A on a 2,000-document sample.** Run `index` -> `fetch` ->
-      `extract` for a handful of spiders capped around 2,000 documents
-      total, then read `chpipe.reports.gate_a(conn)`. Look specifically at
-      `by_source`, `ocr_pending` and `mean_quality` before committing to the
-      full backfill — this is the cheap check that catches a systemic
-      extraction problem before it burns hours on the full corpus.
+- [ ] **Gate A on a 2,000-document sample, with `CHPIPE_KEEP_RAW_PDF=1`.**
+      Run `index` -> `fetch` -> `extract` for a handful of spiders capped
+      around 2,000 documents total, then read `chpipe.reports.gate_a(conn)`.
+      Look specifically at `by_source`, `ocr_pending` and `mean_quality`
+      before committing to the full backfill — this is the cheap check that
+      catches a systemic extraction problem before it burns hours on the
+      full corpus. **Set `CHPIPE_KEEP_RAW_PDF=1` for the sample**: `extract`
+      otherwise deletes each PDF once its text is stored (spec section 8),
+      and a Gate A finding you cannot open the source document for is not
+      much of a finding. `mean_quality` is `None` when nothing was measured
+      — that means the gate has no population, not that the quality was
+      zero.
 - [ ] **Gate D against real production counts.** Run
       `reports.completeness(conn, snap["total"], snap["total_alle"])`
       against a fresh `/docs/Snapshots/{date}.json` and prod's real

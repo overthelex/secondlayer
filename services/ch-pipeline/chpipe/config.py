@@ -41,6 +41,14 @@ class Settings:
     # to an empty string to disable the wait entirely (tests, and a
     # maintenance window where the source is known to be healthy).
     retry_backoff_minutes: tuple[int, ...] = (1, 5, 30)
+    # Spec section 8: a PDF is deleted once its text has been extracted
+    # successfully, EXCEPT when the quality was below the threshold or OCR
+    # was involved -- those are kept for a possible second reading. Set
+    # CHPIPE_KEEP_RAW_PDF=1 to keep everything, which is what Gate A wants
+    # (the sample's PDFs have to survive for inspection) and what anyone
+    # re-tuning the extractor wants, since the alternative is re-downloading
+    # ~160 GB from a volunteer-run mirror.
+    keep_raw_pdf: bool = False
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -57,4 +65,5 @@ class Settings:
             max_attempts=int(os.environ.get("CHPIPE_MAX_ATTEMPTS", "3")),
             retry_backoff_minutes=_backoff(
                 os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
+            keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
         )
