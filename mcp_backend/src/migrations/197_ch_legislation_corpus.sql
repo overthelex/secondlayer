@@ -108,23 +108,31 @@ CREATE INDEX IF NOT EXISTS idx_ch_act_change_act
 CREATE INDEX IF NOT EXISTS idx_ch_act_change_article
     ON public.ch_act_change (act_id, e_id, date_applicability);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_change
-    ON public.ch_act_change (to_version_id, e_id, change_type);
+    ON public.ch_act_change (to_version_id, e_id);
 
 DO $$ BEGIN
     ALTER TABLE public.ch_act_version
         ADD CONSTRAINT ch_act_version_failed_stage_chk
         CHECK (failed_stage IS NULL OR failed_stage IN
-               ('discovered', 'fetched', 'parsed', 'diff'));
+               ('discovered', 'fetched', 'parsed', 'diff', 'projection'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 COMMENT ON TABLE public.ch_act_change IS
     'Computed per-article difference between consecutive consolidated editions. '
     'This is the amendment history; Fedlex does not publish it directly.';
+COMMENT ON INDEX public.ux_ch_act_change IS
+    'Key is (to_version_id, e_id) to enforce one statement per article per edition: '
+    'a re-diff must correct a record rather than accumulate contradictions between '
+    'different baseline versions. change_type does not belong in the key because an '
+    'article cannot be both added and repealed in the same edition.';
 COMMENT ON COLUMN public.ch_act.enforcement_status IS
     '0 = in force, 1 = no longer published in the SR, 3 = no longer in force, '
     'NULL = Fedlex publishes no status for this work';
 COMMENT ON COLUMN public.ch_act_version.failed_stage IS
     'the stage a failed row was in when it failed; NULL means it never entered '
     'a queue stage. db.retry_failed() returns a row to this stage, so recovery '
-    'is targeted instead of sending every failure back to the front of the queue.';
+    'is targeted instead of sending every failure back to the front of the queue. '
+    'Unlike migration 196, this list includes parsed (a terminal stage here) because '
+    'diff and projection operate on parsed rows in place without advancing them further.';
+

@@ -129,3 +129,83 @@ def test_failed_stage_check_constraint_rejects_unknown_values(conn):
         conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
                      "lang, date_applicability, failed_stage) "
                      "VALUES (2,1,'https://x/1/2021','en','2021-01-01','unknown_stage')")
+
+
+def test_failed_stage_accepts_all_five_legal_values(conn):
+    """failed_stage should accept discovered, fetched, parsed, diff, and projection."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+
+    for i, stage in enumerate(['discovered', 'fetched', 'parsed', 'diff', 'projection'], 2):
+        conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                     "lang, date_applicability, failed_stage) "
+                     "VALUES (%s, 1, %s, 'de', '2020-01-01', %s)",
+                     (i, f'https://x/1/cons{i}', stage))
+
+    assert conn.execute("SELECT count(*) FROM ch_act_version WHERE failed_stage IS NOT NULL").fetchone()[0] == 5
+
+
+def test_change_table_unique_key_is_to_version_and_e_id_not_change_type(conn):
+    """ux_ch_act_change key is (to_version_id, e_id): one statement per article per edition."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (1,1,'https://x/1/2020','de','2020-01-01')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (2,1,'https://x/1/2021','de','2021-01-01')")
+
+    # Insert first row: modified from version 1 to 2
+    conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                 "change_type, date_applicability) "
+                 "VALUES (1, 1, 2, 'art_1', 'modified', '2021-01-01')")
+
+    # Inserting second row with same to_version_id and e_id but different from_version_id
+    # should collide because the key is (to_version_id, e_id)
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                     "change_type, date_applicability) "
+                     "VALUES (1, NULL, 2, 'art_1', 'modified', '2021-01-01')")
+
+
+def test_change_table_unique_key_also_prevents_different_change_types(conn):
+    """Two rows with same to_version_id and e_id but different change_type collide."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (1,1,'https://x/1/2020','de','2020-01-01')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (2,1,'https://x/1/2021','de','2021-01-01')")
+
+    # Insert first row
+    conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                 "change_type, date_applicability) "
+                 "VALUES (1, 1, 2, 'art_1', 'added', '2021-01-01')")
+
+    # Attempting to insert second row with same to/e_id but different change_type should collide
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                     "change_type, date_applicability) "
+                     "VALUES (1, 1, 2, 'art_1', 'modified', '2021-01-01')")
+
+
+def test_change_table_allows_different_to_version_ids_or_e_ids(conn):
+    """Rows differing in to_version_id or e_id coexist normally."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (1,1,'https://x/1/2020','de','2020-01-01')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (2,1,'https://x/1/2021','de','2021-01-01')")
+    conn.execute("INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+                 "lang, date_applicability) VALUES (3,1,'https://x/1/2022','de','2022-01-01')")
+
+    # Same to_version_id and change_type but different e_id: allowed
+    conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                 "change_type, date_applicability) "
+                 "VALUES (1, 1, 2, 'art_1', 'modified', '2021-01-01')")
+    conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                 "change_type, date_applicability) "
+                 "VALUES (1, 1, 2, 'art_2', 'modified', '2021-01-01')")
+
+    # Same e_id and change_type but different to_version_id: allowed
+    conn.execute("INSERT INTO ch_act_change (act_id, from_version_id, to_version_id, e_id, "
+                 "change_type, date_applicability) "
+                 "VALUES (1, 2, 3, 'art_1', 'modified', '2022-01-01')")
+
+    assert conn.execute("SELECT count(*) FROM ch_act_change").fetchone()[0] == 3
