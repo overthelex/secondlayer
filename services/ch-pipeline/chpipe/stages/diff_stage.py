@@ -55,11 +55,45 @@ class DiffReport:
     added: int = 0
     modified: int = 0
     repealed: int = 0
+    # Change rows a PREVIOUS run wrote for an edition that THIS run no
+    # longer produces at all. Not the number of rows _CLEAR_CHANGES deletes
+    # (a routine re-run deletes and rewrites the identical set, which says
+    # nothing) -- only the ones that would have been left behind as orphans.
+    # See _CLEAR_CHANGES below. A non-zero value means the parser or the
+    # differ changed its mind about an eId, which is exactly the event that
+    # used to leave contradicted history in the table in silence.
+    orphaned: int = 0
     # One act whose editions raise (a malformed article, a write error) must
     # not abort the walk over the rest of ch_act. Counted here instead, same
     # shape as acts_stage.ActsReport.errors / parse_akn_stage.ParseReport.failed.
     errors: int = 0
 
+
+# Every change this run is about to compute for `to_version_id` replaces
+# every change a previous run computed for it. Deleting first, rather than
+# relying on the upsert alone, is the same argument
+# parse_akn_stage.store_articles() makes for itself one file over: "an
+# upsert-by-e_id would leave orphaned rows behind whenever the parser starts
+# recognising an eId it used to miss, or stops recognising one it used to
+# produce".
+#
+# The upsert below corrects rows the new run re-emits. It cannot touch a
+# (to_version_id, e_id) pair the new run no longer emits at all -- and this
+# branch went through five rounds of parser and differ improvements, each of
+# which changes exactly that set. The stale rows then sit in ch_act_change
+# looking like computed history, with nothing counting them.
+#
+# Keyed on to_version_id alone, not on the (from, to) pair: the whole change
+# set of an edition is recomputed here, and keying on the pair would strand
+# the rows written when a different edition was that edition's predecessor
+# -- which is precisely what happens when a newly discovered edition lands
+# between two existing ones.
+#
+# RETURNING e_id so the report can name the orphans specifically. The delete
+# removes every row for the edition either way; what is worth counting is
+# the subset this run does not put back, because a re-run that rewrites the
+# identical set is not news and would otherwise drown the signal.
+_CLEAR_CHANGES = "DELETE FROM ch_act_change WHERE to_version_id = %s RETURNING e_id"
 
 _UPSERT_CHANGE = """
 INSERT INTO ch_act_change
@@ -115,6 +149,13 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
                         _articles(conn, previous["version_id"]),
                         _articles(conn, version["version_id"]))
                     report.comparisons += 1
+                    # Inside the same per-act guard as everything else: a
+                    # failure between the delete and the writes counts as
+                    # one failed act and is retried by the next run, which
+                    # recomputes the whole set anyway.
+                    stale = {r["e_id"] for r in conn.execute(
+                        _CLEAR_CHANGES, (version["version_id"],)).fetchall()}
+                    report.orphaned += len(stale - {c.e_id for c in changes})
                     for change in changes:
                         conn.execute(_UPSERT_CHANGE, (
                             current_act, lang, previous["version_id"],
@@ -132,7 +173,8 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
 
             report.acts += 1
             if report.acts % 200 == 0:
-                log.info("acts=%d changes=%d", report.acts, report.changes)
+                log.info("acts=%d changes=%d orphaned=%d", report.acts,
+                         report.changes, report.orphaned)
     finally:
         conn.close()
     return report
@@ -144,5 +186,12 @@ if __name__ == "__main__":
                         format="%(asctime)s %(levelname)s %(message)s")
     result = run(Settings.from_env(), lang=os.environ.get("CHPIPE_LANG", "de"))
     log.info("acts=%d comparisons=%d changes=%d (added=%d modified=%d repealed=%d) "
-             "errors=%d", result.acts, result.comparisons, result.changes,
-             result.added, result.modified, result.repealed, result.errors)
+             "orphaned=%d errors=%d", result.acts, result.comparisons,
+             result.changes, result.added, result.modified, result.repealed,
+             result.orphaned, result.errors)
+    if result.orphaned:
+        log.warning("ORPHANED: %d change row(s) a previous run wrote are no "
+                    "longer produced and have been removed -- the parser or "
+                    "the differ changed its mind about those articles. Not an "
+                    "error, but the number to read after any parser change.",
+                    result.orphaned)

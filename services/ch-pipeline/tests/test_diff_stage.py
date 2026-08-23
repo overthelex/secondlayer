@@ -192,3 +192,78 @@ def test_one_bad_act_does_not_abort_the_walk_over_the_rest(conn, settings, monke
     bad_rows = conn.execute(
         "SELECT change_id FROM ch_act_change WHERE act_id = %s", (bad_act_id,)).fetchall()
     assert bad_rows == []
+
+
+# --- Finding 5: a re-diff must not orphan rows it stops emitting ---
+# The ON CONFLICT (to_version_id, e_id) DO UPDATE corrects rows the new run
+# re-emits, but nothing removed a pair it no longer produces. Every parser
+# or differ improvement -- and this branch had five rounds of them -- left
+# contradicted change rows behind in silence. Same argument
+# parse_akn_stage.store_articles() makes for replacing rather than upserting.
+
+def test_a_change_the_rerun_no_longer_produces_is_removed(conn, settings):
+    """The defect, staged directly: a change row exists for an eId the
+    current differ does not emit for that edition. It must not survive."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    v2 = _edition(conn, "2022-01-01", [("art_1", "b")])
+    act_id = conn.execute("SELECT act_id FROM ch_act_version WHERE version_id=%s",
+                          (v2,)).fetchone()[0]
+    # A row a previous, differently-behaved parser wrote: art_99 does not
+    # exist in either edition, so no run of the current differ emits it.
+    conn.execute("INSERT INTO ch_act_change (act_id, to_version_id, e_id, "
+                 "change_type, date_applicability) VALUES (%s,%s,'art_99',"
+                 "'modified','2022-01-01')", (act_id, v2))
+
+    diff_stage.run(settings)
+
+    remaining = {r[0] for r in conn.execute(
+        "SELECT e_id FROM ch_act_change WHERE to_version_id=%s", (v2,)).fetchall()}
+    assert remaining == {"art_1"}, "the stale row survived the re-diff"
+
+
+def test_the_orphans_it_removed_are_counted(conn, settings):
+    """A silent cleanup is only half a fix -- the number is the signal that
+    a parser change moved the differ's output."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    v2 = _edition(conn, "2022-01-01", [("art_1", "b")])
+    act_id = conn.execute("SELECT act_id FROM ch_act_version WHERE version_id=%s",
+                          (v2,)).fetchone()[0]
+    for e_id in ("art_98", "art_99"):
+        conn.execute("INSERT INTO ch_act_change (act_id, to_version_id, e_id, "
+                     "change_type, date_applicability) VALUES (%s,%s,%s,"
+                     "'modified','2022-01-01')", (act_id, v2, e_id))
+
+    assert diff_stage.run(settings).orphaned == 2
+
+
+def test_a_plain_rerun_reports_no_orphans(conn, settings):
+    """`orphaned` counts rows the run does not put back, not rows the
+    delete touched -- otherwise every second run reports its own whole
+    output and the number says nothing."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    _edition(conn, "2022-01-01", [("art_1", "b")])
+    diff_stage.run(settings)
+    second = diff_stage.run(settings)
+    assert second.changes == 1
+    assert second.orphaned == 0
+
+
+def test_a_rerun_does_not_duplicate_the_rows_it_rewrites(conn, settings):
+    """The delete-then-insert must not turn one statement per article per
+    edition into two -- ux_ch_act_change's own invariant."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    _edition(conn, "2022-01-01", [("art_1", "b")])
+    diff_stage.run(settings)
+    diff_stage.run(settings)
+    assert conn.execute("SELECT count(*) FROM ch_act_change").fetchone()[0] == 1
+
+
+def test_a_removed_orphan_does_not_take_another_editions_rows_with_it(conn, settings):
+    """Scoped to the edition being recomputed. A delete keyed any wider
+    would clear history this comparison is not responsible for."""
+    _edition(conn, "2020-01-01", [("art_1", "a")])
+    v2 = _edition(conn, "2022-01-01", [("art_1", "b")])
+    v3 = _edition(conn, "2024-01-01", [("art_1", "c")])
+    diff_stage.run(settings)
+    assert {r[0] for r in conn.execute(
+        "SELECT to_version_id FROM ch_act_change").fetchall()} == {v2, v3}
