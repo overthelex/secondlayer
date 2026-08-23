@@ -1480,7 +1480,10 @@ services:
     volumes:
       - ./prometheus/qdrant-edrsr-metrics-cache.js:/app/qdrant-edrsr-metrics-cache.js:ro
     environment:
-      UPSTREAM_URL: "http://10.88.0.6:6333/metrics"
+      # Follows QDRANT_EDRSR_URL so a move of the collection is one env change, not two.
+      # 10.88.0.6 was the big box; it is gone, and the cache served Prometheus a body that
+      # was 49 days stale while every panel looked healthy.
+      UPSTREAM_URL: "${QDRANT_EDRSR_URL:-http://10.88.0.2:6343}/metrics"
       QDRANT_EDRSR_API_KEY: "${QDRANT_EDRSR_API_KEY}"
       REFRESH_INTERVAL_MS: "120000"
       UPSTREAM_TIMEOUT_MS: "300000"
