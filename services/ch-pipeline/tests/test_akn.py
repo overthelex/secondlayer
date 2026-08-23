@@ -84,12 +84,35 @@ def test_normalise_number_folds_en_and_em_dashes():
     assert akn.normalise_number("Art. 111—14") == "111-14"
 
 
-def test_plain_text_raises_rather_than_falling_back_to_the_whole_document():
-    """A missing <body> must not silently pull <meta> (FRBR dates,
-    identifiers) into what a later stage stores as the edition's text."""
+def test_plain_text_is_empty_for_a_body_less_edition_not_a_raise():
+    """A missing <body> is a real Fedlex shape (task 6's live slice found
+    eli/cc/1/598_557_598/18750702, a body-less 1875 Bundesbeschluss), not
+    proof of a truncated download -- fetch_xml_stage already rejects a
+    non-AKN response before anything reaches this function. Recorded
+    honestly as empty text, the same way parse_articles() already returns
+    zero articles for a document with no <article> elements."""
     no_body = (b'<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
                b'<act><meta><identification source="#ch.bk"><FRBRWork>'
                b'<FRBRdate date="1911-03-30" name="jolux:dateDocument"/>'
                b'</FRBRWork></identification></meta></act></akomaNtoso>')
+    assert akn.plain_text(no_body) == ""
+    assert akn.parse_articles(no_body) == []
+
+
+def test_plain_text_does_not_fall_back_to_meta_when_body_is_missing():
+    """The empty-string result must come from there being no <body>, not
+    from meta content leaking in as a side effect of some other change."""
+    no_body = (b'<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+               b'<act><meta><identification source="#ch.bk"><FRBRWork>'
+               b'<FRBRdate date="1911-03-30" name="jolux:dateDocument"/>'
+               b'<FRBRname value="should never appear in plain_text"/>'
+               b'</FRBRWork></identification></meta></act></akomaNtoso>')
+    assert "should never appear" not in akn.plain_text(no_body)
+
+
+def test_plain_text_still_raises_on_malformed_xml():
+    """Only the body-less-but-valid case stopped raising. Genuinely
+    malformed XML -- a truncated download, a corrupted response -- must
+    still raise, the same as parse_articles()."""
     with pytest.raises(akn.AknParseError):
-        akn.plain_text(no_body)
+        akn.plain_text(b"<akomaNtoso><unclosed>")

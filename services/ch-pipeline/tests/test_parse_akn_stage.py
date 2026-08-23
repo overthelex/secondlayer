@@ -124,6 +124,43 @@ def test_claim_versions_skips_rows_that_exhausted_their_attempts(conn):
     assert db.claim_versions(conn, "discovered", limit=10, max_attempts=3) == []
 
 
+# --- Fix round 1, finding 2: claim_versions() needs the same backoff
+# predicate as claim(), now that migration 197 gives ch_act_version a
+# stage_updated_at column to key it off. ---
+
+def test_claim_versions_does_not_offer_a_row_that_just_failed(conn):
+    """Spec section 8's 1/5/30-minute backoff, carried over from the
+    decisions queue. Without a time predicate the same run() re-claims a
+    failed row on its very next while-True iteration, so one transient
+    hiccup burns the whole attempt budget within seconds."""
+    vid = _version(conn)
+    db.fail_version(conn, vid, "connection reset", max_attempts=3)
+    assert db.claim_versions(conn, "discovered", limit=10) == []
+
+
+def test_claim_versions_offers_the_row_again_once_the_backoff_has_elapsed(conn):
+    vid = _version(conn)
+    db.fail_version(conn, vid, "connection reset", max_attempts=3)
+    conn.execute("UPDATE ch_act_version SET stage_updated_at = "
+                "now() - interval '2 minutes' WHERE version_id=%s", (vid,))
+    assert [r["version_id"] for r in db.claim_versions(conn, "discovered", limit=10)] == [vid]
+
+
+def test_claim_versions_never_delays_a_row_that_has_not_failed_yet(conn):
+    vid = _version(conn)
+    assert [r["version_id"] for r in db.claim_versions(conn, "discovered", limit=10)] == [vid]
+
+
+def test_claim_versions_claims_a_row_whose_stage_updated_at_is_null(conn):
+    """Migration 197 can enrol a row with stage_updated_at still NULL (it
+    has never been written back by complete_version()/fail_version()); the
+    backoff predicate must not mistake NULL for 'recently failed'."""
+    vid = _version(conn)
+    conn.execute("UPDATE ch_act_version SET attempts=1, stage_updated_at=NULL "
+                "WHERE version_id=%s", (vid,))
+    assert [r["version_id"] for r in db.claim_versions(conn, "discovered", limit=10)] == [vid]
+
+
 def test_complete_version_rejects_reserved_column(conn):
     vid = _version(conn)
     with pytest.raises(ValueError, match="stage"):
@@ -203,6 +240,24 @@ def test_fail_version_does_not_record_an_origin_while_attempts_remain(conn):
         "SELECT stage, failed_stage FROM ch_act_version WHERE version_id=%s",
         (vid,)).fetchone()
     assert row == ("discovered", None)
+
+
+def test_complete_version_stamps_stage_updated_at(conn):
+    """The backoff predicate in claim_versions() has nothing to key off
+    unless a forward move stamps the clock too, not just a failure."""
+    vid = _version(conn)
+    db.complete_version(conn, vid, "fetched", akn_xml="<akomaNtoso/>")
+    assert conn.execute(
+        "SELECT stage_updated_at FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()[0] is not None
+
+
+def test_fail_version_stamps_stage_updated_at(conn):
+    vid = _version(conn)
+    db.fail_version(conn, vid, "boom", max_attempts=3)
+    assert conn.execute(
+        "SELECT stage_updated_at FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()[0] is not None
 
 
 # --- fetch_xml_stage ---
@@ -400,14 +455,11 @@ def test_a_bad_edition_does_not_abort_a_parse_batch_of_others(conn):
     unparseable akn_xml must not stop the other 12,032 in the same claim
     from being parsed.
 
-    ch_act_version carries no stage_updated_at column, so -- unlike the
-    decisions queue -- claim_versions() has no backoff predicate to space
-    retries out. run()'s own while-True loop therefore re-claims a
-    still-'fetched' broken row on its very next iteration and burns through
-    its whole attempt budget inside this one call, ending at 'failed' with
-    attempts == max_attempts rather than surviving as a single spent
-    attempt. That is a real, expected consequence of the schema (see the
-    task report), not a bug in this test."""
+    Fix round 1 gave ch_act_version a stage_updated_at column and the same
+    backoff predicate as the decisions queue, so the freshly-failed row is
+    NOT reclaimed on run()'s next while-True iteration within this same
+    call -- it survives as a single spent attempt, exactly like a decisions-
+    pipeline row does, rather than burning its whole budget in one run."""
     good = _version(conn, "2020-01-01")
     bad = _version(conn, "2021-01-01")
     _seed_fetched(conn, good, FIXTURE.read_text(encoding="utf-8"))
@@ -424,16 +476,16 @@ def test_a_bad_edition_does_not_abort_a_parse_batch_of_others(conn):
         (bad,)).fetchone()
     assert good_row[0] == "parsed"
     assert good_row[1] > 0
-    assert bad_row[0] == "failed"
-    assert bad_row[1] == settings.max_attempts
+    assert bad_row[0] == "fetched"
+    assert bad_row[1] == 1
     assert bad_row[2]
     assert report.parsed == 1
-    assert report.failed == settings.max_attempts
+    assert report.failed == 1
 
 
 def test_a_version_with_no_akn_xml_is_recorded_as_failed_not_silently_skipped(conn):
-    """Same no-backoff consequence as above: within one run() call the row
-    is reclaimed and re-failed until its attempt budget is exhausted."""
+    """The backoff predicate keeps this to a single spent attempt within
+    one run() call, same as the guard test above."""
     vid = _version(conn)
     conn.execute("UPDATE ch_act_version SET stage='fetched' WHERE version_id=%s", (vid,))
     settings = _settings(pathlib.Path("/tmp/chpipe-parse-akn-test"))
@@ -442,8 +494,8 @@ def test_a_version_with_no_akn_xml_is_recorded_as_failed_not_silently_skipped(co
     row = conn.execute(
         "SELECT stage, attempts, last_error FROM ch_act_version WHERE version_id=%s",
         (vid,)).fetchone()
-    assert row[0] == "failed"
-    assert row[1] == settings.max_attempts
+    assert row[0] == "fetched"
+    assert row[1] == 1
     assert "no akn_xml" in row[2]
-    assert report.failed == settings.max_attempts
+    assert report.failed == 1
     assert report.parsed == 0

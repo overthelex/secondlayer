@@ -58,6 +58,12 @@ CREATE TABLE IF NOT EXISTS public.ch_act_version (
     last_error              text,
     failed_stage            text,
     fetched_at              timestamptz,
+    -- The queue's retry-backoff clock, same role as migration 196's column
+    -- of the same name on ch_court_decisions: complete_version()/
+    -- fail_version() stamp it on every write, and claim_versions() uses it
+    -- to space retries out (1, 5, 30 minutes by attempt) so a durably-broken
+    -- row does not burn its whole attempt budget inside one stage run.
+    stage_updated_at        timestamptz,
     updated_at              timestamptz NOT NULL DEFAULT now()
 );
 

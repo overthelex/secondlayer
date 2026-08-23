@@ -256,18 +256,22 @@ def retry_failed(conn, stage: str | None = None, spider: str | None = None) -> i
 # ---------------------------------------------------------------------------
 # ch_act_version queue: the fetch-xml / parse-akn pipeline's queue, over a
 # second table. Same discipline as the ch_court_decisions queue above -- a
-# column allowlist on the dynamic SET, and a loud QueueWriteMissed on any
-# keyed write that matches no row -- because both defects were found, the
-# hard way, in the decisions pipeline first (see claim()'s and complete()'s
-# docstrings above) and there is no reason this table gets to relearn them.
+# column allowlist on the dynamic SET, a loud QueueWriteMissed on any keyed
+# write that matches no row, and (as of migration 197's stage_updated_at
+# column) the same retry backoff -- because all three defects were found,
+# the hard way, in the decisions pipeline first (see claim()'s, complete()'s
+# and RETRY_BACKOFF_MINUTES's comments above) and there is no reason this
+# table gets to relearn them. Without the backoff specifically: a durably
+# broken row was reclaimed on run()'s very next while-True iteration and
+# burned its whole attempts budget inside one stage run, ending at 'failed'
+# before the row ever got a second look on a later day -- the identical
+# defect RETRY_BACKOFF_MINUTES exists to close on the decisions queue.
 #
 # One thing this queue does NOT need that the decisions queue does: an
-# unkeyed-row guard and a retry backoff. version_id is a bigserial primary
-# key every row has by construction (there is no legacy population claimed
-# but never written back, unlike doc_id on ch_court_decisions), and
-# ch_act_version carries no stage_updated_at column for a backoff predicate
-# to key off -- see migration 197. Both omissions are deliberate, not
-# oversights carried over from a copy-paste.
+# unkeyed-row guard. version_id is a bigserial primary key every row has by
+# construction -- there is no legacy population claimed but never written
+# back, unlike doc_id on ch_court_decisions -- so claim_versions() carries
+# no doc_id-is-null equivalent and there is no unkeyed_versions_count().
 # ---------------------------------------------------------------------------
 
 _CLAIM_VERSION_COLUMNS = (
@@ -286,14 +290,29 @@ _COMPLETE_VERSION_ALLOWED_COLUMNS = frozenset({
 })
 
 
-def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3) -> list[dict]:
-    """The same queue discipline as claim(), against ch_act_version."""
+def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3,
+                   backoff_minutes: tuple[int, ...] | None = RETRY_BACKOFF_MINUTES
+                   ) -> list[dict]:
+    """The same queue discipline as claim(), against ch_act_version --
+    including the same backoff predicate, over the same RETRY_BACKOFF_MINUTES
+    schedule: attempt 1 waits a minute, attempt 2 five, attempt 3 thirty; a
+    row that has never failed (attempts = 0) or whose stage_updated_at is
+    still NULL (migration 197 enrolled it with none) is claimable
+    immediately. See claim()'s docstring for why the predicate is `>=`-style
+    time math rather than a re-queue timestamp, and why a row is never
+    delayed until it has actually failed once."""
+    sql = (f"SELECT {_CLAIM_VERSION_COLUMNS} FROM ch_act_version "
+           "WHERE stage = %s AND attempts < %s")
+    params: list = [stage, max_attempts]
+    if backoff_minutes:
+        sql += (" AND (attempts = 0 OR stage_updated_at IS NULL"
+                " OR stage_updated_at <= now() - make_interval("
+                "mins => (%s::int[])[least(attempts, %s)]))")
+        params.extend([list(backoff_minutes), len(backoff_minutes)])
+    sql += " ORDER BY act_id, date_applicability, lang LIMIT %s FOR UPDATE SKIP LOCKED"
+    params.append(limit)
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            f"SELECT {_CLAIM_VERSION_COLUMNS} FROM ch_act_version "
-            "WHERE stage = %s AND attempts < %s "
-            "ORDER BY act_id, date_applicability, lang LIMIT %s FOR UPDATE SKIP LOCKED",
-            (stage, max_attempts, limit))
+        cur.execute(sql, params)
         return cur.fetchall()
 
 
@@ -323,7 +342,8 @@ def complete_version(conn, version_id: int, next_stage: str, **fields) -> None:
             raise ValueError(f"complete_version() does not allow column '{column}'")
 
     assignments = ["stage = %s", "last_error = NULL", "attempts = 0",
-                   "failed_stage = NULL", "updated_at = now()"]
+                   "failed_stage = NULL", "stage_updated_at = now()",
+                   "updated_at = now()"]
     params: list = [next_stage]
     for column, value in fields.items():
         assignments.append(f"{column} = %s")
@@ -350,7 +370,7 @@ def fail_version(conn, version_id: int, error: str, max_attempts: int) -> None:
                failed_stage = CASE WHEN attempts + 1 >= %s AND stage <> 'failed'
                                    THEN stage ELSE failed_stage END,
                stage = CASE WHEN attempts + 1 >= %s THEN 'failed' ELSE stage END,
-               updated_at = now()
+               stage_updated_at = now()
          WHERE version_id = %s
         """,
         (error[:2000], max_attempts, max_attempts, version_id))

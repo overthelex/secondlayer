@@ -15,6 +15,19 @@ Two facts that shape this module:
     act and only the eId identifies an article.
   * That act contains zero <heading> elements as direct children of <article>,
     so marginal_note is usually None and must not be treated as required.
+
+A missing <body> is a real Fedlex shape, not always a broken download. The
+OASIS AKN 3.0 XSD makes <body> mandatory inside <act>, so an earlier version
+of this module treated its absence as proof of truncation and raised. A
+small live slice of real editions (task 6) disproved that: eli/cc/1/
+598_557_598/18750702 -- a one-page 1875 Bundesbeschluss whose <act> holds
+only <meta>, <preface> and <preamble> -- is schema-invalid by that rule and
+is still exactly what Fedlex serves; nothing about the download is
+truncated. Nineteenth-century Swiss federal resolutions predate the
+<body>/<article> structure this schema assumes. plain_text() now returns ""
+for a body-less document instead of raising -- see its docstring for the
+full reasoning, including why the fallback to the whole document is still
+refused.
 """
 from __future__ import annotations
 
@@ -102,15 +115,29 @@ def plain_text(xml: bytes) -> str:
     missing: the root also holds <meta> (FRBRdate values, identifiers,
     classifications), and silently vacuuming that into what a later stage
     stores as "the edition's text" would put metadata junk into a field
-    meant to hold only the act's substantive content. A missing <body> is
-    treated the same as any other structurally broken document: it raises.
+    meant to hold only the act's substantive content.
+
+    A missing <body> does NOT raise. The OASIS AKN 3.0 schema makes <body>
+    mandatory inside <act>, which is why an earlier version of this function
+    treated a missing one as proof of a truncated download. A live Fedlex
+    edition disproved that: eli/cc/1/598_557_598/18750702 (a one-page 1875
+    Bundesbeschluss, "betreffend die Leistungen der Stadt Bern an den
+    Bundessitz") is schema-INVALID by that rule -- its <act> holds only
+    <meta>, <preface> and <preamble>, no <body> anywhere, and the resolution
+    text itself is IN the <preamble> -- yet it parses cleanly and is exactly
+    what Fedlex serves for that consolidation; there is no truncation, no
+    HTTP error, nothing to retry. fetch_xml_stage now checks the AKN
+    namespace before anything is stored, so a genuinely broken or non-AKN
+    download is already caught before this function ever sees it -- a
+    missing <body> here can only mean a real edition shaped like this one.
+    It is recorded honestly instead: empty text, same as parse_articles()
+    already returns zero articles for a body-less document with no
+    <article> elements to find.
     """
     root = _root(xml)
     body = root.find(".//" + _AKN + "body")
     if body is None:
-        raise AknParseError(
-            "act has no <body> element; refusing to fall back to the whole "
-            "document, which would leak <meta> content into the edition text")
+        return ""
     lines = [t.strip() for t in body.itertext() if t and t.strip()]
     return "\n".join(lines)
 
