@@ -130,6 +130,38 @@ services:
           cpus: '8'
           memory: 16G
 
+  # Граф цитирования. Копия прод-снимка (183.7 млн узлов, 767.9 млн рёбер),
+  # версия закреплена: сырой стор Neo4j переносится между одинаковыми версиями.
+  # Данные на nvme — обход графа это случайный доступ, шпиндель не годится.
+  neo4j-citation:
+    image: neo4j:5.26.28-community
+    container_name: neo4j-citation-local
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-local_neo4j_pass}
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_memory_heap_initial__size: 8g
+      NEO4J_server_memory_heap_max__size: 8g
+      NEO4J_server_memory_pagecache_size: 12g
+      NEO4J_db_transaction_timeout: 30s
+    volumes:
+      - /home/vovkes/neo4j-citation/data:/data
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:7474/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          memory: 26G
+
   redis-local:
     image: redis:7-alpine
     container_name: secondlayer-redis-local
@@ -291,6 +323,9 @@ services:
       QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
       QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
       QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
 
       # Cache
       REDIS_URL: redis://:${REDIS_PASSWORD:-local_redis_pass}@redis-local:6379
@@ -563,6 +598,9 @@ services:
       QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
       QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
       QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
 
       # Cache
       REDIS_URL: redis://:${REDIS_PASSWORD:-local_redis_pass}@redis-local:6379
@@ -788,6 +826,9 @@ services:
       QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
       QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
       QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
       OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
