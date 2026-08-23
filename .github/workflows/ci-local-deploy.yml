@@ -10,6 +10,16 @@ name: 'CI/CD: Local Build & Test'
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Развернуть локальное окружение (docker compose up на cthulhu)'
+        type: boolean
+        default: true
+      no_cache:
+        description: 'Полная пересборка образов (--no-cache)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -323,3 +333,89 @@ jobs:
             --base main \
             --head "$BRANCH"
 
+  # ─── Step 4: Deploy to the local environment ─────────────────────────
+  # Разворачивает стек на cthulhu (local.lex) тем же compose-файлом, что и
+  # ручной `manage-gateway.sh deploy local`, но под контролем пайплайна.
+  deploy-local:
+    name: Deploy Local Environment
+    # ВАЖНО: пин на `local-deploy` — единственный лейбл, уникальный для cthulhu.
+    # Лейбл `local` матчится и на prod-runner, и джоба уехала бы разворачивать
+    # локальный стек прямо на проде (см. deploy-preview note в deploy-prod.yml).
+    runs-on: [self-hosted, local-deploy]
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.build-and-test.result != 'failure' &&
+      needs.build-and-test.result != 'cancelled' &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deploy) ||
+        (github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true')
+      )
+    timeout-minutes: 120
+    steps:
+      - name: Sync deployment checkout
+        run: |
+          set -euo pipefail
+          REPO="$HOME/SecondLayer"
+          if [ ! -d "$REPO/.git" ]; then
+            echo "::error::$REPO не является git-репозиторием — деплой-чекаут не найден"
+            exit 1
+          fi
+          cd "$REPO"
+          git fetch --prune origin
+          git checkout main
+          git reset --hard "${{ github.sha }}"
+          echo "Развёрнутый коммит: $(git log --oneline -1)"
+
+      - name: Verify local env file
+        run: |
+          set -euo pipefail
+          ENV_FILE="$HOME/SecondLayer/deployment/.env.local"
+          if [ ! -s "$ENV_FILE" ]; then
+            echo "::error::$ENV_FILE отсутствует или пуст (секреты не в git — файл живёт на машине)"
+            exit 1
+          fi
+          echo "Переменных в .env.local: $(grep -cE '^[A-Z_]+=' "$ENV_FILE")"
+
+      - name: Deploy stack
+        run: |
+          set -euo pipefail
+          cd "$HOME/SecondLayer/deployment"
+          DC="docker compose -f docker-compose.local.yml --env-file .env.local"
+          if [ "${{ inputs.no_cache }}" = "true" ]; then
+            $DC build --no-cache
+          fi
+          # без --remove-orphans: рядом на этой же машине крутятся qdrant-edrsr-local
+          # и qdrant-general-local, которые обслуживают ПРОД
+          $DC up -d --build
+          $DC ps
+
+      - name: Wait for backend health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            if docker exec secondlayer-app-local wget -q -O /dev/null --timeout=5 http://127.0.0.1:3000/health 2>/dev/null; then
+              echo "✓ backend отвечает на :3000/health"
+              exit 0
+            fi
+            echo "  жду бэкенд... ($i/30)"
+            sleep 10
+          done
+          echo "::error::backend не поднялся за 5 минут"
+          docker logs --tail 80 secondlayer-app-local || true
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Локальное окружение развёрнуто"
+            echo ""
+            echo "- Коммит: \`${{ github.sha }}\`"
+            echo "- URL: https://local.legal.org.ua"
+            echo ""
+            echo '```'
+            cd "$HOME/SecondLayer/deployment"
+            docker compose -f docker-compose.local.yml --env-file .env.local ps --format '{{.Name}}\t{{.Status}}' 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
