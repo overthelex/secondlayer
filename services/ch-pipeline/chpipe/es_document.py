@@ -76,9 +76,16 @@ def _languages(data: dict) -> list[str]:
                 for lang in entry.get("Sprachen") or []:
                     if lang not in seen:
                         seen.append(str(lang))
-    for lang in (data.get("Sprache") or []) if isinstance(data.get("Sprache"), list) else []:
-        if lang not in seen:
-            seen.append(str(lang))
+    # Handle Sprache as either a string or a list of strings
+    sprache = data.get("Sprache")
+    if sprache:
+        if isinstance(sprache, str):
+            if sprache not in seen:
+                seen.append(sprache)
+        elif isinstance(sprache, list):
+            for lang in sprache:
+                if lang not in seen:
+                    seen.append(str(lang))
     return seen
 
 

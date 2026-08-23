@@ -6,6 +6,7 @@ from chpipe import es_document
 
 FIX = pathlib.Path(__file__).parent / "fixtures"
 ZG = json.loads((FIX / "doc_zg_og_001.json").read_text())
+CH_BGER = json.loads((FIX / "doc_ch_bger.json").read_text())
 
 
 def test_reads_the_date_from_the_top_level_not_from_meta():
@@ -79,3 +80,43 @@ def test_metadata_json_keeps_the_untouched_payload_keys():
     f = es_document.parse("ZG_Obergericht", "d", ZG)
     assert f.metadata_json["Signatur"] == "ZG_OG_001"
     assert "Scrapedate" in f.metadata_json
+
+
+def test_ch_bger_html_path_is_populated_and_ends_with_html():
+    """CH_BGer fixture has HTML but no PDF."""
+    f = es_document.parse("CH_BGer", "d", CH_BGER)
+    assert f.html_path is not None
+    assert f.html_path.endswith(".html")
+
+
+def test_ch_bger_has_no_pdf():
+    """CH_BGer fixture has no PDF key."""
+    f = es_document.parse("CH_BGer", "d", CH_BGER)
+    assert f.pdf_path is None
+    assert f.source_pdf_url is None
+
+
+def test_ch_bger_has_no_abstract():
+    """CH_BGer fixture has no Abstract key."""
+    f = es_document.parse("CH_BGer", "d", CH_BGER)
+    assert f.abstract is None
+
+
+def test_languages_from_sprache_string_alone():
+    """Test that languages correctly reads Sprache as a string, not just lists.
+
+    This would fail under the old bug where only list Sprache was processed.
+    The CH_BGer fixture has Sprache as "de" (string), and this test verifies it works.
+    """
+    f = es_document.parse("CH_BGer", "d", CH_BGER)
+    assert "de" in f.languages
+
+
+def test_languages_from_sprache_string_with_no_kopfzeile_or_meta():
+    """Test languages extraction from a minimal payload with only Sprache.
+
+    This ensures the fix works even when there are no Kopfzeile/Meta entries,
+    which would have masked the old bug.
+    """
+    f = es_document.parse("CH_BGer", "d", {"Datum": "2000-01-01", "Sprache": "de"})
+    assert f.languages == ["de"]
