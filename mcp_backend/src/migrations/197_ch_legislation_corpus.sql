@@ -144,8 +144,11 @@ COMMENT ON COLUMN public.ch_act.enforcement_status IS
     'NULL = Fedlex publishes no status for this work';
 COMMENT ON COLUMN public.ch_act_version.failed_stage IS
     'the stage a failed row was in when it failed; NULL means it never entered '
-    'a queue stage. db.retry_failed() returns a row to this stage, so recovery '
-    'is targeted instead of sending every failure back to the front of the queue. '
+    'a queue stage. chpipe.db.retry_failed_versions() returns a row to this stage, '
+    'so recovery is targeted instead of sending every failure back to the front of '
+    'the queue; chpipe.db.failed_by_stage_versions() is the triage query to read '
+    'first. NOT db.retry_failed(), which this comment used to name: that one reads '
+    'ch_court_decisions and answers 0 against a legislation backlog. '
     'Unlike migration 196, this list includes parsed (a terminal stage here) because '
     'diff and projection operate on parsed rows in place without advancing them further.';
 

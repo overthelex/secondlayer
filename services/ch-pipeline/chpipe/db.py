@@ -360,8 +360,8 @@ def fail_version(conn, version_id: int, error: str, max_attempts: int) -> None:
     the row died in. Same shape as fail(): the row keeps its stage while
     attempts remain (a transient error retries) and moves to 'failed' only
     on the last one (a permanent error stops consuming the queue).
-    failed_stage lets db.retry_failed()'s sibling send the row back to where
-    it actually died instead of to the front of the queue."""
+    failed_stage lets retry_failed_versions() below send the row back to
+    where it actually died instead of to the front of the queue."""
     cursor = conn.execute(
         """
         UPDATE ch_act_version
@@ -375,3 +375,62 @@ def fail_version(conn, version_id: int, error: str, max_attempts: int) -> None:
         """,
         (error[:2000], max_attempts, max_attempts, version_id))
     _require_one_version(cursor, version_id, "fail_version()")
+
+
+def failed_by_stage_versions(conn) -> list[tuple[str | None, int]]:
+    """Triage for the ch_act_version queue: how many failures each stage
+    produced. The twin of failed_by_stage() above, and the query an operator
+    is told to run before retrying anything.
+
+    A NULL failed_stage means the row reached 'failed' without fail_version()
+    ever recording an origin -- it should not happen (fail_version() stamps
+    failed_stage on the attempt that retires the row), so a non-zero NULL
+    bucket is itself worth looking at rather than rounding away.
+    """
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute("SELECT failed_stage, count(*) FROM ch_act_version "
+                    "WHERE stage = 'failed' GROUP BY 1 ORDER BY 2 DESC")
+        return [(r[0], r[1]) for r in cur.fetchall()]
+
+
+def retry_failed_versions(conn, stage: str | None = None,
+                          act_id: int | None = None) -> int:
+    """Put failed editions back on the stage they failed in, with a clean
+    budget. The ch_act_version twin of retry_failed() above.
+
+    It exists because the legislation half of this pipeline had no recovery
+    path at all while three separate comments promised one:
+    fail_version()'s docstring, migration 197's COMMENT ON
+    ch_act_version.failed_stage, and the README, which told the operator to
+    run db.retry_failed() -- a function that touches ch_court_decisions only
+    and therefore returns 0 against a legislation backlog, doing nothing,
+    loudly enough to look like "there was nothing to retry".
+
+    Same three decisions as retry_failed(), for the same reasons:
+
+      * `stage=None` -- the sensible default -- returns each row to its own
+        failed_stage rather than to one caller-chosen stage. A row that died
+        in `parsed` must not be sent back to `discovered` to be re-fetched.
+      * Rows with a NULL failed_stage are left alone unless `stage` is given
+        explicitly: there is no stage to return them to, and re-queueing
+        them just burns another attempts budget.
+      * last_error is deliberately NOT cleared. It is the field the operator
+        was told to read before retrying; complete_version() clears it when
+        the row actually succeeds.
+
+    `act_id` narrows the retry to one act, the way retry_failed()'s `spider`
+    narrows it to one court -- so a diagnosis that applies to a single act's
+    editions can be acted on without re-queueing the whole corpus.
+
+    Deliberately manual: a failed edition means someone has to read
+    last_error (and failed_by_stage_versions()) before another run.
+    """
+    sql = ("UPDATE ch_act_version "
+           "SET stage = COALESCE(%s, failed_stage), attempts = 0, "
+           "    failed_stage = NULL, stage_updated_at = now() "
+           "WHERE stage = 'failed' AND COALESCE(%s, failed_stage) IS NOT NULL")
+    params: list = [stage, stage]
+    if act_id is not None:
+        sql += " AND act_id = %s"
+        params.append(act_id)
+    return conn.execute(sql, params).rowcount
