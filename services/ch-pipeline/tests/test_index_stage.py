@@ -5,7 +5,7 @@ import os
 import pathlib
 import psycopg
 import pytest
-from chpipe import es_document
+from chpipe import db, es_document
 from chpipe.stages import index_stage
 
 # Derive repo root from this file's location: services/ch-pipeline/tests/test_index_stage.py
@@ -304,6 +304,34 @@ def test_reindexing_does_requeue_a_row_that_has_done_no_work(conn, stage):
         "SELECT stage, last_error FROM ch_court_decisions").fetchone()
     assert row[0] == "indexed"
     assert row[1] is None
+
+
+def test_reindexing_a_failed_row_clears_its_exhausted_attempt_budget(conn):
+    """A row retired by db.fail() carries attempts >= max_attempts and a
+    failed_stage recording where it died. If the upsert returns such a row
+    to 'indexed' without resetting attempts and failed_stage, the row is
+    invisible to every recovery path at once: db.claim filters it out on
+    attempts < max_attempts, unkeyed_count skips it because it now has a
+    doc_id, and failed_by_stage/retry_failed skip it because its stage is
+    no longer 'failed' -- while its diagnosis has already been wiped.
+    Claimability, not just attempts == 0, is the property that matters."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions "
+        "(ecli, spider, stage, attempts, failed_stage, last_error) "
+        "VALUES (%s,%s,'failed',3,'fetched','boom')",
+        (f.ecli, f.spider))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, attempts, failed_stage, last_error "
+        "FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] == 0
+    assert row[2] is None
+    assert row[3] is None
+    claimed = db.claim(conn, "indexed", 10, max_attempts=3)
+    assert len(claimed) == 1
+    assert claimed[0]["ecli"] == f.ecli
 
 
 def test_a_protected_row_is_not_stamped_with_an_error_it_never_hit(conn):

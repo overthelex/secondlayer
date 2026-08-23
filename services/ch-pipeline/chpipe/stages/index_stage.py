@@ -75,6 +75,19 @@ ON CONFLICT (ecli) DO UPDATE SET
                                     THEN ch_court_decisions.stage
                                     ELSE EXCLUDED.stage END) = 'failed'
                          THEN %(error)s ELSE NULL END,
+    -- A row un-protected out of 'failed' is exactly db.complete()'s "moved
+    -- forward" event (chpipe/db.py:143-144): the retry budget it exhausted
+    -- getting here no longer describes anything, so it resets with
+    -- failed_stage, the same pair complete() resets together. Keying this on
+    -- the OLD stage being 'failed' -- not on "unprotected" generally --
+    -- matters: a row already sitting at 'indexed' is also unprotected, but
+    -- its attempts there can be a legitimate in-progress count owned by a
+    -- concurrent fetch-stage claim, and clobbering that out from under it
+    -- would be a second bug, not a fix.
+    attempts      = CASE WHEN ch_court_decisions.stage = 'failed'
+                         THEN 0 ELSE ch_court_decisions.attempts END,
+    failed_stage  = CASE WHEN ch_court_decisions.stage = 'failed'
+                         THEN NULL ELSE ch_court_decisions.failed_stage END,
     stage_updated_at = now(),
     updated_at    = now()
 RETURNING (xmax = 0) AS inserted
