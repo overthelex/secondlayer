@@ -81,3 +81,93 @@ def test_an_article_emptied_to_nothing_at_all_is_repealed_too():
 
     changes = d.diff([_a("art_2", "Der Text.")], [_a("art_2", "   ")])
     assert [(c.e_id, c.change_type) for c in changes] == [("art_2", "repealed")]
+
+
+def test_ellipsis_variants_are_not_changes():
+    """Fedlex renders a struck-out paragraph as an ellipsis, and the same
+    edition is not always consistent about which ellipsis character it
+    uses (a single U+2026 character vs three literal periods). Treating
+    that as an amendment would be the same class of fabrication as the
+    dash and quote variants above."""
+    assert d.diff([_a("art_1", "Es gilt Art. 5 … 9.")],
+                  [_a("art_1", "Es gilt Art. 5 ... 9.")]) == []
+
+
+def test_a_body_of_only_the_struck_paragraph_ellipsis_is_repealed():
+    """An article whose entire body is Fedlex's ellipsis-for-struck-
+    paragraph marker (no marker word at all, just '…') carries no operative
+    text, the same as an explicit "Aufgehoben" or a genuinely empty body."""
+    changes = d.diff([_a("art_2", "Der Text.")], [_a("art_2", "…")])
+    assert [(c.e_id, c.change_type) for c in changes] == [("art_2", "repealed")]
+
+
+def test_non_breaking_space_and_extra_dash_variants_are_not_changes():
+    assert d.diff([_a("art_1", "Der Vertrag ist gültig.")],
+                  [_a("art_1", "Der Vertrag ist gültig.")]) == []
+    assert d.diff([_a("art_1", "Art. 111‑114 gilt.")],
+                  [_a("art_1", "Art. 111−114 gilt.")]) == []
+
+
+def test_disp_container_renumbering_is_not_a_repeal_and_an_addition():
+    """Fedlex renumbers a transitional-provisions container wholesale when
+    a new block is inserted -- 'disp_u15/art_1' becomes 'disp_u16/art_1'
+    with byte-identical text, and every article inside the container gets a
+    new eId even though nothing about the law changed. Matching purely on
+    eId (as the module docstring says to, for the collision reasons
+    measured there) would read that as one article repealed and an
+    unrelated one added; this must produce no change at all."""
+    before = [_a("art_1", "x"), _a("disp_u15/art_1", "Übergangsbestimmung.")]
+    after = [_a("art_1", "x"), _a("disp_u16/art_1", "Übergangsbestimmung.")]
+    assert d.diff(before, after) == []
+
+
+def test_disp_container_renumbering_with_a_wording_change_is_one_modified_row():
+    """A container renumber and a genuine wording change can land in the
+    same edition. Silently dropping the wording change (because the eId
+    also changed) would hide a real amendment; recording it as an
+    unrelated repeal+addition would fabricate a repeal that never
+    happened. It must come back as exactly one 'modified' row, keyed on
+    the eId the provision now has."""
+    before = [_a("disp_u15/art_1", "Die alte Fassung.")]
+    after = [_a("disp_u16/art_1", "Die neue Fassung.")]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == [("disp_u16/art_1", "modified")]
+
+
+def test_disp_container_renumbering_into_a_repeal_is_recorded_as_repealed():
+    """The same reconciliation must still call a real repeal a repeal: if
+    the provision's text is a repeal marker under its new eId, that is a
+    repeal riding along with the renumber, not a wording change."""
+    before = [_a("disp_u15/art_1", "Die alte Fassung.")]
+    after = [_a("disp_u16/art_1", "Aufgehoben")]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == [("disp_u16/art_1", "repealed")]
+
+
+def test_unrelated_articles_with_identical_new_text_are_not_merged_into_a_rename():
+    """A repealed top-level article and an unrelated new top-level article
+    that happen to land on identical text must not be paired into a rename
+    just because the content matches -- the reconciliation above is scoped
+    to the disp_uN container-renumbering pattern specifically (a structural
+    signal, checked on the eId shape), not to "any two articles with the
+    same text", which would silently erase a genuine repeal sitting next to
+    a genuine, unrelated addition. Neither eId here is disp_u-scoped, so
+    neither can enter the reconciliation at all."""
+    before = [_a("art_5", "Der alte Text.")]
+    after = [_a("art_5", "Aufgehoben"), _a("art_9", "Gemeinsamer Wortlaut.")]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == \
+        [("art_5", "repealed"), ("art_9", "added")]
+
+
+def test_a_new_e_id_already_empty_at_first_appearance_produces_no_change():
+    """An eId with no prior existence at all, whose body is already empty
+    or a repeal marker the moment it first appears, never carried
+    operative text under that identifier -- there is nothing to assert was
+    added. Recording "added" would be as wrong as recording "repealed" for
+    something that was never in force; recording nothing is the honest
+    answer, the same stance as a pure container rename with unchanged
+    text."""
+    changes = d.diff([_a("art_1", "x")],
+                     [_a("art_1", "x"), _a("art_9", "Aufgehoben"), _a("art_10", "")])
+    assert changes == []

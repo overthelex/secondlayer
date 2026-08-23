@@ -4,6 +4,20 @@ Fedlex publishes editions, not amendments. ch_act_change is computed here, and
 it is the answer to "which article changed, when" -- the question the flat
 table could not express at all.
 
+THE CHANGE LOG COVERS ONLY THE EDITIONS FEDLEX SERVES AS XML, NOT AN ACT'S
+FULL HISTORY. Measured directly against the live endpoint for SR 220 (the
+Code of Obligations, in force since 1912): Fedlex serves exactly 14 German
+XML manifestations for that act, the earliest dated 2021-01-01. The computed
+change log for the OR therefore covers 5.75 years, not the 114 it has existed
+-- every edition before 2021 exists on Fedlex only as PDF/HTML, which this
+pipeline does not parse into articles at all (see versions_stage.py and
+fetch_xml_stage.py: the corpus is built only from consolidations that carry
+an XML manifestation). This is a Fedlex publishing limit, not a choice this
+stage makes, but it is not obvious from the schema or from a query result --
+"the amendment history of the OR" reads as complete, and it is not. Any
+consumer of ch_act_change needs this stated, not left as a fact only visible
+by cross-referencing ch_act_version's own date range.
+
 Editions are compared in date_applicability order, never insertion order: a
 corpus that discovered editions out of the order Fedlex published them (a
 plausible walk order for versions_stage, which is driven by work batches, not
