@@ -74,19 +74,33 @@ def test_is_idempotent(conn):
 
 
 def test_existing_rows_are_preserved_and_marked_indexed(conn):
+    # Case 1: long clean text → loaded
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s, %s, %s)",
-        ("ECLI:CH:CH_BGer:x", "CH_BGer", "a" * 500),
+        ("ECLI:CH:CH_BGer:clean", "CH_BGer", "a" * 500),
     )
+    # Case 2: long text with mojibake marker Ã → indexed (needs re-fetch)
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s, %s, %s)",
+        ("ECLI:CH:CH_BGer:mojibake_a", "CH_BGer", "EidgenÃ¶ssisches" + ("a" * 485)),
+    )
+    # Case 3: long text with mojibake marker Â → indexed (needs re-fetch)
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text) VALUES (%s, %s, %s)",
+        ("ECLI:CH:CH_BGer:mojibake_b", "CH_BGer", "VersicherungsgerichtÂ" + ("a" * 480)),
+    )
+    # Case 4: NULL or short text → indexed (needs fetch)
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider) VALUES (%s, %s)",
-        ("ECLI:CH:ZH_Obergericht:y", "ZH_Obergericht"),
+        ("ECLI:CH:ZH_Obergericht:empty", "ZH_Obergericht"),
     )
     _apply(conn)
     rows = dict(conn.execute("SELECT ecli, stage FROM ch_court_decisions").fetchall())
-    # A row that already carries text is done; a row without text must be re-fetched.
-    assert rows["ECLI:CH:CH_BGer:x"] == "loaded"
-    assert rows["ECLI:CH:ZH_Obergericht:y"] == "indexed"
+    # Only clean long text is marked loaded; everything else is indexed for re-processing
+    assert rows["ECLI:CH:CH_BGer:clean"] == "loaded", "clean long text should be loaded"
+    assert rows["ECLI:CH:CH_BGer:mojibake_a"] == "indexed", "text with Ã should be re-fetched"
+    assert rows["ECLI:CH:CH_BGer:mojibake_b"] == "indexed", "text with Â should be re-fetched"
+    assert rows["ECLI:CH:ZH_Obergericht:empty"] == "indexed", "NULL/short text should be indexed"
 
 
 def test_doc_id_is_unique_but_nullable(conn):

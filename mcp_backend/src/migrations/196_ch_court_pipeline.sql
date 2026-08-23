@@ -35,9 +35,17 @@ END $$;
 -- Enrol the rows that are already here. A row that already carries real text is
 -- done; everything else goes back to the front of the queue. length() > 200 is
 -- the same threshold used to measure coverage, so the two numbers agree.
+-- CRITICAL: As of 2026-08-23, all 165,363 CH_BGer rows carry mojibake (UTF-8
+-- decoded as Latin-1 in the original import). Every row contains Ã and Â markers.
+-- Rows with mojibake must be re-queued for re-fetching, even if length > 200.
+-- Only clean text without these markers is marked 'loaded'.
 UPDATE public.ch_court_decisions
    SET stage = CASE
-                 WHEN full_text IS NOT NULL AND length(full_text) > 200 THEN 'loaded'
+                 WHEN full_text IS NOT NULL
+                      AND length(full_text) > 200
+                      AND full_text NOT LIKE '%Ã%'
+                      AND full_text NOT LIKE '%Â%'
+                 THEN 'loaded'
                  ELSE 'indexed'
                END,
        stage_updated_at = now()
