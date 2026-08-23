@@ -11,23 +11,49 @@ from __future__ import annotations
 
 
 def gate_a(conn) -> dict:
-    """Gate A: what the sample says about HTML / PDF / OCR before the full run."""
-    row = conn.execute("""
-        SELECT count(*)                                              AS total,
-               count(*) FILTER (WHERE text_source = 'html')          AS html,
-               count(*) FILTER (WHERE text_source = 'pdf')           AS pdf,
-               count(*) FILTER (WHERE text_source = 'ocr')           AS ocr,
-               count(*) FILTER (WHERE stage = 'ocr_pending')         AS ocr_pending,
-               count(*) FILTER (WHERE stage = 'failed')              AS failed,
-               avg(text_quality)                                     AS mean_quality
+    """Gate A: what the sample says about HTML / PDF / OCR before the full run.
+
+    `stage = 'failed'` is reachable from three places, not one: extract_stage
+    marks a row failed when its quality is bad and there is no scan behind it
+    (HTML), but index_stage also marks a row failed when the listing offers
+    neither HTML nor PDF, and fetch_stage marks one failed when its attempts
+    run out. Those last two never reach this stage at all, so they never get
+    a text_source or a text_quality score. Folding them into the same
+    denominator as the rows that were actually extracted would silently
+    understate every by_source share -- extract runs immediately after fetch
+    on the same sample, and some fetches fail, so this is not a corner case.
+
+    So the numbers below cover two different populations, kept apart:
+
+      total, by_source, ocr_pending, failed, mean_quality
+          -- rows that reached extraction (text_quality IS NOT NULL).
+             by_source/ocr_pending/failed are shares OF `total`; `failed`
+             here means bad-quality HTML with nothing left to try.
+
+      pre_extraction_failed
+          -- rows marked failed before they ever reached this stage (no
+             body available, or fetch exhausted its attempts). Not part of
+             `total` and not a share of anything -- reported as its own
+             count so it is never hidden inside a shrunk denominator.
+    """
+    reached = "text_quality IS NOT NULL"    # a row that reached extraction
+    row = conn.execute(f"""
+        SELECT count(*) FILTER (WHERE {reached})                          AS total,
+               count(*) FILTER (WHERE {reached} AND text_source = 'html') AS html,
+               count(*) FILTER (WHERE {reached} AND text_source = 'pdf')  AS pdf,
+               count(*) FILTER (WHERE {reached} AND text_source = 'ocr')  AS ocr,
+               count(*) FILTER (WHERE stage = 'ocr_pending')              AS ocr_pending,
+               count(*) FILTER (WHERE stage = 'failed' AND {reached})     AS extraction_failed,
+               count(*) FILTER (WHERE stage = 'failed' AND NOT {reached}) AS pre_extraction_failed,
+               avg(text_quality)                                          AS mean_quality
           FROM ch_court_decisions
-         WHERE text_quality IS NOT NULL OR stage IN ('ocr_pending','failed')
     """).fetchone()
     return {
         "total": row["total"],
         "by_source": {"html": row["html"], "pdf": row["pdf"], "ocr": row["ocr"]},
         "ocr_pending": row["ocr_pending"],
-        "failed": row["failed"],
+        "failed": row["extraction_failed"],
+        "pre_extraction_failed": row["pre_extraction_failed"],
         "mean_quality": float(row["mean_quality"]) if row["mean_quality"] else 0.0,
     }
 

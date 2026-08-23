@@ -57,3 +57,36 @@ def test_pdf_to_text_reads_a_real_swiss_decision():
 def test_pdf_to_text_on_a_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         text_extract.from_pdf(tmp_path / "nope.pdf")
+
+
+def test_pdf_to_text_strips_nul_and_other_control_characters(tmp_path, monkeypatch):
+    """decode(..., errors="replace") only fixes invalid UTF-8 -- a genuine NUL
+    byte (or any other C0/C1 control byte) is valid UTF-8 on its own and
+    passes straight through undecoded. Postgres rejects NUL in a text column
+    outright, so these must never reach the database. Surrounding text and
+    newlines must survive the strip."""
+    dummy_pdf = tmp_path / "d.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4")
+
+    raw = (
+        "Das Bundesgericht\x00 hat entschieden.\n"
+        "Zweite Zeile\x01\x02 mit Kontrollzeichen.\x0b\x0c"
+    )
+
+    class FakeCompleted:
+        returncode = 0
+        stdout = raw.encode("utf-8")
+        stderr = b""
+
+    monkeypatch.setattr(
+        text_extract.subprocess, "run",
+        lambda *a, **k: FakeCompleted())
+
+    text = text_extract.from_pdf(dummy_pdf)
+
+    assert "\x00" not in text
+    assert "\x01" not in text and "\x02" not in text
+    assert "\x0b" not in text and "\x0c" not in text
+    assert "Das Bundesgericht hat entschieden." in text
+    assert "Zweite Zeile mit Kontrollzeichen." in text
+    assert "\n" in text

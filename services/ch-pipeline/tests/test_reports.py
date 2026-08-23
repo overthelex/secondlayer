@@ -55,6 +55,33 @@ def test_gate_a_reports_shares_by_source_and_the_ocr_backlog(conn):
     assert 0.6 < g["mean_quality"] < 0.7
 
 
+def test_gate_a_separates_pre_extraction_failures_from_the_extracted_population(conn):
+    """Round 1 finding: stage = 'failed' is reachable from three places, not
+    one. index_stage marks a row failed when the listing has neither HTML
+    nor PDF, and fetch_stage marks one failed when attempts run out --
+    neither of those two ever gets a text_source or a text_quality score, so
+    folding them into gate_a's denominator silently understates every
+    by_source share. They must be counted separately and never hidden."""
+    # An extraction-stage failure: HTML with bad quality, so text_source and
+    # text_quality ARE set -- it reached extraction, it just failed there.
+    _row(conn, "a", "GE_Gerichte", "html", 0.9, "extracted")
+    _row(conn, "b", "GE_Gerichte", "html", 0.1, "failed")
+    # An index-stage failure: no body was ever available, so neither
+    # text_source nor text_quality is set -- it never reached extraction.
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage) "
+        "VALUES (%s,%s,%s,%s)",
+        ("e:c", "ZH_Obergericht", "c", "failed"))
+
+    g = reports.gate_a(conn)
+
+    assert g["total"] == 2, "only rows that reached extraction count toward the total"
+    assert g["failed"] == 1, "the extraction-stage failure (bad HTML quality)"
+    assert g["pre_extraction_failed"] == 1, "the index-stage failure, kept apart"
+    assert (g["by_source"]["html"] + g["by_source"]["pdf"] + g["by_source"]["ocr"]
+            == g["total"]), "by-source shares must sum to the same population as total"
+
+
 def test_quality_distribution_buckets_by_tenth(conn):
     for i, q in enumerate([0.05, 0.15, 0.15, 0.95]):
         _row(conn, f"d{i}", "S", "pdf", q, "extracted")

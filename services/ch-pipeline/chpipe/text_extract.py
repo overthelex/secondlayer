@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pathlib
 import subprocess
+import unicodedata
 
 from lxml import etree, html as lxml_html
 
@@ -33,6 +34,25 @@ _VOID_BLOCK_TAGS = frozenset({"br"})
 
 class PdfToolMissing(RuntimeError):
     pass
+
+
+def _strip_control_characters(text: str) -> str:
+    """Drop NUL and other C0/C1 control characters from decoded pdftotext
+    output, keeping \n, \r and \t.
+
+    decode(..., errors="replace") only fixes invalid UTF-8 byte sequences --
+    a genuine NUL byte, or any other Unicode Cc control character, is valid
+    UTF-8 on its own and passes straight through undecoded. Postgres text
+    columns reject NUL outright (DataError), so a broken-CMap PDF whose junk
+    text layer happens to clear the quality gate could otherwise take down
+    the whole batch on the write, not the extraction. Text that needed these
+    bytes stripped was not usable text to begin with -- text_quality.score
+    still judges what remains after they are gone.
+    """
+    return "".join(
+        c for c in text
+        if c in "\n\r\t" or unicodedata.category(c) != "Cc"
+    )
 
 
 def from_html(payload: bytes) -> str:
@@ -73,4 +93,5 @@ def from_pdf(path: pathlib.Path) -> str:
         return ""
     if completed.returncode != 0:
         return ""
-    return completed.stdout.decode("utf-8", errors="replace").strip()
+    text = completed.stdout.decode("utf-8", errors="replace")
+    return _strip_control_characters(text).strip()

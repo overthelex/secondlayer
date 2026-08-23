@@ -69,16 +69,26 @@ def run(settings: Settings, limit: int | None = None,
                     break
                 futures = {pool.submit(extract_one, settings, r): r for r in rows}
                 # Each future is resolved and completed independently: a
-                # single document that fails to extract must not abort the
-                # rest of the batch (two earlier stages had exactly this
-                # defect -- an exception escaping the loop via future.result()
-                # kills the whole run). The try/except sits directly around
-                # future.result(), so only the extraction failure is caught;
-                # everything after it runs for every other future regardless.
+                # single document that fails to extract, OR whose db.complete
+                # write fails (e.g. a Postgres DataError from a byte the
+                # extractor did not know to strip), must not abort the rest
+                # of the batch (two earlier stages had exactly this defect --
+                # an exception escaping the loop via future.result() kills
+                # the whole run). The try/except therefore wraps
+                # future.result() AND the write that follows it, not just
+                # the former -- a failure on either path is routed to
+                # db.fail() the same way. Report counters are only
+                # incremented once the row's fate is durably recorded, so a
+                # failed write is never double-counted as both a success and
+                # a failure.
                 for future in concurrent.futures.as_completed(futures):
                     row = futures[future]
                     try:
                         text, quality, next_stage = future.result()
+                        fields = {"text_quality": quality}
+                        if next_stage == "extracted":
+                            fields["full_text"] = text
+                        db.complete(conn, row["doc_id"], next_stage, **fields)
                     except Exception as exc:                    # noqa: BLE001
                         log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
                         try:
@@ -89,15 +99,12 @@ def run(settings: Settings, limit: int | None = None,
                                      row["spider"], row["doc_id"], fail_exc)
                         report.failed += 1
                         continue
-                    fields = {"text_quality": quality}
                     if next_stage == "extracted":
-                        fields["full_text"] = text
                         report.extracted += 1
                     elif next_stage == "ocr_pending":
                         report.queued_for_ocr += 1
                     else:
                         report.failed += 1
-                    db.complete(conn, row["doc_id"], next_stage, **fields)
                 if remaining is not None:
                     remaining -= len(rows)
                 log.info("extracted=%d ocr_pending=%d failed=%d", report.extracted,
