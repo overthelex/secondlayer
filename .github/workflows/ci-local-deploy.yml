@@ -43,6 +43,7 @@ jobs:
       openreyestr: ${{ steps.changes.outputs.openreyestr }}
       frontend: ${{ steps.changes.outputs.frontend }}
       deployment: ${{ steps.changes.outputs.deployment }}
+      local_only: ${{ steps.changes.outputs.local_only }}
       any_backend: ${{ steps.changes.outputs.any_backend }}
       services_to_build: ${{ steps.changes.outputs.services_to_build }}
       services_to_deploy: ${{ steps.changes.outputs.services_to_deploy }}
@@ -64,7 +65,10 @@ jobs:
         run: |
           SERVICES='${{ steps.changes.outputs.services_to_build }}'
           MONITORING='${{ steps.changes.outputs.monitoring }}'
-          if [ "$SERVICES" = '[]' ] && [ "$MONITORING" != "true" ]; then
+          LOCAL_ONLY='${{ steps.changes.outputs.local_only }}'
+          # local_only — правка docker-compose.local.yml: прод её игнорирует
+          # (см. detect-changes), а локальное окружение обязано передеплоиться
+          if [ "$SERVICES" = '[]' ] && [ "$MONITORING" != "true" ] && [ "$LOCAL_ONLY" != "true" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "No services changed — skipping build/test/deploy"
           else
