@@ -240,3 +240,46 @@ def test_an_empty_lang_is_not_a_language(monkeypatch, no_renice):
     monkeypatch.setenv("CHPIPE_LANG", "")
     diff_stage.main()
     assert seen["kwargs"]["lang"] == "de"
+
+
+# --- run-stage.sh's own usage line ---
+# It read `index|fetch|extract|ocr|load` long after six more stages existed,
+# and its wrapper is the only way any of them is actually invoked on prod.
+# A name it accepts that resolves to no module is a stage nobody can run.
+
+import importlib
+import re
+
+_RUN_STAGE = pathlib.Path(__file__).parent.parent / "run-stage.sh"
+
+
+def _accepted_stage_names() -> set[str]:
+    """The case labels run-stage.sh dispatches on, minus the `*` catch-all."""
+    body = _RUN_STAGE.read_text()
+    case = body[body.index("case \"$STAGE\" in"):body.index("esac")]
+    names: set[str] = set()
+    for label in re.findall(r"^\s{2}([a-z0-9|_-]+)\)", case, re.M):
+        names.update(label.split("|"))
+    return names
+
+
+def test_run_stage_accepts_every_stage_this_package_has():
+    expected = {"index", "fetch", "extract", "ocr", "load",
+                "acts", "versions", "fetch-xml", "parse-akn", "diff",
+                "project-legacy"}
+    assert _accepted_stage_names() == expected
+
+
+def test_every_name_run_stage_accepts_resolves_to_a_module_with_a_main():
+    for name in sorted(_accepted_stage_names()):
+        module = importlib.import_module(
+            f"chpipe.stages.{name.replace('-', '_')}_stage")
+        assert callable(getattr(module, "main", None)), \
+            f"run-stage.sh offers '{name}' but that module has no main()"
+
+
+def test_the_usage_comment_names_both_halves():
+    """The usage line is what an operator reads at the keyboard."""
+    usage = _RUN_STAGE.read_text()
+    for name in ("fetch-xml", "parse-akn", "project-legacy"):
+        assert name in usage, f"the usage comment does not mention {name}"

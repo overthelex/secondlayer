@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # One stage, under supervision, with a log. Usage:
-#   ./run-stage.sh index|fetch|extract|ocr|load [spider]
+#
+#   decisions:    ./run-stage.sh index|fetch|extract|ocr|load [spider]
+#   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy [lang]
+#
+# The optional second argument means different things to the two halves, so
+# it is dispatched explicitly rather than exported as both: for the decisions
+# stages it is a spider name (CHPIPE_SPIDER), for `diff` it is a language
+# (CHPIPE_LANG, default de). The legislation stages take no spider at all.
 set -euo pipefail
 
 STAGE="${1:?stage required}"
-SPIDER="${2:-}"
+ARG="${2:-}"
 LOG_DIR=/data/ch-corpus/logs
 mkdir -p "$LOG_DIR"
 
@@ -14,8 +21,29 @@ mkdir -p "$LOG_DIR"
 PGPASS="$(grep -E '^POSTGRES_PASSWORD=' ~/SecondLayer/deployment/.env.prod | cut -d= -f2-)"
 export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:5438/secondlayer_prod"
 export CHPIPE_RAW_DIR=/data/ch-corpus/raw
-export CHPIPE_SPIDER="$SPIDER"
 
-LOG="$LOG_DIR/${STAGE}${SPIDER:+-$SPIDER}.log"
-echo "=== $(date -Is) starting $STAGE ${SPIDER} ===" >> "$LOG"
-exec python3 -m "chpipe.stages.${STAGE}_stage" >> "$LOG" 2>&1
+# `fetch-xml` on the command line, fetch_xml_stage as a module.
+MODULE="chpipe.stages.${STAGE//-/_}_stage"
+
+case "$STAGE" in
+  index|fetch|extract|ocr|load)
+    export CHPIPE_SPIDER="$ARG"
+    ;;
+  diff)
+    export CHPIPE_LANG="$ARG"
+    ;;
+  acts|versions|fetch-xml|parse-akn|project-legacy)
+    if [ -n "$ARG" ]; then
+      echo "$STAGE takes no second argument (got '$ARG')" >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "unknown stage '$STAGE' -- see the usage comment at the top" >&2
+    exit 2
+    ;;
+esac
+
+LOG="$LOG_DIR/${STAGE}${ARG:+-$ARG}.log"
+echo "=== $(date -Is) starting $STAGE ${ARG} ===" >> "$LOG"
+exec python3 -m "$MODULE" >> "$LOG" 2>&1
