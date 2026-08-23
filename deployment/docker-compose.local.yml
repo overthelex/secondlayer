@@ -103,6 +103,30 @@ services:
           cpus: '1.0'
           memory: 4G
 
+  # Эмбеддинги для векторного поиска. Прод держит ровно такой же контейнер
+  # (запущен вручную, поэтому его нет в prod-компоузе): образ cpu-latest,
+  # BAAI/bge-m3, 1024 измерения — под коллекции EDRSR и законодательства.
+  tei-bge-m3:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    container_name: tei-bge-m3-local
+    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "65536", "--max-client-batch-size", "128"]
+    volumes:
+      - tei_cache_local:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '8'
+          memory: 16G
+
   redis-local:
     image: redis:7-alpine
     container_name: secondlayer-redis-local
@@ -286,7 +310,7 @@ services:
       VOYAGEAI_API_KEY: ${VOYAGEAI_API_KEY:-}
       VOYAGEAI_API_KEY_2: ${VOYAGEAI_API_KEY_2:-}
       VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
-      BGE_M3_URL: ${BGE_M3_URL:-}
+      BGE_M3_URL: ${BGE_M3_URL:-http://tei-bge-m3:80}
 
       # LLM Provider Strategy
       LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-bedrock-first}
@@ -1104,6 +1128,9 @@ volumes:
     driver: local
   lexwebapp_node_modules:
     driver: local
+  tei_cache_local:
+    driver: local
+
   postgres_hudoc_local_data:
     driver: local
   postgres_openreyestr_local_data:
