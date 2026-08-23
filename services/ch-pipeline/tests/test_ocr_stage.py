@@ -112,3 +112,48 @@ def test_one_document_raising_does_not_abort_the_rest_of_the_batch(
 
     assert report.recovered == 2
     assert report.failed == 1
+
+
+# --- Round 1 review finding: a tool crash must not be recorded as a
+# genuinely illegible document ---
+#
+# chpipe.ocr.ocr_pdf now raises ocr.OcrRenderFailed when pdftoppm or
+# tesseract crash/time out, instead of returning "" as though OCR ran and
+# found nothing. That exception must travel through the SAME per-document
+# guard exercised above -- no second handler -- landing in db.fail() (retry
+# budget preserved, diagnostic kept) rather than db.complete(..., "failed",
+# text_quality=0.0) (retry budget burned, diagnostic erased, a fabricated
+# quality score written for a document nobody actually read).
+#
+# This exercises the real _ocr_one, unlike the test above which replaces it
+# wholesale -- only ocr.ocr_pdf itself is faked, so the guard wiring in
+# run() is what is actually under test here.
+def test_a_render_failure_keeps_the_document_queued_instead_of_closing_it_failed(
+        conn, tmp_path, monkeypatch):
+    spider = "S"
+    (tmp_path / spider).mkdir()
+    (tmp_path / spider / "d.pdf").write_bytes(b"%PDF-1.4 fake")
+    _seed_ocr_pending(conn, "d", spider)
+
+    def crashing_ocr_pdf(path, languages, timeout=900):
+        raise ocr_stage.ocr.OcrRenderFailed("simulated pdftoppm crash rendering d.pdf")
+
+    monkeypatch.setattr(ocr_stage.ocr, "ocr_pdf", crashing_ocr_pdf)
+
+    settings = _settings(os.environ["CHPIPE_TEST_DSN"], tmp_path)
+    report = ocr_stage.run(settings, spider=spider, limit=1)   # must not raise
+
+    row = conn.execute(
+        "SELECT stage, attempts, last_error, text_quality FROM ch_court_decisions"
+        " WHERE doc_id = %s", ("d",)).fetchone()
+
+    assert row["stage"] == "ocr_pending", \
+        "a tool crash must not close the row as 'failed'"
+    assert row["attempts"] == 1
+    assert "simulated pdftoppm crash" in row["last_error"]
+    assert row["text_quality"] is None, \
+        "a tool crash must not fabricate a quality score for a document nobody read"
+
+    assert report.failed == 1
+    assert report.still_bad == 0
+    assert report.recovered == 0
