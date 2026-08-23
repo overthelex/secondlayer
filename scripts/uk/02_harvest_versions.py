@@ -288,7 +288,16 @@ def main():
         if items_batch:
             execute_values(cur, UPD_ITEM, items_batch, page_size=len(items_batch))
         if vers_batch:
-            execute_values(cur, INS_VER, vers_batch, page_size=len(vers_batch))
+            # Deduplicate on the conflict key before sending. Postgres rejects a
+            # whole ON CONFLICT DO UPDATE statement with CardinalityViolation if two
+            # proposed rows share the constrained key, and some items really do
+            # declare two hasVersion links carrying the same date. This crashed the
+            # first full run at 130,000 of 137,143 items.
+            seen_v = {}
+            for row in vers_batch:
+                seen_v[(row[0], row[1])] = row
+            execute_values(cur, INS_VER, list(seen_v.values()),
+                           page_size=len(seen_v))
         conn.commit()
         items_batch.clear()
         vers_batch.clear()
