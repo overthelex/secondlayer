@@ -412,6 +412,21 @@ save time before a full run.
       much of the raw snapshot dict still has no spider mapping (expect a
       large, possibly >100%, number per the nested-hierarchy note above —
       that is expected, not a new bug).
+- [ ] **Drop `idx_ch_court_fts` before `extract`, rebuild it after `load`.**
+      It is a 2.5 GB GIN over `to_tsvector('simple', ... full_text ...)`,
+      and every `full_text` UPDATE re-tokenises the document into it. On
+      the first prod backfill that was the whole extract throughput:
+      ~70 ms per row, serialised on the main thread, 850 docs/min with
+      the box 95% idle -- six workers and a higher load ceiling moved it
+      by 17%. Nothing reads the index today. Save the definition first:
+
+          \copy (SELECT indexdef || ';' FROM pg_indexes WHERE indexname = 'idx_ch_court_fts') TO '/tmp/idx_ch_court_fts.rebuild.sql'
+          DROP INDEX idx_ch_court_fts;
+
+      and after the backfill rebuild it from that file with `CONCURRENTLY`
+      added, in a window: GIN builds are single-threaded on PG16, so expect
+      hours over 1.2M documents. The saved file from 24.08.2026 is at
+      `/data/ch-corpus/idx_ch_court_fts.rebuild.sql` on the AWS box.
 - [ ] **The full stage runs themselves**, in order, under `tmux`, one stage
       at a time per the "Running one" section above: `index`, `fetch`,
       `extract`, `ocr`, `load`. Confirm liveness with `pgrep -af
