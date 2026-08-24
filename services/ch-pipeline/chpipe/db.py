@@ -208,6 +208,42 @@ def mark_failed(conn, doc_id: str, error: str, from_stage: str, **fields) -> Non
     _require_one(cursor, doc_id, "mark_failed()")
 
 
+def requeue_for_pdf(conn, doc_id: str, error: str) -> None:
+    """Send a document whose HTML body was unusable back to `indexed` so the
+    next fetch takes the PDF the listing also offered.
+
+    Found on the first prod backfill: GE_TAPI's HTML pages are 3 KB cards --
+    docket, descriptors and a `var pdfUrl = ...` -- and AG_Gerichte's are
+    Weblaw "AGVE - Archiv" shells; the decision IS the PDF. choose_body()
+    prefers HTML, so 506 documents with a pdf_url in the table were retired
+    as "html quality 0.0000 ... no scan behind an HTML page". The HTML being
+    a card is recorded as text_source = 'pdf' -- the body this document
+    WANTS -- and fetch_stage.choose_body() honours it. Not by clearing
+    html_url: index_stage's upsert restores html_url from the listing on
+    every re-index (COALESCE(EXCLUDED.html_url, ...)), and the nightly delta
+    runs index before fetch, so a cleared URL would come back and the row
+    would fetch the card again forever. text_source is not in that SET list
+    and survives. The diagnosis stays in last_error; attempts are left alone
+    because nothing was retried, the body was wrong. Refuses (rowcount 0 ->
+    QueueWriteMissed) when there is no pdf_url to fall back to -- that case
+    is mark_failed()'s, and the row is left exactly as it was.
+    """
+    cursor = conn.execute(
+        """
+        UPDATE ch_court_decisions
+           SET stage = 'indexed',
+               text_source = 'pdf',
+               last_error = %s,
+               failed_stage = NULL,
+               stage_updated_at = now(),
+               updated_at = now()
+         WHERE doc_id = %s AND pdf_url IS NOT NULL
+        """,
+        (error[:2000], doc_id),
+    )
+    _require_one(cursor, doc_id, "requeue_for_pdf()")
+
+
 def failed_by_stage(conn) -> list[tuple[str | None, int]]:
     """Triage: how many failures each stage produced. NULL means the row never
     entered a queue stage at all (index found neither HTML nor PDF)."""

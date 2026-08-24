@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 class ExtractReport:
     extracted: int = 0
     queued_for_ocr: int = 0
+    # Bad HTML with a pdf_url behind it: sent back to `indexed` for the PDF,
+    # not retired. See db.requeue_for_pdf().
+    requeued_for_pdf: int = 0
     failed: int = 0
 
 
@@ -129,6 +132,21 @@ def run(settings: Settings, limit: int | None = None,
                     row = futures[future]
                     try:
                         text, quality, next_stage = future.result()
+                        if next_stage == "failed" and row.get("pdf_url"):
+                            # Bad HTML, but the listing also offered a PDF:
+                            # GE_TAPI's and AG_Gerichte's HTML pages are
+                            # cards around a PDF that holds the decision.
+                            # Back to `indexed` with text_source = 'pdf', so
+                            # the next fetch takes the PDF (and a re-index
+                            # cannot undo it) and OCR stands behind it. 506 documents were retired this way on the
+                            # first prod run before this branch existed.
+                            db.requeue_for_pdf(
+                                conn, row["doc_id"],
+                                f"html quality {quality:.4f} below "
+                                f"{text_quality.ACCEPT_THRESHOLD}; a pdf_url "
+                                "exists, re-queued for the PDF")
+                            report.requeued_for_pdf += 1
+                            continue
                         if next_stage == "failed":
                             # Bad-quality HTML with no scan behind it: there
                             # is nothing left to try, so this is terminal --
@@ -170,7 +188,10 @@ def run(settings: Settings, limit: int | None = None,
                         report.failed += 1
                 if remaining is not None:
                     remaining -= len(rows)
-                log.info("extracted=%d ocr_pending=%d failed=%d", report.extracted,
+                log.info("extracted=%d ocr_pending=%d requeued_for_pdf=%d failed=%d",
+                         report.extracted, report.queued_for_ocr,
+                         report.requeued_for_pdf, report.failed)
+                log.debug("extracted=%d ocr_pending=%d failed=%d", report.extracted,
                          report.queued_for_ocr, report.failed)
     finally:
         conn.close()
@@ -187,6 +208,7 @@ def main() -> ExtractReport:
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
+    log.info("requeued_for_pdf=%d", result.requeued_for_pdf)
     log.info("extracted=%d ocr_pending=%d failed=%d", result.extracted,
              result.queued_for_ocr, result.failed)
     return result

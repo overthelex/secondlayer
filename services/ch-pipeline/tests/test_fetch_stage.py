@@ -53,6 +53,20 @@ def test_choose_body_prefers_html():
     assert fetch_stage.choose_body(row) == ("html", "https://x/d.html")
 
 
+def test_choose_body_prefers_the_pdf_when_extract_asked_for_it():
+    """A row extract sent back with text_source='pdf' (its HTML is a card)
+    takes the PDF even though the html_url is still there -- a re-index
+    restores html_url from the listing, so the URL cannot carry the fact."""
+    row = {"html_url": "https://x/card.html", "pdf_url": "https://x/d.pdf",
+           "text_source": "pdf"}
+    assert fetch_stage.choose_body(row) == ("pdf", "https://x/d.pdf")
+
+
+def test_choose_body_ignores_a_pdf_preference_with_no_pdf():
+    row = {"html_url": "https://x/d.html", "pdf_url": None, "text_source": "pdf"}
+    assert fetch_stage.choose_body(row) == ("html", "https://x/d.html")
+
+
 def test_choose_body_falls_back_to_pdf():
     row = {"html_url": None, "pdf_url": "https://x/d.pdf"}
     assert fetch_stage.choose_body(row) == ("pdf", "https://x/d.pdf")

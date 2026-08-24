@@ -292,3 +292,78 @@ def test_a_failed_write_never_costs_the_source_file(conn, tmp_path, monkeypatch)
 
     extract_stage.run(_pdf_settings(tmp_path), spider="S", limit=1)
     assert pdf.exists()
+
+
+# --- An HTML card with a PDF behind it is a re-queue, not a failure ---
+# GE_TAPI's HTML is a 3 KB card (docket, descriptors, `var pdfUrl = ...`) and
+# AG_Gerichte's is a Weblaw "AGVE - Archiv" shell; the decision is the PDF.
+# choose_body() prefers HTML, so on the first prod run 506 documents with a
+# pdf_url in the table were retired as "no scan behind an HTML page".
+
+def _seed_fetched_html_card(conn, doc_id, spider, pdf_url):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, text_source, "
+        "html_url, pdf_url) VALUES (%s,%s,%s,'fetched','html',%s,%s)",
+        (f"ECLI:CH:{spider}:{doc_id}", spider, doc_id,
+         f"https://x/{doc_id}.html", pdf_url))
+
+
+def _card_settings(tmp_path):
+    return Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=tmp_path,
+                    http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                    load_ceiling=0.0, max_attempts=3, retry_backoff_minutes=())
+
+
+def test_a_bad_html_body_with_a_pdf_behind_it_is_requeued_for_the_pdf(conn, tmp_path):
+    spider = "S"
+    (tmp_path / spider).mkdir()
+    (tmp_path / spider / "card.html").write_text(
+        "<html><body><script>var pdfUrl = '/apps/decis/x.pdf'</script></body></html>")
+    _seed_fetched_html_card(conn, "card", spider, "https://x/card.pdf")
+
+    report = extract_stage.run(_card_settings(tmp_path), spider=spider, limit=1)
+
+    row = conn.execute(
+        "SELECT stage, html_url, text_source, last_error, attempts, failed_stage "
+        "FROM ch_court_decisions WHERE doc_id='card'").fetchone()
+    assert row["stage"] == "indexed", "back to the front of the queue"
+    assert row["html_url"] == "https://x/card.html", \
+        "kept: a re-index would restore it anyway; the preference lives elsewhere"
+    assert row["text_source"] == "pdf", "the body this document wants"
+    assert row["last_error"] and "re-queued for the PDF" in row["last_error"]
+    assert row["attempts"] == 0, "nothing was retried; the body was wrong"
+    assert row["failed_stage"] is None
+    assert report.requeued_for_pdf == 1
+    assert report.failed == 0
+
+
+def test_a_bad_html_body_without_a_pdf_is_still_terminal(conn, tmp_path):
+    spider = "S"
+    (tmp_path / spider).mkdir()
+    (tmp_path / spider / "card.html").write_text("<html><body>...</body></html>")
+    _seed_fetched_html_card(conn, "card", spider, None)
+
+    report = extract_stage.run(_card_settings(tmp_path), spider=spider, limit=1)
+
+    row = conn.execute(
+        "SELECT stage, failed_stage FROM ch_court_decisions WHERE doc_id='card'").fetchone()
+    assert row["stage"] == "failed"
+    assert row["failed_stage"] == "fetched"
+    assert report.requeued_for_pdf == 0
+    assert report.failed == 1
+
+
+def test_requeue_for_pdf_refuses_a_row_with_no_pdf_and_leaves_it_untouched(conn):
+    """The refusal rests on the UPDATE's WHERE matching zero rows; a future
+    change that wrote fields before checking rowcount would still raise --
+    so the row itself is asserted, not just the exception."""
+    from chpipe import db
+    _seed_fetched_html_card(conn, "nopdf", "S", None)
+    with pytest.raises(db.QueueWriteMissed):
+        db.requeue_for_pdf(conn, "nopdf", "x")
+    row = conn.execute("SELECT stage, html_url, text_source, last_error "
+                       "FROM ch_court_decisions WHERE doc_id='nopdf'").fetchone()
+    assert row["stage"] == "fetched"
+    assert row["html_url"] == "https://x/nopdf.html"
+    assert row["text_source"] == "html"
+    assert row["last_error"] is None
