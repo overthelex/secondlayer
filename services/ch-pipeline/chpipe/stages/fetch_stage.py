@@ -86,7 +86,17 @@ def choose_body(row) -> tuple[str, str] | None:
     AG_Gerichte's Weblaw shells), see db.requeue_for_pdf(). That preference
     lives in text_source rather than in a cleared html_url because a
     re-index restores html_url from the listing and would otherwise fetch
-    the card again every night."""
+    the card again every night.
+
+    KNOWN LIMITATION: text_source = 'pdf' also describes a row whose body
+    was legitimately fetched as a PDF because the listing offered nothing
+    else. If such a row later fails (OCR, twice) and a re-index then finds
+    the court has ADDED an HTML body, this branch still takes the PDF. One
+    column carrying two facts; the honest fix is a dedicated flag
+    (migration 199, `prefer_pdf`), deferred because it needs DDL on prod and
+    a dozen test fixtures while the first backfill is running. The
+    exposure is a court that gains HTML after a document's PDF failed OCR
+    twice -- rare, and visible in last_error."""
     if row.get("text_source") == "pdf" and row.get("pdf_url"):
         return "pdf", row["pdf_url"]
     if row.get("html_url"):
