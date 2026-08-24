@@ -439,8 +439,6 @@ def _run_wrapper(tmp_path, monkeypatch, args, env_extra):
     stub.write_text("#!/bin/sh\nprintf 'SPIDER=%s LANG=%s\\n' "
                     "\"${CHPIPE_SPIDER-<unset>}\" \"${CHPIPE_LANG-<unset>}\"\n")
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
-    env_file = tmp_path / ".env.prod"
-    env_file.write_text("POSTGRES_PASSWORD=x\n")
     home = tmp_path / "home"
     (home / "SecondLayer" / "deployment").mkdir(parents=True)
     (home / "SecondLayer" / "deployment" / ".env.prod").write_text("POSTGRES_PASSWORD=x\n")
@@ -476,3 +474,18 @@ def test_no_spider_anywhere_still_means_all_spiders(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "environ", env)
     _, line = _run_wrapper(tmp_path, monkeypatch, ["index"], {})
     assert line == "SPIDER= LANG=<unset>"
+
+
+def test_a_leftover_lang_does_not_become_a_spider(tmp_path, monkeypatch):
+    """The fallback is per family. `CHPIPE_LANG=fr ./run-stage.sh diff`
+    followed by `./run-stage.sh index` in the same shell must still mean
+    every spider -- not a single nonsense spider called "fr"."""
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["index"],
+                           {"CHPIPE_LANG": "fr"})
+    assert line.startswith("SPIDER= "), line
+
+
+def test_a_leftover_spider_does_not_become_a_language(tmp_path, monkeypatch):
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["diff"],
+                           {"CHPIPE_SPIDER": "CH_VB"})
+    assert line == "SPIDER=CH_VB LANG=", "diff exports LANG=\"\" (its own default), never the spider"
