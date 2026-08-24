@@ -615,3 +615,72 @@ def test_a_shift_leaves_transitional_containers_to_the_disp_machinery():
     after = [_a(f"disp_u12/art_{i}", f"t{i}") for i in range(1, 5)]
     assert d._shifted_article_pairs(before, after) == []
     assert d.diff(before, after) == []
+
+
+def test_a_reworded_member_in_the_middle_of_the_block_splits_nothing():
+    """The re-review's failing shape: the same six-article displacement as
+    _SHIFT_BEFORE/_SHIFT_AFTER, but with the reworded member in the MIDDLE
+    of the block instead of at its end. The byte-identical positions then
+    fall into two runs -- three before the reworded member, two after -- and
+    gating each run alone left the far pair unclaimed: its old eIds became
+    `repealed` and its new eIds `added`, four fabricated rows for provisions
+    whose text survives verbatim three positions along. A `repealed` row for
+    a provision that still exists is a stronger wrong claim than the
+    `modified` pair the shift detector exists to remove."""
+    before = [
+        _a("art_963", "Anwendbarkeit."),
+        _a("art_964_a", "AAA text."),
+        _a("art_964_b", "BBB text."),
+        _a("art_964_c", "CCC text."),
+        _a("art_964_d", "DDD old wording."),   # reworded on the way
+        _a("art_964_e", "EEE text."),
+        _a("art_964_f", "FFF text."),
+        _a("art_965", "Wertpapiere."),
+    ]
+    after = [
+        _a("art_963", "Anwendbarkeit."),
+        _a("art_964_a", "New topic one."),     # genuinely new under reused ids
+        _a("art_964_b", "New topic two."),
+        _a("art_964_c", "New topic three."),
+        _a("art_964_d", "AAA text."),
+        _a("art_964_e", "BBB text."),
+        _a("art_964_f", "CCC text."),
+        _a("art_964_g", "DDD new wording."),   # the reworded member
+        _a("art_964_h", "EEE text."),
+        _a("art_964_i", "FFF text."),
+        _a("art_965", "Wertpapiere."),
+    ]
+    changes = d.diff(before, after)
+    assert [(c.e_id, c.change_type) for c in changes] == [
+        ("art_964_a", "added"),
+        ("art_964_b", "added"),
+        ("art_964_c", "added"),
+        ("art_964_g", "modified"),
+    ]
+    assert not any(c.change_type == "repealed" for c in changes), \
+        "nothing was repealed: every displaced text survives verbatim"
+
+
+def test_a_displaced_straggler_across_a_gap_is_not_repealed():
+    """The same class, minimal form: one displaced article separated from
+    the qualifying run by a member whose rewording keeps its text 'accounted
+    for' on neither side -- the bridge is unaccounted, the straggler is a
+    same-offset verbatim reappearance, and both belong to the one block."""
+    before = [_a("art_1", "aaa"), _a("art_2", "bbb"), _a("art_3", "ccc"),
+              _a("art_4", "old ddd"), _a("art_5", "eee"),
+              _a("art_9", "tail")]
+    after = [_a("art_0_a", "new head"),
+             _a("art_1", "aaa"), _a("art_2", "bbb"), _a("art_3", "ccc"),
+             _a("art_4", "new ddd"), _a("art_5", "eee"),
+             _a("art_9", "tail")]
+    # positions shift by +1; art_1..art_3 seed the run, art_4 is the
+    # unaccounted bridge, art_5 the straggler beyond it.
+    before2 = [_a(f"art_{n}", t) for n, t in
+               (("1", "aaa"), ("2", "bbb"), ("3", "ccc"),
+                ("4", "old ddd"), ("5", "eee"))]
+    after2 = [_a(f"art_{n}", t) for n, t in
+              (("1", "brand new"), ("2", "aaa"), ("3", "bbb"),
+               ("4", "ccc"), ("5", "new ddd"), ("6", "eee"))]
+    changes = d.diff(before2, after2)
+    assert not any(c.change_type == "repealed" for c in changes)
+    assert ("art_6", "added") not in {(c.e_id, c.change_type) for c in changes}

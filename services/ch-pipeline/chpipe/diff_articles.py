@@ -265,12 +265,16 @@ def _compare(e_id: str, article_number: str | None,
     compares, so correcting a label alone scores as a change. The one real
     instance found is art_624, whose paragraph label reads "2 e 3" in one
     German file and "2 und 3" in another -- an Italian "e" that leaked into
-    the German edition and was later corrected. It is NOT reachable from a
-    real edition transition: it appears only between two manifestations of
-    the SAME 2026-01-01 consolidation (the Fedlex re-issue recorded in this
-    plan's ledger), and across the five cached real edition pairs -- SR 220
-    x3, SR 311.0, SR 210, 6,763 article comparisons -- art_624 is identical
-    on every one. Left alone deliberately: excluding the label would mean
+    the German edition and was later corrected. This IS reachable from a
+    real edition transition: against the manifestations Fedlex's own graph
+    points at (the fileUrl VERSIONS binds and versions_stage stores),
+    SR 220's 2025-10-01 -> 2026-01-01 diff carries art_624 as its eighth
+    row, because the re-issue that fixed the label landed inside the
+    2026-01-01 manifestation. (An earlier note here claimed the opposite; it
+    was measured against a hand-built URL the pipeline never fetches.) So
+    the cost is one spurious `modified` row per label correction per
+    affected transition -- rare, but real and served. Left alone
+    deliberately, on cost alone: excluding the label would mean
     separating paragraph numbering from operative text in chpipe/akn.py,
     which changes ch_act_article.text, hence full_text, hence the served
     ch_legislation rows and their full-text index, for every article in the
@@ -647,6 +651,17 @@ def _shifted_article_pairs(before: list[dict],
         if offset == 0:
             continue
         positions = sorted(by_offset[offset])
+        # Every same-offset verbatim reappearance, not just this run's. The
+        # extension walk below may absorb members of a NEIGHBOURING
+        # sub-threshold run: a reworded member in the middle of one displaced
+        # block splits the byte-identical positions into two runs, and gating
+        # each run alone fabricated `repealed`+`added` rows for the far,
+        # shorter half -- its text survives verbatim three positions along,
+        # which unaccounted() correctly refuses to walk over. A position that
+        # reappears verbatim at THIS offset is exactly the evidence the run
+        # itself is made of, so the walk may cross it; the threshold still
+        # applies to the seed run, so no pairing starts from thin air.
+        offset_positions = set(positions)
         runs: list[list[int]] = []
         for position in positions:
             if runs and position == runs[-1][-1] + 1:
@@ -676,7 +691,8 @@ def _shifted_article_pairs(before: list[dict],
 
             for step, edge in ((1, run[-1]), (-1, run[0])):
                 position = edge + step
-                while free(position) and unaccounted(position):
+                while free(position) and (position in offset_positions
+                                          or unaccounted(position)):
                     members.append(position)
                     position += step
 

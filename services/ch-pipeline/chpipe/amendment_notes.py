@@ -570,16 +570,17 @@ def _anchor_of(element) -> tuple[str, str, int | None] | None:
 
     Two shapes, separated because the evidence separates them cleanly:
 
-    * A <level> whose ONLY article is its direct child. Fedlex puts the
-      article's own marginal-note heading on a wrapping <level>
-      ("lvl_G" heading "Verjährung" wrapping art_60) and hangs the
-      amendment note off that heading. The note is about that one article
-      and nothing else. Measured: 51 of the 93 German orphans are exactly
-      this, and ALL 51 are a <level> that is the direct parent of exactly
-      one <article> -- zero indirect cases, in any of the three languages.
-      These are attributed to the article. This is not inheritance; it is
-      the same "which provision is this note about" walk, corrected for
-      where Fedlex actually hangs the heading.
+    * A container whose ONLY article is its direct child. The code accepts
+      ANY eId-bearing container in that shape, not just <level> -- though on
+      the three cached editions every case that fires IS a <level> (51 de,
+      50 fr, 49 it, zero indirect): Fedlex puts the article's own
+      marginal-note heading on a wrapping <level> ("lvl_G" heading
+      "Verjährung" wrapping art_60) and hangs the amendment note off that
+      heading. The note is about that one article and nothing else, and
+      that reasoning does not depend on the wrapper's tag name. These are
+      attributed to the article. This is not inheritance; it is the same
+      "which provision is this note about" walk, corrected for where Fedlex
+      actually hangs the heading.
 
     * Anything else -- 2 to 525 articles beneath. The note is stored ONCE,
       against the container, and is NEVER pushed down to the articles
@@ -598,6 +599,13 @@ def _anchor_of(element) -> tuple[str, str, int | None] | None:
     preamble note on the German and French OR, none on the Italian) --
     there is no real identifier to anchor it to, and a synthetic one would
     put a made-up value in a column callers read as a citation.
+
+    A container row with container_articles = 0 is the last-resort fallback
+    below: the nearest eId-bearing ancestor that holds no article at all (a
+    <paragraph> inside a <transitional> -- disp_u15, disp_u15/para and
+    disp_u18 on the OR, 3 rows per language). The count is honest: zero
+    articles sit beneath the anchor, and the row exists so the note is
+    queryable at all rather than dropped.
     """
     article = _owning_article(element)
     if article:
