@@ -645,3 +645,101 @@ which is a deliberate change of meaning for that column.
       cross-check, and read the first pair of each line.
 - [ ] **Read `unaccounted_rows()` after `project-legacy`** and decide, in
       writing, what happens to the survivors.
+
+## Deltas
+
+Once the backfill for both halves is done, `run-delta.sh` is what keeps them
+from rotting. It runs nightly at **04:17** from cron on prod — after
+entscheidsuche's own scrapes (their `Snapshots` file for 2026-08-20 was
+generated at 06:00 UTC and the `Status` files show spider runs finishing
+around 23:57) and away from the backup window. Install it with:
+
+    ( crontab -l 2>/dev/null | grep -v 'ch-pipeline/run-delta.sh'; \
+      echo '17 4 * * * cd $HOME/SecondLayer/services/ch-pipeline && ./run-delta.sh' ) | crontab -
+
+**Decisions.** Reads `https://entscheidsuche.ch/docs/Snapshots/{date}.json`
+(falling back up to three days if today's file is not published yet — their
+own scrapes sometimes run late), and compares its per-court counter map
+against `$CHPIPE_RAW_DIR/snapshot-state.json`, the map stored after the
+previous run. `total` in that file is not flat: it mixes three independent
+levels that each separately sum to `total_alle` — a per-canton rollup (e.g.
+`"ZH"`), a per-court-code level (e.g. `"ZH_OG"`), and a per-chamber level
+(e.g. `"CH_BGer_001"`). The first and third are structurally dropped (a bare
+two-letter code, or a trailing `_<digits>` chamber suffix) — neither names a
+spider at any granularity, so neither can be re-indexed. What remains is
+compared key by key against the stored map: **a change in either direction**
+re-walks that court, because a shrinking count means the source withdrew
+documents, not just that nothing new arrived.
+
+The catch: entscheidsuche's court-code spelling does not match our 54 spider
+directory names for most of the corpus (`reports.completeness()` measured
+this against the live 2026-08-20 file and found exact matches for only 7 of
+54 — `"ZH_OG"` is our `"ZH_Obergericht"`, `"GE_CJ"` is our `"GE_Gerichte"`).
+There is no verified name-translation table in this codebase, so a changed
+key that matches no spider directory name is **not** re-indexed — it cannot
+be, without requesting a listing URL that does not exist. It is not silently
+dropped either: every such run logs a `WARNING` line naming the unmatched
+keys and roughly how many documents (as a share of `total_alle`) they
+represent. **A recurring warning here is the signal to act on, not ignore**
+— check Gate D (`reports.completeness`, the exact corpus-level count) to see
+whether the gap is actually growing, and run the affected spiders through
+`run-stage.sh index` by hand if it is. The delta is honest about this limit
+so it can never read as "the corpus is current" while quietly missing most
+of it.
+
+**Legislation.** Re-runs `acts` and `versions` in full — both are idempotent
+upserts over the whole graph, and the whole graph is a few minutes of SPARQL,
+which is simpler and more reliable than trying to filter by a modification
+date Fedlex does not reliably expose. Newly discovered editions land at
+stage `discovered`; `fetch-xml` and `parse-akn` drain that queue in the same
+run, so a new consolidation is fetched and parsed the same night it appears
+rather than merely recorded as pending.
+
+**OCR is not part of this script**, deliberately. Documents whose text layer
+fails the gate accumulate at `ocr_pending` and are cleared by a supervised
+`ocr` run — see "Deferred to the supervised operations phase" above. An
+unattended cron job must never be the thing that decides to spend CPU on
+that queue.
+
+**Priority.** `run_decisions`/`run_legislation` call each stage's `run()`
+directly, not its `main()`, so none of the individual `renice()` calls each
+stage's own `main()` would normally trigger actually fire. `chpipe.delta.main()`
+calls `throttle.renice(throttle.NICE_IO)` once at start-up to stand in for
+all of them — `NICE_IO` and `NICE_CPU` are both 10, and every stage this
+script reaches (including `parse-akn`, the one CPU-bound stage in the mix)
+resolves to one or the other, so one call reproduces what a sequence of each
+stage's own `main()` would have set, without stacking `os.nice()`'s
+cumulative increment once per stage. The load-average ceiling needs no extra
+wiring here: it already lives inside `extract_stage.run()` and
+`parse_akn_stage.run()` themselves, so calling `run()` directly still gets
+it.
+
+Compared to `run-stage.sh`, the wrapper itself carries three things a
+supervised one-off invocation can get away without: a `flock` so a slow
+previous run and the next scheduled one can never claim the same rows at
+once (row-locking here is explicitly not a distributed lock — see "Running
+one" above), log rotation at 20 MB so a job running 365+ times a year with
+nobody watching does not grow the log file forever, and an explicit
+`FAILED`/`OK` marker on every run (via a shell `trap`, so a crash inside
+Python still gets one) — there is no `MAILTO` configured for this cron
+entry, so the log is the only place a failure is visible at all.
+
+**Checking last night's run:**
+
+    tail -80 /data/ch-corpus/logs/delta.log
+    # last line should read "... delta finished: OK ===". FAILED, or no
+    # matching line for last night at all, both need investigation.
+    grep 'changed key(s) match no spider' /data/ch-corpus/logs/delta.log | tail -5
+    psql -c "SELECT stage, count(*) FROM ch_court_decisions GROUP BY 1"
+    psql -c "SELECT stage, count(*) FROM ch_act_version GROUP BY 1"
+
+**Recovering from a night that did not work:** the delta is restartable and
+idempotent by construction — every stage it calls upserts, and
+`snapshot-state.json` is only overwritten after a successful pass, so a
+crashed run leaves the previous night's state in place and the next
+scheduled run (or a manual `./run-delta.sh`) picks up the full gap since
+then, not just one night's worth. If `flock` reports the lock already held
+but no process is actually running (a hard reboot mid-run, say), remove
+`/data/ch-corpus/logs/delta.lock` before retrying — nothing else needs it
+released automatically, since the OS already reclaims the fd on process
+exit in the ordinary case.
