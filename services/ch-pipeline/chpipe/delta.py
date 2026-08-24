@@ -306,33 +306,60 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     # court_code_spider_map). Keys reachable both ways are one spider, not
     # two -- dict-building on spider name dedupes that for free.
     known = set(index_stage.ALL_SPIDERS)
-    actionable: dict[str, str] = {}     # spider -> the snapshot key that grew
+    # spider -> EVERY snapshot key that resolved to it. A dict holding one
+    # key per spider silently dropped all but the last: the real 2026-08-23
+    # snapshot carries 131 court-code keys against 54 spiders, so several
+    # grown keys resolving to one spider is the normal shape, not an edge
+    # case ("AG_OG" and "AG_VG" both map to "AG_Gerichte"). The keys are
+    # what the saved baseline is keyed by, so losing one means a failed
+    # listing rolls back only the survivor and retires the other court's
+    # growth as though it had been indexed.
+    actionable: dict[str, list[str]] = {}
     for name in grown:
-        if name in known:
-            actionable[name] = name
-        elif name in mapped:
-            actionable[mapped[name]] = name
+        spider = name if name in known else mapped.get(name)
+        if spider is not None:
+            actionable.setdefault(spider, []).append(name)
     unmapped = [name for name in grown if name not in known and name not in mapped]
+
+    # The baseline advances to `current` only for keys this run actually
+    # walked. Everything else is held at its PREVIOUS value (or dropped, if
+    # there was none) so tomorrow's comparison sees the same growth again
+    # rather than retiring documents nobody fetched.
+    next_state = dict(current)
+
+    def hold_back(keys) -> None:
+        for key in keys:
+            if key in previous:
+                next_state[key] = previous[key]
+            else:
+                next_state.pop(key, None)
 
     if unmapped:
         # Real signal we cannot act on -- see the module docstring. Logged
-        # every run, at WARNING, so this can never read as a clean night:
-        # missed_growth/total_growth is THIS NIGHT's number (F9 -- the stock
-        # of the unmapped courts is constant almost every night and says
-        # nothing about tonight; the growth actually missed is the same two
-        # dicts spiders_that_grew already compared).
+        # every run, at WARNING, so this can never read as a clean night.
+        #
+        # The number is the growth OUTSTANDING on those keys, not just
+        # tonight's: their baseline is held back below, so `previous` for an
+        # unmapped court is the last point at which it was actually walked,
+        # and the figure therefore accumulates until either a spider or a
+        # court_code row closes the gap. That is the escalating signal this
+        # warning is for. (F9's finding still holds against what it was
+        # written about: current.get(name, 0), the court's whole STOCK,
+        # which is near-constant and says nothing about anything.)
         total_growth = _growth(previous, current, grown)
         missed_growth = _growth(previous, current, unmapped)
         share = f"{missed_growth / total_growth * 100:.0f}%" if total_growth else "n/a"
         log.warning(
             "delta(%s): %d changed key(s) resolve to no spider (by name or "
             "by the corpus-derived court_code map) and cannot be re-indexed "
-            "tonight -- missed %d of %d new document(s) detected (%s): %s",
+            "tonight -- %d of %d detected new document(s) still unindexed "
+            "(%s): %s",
             day, len(unmapped), missed_growth, total_growth, share,
             ",".join(unmapped))
+    hold_back(unmapped)
 
     if not actionable:
-        _save_state(settings, current)
+        _save_state(settings, next_state)
         return DeltaReport()
 
     spiders = sorted(actionable)
@@ -349,18 +376,12 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     # 116 MB CH_BGer listing does not abort the other 53 (index_stage.py).
     # But that means a spider whose listing never actually loaded tonight
     # must NOT have its snapshot counter advanced in the saved baseline:
-    # doing so unconditionally (the previous shape of this function) tells
-    # tomorrow's comparison nothing changed there, silently retiring
-    # tonight's real growth forever. Keep the OLD stored value (or, if there
-    # was none, drop the key) so the very next run sees it as changed again.
-    next_state = dict(current)
+    # doing so tells tomorrow's comparison nothing changed there, silently
+    # retiring tonight's real growth forever. Roll back EVERY key that
+    # resolved to the failed spider, not one of them -- see `actionable`.
     failed = set(index_report.failed_spiders)
-    for spider, key in actionable.items():
-        if spider in failed:
-            if key in previous:
-                next_state[key] = previous[key]
-            else:
-                next_state.pop(key, None)
+    for spider in sorted(failed & set(actionable)):
+        hold_back(actionable[spider])
 
     _save_state(settings, next_state)
     return DeltaReport(spiders=spiders, new_documents=index_report.inserted)

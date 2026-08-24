@@ -429,14 +429,63 @@ Run them in this order. Each is idempotent; re-running one is safe.
     fetch-xml       download each edition's Akoma Ntoso XML
     parse-akn       XML -> ch_act_article + full_text
     diff            consecutive editions -> ch_act_change (the amendment log)
+    provenance      AKN footnotes -> ch_article_provenance (the other one)
+    as-bbl          Official Compilation + Federal Gazette -> ch_as_act
+    basic-act       jolux:basicAct etc. -> ch_act_as_link
     project-legacy  latest parsed edition per (act, lang) -> ch_legislation
 
 `acts` and `versions` are SPARQL walks and write straight through — they have
 no queue. `fetch-xml` and `parse-akn` are queue stages over
 `ch_act_version.stage` (`discovered` -> `fetched` -> `parsed`), with the same
 claim/complete/fail discipline, the same retry backoff and the same
-`failed` terminal state as the decisions queue. `diff` and `project-legacy`
-read `parsed` rows in place and do not advance them.
+`failed` terminal state as the decisions queue. `diff`, `provenance` and
+`project-legacy` read `parsed` rows in place and do not advance them.
+`as-bbl` and `basic-act` are SPARQL walks over the Official Compilation and
+do not touch the edition queue at all.
+
+### What `ch_article_provenance` does and does not claim
+
+`provenance` reads the `<authorialNote>` prose Fedlex embeds in the Akoma
+Ntoso — "Eingefügt durch Ziff. I des BG vom 5. Okt. 1990, in Kraft seit
+1. Juli 1991 (AS 1991 846; BBl 1986 II 354)" — because Fedlex publishes no
+`amends` predicate at all. Together with `diff`'s computed change log these
+are the only two sources of amendment history this corpus has.
+
+**Read `anchor_level` before reading anything else.** Fedlex attaches an
+insertion or an act-wide terminology change ONCE, to the enclosing
+`<chapter>`/`<title>`/`<level>`/`<part>`/`<proviso>`/`<transitional>`, and
+never repeats it on the articles beneath — 10.4% to 10.6% of the amendment
+events in the three language editions of the OR, measured 2026-08-24. Those
+rows carry `anchor_level = 'container'`, `e_id` naming the container, and
+`container_articles` saying how many articles it holds. **A container row is
+not a claim about any single article inside it.** A query about one
+provision must filter `anchor_level = 'article'`; an act-level history wants
+both.
+
+They are stored that way rather than inherited by every article underneath
+because inheritance fabricates. On the German OR it would have turned 782
+rows into 1,590, and 498 of those 1,590 (31%) are contradicted by the
+receiving article's own footnotes, which name a LATER amending act — worst
+case, `part_3`'s "Fassung gemäss BG vom 18. Dez. 1936" landing on art. 964a,
+a provision inserted in 2021.
+
+One shape is promoted rather than kept as a container: a `<level>` whose only
+article is its direct child, which is how Fedlex writes an ordinary article's
+marginal-note heading. Measured on all three languages, every such case is a
+direct parent of exactly one article, so the note names that article and
+nothing else. 51 of the German OR's 93 container-attached events are this.
+
+What is still dropped: a note with no eId-bearing ancestor at all (one
+preamble note on the German and French OR, none on the Italian). It is still
+in `ch_act_version.akn_xml` — unindexed, not lost.
+
+The stage is a full replacement per edition, and that includes an edition
+whose parse now yields nothing: re-running after a parser fix REMOVES rows
+the fix invalidated, and the run report's `cleared` counter says how many
+editions that happened to. An edition with no `akn_xml` at all is the one
+case left alone — that is a hole in the corpus, not evidence about its
+provenance — and it has its own counter, `versions_without_xml`, so a fetch
+gap never hides inside `versions_without_notes`.
 
 Resource discipline, as the code does it (`chpipe/throttle.py`), same table
 as the decisions half above:
@@ -469,6 +518,9 @@ and a quiet window, not with worker counts.
     ./run-stage.sh fetch-xml
     ./run-stage.sh parse-akn
     ./run-stage.sh diff            # German; ./run-stage.sh diff fr for French
+    ./run-stage.sh provenance      # same: language as the second argument
+    ./run-stage.sh as-bbl
+    ./run-stage.sh basic-act
     ./run-stage.sh project-legacy
 
 Under `tmux`, and check liveness with `pgrep -af 'chpipe.stages'` — a tmux
@@ -706,16 +758,28 @@ rebuilt from the database fresh every run rather than trusted stale — a
 spider with zero rows so far contributes no entry, which is correct, not a
 gap to invent an entry for. A grown key that resolves through **neither** the
 exact-name check **nor** this map is real signal this run still cannot act
-on. It is not silently dropped: the log carries a `WARNING` naming those
-keys and, critically, **how much of tonight's growth they represent** — not
-their standing stock, which is nearly constant night to night and says
-nothing about whether tonight is a problem. **A recurring warning here is
-the signal to act on, not ignore** — if the missed share stays high across
-several nights, that means the corpus keeps growing at courts this run can
-never resolve from the loaded data alone (a spider that has never
-successfully indexed a single document yet), and the fix is a manual
-`run-stage.sh index <spider>` to seed at least one court_code row for it, not
-a change to this script.
+on. It is not silently dropped, and — just as important — **its growth is
+never retired**: the stored baseline advances only for keys this run
+actually walked, so an unresolvable court's counter is held at its previous
+value and tomorrow sees the same growth again. The `WARNING` names those
+keys and reports **how many detected documents are still unindexed**, which
+therefore accumulates night after night rather than resetting. (An earlier
+shape advanced every key including these, so the warning fired exactly once
+— on the night the court grew — and those documents were never detected
+again.) **A recurring, RISING warning here is the signal to act on** — the
+corpus keeps growing at courts this run cannot resolve from the loaded data
+alone (a spider that has never successfully indexed a single document yet),
+and the fix is a manual `run-stage.sh index <spider>` to seed at least one
+court_code row for it, not a change to this script.
+
+The same hold-back rule covers a listing that failed: `index_stage.run()`
+swallows a per-spider failure into `failed_spiders` rather than raising, and
+**every** snapshot key that resolved to that spider is rolled back, not just
+one of them. Several court-code keys resolving to one spider is the normal
+shape here — the 2026-08-23 snapshot has 131 court-code keys against 54
+spiders — so `AG_OG` and `AG_VG` both mapping to `AG_Gerichte` is routine,
+and advancing one of the two while restoring the other would retire a real
+night's growth at whichever court lost the coin toss.
 
 **Legislation.** Re-runs `acts` and `versions` in full — both are idempotent
 upserts over the whole graph, and the whole graph is a few minutes of SPARQL,

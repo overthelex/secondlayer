@@ -456,7 +456,8 @@ def test_unmapped_growth_warning_reports_the_miss_not_the_stock(
                             fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
 
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("missed 6 of 8" in msg for msg in warnings), warnings
+    assert any("6 of 8 detected new document(s) still unindexed" in msg
+               for msg in warnings), warnings
     # The old (wrong) stock-based number would have been 53 + 500 = 553; it
     # must not appear anywhere in the log.
     assert not any("553" in msg for msg in warnings)
@@ -525,3 +526,120 @@ def test_run_legislation_runs_acts_then_versions_then_drains_the_xml_queue(
 
     assert calls == ["acts", "versions", "fetch-xml", "parse-akn"]
     assert report.new_versions == 7
+
+
+# --- B3: many-to-one court code -> spider, and the rollback that lost it ---
+
+def test_a_failed_listing_rolls_back_every_court_code_that_shares_the_spider(
+        tmp_path, monkeypatch, conn):
+    """`actionable` was keyed by spider with a single snapshot key as its
+    value, so of two grown court codes resolving to one spider only the
+    LAST survived -- and the failed-listing rollback restored only that one,
+    advancing the other's baseline as though it had been walked. The
+    2026-08-23 snapshot has 131 court-code keys against 54 spiders, so
+    many-to-one is the NORMAL shape; the existing coverage seeded only
+    CH_BGer, where spider and key are the same string.
+
+    AG_OG and AG_VG both resolve to AG_Gerichte through the corpus-derived
+    map, both grow, the listing for AG_Gerichte fails -- so NEITHER
+    baseline may advance."""
+    _seed(conn, "ECLI:1", "AG_Gerichte", "AG_OG_001")
+    _seed(conn, "ECLI:2", "AG_Gerichte", "AG_VG_001")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"AG_OG": 10, "AG_VG": 20}, "total_alle": 30}
+    _stub_decision_stages(monkeypatch, failed_spiders=["AG_Gerichte"])
+
+    report = delta.run_decisions(
+        _settings(tmp_path),
+        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+    assert report.spiders == ["AG_Gerichte"]
+
+    state = delta._load_state(_settings(tmp_path))
+    assert state == {}, (
+        "a listing that failed must leave NO key it covered advanced; "
+        f"got {state}")
+
+    # And the very next run must see both courts as changed again.
+    second = delta.run_decisions(
+        _settings(tmp_path),
+        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+    assert second.spiders == ["AG_Gerichte"]
+
+
+def test_both_court_codes_of_one_spider_reach_index_stage_once(
+        tmp_path, monkeypatch, conn):
+    """The flip side: two keys, one spider, one re-index -- not two."""
+    _seed(conn, "ECLI:1", "AG_Gerichte", "AG_OG_001")
+    _seed(conn, "ECLI:2", "AG_Gerichte", "AG_VG_001")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"AG_OG": 10, "AG_VG": 20}, "total_alle": 30}
+    seen = _stub_decision_stages(monkeypatch)
+
+    delta.run_decisions(_settings(tmp_path),
+                        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    assert seen["index"] == ["AG_Gerichte"]
+    assert seen["fetch"] == ["AG_Gerichte"]
+
+
+# --- N4: growth on a key we cannot re-index must not be retired ---
+
+def test_growth_on_an_unmapped_key_is_never_retired(tmp_path, monkeypatch, conn):
+    """`next_state = dict(current)` advanced every key, unmapped ones
+    included -- so the WARNING fired once, on the night the court grew, and
+    those documents were never detected again. README's Deltas section tells
+    the operator a RECURRING warning is the signal to act on, which held
+    only while the court kept growing."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    # VD_TC resolves to no spider by name and the corpus (conn) is empty,
+    # so nothing can index it. ZH_Obergericht is real and must advance.
+    snapshot = {"total": {"VD_TC": 500, "ZH_Obergericht": 14}, "total_alle": 514}
+    state_path = delta._state_path(_settings(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({"VD_TC": 497, "ZH_Obergericht": 12}))
+    _stub_decision_stages(monkeypatch)
+
+    delta.run_decisions(_settings(tmp_path),
+                        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    state = delta._load_state(_settings(tmp_path))
+    assert state["VD_TC"] == 497, "an unindexable court's baseline must not move"
+    assert state["ZH_Obergericht"] == 14, "a walked spider's baseline must move"
+
+
+def test_the_unmapped_warning_keeps_escalating_across_nights(
+        tmp_path, monkeypatch, conn, caplog):
+    """Because the baseline is held back, the reported figure is the
+    OUTSTANDING unindexed count and grows every night the court does --
+    which is what makes a recurring warning worth acting on."""
+    _use_conn(monkeypatch, conn)
+    _stub_decision_stages(monkeypatch)
+    settings = _settings(tmp_path)
+    state_path = delta._state_path(settings)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({"VD_TC": 100}))
+
+    seen = []
+    for day, total in ((datetime.date(2026, 8, 20), 105),
+                       (datetime.date(2026, 8, 21), 112)):
+        monkeypatch.setattr(delta, "_today", lambda d=day: d)
+        url = delta.snapshot_url(day)
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            delta.run_decisions(
+                settings,
+                fetcher_factory=lambda: _FakeAsyncFetcher(
+                    {url: {"total": {"VD_TC": total}, "total_alle": total}}))
+        seen.append([r.getMessage() for r in caplog.records
+                     if r.levelno == logging.WARNING])
+
+    assert any("5 of 5 detected new document(s) still unindexed" in m
+               for m in seen[0]), seen[0]
+    assert any("12 of 12 detected new document(s) still unindexed" in m
+               for m in seen[1]), seen[1]
