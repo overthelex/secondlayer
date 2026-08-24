@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add the Official Compilation and Federal Gazette (369,181 acts) to the Swiss corpus, attach amendment provenance to individual articles, and put both the decisions and the legislation corpora on a daily delta so they stop rotting the day the backfill ends.
+**Goal:** Add the Official Compilation and Federal Gazette (211,637 acts) to the Swiss corpus, attach amendment provenance to individual articles, and put both the decisions and the legislation corpora on a daily delta so they stop rotting the day the backfill ends.
 
 **Architecture:** Two more discovery stages over the same SPARQL client, one parser over the Akoma Ntoso footnotes already downloaded by Plan 2, and a delta runner that reuses every stage from Plans 1 and 2 with a narrower claim.
 
@@ -18,12 +18,12 @@ Everything from the two earlier plans applies. Additionally:
 
 - **Migration number 198** is reserved for this plan.
 - **⚠ Fedlex publishes no "amends" relation.** Verified 2026-08-23 by enumerating every predicate on `jolux:Act` and on `jolux:ConsolidationAbstract`. There is no `changes`, no `amends`, no `modifies`. What exists is:
-  - `jolux:basicAct` on `ConsolidationAbstract` — 69,190 occurrences, pointing from a Classified Compilation entry to the Official Compilation act that established it. Verified for SR 220: `eli/cc/27/317_321_377 → eli/oc/27/317_321_377`.
+  - `jolux:basicAct` on `ConsolidationAbstract` — **17,055** links (re-measured 2026-08-24; the 69,190 recorded here on 2026-08-23 does not reproduce and is almost certainly a count of `jolux:ConsolidationAbstract` instances, which measures 69,495), pointing from a Classified Compilation entry to the Official Compilation act that established it. Verified for SR 220: `eli/cc/27/317_321_377 → eli/oc/27/317_321_377`.
   - `jolux:rectifies` — 343 occurrences.
   - `jolux:isFollowingAct` — 414 occurrences.
   So the amendment chain cannot be read out of the graph. It comes from two places instead: the computed change log from Plan 2 Task 7, and the Akoma Ntoso footnotes parsed in Task 4 here. Any claim that the graph gives us amendments is false; do not build one.
 - **Do not re-download the AKN XML.** Task 4 parses `ch_act_version.akn_xml`, already on disk and in the database from Plan 2. Re-fetching 170,000 files to read their footnotes would be pointless load on Fedlex.
-- **369,181 acts is the largest single stage in the whole corpus.** It runs last so nothing more useful waits behind it.
+- **211,637 acts is the largest single stage in the whole corpus.** (The 369,181 recorded on 2026-08-23 is `COUNT(*)` over `?a a jolux:Act`, a raw triple count; `COUNT(DISTINCT ?a)` over the same pattern is 211,637. Both re-measured 2026-08-24.) It runs last so nothing more useful waits behind it.
 
 ---
 
@@ -167,7 +167,7 @@ Expected: FAIL — the migration does not exist.
 -- provenance that Fedlex does NOT publish as a relation.
 --
 -- Verified 2026-08-23: neither jolux:Act nor jolux:ConsolidationAbstract carries
--- an "amends" predicate. jolux:basicAct (69,190 links) points from a Classified
+-- an "amends" predicate. jolux:basicAct (17,055 links) points from a Classified
 -- Compilation entry to the Official Compilation act that established it, and
 -- that is the only structured link there is. The per-article amendment history
 -- is recovered from the Akoma Ntoso footnotes instead — see ch_article_provenance.
@@ -969,7 +969,7 @@ def collection_of(eli_uri: str | None) -> str | None:
     return _COLLECTION_NAME.get(match.group(1)) if match else None
 
 
-# 369,181 jolux:Act as of 2026-08-23 — the largest stage in the corpus.
+# 211,637 distinct jolux:Act as of 2026-08-24 — the largest stage in the corpus.
 AS_ACTS = _PREFIXES + """
 SELECT DISTINCT ?act ?dateDocument ?publicationDate ?dateEntryForce ?typeDocument WHERE {
   ?act a jolux:Act .
@@ -982,7 +982,7 @@ ORDER BY ?act
 LIMIT %(limit)d OFFSET %(offset)d
 """
 
-# The only structured CC -> AS relation Fedlex publishes: 69,190 basicAct links.
+# The only structured CC -> AS relation Fedlex publishes: 17,055 basicAct links.
 # There is no "amends" predicate anywhere in this graph.
 BASIC_ACTS = _PREFIXES + """
 SELECT DISTINCT ?work ?basicAct WHERE {
@@ -997,7 +997,7 @@ LIMIT %(limit)d OFFSET %(offset)d
 # services/ch-pipeline/chpipe/stages/as_bbl_stage.py
 """Discovery of Official Compilation and Federal Gazette acts.
 
-369,181 jolux:Act as of 2026-08-23. This is the largest stage in the corpus and
+211,637 distinct jolux:Act as of 2026-08-24. This is the largest stage in the corpus and
 runs last, so nothing more useful queues behind it. Titles are not fetched here:
 that would be a second query of comparable size, and the titles are only worth
 having for the acts that turn out to be referenced. Fetch them later, for the
@@ -1095,7 +1095,7 @@ if __name__ == "__main__":
 """jolux:basicAct links between a Classified Compilation entry and the Official
 Compilation act that established it.
 
-69,190 links as of 2026-08-23. This is NOT an amendment relation — Fedlex
+17,055 links as of 2026-08-24. This is NOT an amendment relation — Fedlex
 publishes none. It answers "which AS act created this SR entry", nothing more.
 The amendment history lives in ch_act_change (computed) and
 ch_article_provenance (from footnotes).
@@ -1178,7 +1178,7 @@ ssh prod "docker exec secondlayer-postgres-prod psql -U secondlayer -d secondlay
     SELECT relation_type, count(*) FROM ch_act_amendment_link GROUP BY 1\""
 ```
 
-Reference from 2026-08-23: `jolux:Act` totals 369,181 across both collections, and `basicAct` yields 69,190 links. A materially lower link count means acts the links point at were skipped during AS/BBl discovery — report the `unresolved` figure from the run log rather than passing over it.
+Reference re-measured 2026-08-24: `jolux:Act` totals **211,637 distinct** acts across both collections (369,181 is the raw `COUNT(*)` and is not a row count), and `basicAct` yields **17,055** links, not the 69,190 recorded on 2026-08-23. Compare the run against these figures, not the old ones: a gate calibrated to 69,190 would report a 75% shortfall on a healthy run and send an operator hunting a bug that is not there. A materially lower link count than 17,055 means acts the links point at were skipped during AS/BBl discovery — report the `unresolved` figure from the run log rather than passing over it.
 
 - [ ] **Step 6: Commit**
 

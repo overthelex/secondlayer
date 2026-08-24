@@ -533,7 +533,7 @@ class SparqlClient:
 Counts observed that day, for reference when a run's numbers look wrong:
   jolux:ConsolidationAbstract   17,293 distinct works
   jolux:Consolidation           56,328
-  jolux:Act (AS + BBl)         369,181
+  jolux:Act (AS + BBl)         211,637 distinct (369,181 is COUNT(*), a raw triple count)
   enforcement-status 0 (in force)  5,087 works
   enforcement-status 3 (repealed)  7,863 works
   enforcement-status 1                47 works

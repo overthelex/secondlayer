@@ -3,7 +3,8 @@
 -- provenance that Fedlex does NOT publish as a relation.
 --
 -- Verified 2026-08-23: neither jolux:Act nor jolux:ConsolidationAbstract carries
--- an "amends" predicate. jolux:basicAct (69,190 occurrences) points from a
+-- an "amends" predicate. jolux:basicAct (17,055 links, re-measured 2026-08-24;
+-- the 69,190 recorded a day earlier does not reproduce) points from a
 -- Classified Compilation entry to the Official Compilation act that established
 -- it -- that is establishment, not amendment. jolux:rectifies (343 occurrences)
 -- and jolux:isFollowingAct (414 occurrences) are the only other structured
