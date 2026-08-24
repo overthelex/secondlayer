@@ -435,6 +435,14 @@ jobs:
           # без --remove-orphans: рядом на этой же машине крутятся qdrant-edrsr-local
           # и qdrant-general-local, которые обслуживают ПРОД
           $DC up -d --build
+          # nginx резолвит upstream-имена (server app-local:3000) ОДИН раз при
+          # старте. После `up -d --build` app-контейнеры пересозданы с новыми
+          # IP, а nginx-local живёт со старыми -- и отдаёт 502 на весь
+          # local.legal.org.ua. Так и случилось 24.08 после мержа #2325:
+          # app healthy, nginx "Up 26 hours", публичный /health -> 502.
+          # Правило из CLAUDE.md, теперь в коде: force-recreate после
+          # любого изменения upstream'ов.
+          $DC up -d --force-recreate nginx-local
           $DC ps
 
       - name: Wait for backend health
