@@ -273,3 +273,20 @@ def test_an_undeclared_utf8_body_survives_the_round_trip(conn, tmp_path):
         (tmp_path / "ZG_Obergericht" / "PLAIN.html").read_bytes())
     assert "Graubünden" in text and "Grundsätze" in text
     assert "Ã" not in text
+
+
+def test_raw_path_accepts_a_doc_id_with_a_non_ascii_letter(tmp_path):
+    """CH_EDOEB's ids carry the court's own umlaut: `CH_EDÖB_999_...`. The
+    first prod run refused all 1,876 of them as "unsafe path component" --
+    three attempts each, 5,628 ERROR lines, every one a real file the mirror
+    served with a 200. A letter is a letter; the path guard is about
+    separators, NULs and '..', not about the Latin-1 range."""
+    p = fetch_stage.raw_path(tmp_path, "CH_EDOEB",
+                             "CH_EDÖB_999_fedpol---Information_2023-12-21", "pdf")
+    assert p == tmp_path / "CH_EDOEB" / "CH_EDÖB_999_fedpol---Information_2023-12-21.pdf"
+
+
+@pytest.mark.parametrize("bad", ["a/b", "a\x00b", "a\nb", "..", "a\tb"])
+def test_raw_path_still_refuses_separators_controls_and_dotdot(tmp_path, bad):
+    with pytest.raises(ValueError):
+        fetch_stage.raw_path(tmp_path, "CH_BGer", bad, "pdf")
