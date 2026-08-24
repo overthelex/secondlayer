@@ -11,6 +11,46 @@ Payload shape, captured 2026-08-23 from ZG_Obergericht:
 Note what is NOT here: any key holding the decision text. The text is a separate
 file named by PDF.Datei or HTML.Datei. And `Datum` is top level, not under
 `Meta` — reading it from `Meta` is what left every row dateless.
+
+WHAT `chamber` HOLDS, AND WHY IT IS `Meta`'s FIRST ENTRY
+--------------------------------------------------------
+`Meta` is a LANGUAGE array, not a specificity ladder. Measured 2026-08-24
+against both committed fixtures and eight spiders live on entscheidsuche.ch:
+
+    spider                  entries  shape
+    CH_BGer      (fixture)    3      de / fr / it of one label
+    ZG_Obergericht (fixture)  4      de / fr / it, + one all-language entry
+    AI_Aktuell                3      de / fr / it of one label
+    NW_Gerichte               3      de / fr / it of one label
+    SH_OG                     3      de / fr / it of one label
+    OW_Gerichte               3      de / fr / it of one label
+    CH_EDOEB                  3      de / fr / it of one label
+    GE_Gerichte               3      de / fr / it of one label
+    TI_Gerichte               3      de / fr / it of one label
+    ZG_Verwaltungsgericht     4      de / fr / it, + one all-language entry
+
+Eight of the ten carry the three-language shape and nothing else, and in
+every one of them entry [0] is the German rendering and the LAST entry is
+the Italian one — so "take the most specific entry" implemented as "take the
+last" would store `Confederazione Tribunale federale I Corte di diritto
+pubblico` on a German Bundesgericht decision, and an Italian label on all
+91,866 French GE_Gerichte documents.
+
+The two ZG spiders do carry a fourth, language-independent entry, and on
+most of their documents it IS the more specific chamber (`I. Zivilabteilung`
+against `Zug Obergericht Zivilabteilung`). It is not reliably a chamber even
+there: ZG_VG_999 carries `Korrespondenz Verwaltungsgericht`, a document
+category. Preferring it where it exists would also make one column mean two
+different things — a chamber on two spiders, a court label on the other
+fifty-two — which is worse for a reader than one meaning applied uniformly.
+
+So `chamber` holds **entry [0] of `Meta`: entscheidsuche's own court label in
+German, canton + court + division** (`Zug Obergericht Zivilabteilung`,
+`Eidgenossenschaft Bundesgericht I. Öffentlich-rechtliche Abteilung`). It is
+in German regardless of the decision's own language, because that is the
+order entscheidsuche publishes the array in. The court's identity is also
+carried structurally by `canton`, `court_code` (the `Signatur`) and `spider`;
+this column is the human-readable name that goes with them.
 """
 from __future__ import annotations
 

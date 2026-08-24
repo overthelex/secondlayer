@@ -505,14 +505,22 @@ as the decisions half above:
 |------------------|-----------|-----------------------|
 | `acts`           | `nice 10` | not checked — bounded by Fedlex, not by cores |
 | `versions`       | `nice 10` | not checked — same |
+| `as-bbl`         | `nice 10` | not checked — same |
+| `basic-act`      | `nice 10` | not checked — same |
 | `fetch-xml`      | `nice 10` | not checked — network bound |
 | `parse-akn`      | `nice 10` | **checked before each claim** |
 | `diff`           | `nice 10` | **checked before each act** |
+| `provenance`     | `nice 10` | **checked before each version** |
 | `project-legacy` | `nice 10` | not checked — the load is Postgres-side, bounded by the batch size and the statement timeout |
 
-`parse-akn` (12,033 lxml parses) and `diff` (a corpus walk holding two
-article sets per comparison) are the CPU stages; they get the ceiling for the
-same reason `extract` does.
+`parse-akn` (12,033 lxml parses), `diff` (a corpus walk holding two article
+sets per comparison) and `provenance` (an lxml walk over the same ~12,033
+TOASTed `akn_xml` payloads) are the CPU stages; they get the ceiling for the
+same reason `extract` does. The table listed six stages while the code ran
+nine — `provenance` in particular reads as an unthrottled full-corpus lxml
+walk when the code has taken `NICE_CPU` and the per-version capacity wait
+since it was written. `throttle.py`'s own docstring says a stage added later
+belongs in this list; three of them had not been added.
 
 **`CHPIPE_CPU_WORKERS` is not read by any legislation stage.** All six are
 single-threaded, so setting it before a parse-akn run changes nothing — the

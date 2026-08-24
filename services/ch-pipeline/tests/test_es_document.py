@@ -129,3 +129,40 @@ def test_languages_from_sprache_string_with_no_kopfzeile_or_meta():
     """
     f = es_document.parse("CH_BGer", "d", {"Datum": "2000-01-01", "Sprache": "de"})
     assert f.languages == ["de"]
+
+
+# --- What `chamber` holds, pinned against both committed fixtures ---
+#
+# Measured 2026-08-24 against both fixtures and eight spiders live on
+# entscheidsuche.ch (the table is in es_document.py's module docstring):
+# `Meta` is a LANGUAGE array, not a specificity ladder. Eight of the ten
+# carry exactly three entries -- de, fr, it of ONE label -- so reading "the
+# most specific entry" as "the last entry" would store the Italian rendering
+# on a German Bundesgericht decision and on all 91,866 French GE_Gerichte
+# documents. These tests exist so that change cannot be made by accident.
+
+def test_chamber_is_the_german_court_label_not_the_italian_one():
+    """CH_BGer's Meta is three translations of one label. Its LAST entry is
+    Italian: 'Confederazione Tribunale federale I Corte di diritto pubblico'."""
+    f = es_document.parse("CH_BGer", "d", CH_BGER)
+    assert f.chamber == "Eidgenossenschaft Bundesgericht I. Öffentlich-rechtliche Abteilung"
+    assert CH_BGER["Meta"][-1]["Sprachen"] == ["it"], \
+        "the fixture must still be the three-language shape this pins"
+
+
+def test_chamber_ignores_the_language_independent_extra_entry():
+    """ZG_Obergericht is one of only two spiders measured carrying a fourth,
+    all-language entry ('I. Zivilabteilung'). Preferring it would make this
+    one column mean a chamber on two spiders and a court label on the other
+    fifty-two -- and it is not reliably a chamber even there
+    (ZG_Verwaltungsgericht's ZG_VG_999 carries 'Korrespondenz
+    Verwaltungsgericht', a document category)."""
+    f = es_document.parse("ZG_Obergericht", "d", ZG)
+    assert f.chamber == "Zug Obergericht Zivilabteilung"
+    assert ZG["Meta"][-1]["Text"] == "I. Zivilabteilung"
+    assert ZG["Meta"][-1]["Sprachen"] == ["de", "fr", "it"]
+
+
+def test_chamber_is_none_when_meta_carries_nothing_usable():
+    assert es_document.parse("XX_Upload", "d", {"Meta": []}).chamber is None
+    assert es_document.parse("XX_Upload", "d", {}).chamber is None
