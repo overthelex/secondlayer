@@ -48,6 +48,21 @@ _AKN_AUTHORIAL_NOTE = _AKN + "authorialNote"
 _AS_REFERENCE = re.compile(r"\b(AS|RO|RU)\s+(\d{1,4}\s+(?:[IVX]+\s+)?\d+)")
 _BBL_REFERENCE = re.compile(r"\b(BBl|FF)\s+(\d{4}\s+[IVX]+\s+\d+|\d{4}\s+\d+)")
 
+# KNOWN, DELIBERATE truncation, not a fabrication: a citation that spans
+# more than one page comes back as only its first page. Two real shapes on
+# the full OR, both measured directly (not estimated): a "glued" second
+# page with no separator ("AS 1982 1676 1724" -> as_reference stops at "AS
+# 1982 1676", 5 of 782 rows) and, far more commonly, a semicolon-separated
+# continuation citation that does not repeat the "AS" token ("AS 2020 4005;
+# 2022 109; BBl 2017 399" -> as_reference stops at "AS 2020 4005", dropping
+# "2022 109" -- 274 of 782 rows, 35%, across 191 distinct articles). Every
+# emitted as_reference is still a TRUE PREFIX of the note's real citation,
+# never a fabricated one -- but at 35% of rows this is not a rare edge case
+# to patch with a wider regex; representing it properly needs as_reference
+# to become a list of citations, not a single string, which is a schema
+# decision for tasks 1 and 3 to make, not something this parser decides
+# unilaterally by changing its own return shape.
+
 # Case-insensitive: measured on the full OR, "Eingefügt"/"Aufgehoben" are not
 # always sentence-initial -- "Zweiter Satz eingefügt durch ..." lower-cases
 # the verb once it follows a noun phrase mid-sentence. Measured directly (not
@@ -151,8 +166,47 @@ _SOURCE_ACT = re.compile(
 # konsultiert" (14 characters) on the full OR -- a first draft capped this
 # at 10 and silently matched nothing, which is how this pointer phrasing
 # ended up in the "keep" bucket instead of being dropped by it.
-_CHANGE_LOG_POINTER = re.compile(
-    r"\bkönnen\s+unter\b.{0,40}\bkonsultiert\s+werden\b", re.IGNORECASE)
+#
+# Keyed by lang, like _ACTIONS: extract() takes lang="fr"/"it" and
+# run-stage.sh exposes CHPIPE_LANG, so a German-only pattern here would
+# silently re-admit the ENTIRE pointer class on a French or Italian run --
+# _is_amendment() returns True for "Les modifications peuvent être
+# consultées au RO 1971 1465." against a de-only check, exactly the failure
+# this rule exists to prevent. Only the "de" entry is measured against real
+# text (12 occurrences on the full OR); "fr" and "it" are the structurally
+# parallel construction ("<can be> <consulted> <at/in> <AS-equivalent>
+# <ref>") and are covered by tests, but a French or Italian OR has not been
+# fetched to confirm the exact phrasing Fedlex uses there.
+_CHANGE_LOG_POINTER = {
+    "de": re.compile(
+        r"\bkönnen\s+unter\b.{0,40}\bkonsultiert\s+werden\b", re.IGNORECASE),
+    "fr": re.compile(
+        r"\bpeu(?:vent|t)\s+être\s+consultée?s?\b", re.IGNORECASE),
+    "it": re.compile(
+        r"\b(?:pu[oò]\s+essere\s+consultat[ao]|"
+        r"possono\s+essere\s+consultat[ei])\b", re.IGNORECASE),
+}
+
+# A citation that is not THIS event's own but a BACK-REFERENCE to some
+# other, earlier text -- "Für den Text in der ursprünglichen Fassung siehe
+# AS 53 185." ("for the text in the original version, see AS 53 185").
+# Measured on disp_u16/art_19 (the only note on the full OR matching this):
+# the note's FIRST sentence describes a real event ("... ist in der Fassung
+# des BG vom 1. April 1949 in Kraft gesetzt worden" -- this section took
+# its current wording from the 1949 Act, a genuine source_act_date) but its
+# SECOND sentence points at the citation of the act that 1949 act REPLACED,
+# not the 1949 act itself. Naively taking the nearest AS/BBl match in the
+# whole note welded 'AS 53 185' (the superseded original) to
+# source_act_date=1949-04-01 (the replacement) -- the same event-blend
+# finding 1 removed, just inside one sentence pair instead of across two
+# split verbs. _strip_backreference_citations() removes the "siehe/voir/
+# vedi <citation>" span before as_reference/bbl_reference are ever
+# extracted, so a back-referenced citation can no longer be misattributed
+# to the CURRENT event; source_act_date, parsed from the earlier, unrelated
+# "vom 1. April 1949" clause, is untouched. Only "de" is measured (1
+# occurrence); "fr"/"it" verbs are the parallel construction, unverified
+# against real text, same caveat as _CHANGE_LOG_POINTER above.
+_SEE_ALSO_VERB = {"de": "siehe", "fr": "voir", "it": "vedi"}
 
 # A bracketed publication history -- "[AS 1972 1502; 1977 1269; 1982 1234;
 # 1987 1189]" -- is typographically distinct from a prose sentence: every
@@ -201,6 +255,21 @@ def _parse_date(fragment: str | None) -> datetime.date | None:
         return None
 
 
+def _strip_backreference_citations(note: str, lang: str) -> str:
+    """Remove a "siehe/voir/vedi <citation>" span -- a citation that points
+    at some OTHER, earlier text rather than describing the current event --
+    before as_reference/bbl_reference are extracted from what's left. See
+    _SEE_ALSO_VERB's module-level comment for the real example this fixes
+    (disp_u16/art_19) and why the citation, not the date, is the field that
+    is wrong there.
+    """
+    verb = re.escape(_SEE_ALSO_VERB.get(lang, _SEE_ALSO_VERB["de"]))
+    pattern = re.compile(
+        rf"\b{verb}\s+(?:{_AS_REFERENCE.pattern}|{_BBL_REFERENCE.pattern})",
+        re.IGNORECASE)
+    return pattern.sub("", note)
+
+
 def parse_note(text: str, lang: str = "de") -> dict:
     """Parse one amendment EVENT's already-flattened text.
 
@@ -230,8 +299,15 @@ def parse_note(text: str, lang: str = "de") -> dict:
             action = name
             break
 
-    as_match = _AS_REFERENCE.search(note)
-    bbl_match = _BBL_REFERENCE.search(note)
+    # Citations are searched on a version with any "siehe/voir/vedi
+    # <citation>" back-reference removed (see _strip_backreference_citations),
+    # so a pointer to some OTHER text's citation can never be picked up as
+    # THIS event's own as_reference/bbl_reference. raw_note below keeps the
+    # ORIGINAL, unstripped text -- this is a citation-matching detail, not a
+    # right to shorten what gets audited.
+    citation_text = _strip_backreference_citations(note, lang)
+    as_match = _AS_REFERENCE.search(citation_text)
+    bbl_match = _BBL_REFERENCE.search(citation_text)
     effective = _EFFECTIVE.search(note)
     source = _SOURCE_ACT.search(note)
 
@@ -277,9 +353,11 @@ def _split_events(note: str, lang: str) -> list[str]:
     as its own single-element list, so parse_note() behaves exactly as it
     did before this function existed for the common case.
 
-    Order is preserved (document order in, document order out) so a
-    consumer reading a stream of rows for one e_id can treat the LAST row
-    as that article's current state -- see extract()'s docstring.
+    Order is preserved (document order in, document order out): within
+    ONE note, that is chronological (every multi-event note measured writes
+    its sentences earliest-event-first), but see extract()'s docstring for
+    why that does NOT make the LAST row for an e_id across MULTIPLE notes
+    that article's current state.
     """
     if lang not in _ACTIONS:
         raise _unsupported_lang(lang)
@@ -300,33 +378,45 @@ def _split_events(note: str, lang: str) -> list[str]:
     return [note[a:b].strip() for a, b in zip(boundaries, boundaries[1:])]
 
 
-def _is_amendment(parsed: dict) -> bool:
+def _is_amendment(parsed: dict, lang: str) -> bool:
     """Whether one already-split event's parse describes a change to THIS
     article, as opposed to a footnote that merely mentions an AS number
     while pointing somewhere else.
 
-    The brief's rule ("action" is set OR "as_reference" is set) is too
-    loose. Measured directly on the full OR, post-split: 897 event segments
-    sit inside an article; of the 809 that have an action or an AS/BBl
-    reference, 45 have an AS reference but no recognised verb. Read one by
-    one, those 45 split into four real shapes -- 19 that ARE this
-    article's own provenance, 26 that are not:
+    `lang` selects which language's _CHANGE_LOG_POINTER pattern applies --
+    a German-only check here would silently re-admit the entire change-log
+    pointer class on a French or Italian run (extract() takes lang="fr"/
+    "it", and run-stage.sh exposes CHPIPE_LANG). See _CHANGE_LOG_POINTER's
+    module-level comment.
 
-      * 19 KEPT: "Ausdruck gemäss ..." (a single term changed), "Fassung
-        [erster/des zweiten] Satzes gemäss ..." (a named part of the
-        article re-worded), and "Berichtigt von der Redaktionskommission
-        der BVers (Art. 33 GVG -- AS 1974 1051)." -- a correction made by
-        the drafting commission under its own statutory authority, not by
-        a later amending act. None of these three is one of the three
-        verbs this module classifies (action stays None), but each is a
-        real, cited sentence describing a change to THIS article's text.
+    The brief's rule ("action" is set OR "as_reference" is set) is too
+    loose in two ways: it should read as_reference OR bbl_reference (a
+    BBl-only citation with no recognised verb is exactly as much this
+    article's provenance as an AS-only one -- zero occurrences on the full
+    OR, so this is a doc/code agreement fix, not something the data forced),
+    and even with an as_reference/bbl_reference present, not every note
+    carrying one is provenance. Measured directly on the full OR, post-split
+    and after _strip_backreference_citations() removes disp_u16/art_19's
+    welded row from consideration: 897 event segments sit inside an
+    article. 782 are kept (764 with a recognised action, 18 without one but
+    with an AS/BBl reference) and 115 are dropped, in four real shapes:
+
+      * 14 + 4 = 18 KEPT with no recognised action: "Ausdruck gemäss ..."
+        (a single term changed), "Fassung [erster/des zweiten] Satzes
+        gemäss ..." (a named part of the article re-worded) -- 14 of these
+        -- and "Berichtigt von der Redaktionskommission der BVers (Art. 33
+        GVG -- AS 1974 1051)." -- 4 of these -- a correction made by the
+        drafting commission under its own statutory authority, not by a
+        later amending act. None of these three is one of the three verbs
+        this module classifies (action stays None), but each is a real,
+        cited sentence describing a change to THIS article's text.
         "Berichtigt" is the one worth arguing about either way: Fedlex
         itself models a correction as jolux:rectifies, a relation of its
         own, distinct from an amendment but not nothing -- dropping it
         would erase a real, cited edit to this exact provision. What
-        distinguishes all 19 from the 26 dropped below is that every one
-        of them is a full sentence ABOUT this article, not a list or a
-        pointer that happens to contain an AS number.
+        distinguishes all 18 kept rows from the dropped ones below is that
+        every kept one is a full sentence ABOUT this article, not a list or
+        a pointer that happens to contain an AS number.
       * 11 DROPPED: a bracketed publication history of a DIFFERENT,
         already-repealed act -- "[AS 1972 1502; 1977 1269; 1982 1234;
         1987 1189]". The AS numbers are that other act's amendment trail,
@@ -335,25 +425,39 @@ def _is_amendment(parsed: dict) -> bool:
       * 12 DROPPED: "Die Änderungen können unter AS 1971 1465 konsultiert
         werden." -- a pointer telling the reader where to go look, not a
         description of a change. See _CHANGE_LOG_POINTER.
-      * 3 DROPPED (caught by the bare-citation residue check below,
-        applied last): a bare citation with nothing else -- "AS 53 185".
-        No verb, no surrounding prose; a floating number is not "this
-        article was amended", it is exactly the same shape as the SR
-        cross-reference the brief's own rule already excludes when there
-        is no AS prefix.
+      * 3 DROPPED (caught by the bare-citation residue check below, applied
+        last): a bare citation with nothing else -- "AS 53 185". No verb,
+        no surrounding prose; a floating number is not "this article was
+        amended", it is exactly the same shape as the SR cross-reference
+        the brief's own rule already excludes when there is no AS prefix.
+
+    (The remaining 89 of the 115 dropped have neither a recognised action
+    nor an AS/BBl reference at all -- plain SR cross-references and
+    explanatory prose -- and are excluded by the very first check below,
+    before any of the four shapes above are even considered.)
+
+    A fifth shape does not reach this function at all: a citation that is a
+    BACK-REFERENCE to some other, earlier text ("siehe AS 53 185" -- "see AS
+    53 185") is stripped out of as_reference/bbl_reference before parse_note
+    ever returns, by _strip_backreference_citations(); see that function's
+    docstring. Without it, a note whose FIRST sentence describes this
+    event and whose SECOND sentence points at a different, earlier act's
+    citation would weld the two together exactly like the one-note-two-
+    events defect finding 1 fixed -- disp_u16/art_19 on the full OR is
+    measured doing exactly this.
 
     So the rule is: keep a row with a recognised action outright. Otherwise
-    require an AS/BBl reference AND that the note is not a bracketed list
-    and not a change-log pointer AND that something besides the citation(s)
-    themselves is in the note at all.
+    require an AS or BBl reference AND that the note is not a bracketed
+    list and not a change-log pointer (in `lang`) AND that something besides
+    the citation(s) themselves is in the note at all.
     """
     if parsed["action"]:
         return True
-    if not parsed["as_reference"]:
+    if not parsed["as_reference"] and not parsed["bbl_reference"]:
         return False
     if _BRACKETED_LIST.match(parsed["raw_note"]):
         return False
-    if _CHANGE_LOG_POINTER.search(parsed["raw_note"]):
+    if _CHANGE_LOG_POINTER[lang].search(parsed["raw_note"]):
         return False
     # A bare citation with no action verb and no prose beyond the
     # reference(s) themselves -- "AS 53 185". Strip every AS/BBl match and
@@ -397,9 +501,24 @@ def extract(xml: bytes, lang: str = "de") -> list[Provenance]:
     successive amendments to the same article produces two rows, not one
     row whose fields are blended from both acts.
 
-    Rows come out in document order, and within one e_id that is also event
-    order: a caller asking "what is this article's current state" wants the
-    LAST row for that e_id, not the first.
+    Rows come out in DOCUMENT order, not chronological order, and the two
+    are not the same thing across notes. Within a single split note, event
+    order and document order agree (see _split_events()'s docstring) -- but
+    an article commonly carries one <authorialNote> per amended PARAGRAPH,
+    in paragraph position, and Fedlex does not keep paragraphs in the order
+    they were last amended. Measured directly: 19 of 509 e_ids on the full
+    OR have a non-monotonic source_act_date sequence across their rows --
+    art_740 emits 2005-12-16 then 1991-10-04; art_361 ends on a 1988
+    amendment that comes after a 2013 one earlier in the same stream. A
+    consumer wanting "this article's current state" MUST sort that e_id's
+    rows by date itself (effective_date if it wants what's in force,
+    source_act_date otherwise) -- the last row in the order this function
+    returns is NOT a promise of anything. An earlier version of this
+    docstring claimed it was; that claim was false and has been removed
+    rather than made true, because making it true would mean silently
+    resorting rows that carry no date at all (6 of 782 recognised rows have
+    neither effective_date nor source_act_date, measured on the full OR)
+    under some invented tiebreak this module has no basis for choosing.
 
     Three kinds of note contribute no row, all deliberate: one that never
     reaches an enclosing <article> (see _owning_article), a plain
@@ -423,7 +542,7 @@ def extract(xml: bytes, lang: str = "de") -> list[Provenance]:
         full_text = " ".join("".join(note.itertext()).split())
         for event_text in _split_events(full_text, lang):
             parsed = parse_note(event_text, lang=lang)
-            if not _is_amendment(parsed):
+            if not _is_amendment(parsed, lang):
                 continue
             rows.append(Provenance(
                 e_id=e_id,

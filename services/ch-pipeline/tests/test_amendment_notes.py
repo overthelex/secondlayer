@@ -27,17 +27,25 @@ TWO_EVENT_NOTE = (
     "(AS 2000 2355; BBl 1999 III 2829).")
 
 
-def _akn_document(note_text: str) -> bytes:
+def _akn_document(*note_texts: str, e_id: str = "art_40_g") -> bytes:
     """The minimal real shape extract() walks: a note with no eId of its
     own, sitting inside an <article>, exactly as verified on the live OR
     (with_eId=0, measured directly -- see amendment_notes.py's
-    _owning_article docstring)."""
+    _owning_article docstring). One <paragraph> per note_text given -- an
+    article with several amended paragraphs carries one <authorialNote>
+    each, in paragraph position, which is the real shape review finding 1
+    (item 1 of round 2) needed: document order across TWO notes is not
+    chronological order, only within one note is."""
+    paragraphs = "".join(
+        f'<paragraph eId="{e_id}/para_{i}"><content><p>Text.'
+        f'<authorialNote>{text}</authorialNote></p></content></paragraph>'
+        for i, text in enumerate(note_texts, start=1)
+    )
     return (
         '<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
-        '<act><body><article eId="art_40_g"><num><b>Art. 40g</b></num>'
-        '<paragraph eId="art_40_g/para_1"><content><p>Text.'
-        f'<authorialNote>{note_text}</authorialNote>'
-        '</p></content></paragraph></article></body></act></akomaNtoso>'
+        f'<act><body><article eId="{e_id}"><num><b>Art. 40g</b></num>'
+        f'{paragraphs}'
+        '</article></body></act></akomaNtoso>'
     ).encode("utf-8")
 
 
@@ -170,8 +178,10 @@ def test_a_two_event_note_produces_two_rows():
     both acts -- action='inserted' (first verb wins) next to the REPEAL's
     effective date. 61 of 748 rows on the full OR had this shape. Each
     event now gets its own row, each carrying only its own event's fields,
-    and both keep the FULL original note in raw_note (see extract()'s
-    docstring: the last row for one e_id is that article's current state)."""
+    and both keep the FULL original note in raw_note -- the column exists
+    so a wrong parse stays auditable. (Ordering WITHIN one split note is
+    chronological -- see test_document_order_is_not_chronological_across_notes
+    for why that does NOT extend to rows from DIFFERENT notes.)"""
     rows = an.extract(_akn_document(TWO_EVENT_NOTE))
     assert len(rows) == 2
 
@@ -223,3 +233,91 @@ def test_extract_raises_on_an_unrecognised_language():
 def test_parse_note_raises_on_an_unrecognised_language():
     with pytest.raises(ValueError):
         an.parse_note(INSERTED, lang="es")
+
+
+# --- Round 2 fixes -----------------------------------------------------
+
+def test_document_order_is_not_chronological_across_notes():
+    """Review round 2, item 1: an earlier docstring claimed the LAST row
+    for one e_id was that article's current state. False across notes --
+    an article carries one <authorialNote> per amended paragraph, in
+    paragraph position, not chronological position. Measured on the full
+    OR: art_740 emits source_act_date 2005-12-16 then 1991-10-04 (19 of 509
+    e_ids are non-monotonic this way). This test pins the contract this
+    round landed on: extract() makes no ordering promise across notes, so
+    it must NOT silently sort -- a consumer wanting current state sorts
+    itself. Two single-event notes on the same article, newer one first in
+    the document (mirroring art_740's own shape), non-monotonic on output
+    if and only if extract() preserves raw document order."""
+    newer_first = (
+        "Fassung gemäss Ziff. I des BG vom 16. Dez. 2005, in Kraft seit "
+        "1. Jan. 2006 (AS 2005 999; BBl 2004 888).")
+    older_second = (
+        "Fassung gemäss Ziff. I des BG vom 4. Okt. 1991, in Kraft seit "
+        "1. Juli 1992 (AS 1991 777; BBl 1990 666).")
+    rows = an.extract(_akn_document(newer_first, older_second))
+    assert [r.source_act_date for r in rows] == [
+        datetime.date(2005, 12, 16), datetime.date(1991, 10, 4)]
+    # Non-monotonic: the second row's date is EARLIER than the first's --
+    # the last row is not "later", let alone "current".
+
+
+def test_backreference_citation_is_dropped_not_welded_to_another_events_date():
+    """Review round 2, item 2: disp_u16/art_19 on the full OR, verbatim.
+    The first sentence describes a real event (this section took its
+    current wording from the BG of 1 April 1949); the second sentence
+    points at AS 53 185, the citation of the ORIGINAL text that 1949 act
+    REPLACED -- not a citation of the 1949 act itself. Before this fix,
+    the nearest-match search welded them into one row: as_reference from
+    the superseded original, source_act_date from its replacement, the
+    same event-blend finding 1 removed, reintroduced through one sentence
+    pointing at another. No action verb and (after the back-reference
+    citation is stripped) no citation belonging to THIS event puts the
+    note in the same category as any other explanatory prose with nothing
+    to hang provenance on -- dropped, not repaired with a guessed field."""
+    text = ("Dieser Abschnitt ist in der Fassung des BG vom 1. April 1949 "
+            "in Kraft gesetzt worden. Für den Text in der ursprünglichen "
+            "Fassung siehe AS 53 185.")
+    assert an.extract(_akn_document(text)) == []
+
+
+def test_change_log_pointer_is_dropped_in_french_and_italian():
+    """Review round 2, item 3: _CHANGE_LOG_POINTER was German-only while
+    extract() takes lang='fr'/'it' (and run-stage.sh exposes CHPIPE_LANG)
+    -- a French or Italian run silently re-admitted the entire change-log
+    pointer class this rule exists to block."""
+    fr = "Les modifications peuvent être consultées au RO 1971 1465."
+    assert an.extract(_akn_document(fr), lang="fr") == []
+
+    it = "Le modifiche possono essere consultate nella RU 1971 1465."
+    assert an.extract(_akn_document(it), lang="it") == []
+
+
+def test_extract_drops_a_bracketed_publication_history():
+    """Review round 2, item 4: _BRACKETED_LIST had no test of its own --
+    all 22 tests stayed green with it deleted. A bracketed list like this
+    is the entire note, opening bracket first, citing a DIFFERENT act's
+    publication trail, not this article's."""
+    text = "[AS 1972 1502; 1977 1269; 1982 1234; 1987 1189]"
+    assert an.extract(_akn_document(text)) == []
+
+
+def test_extract_drops_a_bare_citation_with_no_prose():
+    """Review round 2, item 4: the bare-citation residue check had no test
+    of its own either -- deleting it left all 22 tests green. 'AS 53 185'
+    alone, no verb, no surrounding sentence, is the same shape as an SR
+    cross-reference with no AS prefix -- not a description of an event."""
+    assert an.extract(_akn_document("AS 53 185")) == []
+
+
+def test_extract_keeps_a_bbl_only_citation_with_no_recognised_verb():
+    """Review round 2, item 5: the docstring always said "require an AS/BBl
+    reference"; the code required as_reference alone, silently dropping a
+    BBl-only row with no recognised verb (zero occurrences on the full OR,
+    so this is a doc/code agreement fix, not something real data forced)."""
+    text = ("Ausdruck gemäss Ziff. I des BG vom 5. Okt. 1990 "
+            "(BBl 1986 II 354).")
+    rows = an.extract(_akn_document(text))
+    assert len(rows) == 1
+    assert rows[0].as_reference is None
+    assert rows[0].bbl_reference == "BBl 1986 II 354"
