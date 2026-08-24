@@ -50,7 +50,19 @@ handle:
     is diffed against unrelated content, fabricating a "modified" row for
     every article in the shift.
 
-diff() reconciles both by aligning whole CONTAINERS, not individual eIds:
+Ordinary, non-disp articles are renumbered too, by a different mechanism
+that produces the same re-pointing: Fedlex inserts new articles at the head
+of a chapter and pushes the existing ones down a letter each. SR 220
+2021-07-01 -> 2022-01-01 does exactly this -- art_964a..964f become
+art_964d..964i, five of the six byte-identical -- and there the CONTAINER
+(part_4/tit_32/chap_7) is the same on both sides while the articles inside
+it shift, which is the inverse of the disp case and needs its own
+mechanism. _shifted_article_pairs() below is it: exact content identity on
+fingerprints that are unique on both sides, corroborated by at least three
+consecutive pairs agreeing on one displacement in document order. Its
+scope is precisely the eIds the container machinery excludes.
+
+diff() reconciles the disp shifts by aligning whole CONTAINERS, not individual eIds:
 _match_containers() scores every (before-container, after-container) pair by
 how much of their content overlaps (shared internal suffixes, tie-broken by
 how many of those are fingerprint-identical) and confirms a pairing only
@@ -434,9 +446,14 @@ def _reconcile_moved_disp_articles(
     _disp_container()), never ordinary top-level articles. Matching
     content alone across top-level articles risks exactly what
     test_unrelated_articles_with_identical_new_text_are_not_merged_into_a_rename
-    guards against. Disp containers are the ones Fedlex is known,
-    structurally, to reshuffle; ordinary articles are not, so this stays
-    inside the boundary the rest of the module already draws.
+    guards against, and the corroboration rules above are expressed in disp
+    CONTAINER NUMBERS, which an ordinary article does not have. An earlier
+    version of this paragraph also claimed ordinary articles are not
+    reshuffled; that is false, and SR 220 2021-07-01 -> 2022-01-01 is the
+    counter-example (art_964a..964f renumbered to art_964d..964i). It is
+    handled by _shifted_article_pairs(), which covers exactly the eIds this
+    function excludes -- the two scopes are disjoint by construction, so
+    they never offer competing readings of one row.
 
     A MOVE THAT ALSO CARRIES A WORDING CHANGE is deliberately NOT caught
     here: its fingerprint changes, so it will not reappear verbatim on the
@@ -510,6 +527,153 @@ def _reconcile_moved_disp_articles(
     return moved_old, moved_new
 
 
+# How many byte-identical, uniquely-fingerprinted pairs must agree on ONE
+# offset before a renumbering is believed. Three is the smallest number that
+# cannot be produced by a single coincidence plus its neighbour; the real
+# case that motivated this carries five.
+_MIN_SHIFT_IDENTICAL = 3
+
+
+def _shifted_article_pairs(before: list[dict],
+                           after: list[dict]) -> list[tuple[dict, dict]]:
+    """(old_article, new_article) pairs consumed by a confirmed renumbering
+    of ORDINARY, non-disp articles.
+
+    The module docstring says Fedlex renumbers transitional containers
+    wholesale, and _match_containers() handles that. It is not only
+    transitional containers. SR 220 2021-07-01 -> 2022-01-01 inserts three
+    new articles at the head of one chapter and pushes the six that were
+    there down by three: art_964_a..964_f become art_964_d..964_i, five of
+    the six byte-identical after normalisation. Every one of those eId
+    STRINGS exists on both sides, so none reaches the added/removed pools --
+    they go straight through the same-eId path and are diffed against
+    unrelated content. Measured on the real transition: six "modified" rows
+    for provisions whose text never changed, plus three "added" at eIds that
+    are old provisions renumbered. Six of fifteen rows, 40% of that
+    transition's change log, false.
+
+    Why this and not the two mechanisms already here. _match_containers()
+    aligns whole disp containers by their NUMBER, on the premise that the
+    container number shifts while the internal suffixes stay put; here the
+    container (part_4/tit_32/chap_7) is the same on both sides and it is the
+    ARTICLES inside it that shift, so the premise is inverted and there is
+    no container number to align. _reconcile_moved_disp_articles() is the
+    right shape -- content identity plus corroboration -- but it only ever
+    sees the added/removed pools, which a re-pointed eId never enters, and
+    its corroboration rules are expressed in disp container numbers. So this
+    is the same idea (identity, corroborated) applied to the half of the eId
+    space the other two deliberately exclude, not a third opinion competing
+    with them on the same rows: the scopes are disjoint by construction.
+
+    Evidence required, all of it:
+
+      * FINGERPRINT IDENTITY, on a fingerprint that is UNIQUE on both sides.
+        A text occurring twice on either side is not evidence of anything --
+        that is the boilerplate trap _reconcile_moved_disp_articles()'s
+        docstring measured, and the cheapest way to stay out of it is to
+        refuse ambiguous fingerprints outright rather than pair them off.
+        Empty and repeal-marker bodies are excluded for the same reason.
+      * A CONSTANT OFFSET shared by at least _MIN_SHIFT_IDENTICAL such
+        pairs, whose positions are CONTIGUOUS in document order. One
+        provision reappearing verbatim elsewhere is a coincidence; three
+        consecutive ones landing at the same displacement is a shift.
+      * Nothing else claiming either side.
+
+    A confirmed run is then extended outwards, one position at a time at the
+    same offset, but ONLY while both candidates are unaccounted for --
+    neither the old text occurring anywhere in `after`, nor the new text
+    anywhere in `before`. That is what catches the sixth article of a
+    six-article shift when it was reworded on the way (old art_964_f -> new
+    art_964_i, the one pair whose fingerprints differ), and it is what stops
+    the run at the first unchanged neighbour, whose text trivially occurs on
+    both sides. An extended pair is NOT silently consumed: its content
+    really did change, so it yields a `modified` at the new eId. Without the
+    extension that provision's old text simply vanishes and its eId reads as
+    a repeal, which is a fabricated row of exactly the kind this function
+    exists to remove.
+
+    Document order is load-bearing here, and it is real: diff_stage reads
+    articles `ORDER BY ordinal`, and akn.parse_articles() emits them in
+    document order.
+    """
+    old_list = [a for a in before if _disp_container(a["e_id"]) is None]
+    new_list = [a for a in after if _disp_container(a["e_id"]) is None]
+
+    def unique_fingerprints(articles: list[dict]) -> dict[str, int]:
+        seen: dict[str, list[int]] = {}
+        for position, article in enumerate(articles):
+            text = article.get("text", "")
+            if _is_repealed(text):
+                continue
+            seen.setdefault(fingerprint(text), []).append(position)
+        return {fp: positions[0] for fp, positions in seen.items()
+                if len(positions) == 1}
+
+    old_unique = unique_fingerprints(old_list)
+    new_unique = unique_fingerprints(new_list)
+
+    # offset -> the old positions that reappear, verbatim, that far along.
+    by_offset: dict[int, list[int]] = {}
+    for fp in sorted(old_unique.keys() & new_unique.keys()):
+        old_position, new_position = old_unique[fp], new_unique[fp]
+        if old_list[old_position]["e_id"] == new_list[new_position]["e_id"]:
+            continue
+        by_offset.setdefault(new_position - old_position, []).append(old_position)
+
+    old_texts = {fingerprint(a.get("text", "")) for a in old_list}
+    new_texts = {fingerprint(a.get("text", "")) for a in new_list}
+
+    pairs: list[tuple[dict, dict]] = []
+    claimed_old: set[int] = set()
+    claimed_new: set[int] = set()
+    for offset in sorted(by_offset, key=lambda k: (-len(by_offset[k]), k)):
+        if offset == 0:
+            continue
+        positions = sorted(by_offset[offset])
+        runs: list[list[int]] = []
+        for position in positions:
+            if runs and position == runs[-1][-1] + 1:
+                runs[-1].append(position)
+            else:
+                runs.append([position])
+        for run in runs:
+            if len(run) < _MIN_SHIFT_IDENTICAL:
+                continue
+            members = list(run)
+
+            def free(position: int) -> bool:
+                return (0 <= position < len(old_list)
+                        and 0 <= position + offset < len(new_list)
+                        and position not in claimed_old
+                        and position + offset not in claimed_new)
+
+            def unaccounted(position: int) -> bool:
+                """Neither side's text occurs anywhere on the other side --
+                so nothing else can explain either of them."""
+                old_text = old_list[position].get("text", "")
+                new_text = new_list[position + offset].get("text", "")
+                if _is_repealed(old_text) or _is_repealed(new_text):
+                    return False
+                return (fingerprint(old_text) not in new_texts
+                        and fingerprint(new_text) not in old_texts)
+
+            for step, edge in ((1, run[-1]), (-1, run[0])):
+                position = edge + step
+                while free(position) and unaccounted(position):
+                    members.append(position)
+                    position += step
+
+            if any(position in claimed_old or position + offset in claimed_new
+                   for position in members):
+                continue
+            for position in sorted(members):
+                claimed_old.add(position)
+                claimed_new.add(position + offset)
+                pairs.append((old_list[position], new_list[position + offset]))
+
+    return pairs
+
+
 def diff(before: list[dict], after: list[dict]) -> list[Change]:
     """Changes that turn `before` into `after`, ordered by eId for stability."""
     old = {a["e_id"]: a for a in before}
@@ -522,6 +686,22 @@ def diff(before: list[dict], after: list[dict]) -> list[Change]:
 
     matched_old_ids: set[str] = set()
     matched_new_ids: set[str] = set()
+
+    # An ordinary-article renumbering, resolved before anything else looks at
+    # these eIds: both sides of a shifted pair are accounted for here, so the
+    # old eId's surviving string is free to be judged on its NEW content and
+    # the new eId is not diffed against whatever used to live there. See
+    # _shifted_article_pairs(). A pair whose content also changed on the way
+    # keeps its row, at the eId the provision now carries.
+    for old_article, new_article in _shifted_article_pairs(before, after):
+        matched_old_ids.add(old_article["e_id"])
+        matched_new_ids.add(new_article["e_id"])
+        change = _compare(new_article["e_id"],
+                          new_article.get("article_number"),
+                          old_article.get("text", ""),
+                          new_article.get("text", ""))
+        if change is not None:
+            changes.append(change)
     # Every "old-only" / "new-only" disp article this call produces, from
     # EVERY source (a confirmed pair's own old-only/new-only suffixes, and
     # the plain fallback below) -- collected rather than turned into

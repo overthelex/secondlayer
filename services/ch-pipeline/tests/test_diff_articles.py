@@ -503,3 +503,115 @@ def test_diff_is_deterministic_across_process_hash_seeds():
         assert result.returncode == 0, result.stderr
         outputs.add(result.stdout.strip())
     assert len(outputs) == 1, f"diff() output differs across hash seeds: {outputs}"
+
+
+# --- Final gate B6: an ordinary-article renumbering ----------------------
+#
+# The real transition, SR 220 2021-07-01 -> 2022-01-01: three new articles
+# are inserted at the head of one chapter, pushing art_964a..964f down to
+# art_964d..964i. Five of the six are byte-identical after normalisation;
+# the sixth was reworded on the way. Before this fix the shipped diff() emitted
+# six "modified" rows for provisions whose text never changed plus three
+# "added" at eIds that are old provisions renumbered -- 6 of 15 rows, 40% of
+# that transition's change log, false.
+
+_SHIFT_BEFORE = [
+    _a("art_963", "Konzernrechnung."),
+    _a("art_964_a", "Rohstoffzahlungen: Grundsatz.", number="964a"),
+    _a("art_964_b", "Rohstoffzahlungen: Form.", number="964b"),
+    _a("art_964_c", "Rohstoffzahlungen: Inhalt.", number="964c"),
+    _a("art_964_d", "Rohstoffzahlungen: Umfang.", number="964d"),
+    _a("art_964_e", "Rohstoffzahlungen: Veroeffentlichung.", number="964e"),
+    _a("art_964_f", "Der Bundesrat kann Ausnahmen vorsehen.", number="964f"),
+    _a("art_965", "Wertpapiere."),
+]
+_SHIFT_AFTER = [
+    _a("art_963", "Konzernrechnung."),
+    _a("art_964_a", "Nichtfinanzielle Belange: Grundsatz.", number="964a"),
+    _a("art_964_b", "Nichtfinanzielle Belange: Inhalt.", number="964b"),
+    _a("art_964_c", "Nichtfinanzielle Belange: Genehmigung.", number="964c"),
+    _a("art_964_d", "Rohstoffzahlungen: Grundsatz.", number="964d"),
+    _a("art_964_e", "Rohstoffzahlungen: Form.", number="964e"),
+    _a("art_964_f", "Rohstoffzahlungen: Inhalt.", number="964f"),
+    _a("art_964_g", "Rohstoffzahlungen: Umfang.", number="964g"),
+    _a("art_964_h", "Rohstoffzahlungen: Veroeffentlichung.", number="964h"),
+    _a("art_964_i", "Der Bundesrat kann im Rahmen eines international "
+                    "abgestimmten Vorgehens Ausnahmen vorsehen.", number="964i"),
+    _a("art_965", "Wertpapiere."),
+]
+
+
+def test_a_top_level_renumbering_is_not_diffed_as_content_change():
+    changes = d.diff(_SHIFT_BEFORE, _SHIFT_AFTER)
+    assert [(c.e_id, c.change_type) for c in changes] == [
+        # genuinely new text under a reused identifier
+        ("art_964_a", "added"),
+        ("art_964_b", "added"),
+        ("art_964_c", "added"),
+        # art_964_d..art_964_h: the shift itself, no rows at all
+        # the one member of the shift that was also reworded, at the eId the
+        # provision now carries
+        ("art_964_i", "modified"),
+    ]
+
+
+def test_the_shifted_provisions_produce_no_row_at_all():
+    """Stated separately from the row list above because it is the actual
+    claim: five provisions whose text did not change must not appear."""
+    moved = {"art_964_d", "art_964_e", "art_964_f", "art_964_g", "art_964_h"}
+    assert {c.e_id for c in d.diff(_SHIFT_BEFORE, _SHIFT_AFTER)} & moved == set()
+
+
+def test_two_identical_pairs_are_not_enough_to_claim_a_renumbering():
+    """Corroboration, not identity, is what licenses the claim. Two
+    consecutive verbatim reappearances at one offset stay an ordinary
+    modified/added/repealed reading."""
+    before = [_a("art_1", "aaa"), _a("art_2", "bbb"), _a("art_3", "ccc")]
+    after = [_a("art_1", "zzz"), _a("art_2", "aaa"), _a("art_3", "bbb")]
+    kinds = {(c.e_id, c.change_type) for c in d.diff(before, after)}
+    assert kinds == {("art_1", "modified"), ("art_2", "modified"),
+                     ("art_3", "modified")}
+
+
+def test_repeated_boilerplate_is_never_evidence_of_a_renumbering():
+    """The trap _reconcile_moved_disp_articles() measured, in this half of
+    the eId space: a text that occurs more than once on either side says
+    nothing about which provision continues which, so an ambiguous
+    fingerprint is refused outright rather than paired off against its first
+    occurrence.
+
+    Three DIFFERENT boilerplate sentences, each appearing twice on both
+    sides, at three consecutive positions one step apart. Pairing each
+    fingerprint's first occurrence would clear the corroboration bar with
+    three same-offset "identical" pairs and claim a renumbering that did not
+    happen. Nothing here moved that can be told apart from anything else."""
+    x = "Der Bundesrat regelt die Einzelheiten."
+    y = "Vorbehalten bleiben die kantonalen Vorschriften."
+    z = "Das Verfahren richtet sich nach der ZPO."
+    before = [_a("art_1", x), _a("art_2", y), _a("art_3", z),
+              _a("art_4", x), _a("art_5", y), _a("art_6", z),
+              _a("art_7", "Schlussbestimmung.")]
+    after = [_a("art_1", "Ganz neuer Text."), _a("art_2", x), _a("art_3", y),
+             _a("art_4", z), _a("art_5", x), _a("art_6", y), _a("art_7", z)]
+
+    assert d._shifted_article_pairs(before, after) == []
+
+
+def test_a_shift_stops_at_the_first_unchanged_neighbour():
+    """The extension past the byte-identical run is what catches a member
+    reworded on the way; it must not walk off into the rest of the act. An
+    unchanged neighbour's text occurs on both sides, so it is accounted for
+    and the run ends there -- art_965 keeps its own identity."""
+    changes = d.diff(_SHIFT_BEFORE, _SHIFT_AFTER)
+    assert "art_965" not in {c.e_id for c in changes}
+    assert "art_963" not in {c.e_id for c in changes}
+
+
+def test_a_shift_leaves_transitional_containers_to_the_disp_machinery():
+    """Scopes are disjoint by construction: disp-scoped eIds are excluded
+    from the shift detector entirely, so the two mechanisms can never offer
+    competing readings of the same row."""
+    before = [_a(f"disp_u11/art_{i}", f"t{i}") for i in range(1, 5)]
+    after = [_a(f"disp_u12/art_{i}", f"t{i}") for i in range(1, 5)]
+    assert d._shifted_article_pairs(before, after) == []
+    assert d.diff(before, after) == []
