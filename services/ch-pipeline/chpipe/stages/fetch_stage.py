@@ -20,7 +20,17 @@ from ..http import FetchError, Fetcher
 
 log = logging.getLogger(__name__)
 
-_SAFE_NAME = re.compile(r"^[A-Za-z0-9._ -]+$")
+# \w, not [A-Za-z0-9]: entscheidsuche's doc ids carry the court's own name,
+# and CH_EDOEB writes it "CH_EDÖB_999_...". An ASCII-only class refused all
+# 1,876 of that spider's documents on the first prod run -- three attempts
+# each, 5,628 ERROR lines, every one a real file the mirror was serving with
+# a 200. Unicode letters and digits are as safe on ext4 as ASCII ones; what
+# a path must never contain is a separator, a NUL or a control character,
+# and none of those is in \w. The resolve-based checks below stay the real
+# guard against '..' and friends.
+# \Z, not $: in Python `$` also matches just before a trailing newline, so
+# "abc\n" would pass and the file would be written as "abc\n.pdf".
+_SAFE_NAME = re.compile(r"^[\w.\- ]+\Z")
 
 
 @dataclass
