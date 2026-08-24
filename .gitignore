@@ -72,6 +72,7 @@ coverage/
 .nyc_output/
 test-results/
 tests/
+!services/ch-pipeline/tests/
 test_data/
 
 # Temp files
