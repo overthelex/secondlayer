@@ -11,7 +11,13 @@
 set -euo pipefail
 
 STAGE="${1:?stage required}"
-ARG="${2:-}"
+# A positional argument wins; with none given, an already-exported
+# CHPIPE_SPIDER / CHPIPE_LANG survives instead of being clobbered to "".
+# The first prod run of `index` was launched as
+#   CHPIPE_SPIDER=CH_VB ./run-stage.sh index
+# and walked all 54 spiders, because the case below exported the empty
+# positional over the env and index_stage read "" as "every spider".
+ARG="${2:-${CHPIPE_SPIDER:-${CHPIPE_LANG:-}}}"
 LOG_DIR=/data/ch-corpus/logs
 mkdir -p "$LOG_DIR"
 
