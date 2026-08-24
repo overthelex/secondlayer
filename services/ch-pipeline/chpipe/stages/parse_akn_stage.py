@@ -43,6 +43,21 @@ class ParseReport:
     acts: set[tuple[int, str]] = field(default_factory=set)
 
 
+# Named so a test can break it the same way test_provenance_stage.py breaks
+# provenance_stage._INSERT and test_diff_stage.py breaks
+# diff_stage._UPSERT_CHANGE: monkeypatch this to bad SQL and watch the
+# transaction below roll back cleanly.
+_INSERT = (
+    "INSERT INTO ch_act_article (version_id, e_id, article_number, "
+    "marginal_note, text, ordinal, parent_e_id, notes) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)")
+
+# Named for the same reason as _INSERT: it is the third statement inside the
+# transaction below, and "article_count rolls back with the rows it counts"
+# is only provable by a test that can break this one specifically.
+_SET_COUNT = "UPDATE ch_act_version SET article_count = %s WHERE version_id = %s"
+
+
 def store_articles(conn, version_id: int, articles: list[akn.Article]) -> int:
     """Replace this version's articles. Replace rather than upsert: an
     edition's XML is immutable once fetched, so the only reason to parse it
@@ -51,17 +66,31 @@ def store_articles(conn, version_id: int, articles: list[akn.Article]) -> int:
     upsert-by-e_id would leave orphaned rows behind whenever the parser
     starts recognising an eId it used to miss, or stops recognising one it
     used to produce, so this deletes the version's rows outright and
-    reinserts the full set inside the same call."""
-    conn.execute("DELETE FROM ch_act_article WHERE version_id = %s", (version_id,))
-    with conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO ch_act_article (version_id, e_id, article_number, "
-            "marginal_note, text, ordinal, parent_e_id, notes) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            [(version_id, a.e_id, a.article_number, a.marginal_note, a.text,
-              a.ordinal, a.parent_e_id, list(a.notes)) for a in articles])
-    conn.execute("UPDATE ch_act_version SET article_count = %s WHERE version_id = %s",
-                 (len(articles), version_id))
+    reinserts the full set inside the same call.
+
+    db.connect() opens the connection with autocommit=True, so an unguarded
+    DELETE would commit on its own: a hard kill between the delete and the
+    inserts would leave the edition with no articles at all, committed, and
+    article_count still claiming the old number -- a state the code could
+    not otherwise reach, and one that reads as "Fedlex publishes an empty
+    act" rather than as damage. This exact defect was found and closed in
+    diff_stage at 323c0d83 (see its `with conn.transaction():` block and
+    comment) and again in provenance_stage.store(); wrapping the delete, the
+    inserts AND the article_count write in one explicit transaction on the
+    autocommit connection gives store_articles() the same all-or-nothing
+    replacement. article_count is inside the block deliberately: it is a
+    statement ABOUT the rows this call writes, so a count that survived a
+    rolled-back insert would be a lie of exactly the kind the rest of this
+    module's counters exist to prevent.
+    """
+    with conn.transaction():
+        conn.execute("DELETE FROM ch_act_article WHERE version_id = %s", (version_id,))
+        with conn.cursor() as cur:
+            cur.executemany(
+                _INSERT,
+                [(version_id, a.e_id, a.article_number, a.marginal_note, a.text,
+                  a.ordinal, a.parent_e_id, list(a.notes)) for a in articles])
+        conn.execute(_SET_COUNT, (len(articles), version_id))
     return len(articles)
 
 

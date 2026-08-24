@@ -617,3 +617,62 @@ def test_parse_uses_one_document_parse_for_both_products(conn, tmp_path,
     assert len(calls) == 1
     assert report.parsed == 1
     assert report.articles > 0
+
+
+def _article_snapshot(conn, version_id):
+    """Every column that distinguishes one stored article from another, in a
+    stable order -- the shape test_provenance_stage.py's _snapshot() uses,
+    and for the same reason: a set of e_ids cannot tell a replaced row from
+    a lost one."""
+    return conn.execute(
+        "SELECT e_id, article_number, marginal_note, text, ordinal, "
+        "parent_e_id, notes FROM ch_act_article WHERE version_id = %s "
+        "ORDER BY ordinal, e_id", (version_id,)).fetchall()
+
+
+def test_a_crash_between_the_delete_and_the_insert_keeps_the_old_rows(
+        conn, monkeypatch):
+    """store_articles()' connection is autocommit (db.connect() sets it), so
+    an unguarded delete would commit on its own: a kill before the inserts
+    would leave the edition with no articles and article_count still naming
+    the old number -- committed, and indistinguishable from an act Fedlex
+    publishes empty. This is the same defect diff_stage's _CLEAR_CHANGES /
+    _UPSERT_CHANGE pair was found and closed for at 323c0d83, and that
+    provenance_stage.store() was given the identical guard for; this test
+    proves store_articles() has it too, using the same "break the write with
+    a bad statement" technique both of those tests use."""
+    vid = _version(conn)
+    articles = akn.parse_articles(FIXTURE.read_bytes())
+    parse_akn_stage.store_articles(conn, vid, articles)
+    before = _article_snapshot(conn, vid)
+    assert len(before) == len(articles)
+
+    monkeypatch.setattr(parse_akn_stage, "_INSERT", "SELECT 1/0")
+    with pytest.raises(Exception):
+        parse_akn_stage.store_articles(conn, vid, articles)
+
+    assert _article_snapshot(conn, vid) == before, \
+        "the delete must have rolled back with the failed insert"
+
+
+def test_a_crash_after_the_insert_rolls_the_article_count_back_too(
+        conn, monkeypatch):
+    """article_count is a statement ABOUT the rows store_articles() writes,
+    so it lives inside the same transaction: a replacement that got its rows
+    in and then died before the count would leave the edition claiming an
+    article set the table no longer holds. Breaking _SET_COUNT is the only
+    way to reach the window between the two."""
+    vid = _version(conn)
+    articles = akn.parse_articles(FIXTURE.read_bytes())
+    parse_akn_stage.store_articles(conn, vid, articles)
+    before = _article_snapshot(conn, vid)
+
+    monkeypatch.setattr(parse_akn_stage, "_SET_COUNT", "SELECT 1/0")
+    with pytest.raises(Exception):
+        parse_akn_stage.store_articles(conn, vid, articles[:1])
+
+    assert _article_snapshot(conn, vid) == before, \
+        "the rows must roll back with the count that describes them"
+    assert conn.execute(
+        "SELECT article_count FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()[0] == len(articles)
