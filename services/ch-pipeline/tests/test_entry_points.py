@@ -418,3 +418,74 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
                        "projected=0 failed=legislation"]
+
+
+# --- run-stage.sh must not clobber an env-only spider ---
+# The first prod run of `index` was launched as
+# `CHPIPE_SPIDER=CH_VB ./run-stage.sh index` and walked all 54 spiders: the
+# wrapper exported its EMPTY positional argument over the env, and
+# index_stage reads "" as "every spider". Exercised end to end with a stub
+# python3 on PATH that prints the env the wrapper hands it.
+
+import os
+import stat
+import subprocess
+
+
+def _run_wrapper(tmp_path, monkeypatch, args, env_extra):
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    stub = stub_bin / "python3"
+    stub.write_text("#!/bin/sh\nprintf 'SPIDER=%s LANG=%s\\n' "
+                    "\"${CHPIPE_SPIDER-<unset>}\" \"${CHPIPE_LANG-<unset>}\"\n")
+    stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+    home = tmp_path / "home"
+    (home / "SecondLayer" / "deployment").mkdir(parents=True)
+    (home / "SecondLayer" / "deployment" / ".env.prod").write_text("POSTGRES_PASSWORD=x\n")
+    log_dir = tmp_path / "logs"
+    env = {**os.environ, **env_extra,
+           "PATH": f"{stub_bin}:{os.environ['PATH']}", "HOME": str(home)}
+    body = _RUN_STAGE.read_text().replace("LOG_DIR=/data/ch-corpus/logs",
+                                          f"LOG_DIR={log_dir}")
+    script = tmp_path / "run-stage.sh"
+    script.write_text(body)
+    subprocess.run(["bash", str(script), *args], env=env, check=True,
+                   capture_output=True)
+    logs = list(log_dir.glob("*.log"))
+    assert len(logs) == 1, logs
+    return logs[0].name, logs[0].read_text().strip().splitlines()[-1]
+
+
+def test_an_env_only_spider_survives_the_wrapper(tmp_path, monkeypatch):
+    name, line = _run_wrapper(tmp_path, monkeypatch, ["index"],
+                              {"CHPIPE_SPIDER": "CH_VB"})
+    assert line == "SPIDER=CH_VB LANG=<unset>"
+    assert name == "index-CH_VB.log", "the log is named for the effective spider too"
+
+
+def test_a_positional_spider_still_wins_over_the_env(tmp_path, monkeypatch):
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["index", "ZH_Obergericht"],
+                           {"CHPIPE_SPIDER": "CH_VB"})
+    assert line == "SPIDER=ZH_Obergericht LANG=<unset>"
+
+
+def test_no_spider_anywhere_still_means_all_spiders(tmp_path, monkeypatch):
+    env = {k: v for k, v in os.environ.items() if k != "CHPIPE_SPIDER"}
+    monkeypatch.setattr(os, "environ", env)
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["index"], {})
+    assert line == "SPIDER= LANG=<unset>"
+
+
+def test_a_leftover_lang_does_not_become_a_spider(tmp_path, monkeypatch):
+    """The fallback is per family. `CHPIPE_LANG=fr ./run-stage.sh diff`
+    followed by `./run-stage.sh index` in the same shell must still mean
+    every spider -- not a single nonsense spider called "fr"."""
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["index"],
+                           {"CHPIPE_LANG": "fr"})
+    assert line.startswith("SPIDER= "), line
+
+
+def test_a_leftover_spider_does_not_become_a_language(tmp_path, monkeypatch):
+    _, line = _run_wrapper(tmp_path, monkeypatch, ["diff"],
+                           {"CHPIPE_SPIDER": "CH_VB"})
+    assert line == "SPIDER=CH_VB LANG=", "diff exports LANG=\"\" (its own default), never the spider"

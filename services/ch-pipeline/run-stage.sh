@@ -11,7 +11,17 @@
 set -euo pipefail
 
 STAGE="${1:?stage required}"
-ARG="${2:-}"
+# A positional argument wins; with none given, the family's OWN env var
+# survives instead of being clobbered to "". The first prod run of `index`
+# was launched as
+#   CHPIPE_SPIDER=CH_VB ./run-stage.sh index
+# and walked all 54 spiders, because the case below exported the empty
+# positional over the env and index_stage read "" as "every spider".
+# Resolved per family, deliberately: a leftover CHPIPE_LANG=fr must not
+# become CHPIPE_SPIDER=fr on the next `index` (one nonsense spider is worse
+# than all of them), and vice versa.
+POS="${2:-}"
+ARG="$POS"
 LOG_DIR=/data/ch-corpus/logs
 mkdir -p "$LOG_DIR"
 
@@ -27,13 +37,15 @@ MODULE="chpipe.stages.${STAGE//-/_}_stage"
 
 case "$STAGE" in
   index|fetch|extract|ocr|load)
+    ARG="${POS:-${CHPIPE_SPIDER:-}}"
     export CHPIPE_SPIDER="$ARG"
     ;;
   diff|provenance)
+    ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
     ;;
   acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act)
-    if [ -n "$ARG" ]; then
+    if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
     fi
