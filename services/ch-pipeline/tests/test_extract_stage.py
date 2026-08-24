@@ -327,8 +327,9 @@ def test_a_bad_html_body_with_a_pdf_behind_it_is_requeued_for_the_pdf(conn, tmp_
         "SELECT stage, html_url, text_source, last_error, attempts, failed_stage "
         "FROM ch_court_decisions WHERE doc_id='card'").fetchone()
     assert row["stage"] == "indexed", "back to the front of the queue"
-    assert row["html_url"] is None, "the HTML is a card: never fetch it again"
-    assert row["text_source"] is None
+    assert row["html_url"] == "https://x/card.html", \
+        "kept: a re-index would restore it anyway; the preference lives elsewhere"
+    assert row["text_source"] == "pdf", "the body this document wants"
     assert row["last_error"] and "re-queued for the PDF" in row["last_error"]
     assert row["attempts"] == 0, "nothing was retried; the body was wrong"
     assert row["failed_stage"] is None
@@ -352,8 +353,17 @@ def test_a_bad_html_body_without_a_pdf_is_still_terminal(conn, tmp_path):
     assert report.failed == 1
 
 
-def test_requeue_for_pdf_refuses_a_row_with_no_pdf(conn):
+def test_requeue_for_pdf_refuses_a_row_with_no_pdf_and_leaves_it_untouched(conn):
+    """The refusal rests on the UPDATE's WHERE matching zero rows; a future
+    change that wrote fields before checking rowcount would still raise --
+    so the row itself is asserted, not just the exception."""
     from chpipe import db
     _seed_fetched_html_card(conn, "nopdf", "S", None)
     with pytest.raises(db.QueueWriteMissed):
         db.requeue_for_pdf(conn, "nopdf", "x")
+    row = conn.execute("SELECT stage, html_url, text_source, last_error "
+                       "FROM ch_court_decisions WHERE doc_id='nopdf'").fetchone()
+    assert row["stage"] == "fetched"
+    assert row["html_url"] == "https://x/nopdf.html"
+    assert row["text_source"] == "html"
+    assert row["last_error"] is None

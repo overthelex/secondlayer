@@ -136,9 +136,9 @@ def run(settings: Settings, limit: int | None = None,
                             # Bad HTML, but the listing also offered a PDF:
                             # GE_TAPI's and AG_Gerichte's HTML pages are
                             # cards around a PDF that holds the decision.
-                            # Back to `indexed` without an html_url, so the
-                            # next fetch takes the PDF and OCR stands behind
-                            # it. 506 documents were retired this way on the
+                            # Back to `indexed` with text_source = 'pdf', so
+                            # the next fetch takes the PDF (and a re-index
+                            # cannot undo it) and OCR stands behind it. 506 documents were retired this way on the
                             # first prod run before this branch existed.
                             db.requeue_for_pdf(
                                 conn, row["doc_id"],

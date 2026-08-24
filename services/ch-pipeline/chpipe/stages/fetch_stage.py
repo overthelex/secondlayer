@@ -79,7 +79,16 @@ def raw_path(raw_dir: pathlib.Path, spider: str, doc_id: str,
 
 
 def choose_body(row) -> tuple[str, str] | None:
-    """('html'|'pdf', url) for the body we want, or None if there is none."""
+    """('html'|'pdf', url) for the body we want, or None if there is none.
+
+    HTML first -- except for a row that extract sent back with
+    text_source = 'pdf': its HTML is a card around the PDF (GE_TAPI,
+    AG_Gerichte's Weblaw shells), see db.requeue_for_pdf(). That preference
+    lives in text_source rather than in a cleared html_url because a
+    re-index restores html_url from the listing and would otherwise fetch
+    the card again every night."""
+    if row.get("text_source") == "pdf" and row.get("pdf_url"):
+        return "pdf", row["pdf_url"]
     if row.get("html_url"):
         return "html", row["html_url"]
     if row.get("pdf_url"):

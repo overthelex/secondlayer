@@ -496,3 +496,20 @@ def test_a_populated_listing_is_not_treated_as_empty(conn, monkeypatch):
     assert report.failed_spiders == []
     assert report.failed_per_spider == {}
     assert report.inserted == 1
+
+
+def test_a_reindex_keeps_the_pdf_preference_extract_recorded(conn):
+    """db.requeue_for_pdf() records "this document's HTML is a card" as
+    text_source = 'pdf'. It cannot live in a cleared html_url: this upsert
+    restores html_url from the listing (COALESCE(EXCLUDED.html_url, ...)),
+    and the nightly delta runs index before fetch -- the row would fetch the
+    card again every night. text_source is not in the SET list."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})
+    conn.execute("UPDATE ch_court_decisions SET text_source = 'pdf', stage = 'indexed'")
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})
+    row = conn.execute(
+        "SELECT text_source, html_url, pdf_url, stage FROM ch_court_decisions").fetchone()
+    assert row[0] == "pdf", "the preference must survive a re-index"
+    assert row[1] and row[2], "both URLs restored from the listing, as before"
+    assert row[3] == "indexed"

@@ -217,17 +217,22 @@ def requeue_for_pdf(conn, doc_id: str, error: str) -> None:
     Weblaw "AGVE - Archiv" shells; the decision IS the PDF. choose_body()
     prefers HTML, so 506 documents with a pdf_url in the table were retired
     as "html quality 0.0000 ... no scan behind an HTML page". The HTML being
-    a card is a fact about this source, recorded by clearing html_url; the
-    diagnosis stays in last_error; attempts are left alone because nothing
-    was retried, the body was wrong. Refuses (rowcount 0 -> QueueWriteMissed)
-    when there is no pdf_url to fall back to -- that case is mark_failed()'s.
+    a card is recorded as text_source = 'pdf' -- the body this document
+    WANTS -- and fetch_stage.choose_body() honours it. Not by clearing
+    html_url: index_stage's upsert restores html_url from the listing on
+    every re-index (COALESCE(EXCLUDED.html_url, ...)), and the nightly delta
+    runs index before fetch, so a cleared URL would come back and the row
+    would fetch the card again forever. text_source is not in that SET list
+    and survives. The diagnosis stays in last_error; attempts are left alone
+    because nothing was retried, the body was wrong. Refuses (rowcount 0 ->
+    QueueWriteMissed) when there is no pdf_url to fall back to -- that case
+    is mark_failed()'s, and the row is left exactly as it was.
     """
     cursor = conn.execute(
         """
         UPDATE ch_court_decisions
            SET stage = 'indexed',
-               html_url = NULL,
-               text_source = NULL,
+               text_source = 'pdf',
                last_error = %s,
                failed_stage = NULL,
                stage_updated_at = now(),
