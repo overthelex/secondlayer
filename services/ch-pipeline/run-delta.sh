@@ -55,6 +55,18 @@ fi
   # not enough on its own: this job has no MAILTO configured, so the log is
   # the only place a failure is visible.
   #
+  # This trap DOES reach the log, and the reason is `set -euo pipefail` on
+  # line 26, not the trap's position: a failing command inside the group
+  # makes the shell exit from INSIDE it, while `>> "$LOG"` is still in
+  # effect. (An EXIT trap in a script WITHOUT `set -e` would fire only after
+  # the group completed and its redirection was torn down, and would land on
+  # cron's discarded stdout -- which is what the OK path below has to work
+  # around, and why the two paths are written differently.) Measured on bash
+  # 3.2.57 and 5.3.0 over a failing payload, a missing POSTGRES_PASSWORD
+  # line, a missing cd target and a signal-shaped exit 143; pinned by
+  # tests/test_run_delta_sh.py, which runs this script and reads the log,
+  # because the invariant rests on a `set -e` twelve lines away.
+  #
   # `$?` is captured into `code` as the FIRST thing the trap does, before
   # anything else runs. Round 1 shipped `echo "... (exit $?)"` directly:
   # $(date -Is) is itself a command substitution, and bash evaluates it

@@ -418,10 +418,39 @@ def main() -> DeltaReport:
         "renice again, not one call standing in for all of them")
     throttle.renice(throttle.NICE_IO)
     settings = Settings.from_env()
-    decisions = run_decisions(settings)
-    legislation = run_legislation(settings)
-    log.info("delta: spiders=%s new_documents=%d new_versions=%d",
-             decisions.spiders, decisions.new_documents, legislation.new_versions)
+
+    # The two corpora are independent -- entscheidsuche and Fedlex share no
+    # table, no queue and no failure mode -- but a bare `run_decisions();
+    # run_legislation()` couples them: one SPARQL timeout on the decisions
+    # side and the legislation half does not run AT ALL that night, and
+    # again every night after, until someone reads the traceback. Each half
+    # gets its own guard so a bad night on one corpus costs that corpus
+    # only.
+    #
+    # The failures are re-raised once both halves have had their turn, NOT
+    # swallowed: run-delta.sh's marker line reports the exit status, and a
+    # night where half the job died must not print OK. Raising the FIRST
+    # failure (the others are logged in full above it) keeps the traceback
+    # an operator sees pointing at a real cause rather than at a synthetic
+    # wrapper exception.
+    reports: dict[str, DeltaReport] = {}
+    failures: list[tuple[str, BaseException]] = []
+    for name, half in (("decisions", run_decisions),
+                       ("legislation", run_legislation)):
+        try:
+            reports[name] = half(settings)
+        except Exception as exc:               # noqa: BLE001 -- see above
+            log.exception("delta: the %s half failed", name)
+            failures.append((name, exc))
+            reports[name] = DeltaReport()
+
+    decisions, legislation = reports["decisions"], reports["legislation"]
+    log.info("delta: spiders=%s new_documents=%d new_versions=%d failed=%s",
+             decisions.spiders, decisions.new_documents,
+             legislation.new_versions,
+             ",".join(name for name, _ in failures) or "none")
+    if failures:
+        raise failures[0][1]
     return DeltaReport(spiders=decisions.spiders,
                        new_documents=decisions.new_documents,
                        new_versions=legislation.new_versions)

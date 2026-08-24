@@ -366,3 +366,48 @@ def test_delta_main_refuses_to_renice_if_nice_io_and_nice_cpu_diverge(
     with pytest.raises(AssertionError):
         delta_module.main()
     assert no_renice == [], "must fail before ever calling renice, not after"
+
+
+def test_a_failing_decisions_half_does_not_skip_the_legislation_half(
+        monkeypatch, no_renice):
+    """The two corpora share no table and no failure mode, but a bare
+    `run_decisions(); run_legislation()` coupled them: one SPARQL timeout on
+    the decisions side and Fedlex is not walked at all that night, or any
+    night after, until someone reads the traceback."""
+    called = []
+
+    def boom(settings, **kw):
+        called.append("decisions")
+        raise RuntimeError("entscheidsuche is down")
+
+    def legislation(settings):
+        called.append("legislation")
+        return delta_module.DeltaReport(new_versions=4)
+
+    monkeypatch.setattr(delta_module, "run_decisions", boom)
+    monkeypatch.setattr(delta_module, "run_legislation", legislation)
+
+    # Still raises: run-delta.sh's marker reports the exit status, and a
+    # night where half the job died must not print OK.
+    with pytest.raises(RuntimeError, match="entscheidsuche is down"):
+        delta_module.main()
+    assert called == ["decisions", "legislation"]
+
+
+def test_a_failing_legislation_half_still_reports_the_decisions_half(
+        monkeypatch, no_renice, caplog):
+    monkeypatch.setattr(
+        delta_module, "run_decisions",
+        lambda settings, **kw: delta_module.DeltaReport(
+            spiders=["CH_BGer"], new_documents=9))
+    monkeypatch.setattr(
+        delta_module, "run_legislation",
+        lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+
+    with caplog.at_level("INFO"):
+        with pytest.raises(RuntimeError, match="fedlex 503"):
+            delta_module.main()
+    summary = [r.getMessage() for r in caplog.records
+               if r.getMessage().startswith("delta: spiders=")]
+    assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
+                       "new_versions=0 failed=legislation"]
