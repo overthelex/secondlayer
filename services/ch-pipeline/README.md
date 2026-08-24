@@ -34,6 +34,17 @@ taking on new work and sleeps 60s at a time, while work already in flight
 finishes rather than being abandoned half-done. Set the ceiling to `0` to
 disable it — an explicit opt-out for a maintenance window, not the default.
 
+`0` is the *only* way to ask for that. A non-finite value is refused at
+start-up (`Settings.from_env`): `float()` parses `nan` happily and every
+comparison against `nan` is False, so `CHPIPE_LOAD_CEILING=nan` disabled the
+guard entirely while still printing in the log as though it were in effect.
+
+`CHPIPE_HTTP_CONCURRENCY` has **no** such opt-out, and `0` is refused for the
+opposite reason: `asyncio.Semaphore(0)` never grants, so a stage set to 0
+would await forever with no error, no timeout and no log line. The
+ceiling's "0 disables the guard" convention is exactly what makes that a
+mistake worth refusing loudly.
+
 `extract` is the one that most needs it: measured at roughly 17 CPU-hours for
 800,000 documents, it occupies about 4 of 8 cores at `cpu_workers=3` and runs
 for hours. `nice` alone only decides who wins a contended core; it does not

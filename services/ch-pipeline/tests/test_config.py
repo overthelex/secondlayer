@@ -54,3 +54,26 @@ def test_retry_backoff_can_be_disabled(monkeypatch):
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
     monkeypatch.setenv("CHPIPE_RETRY_BACKOFF_MINUTES", "")
     assert Settings.from_env().retry_backoff_minutes == ()
+
+
+# --- CHPIPE_LOAD_CEILING=nan disabled the guard silently ---
+#
+# float() parses "nan" happily, and every comparison against nan is False --
+# so throttle.should_pause() returned False for any load whatsoever while the
+# setting still printed in the log as though it were in effect.
+
+@pytest.mark.parametrize("bad", ["nan", "NaN", "inf", "-inf", "Infinity"])
+def test_a_non_finite_load_ceiling_is_refused(monkeypatch, bad):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_LOAD_CEILING", bad)
+    with pytest.raises(ValueError, match="finite"):
+        Settings.from_env()
+
+
+def test_zero_is_still_the_deliberate_way_to_disable_the_guard(monkeypatch):
+    """throttle.should_pause()'s contract is "0 or less disables the guard",
+    and that opt-out is real -- it is the honest way to ask, unlike a value
+    that happens to defeat the comparison."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_LOAD_CEILING", "0")
+    assert Settings.from_env().load_ceiling == 0.0

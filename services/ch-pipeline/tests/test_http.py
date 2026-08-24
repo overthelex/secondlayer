@@ -68,3 +68,31 @@ async def test_concurrency_is_capped():
     async with Fetcher(concurrency=3, transport=httpx.MockTransport(handler)) as f:
         await asyncio.gather(*(f.text(f"https://x/{i}") for i in range(20)))
     assert live["peak"] <= 3
+
+
+# --- CHPIPE_HTTP_CONCURRENCY=0 hung every request forever ---
+#
+# asyncio.Semaphore(0) is a valid semaphore that never grants: no error, no
+# log line, no timeout, just a stage that looks alive and fetches nothing.
+# And throttle.py's ceiling documents "0 or less disables the guard", so this
+# codebase's own convention trains an operator to expect 0 = off.
+
+@pytest.mark.parametrize("bad", [0, -1])
+def test_a_concurrency_below_one_is_refused(bad):
+    with pytest.raises(ValueError, match="at least 1"):
+        Fetcher(concurrency=bad)
+
+
+@pytest.mark.asyncio
+async def test_a_concurrency_of_one_still_works():
+    async with Fetcher(concurrency=1, transport=_transport(
+            lambda r: httpx.Response(200, text="hello"))) as f:
+        assert await f.text("https://x/") == "hello"
+
+
+def test_the_refusal_says_zero_is_not_an_opt_out():
+    """The message has to correct the expectation, not just report a bound:
+    the operator arrived here because another setting in this codebase does
+    treat 0 as off."""
+    with pytest.raises(ValueError, match="no limit"):
+        Fetcher(concurrency=0)

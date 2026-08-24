@@ -22,6 +22,21 @@ class FetchError(RuntimeError):
 class Fetcher:
     def __init__(self, concurrency: int, retries: int = 3, timeout: float = 60.0,
                  backoff: float = 1.0, transport: httpx.BaseTransport | None = None):
+        # asyncio.Semaphore(0) is a valid semaphore that never grants: every
+        # request would await forever, with no error, no log line and no
+        # timeout -- a stage that looks alive and fetches nothing. And this
+        # codebase actively trains an operator to try it: throttle.py's
+        # ceiling documents "0 or less disables the guard", so
+        # CHPIPE_HTTP_CONCURRENCY=0 reads as "no cap" and does the opposite
+        # of unlimited. Refuse it here, at the one place every caller
+        # (Settings.from_env's http_concurrency, delta's Fetcher(concurrency=1),
+        # the tests) has to pass through, rather than in from_env alone.
+        if concurrency < 1:
+            raise ValueError(
+                f"Fetcher concurrency must be at least 1, got {concurrency}. "
+                "0 does not mean 'no limit' here -- it builds a semaphore that "
+                "never grants, so every request hangs forever. Unlike "
+                "CHPIPE_LOAD_CEILING, this setting has no opt-out value.")
         self._sem = asyncio.Semaphore(concurrency)
         self._retries = retries
         self._backoff = backoff

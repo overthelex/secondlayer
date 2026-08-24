@@ -21,9 +21,34 @@ Anything that moves work between the two columns moves it again.
 """
 from __future__ import annotations
 
+import math
 import os
 import pathlib
 from dataclasses import dataclass
+
+
+def _load_ceiling(raw: str | None) -> float:
+    """The one-minute load average at or above which a stage stops claiming.
+
+    float() happily parses "nan", "inf" and "-inf", and nan is the dangerous
+    one: every comparison against it is False, so throttle.should_pause()
+    returns False for any load whatsoever and the guard is off -- silently,
+    with the setting still printed in the log as though it were in effect.
+    A stage set to nan then runs at full tilt on a box already at load 30.
+
+    Rejected here rather than in throttle.py: throttle's contract ("0 or
+    less disables the guard") is a real opt-out an operator may want, and
+    the honest way to ask for it is 0, not a value that happens to defeat
+    the comparison. Non-finite is a typo or a bad template, and a nightly
+    job should refuse to start on one rather than quietly drop its guard.
+    """
+    value = float(raw) if raw is not None else 6.0
+    if not math.isfinite(value):
+        raise ValueError(
+            f"CHPIPE_LOAD_CEILING must be a finite number, got {raw!r}. "
+            "nan disables the load guard silently (every comparison against "
+            "it is False); set 0 to disable it deliberately.")
+    return value
 
 
 def _backoff(raw: str | None) -> tuple[int, ...]:
@@ -67,7 +92,7 @@ class Settings:
             http_concurrency=int(os.environ.get("CHPIPE_HTTP_CONCURRENCY", "12")),
             cpu_workers=int(os.environ.get("CHPIPE_CPU_WORKERS", "3")),
             ocr_workers=int(os.environ.get("CHPIPE_OCR_WORKERS", "2")),
-            load_ceiling=float(os.environ.get("CHPIPE_LOAD_CEILING", "6.0")),
+            load_ceiling=_load_ceiling(os.environ.get("CHPIPE_LOAD_CEILING")),
             max_attempts=int(os.environ.get("CHPIPE_MAX_ATTEMPTS", "3")),
             retry_backoff_minutes=_backoff(
                 os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
