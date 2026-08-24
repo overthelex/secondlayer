@@ -368,3 +368,81 @@ def test_italian_elided_dell_before_a_source_act_date():
     assert parsed["source_act_date"] == datetime.date(1999, 10, 8)
     assert parsed["effective_date"] == datetime.date(2004, 7, 1)
 
+
+
+# --- Final gate, B1: inflected French/Italian participles ---------------
+
+# Real notes from the cached French and Italian OR, on art. 226a-226d --
+# articles the 1962 Act INSERTED and the 2001 consumer-credit Act REPEALED.
+# Both are plural because the note describes four articles at once, so both
+# defeated the masculine-singular-only "Introduit"/"Abrogato" patterns.
+FR_PLURAL_TWO_EVENTS = (
+    "Introduits par le ch. I de la LF du 23 mars 1962 (RO 1962 1082; "
+    "FF 1960 I 537). Abrogés par l’annexe 2 ch. II 1 de la LF du 23 mars "
+    "2001 sur le crédit à la consommation, avec effet au 1er janv. 2003 "
+    "(RO 2002 3846; FF 1999 III 2879).")
+IT_PLURAL_TWO_EVENTS = (
+    "Introdotti dalla cifra I della LF del 23 mar. 1962 (RU 1962 1085; "
+    "FF 1962 593). Abrogati all’all. 2 cifra II n. 2 della LF del 23 mar. "
+    "2001 sul credito al consumo, con effetto dal 1° gen. 2003 "
+    "(RU 2002 3846; FF 1999 III 2697).")
+
+
+@pytest.mark.parametrize("lang,text,inserted_ref,repealed_ref", [
+    ("fr", FR_PLURAL_TWO_EVENTS, "RO 1962 1082", "RO 2002 3846"),
+    ("it", IT_PLURAL_TWO_EVENTS, "RU 1962 1085", "RU 2002 3846"),
+])
+def test_a_plural_participle_still_splits_into_two_events(
+        lang, text, inserted_ref, repealed_ref):
+    """B1: with the plural verb invisible, _split_events() saw ONE event and
+    parse_note() welded the FIRST event's citation to the SECOND event's
+    date -- 'arts. 226a-226d repealed by RO 1962 1082, effective 2003',
+    naming the act that introduced them as the act that repealed them. That
+    is worse than no row: every field is populated, so the accuracy table
+    reads healthy and only cross-language comparison exposes it.
+
+    Asserted as the pairing, not just the row count: a fix that split the
+    note but crossed the citations over would still pass a length check.
+    """
+    rows = an.extract(_akn_document(text, e_id="art_226_a_226_d"), lang=lang)
+    assert [(r.action, r.as_reference, r.effective_date) for r in rows] == [
+        ("inserted", inserted_ref, None),
+        ("repealed", repealed_ref, datetime.date(2003, 1, 1)),
+    ]
+
+
+@pytest.mark.parametrize("lang,text,expected", [
+    # Every inflected form that occurs on the full fr/it OR, enumerated
+    # from the documents rather than from a grammar table.
+    ("fr", "Introduit par le ch. I de la LF du 5 oct. 1990.", "inserted"),
+    ("fr", "Introduits par le ch. I de la LF du 5 oct. 1990.", "inserted"),
+    ("fr", "Introduite par le ch. I de la LF du 5 oct. 1990.", "inserted"),
+    ("fr", "Introduites par le ch. I de la LF du 5 oct. 1990.", "inserted"),
+    ("fr", "Abrogé par le ch. I de la LF du 5 oct. 1990.", "repealed"),
+    ("fr", "Abrogés par le ch. I de la LF du 5 oct. 1990.", "repealed"),
+    ("fr", "Abrogée par le ch. I de la LF du 5 oct. 1990.", "repealed"),
+    ("fr", "Abrogées par le ch. I de la LF du 5 oct. 1990.", "repealed"),
+    ("it", "Introdotto dalla cifra I della LF del 5 ott. 1990.", "inserted"),
+    ("it", "Introdotti dalla cifra I della LF del 5 ott. 1990.", "inserted"),
+    ("it", "Introdotta dalla cifra I della LF del 5 ott. 1990.", "inserted"),
+    ("it", "Introdotte dalla cifra I della LF del 5 ott. 1990.", "inserted"),
+    ("it", "Abrogato dalla cifra I della LF del 5 ott. 1990.", "repealed"),
+    ("it", "Abrogati dalla cifra I della LF del 5 ott. 1990.", "repealed"),
+    ("it", "Abrogata dalla cifra I della LF del 5 ott. 1990.", "repealed"),
+    ("it", "Abrogate dalla cifra I della LF del 5 ott. 1990.", "repealed"),
+])
+def test_every_inflected_form_found_in_the_corpus_is_classified(
+        lang, text, expected):
+    assert an.parse_note(text, lang=lang)["action"] == expected
+
+
+@pytest.mark.parametrize("lang,text", [
+    # "Abrogé" carried no trailing boundary, so it matched any word with
+    # that prefix. These are the neighbouring words that must NOT be read
+    # as a repeal of this article: "Abrogation" is a heading word, and the
+    # Italian nominalisation is not a participle at all.
+    ("fr", "Abrogation de l’art. 5 de la LF du 5 oct. 1990."),
+    ("it", "Abrogazione dell’art. 5 della LF del 5 ott. 1990."),
+])
+def test_a_nominalisation_is_not_read_as_a_repeal(lang, text):
+    assert an.parse_note(text, lang=lang)["action"] is None

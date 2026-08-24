@@ -88,14 +88,34 @@ _ACTIONS = {
         ("repealed", re.compile(r"\bAufgehoben\b", re.IGNORECASE)),
         ("amended", re.compile(r"\bFassung gemäss\b", re.IGNORECASE)),
     ),
+    # French and Italian participles AGREE with the provision they describe,
+    # so a note on "art. 226a a 226d" writes "Introduits"/"Introdotti", and one
+    # on a feminine noun ("disposition", "lettera") writes "Introduite"/
+    # "Introdotta". German does not inflect here, which is why the German
+    # column never showed this. A masculine-singular-only pattern is not a
+    # missing row, it is a WRONG row: with one of a note's two verbs invisible,
+    # _split_events() sees one event and parse_note() welds the first event's
+    # citation to the second event's date -- art_226_a_226_d then asserts that
+    # RO 1962 1082, the act that INTRODUCED those articles, repealed them.
+    # Enumerated on the full fr/it OR rather than derived from grammar (a
+    # capital-letter prefix count of every note word against the pattern):
+    # fr Introduits 6, Introduite 9, introduite 7, Introduites 7 -- all missed;
+    # it Abrogati 21, abrogati 1, Introdotti 6, Introdotta 11, Introdotte 7 --
+    # all missed. Nothing outside the four -o/-a/-i/-e endings occurs.
+    #
+    # "Abrogé" carried no trailing \b, which is the only reason the French
+    # repeal half looked healthy ("Abrogés" matched by accident). It is
+    # written out in full below so the four accepted forms are stated rather
+    # than obtained as a side effect of an absent anchor -- an open-ended
+    # prefix would also swallow any future "Abrogé..." word.
     "fr": (
-        ("inserted", re.compile(r"\bIntroduit\b", re.IGNORECASE)),
-        ("repealed", re.compile(r"\bAbrogé", re.IGNORECASE)),
+        ("inserted", re.compile(r"\bIntroduite?s?\b", re.IGNORECASE)),
+        ("repealed", re.compile(r"\bAbrogée?s?\b", re.IGNORECASE)),
         ("amended", re.compile(r"\bNouvelle teneur selon\b", re.IGNORECASE)),
     ),
     "it": (
-        ("inserted", re.compile(r"\bIntrodotto\b", re.IGNORECASE)),
-        ("repealed", re.compile(r"\bAbrogato\b", re.IGNORECASE)),
+        ("inserted", re.compile(r"\bIntrodott[oaie]\b", re.IGNORECASE)),
+        ("repealed", re.compile(r"\bAbrogat[oaie]\b", re.IGNORECASE)),
         ("amended", re.compile(r"\bNuovo testo giusta\b", re.IGNORECASE)),
     ),
 }
