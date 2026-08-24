@@ -19,7 +19,7 @@ the encoding declaration before the column was ever written.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .. import akn, db, throttle
 from ..config import Settings
@@ -33,6 +33,14 @@ class ParseReport:
     articles: int = 0
     empty: int = 0
     failed: int = 0
+    # (act_id, lang) for every edition this run actually promoted to
+    # 'parsed'. A supervised backfill has no use for it -- it runs `diff`
+    # and `provenance` over the whole corpus afterwards anyway -- but the
+    # nightly delta does: those two stages and project-legacy are what turn
+    # a newly parsed edition into a change log, a provenance record and a
+    # served row, and without knowing WHICH acts moved the delta would have
+    # to re-walk all 12,033 editions every night to find out.
+    acts: set[tuple[int, str]] = field(default_factory=set)
 
 
 def store_articles(conn, version_id: int, articles: list[akn.Article]) -> int:
@@ -121,6 +129,7 @@ def run(settings: Settings, limit: int | None = None) -> ParseReport:
                     report.failed += 1
                     continue
                 report.parsed += 1
+                report.acts.add((row["act_id"], row["lang"]))
                 report.articles += len(articles)
                 if not articles:
                     report.empty += 1

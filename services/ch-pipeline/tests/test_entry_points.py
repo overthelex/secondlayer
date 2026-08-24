@@ -410,4 +410,5 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     summary = [r.getMessage() for r in caplog.records
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
-                       "new_versions=0 failed=legislation"]
+                       "new_versions=0 new_changes=0 new_provenance=0 "
+                       "projected=0 failed=legislation"]

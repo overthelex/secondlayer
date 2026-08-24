@@ -31,9 +31,10 @@ import pytest
 
 from chpipe import delta
 from chpipe.config import Settings
-from chpipe.stages import (acts_stage, extract_stage, fetch_stage,
+from chpipe.stages import (acts_stage, diff_stage, extract_stage, fetch_stage,
                            fetch_xml_stage, index_stage, load_stage,
-                           parse_akn_stage, versions_stage)
+                           parse_akn_stage, project_legacy_stage,
+                           provenance_stage, versions_stage)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
@@ -521,11 +522,83 @@ def test_run_legislation_runs_acts_then_versions_then_drains_the_xml_queue(
         parse_akn_stage, "run",
         lambda settings, limit=None: calls.append("parse-akn") or
         parse_akn_stage.ParseReport())
+    _stub_legislation_tail(monkeypatch, calls)
 
     report = delta.run_legislation(_settings(tmp_path))
 
-    assert calls == ["acts", "versions", "fetch-xml", "parse-akn"]
+    assert calls == ["acts", "versions", "fetch-xml", "parse-akn",
+                     "project-legacy"]
     assert report.new_versions == 7
+
+
+# --- N1: parsing an edition is not what makes it readable ---------------
+
+def _stub_legislation_tail(monkeypatch, calls):
+    def fake_diff(settings, lang="de", act_id=None):
+        calls.append(f"diff({act_id},{lang})")
+        return diff_stage.DiffReport(changes=3)
+
+    def fake_provenance(settings, lang="de", limit=None, act_id=None):
+        calls.append(f"provenance({act_id},{lang})")
+        return provenance_stage.ProvenanceReport(rows=5)
+
+    def fake_project(settings):
+        calls.append("project-legacy")
+        return 2
+
+    monkeypatch.setattr(diff_stage, "run", fake_diff)
+    monkeypatch.setattr(provenance_stage, "run", fake_provenance)
+    monkeypatch.setattr(project_legacy_stage, "run", fake_project)
+
+
+def _stub_legislation_head(monkeypatch, calls, acts):
+    monkeypatch.setattr(acts_stage, "run",
+                        lambda settings: calls.append("acts") or
+                        acts_stage.ActsReport())
+    monkeypatch.setattr(versions_stage, "run",
+                        lambda settings: calls.append("versions") or
+                        versions_stage.VersionsReport(discovered=1))
+    monkeypatch.setattr(fetch_xml_stage, "run",
+                        lambda settings, limit=None: calls.append("fetch-xml") or
+                        fetch_xml_stage.FetchXmlReport())
+    monkeypatch.setattr(parse_akn_stage, "run",
+                        lambda settings, limit=None: calls.append("parse-akn") or
+                        parse_akn_stage.ParseReport(parsed=len(acts), acts=set(acts)))
+
+
+def test_a_newly_parsed_edition_gets_its_change_log_and_provenance(
+        tmp_path, monkeypatch):
+    """Stopping after parse-akn left every edition of an act carrying a
+    change log, a provenance record and a served row EXCEPT the newest --
+    the one a reader is most likely to ask about."""
+    calls = []
+    _stub_legislation_head(monkeypatch, calls, [(11, "de"), (11, "fr")])
+    _stub_legislation_tail(monkeypatch, calls)
+
+    report = delta.run_legislation(_settings(tmp_path))
+
+    assert calls == ["acts", "versions", "fetch-xml", "parse-akn",
+                     "diff(11,de)", "provenance(11,de)",
+                     "diff(11,fr)", "provenance(11,fr)",
+                     "project-legacy"]
+    assert (report.new_changes, report.new_provenance, report.projected) == \
+        (6, 10, 2)
+
+
+def test_a_quiet_night_re_derives_nothing_but_still_projects(
+        tmp_path, monkeypatch):
+    """The narrowing is the point: with no act newly parsed, the nightly job
+    must not re-walk 12,033 editions. project-legacy still runs -- it picks
+    its own pending set, so it is one query on a quiet night and it is what
+    recovers an edition an earlier run parsed and died before projecting."""
+    calls = []
+    _stub_legislation_head(monkeypatch, calls, [])
+    _stub_legislation_tail(monkeypatch, calls)
+
+    delta.run_legislation(_settings(tmp_path))
+
+    assert [c for c in calls if c.startswith(("diff", "provenance"))] == []
+    assert "project-legacy" in calls
 
 
 # --- B3: many-to-one court code -> spider, and the rollback that lost it ---

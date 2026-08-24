@@ -72,8 +72,10 @@ from dataclasses import dataclass, field
 from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
-from .stages import (acts_stage, extract_stage, fetch_stage, fetch_xml_stage,
-                     index_stage, load_stage, parse_akn_stage, versions_stage)
+from .stages import (acts_stage, diff_stage, extract_stage, fetch_stage,
+                     fetch_xml_stage, index_stage, load_stage,
+                     parse_akn_stage, project_legacy_stage,
+                     provenance_stage, versions_stage)
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +101,11 @@ class DeltaReport:
     spiders: list[str] = field(default_factory=list)
     new_documents: int = 0
     new_versions: int = 0
+    # Downstream of the newly parsed editions: the change log, the footnote
+    # provenance, and the projection into the served ch_legislation table.
+    new_changes: int = 0
+    new_provenance: int = 0
+    projected: int = 0
 
 
 def snapshot_url(day: datetime.date) -> str:
@@ -395,8 +402,35 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # separately-scheduled pass, so a new consolidation is fetched and
     # parsed the same night it is found, not merely recorded as pending.
     fetch_xml_stage.run(settings)
-    parse_akn_stage.run(settings)
-    return DeltaReport(new_versions=versions.discovered)
+    parsed = parse_akn_stage.run(settings)
+
+    # Parsing is not where a new edition becomes readable. `diff` is what
+    # gives it a change log, `provenance` what gives its articles their
+    # footnote record, and `project-legacy` what puts it in the table the
+    # product actually serves. Stopping after parse_akn left a corpus where
+    # every edition of an act had those three EXCEPT the newest -- the one a
+    # reader is most likely to ask about -- and it stayed that way until
+    # somebody happened to run the stages by hand.
+    #
+    # Narrowed to the acts that actually gained an edition tonight, and to
+    # the languages they gained it in, rather than re-walking the whole
+    # corpus: on a quiet night parsed.acts is empty and this costs one
+    # already-incremental projection query. diff and provenance both re-do
+    # an act WHOLE (every consecutive edition pair, every parsed edition) --
+    # that is their unit of work and it is what makes them idempotent, so
+    # the narrowing is by act, not by edition.
+    report = DeltaReport(new_versions=versions.discovered)
+    for act_id, lang in sorted(parsed.acts):
+        report.new_changes += diff_stage.run(
+            settings, lang=lang, act_id=act_id).changes
+        report.new_provenance += provenance_stage.run(
+            settings, lang=lang, act_id=act_id).rows
+    # Unconditional: project_legacy_stage picks its own pending set (an
+    # edition parsed but not yet projected), so on a night with nothing new
+    # it is one query, and on a night where an EARLIER run parsed something
+    # and died before projecting it, this is what recovers it.
+    report.projected = project_legacy_stage.run(settings)
+    return report
 
 
 def main() -> DeltaReport:
@@ -466,15 +500,20 @@ def main() -> DeltaReport:
             reports[name] = DeltaReport()
 
     decisions, legislation = reports["decisions"], reports["legislation"]
-    log.info("delta: spiders=%s new_documents=%d new_versions=%d failed=%s",
+    log.info("delta: spiders=%s new_documents=%d new_versions=%d "
+             "new_changes=%d new_provenance=%d projected=%d failed=%s",
              decisions.spiders, decisions.new_documents,
-             legislation.new_versions,
+             legislation.new_versions, legislation.new_changes,
+             legislation.new_provenance, legislation.projected,
              ",".join(name for name, _ in failures) or "none")
     if failures:
         raise failures[0][1]
     return DeltaReport(spiders=decisions.spiders,
                        new_documents=decisions.new_documents,
-                       new_versions=legislation.new_versions)
+                       new_versions=legislation.new_versions,
+                       new_changes=legislation.new_changes,
+                       new_provenance=legislation.new_provenance,
+                       projected=legislation.projected)
 
 
 if __name__ == "__main__":

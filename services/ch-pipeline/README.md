@@ -789,6 +789,22 @@ stage `discovered`; `fetch-xml` and `parse-akn` drain that queue in the same
 run, so a new consolidation is fetched and parsed the same night it appears
 rather than merely recorded as pending.
 
+Parsing is not what makes an edition readable, so the run does not stop
+there. For each act that actually gained a parsed edition that night, and in
+each language it gained one in, `diff` re-derives that act's change log and
+`provenance` its footnote record; then `project-legacy` runs once, over
+whatever is pending, to put the new edition in the table the product serves.
+Without those three, every edition of an act had a change log, a provenance
+record and a served row **except the newest** — the one a reader is most
+likely to ask about — until somebody happened to run the stages by hand.
+
+They are narrowed to the acts that moved, not run corpus-wide: on a quiet
+night `diff` and `provenance` are not called at all and `project-legacy` is
+one query. The narrowing is by ACT rather than by edition because that is
+their unit of work — `diff` re-does every consecutive edition pair of an act
+and `provenance` every parsed edition of it, which is exactly what makes
+both idempotent.
+
 **OCR is not part of this script**, deliberately. Documents whose text layer
 fails the gate accumulate at `ocr_pending` and are cleared by a supervised
 `ocr` run — see "Deferred to the supervised operations phase" above. An

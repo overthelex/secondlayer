@@ -94,13 +94,23 @@ def clear(conn, version_id: int) -> int:
 
 
 def run(settings: Settings, lang: str = "de",
-        limit: int | None = None) -> ProvenanceReport:
+        limit: int | None = None,
+        act_id: int | None = None) -> ProvenanceReport:
+    """Every parsed edition in `lang`, or only one act's when `act_id` is
+    given -- the same narrowing diff_stage.run() already takes, and for the
+    same caller: the nightly delta re-derives provenance for the acts that
+    gained an edition that night, not for all 12,033 editions.
+    """
     report = ProvenanceReport()
     conn = db.connect(settings)
     try:
         sql = ("SELECT version_id FROM ch_act_version "
-               "WHERE lang = %s AND stage = 'parsed' ORDER BY version_id")
+               "WHERE lang = %s AND stage = 'parsed'")
         params: list = [lang]
+        if act_id is not None:
+            sql += " AND act_id = %s"
+            params.append(act_id)
+        sql += " ORDER BY version_id"
         if limit:
             sql += " LIMIT %s"
             params.append(limit)
