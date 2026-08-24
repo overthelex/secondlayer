@@ -166,3 +166,36 @@ def test_gate_a_reports_a_genuine_zero_as_zero(conn):
     g = reports.gate_a(conn)
     assert g["total"] == 1
     assert g["mean_quality"] == 0.0
+
+
+# --- Gate D: a snapshot that says nothing must not read as a clean corpus ---
+#
+# `if total_alle else 0.0` made a zero/absent grand total report gap_pct 0.0
+# and needs_investigation False -- the most reassuring output this gate can
+# produce, from the one input that carries no information at all.
+
+def test_a_zero_snapshot_total_against_a_populated_corpus_is_flagged(conn):
+    _row(conn, "g1", "GE_Gerichte", "html", 0.9, "loaded")
+    _row(conn, "g2", "GE_Gerichte", "html", 0.9, "loaded")
+    result = reports.completeness(conn, {}, total_alle=0)
+    assert result["corpus"]["snapshot_unusable"] is True
+    assert result["corpus"]["needs_investigation"] is True
+    assert result["corpus"]["gap_pct"] is None, \
+        "a gap that could not be computed is None, never a number"
+    assert result["corpus"]["ours"] == 2
+
+
+def test_both_sides_zero_is_a_genuine_clean_zero(conn):
+    """An empty scratch database agreeing with an empty snapshot is not a
+    malformed snapshot -- the flag must not fire on it."""
+    result = reports.completeness(conn, {}, total_alle=0)
+    assert result["corpus"]["snapshot_unusable"] is False
+    assert result["corpus"]["needs_investigation"] is False
+    assert result["corpus"]["gap_pct"] == 0.0
+
+
+def test_a_usable_snapshot_still_reports_a_numeric_gap(conn):
+    _row(conn, "g1", "GE_Gerichte", "html", 0.9, "loaded")
+    result = reports.completeness(conn, {"GE_Gerichte": 1}, total_alle=1)
+    assert result["corpus"]["snapshot_unusable"] is False
+    assert result["corpus"]["gap_pct"] == 0.0

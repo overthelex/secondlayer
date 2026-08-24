@@ -110,9 +110,18 @@ def gate_e(conn, sr_numbers: list[str] | None = None,
                 (act["act_id"], lang))
             latest = cur.fetchone()
 
+            # AND lang, like its two sibling queries above. Without it this
+            # one counted every language's change log while `editions` and
+            # `articles_latest` counted one, so a German gate on a corpus
+            # loaded in de/fr/it reported roughly three times the changes
+            # its own edition count could account for -- and the ratio a
+            # reader takes from Gate E is changes-per-edition. ch_act_change
+            # carries lang precisely so the two can be read together
+            # (migration 197; diff_stage never compares across languages).
             cur.execute(
-                "SELECT count(*) AS n FROM ch_act_change WHERE act_id = %s",
-                (act["act_id"],))
+                "SELECT count(*) AS n FROM ch_act_change "
+                "WHERE act_id = %s AND lang = %s",
+                (act["act_id"], lang))
             changes = cur.fetchone()["n"]
 
         out.append({

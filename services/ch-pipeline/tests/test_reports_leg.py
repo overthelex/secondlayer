@@ -250,3 +250,52 @@ def test_cross_check_fedlex_annotates_only_found_rows(conn):
     assert found["sr_number"] == "220" and found["fedlex_editions"] == 1
     assert missing["sr_number"] == "999" and "fedlex_editions" not in missing
     assert "fedlex_consolidations" not in missing and "coverage" not in missing
+
+
+# --- Gate E's change count must be scoped like its siblings ---
+#
+# `editions` and `articles_latest` filter on lang; `changes` did not, so a
+# German gate on a corpus loaded in de/fr/it reported roughly three times the
+# changes its own edition count could account for -- and changes-per-edition
+# is the ratio a reader takes from this gate.
+
+def test_gate_e_counts_only_this_languages_changes(conn):
+    act_id = acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
+    vid = versions_stage.upsert_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/2026", "dateApplicability": "2026-01-01",
+        "lang": L + "DEU", "fileUrl": "https://x/x.xml"})
+    conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=1 "
+                 "WHERE version_id=%s", (vid,))
+    vfr = versions_stage.upsert_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/2026", "dateApplicability": "2026-01-01",
+        "lang": L + "FRA", "fileUrl": "https://x/x-fr.xml"})
+    conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=1 "
+                 "WHERE version_id=%s", (vfr,))
+    for version_id, lang in ((vid, "de"), (vfr, "fr")):
+        conn.execute("INSERT INTO ch_act_change (act_id, lang, to_version_id, "
+                     "e_id, change_type, date_applicability) "
+                     "VALUES (%s,%s,%s,'art_1','modified','2026-01-01')",
+                     (act_id, lang, version_id))
+
+    assert reports_leg.gate_e(conn, ["220"], lang="de")[0]["changes"] == 1
+    assert reports_leg.gate_e(conn, ["220"], lang="fr")[0]["changes"] == 1
+
+
+def test_gate_e_editions_and_changes_stay_countable_against_each_other(conn):
+    """The invariant the missing filter broke: a gate reporting N editions in
+    a language cannot report changes from editions it did not count."""
+    act_id = acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
+    vid = versions_stage.upsert_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/2026", "dateApplicability": "2026-01-01",
+        "lang": L + "DEU", "fileUrl": "https://x/x.xml"})
+    conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=1 "
+                 "WHERE version_id=%s", (vid,))
+    for lang in ("fr", "it"):
+        conn.execute("INSERT INTO ch_act_change (act_id, lang, e_id, "
+                     "change_type, date_applicability) "
+                     "VALUES (%s,%s,'art_1','modified','2026-01-01')", (act_id, lang))
+
+    row = reports_leg.gate_e(conn, ["220"], lang="de")[0]
+    assert row["editions"] == 1
+    assert row["changes"] == 0, \
+        "changes from editions this gate did not count must not appear"

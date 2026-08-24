@@ -107,12 +107,21 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
     function returns three independently-scoped pieces -- read all three,
     not just one:
 
-      corpus      -- {ours, theirs, gap_pct, needs_investigation}. `ours` is
+      corpus      -- {ours, theirs, gap_pct, needs_investigation,
+                      snapshot_unusable}. `ours` is
                       count(*) over the whole table; `theirs` is
                       `total_alle`. Exact and level-independent -- this is
                       the one number that actually answers "did we get
                       everything", and it does not depend on any name match.
                       Always trust this one first.
+
+                      `snapshot_unusable` is True when `total_alle` is zero
+                      or absent while `ours` is not: the snapshot said
+                      nothing, and every figure in this result that divides
+                      by it -- `gap_pct` here, `uncovered.share_pct` below --
+                      is meaningless rather than good news. `gap_pct` is None
+                      in that case and `needs_investigation` is True, so the
+                      gate cannot be read as passing on an input it never got.
 
       per_spider  -- one row per snapshot key that is also a known spider
                       name (`chpipe.stages.index_stage.ALL_SPIDERS`):
@@ -138,12 +147,23 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
     """
     ours_total = conn.execute(
         "SELECT count(*) AS n FROM ch_court_decisions").fetchone()["n"]
+    # A snapshot whose grand total is zero or absent while we hold documents
+    # is a MALFORMED SNAPSHOT, not a gap-free corpus. `if total_alle else
+    # 0.0` used to make that case report gap_pct 0.0 and
+    # needs_investigation False -- the single most reassuring output this
+    # gate can produce, emitted from the one input that says nothing at all.
+    # (The reverse -- both sides zero -- is a genuine clean zero: an empty
+    # scratch database agreeing with an empty snapshot.) Same discipline as
+    # gate_a's mean_quality above: a figure that was not measurable is None,
+    # never a number that reads as a measurement.
+    snapshot_unusable = not total_alle and ours_total > 0
     corpus_gap = abs(ours_total - total_alle) / total_alle if total_alle else 0.0
     corpus = {
         "ours": ours_total,
         "theirs": total_alle,
-        "gap_pct": round(corpus_gap * 100, 2),
-        "needs_investigation": corpus_gap > 0.01,
+        "gap_pct": None if snapshot_unusable else round(corpus_gap * 100, 2),
+        "needs_investigation": snapshot_unusable or corpus_gap > 0.01,
+        "snapshot_unusable": snapshot_unusable,
     }
 
     ours_by_spider = {r["spider"]: r["n"] for r in conn.execute(
