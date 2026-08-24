@@ -849,3 +849,83 @@ def test_a_document_level_failure_is_reported_at_warning(
 
     assert any("CH_BGer:3" in r.getMessage() for r in caplog.records
                if r.levelno == logging.WARNING), caplog.text
+
+
+# --- snapshot-state.json: written atomically, read defensively ---
+#
+# It is the one piece of state in this job that decides which documents are
+# retired unfetched. A truncated write, or a crash on reading one, must not
+# be able to cost a night's growth or the whole run.
+
+def test_the_state_file_is_replaced_atomically_not_truncated_in_place(
+        tmp_path, monkeypatch):
+    """A direct write_text() truncates the existing file first, so a kill
+    anywhere in the write leaves a prefix of the new map. Under os.replace()
+    a failed write leaves the OLD file completely intact."""
+    settings = _settings(tmp_path)
+    delta._save_state(settings, {"CH_BGer": 100})
+
+    real_replace = delta.os.replace
+    monkeypatch.setattr(delta.os, "replace",
+                        lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError):
+        delta._save_state(settings, {"CH_BGer": 200})
+    monkeypatch.setattr(delta.os, "replace", real_replace)
+
+    assert delta._load_state(settings) == {"CH_BGer": 100}, \
+        "the previous baseline must survive a failed write whole"
+    assert not list(tmp_path.glob("*.tmp")), \
+        "a failed write must not leave its temp file behind"
+
+
+def test_a_corrupt_state_file_is_a_loud_warning_not_a_crash(
+        tmp_path, monkeypatch, caplog):
+    """Letting json.loads raise takes the whole nightly job down over one
+    unreadable file; swallowing it silently makes a full 54-spider re-walk
+    look like a mystery. It reads as no baseline, and it says so."""
+    settings = _settings(tmp_path)
+    path = delta._state_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"CH_BGer": 10')
+
+    with caplog.at_level(logging.WARNING):
+        state = delta._load_state(settings)
+
+    assert state == {}
+    assert any("unreadable" in r.getMessage() for r in caplog.records
+               if r.levelno == logging.WARNING), caplog.text
+
+
+def test_a_state_file_that_is_not_a_map_is_rejected_the_same_way(
+        tmp_path, caplog):
+    """Valid JSON, wrong shape -- a list indexes into nothing this code can
+    use, and .get() on it raises deep inside spiders_that_grew()."""
+    settings = _settings(tmp_path)
+    path = delta._state_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('["CH_BGer"]')
+
+    with caplog.at_level(logging.WARNING):
+        assert delta._load_state(settings) == {}
+    assert any("not the counter map" in r.getMessage() for r in caplog.records)
+
+
+def test_a_corrupt_state_file_makes_the_run_re_walk_rather_than_retire(
+        tmp_path, monkeypatch, conn):
+    """The safe direction, and the reason {} is an acceptable answer at all:
+    no baseline means every court reads as changed, which costs a night of
+    walking -- never a document."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    settings = _settings(tmp_path)
+    path = delta._state_path(settings)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not json at all")
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch)
+
+    report = delta.run_decisions(settings,
+                                 fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    assert report.spiders == ["CH_BGer"]

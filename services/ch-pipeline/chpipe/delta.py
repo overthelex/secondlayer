@@ -65,6 +65,7 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import pathlib
 import re
 from dataclasses import dataclass, field
@@ -159,16 +160,66 @@ def _state_path(settings: Settings) -> pathlib.Path:
 
 
 def _load_state(settings: Settings) -> dict:
+    """The stored baseline, or {} when there is not a usable one.
+
+    An unreadable or unparseable file is treated as "no baseline" -- but
+    LOUDLY, and never as a crash. The two rejected alternatives say why:
+
+      * letting json.loads raise takes down the whole nightly job over a
+        file that a kill -9 mid-write could produce (which is exactly what
+        _save_state below now makes impossible, but a full disk, a bad
+        restore or a hand-edit still can). The decisions half would then not
+        run again until a human read the traceback.
+      * swallowing it silently is worse than the crash: {} means every
+        snapshot key looks grown, so the run walks all 54 spiders. That is
+        the SAFE direction -- an expensive night, not a lost document -- but
+        an operator who is not told will read a full re-walk as a mystery.
+    """
     path = _state_path(settings)
     if not path.exists():
         return {}
-    return json.loads(path.read_text())
+    try:
+        state = json.loads(path.read_text())
+    except (ValueError, OSError) as exc:
+        log.warning(
+            "%s is unreadable (%s: %s) -- continuing with NO baseline, which "
+            "means every court reads as changed and tonight's run re-walks "
+            "all of them. Not fatal and not silent: the file is rewritten at "
+            "the end of this run, so this should not repeat.",
+            path, type(exc).__name__, exc)
+        return {}
+    if not isinstance(state, dict):
+        log.warning(
+            "%s parsed as %s, not the counter map this file is -- continuing "
+            "with NO baseline (every court reads as changed) rather than "
+            "indexing into something that is not one",
+            path, type(state).__name__)
+        return {}
+    return state
 
 
 def _save_state(settings: Settings, snapshot: dict) -> None:
+    """Write the baseline atomically: temp file, then os.replace().
+
+    A direct write_text() truncates the existing file first, so a kill
+    anywhere in the write leaves a half-written baseline -- and a baseline is
+    the one piece of state in this job that decides which documents are
+    retired unfetched. os.replace() is atomic within a filesystem, so the
+    file a reader sees is always one complete run's map: the old one or the
+    new one, never a prefix of either. The temp file is created beside it for
+    the same reason -- a rename across filesystems is not atomic.
+    """
     path = _state_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(snapshot, ensure_ascii=False))
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(json.dumps(snapshot, ensure_ascii=False))
+        os.replace(tmp, path)
+    except BaseException:
+        # Including KeyboardInterrupt/SystemExit: an abandoned .tmp beside
+        # the real file would otherwise accumulate one per killed run.
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 async def _fetch_snapshot(url: str, fetcher_factory) -> dict:

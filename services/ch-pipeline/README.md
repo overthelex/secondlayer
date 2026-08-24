@@ -893,6 +893,16 @@ into the expected shape), so a crashed run leaves the previous night's state
 in place and the next scheduled run (or a manual `./run-delta.sh`) picks up
 the full gap since then, not just one night's worth.
 
+The file is written to a temp file beside it and moved into place with
+`os.replace()`, so a kill during the write leaves the previous night's map
+whole rather than a prefix of the new one — a baseline is the one piece of
+state here that decides which documents are retired unfetched. If it ever
+does become unreadable (a full disk, a bad restore, a hand-edit), the run
+logs a WARNING and continues with **no** baseline, which makes every court
+read as changed and re-walks all 54. That is the safe direction — an
+expensive night, never a lost document — and the WARNING is there so a full
+re-walk is never a mystery.
+
 **If a run needs to be stopped, or looks stuck: do NOT delete
 `delta.lock`.** `flock` is advisory on the *open file descriptor*, not the
 file name — removing the file releases nothing a live process still holds,

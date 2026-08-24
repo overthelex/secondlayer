@@ -62,9 +62,76 @@ def test_select_posts_the_query_as_form_data():
 
 
 def test_a_non_200_raises():
-    c = _client(lambda r: httpx.Response(500, text="boom"))
+    c = _client(lambda r: httpx.Response(500, text="boom"), backoff=0.0)
     with pytest.raises(SparqlError, match="500"):
         c.select("SELECT * WHERE {}")
+
+
+# --- Bounded retry, the one chpipe/http.py's Fetcher already had ---
+#
+# The walks built on select() issue hundreds to thousands of pages against
+# Fedlex over hours. A single 502 from a load balancer killed the whole walk
+# and the recovery was to start again from the first page.
+
+@pytest.mark.parametrize("transient", [429, 500, 502, 503, 504])
+def test_a_transient_failure_is_retried_and_then_succeeds(transient):
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(transient, text="upstream had a moment")
+        return httpx.Response(200, json=RESULT)
+
+    c = _client(handler, backoff=0.0)
+    assert len(c.select("SELECT * WHERE {}")) == 2
+    assert calls["n"] == 2
+
+
+def test_a_400_fails_immediately_without_a_retry():
+    """Virtuoso answers a query it will not run -- a syntax error, and SR353,
+    the sorted-TOP ceiling this whole module is built around -- with a 400.
+    That is a statement ABOUT the query: retrying re-asks a question already
+    answered, and reports the same failure minutes later than it could."""
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(
+            400, text="Virtuoso 22023 Error SR353: Sorted TOP clause specifies "
+                      "more then 10005 rows to sort. Only 10000 are allowed.")
+
+    c = _client(handler, backoff=0.0)
+    with pytest.raises(SparqlError, match="SR353"):
+        c.select("SELECT * WHERE {}")
+    assert calls["n"] == 1, "a 400 is an answer, not a fault"
+
+
+def test_a_transport_error_is_retried_too():
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise httpx.ConnectError("connection reset")
+        return httpx.Response(200, json=RESULT)
+
+    c = _client(handler, backoff=0.0)
+    assert len(c.select("SELECT * WHERE {}")) == 2
+    assert calls["n"] == 3
+
+
+def test_retries_are_bounded_and_the_last_failure_is_reported():
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(503, text="still down")
+
+    c = _client(handler, retries=3, backoff=0.0)
+    with pytest.raises(SparqlError, match="after 3 attempts"):
+        c.select("SELECT * WHERE {}")
+    assert calls["n"] == 3
 
 
 # --------------------------------------------------------------------------

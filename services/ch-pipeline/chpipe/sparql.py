@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from typing import Iterable, Iterator
 
 import httpx
@@ -60,6 +61,16 @@ DEFAULT_BATCH_SIZE = 20
 _UNSAFE_IN_IRI = re.compile(r"""[<>"{}|\\^`\s]""")
 
 
+# Mirrors chpipe/http.py's _NO_RETRY, and the distinction is load-bearing
+# here in a way it is not there. Virtuoso answers a query it will not run --
+# a syntax error, and SR353, the sorted-TOP ceiling this whole module is
+# built around -- with a 400. That is a statement ABOUT the query: retrying
+# it re-asks a question already answered, three times, minutes apart, and
+# then reports the same failure later than it could have. Only 429 and 5xx
+# and transport errors are retried.
+_NO_RETRY = frozenset({400, 401, 403, 404, 410})
+
+
 class SparqlError(RuntimeError):
     pass
 
@@ -83,8 +94,11 @@ def _reject_offset(query_template: str, walker: str) -> None:
 
 class SparqlClient:
     def __init__(self, endpoint: str, timeout: float = 180.0,
-                 transport: httpx.BaseTransport | None = None):
+                 transport: httpx.BaseTransport | None = None,
+                 retries: int = 3, backoff: float = 1.0):
         self._endpoint = endpoint
+        self._retries = retries
+        self._backoff = backoff
         self._client = httpx.Client(
             timeout=timeout, transport=transport,
             headers={"Accept": "application/sparql-results+json",
@@ -95,11 +109,44 @@ class SparqlClient:
         self._client.close()
 
     def select(self, query: str) -> list[dict[str, str]]:
-        response = self._client.post(self._endpoint, data={"query": query})
-        if response.status_code != 200:
-            raise SparqlError(f"{response.status_code}: {response.text[:300]}")
-        bindings = response.json().get("results", {}).get("bindings", [])
-        return [{k: v["value"] for k, v in row.items()} for row in bindings]
+        """One SELECT, with the bounded retry chpipe/http.py's Fetcher._get()
+        already has and this did not.
+
+        Discovery is a handful of long queries, but the walks built on them
+        are not: acts/versions/as-bbl each issue hundreds to thousands of
+        pages against Fedlex over hours, and every one of them went through
+        here with no retry at all. A single 502 from a load balancer -- the
+        most ordinary thing that happens to a public endpoint in a
+        multi-hour window -- killed the whole walk, and the recovery was to
+        start it again from the first page.
+
+        Same shape and same naming as http.py: `retries` attempts, exponential
+        `backoff` between them, and _NO_RETRY statuses raise immediately
+        because they are answers rather than faults. See _NO_RETRY for why
+        400 in particular must never be retried here.
+        """
+        last: Exception | None = None
+        for attempt in range(self._retries):
+            try:
+                response = self._client.post(self._endpoint, data={"query": query})
+            except httpx.HTTPError as exc:
+                last = exc
+            else:
+                if response.status_code == 200:
+                    bindings = response.json().get("results", {}).get("bindings", [])
+                    return [{k: v["value"] for k, v in row.items()}
+                            for row in bindings]
+                error = SparqlError(f"{response.status_code}: {response.text[:300]}")
+                if response.status_code in _NO_RETRY:
+                    raise error
+                last = error
+            if attempt + 1 < self._retries and self._backoff:
+                # Synchronous, like the rest of this module: one client, one
+                # connection, one query in flight. There is nothing to yield
+                # to.
+                time.sleep(self._backoff * (2 ** attempt))
+        raise SparqlError(
+            f"{self._endpoint} failed after {self._retries} attempts: {last}")
 
     def keyset(self, query_template: str, key: str = "work",
                page_size: int = DEFAULT_PAGE_SIZE) -> Iterator[dict[str, str]]:
