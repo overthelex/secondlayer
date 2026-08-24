@@ -649,43 +649,73 @@ which is a deliberate change of meaning for that column.
 ## Deltas
 
 Once the backfill for both halves is done, `run-delta.sh` is what keeps them
-from rotting. It runs nightly at **04:17** from cron on prod — after
-entscheidsuche's own scrapes (their `Snapshots` file for 2026-08-20 was
-generated at 06:00 UTC and the `Status` files show spider runs finishing
-around 23:57) and away from the backup window. Install it with:
+from rotting. It runs nightly at **07:15 UTC** from cron on prod — after
+entscheidsuche's own scrapes (their `Snapshots` file is generated at 06:00
+UTC; the `Status` files show spider runs finishing around 23:57 UTC) and
+away from the backup window.
 
-    ( crontab -l 2>/dev/null | grep -v 'ch-pipeline/run-delta.sh'; \
-      echo '17 4 * * * cd $HOME/SecondLayer/services/ch-pipeline && ./run-delta.sh' ) | crontab -
+Round 1 of this task shipped this at "04:17" with no timezone stated and a
+rationale that only makes sense read as UTC — except 04:17 UTC is still
+*before* 06:00 UTC, so even on its own terms the file it is waiting for does
+not exist yet. Verified live against the real endpoint: at 04:04 UTC the
+day's `Snapshots` file 404s. At that schedule the four-day lookback fired
+*every single night*, which makes the `INFO "no snapshot at ..."` line pure
+nightly noise — indistinguishable from the one thing it exists to announce,
+a real entscheidsuche outage. 07:15 UTC leaves over an hour of margin after
+06:00 UTC. **Prod's crontab runs in whatever timezone `crontab -l`'s entries
+are interpreted in on that box, not necessarily UTC — confirm with `date` on
+prod before installing, and adjust the hour if it is not UTC.** The install
+line below sets `CRON_TZ=UTC` for this one entry so the schedule does not
+depend on that guess (supported by `cronie`/modern Vixie cron, which prod's
+Ubuntu image ships); verify with `crontab -l` after installing that the line
+still reads `CRON_TZ=UTC` immediately above the job.
+
+    ( crontab -l 2>/dev/null | grep -v 'ch-pipeline/run-delta.sh' | grep -v '^CRON_TZ='; \
+      echo 'CRON_TZ=UTC'; \
+      echo '15 7 * * * cd $HOME/SecondLayer/services/ch-pipeline && ./run-delta.sh' ) | crontab -
 
 **Decisions.** Reads `https://entscheidsuche.ch/docs/Snapshots/{date}.json`
-(falling back up to three days if today's file is not published yet — their
-own scrapes sometimes run late), and compares its per-court counter map
-against `$CHPIPE_RAW_DIR/snapshot-state.json`, the map stored after the
-previous run. `total` in that file is not flat: it mixes three independent
+(falling back up to three days if today's file is not published yet, or is
+published but does not parse into the shape this job expects — see below),
+and compares its per-court counter map against
+`$CHPIPE_RAW_DIR/snapshot-state.json`, the map stored after the previous
+successful run. `total` in that file is not flat: it mixes three independent
 levels that each separately sum to `total_alle` — a per-canton rollup (e.g.
 `"ZH"`), a per-court-code level (e.g. `"ZH_OG"`), and a per-chamber level
 (e.g. `"CH_BGer_001"`). The first and third are structurally dropped (a bare
 two-letter code, or a trailing `_<digits>` chamber suffix) — neither names a
 spider at any granularity, so neither can be re-indexed. What remains is
-compared key by key against the stored map: **a change in either direction**
-re-walks that court, because a shrinking count means the source withdrew
-documents, not just that nothing new arrived.
+compared key by key against the stored map, in **both directions**: a change
+either way re-walks that court, because a shrinking count (or a key vanishing
+from the map entirely) means the source withdrew documents, not just that
+nothing new arrived.
 
-The catch: entscheidsuche's court-code spelling does not match our 54 spider
-directory names for most of the corpus (`reports.completeness()` measured
-this against the live 2026-08-20 file and found exact matches for only 7 of
-54 — `"ZH_OG"` is our `"ZH_Obergericht"`, `"GE_CJ"` is our `"GE_Gerichte"`).
-There is no verified name-translation table in this codebase, so a changed
-key that matches no spider directory name is **not** re-indexed — it cannot
-be, without requesting a listing URL that does not exist. It is not silently
-dropped either: every such run logs a `WARNING` line naming the unmatched
-keys and roughly how many documents (as a share of `total_alle`) they
-represent. **A recurring warning here is the signal to act on, not ignore**
-— check Gate D (`reports.completeness`, the exact corpus-level count) to see
-whether the gap is actually growing, and run the affected spiders through
-`run-stage.sh index` by hand if it is. The delta is honest about this limit
-so it can never read as "the corpus is current" while quietly missing most
-of it.
+**Turning a changed key into a spider to re-index.** Some keys already spell
+one of our 54 spider directory names exactly (`reports.completeness()`
+measured this against the live 2026-08-23 file and found exact matches for
+only 7 of 54 — `"ZH_OG"` is our `"ZH_Obergericht"`, `"GE_CJ"` is our
+`"GE_Gerichte"`). For the rest, `chpipe.delta.court_code_spider_map()` builds
+root-court-code → spider straight from what is already loaded:
+`ch_court_decisions.court_code` is written from the document JSON's own
+`"Signatur"` field — entscheidsuche's own identifier, in the same vocabulary
+`Snapshots` uses, one level finer (chamber, e.g. `"ZG_OG_001"`) than the
+court-code level `total` needs; stripping the same `_<digits>` suffix
+spiders_that_grew already treats as noise recovers the right level. This
+table is only ever as complete as what has actually been indexed, and it is
+rebuilt from the database fresh every run rather than trusted stale — a
+spider with zero rows so far contributes no entry, which is correct, not a
+gap to invent an entry for. A grown key that resolves through **neither** the
+exact-name check **nor** this map is real signal this run still cannot act
+on. It is not silently dropped: the log carries a `WARNING` naming those
+keys and, critically, **how much of tonight's growth they represent** — not
+their standing stock, which is nearly constant night to night and says
+nothing about whether tonight is a problem. **A recurring warning here is
+the signal to act on, not ignore** — if the missed share stays high across
+several nights, that means the corpus keeps growing at courts this run can
+never resolve from the loaded data alone (a spider that has never
+successfully indexed a single document yet), and the fix is a manual
+`run-stage.sh index <spider>` to seed at least one court_code row for it, not
+a change to this script.
 
 **Legislation.** Re-runs `acts` and `versions` in full — both are idempotent
 upserts over the whole graph, and the whole graph is a few minutes of SPARQL,
@@ -705,41 +735,70 @@ that queue.
 directly, not its `main()`, so none of the individual `renice()` calls each
 stage's own `main()` would normally trigger actually fire. `chpipe.delta.main()`
 calls `throttle.renice(throttle.NICE_IO)` once at start-up to stand in for
-all of them — `NICE_IO` and `NICE_CPU` are both 10, and every stage this
-script reaches (including `parse-akn`, the one CPU-bound stage in the mix)
-resolves to one or the other, so one call reproduces what a sequence of each
-stage's own `main()` would have set, without stacking `os.nice()`'s
-cumulative increment once per stage. The load-average ceiling needs no extra
-wiring here: it already lives inside `extract_stage.run()` and
-`parse_akn_stage.run()` themselves, so calling `run()` directly still gets
-it.
+all of them, guarded by `assert throttle.NICE_IO == throttle.NICE_CPU` right
+before the call — `NICE_IO` and `NICE_CPU` are both 10 today, and every
+stage this script reaches (including `parse-akn`, the one CPU-bound stage in
+the mix) resolves to one or the other, so one call reproduces what a
+sequence of each stage's own `main()` would have set, without stacking
+`os.nice()`'s cumulative increment once per stage. If the two constants ever
+diverge, the assertion fails loudly instead of silently reniceing `parse-akn`
+at the wrong priority with no test able to catch it after the fact
+(`os.nice()` cannot be corrected back in-process). The load-average ceiling
+needs no extra wiring here: it already lives inside `extract_stage.run()`
+and `parse_akn_stage.run()` themselves, so calling `run()` directly still
+gets it.
 
-Compared to `run-stage.sh`, the wrapper itself carries three things a
-supervised one-off invocation can get away without: a `flock` so a slow
-previous run and the next scheduled one can never claim the same rows at
-once (row-locking here is explicitly not a distributed lock — see "Running
-one" above), log rotation at 20 MB so a job running 365+ times a year with
-nobody watching does not grow the log file forever, and an explicit
-`FAILED`/`OK` marker on every run (via a shell `trap`, so a crash inside
-Python still gets one) — there is no `MAILTO` configured for this cron
-entry, so the log is the only place a failure is visible at all.
+Compared to `run-stage.sh`, the wrapper itself carries a few things a
+supervised one-off invocation can get away without:
+
+- a `flock` so a slow previous run and the next scheduled one can never
+  claim the same rows at once (row-locking here is explicitly not a
+  distributed lock — see "Running one" above). The lock fd is deliberately
+  **not** inherited by the `python3` child (`9>&-` on that line) — the
+  wrapper shell holds it for its own whole lifetime, which is what enforces
+  the mutex, and there is no reason for a process that knows nothing about
+  the lock to also hold a copy of it.
+- log rotation at 20 MB so a job running 365+ times a year with nobody
+  watching does not grow the log file forever.
+- an explicit `FAILED`/`OK` marker on every run, via a shell `trap` that
+  captures `$?` into a variable as its very first action (a command
+  substitution earlier in the same line — `$(date -Is)` — runs first and
+  resets `$?` before it would otherwise be read, so capturing it immediately
+  is what makes the reported exit code the real one) — there is no `MAILTO`
+  configured for this cron entry, so the log is the only place a failure is
+  visible at all. The `OK` line is written as an ordinary command with the
+  trap cleared, not by re-arming the trap: an `EXIT` trap only actually
+  fires once the *whole script process* exits, by which point
+  `{ ... } >> "$LOG"` has already torn its own redirection down, so a
+  trap re-armed there prints to cron's discarded stdout instead of the log.
 
 **Checking last night's run:**
 
     tail -80 /data/ch-corpus/logs/delta.log
     # last line should read "... delta finished: OK ===". FAILED, or no
     # matching line for last night at all, both need investigation.
-    grep 'changed key(s) match no spider' /data/ch-corpus/logs/delta.log | tail -5
+    grep 'resolve to no spider' /data/ch-corpus/logs/delta.log | tail -5
     psql -c "SELECT stage, count(*) FROM ch_court_decisions GROUP BY 1"
     psql -c "SELECT stage, count(*) FROM ch_act_version GROUP BY 1"
 
 **Recovering from a night that did not work:** the delta is restartable and
 idempotent by construction — every stage it calls upserts, and
-`snapshot-state.json` is only overwritten after a successful pass, so a
-crashed run leaves the previous night's state in place and the next
-scheduled run (or a manual `./run-delta.sh`) picks up the full gap since
-then, not just one night's worth. If `flock` reports the lock already held
-but no process is actually running (a hard reboot mid-run, say), remove
-`/data/ch-corpus/logs/delta.lock` before retrying — nothing else needs it
-released automatically, since the OS already reclaims the fd on process
-exit in the ordinary case.
+`snapshot-state.json` is only overwritten after a successful pass (never for
+a spider whose listing failed this run — its old value is kept so the next
+run sees it as changed again — and never for a snapshot that failed to parse
+into the expected shape), so a crashed run leaves the previous night's state
+in place and the next scheduled run (or a manual `./run-delta.sh`) picks up
+the full gap since then, not just one night's worth.
+
+**If a run needs to be stopped, or looks stuck: do NOT delete
+`delta.lock`.** `flock` is advisory on the *open file descriptor*, not the
+file name — removing the file releases nothing a live process still holds,
+and it opens a window where a fresh run locks the new inode while the old
+process is still writing against the database under the previous one. There
+is also no "stale lock after a reboot" case to clean up: a reboot kills
+whatever held the fd, and the OS releases the lock with it automatically —
+nothing to remove by hand either way. Instead, check what is actually
+running (`pgrep -fa run-delta.sh`; `pgrep -fa chpipe.delta` separately, since
+the `python3` child does not hold the lock fd and can keep running after the
+wrapper is gone) and kill the real process. Once nothing holds the fd, the
+lock releases itself.

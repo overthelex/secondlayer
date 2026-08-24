@@ -320,3 +320,49 @@ def test_the_usage_comment_names_both_halves():
     usage = _RUN_STAGE.read_text()
     for name in ("fetch-xml", "parse-akn", "project-legacy"):
         assert name in usage, f"the usage comment does not mention {name}"
+
+
+# --- chpipe.delta: the one entry point run-stage.sh does NOT dispatch ---
+#
+# delta.main() has its own wrapper (run-delta.sh, a cron entry, not a
+# run-stage.sh case label) and its own composition -- it calls
+# run_decisions() and run_legislation() rather than a single stage `run()`.
+# Round 1 review (task-5-findings.md, F11) found the load-bearing claim in
+# delta.main()'s own docstring -- exactly one renice, at NICE_IO, standing
+# in for every stage's own main() -- confirmed only by hand and kept true by
+# nothing in the suite. These are the tests that reach it.
+
+from chpipe import delta as delta_module
+
+
+def test_delta_main_is_reachable(monkeypatch, no_renice):
+    """no_env (autouse) already patches Settings.from_env for every test in
+    this file, delta.main() included."""
+    monkeypatch.setattr(delta_module, "run_decisions",
+                        lambda settings, **kw: delta_module.DeltaReport())
+    monkeypatch.setattr(delta_module, "run_legislation",
+                        lambda settings: delta_module.DeltaReport())
+    result = delta_module.main()
+    assert isinstance(result, delta_module.DeltaReport)
+
+
+def test_delta_main_renices_exactly_once_at_nice_io(monkeypatch, no_renice):
+    monkeypatch.setattr(delta_module, "run_decisions",
+                        lambda settings, **kw: delta_module.DeltaReport())
+    monkeypatch.setattr(delta_module, "run_legislation",
+                        lambda settings: delta_module.DeltaReport())
+    delta_module.main()
+    assert no_renice == [throttle.NICE_IO], \
+        "delta.main() must renice once, standing in for every stage's own main()"
+
+
+def test_delta_main_refuses_to_renice_if_nice_io_and_nice_cpu_diverge(
+        monkeypatch, no_renice):
+    """F12: the single-renice call is only correct while the two constants
+    are equal. A silent renice(NICE_IO) after they diverge would run
+    parse-akn -- the one CPU-bound stage delta reaches -- at the wrong,
+    irreversible priority with nothing left to notice."""
+    monkeypatch.setattr(throttle, "NICE_CPU", throttle.NICE_IO + 1)
+    with pytest.raises(AssertionError):
+        delta_module.main()
+    assert no_renice == [], "must fail before ever calling renice, not after"

@@ -1,16 +1,32 @@
 """Daily delta for both Swiss corpora.
 
-delta.py never issues SQL of its own -- every write happens inside a stage
-whose own test file already exercises it against real Postgres (see
-test_index_stage.py, test_fetch_stage.py, test_acts_stage.py,
-test_versions_stage.py). What is under test here is composition: which
-stages get called, with which arguments, and how the entscheidsuche snapshot
-comparison decides that. So these tests monkeypatch stage.run the same way
-tests/test_entry_points.py does, and touch no database.
+Round 1 review (task-5-findings.md) found the comparison logic sound but
+everything around it not fit to run unattended for a year: an unconditional
+state save that retires real growth behind a swallowed listing failure or a
+malformed snapshot (F2/F3), a withdrawn court invisible to spiders_that_grew
+(F5), a WARNING that reported the wrong number (F9), a tautological test
+(F10), and a spider/court_code mapping the round-1 report wrongly called a
+research task instead of a query. This file's structure follows that review:
+the pure-function tests from the brief and round 1 stay as they were (the
+comparison logic they cover was upheld), and the fixes below each get a test
+that fails on the pre-fix code -- verified by hand for every one of them
+(see the fix-round-2 report for the red/green transcript).
+
+court_code_spider_map() issues real SQL, so its own tests -- and every
+run_decisions test that reaches a non-empty `grown` set, since run_decisions
+now queries that map -- run against a real ch_court_decisions table via
+CHPIPE_TEST_DSN, the same fixture shape test_index_stage.py and
+test_fetch_stage.py already use. Tests that never get past an empty `grown`
+set (nothing changed, or no snapshot found) still touch no database, since
+run_decisions only opens a connection once it has something to look up.
 """
 import datetime
+import json
+import logging
+import os
 import pathlib
 
+import psycopg
 import pytest
 
 from chpipe import delta
@@ -18,6 +34,9 @@ from chpipe.config import Settings
 from chpipe.stages import (acts_stage, extract_stage, fetch_stage,
                            fetch_xml_stage, index_stage, load_stage,
                            parse_akn_stage, versions_stage)
+
+_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
+MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 
 
 def test_snapshot_url_uses_the_iso_date():
@@ -56,16 +75,6 @@ def test_non_spider_keys_from_the_snapshot_are_dropped():
 
 
 # --- The nested-counter problem: canton and chamber rollups are noise ---
-#
-# reports.completeness()'s docstring (chpipe/reports.py) measured the shape
-# of Snapshots/{date}.json against the live 2026-08-20 file: `total` mixes
-# three independent levels that each separately sum to `total_alle` -- a
-# per-canton rollup (28 keys, e.g. "ZH"), a per-court-code level (131 keys,
-# e.g. "ZH_OG"), and a per-chamber level (360 keys, e.g. "CH_BGer_001"). Only
-# the chamber level carries the trailing "_NNN" shape already covered above;
-# a bare two-letter canton rollup needs its own case, because nothing else
-# distinguishes "ZH" (a rollup nobody can re-index) from a genuinely short
-# spider name.
 
 def test_a_bare_two_letter_canton_rollup_is_dropped():
     grown = delta.spiders_that_grew({}, {"ZH": 500, "ZH_OG": 12})
@@ -78,25 +87,99 @@ def test_a_chamber_level_key_with_a_multi_digit_suffix_is_dropped():
     assert grown == ["CH_BGer"]
 
 
-# --- run_decisions: snapshot fetch, fallback, and the ALL_SPIDERS gate ---
+# --- F5: a court withdrawn so completely it vanishes from `current` ---
 #
-# spiders_that_grew is deliberately name-agnostic (it would otherwise fail
-# the two tests above and the "XX_New"/"ZG_OG" cases): it returns whatever
-# court-code-shaped key changed, whether or not that string is one of our 54
-# spider directory names. reports.py's own completeness() gate found that
-# only 7 of 54 match by exact string (entscheidsuche's "ZH_OG" is our
-# "ZH_Obergericht"). Baking an ALL_SPIDERS filter into spiders_that_grew
-# itself would just relocate that same 7-of-54 blind spot into the function
-# everything else trusts. So the ALL_SPIDERS gate belongs one level up, in
-# run_decisions, which is the only place that actually needs a real spider
-# directory name to call index_stage.run. Keys that changed but match no
-# spider name are real signal that must not be silently dropped -- see the
-# "unmapped" assertions below.
+# Pre-fix, the comprehension iterated current.items() only, so a name absent
+# from `current` never became a loop variable and could never be compared --
+# spiders_that_grew({"ZG_Obergericht": 500}, {}) returned []. Verified by
+# hand against the pre-fix code before writing this test.
+
+def test_a_court_that_vanishes_entirely_from_current_is_returned():
+    assert delta.spiders_that_grew({"ZG_Obergericht": 500}, {}) == ["ZG_Obergericht"]
+
+
+def test_a_vanished_court_is_reported_alongside_an_unrelated_growth():
+    grown = delta.spiders_that_grew({"ZG_Obergericht": 500, "CH_BGer": 100},
+                                    {"CH_BGer": 103})
+    assert grown == ["CH_BGer", "ZG_Obergericht"]
+
+
+# --- court_code_spider_map: the mapping is a query, not a research task ---
+#
+# ch_court_decisions.court_code is written from the document JSON's own
+# "Signatur" field (es_document.parse(), confirmed by reading the source and
+# the ZG fixture: Signatur "ZG_OG_001", Spider "ZG_Obergericht") -- chamber
+# granularity, one level finer than the court-code level `total`'s "rest"
+# keys use. Stripping the same "_<digits>" suffix spiders_that_grew already
+# treats as chamber noise recovers that level.
+
+@pytest.fixture
+def conn():
+    if not os.environ.get("CHPIPE_TEST_DSN"):
+        pytest.skip("CHPIPE_TEST_DSN not set")
+    with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
+        c.execute("DROP TABLE IF EXISTS ch_court_decisions")
+        c.execute("""
+            CREATE TABLE ch_court_decisions (
+                ecli text PRIMARY KEY, spider text NOT NULL,
+                court_code text, court_name text, chamber text,
+                decision_type text, decision_date date, docket_number text,
+                parties text, abstract text, full_text text,
+                pdf_url text, json_url text, languages text[], metadata_json jsonb,
+                imported_at timestamptz DEFAULT now(),
+                updated_at timestamptz DEFAULT now())
+        """)
+        c.execute(MIGRATION.read_text())
+        yield c
+
+
+def _seed(conn, ecli, spider, court_code):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, court_code) VALUES (%s,%s,%s)",
+        (ecli, spider, court_code))
+
+
+def test_court_code_spider_map_strips_the_chamber_suffix(conn):
+    _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
+    _seed(conn, "ECLI:2", "ZG_Obergericht", "ZG_OG_002")
+    mapping = delta.court_code_spider_map(conn)
+    assert mapping == {"ZG_OG": "ZG_Obergericht"}
+
+
+def test_court_code_spider_map_is_partial_by_construction(conn):
+    """A spider with zero rows contributes no entry -- that is the correct
+    behaviour (see the function's own docstring), not a gap to paper over."""
+    _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
+    mapping = delta.court_code_spider_map(conn)
+    assert "AG_Gerichte" not in mapping
+    assert set(mapping.values()) == {"ZG_Obergericht"}
+
+
+def test_court_code_spider_map_keeps_the_first_spider_on_a_conflict(conn, caplog):
+    _seed(conn, "ECLI:1", "SpiderA", "XX_YY_001")
+    _seed(conn, "ECLI:2", "SpiderB", "XX_YY_002")
+    with caplog.at_level(logging.WARNING):
+        mapping = delta.court_code_spider_map(conn)
+    assert mapping["XX_YY"] in ("SpiderA", "SpiderB")
+    assert "maps to both" in caplog.text
+
+
+# --- run_decisions: composition, monkeypatched at the stage boundary ---
+
+def _settings(tmp_path):
+    return Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=1,
+                    cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
+                    max_attempts=3)
+
+
+def _use_conn(monkeypatch, conn):
+    """The same pattern test_index_stage.py uses to hand a fixture
+    connection to code that calls db.connect(settings) internally."""
+    monkeypatch.setattr(delta.db, "connect", lambda settings: conn)
+    monkeypatch.setattr(conn, "close", lambda: None, raising=False)
+
 
 class _FakeAsyncFetcher:
-    """Stands in for chpipe.http.Fetcher: an async context manager whose
-    .json(url) either returns a fixed payload or raises, keyed by url."""
-
     def __init__(self, by_url: dict):
         self._by_url = by_url
 
@@ -112,18 +195,13 @@ class _FakeAsyncFetcher:
         return self._by_url[url]
 
 
-def _settings(tmp_path):
-    return Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=1,
-                    cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
-                    max_attempts=3)
-
-
-def _stub_decision_stages(monkeypatch):
+def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=()):
     seen = {"index": None, "fetch": [], "extract": [], "load": []}
 
     def fake_index(settings, spiders):
         seen["index"] = spiders
-        return index_stage.IndexReport(inserted=len(spiders) * 2)
+        return index_stage.IndexReport(inserted=inserted,
+                                       failed_spiders=list(failed_spiders))
 
     def fake_fetch(settings, limit=None, spider=None):
         seen["fetch"].append(spider)
@@ -145,13 +223,12 @@ def _stub_decision_stages(monkeypatch):
 
 
 def test_run_decisions_only_dispatches_names_that_are_real_spiders(
-        tmp_path, monkeypatch):
-    """"ZH_OG" changed but is not a spider directory name (ours is
-    "ZH_Obergericht"); "ZH_Obergericht" itself also changed and IS one.
-    Only the second may reach index_stage.run -- handing "ZH_OG" to it would
-    request https://entscheidsuche.ch/docs/ZH_OG/, a listing that does not
-    exist under that name."""
+        tmp_path, monkeypatch, conn):
+    """"ZH_OG" changed but is not a spider directory name and the corpus
+    holds no court_code for it yet; "ZH_Obergericht" itself also changed and
+    IS a real spider. Only the second may reach index_stage.run."""
     monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
     snapshot = {"total": {"ZH_OG": 50, "ZH_Obergericht": 12}, "total_alle": 62}
     fetcher = _FakeAsyncFetcher({
         delta.snapshot_url(datetime.date(2026, 8, 20)): snapshot,
@@ -168,14 +245,35 @@ def test_run_decisions_only_dispatches_names_that_are_real_spiders(
     assert seen["load"] == ["ZH_Obergericht"]
 
 
-def test_run_decisions_falls_back_to_an_earlier_snapshot(tmp_path, monkeypatch):
+def test_run_decisions_resolves_a_grown_key_through_the_court_code_map(
+        tmp_path, monkeypatch, conn):
+    """The core capability round 1 was missing: "ZH_OG" (entscheidsuche's
+    own spelling) resolves to our spider "ZH_Obergericht" because the corpus
+    already holds a chamber-level court_code ("ZH_OG_003") under that
+    spider -- no hand-maintained table, no exact-name match needed."""
+    _seed(conn, "ECLI:1", "ZH_Obergericht", "ZH_OG_003")
     monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
-    # Today's and yesterday's files are not published yet; the one from two
-    # days ago is -- "falls back up to three days" per the README.
+    _use_conn(monkeypatch, conn)
+    snapshot = {"total": {"ZH_OG": 13}, "total_alle": 13}
+    fetcher = _FakeAsyncFetcher({
+        delta.snapshot_url(datetime.date(2026, 8, 20)): snapshot,
+    })
+    seen = _stub_decision_stages(monkeypatch)
+
+    report = delta.run_decisions(_settings(tmp_path),
+                                 fetcher_factory=lambda: fetcher)
+
+    assert report.spiders == ["ZH_Obergericht"]
+    assert seen["index"] == ["ZH_Obergericht"]
+
+
+def test_run_decisions_falls_back_to_an_earlier_snapshot(tmp_path, monkeypatch, conn):
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
     older = datetime.date(2026, 8, 18)
     snapshot = {"total": {"ZG_Obergericht": 5}, "total_alle": 5}
     fetcher = _FakeAsyncFetcher({delta.snapshot_url(older): snapshot})
-    seen = _stub_decision_stages(monkeypatch)
+    _stub_decision_stages(monkeypatch)
 
     report = delta.run_decisions(_settings(tmp_path),
                                  fetcher_factory=lambda: fetcher)
@@ -183,8 +281,7 @@ def test_run_decisions_falls_back_to_an_earlier_snapshot(tmp_path, monkeypatch):
     assert report.spiders == ["ZG_Obergericht"]
 
 
-def test_run_decisions_gives_up_quietly_after_four_missing_days(
-        tmp_path, monkeypatch):
+def test_run_decisions_gives_up_quietly_after_four_missing_days(tmp_path, monkeypatch):
     monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
     fetcher = _FakeAsyncFetcher({})   # nothing published at any of the 4 URLs
     seen = _stub_decision_stages(monkeypatch)
@@ -197,8 +294,9 @@ def test_run_decisions_gives_up_quietly_after_four_missing_days(
 
 
 def test_run_decisions_persists_state_so_an_unchanged_run_dispatches_nothing(
-        tmp_path, monkeypatch):
+        tmp_path, monkeypatch, conn):
     monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
     url = delta.snapshot_url(datetime.date(2026, 8, 20))
     snapshot = {"total": {"ZG_Obergericht": 5}, "total_alle": 5}
     seen = _stub_decision_stages(monkeypatch)
@@ -216,16 +314,191 @@ def test_run_decisions_persists_state_so_an_unchanged_run_dispatches_nothing(
 
 
 def test_run_decisions_reports_documents_inserted_by_index_stage(
-        tmp_path, monkeypatch):
+        tmp_path, monkeypatch, conn):
+    """F10 fix: the stub's inserted count is independent of len(spiders),
+    so a run_decisions that regresses to returning a bare DeltaReport() (the
+    mutation the round-1 review used to prove the old test was a tautology:
+    0 == 0*2 passed) now fails this assertion (0 != 41)."""
     monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
     url = delta.snapshot_url(datetime.date(2026, 8, 20))
     snapshot = {"total": {"ZG_Obergericht": 5, "CH_BGer": 9}, "total_alle": 14}
     fetcher = _FakeAsyncFetcher({url: snapshot})
-    _stub_decision_stages(monkeypatch)
+    _stub_decision_stages(monkeypatch, inserted=41)
 
     report = delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
 
-    assert report.new_documents == len(report.spiders) * 2  # fake_index's rule
+    assert report.new_documents == 41
+
+
+# --- F2: a swallowed per-spider listing failure must not retire the night ---
+
+def test_a_failed_listing_keeps_the_old_baseline_so_the_next_run_retries(
+        tmp_path, monkeypatch, conn):
+    """index_stage.run() swallows a listing failure into `failed_spiders`
+    and returns normally -- it does not raise. Pre-fix, _save_state was
+    unconditional: reproduced by hand, night 1 with the listing failing
+    still wrote state {'CH_BGer': 100}, and night 2 against an unchanged
+    snapshot found nothing grown and retried nothing."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=["CH_BGer"])
+
+    fetcher1 = _FakeAsyncFetcher({url: snapshot})
+    first = delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher1)
+    assert first.spiders == ["CH_BGer"]
+
+    # Same snapshot again: if the failed listing had advanced the baseline,
+    # this second call would see nothing grown. It must see CH_BGer again.
+    fetcher2 = _FakeAsyncFetcher({url: snapshot})
+    second = delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher2)
+    assert second.spiders == ["CH_BGer"], \
+        "a spider whose listing failed must still look changed next run"
+
+
+def test_a_failed_listing_with_no_prior_state_drops_the_key_entirely(
+        tmp_path, monkeypatch, conn):
+    """First-ever run, no snapshot-state.json yet: a failed listing must not
+    plant a baseline for a spider we never actually walked."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=["CH_BGer"])
+
+    fetcher = _FakeAsyncFetcher({url: snapshot})
+    delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
+
+    state = delta._load_state(_settings(tmp_path))
+    assert "CH_BGer" not in state
+
+
+# --- F3: a malformed snapshot must not be treated as a no-growth night ---
+
+def test_a_snapshot_missing_the_total_key_is_not_accepted(tmp_path, monkeypatch):
+    """Pre-fix, snapshot.get("total", {}) turned a missing key into {}
+    silently -- byte-identical to a real no-growth night, and it overwrote
+    the stored baseline with {}. Reproduced by hand from
+    {"CH_BGer": 177809} to {}."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    fetcher = _FakeAsyncFetcher({url: {"generated": "2026-08-20", "total_alle": 5}})
+    seen = _stub_decision_stages(monkeypatch)
+
+    report = delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
+
+    assert report == delta.DeltaReport()
+    assert seen["index"] is None
+    # No state file at all: a malformed snapshot must never look like the
+    # successful pass that writes one.
+    assert not delta._state_path(_settings(tmp_path)).exists()
+
+
+def test_a_malformed_snapshot_does_not_clobber_a_good_prior_baseline(
+        tmp_path, monkeypatch, conn):
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    good_url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    good_snapshot = {"total": {"CH_BGer": 177809, "ZH_Obergericht": 5},
+                     "total_alle": 177814}
+    _stub_decision_stages(monkeypatch)
+    delta.run_decisions(_settings(tmp_path),
+                        fetcher_factory=lambda: _FakeAsyncFetcher({good_url: good_snapshot}))
+    before = delta._load_state(_settings(tmp_path))
+    assert before == good_snapshot["total"]
+
+    # The next night, today's file parses but has lost its "total" map, and
+    # nothing earlier in the lookback window is any better.
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 21))
+    broken = _FakeAsyncFetcher({})   # every lookback URL 404s -- see below
+    for offset in range(delta._SNAPSHOT_LOOKBACK_DAYS):
+        day = datetime.date(2026, 8, 21) - datetime.timedelta(days=offset)
+        broken._by_url[delta.snapshot_url(day)] = {"generated": str(day)}  # no "total"
+
+    report = delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: broken)
+
+    assert report == delta.DeltaReport()
+    after = delta._load_state(_settings(tmp_path))
+    assert after == good_snapshot["total"], "the good baseline must survive untouched"
+
+
+# --- F9: the WARNING reports the growth actually missed, not the stock ---
+
+def test_unmapped_growth_warning_reports_the_miss_not_the_stock(
+        tmp_path, monkeypatch, conn, caplog):
+    """Pre-fix this summed current.get(name, 0) -- the STOCK of the
+    unmapped court, constant on almost every real night -- instead of
+    current - previous, the actual overnight change. Two unmapped courts:
+    one grew by 3, one is untouched (present unchanged is impossible since
+    spiders_that_grew already filters those out, so both here are "grown"
+    in the union sense used above -- a withdrawal counts too, at 0 net
+    growth after the floor)."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    # ZH_Obergericht IS a real spider (mapped exactly), grows by 2.
+    # ZH_OG and VD_TC resolve to no spider by name and have no court_code
+    # rows in the corpus (conn is empty), so both are unmapped; ZH_OG grows
+    # by 3, VD_TC only had its stock recorded, not a delta -- give it 500
+    # in `current` with 497 already in `previous` so its GROWTH is 3 too.
+    snapshot = {"total": {"ZH_Obergericht": 14, "ZH_OG": 53, "VD_TC": 500},
+               "total_alle": 567}
+    state_path = delta._state_path(_settings(tmp_path))
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(
+        {"ZH_Obergericht": 12, "ZH_OG": 50, "VD_TC": 497}))
+    _stub_decision_stages(monkeypatch)
+
+    with caplog.at_level(logging.WARNING):
+        delta.run_decisions(_settings(tmp_path),
+                            fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("missed 6 of 8" in msg for msg in warnings), warnings
+    # The old (wrong) stock-based number would have been 53 + 500 = 553; it
+    # must not appear anywhere in the log.
+    assert not any("553" in msg for msg in warnings)
+
+
+# --- F13: a real bug in the fetch path must not read like a routine 404 ---
+
+def test_a_non_fetch_error_from_the_fetcher_is_logged_loudly(tmp_path, monkeypatch, caplog):
+    """Pre-fix, `except Exception` at INFO made a broken fetcher_factory
+    (e.g. one that raises TypeError because it was miswired) indistinguishable
+    from the routine "not published yet" 404 for all four lookback attempts."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+
+    def broken_factory():
+        raise TypeError("simulated miswiring")
+
+    with caplog.at_level(logging.INFO):
+        report = delta.run_decisions(_settings(tmp_path), fetcher_factory=broken_factory)
+
+    assert report == delta.DeltaReport()
+    # Per-attempt warnings for the actual bug, kept apart from the separate
+    # (and legitimate) top-level "no snapshot published" warning
+    # run_decisions itself logs once nothing usable turned up at all.
+    bug_warnings = [r for r in caplog.records if r.levelno == logging.WARNING
+                    and "snapshot fetch at" in r.getMessage()]
+    infos = [r for r in caplog.records if r.levelno == logging.INFO
+            and "no snapshot at" in r.getMessage()]
+    assert len(bug_warnings) == delta._SNAPSHOT_LOOKBACK_DAYS, \
+        "every attempt hit the same bug and must be loud every time"
+    assert infos == [], "a real defect must not also log as a routine miss"
+
+
+# --- F12: the single-renice premise (NICE_IO == NICE_CPU) must not silently rot ---
+
+def test_main_refuses_to_renice_once_if_the_two_priorities_diverge(monkeypatch):
+    """The assertion fires before Settings.from_env(), so this needs no
+    CHPIPE_DSN -- a diverged premise must be caught before main() gets
+    anywhere near touching the environment or a stage."""
+    from chpipe import throttle
+    monkeypatch.setattr(throttle, "NICE_CPU", throttle.NICE_IO + 1)
+    with pytest.raises(AssertionError):
+        delta.main()
 
 
 # --- run_legislation: acts and versions are cheap, so re-run both in full ---
@@ -250,8 +523,5 @@ def test_run_legislation_runs_acts_then_versions_then_drains_the_xml_queue(
 
     report = delta.run_legislation(_settings(tmp_path))
 
-    # versions is driven by ch_act (see versions_stage.run's own docstring),
-    # and fetch-xml/parse-akn drain rows versions just discovered -- so the
-    # call order is not a style choice, it is the dependency order.
     assert calls == ["acts", "versions", "fetch-xml", "parse-akn"]
     assert report.new_versions == 7

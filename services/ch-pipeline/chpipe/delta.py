@@ -1,9 +1,12 @@
 """Daily delta for both Swiss corpora, run once a night once the backfill is
-finished (spec section 10). Nothing here issues SQL of its own: every write
-happens inside a stage that already has its own real-Postgres tests
-(index_stage, fetch_stage, extract_stage, load_stage, acts_stage,
-versions_stage, fetch_xml_stage, parse_akn_stage). This module only decides
-which of those stages to call, and with what arguments.
+finished (spec section 10). Every WRITE happens inside a stage that already
+has its own real-Postgres tests (index_stage, fetch_stage, extract_stage,
+load_stage, acts_stage, versions_stage, fetch_xml_stage, parse_akn_stage) --
+this module only decides which of those stages to call, and with what
+arguments. It does issue one read of its own, court_code_spider_map()'s
+`SELECT DISTINCT`, covered by its own real-Postgres tests below (round 1 of
+this task shipped with no direct SQL at all; see that function's docstring
+for why a query earns its way in here).
 
 Decisions: entscheidsuche publishes /docs/Snapshots/{date}.json with a
 per-court counter map (`total`) and a grand total (`total_alle`). Comparing
@@ -29,17 +32,25 @@ problems follow from that, and they are handled in two different places:
     why checking names there would be the same 7-of-54 bug relocated.
 
   * the remaining court-code keys are real signal, but most of them still
-    do not spell one of our 54 spider directory names, and there is no
-    verified name-translation table in this codebase to close that gap (see
-    chpipe/reports.py's own docstring, which documents the same blind spot
-    rather than papering over it). run_decisions() is the one place that
-    needs an actual directory name -- it is what gets handed to
-    index_stage.run(), which requests https://entscheidsuche.ch/docs/{name}/
-    -- so THAT is where the ALL_SPIDERS filter belongs, and only changed
-    keys that survive it are re-walked. Keys that changed but match no
-    spider name are not silently dropped: they are logged at WARNING with
-    their share of total_alle, every run, so a delta that is quietly missing
-    most of the corpus never reads as a clean night.
+    do not spell one of our 54 spider directory names. There is no
+    hand-maintained translation table for that in this codebase, and round 1
+    of this task did not build one -- chpipe/reports.py's docstring documents
+    the same blind spot rather than papering over it. What closes most of the
+    gap instead is already sitting in the data: ch_court_decisions.court_code
+    is entscheidsuche's own "Signatur" field (es_document.parse()), in the
+    SAME vocabulary Snapshots/{date}.json uses, one level finer (chamber, not
+    court-code) than what `total`'s "rest" keys need -- stripping the same
+    "_<digits>" suffix recovers that level. court_code_spider_map() builds
+    root-court-code -> spider from `SELECT DISTINCT spider, court_code`, so
+    the table is only ever as complete as what has actually been indexed,
+    and it is rebuilt fresh every run rather than trusted stale. A grown key
+    that resolves through neither the exact-name check nor this map is real
+    signal we still cannot act on, and it is not silently dropped:
+    run_decisions() logs it at WARNING with how much of tonight's growth
+    (not the courts' total stock -- see court_code_spider_map's own
+    docstring and F9 in the round-1 review) it represents, every run, so a
+    delta that is quietly missing part of the corpus never reads as a clean
+    night.
 
 Legislation: acts and versions are idempotent upserts over the whole graph
 (fedlex_queries.py), and the whole graph is a few minutes of SPARQL -- far
@@ -58,6 +69,7 @@ import pathlib
 import re
 from dataclasses import dataclass, field
 
+from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
 from .stages import (acts_stage, extract_stage, fetch_stage, fetch_xml_stage,
@@ -101,6 +113,15 @@ def spiders_that_grew(previous: dict, current: dict) -> list[str]:
     taken down. A key present in `current` but not `previous` (a brand new
     court, or the first run with no stored state at all) counts as grown.
 
+    A key present in `previous` but **gone entirely** from `current` --
+    a court withdrawn so completely it no longer appears in the map at all,
+    not just at a lower count -- is the maximal case of that same withdrawal
+    and must be caught the same way. Iterating `current.items()` alone
+    (the previous shape of this function) misses it: a name absent from
+    `current` never becomes a loop variable, so it can never be compared.
+    Iterating the union of both dicts' keys is what makes "gone" and
+    "shrunk" the same code path instead of two.
+
     Deliberately NOT filtered against a known-spider list: entscheidsuche's
     court-code spelling does not match our spider directory names for most
     of the corpus (see the module docstring), so filtering here would just
@@ -111,10 +132,10 @@ def spiders_that_grew(previous: dict, current: dict) -> list[str]:
     job to decide which of the remaining keys it can act on.
     """
     changed = [
-        name for name, count in current.items()
+        name for name in previous.keys() | current.keys()
         if not _CHAMBER_SUFFIX.search(name)
         and not _CANTON_ROLLUP.match(name)
-        and previous.get(name) != count
+        and previous.get(name) != current.get(name)
     ]
     return sorted(changed)
 
@@ -150,19 +171,111 @@ async def _fetch_snapshot(url: str, fetcher_factory) -> dict:
 
 
 def _fetch_latest_snapshot(fetcher_factory) -> tuple[dict | None, datetime.date | None]:
-    """The most recent published Snapshots file, trying today first and
-    walking backwards. Returns (None, None) if nothing was found."""
+    """The most recent published, well-formed Snapshots file, trying today
+    first and walking backwards. Returns (None, None) if nothing usable was
+    found in the lookback window.
+
+    Two failure shapes are handled differently on purpose:
+
+      * FetchError (a 404, a timeout) means "not published yet" -- the
+        expected, nightly-routine case while the lookback covers it. Logged
+        at INFO.
+      * anything else -- a bad fetcher_factory raising TypeError, a response
+        that is not JSON at all -- is a real defect, not a quiet fact about
+        publication timing, and reads at WARNING so it cannot be mistaken
+        for the routine case (F13: `except Exception` at INFO made a broken
+        fetcher indistinguishable from a normal 404 for all four attempts).
+      * a response that parses as JSON but has no `total` dict -- a schema
+        change, an HTML error page entscheidsuche served with a 200 -- is
+        published, but not the shape this function knows how to read. It is
+        NOT accepted as this night's snapshot (a malformed `total` silently
+        becomes `{}` otherwise, which is byte-identical to "nothing grew"
+        and would overwrite the stored baseline with it -- see run_decisions
+        for why that must never happen). Logged at WARNING for the same
+        reason as the line above: this is not a "not published yet" night.
+    """
     today = _today()
     for offset in range(_SNAPSHOT_LOOKBACK_DAYS):
         day = today - datetime.timedelta(days=offset)
         url = snapshot_url(day)
         try:
             snapshot = asyncio.run(_fetch_snapshot(url, fetcher_factory))
-        except Exception as exc:                          # noqa: BLE001
+        except FetchError as exc:
             log.info("no snapshot at %s (%s)", url, exc)
+            continue
+        except Exception as exc:                          # noqa: BLE001
+            log.warning("snapshot fetch at %s raised %s: %s -- this is NOT "
+                       "the routine 'not published yet' case, investigate",
+                       url, type(exc).__name__, exc)
+            continue
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("total"), dict):
+            log.warning(
+                "snapshot at %s parsed but has no usable 'total' map "
+                "(top-level keys: %s) -- treating it as unusable rather "
+                "than as a no-growth night", url,
+                sorted(snapshot.keys()) if isinstance(snapshot, dict) else type(snapshot))
             continue
         return snapshot, day
     return None, None
+
+
+def _growth(previous: dict, current: dict, names) -> int:
+    """Net new documents across `names`, this night only -- current minus
+    previous, floored at 0 per name so a withdrawal at one court does not
+    cancel out growth at another in the same sum."""
+    return sum(max(0, current.get(name, 0) - previous.get(name, 0)) for name in names)
+
+
+def court_code_spider_map(conn) -> dict[str, str]:
+    """Court-code-level key (e.g. "ZH_OG") -> our spider directory name
+    (e.g. "ZH_Obergericht"), built from documents already loaded rather than
+    from a hand-maintained table.
+
+    ch_court_decisions.court_code is written from the document JSON's own
+    "Signatur" field (es_document.parse(): `court_code=data.get("Signatur")`)
+    -- entscheidsuche's own identifier for the court, in the SAME vocabulary
+    Snapshots/{date}.json uses. But it is written at chamber granularity
+    ("ZG_OG_001", matching the fixture in es_document.py's own docstring),
+    one level finer than the court-code level `total`'s "rest" keys use
+    ("ZG_OG") -- stripping the identical "_<digits>" suffix
+    spiders_that_grew() already treats as chamber noise recovers exactly
+    that level. Verified against the real 2026-08-23 snapshot: both "ZG_OG"
+    and "CH_BGer" are members of its 131-key court-code level, the same
+    level stripping produces here.
+
+    This is necessarily partial, and grows only as documents already sit in
+    the table: a spider we have never successfully indexed contributes no
+    row and therefore no entry. That is the correct behaviour, not a bug to
+    paper over with an invented one -- see run_decisions for how the
+    remaining gap is reported, never silently assumed away.
+    """
+    rows = conn.execute(
+        "SELECT DISTINCT spider, court_code FROM ch_court_decisions "
+        "WHERE court_code IS NOT NULL"
+    ).fetchall()
+    mapping: dict[str, str] = {}
+    for row in rows:
+        # db.connect() hands out dict_row in production; the test fixture's
+        # own bare psycopg.connect() hands out tuples (same convention
+        # index_stage.upsert() and versions_stage already follow) -- read
+        # either shape rather than assuming one.
+        spider, court_code = ((row["spider"], row["court_code"])
+                              if isinstance(row, dict) else (row[0], row[1]))
+        root = _CHAMBER_SUFFIX.sub("", court_code)
+        existing = mapping.get(root)
+        if existing is not None and existing != spider:
+            # Two different spiders reporting documents under the same
+            # stripped court code is a real data anomaly worth a human
+            # noticing, not a reason to crash a nightly job over. Keep the
+            # first one seen (deterministic given ORDER BY is absent only
+            # because DISTINCT already dedupes exact pairs; row order from
+            # Postgres without an ORDER BY is not guaranteed stable, so
+            # "first seen" is best-effort, not a promise) and say so.
+            log.warning("court_code_spider_map: %r maps to both %r and %r; "
+                       "keeping %r", root, existing, spider, existing)
+            continue
+        mapping[root] = spider
+    return mapping
 
 
 def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
@@ -173,43 +286,84 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
             "skipping the decisions delta", _SNAPSHOT_LOOKBACK_DAYS)
         return DeltaReport()
 
-    current = snapshot.get("total", {})
-    total_alle = snapshot.get("total_alle")
+    current = snapshot["total"]
     previous = _load_state(settings)
     grown = spiders_that_grew(previous, current)
 
+    if not grown:
+        _save_state(settings, current)
+        return DeltaReport()
+
+    conn = db.connect(settings)
+    try:
+        mapped = court_code_spider_map(conn)
+    finally:
+        conn.close()
+
+    # Two ways a changed key becomes an actual re-index target: it already
+    # spells one of our 54 directory names exactly (the 7-of-54 case), or
+    # the corpus-derived mapping resolves it to one (see
+    # court_code_spider_map). Keys reachable both ways are one spider, not
+    # two -- dict-building on spider name dedupes that for free.
     known = set(index_stage.ALL_SPIDERS)
-    actionable = [name for name in grown if name in known]
-    unmapped = [name for name in grown if name not in known]
+    actionable: dict[str, str] = {}     # spider -> the snapshot key that grew
+    for name in grown:
+        if name in known:
+            actionable[name] = name
+        elif name in mapped:
+            actionable[mapped[name]] = name
+    unmapped = [name for name in grown if name not in known and name not in mapped]
 
     if unmapped:
-        # Real signal we cannot act on by name -- see the module docstring.
-        # Logged every time, at WARNING, specifically so this never reads as
-        # a clean run: a delta that silently matches a handful of spiders by
-        # name while dropping the rest would be worse than no delta at all.
-        unmapped_docs = sum(current.get(name, 0) for name in unmapped)
-        share = (unmapped_docs / total_alle * 100) if total_alle else None
+        # Real signal we cannot act on -- see the module docstring. Logged
+        # every run, at WARNING, so this can never read as a clean night:
+        # missed_growth/total_growth is THIS NIGHT's number (F9 -- the stock
+        # of the unmapped courts is constant almost every night and says
+        # nothing about tonight; the growth actually missed is the same two
+        # dicts spiders_that_grew already compared).
+        total_growth = _growth(previous, current, grown)
+        missed_growth = _growth(previous, current, unmapped)
+        share = f"{missed_growth / total_growth * 100:.0f}%" if total_growth else "n/a"
         log.warning(
-            "delta(%s): %d changed key(s) match no spider directory name and "
-            "cannot be re-indexed by this run (~%d documents%s): %s",
-            day, len(unmapped), unmapped_docs,
-            f", ~{share:.1f}% of total_alle" if share is not None else "",
+            "delta(%s): %d changed key(s) resolve to no spider (by name or "
+            "by the corpus-derived court_code map) and cannot be re-indexed "
+            "tonight -- missed %d of %d new document(s) detected (%s): %s",
+            day, len(unmapped), missed_growth, total_growth, share,
             ",".join(unmapped))
 
     if not actionable:
         _save_state(settings, current)
         return DeltaReport()
 
+    spiders = sorted(actionable)
     log.info("delta(%s): %d spider(s) changed and are actionable: %s",
-             day, len(actionable), ",".join(actionable))
-    index_report = index_stage.run(settings, actionable)
-    for spider in actionable:
+             day, len(spiders), ",".join(spiders))
+    index_report = index_stage.run(settings, spiders)
+    for spider in spiders:
         fetch_stage.run(settings, spider=spider)
         extract_stage.run(settings, spider=spider)
         load_stage.run(settings, spider=spider)
 
-    _save_state(settings, current)
-    return DeltaReport(spiders=actionable, new_documents=index_report.inserted)
+    # index_stage.run() swallows a per-spider listing failure into
+    # `failed_spiders` rather than raising -- deliberately, so one flaky
+    # 116 MB CH_BGer listing does not abort the other 53 (index_stage.py).
+    # But that means a spider whose listing never actually loaded tonight
+    # must NOT have its snapshot counter advanced in the saved baseline:
+    # doing so unconditionally (the previous shape of this function) tells
+    # tomorrow's comparison nothing changed there, silently retiring
+    # tonight's real growth forever. Keep the OLD stored value (or, if there
+    # was none, drop the key) so the very next run sees it as changed again.
+    next_state = dict(current)
+    failed = set(index_report.failed_spiders)
+    for spider, key in actionable.items():
+        if spider in failed:
+            if key in previous:
+                next_state[key] = previous[key]
+            else:
+                next_state.pop(key, None)
+
+    _save_state(settings, next_state)
+    return DeltaReport(spiders=spiders, new_documents=index_report.inserted)
 
 
 def run_legislation(settings: Settings) -> DeltaReport:
@@ -253,6 +407,15 @@ def main() -> DeltaReport:
     from . import throttle
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
+    # The single-renice argument above only holds while the two constants
+    # are equal. If they ever diverge, a silent renice(NICE_IO) here would
+    # run parse_akn_stage -- the one CPU-bound stage in this job -- at the
+    # wrong priority, os.nice() cannot be corrected back in-process, and
+    # nothing else would fail. Make the premise loud instead of silent.
+    assert throttle.NICE_IO == throttle.NICE_CPU, (
+        "delta.main() renices once at NICE_IO on the assumption that it "
+        "equals NICE_CPU; that has diverged, so this needs a real per-stage "
+        "renice again, not one call standing in for all of them")
     throttle.renice(throttle.NICE_IO)
     settings = Settings.from_env()
     decisions = run_decisions(settings)

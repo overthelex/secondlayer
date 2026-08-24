@@ -54,7 +54,16 @@ fi
   # hanging on a start marker with no explanation. A plain nonzero exit is
   # not enough on its own: this job has no MAILTO configured, so the log is
   # the only place a failure is visible.
-  trap 'echo "=== $(date -Is) delta finished: FAILED (exit $?) ==="' EXIT
+  #
+  # `$?` is captured into `code` as the FIRST thing the trap does, before
+  # anything else runs. Round 1 shipped `echo "... (exit $?)"` directly:
+  # $(date -Is) is itself a command substitution, and bash evaluates it
+  # before $? is expanded in the same command line, so by the time $?
+  # appears in the string it is date's OWN exit status (usually 0), not the
+  # status that triggered the trap. Verified by hand: a simulated exit 3
+  # printed "FAILED (exit 0)" with the old form and "FAILED (exit 3)" with
+  # this one.
+  trap 'code=$?; echo "=== $(date -Is) delta finished: FAILED (exit $code) ==="' EXIT
   echo "=== $(date -Is) starting delta ==="
 
   PGPASS="$(grep -E '^POSTGRES_PASSWORD=' ~/SecondLayer/deployment/.env.prod | cut -d= -f2-)"
@@ -70,7 +79,24 @@ fi
   export CHPIPE_CPU_WORKERS=2
 
   cd ~/SecondLayer/services/ch-pipeline
-  python3 -m chpipe.delta
+  # 9>&- closes the lock fd for python specifically, so it is never
+  # inherited into that process (verified: without this, `os.listdir
+  # ('/dev/fd')` inside python includes fd 9). The wrapper shell above still
+  # holds it for its own entire lifetime -- that is what actually enforces
+  # the mutex, for as long as this script is the thing running -- but there
+  # is no reason for python, which knows nothing about the lock, to hold a
+  # copy neither `flock` nor this script asked it to keep.
+  python3 -m chpipe.delta 9>&-
 
-  trap 'echo "=== $(date -Is) delta finished: OK ==="' EXIT
+  # Reached only on success. This is NOT a re-armed trap (round 1's bug):
+  # `{ ... } >> "$LOG"` tears its redirection down once the compound command
+  # finishes, and an EXIT trap only actually fires once the whole script
+  # process truly exits -- by which point that redirection is already gone,
+  # so a trap re-armed here would print to cron's discarded stdout instead
+  # of the log. Verified by hand: re-arming here landed on the terminal;
+  # clearing the trap and echoing directly, right here, lands in the log,
+  # because it runs as an ordinary command while the redirection is still
+  # live, not deferred to process-exit time.
+  trap - EXIT
+  echo "=== $(date -Is) delta finished: OK ==="
 } >> "$LOG" 2>&1
