@@ -269,3 +269,29 @@ def test_the_whole_chain_reads_a_real_swiss_decision(tmp_path, monkeypatch):
     assert "Abteilungspräsident" in text, "German accents must survive OCR"
     assert not list(volume.glob("chpipe-ocr-*")), \
         "the per-document temp directory must be cleaned up"
+
+
+def test_tesseract_runs_single_threaded(tmp_path, monkeypatch):
+    """OpenMP tesseract on the first prod run: two workers at 235% and 213%
+    CPU, load past 7, and extract's load-average guard paused for most of a
+    30-minute tick. Parallelism belongs to ocr_workers, not to OpenMP."""
+    pdf = _fake_pdf(tmp_path)
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "pdfinfo":
+            return _fake_pdfinfo(1)
+        if cmd[0] == "pdftoppm":
+            stem = pathlib.Path(cmd[-1])
+            (stem.parent / f"{stem.name}-1.png").write_bytes(b"fake png bytes")
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        if cmd[0] == "tesseract":
+            seen["env"] = kwargs.get("env")
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(ocr.subprocess, "run", fake_run)
+    ocr.ocr_pdf(pdf, ["de"], timeout=5)
+    assert seen["env"] is not None, "tesseract must get an explicit environment"
+    assert seen["env"].get("OMP_THREAD_LIMIT") == "1"
+    assert "PATH" in seen["env"], "the rest of the environment must survive"
