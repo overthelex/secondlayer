@@ -134,10 +134,11 @@ def test_index_with_neither_walks_every_spider(monkeypatch):
 from chpipe import throttle
 from chpipe.stages import (acts_stage, diff_stage, fetch_xml_stage,
                            parse_akn_stage, project_legacy_stage,
-                           versions_stage)
+                           provenance_stage, versions_stage)
 
 LEGISLATION_STAGES = [acts_stage, versions_stage, fetch_xml_stage,
-                      parse_akn_stage, diff_stage, project_legacy_stage]
+                      parse_akn_stage, diff_stage, project_legacy_stage,
+                      provenance_stage]
 
 _LEG_REPORT = {
     acts_stage: lambda: acts_stage.ActsReport(),
@@ -146,11 +147,14 @@ _LEG_REPORT = {
     parse_akn_stage: lambda: parse_akn_stage.ParseReport(),
     diff_stage: lambda: diff_stage.DiffReport(),
     project_legacy_stage: lambda: 0,
+    provenance_stage: lambda: provenance_stage.ProvenanceReport(),
 }
 
 # Spec section 8. fetch-xml, acts and versions are network walks that still
-# hold the GIL and a connection; parse-akn and diff are the CPU stages;
-# project-legacy pushes ~15,000 full documents through a GIN-indexed table.
+# hold the GIL and a connection; parse-akn, diff and provenance are the CPU
+# stages (provenance is parse_akn_stage's shape exactly -- a full-corpus
+# lxml walk over the same TOASTed akn_xml payloads); project-legacy pushes
+# ~15,000 full documents through a GIN-indexed table.
 EXPECTED_NICE = {
     acts_stage: throttle.NICE_IO,
     versions_stage: throttle.NICE_IO,
@@ -158,6 +162,7 @@ EXPECTED_NICE = {
     parse_akn_stage: throttle.NICE_CPU,
     diff_stage: throttle.NICE_CPU,
     project_legacy_stage: throttle.NICE_IO,
+    provenance_stage: throttle.NICE_CPU,
 }
 
 
@@ -242,6 +247,30 @@ def test_an_empty_lang_is_not_a_language(monkeypatch, no_renice):
     assert seen["kwargs"]["lang"] == "de"
 
 
+def test_provenance_honours_chpipe_lang(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, provenance_stage)
+    monkeypatch.setenv("CHPIPE_LANG", "fr")
+    provenance_stage.main()
+    assert seen["kwargs"]["lang"] == "fr"
+
+
+def test_provenance_defaults_to_german(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, provenance_stage)
+    monkeypatch.delenv("CHPIPE_LANG", raising=False)
+    provenance_stage.main()
+    assert seen["kwargs"]["lang"] == "de"
+
+
+def test_an_empty_lang_is_not_a_language_for_provenance(monkeypatch, no_renice):
+    """The same run-stage.sh shape as diff's identical test above:
+    CHPIPE_LANG is exported unconditionally, empty when no language was
+    given on the command line."""
+    seen = _capture_leg(monkeypatch, provenance_stage)
+    monkeypatch.setenv("CHPIPE_LANG", "")
+    provenance_stage.main()
+    assert seen["kwargs"]["lang"] == "de"
+
+
 # --- run-stage.sh's own usage line ---
 # It read `index|fetch|extract|ocr|load` long after six more stages existed,
 # and its wrapper is the only way any of them is actually invoked on prod.
@@ -266,7 +295,7 @@ def _accepted_stage_names() -> set[str]:
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
-                "project-legacy"}
+                "project-legacy", "provenance"}
     assert _accepted_stage_names() == expected
 
 

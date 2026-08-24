@@ -2,7 +2,7 @@
 # One stage, under supervision, with a log. Usage:
 #
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load [spider]
-#   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy [lang]
+#   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance [lang]
 #
 # The optional second argument means different things to the two halves, so
 # it is dispatched explicitly rather than exported as both: for the decisions
@@ -29,7 +29,7 @@ case "$STAGE" in
   index|fetch|extract|ocr|load)
     export CHPIPE_SPIDER="$ARG"
     ;;
-  diff)
+  diff|provenance)
     export CHPIPE_LANG="$ARG"
     ;;
   acts|versions|fetch-xml|parse-akn|project-legacy)
