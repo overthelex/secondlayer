@@ -146,17 +146,43 @@ _DATE = re.compile(
 # alongside test_reads_in_kraft_seit_as_the_effective_date). The 40-char cap
 # on the capture keeps a runaway match from crossing into an unrelated
 # sentence later in a long note.
+
+# "avec effet au" is the French counterpart of German "mit Wirkung seit" --
+# both introduce a REPEAL's effective date, as opposed to "en vigueur
+# depuis"/"in Kraft seit" for an insertion or amendment. Missing from the
+# first cut of this pattern: verified directly on the full French OR, 121
+# of the 171 rows carrying an AS reference and no effective_date used this
+# exact phrasing, dragging French effective-date coverage to 78% (615/788)
+# against German and Italian's 92%. Checked and not found before adding it:
+# "avec effet à" (0 occurrences), "avec effet dès" (0), "avec effet du" (0)
+# -- "avec effet au" is the only variant. (One further anomaly, measured
+# and left alone: a single note reads "avec effet audepuis le ..." -- two
+# phrasings glued with no space, a source data defect, not a phrasing this
+# module should special-case for one occurrence.)
 _EFFECTIVE = re.compile(
     r"(?:in\s+Kraft\s+seit|mit\s+Wirkung\s+seit|"
-    r"en\s+vigueur\s+depuis(?:\s+le)?|con\s+effetto\s+dal|"
+    r"en\s+vigueur\s+depuis(?:\s+le)?|avec\s+effet\s+au|"
+    r"con\s+effetto\s+dal|"
     r"in\s+vigore\s+dal)\s*(.{0,40})",
     re.IGNORECASE)
 
-# "vom 5. Okt. 1990" (de), "du 5 oct. 1990" (fr), "del 5 ott. 1990" (it) --
-# the date of the amending act itself, always introduced by this
-# preposition right after the act's own designation ("BG", "LF", "LF").
+# "vom 5. Okt. 1990" (de), "du 5 oct. 1990" (fr), "del 5 ott. 1990" / "dell'8
+# ott. 1999" (it) -- the date of the amending act itself, always introduced
+# by this preposition right after the act's own designation ("BG", "LF",
+# "LF"). Two things the day-group and trigger must both allow, both
+# measured on the full Italian OR, not assumed: the day can carry the
+# Italian ordinal sign ("1°"), the same fix _DATE already needed -- without
+# it "della LF del 1° ott. 2021" doesn't match at all, since "1" then "°"
+# fails on the literal "." the old pattern required next. And "del" elides
+# to "dell'" before a digit spoken with a leading vowel sound (8, 11, ...:
+# "dell’8 ott. 1999", "dell’11 dic. 2009") -- 7 occurrences against 865
+# unelided "del ", real and systematic (Italian grammar, not a typo) but
+# rare enough that _DATE's own day-group, not a new trigger branch, is
+# where the "°" fix belongs; the elided article itself needs no following
+# whitespace, unlike "del"/"vom"/"du".
 _SOURCE_ACT = re.compile(
-    r"\b(?:vom|du|del)\s+(\d{1,2}(?:er)?\.?\s+[A-Za-zÀ-ÿ]+\.?\s+\d{4})",
+    r"\b(?:vom\s+|du\s+|del\s+|dell['’])"
+    r"(\d{1,2}(?:er|°)?\.?\s+[A-Za-zÀ-ÿ]+\.?\s+\d{4})",
     re.IGNORECASE)
 
 # Bare pointers to a change history rather than a description of a change to

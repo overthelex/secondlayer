@@ -321,3 +321,50 @@ def test_extract_keeps_a_bbl_only_citation_with_no_recognised_verb():
     assert len(rows) == 1
     assert rows[0].as_reference is None
     assert rows[0].bbl_reference == "BBl 1986 II 354"
+
+
+# --- Round 3 fixes -----------------------------------------------------
+
+def test_french_avec_effet_au_is_the_effective_date():
+    """Review round 3, item 1/2: 'avec effet au' is the French counterpart
+    of German 'mit Wirkung seit' -- the phrasing French uses for a repeal's
+    effective date. Missing before this fix, it left French effective-date
+    coverage at 78% (615/788) against German/Italian's 92%. Real sentence
+    from the cached French OR (art_13)."""
+    text = ("Abrogé par l’annexe ch. 2 de la LF du 19 déc. 2003 sur la "
+            "signature électronique, avec effet au 1er janv. 2005 "
+            "(RO 2004 5085; FF 2001 5423).")
+    parsed = an.parse_note(text, lang="fr")
+    assert parsed["action"] == "repealed"
+    assert parsed["effective_date"] == datetime.date(2005, 1, 1)
+    assert parsed["source_act_date"] == datetime.date(2003, 12, 19)
+
+
+def test_italian_ordinal_in_the_source_act_date():
+    """Review round 3, item 2: _SOURCE_ACT's own day-group needed the same
+    Italian ordinal fix _DATE got earlier -- 'della LF del 1° ott. 2021'
+    did not match at all, since "1" followed by "°" (not a literal '.')
+    failed the old pattern before it ever reached the month. Real sentence
+    from the cached Italian OR (an insertion into the transitional
+    provisions, dated by the 1 Oct 2021 annex)."""
+    text = ("Introdotta dall’all. n. 1 della LF del 1° ott. 2021, in vigore "
+            "dal 1° gen. 2023 (RU 2022 468; FF 2019 5841, 6005).")
+    parsed = an.parse_note(text, lang="it")
+    assert parsed["source_act_date"] == datetime.date(2021, 10, 1)
+    assert parsed["effective_date"] == datetime.date(2023, 1, 1)
+
+
+def test_italian_elided_dell_before_a_source_act_date():
+    """Review round 3, item 2: Italian 'del' elides to "dell'" before a
+    digit read with a leading vowel sound (8, 11, ...) -- "della LF
+    dell'8 ott. 1999" has no bare "del " for the old trigger to match at
+    all. 7 occurrences on the full Italian OR against 865 unelided "del ".
+    Real sentence from the cached Italian OR (art_360_a, the posted-workers
+    act)."""
+    text = ("Introdotto dall’all. n. 2 della LF dell’8 ott. 1999 sui "
+            "lavoratori distaccati in Svizzera, in vigore dal 1° lug. 2004 "
+            "(RU 2003 1370; FF 1999 5092).")
+    parsed = an.parse_note(text, lang="it")
+    assert parsed["source_act_date"] == datetime.date(1999, 10, 8)
+    assert parsed["effective_date"] == datetime.date(2004, 7, 1)
+
