@@ -284,10 +284,19 @@ def _growth(previous: dict, current: dict, names) -> int:
     return sum(max(0, current.get(name, 0) - previous.get(name, 0)) for name in names)
 
 
-def court_code_spider_map(conn) -> dict[str, str]:
-    """Court-code-level key (e.g. "ZH_OG") -> our spider directory name
-    (e.g. "ZH_Obergericht"), built from documents already loaded rather than
-    from a hand-maintained table.
+def court_code_spider_map(conn) -> dict[str, tuple[str, ...]]:
+    """Court-code-level key (e.g. "ZH_OG") -> the spider directory name(s)
+    (e.g. ("ZH_Obergericht",)) that have loaded documents under it, built
+    from documents already loaded rather than from a hand-maintained table.
+
+    A tuple, not a string, because one stripped court code can legitimately
+    belong to two spiders. Measured on the loaded prod corpus (24.08.2026,
+    448K rows, all 54 spiders): VD_TC_004/013/002 are VD_FindInfo's chambers
+    and VD_TC_031 is VD_Omni's, so "VD_TC" is both. Keeping "the first one"
+    silently routed VD_Omni's growth to a VD_FindInfo re-index that could
+    never contain it. Every spider under an ambiguous code is re-indexed
+    instead: index is the cheap metadata stage, and a superfluous walk
+    costs a listing, while a mis-routed one costs a court's growth.
 
     ch_court_decisions.court_code is written from the document JSON's own
     "Signatur" field (es_document.parse(): `court_code=data.get("Signatur")`)
@@ -325,7 +334,7 @@ def court_code_spider_map(conn) -> dict[str, str]:
         "SELECT DISTINCT spider, court_code FROM ch_court_decisions "
         "WHERE court_code IS NOT NULL ORDER BY court_code, spider"
     ).fetchall()
-    mapping: dict[str, str] = {}
+    mapping: dict[str, tuple[str, ...]] = {}
     for row in rows:
         # db.connect() hands out dict_row in production; the test fixture's
         # own bare psycopg.connect() hands out tuples (same convention
@@ -340,16 +349,16 @@ def court_code_spider_map(conn) -> dict[str, str]:
                         "walks; %r will not be re-indexed from it",
                         court_code, spider, len(known), root)
             continue
-        existing = mapping.get(root)
-        if existing is not None and existing != spider:
-            # Two different spiders reporting documents under the same
-            # stripped court code is a real data anomaly worth a human
-            # noticing, not a reason to crash a nightly job over. Keep the
-            # first one in the query's own ORDER BY and say so.
-            log.warning("court_code_spider_map: %r maps to both %r and %r; "
-                       "keeping %r", root, existing, spider, existing)
+        existing = mapping.get(root, ())
+        if spider in existing:
             continue
-        mapping[root] = spider
+        if existing:
+            # Two spiders under one stripped court code -- VD_TC on the real
+            # corpus. Both are re-indexed when the code grows; said once per
+            # run so the shape stays visible without becoming noise.
+            log.info("court_code_spider_map: %r belongs to %r and %r; a "
+                     "change on it re-indexes both", root, existing, spider)
+        mapping[root] = tuple(sorted(existing + (spider,)))
     return mapping
 
 
@@ -391,8 +400,8 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     # growth as though it had been indexed.
     actionable: dict[str, list[str]] = {}
     for name in grown:
-        spider = name if name in known else mapped.get(name)
-        if spider is not None:
+        spiders = (name,) if name in known else mapped.get(name, ())
+        for spider in spiders:
             actionable.setdefault(spider, []).append(name)
     unmapped = [name for name in grown if name not in known and name not in mapped]
 
