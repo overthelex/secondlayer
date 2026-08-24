@@ -242,6 +242,37 @@ def test_basic_act_run_reports_linked_missing_act_missing_as(conn, settings, mon
     assert fake.closed
 
 
+def test_the_counters_partition_the_walk(conn, settings, monkeypatch):
+    """Every row lands in exactly one counter, so the five sum to `seen`.
+
+    A row missing on BOTH ends used to increment missing_act AND missing_as,
+    so an operator adding the counters up to cross-check a run found a total
+    larger than the walk -- on exactly the runs worth diagnosing, the ones
+    after a partial acts_stage or as_bbl_stage. The both-missing row is the
+    case the original test never seeded, which is why nothing caught it."""
+    acts_stage.upsert_act(conn, {"work": CC, "srNotation": "220"})
+    as_bbl_stage.upsert_as_act(conn, {"act": OC})
+    rows = [
+        {"work": CC, "basicAct": OC},                          # linked
+        {"work": CC, "basicAct": OC},                          # already linked
+        {"work": "https://cc/never", "basicAct": OC},          # act missing
+        {"work": CC, "basicAct": "https://oc/never"},          # as missing
+        {"work": "https://cc/never", "basicAct": "https://oc/never"},  # both
+    ]
+    fake = _FakeSparqlClient(rows)
+    monkeypatch.setattr(basic_act_stage, "SparqlClient", lambda endpoint: fake)
+    monkeypatch.setattr(basic_act_stage.db, "connect", lambda s: conn)
+    report = basic_act_stage.run(settings)
+
+    assert report.seen == len(rows)
+    assert (report.linked + report.already_linked + report.missing_act
+            + report.missing_as + report.missing_both) == report.seen
+    assert report.missing_both == 1, "the both-missing row is its own answer"
+    assert report.missing_act == 1 and report.missing_as == 1, \
+        "and it must not also be counted as either one of them"
+    assert report.linked == 1 and report.already_linked == 1
+
+
 def test_basic_act_run_does_not_recount_an_already_linked_pair(conn, settings, monkeypatch):
     """The idempotent-relink case (both endpoints known, link already exists)
     must not show up as missing_act or missing_as -- neither is missing, the

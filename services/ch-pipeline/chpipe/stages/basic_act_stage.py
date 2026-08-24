@@ -32,13 +32,32 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class LinkReport:
+    """One row of BASIC_ACTS lands in exactly one counter, and
+
+        linked + already_linked + missing_act + missing_as + missing_both == seen
+
+    is an invariant, not an aspiration -- test_the_counters_partition_the_walk
+    asserts it. The counters existed before without `already_linked` or
+    `missing_both`, and a row missing on BOTH ends incremented two of them, so
+    an operator adding them up to cross-check a run found a total larger than
+    the walk on exactly the runs worth diagnosing: the ones after a partial
+    acts_stage or as_bbl_stage.
+    """
+    seen: int = 0
     linked: int = 0
+    # Both ends resolved and the link was already there -- a re-run, not a
+    # finding. Counted so the sum above closes.
+    already_linked: int = 0
     # The CC act (ch_act.eli_work_uri) this row names does not exist locally
     # -- acts_stage has not discovered it (yet, or ever).
     missing_act: int = 0
     # The AS/BBl act (ch_as_act.eli_uri) this row names does not exist
     # locally -- as_bbl_stage has not discovered it (yet, or ever).
     missing_as: int = 0
+    # Neither end resolved. Its own counter rather than one increment to each
+    # of the two above: which walk to re-run is the question this report
+    # exists to answer, and "both" is a different answer from either.
+    missing_both: int = 0
 
 
 _LINK = """
@@ -89,14 +108,23 @@ def run(settings: Settings, page_size: int = DEFAULT_PAGE_SIZE) -> LinkReport:
                                          (row["work"],)).fetchone() is not None
                 as_known = conn.execute(_AS_EXISTS,
                                         (row["basicAct"],)).fetchone() is not None
-                if not act_known:
+                # One row, one counter -- see LinkReport's docstring for why
+                # the both-missing case is not two increments.
+                if act_known and as_known:
+                    report.already_linked += 1
+                elif not act_known and not as_known:
+                    report.missing_both += 1
+                elif not act_known:
                     report.missing_act += 1
-                if not as_known:
+                else:
                     report.missing_as += 1
             seen += 1
+            report.seen = seen
             if seen % 10000 == 0:
-                log.info("basic-act seen=%d linked=%d missing_act=%d missing_as=%d",
-                         seen, report.linked, report.missing_act, report.missing_as)
+                log.info("basic-act seen=%d linked=%d already=%d missing_act=%d "
+                         "missing_as=%d missing_both=%d", seen, report.linked,
+                         report.already_linked, report.missing_act,
+                         report.missing_as, report.missing_both)
     finally:
         conn.close()
         client.close()
@@ -118,8 +146,10 @@ def main() -> LinkReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env())
-    log.info("linked=%d missing_act=%d missing_as=%d", result.linked,
-             result.missing_act, result.missing_as)
+    log.info("seen=%d linked=%d already=%d missing_act=%d missing_as=%d "
+             "missing_both=%d", result.seen, result.linked,
+             result.already_linked, result.missing_act, result.missing_as,
+             result.missing_both)
     return result
 
 
