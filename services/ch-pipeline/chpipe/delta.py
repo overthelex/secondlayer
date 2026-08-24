@@ -255,10 +255,24 @@ def court_code_spider_map(conn) -> dict[str, str]:
     row and therefore no entry. That is the correct behaviour, not a bug to
     paper over with an invented one -- see run_decisions for how the
     remaining gap is reported, never silently assumed away.
+
+    It is also partial in the other direction. `spider` in this table is
+    whatever wrote the row, and a value that no longer names a directory
+    under CHPIPE_RAW_DIR (a spider entscheidsuche renamed, a one-off import)
+    would otherwise become a nightly re-index target for a listing that
+    404s, forever. Entries are intersected with index_stage.ALL_SPIDERS, and
+    a dropped one is logged rather than silently discarded -- the court code
+    then falls through to run_decisions()'s unmapped WARNING, which is the
+    honest place for "we saw growth we cannot act on".
     """
+    known = set(index_stage.ALL_SPIDERS)
+    # ORDER BY, so "first seen" below is a promise rather than whatever
+    # order Postgres happened to return. DISTINCT dedupes exact pairs but
+    # says nothing about the order they come back in, and a mapping that
+    # differs between runs cannot be reasoned about at 3am.
     rows = conn.execute(
         "SELECT DISTINCT spider, court_code FROM ch_court_decisions "
-        "WHERE court_code IS NOT NULL"
+        "WHERE court_code IS NOT NULL ORDER BY court_code, spider"
     ).fetchall()
     mapping: dict[str, str] = {}
     for row in rows:
@@ -269,15 +283,18 @@ def court_code_spider_map(conn) -> dict[str, str]:
         spider, court_code = ((row["spider"], row["court_code"])
                               if isinstance(row, dict) else (row[0], row[1]))
         root = _CHAMBER_SUFFIX.sub("", court_code)
+        if spider not in known:
+            log.warning("court_code_spider_map: %r names spider %r, which is "
+                        "not one of the %d spider directories this pipeline "
+                        "walks; %r will not be re-indexed from it",
+                        court_code, spider, len(known), root)
+            continue
         existing = mapping.get(root)
         if existing is not None and existing != spider:
             # Two different spiders reporting documents under the same
             # stripped court code is a real data anomaly worth a human
             # noticing, not a reason to crash a nightly job over. Keep the
-            # first one seen (deterministic given ORDER BY is absent only
-            # because DISTINCT already dedupes exact pairs; row order from
-            # Postgres without an ORDER BY is not guaranteed stable, so
-            # "first seen" is best-effort, not a promise) and say so.
+            # first one in the query's own ORDER BY and say so.
             log.warning("court_code_spider_map: %r maps to both %r and %r; "
                        "keeping %r", root, existing, spider, existing)
             continue

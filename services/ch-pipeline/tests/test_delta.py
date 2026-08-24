@@ -157,12 +157,53 @@ def test_court_code_spider_map_is_partial_by_construction(conn):
 
 
 def test_court_code_spider_map_keeps_the_first_spider_on_a_conflict(conn, caplog):
-    _seed(conn, "ECLI:1", "SpiderA", "XX_YY_001")
-    _seed(conn, "ECLI:2", "SpiderB", "XX_YY_002")
+    """Two real spiders reporting under one stripped court code. Both names
+    are real directory names, because the mapping only admits those."""
+    _seed(conn, "ECLI:1", "AG_Gerichte", "XX_YY_001")
+    _seed(conn, "ECLI:2", "AG_Weitere", "XX_YY_002")
     with caplog.at_level(logging.WARNING):
         mapping = delta.court_code_spider_map(conn)
-    assert mapping["XX_YY"] in ("SpiderA", "SpiderB")
+    # Was `in ("SpiderA", "SpiderB")`, which cannot fail for any mapping
+    # that has the key at all. The query now carries its own ORDER BY, so
+    # "the first one seen" is a promise and can be named.
+    assert mapping == {"XX_YY": "AG_Gerichte"}
     assert "maps to both" in caplog.text
+
+
+def test_court_code_spider_map_drops_a_spider_that_is_no_longer_a_directory(
+        conn, caplog):
+    """N6: `spider` is whatever wrote the row. A value that no longer names
+    a directory the pipeline walks would become a nightly re-index target
+    for a listing that 404s, forever. It is dropped and logged; the court
+    code then falls through to run_decisions()'s unmapped WARNING, which is
+    the honest place for growth we cannot act on."""
+    _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
+    _seed(conn, "ECLI:2", "ZH_Handelsgericht_alt", "ZH_HG_001")
+    with caplog.at_level(logging.WARNING):
+        mapping = delta.court_code_spider_map(conn)
+    assert mapping == {"ZG_OG": "ZG_Obergericht"}
+    assert "ZH_Handelsgericht_alt" in caplog.text
+
+
+def test_a_grown_key_whose_only_spider_is_stale_is_reported_as_unmapped(
+        tmp_path, monkeypatch, conn, caplog):
+    """The end-to-end consequence: nothing is dispatched, and the night is
+    not reported as clean."""
+    _seed(conn, "ECLI:1", "ZH_Handelsgericht_alt", "ZH_HG_001")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"ZH_HG": 12}, "total_alle": 12}
+    seen = _stub_decision_stages(monkeypatch)
+
+    with caplog.at_level(logging.WARNING):
+        report = delta.run_decisions(
+            _settings(tmp_path),
+            fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    assert report.spiders == []
+    assert seen["index"] is None
+    assert "resolve to no spider" in caplog.text
 
 
 # --- run_decisions: composition, monkeypatched at the stage boundary ---

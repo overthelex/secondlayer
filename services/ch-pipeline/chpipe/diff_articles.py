@@ -259,7 +259,24 @@ def _compare(e_id: str, article_number: str | None,
     under `e_id`. Shared by the ordinary same-eId comparison and the
     container-alignment comparison -- the two cases differ only in WHICH
     eId's before/after text is being compared, not in how "changed" is
-    decided."""
+    decided.
+
+    KNOWN AND ACCEPTED: a paragraph's <num> LABEL is inside the text this
+    compares, so correcting a label alone scores as a change. The one real
+    instance found is art_624, whose paragraph label reads "2 e 3" in one
+    German file and "2 und 3" in another -- an Italian "e" that leaked into
+    the German edition and was later corrected. It is NOT reachable from a
+    real edition transition: it appears only between two manifestations of
+    the SAME 2026-01-01 consolidation (the Fedlex re-issue recorded in this
+    plan's ledger), and across the five cached real edition pairs -- SR 220
+    x3, SR 311.0, SR 210, 6,763 article comparisons -- art_624 is identical
+    on every one. Left alone deliberately: excluding the label would mean
+    separating paragraph numbering from operative text in chpipe/akn.py,
+    which changes ch_act_article.text, hence full_text, hence the served
+    ch_legislation rows and their full-text index, for every article in the
+    corpus. That is a corpus-wide re-parse to remove one row per re-issue,
+    and it is not a change to make without being able to re-run and measure
+    it."""
     if fingerprint(old_text) == fingerprint(new_text):
         return None
     kind = "repealed" if (_is_repealed(new_text) and not _is_repealed(old_text)) \

@@ -193,18 +193,32 @@ def test_a_link_whose_as_act_is_unknown_writes_nothing(conn):
 # --------------------------------------------------------------------------
 
 class _FakeSparqlClient:
-    """Stands in for chpipe.sparql.SparqlClient. keyset() ignores the query
-    template's paging clauses entirely and just replays the rows it was
-    built with -- the walk mechanics are sparql.py's own tests
-    (test_sparql.py); what is under test here is what each stage's run()
-    does with the rows it is handed."""
+    """Stands in for chpipe.sparql.SparqlClient. keyset() replays the rows it
+    was built with rather than re-implementing the paging -- the walk
+    mechanics are sparql.py's own tests (test_sparql.py); what is under test
+    here is what each stage's run() does with the rows it is handed.
+
+    It does NOT ignore `key`. The real keyset() reads row[key] to compute the
+    next page's `after`, so a stage passing the wrong paging key raises on
+    the first page against a live endpoint -- and against a fake that
+    discards the argument, it passes in silence. The key is recorded and
+    checked against the rows, which is the one thing about the call this
+    file is in a position to verify.
+    """
 
     def __init__(self, rows):
         self._rows = rows
         self.closed = False
+        self.keys_used: list[str] = []
 
     def keyset(self, query_template, key="work", page_size=2000):
-        yield from self._rows
+        self.keys_used.append(key)
+        for row in self._rows:
+            if key not in row:
+                raise KeyError(
+                    f"keyset(key={key!r}) names no variable in the row "
+                    f"{sorted(row)} -- the real client reads row[key] to page")
+            yield row
 
     def close(self):
         self.closed = True
@@ -287,3 +301,20 @@ def test_basic_act_run_does_not_recount_an_already_linked_pair(conn, settings, m
     assert report.linked == 0
     assert report.missing_act == 0
     assert report.missing_as == 0
+
+
+def test_as_bbl_pages_on_the_act_variable(conn, settings, monkeypatch):
+    """AS_ACTS orders by ?act, so ?act is what the walk must page on.
+    Asserted here because nothing else can: sparql.py's own tests never see
+    which key this stage chooses, and a live run only shows it by raising."""
+    fake = _FakeSparqlClient([{"act": OC, "dateDocument": "1911-03-30"}])
+    monkeypatch.setattr(as_bbl_stage, "SparqlClient", lambda endpoint: fake)
+    as_bbl_stage.run(settings)
+    assert fake.keys_used == ["act"]
+
+
+def test_basic_act_pages_on_the_work_variable(conn, settings, monkeypatch):
+    fake = _FakeSparqlClient([{"work": CC, "basicAct": OC}])
+    monkeypatch.setattr(basic_act_stage, "SparqlClient", lambda endpoint: fake)
+    basic_act_stage.run(settings)
+    assert fake.keys_used == ["work"]

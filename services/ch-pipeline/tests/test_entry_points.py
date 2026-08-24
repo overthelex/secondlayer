@@ -315,11 +315,17 @@ def test_every_name_run_stage_accepts_resolves_to_a_module_with_a_main():
             f"run-stage.sh offers '{name}' but that module has no main()"
 
 
-def test_the_usage_comment_names_both_halves():
-    """The usage line is what an operator reads at the keyboard."""
-    usage = _RUN_STAGE.read_text()
-    for name in ("fetch-xml", "parse-akn", "project-legacy"):
-        assert name in usage, f"the usage comment does not mention {name}"
+def test_the_usage_comment_names_every_stage_run_stage_accepts():
+    """The usage line is what an operator reads at the keyboard, so it must
+    list what the dispatcher actually takes -- all of it. Checking three
+    hand-picked names, as this did, passes for a usage comment that names
+    none of the stages added since it was written."""
+    usage = "\n".join(
+        line for line in _RUN_STAGE.read_text().splitlines()
+        if line.startswith("#"))
+    missing = sorted(name for name in _accepted_stage_names()
+                     if name not in usage)
+    assert missing == [], f"the usage comment does not mention {missing}"
 
 
 # --- chpipe.delta: the one entry point run-stage.sh does NOT dispatch ---
