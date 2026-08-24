@@ -60,7 +60,8 @@ class OcrRenderFailed(RuntimeError):
 # every core it can find. On the first prod run two OCR workers showed as
 # 235% and 213% CPU, load went past 7 on eight cores, and extract's
 # capacity guard -- a load-average check, not a priority check -- paused
-# for 38 minutes of a 30-minute tick while nice 19 OCR kept the box busy.
+# 38 times (60 s each) inside one 30-minute tick while nice 19 OCR kept
+# the box busy.
 # One thread per worker: ocr_workers is the parallelism knob, not OpenMP.
 _TESSERACT_ENV = {**os.environ, "OMP_THREAD_LIMIT": "1"}
 
