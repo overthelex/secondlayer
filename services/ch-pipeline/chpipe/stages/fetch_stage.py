@@ -28,7 +28,9 @@ log = logging.getLogger(__name__)
 # a path must never contain is a separator, a NUL or a control character,
 # and none of those is in \w. The resolve-based checks below stay the real
 # guard against '..' and friends.
-_SAFE_NAME = re.compile(r"^[\w.\- ]+$")
+# \Z, not $: in Python `$` also matches just before a trailing newline, so
+# "abc\n" would pass and the file would be written as "abc\n.pdf".
+_SAFE_NAME = re.compile(r"^[\w.\- ]+\Z")
 
 
 @dataclass

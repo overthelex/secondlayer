@@ -286,7 +286,7 @@ def test_raw_path_accepts_a_doc_id_with_a_non_ascii_letter(tmp_path):
     assert p == tmp_path / "CH_EDOEB" / "CH_EDÖB_999_fedpol---Information_2023-12-21.pdf"
 
 
-@pytest.mark.parametrize("bad", ["a/b", "a\x00b", "a\nb", "..", "a\tb"])
+@pytest.mark.parametrize("bad", ["a/b", "a\x00b", "a\nb", "abc\n", "..", "a\tb"])
 def test_raw_path_still_refuses_separators_controls_and_dotdot(tmp_path, bad):
     with pytest.raises(ValueError):
         fetch_stage.raw_path(tmp_path, "CH_BGer", bad, "pdf")
