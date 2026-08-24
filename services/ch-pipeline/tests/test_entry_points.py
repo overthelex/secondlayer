@@ -132,13 +132,14 @@ def test_index_with_neither_walks_every_spider(monkeypatch):
 # on a box serving live traffic was already a shipped defect once.
 
 from chpipe import throttle
-from chpipe.stages import (acts_stage, diff_stage, fetch_xml_stage,
-                           parse_akn_stage, project_legacy_stage,
-                           provenance_stage, versions_stage)
+from chpipe.stages import (acts_stage, as_bbl_stage, basic_act_stage,
+                           diff_stage, fetch_xml_stage, parse_akn_stage,
+                           project_legacy_stage, provenance_stage,
+                           versions_stage)
 
 LEGISLATION_STAGES = [acts_stage, versions_stage, fetch_xml_stage,
                       parse_akn_stage, diff_stage, project_legacy_stage,
-                      provenance_stage]
+                      provenance_stage, as_bbl_stage, basic_act_stage]
 
 _LEG_REPORT = {
     acts_stage: lambda: acts_stage.ActsReport(),
@@ -148,13 +149,18 @@ _LEG_REPORT = {
     diff_stage: lambda: diff_stage.DiffReport(),
     project_legacy_stage: lambda: 0,
     provenance_stage: lambda: provenance_stage.ProvenanceReport(),
+    as_bbl_stage: lambda: as_bbl_stage.AsReport(),
+    basic_act_stage: lambda: basic_act_stage.LinkReport(),
 }
 
 # Spec section 8. fetch-xml, acts and versions are network walks that still
 # hold the GIL and a connection; parse-akn, diff and provenance are the CPU
 # stages (provenance is parse_akn_stage's shape exactly -- a full-corpus
 # lxml walk over the same TOASTed akn_xml payloads); project-legacy pushes
-# ~15,000 full documents through a GIN-indexed table.
+# ~15,000 full documents through a GIN-indexed table. as-bbl is a network
+# walk over jolux:Act, the same shape as acts/versions; basic-act is a short
+# join over rows those walks already discovered -- neither is a multi-hour
+# CPU stage, so both take NICE_IO like acts/versions/fetch-xml/project-legacy.
 EXPECTED_NICE = {
     acts_stage: throttle.NICE_IO,
     versions_stage: throttle.NICE_IO,
@@ -163,6 +169,8 @@ EXPECTED_NICE = {
     diff_stage: throttle.NICE_CPU,
     project_legacy_stage: throttle.NICE_IO,
     provenance_stage: throttle.NICE_CPU,
+    as_bbl_stage: throttle.NICE_IO,
+    basic_act_stage: throttle.NICE_IO,
 }
 
 
@@ -295,7 +303,7 @@ def _accepted_stage_names() -> set[str]:
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
-                "project-legacy", "provenance"}
+                "project-legacy", "provenance", "as-bbl", "basic-act"}
     assert _accepted_stage_names() == expected
 
 

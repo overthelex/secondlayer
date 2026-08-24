@@ -2,7 +2,7 @@
 # One stage, under supervision, with a log. Usage:
 #
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load [spider]
-#   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance [lang]
+#   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #
 # The optional second argument means different things to the two halves, so
 # it is dispatched explicitly rather than exported as both: for the decisions
@@ -32,7 +32,7 @@ case "$STAGE" in
   diff|provenance)
     export CHPIPE_LANG="$ARG"
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act)
     if [ -n "$ARG" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

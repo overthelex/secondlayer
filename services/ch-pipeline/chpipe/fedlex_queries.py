@@ -317,6 +317,78 @@ def consolidations_by_sr(sr_number: str) -> str:
     return CONSOLIDATIONS_BY_SR % {"sr": sr_number}
 
 
+# ELI collection segments, verified on the live graph:
+#   /eli/cc/…  Classified Compilation (SR)  — handled by ACTS/acts_stage
+#   /eli/oc/…  Official Compilation (AS/RO)
+#   /eli/fga/… Federal Gazette (BBl/FF)
+_COLLECTION_SEGMENT = re.compile(r"/eli/(cc|oc|fga)/")
+_COLLECTION_NAME = {"oc": "AS", "fga": "BBl"}
+
+
+def collection_of(eli_uri: str | None) -> str | None:
+    """'AS' or 'BBl' for an Official Compilation or Federal Gazette ELI, else
+    None -- including for a Classified Compilation (/eli/cc/) ELI, which
+    belongs in ch_act via ACTS/acts_stage, not in ch_as_act."""
+    match = _COLLECTION_SEGMENT.search(eli_uri or "")
+    return _COLLECTION_NAME.get(match.group(1)) if match else None
+
+
+# jolux:Act, discovered into ch_as_act by as_bbl_stage. `?act a jolux:Act`
+# with COUNT(*) returns 369,181 (measured live 2026-08-23, and reproduced
+# 2026-08-24) -- but that number is a raw triple count, not a row count of
+# this SELECT DISTINCT: COUNT(DISTINCT ?act) over the same pattern returns
+# 211,637, a materially different figure. Per this module's own warning
+# above, neither COUNT form is trusted here; the only number this pipeline
+# treats as authoritative is rows of an explicit SELECT DISTINCT counted in
+# Python, which for a corpus this size means walking it, not asking
+# Virtuoso to aggregate it. This task deliberately did NOT run that walk in
+# full (369,181-ish rows would be substantial live traffic for a discovery
+# task); a bounded slice was measured instead -- see as_bbl_stage's
+# docstring and Task 4's report for the page timing that was actually
+# observed. Treat any of these three numbers as a snapshot to re-derive,
+# not as ground truth.
+#
+# Keyset paging, same discipline as ACTS: `>=`, not `>`, ORDER BY the paged
+# key first, no OFFSET (see chpipe/sparql.py for the SR353 ceiling). Titles
+# are not fetched here -- see as_bbl_stage's module docstring for why.
+AS_ACTS = _PREFIXES + """
+SELECT DISTINCT ?act ?dateDocument ?publicationDate ?dateEntryForce ?typeDocument WHERE {
+  ?act a jolux:Act .
+  FILTER(STR(?act) >= "%(after)s")
+  OPTIONAL { ?act jolux:dateDocument ?dateDocument }
+  OPTIONAL { ?act jolux:publicationDate ?publicationDate }
+  OPTIONAL { ?act jolux:dateEntryInForce ?dateEntryForce }
+  OPTIONAL { ?act jolux:typeDocument ?typeDocument }
+}
+ORDER BY ?act
+LIMIT %(limit)d
+"""
+
+# jolux:basicAct: the only structured Classified-Compilation -> Official-
+# Compilation relation Fedlex publishes, and it is establishment, not
+# amendment -- there is no "amends" predicate anywhere in this graph (see
+# migration 198's comment and basic_act_stage's module docstring).
+#
+# Measured live 2026-08-24 by walking this exact query (SELECT DISTINCT rows
+# counted in Python, the only counting method this module trusts -- see the
+# warning above AS_ACTS): 17,055 rows, cross-checked against a plain
+# `COUNT(*) WHERE { ?work jolux:basicAct ?basicAct }` on the same day, which
+# agreed exactly (17,055; no named-graph duplication on this predicate,
+# unlike jolux:Act above). That is NOT the 69,190 figure recorded elsewhere
+# in this codebase (migration 198's comment, this task's own brief) as
+# "verified 2026-08-23" -- see Task 4's report for that discrepancy; it is
+# reported here rather than silently reconciled, per this module's own rule
+# about numbers nobody re-derived.
+BASIC_ACTS = _PREFIXES + """
+SELECT DISTINCT ?work ?basicAct WHERE {
+  ?work a jolux:ConsolidationAbstract ; jolux:basicAct ?basicAct .
+  FILTER(STR(?work) >= "%(after)s")
+}
+ORDER BY ?work
+LIMIT %(limit)d
+"""
+
+
 def status_code(uri: str | None) -> int | None:
     if not uri:
         return None
