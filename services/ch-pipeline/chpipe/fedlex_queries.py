@@ -18,7 +18,9 @@ keyset walk of `SELECT DISTINCT ?c WHERE { ?c a jolux:Consolidation }` at
 SPARQL-side COUNT; see this module's warning about that below): 56,326 in
 about six seconds over six requests. 56,328 was simply wrong. It remains a
 snapshot of 2026-08-24 all the same, not an invariant.
-  jolux:Act (AS + BBl)         369,181
+  jolux:Act (AS + BBl)         211,637 distinct (COUNT(*) says 369,181 --
+                               a raw triple count, not a count of acts;
+                               see AS_ACTS's own comment below)
   enforcement-status 0 (in force)  5,087 works
   enforcement-status 3 (repealed)  7,863 works
   enforcement-status 1                47 works

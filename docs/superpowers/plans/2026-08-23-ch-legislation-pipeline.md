@@ -532,7 +532,9 @@ class SparqlClient:
 
 Counts observed that day, for reference when a run's numbers look wrong:
   jolux:ConsolidationAbstract   17,293 distinct works
-  jolux:Consolidation           56,328
+  jolux:Consolidation           56,326 (56,328 was wrong; re-measured
+                                2026-08-24 by keyset walk, see
+                                chpipe/fedlex_queries.py's header)
   jolux:Act (AS + BBl)         211,637 distinct (369,181 is COUNT(*), a raw triple count)
   enforcement-status 0 (in force)  5,087 works
   enforcement-status 3 (repealed)  7,863 works

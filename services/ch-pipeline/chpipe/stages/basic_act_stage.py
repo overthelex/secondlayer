@@ -88,7 +88,8 @@ def run(settings: Settings, page_size: int = DEFAULT_PAGE_SIZE) -> LinkReport:
     """Keyset-walk BASIC_ACTS and link every row it can. See fedlex_queries
     .BASIC_ACTS's own comment for the live count this task actually
     measured (17,055, cross-checked two ways) against the 69,190 figure
-    recorded elsewhere in this codebase -- reported, not reconciled here.
+    that was recorded in the plans until 790f77e6 and now survives only as
+    migration 198's historical note -- reported, not reconciled here.
     """
     report = LinkReport()
     client = SparqlClient(fq.ENDPOINT)

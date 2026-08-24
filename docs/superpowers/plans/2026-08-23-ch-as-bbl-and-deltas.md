@@ -18,7 +18,7 @@ Everything from the two earlier plans applies. Additionally:
 
 - **Migration number 198** is reserved for this plan.
 - **⚠ Fedlex publishes no "amends" relation.** Verified 2026-08-23 by enumerating every predicate on `jolux:Act` and on `jolux:ConsolidationAbstract`. There is no `changes`, no `amends`, no `modifies`. What exists is:
-  - `jolux:basicAct` on `ConsolidationAbstract` — **17,055** links (re-measured 2026-08-24; the 69,190 recorded here on 2026-08-23 does not reproduce and is almost certainly a count of `jolux:ConsolidationAbstract` instances, which measures 69,495), pointing from a Classified Compilation entry to the Official Compilation act that established it. Verified for SR 220: `eli/cc/27/317_321_377 → eli/oc/27/317_321_377`.
+  - `jolux:basicAct` on `ConsolidationAbstract` — **17,055** links (re-measured 2026-08-24; the 69,190 recorded here on 2026-08-23 does not reproduce and is almost certainly a raw `COUNT(*)` over `jolux:ConsolidationAbstract`, which measures 69,495 that way -- against **17,293 distinct** works, the figure `fedlex_queries.py` has carried all along. Both numbers here are `COUNT(*)`s of the same shape, which is the whole point), pointing from a Classified Compilation entry to the Official Compilation act that established it. Verified for SR 220: `eli/cc/27/317_321_377 → eli/oc/27/317_321_377`.
   - `jolux:rectifies` — 343 occurrences.
   - `jolux:isFollowingAct` — 414 occurrences.
   So the amendment chain cannot be read out of the graph. It comes from two places instead: the computed change log from Plan 2 Task 7, and the Akoma Ntoso footnotes parsed in Task 4 here. Any claim that the graph gives us amendments is false; do not build one.
