@@ -38,7 +38,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_as_act_eli ON public.ch_as_act (eli_uri)
 CREATE INDEX IF NOT EXISTS idx_ch_as_act_published
     ON public.ch_as_act (collection, publication_date);
 
-CREATE TABLE IF NOT EXISTS public.ch_act_amendment_link (
+-- NOT ch_act_amendment_link, the name the spec drafted. Nothing this table
+-- holds is an amendment: basicAct is establishment, rectifies is a drafting
+-- correction, isFollowingAct is succession, and Fedlex publishes no amends
+-- predicate at all. A table COMMENT saying so does not help the reader who
+-- only ever sees the name in a query. Named after the two tables it joins,
+-- which is the one thing that is true of every row; relation_type carries
+-- what the link actually is.
+CREATE TABLE IF NOT EXISTS public.ch_act_as_link (
     link_id       bigserial PRIMARY KEY,
     act_id        bigint NOT NULL REFERENCES public.ch_act(act_id) ON DELETE CASCADE,
     as_id         bigint NOT NULL REFERENCES public.ch_as_act(as_id) ON DELETE CASCADE,
@@ -46,12 +53,26 @@ CREATE TABLE IF NOT EXISTS public.ch_act_amendment_link (
     -- 'rectifies'  : jolux:rectifies
     -- 'follows'    : jolux:isFollowingAct
     relation_type text NOT NULL,
-    CONSTRAINT ch_amendment_relation_chk
+    CONSTRAINT ch_act_as_link_relation_chk
         CHECK (relation_type IN ('basic_act', 'rectifies', 'follows'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_amendment_link
-    ON public.ch_act_amendment_link (act_id, as_id, relation_type);
+-- Re-runnable against a database where an EARLIER run of this migration
+-- created the old name: rename in place rather than leaving two tables, and
+-- do nothing at all if the rename already happened.
+DO $$
+BEGIN
+    IF to_regclass('public.ch_act_amendment_link') IS NOT NULL THEN
+        EXECUTE 'INSERT INTO public.ch_act_as_link (act_id, as_id, relation_type)
+                 SELECT act_id, as_id, relation_type
+                 FROM public.ch_act_amendment_link
+                 ON CONFLICT DO NOTHING';
+        EXECUTE 'DROP TABLE public.ch_act_amendment_link';
+    END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_as_link
+    ON public.ch_act_as_link (act_id, as_id, relation_type);
 
 CREATE TABLE IF NOT EXISTS public.ch_article_provenance (
     provenance_id   bigserial PRIMARY KEY,
@@ -66,9 +87,54 @@ CREATE TABLE IF NOT EXISTS public.ch_article_provenance (
     effective_date  date,
     source_act_date date,
     raw_note        text NOT NULL,
+    -- WHAT e_id names. Fedlex attaches an insertion or an act-wide
+    -- terminology change ONCE, to the enclosing chapter/title/level/part/
+    -- proviso/transitional, and never repeats it on the articles beneath --
+    -- 10.4% to 10.6% of the amendment events in the three language editions
+    -- of the OR, measured 2026-08-24. Those notes are stored against the
+    -- container, with anchor_level = 'container', rather than inherited by
+    -- every article underneath: inheritance on the German OR would have
+    -- produced 1,590 rows from 782, and 498 of them (31%) are contradicted
+    -- by the receiving article's own footnotes naming a LATER amending act.
+    -- A consumer asking how ONE article was amended must filter
+    -- anchor_level = 'article'.
+    anchor_level    text NOT NULL DEFAULT 'article',
+    -- How many articles sit beneath that container in this edition; NULL for
+    -- an article row. This is what tells a reader whether a container row is
+    -- nearly a point statement or a sweeping one (part_3 of the OR: 525).
+    container_articles integer,
     CONSTRAINT ch_provenance_action_chk
-        CHECK (action IS NULL OR action IN ('inserted', 'amended', 'repealed'))
+        CHECK (action IS NULL OR action IN ('inserted', 'amended', 'repealed')),
+    CONSTRAINT ch_provenance_anchor_chk
+        CHECK (anchor_level IN ('article', 'container')),
+    -- An article row has no fan-out; a container row must state one.
+    CONSTRAINT ch_provenance_anchor_fanout_chk
+        CHECK ((anchor_level = 'article' AND container_articles IS NULL)
+            OR (anchor_level = 'container' AND container_articles IS NOT NULL))
 );
+
+-- Same re-runnability rule as the rename above: a database where an EARLIER
+-- run of this migration created ch_article_provenance without these two
+-- columns must end up with them, and a second run must be a no-op.
+ALTER TABLE public.ch_article_provenance
+    ADD COLUMN IF NOT EXISTS anchor_level text NOT NULL DEFAULT 'article';
+ALTER TABLE public.ch_article_provenance
+    ADD COLUMN IF NOT EXISTS container_articles integer;
+DO $$
+BEGIN
+    ALTER TABLE public.ch_article_provenance
+        ADD CONSTRAINT ch_provenance_anchor_chk
+        CHECK (anchor_level IN ('article', 'container'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$
+BEGIN
+    ALTER TABLE public.ch_article_provenance
+        ADD CONSTRAINT ch_provenance_anchor_fanout_chk
+        CHECK ((anchor_level = 'article' AND container_articles IS NULL)
+            OR (anchor_level = 'container' AND container_articles IS NOT NULL));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_ch_provenance_version
     ON public.ch_article_provenance (version_id, e_id);
@@ -79,11 +145,14 @@ CREATE INDEX IF NOT EXISTS idx_ch_provenance_as
 COMMENT ON TABLE public.ch_as_act IS
     'Official Compilation (AS/RO) and Federal Gazette (BBl/FF) entries, keyed by '
     'ELI URI. collection distinguishes the two; there is no third value.';
-COMMENT ON TABLE public.ch_act_amendment_link IS
+COMMENT ON TABLE public.ch_act_as_link IS
     'Structured links from a Classified Compilation act (ch_act) to the Official '
     'Compilation entry (ch_as_act) that relates to it. This is establishment and '
     'rectification provenance, not an amendment relation -- Fedlex publishes none.';
 COMMENT ON TABLE public.ch_article_provenance IS
     'Amendment provenance recovered from Akoma Ntoso authorialNote prose, e.g. '
     '"Eingefuegt durch Ziff. I des BG vom 5. Okt. 1990, in Kraft seit 1. Juli 1991 '
-    '(AS 1991 846; BBl 1986 II 354)". Fedlex publishes no amends relation.';
+    '(AS 1991 846; BBl 1986 II 354)". Fedlex publishes no amends relation. '
+    'anchor_level distinguishes a row about one article from a row about a whole '
+    'chapter/title/level; a container row is NOT a claim about any single article '
+    'inside it.';

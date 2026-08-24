@@ -31,10 +31,10 @@ Everything from the two earlier plans applies. Additionally:
 
 | File | Responsibility |
 |---|---|
-| `mcp_backend/src/migrations/198_ch_as_bbl.sql` | `ch_as_act`, `ch_act_amendment_link`, `ch_article_provenance` |
+| `mcp_backend/src/migrations/198_ch_as_bbl.sql` | `ch_as_act`, `ch_act_as_link`, `ch_article_provenance` |
 | `services/ch-pipeline/chpipe/amendment_notes.py` | Akoma Ntoso footnote prose → structured provenance (pure) |
 | `services/ch-pipeline/chpipe/stages/as_bbl_stage.py` | Discovery of `jolux:Act` into `ch_as_act` |
-| `services/ch-pipeline/chpipe/stages/basic_act_stage.py` | `jolux:basicAct` links into `ch_act_amendment_link` |
+| `services/ch-pipeline/chpipe/stages/basic_act_stage.py` | `jolux:basicAct` links into `ch_act_as_link` |
 | `services/ch-pipeline/chpipe/stages/provenance_stage.py` | Footnotes → `ch_article_provenance` |
 | `services/ch-pipeline/chpipe/delta.py` | Daily delta for both corpora |
 | `services/ch-pipeline/run-delta.sh` | Cron entry point |
@@ -48,7 +48,7 @@ Everything from the two earlier plans applies. Additionally:
 - Test: `services/ch-pipeline/tests/test_migration_198.py`
 
 **Interfaces:**
-- Produces: tables `ch_as_act`, `ch_act_amendment_link`, `ch_article_provenance`.
+- Produces: tables `ch_as_act`, `ch_act_as_link`, `ch_article_provenance`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -69,7 +69,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def conn():
     with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_amendment_link", "ch_as_act",
+        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
                   "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
         c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
@@ -81,7 +81,7 @@ def conn():
 
 
 def test_creates_the_three_tables(conn):
-    for t in ("ch_as_act", "ch_act_amendment_link", "ch_article_provenance"):
+    for t in ("ch_as_act", "ch_act_as_link", "ch_article_provenance"):
         assert conn.execute("SELECT to_regclass(%s) IS NOT NULL", (t,)).fetchone()[0]
 
 
@@ -100,10 +100,10 @@ def test_amendment_link_records_the_relation_type(conn):
     conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://cc/1')")
     conn.execute("INSERT INTO ch_as_act (as_id, eli_uri, collection) "
                  "VALUES (1,'https://oc/1','AS')")
-    conn.execute("INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type) "
+    conn.execute("INSERT INTO ch_act_as_link (act_id, as_id, relation_type) "
                  "VALUES (1,1,'basic_act')")
     assert conn.execute(
-        "SELECT relation_type FROM ch_act_amendment_link").fetchone()[0] == "basic_act"
+        "SELECT relation_type FROM ch_act_as_link").fetchone()[0] == "basic_act"
 
 
 def test_amendment_link_rejects_an_unknown_relation_type(conn):
@@ -111,7 +111,7 @@ def test_amendment_link_rejects_an_unknown_relation_type(conn):
     conn.execute("INSERT INTO ch_as_act (as_id, eli_uri, collection) "
                  "VALUES (1,'https://oc/1','AS')")
     with pytest.raises(psycopg.errors.CheckViolation):
-        conn.execute("INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type) "
+        conn.execute("INSERT INTO ch_act_as_link (act_id, as_id, relation_type) "
                      "VALUES (1,1,'amends_probably')")
 
 
@@ -119,10 +119,10 @@ def test_amendment_link_is_unique_per_triple(conn):
     conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://cc/1')")
     conn.execute("INSERT INTO ch_as_act (as_id, eli_uri, collection) "
                  "VALUES (1,'https://oc/1','AS')")
-    conn.execute("INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type) "
+    conn.execute("INSERT INTO ch_act_as_link (act_id, as_id, relation_type) "
                  "VALUES (1,1,'basic_act')")
     with pytest.raises(psycopg.errors.UniqueViolation):
-        conn.execute("INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type) "
+        conn.execute("INSERT INTO ch_act_as_link (act_id, as_id, relation_type) "
                      "VALUES (1,1,'basic_act')")
 
 
@@ -195,7 +195,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_as_act_eli ON public.ch_as_act (eli_uri)
 CREATE INDEX IF NOT EXISTS idx_ch_as_act_published
     ON public.ch_as_act (collection, publication_date);
 
-CREATE TABLE IF NOT EXISTS public.ch_act_amendment_link (
+CREATE TABLE IF NOT EXISTS public.ch_act_as_link (
     link_id       bigserial PRIMARY KEY,
     act_id        bigint NOT NULL REFERENCES public.ch_act(act_id) ON DELETE CASCADE,
     as_id         bigint NOT NULL REFERENCES public.ch_as_act(as_id) ON DELETE CASCADE,
@@ -203,12 +203,12 @@ CREATE TABLE IF NOT EXISTS public.ch_act_amendment_link (
     -- 'rectifies'  : jolux:rectifies
     -- 'follows'    : jolux:isFollowingAct
     relation_type text NOT NULL,
-    CONSTRAINT ch_amendment_relation_chk
+    CONSTRAINT ch_act_as_link_relation_chk
         CHECK (relation_type IN ('basic_act', 'rectifies', 'follows'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_amendment_link
-    ON public.ch_act_amendment_link (act_id, as_id, relation_type);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_as_link
+    ON public.ch_act_as_link (act_id, as_id, relation_type);
 
 CREATE TABLE IF NOT EXISTS public.ch_article_provenance (
     provenance_id   bigserial PRIMARY KEY,
@@ -615,7 +615,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_amendment_link", "ch_as_act",
+        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
                   "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
         c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
@@ -866,7 +866,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_amendment_link", "ch_as_act",
+        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
                   "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
         c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
@@ -918,7 +918,7 @@ def test_links_a_cc_act_to_its_basic_act(conn, settings):
     written = basic_act_stage.link(conn, {"work": CC, "basicAct": OC})
     assert written == 1
     row = conn.execute(
-        "SELECT relation_type FROM ch_act_amendment_link").fetchone()
+        "SELECT relation_type FROM ch_act_as_link").fetchone()
     assert row[0] == "basic_act"
 
 
@@ -928,7 +928,7 @@ def test_linking_twice_does_not_duplicate(conn, settings):
     basic_act_stage.link(conn, {"work": CC, "basicAct": OC})
     basic_act_stage.link(conn, {"work": CC, "basicAct": OC})
     assert conn.execute(
-        "SELECT count(*) FROM ch_act_amendment_link").fetchone()[0] == 1
+        "SELECT count(*) FROM ch_act_as_link").fetchone()[0] == 1
 
 
 def test_a_link_whose_cc_act_is_unknown_writes_nothing(conn, settings):
@@ -1001,7 +1001,7 @@ LIMIT %(limit)d OFFSET %(offset)d
 runs last, so nothing more useful queues behind it. Titles are not fetched here:
 that would be a second query of comparable size, and the titles are only worth
 having for the acts that turn out to be referenced. Fetch them later, for the
-subset that ch_act_amendment_link and ch_article_provenance actually point at.
+subset that ch_act_as_link and ch_article_provenance actually point at.
 """
 from __future__ import annotations
 
@@ -1120,7 +1120,7 @@ class LinkReport:
 
 
 _LINK = """
-INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type)
+INSERT INTO ch_act_as_link (act_id, as_id, relation_type)
 SELECT a.act_id, s.as_id, 'basic_act'
   FROM ch_act a, ch_as_act s
  WHERE a.eli_work_uri = %(work)s AND s.eli_uri = %(basic)s
@@ -1175,7 +1175,7 @@ ssh prod "cd ~/SecondLayer/services/ch-pipeline && ./run-stage.sh as_bbl"
 ssh prod "cd ~/SecondLayer/services/ch-pipeline && ./run-stage.sh basic_act"
 ssh prod "docker exec secondlayer-postgres-prod psql -U secondlayer -d secondlayer_prod -c \
   \"SELECT collection, count(*) FROM ch_as_act GROUP BY 1;
-    SELECT relation_type, count(*) FROM ch_act_amendment_link GROUP BY 1\""
+    SELECT relation_type, count(*) FROM ch_act_as_link GROUP BY 1\""
 ```
 
 Reference re-measured 2026-08-24: `jolux:Act` totals **211,637 distinct** acts across both collections (369,181 is the raw `COUNT(*)` and is not a row count), and `basicAct` yields **17,055** links, not the 69,190 recorded on 2026-08-23. Compare the run against these figures, not the old ones: a gate calibrated to 69,190 would report a 75% shortfall on a healthy run and send an operator hunting a bug that is not there. A materially lower link count than 17,055 means acts the links point at were skipped during AS/BBl discovery — report the `unresolved` figure from the run log rather than passing over it.
@@ -1491,7 +1491,7 @@ git commit -m "feat(ch): daily delta for both swiss corpora"
 | Spec section | Task |
 |---|---|
 | 6.2 `ch_as_act` | Task 1 |
-| 6.2 `ch_act_amendment_link` | Task 1, Task 4 |
+| 6.2 `ch_act_as_link` | Task 1, Task 4 |
 | 7.12 `as-bbl` | Task 4 |
 | 10 deltas, decisions | Task 5 |
 | 10 deltas, legislation | Task 5 |

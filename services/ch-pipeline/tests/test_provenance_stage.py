@@ -56,7 +56,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_amendment_link", "ch_as_act",
+        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
                   "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
         c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
@@ -112,10 +112,15 @@ def test_the_raw_note_is_always_persisted(conn, settings):
 
 
 def test_run_skips_a_version_with_no_xml(conn, settings):
+    """N3: an edition with no akn_xml is a hole in the CORPUS, and it gets
+    its own counter. Folded into versions_without_notes, as it was, an
+    operator could not tell a fetch gap worth chasing from a law nobody has
+    amended."""
     _version(conn, with_xml=False)
     report = provenance_stage.run(settings)
     assert report.rows == 0
-    assert report.versions_without_notes == 1
+    assert report.versions_without_xml == 1
+    assert report.versions_without_notes == 0
 
 
 def test_run_only_touches_the_requested_language(conn, settings):
@@ -219,3 +224,121 @@ def test_run_waits_for_capacity_before_each_version(conn, settings, monkeypatch)
     provenance_stage.run(settings)
 
     assert seen == [(settings.load_ceiling, "provenance")] * 2
+
+
+# --- B4: a re-run that yields nothing must REMOVE the stale rows ---------
+
+_XML_WITH_NOTE = (
+    '<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+    '<act><body><article eId="art_1"><paragraph eId="art_1/para_1"><content>'
+    '<p>Text.<authorialNote><p>{note}</p></authorialNote></p>'
+    '</content></paragraph></article></body></act></akomaNtoso>')
+
+_REAL_NOTE = ("Aufgehoben durch Ziff. I des BG vom 4. Okt. 1991, mit Wirkung "
+              "seit 1. Juli 1992 (AS 1992 733; BBl 1983 II 745).")
+# Not an amendment at all -- a plain SR cross-reference. extract() returns []
+# for it, which before this fix meant store() was never called.
+_NO_NOTE = "SR 943.03"
+
+
+def _set_xml(conn, vid, note):
+    conn.execute("UPDATE ch_act_version SET akn_xml=%s WHERE version_id=%s",
+                 (_XML_WITH_NOTE.format(note=note), vid))
+
+
+def test_a_rerun_that_yields_nothing_clears_the_previous_rows(conn, settings):
+    """run() `continue`d without calling store() when extract() returned [],
+    and store() is the only thing that deletes -- so a row written by an
+    earlier, wrong parse kept asserting its amendment forever while the
+    report counted the night clean.
+
+    This is the recovery path for every parser fix that tightens a rule:
+    this branch's own parser went 748 -> 783 -> 782 -> 874 across four
+    rounds, and rows have to be able to leave, not only arrive."""
+    vid = _version(conn)
+    _set_xml(conn, vid, _REAL_NOTE)
+    first = provenance_stage.run(settings)
+    assert first.rows == 1
+    assert conn.execute("SELECT count(*) FROM ch_article_provenance "
+                        "WHERE version_id=%s", (vid,)).fetchone()[0] == 1
+
+    # Same version, re-parsed with its amendment footnote gone.
+    _set_xml(conn, vid, _NO_NOTE)
+    second = provenance_stage.run(settings)
+
+    assert second.rows == 0
+    assert second.versions_without_notes == 1
+    assert second.cleared == 1, "the report must say a stale row was removed"
+    assert conn.execute("SELECT count(*) FROM ch_article_provenance "
+                        "WHERE version_id=%s", (vid,)).fetchone()[0] == 0
+
+
+def test_a_version_with_no_xml_keeps_its_rows(conn, settings):
+    """The deliberate asymmetry. A missing akn_xml is absence of evidence:
+    the rows were written when the XML was there, and dropping them over an
+    unrelated fetch gap would destroy a good parse. It is counted instead."""
+    vid = _version(conn)
+    _set_xml(conn, vid, _REAL_NOTE)
+    provenance_stage.run(settings)
+    conn.execute("UPDATE ch_act_version SET akn_xml=NULL WHERE version_id=%s",
+                 (vid,))
+
+    report = provenance_stage.run(settings)
+
+    assert report.versions_without_xml == 1
+    assert report.cleared == 0
+    assert conn.execute("SELECT count(*) FROM ch_article_provenance "
+                        "WHERE version_id=%s", (vid,)).fetchone()[0] == 1
+
+
+def test_clearing_a_version_that_never_had_rows_is_not_counted(conn, settings):
+    """`cleared` is the signal that a fix reached the stored rows, so it must
+    stay 0 on a steady-state night rather than counting every quiet act."""
+    vid = _version(conn)
+    _set_xml(conn, vid, _NO_NOTE)
+    report = provenance_stage.run(settings)
+    assert report.versions_without_notes == 1
+    assert report.cleared == 0
+
+
+# --- B5: container-anchored rows reach the table ------------------------
+
+def test_a_container_anchored_row_is_stored_with_its_fan_out(conn, settings):
+    vid = _version(conn)
+    rows = amendment_notes.extract(FIXTURE.read_bytes())
+    containers = [r for r in rows
+                  if r.anchor_level == amendment_notes.ANCHOR_CONTAINER]
+    assert containers, "the fixture must carry a container-anchored note"
+    provenance_stage.store(conn, vid, rows)
+
+    stored = conn.execute(
+        "SELECT anchor_level, count(*) FROM ch_article_provenance "
+        "WHERE version_id=%s GROUP BY 1 ORDER BY 1", (vid,)).fetchall()
+    assert dict(stored) == {
+        "article": sum(1 for r in rows
+                       if r.anchor_level == amendment_notes.ANCHOR_ARTICLE),
+        "container": len(containers)}
+    bad = conn.execute(
+        "SELECT count(*) FROM ch_article_provenance WHERE version_id=%s "
+        "AND anchor_level='container' AND container_articles IS NULL",
+        (vid,)).fetchone()[0]
+    assert bad == 0
+
+
+def test_the_schema_refuses_a_container_row_without_a_fan_out(conn, settings):
+    """The CHECK is what stops a container row from silently reading as a
+    point statement about one provision."""
+    vid = _version(conn)
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO ch_article_provenance (version_id, e_id, raw_note, "
+            "anchor_level) VALUES (%s, 'part_3', 'x', 'container')", (vid,))
+
+
+def test_the_schema_refuses_a_fan_out_on_an_article_row(conn, settings):
+    vid = _version(conn)
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO ch_article_provenance (version_id, e_id, raw_note, "
+            "anchor_level, container_articles) "
+            "VALUES (%s, 'art_1', 'x', 'article', 5)", (vid,))

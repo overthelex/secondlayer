@@ -12,7 +12,7 @@ it while it works through the walk.
 Titles are not fetched here: that would be a second query of comparable
 size, and the titles are only worth having for the AS/BBl acts that turn
 out to be referenced by something else in the corpus. Fetch them later, for
-the subset ch_act_amendment_link and ch_article_provenance actually point
+the subset ch_act_as_link and ch_article_provenance actually point
 at -- migration 198's comment on ch_as_act records the same reasoning for
 why this table carries no title_*/xml_url/pdf_url columns yet.
 """

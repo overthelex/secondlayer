@@ -61,7 +61,7 @@ class LinkReport:
 
 
 _LINK = """
-INSERT INTO ch_act_amendment_link (act_id, as_id, relation_type)
+INSERT INTO ch_act_as_link (act_id, as_id, relation_type)
 SELECT a.act_id, s.as_id, 'basic_act'
   FROM ch_act a, ch_as_act s
  WHERE a.eli_work_uri = %(work)s AND s.eli_uri = %(basic)s

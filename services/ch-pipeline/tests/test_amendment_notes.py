@@ -119,13 +119,15 @@ def test_extract_keeps_the_repeal_and_drops_the_change_log_pointer():
     finding 7's tautological assertion (`r.action or r.as_reference`, a
     literal restatement of the old filter it claimed to test, which could
     not fail for any input); this one fails if either row is wrong."""
-    rows = an.extract(FIXTURE.read_bytes())
+    rows = [r for r in an.extract(FIXTURE.read_bytes())
+            if r.anchor_level == an.ANCHOR_ARTICLE]
     assert len(rows) == 1
     row = rows[0]
     assert row.e_id == "art_637_639"
     assert row.action == "repealed"
     assert row.as_reference == "AS 1992 733"
     assert row.effective_date == datetime.date(1992, 7, 1)
+    assert row.container_articles is None
 
 
 def test_french_notes_are_understood():
@@ -446,3 +448,102 @@ def test_every_inflected_form_found_in_the_corpus_is_classified(
 ])
 def test_a_nominalisation_is_not_read_as_a_repeal(lang, text):
     assert an.parse_note(text, lang=lang)["action"] is None
+
+
+# --- Final gate, B5: notes Fedlex hangs on a container ------------------
+
+_CONTAINER_DOC = (
+    '<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+    '<act><body>'
+    # A <level> wrapping exactly ONE article, with the amendment note on the
+    # level's own heading. 51 of the 93 German orphans are this exact shape,
+    # and all 51 are a direct parent -- so the note names art_60 and nothing
+    # else.
+    '<level eId="lvl_G"><heading>Verjährung<authorialNote><p>{single}</p>'
+    '</authorialNote></heading>'
+    '<article eId="art_60"><paragraph eId="art_60/para_1"><content><p>A.</p>'
+    '</content></paragraph></article></level>'
+    # A <chapter> holding THREE articles, with an act-wide note on its
+    # heading. This one is about the block, not about any of the three.
+    '<chapter eId="chap_7"><heading>Transparenz<authorialNote><p>{block}</p>'
+    '</authorialNote></heading>'
+    '<article eId="art_964_a"><paragraph eId="art_964_a/para_1"><content>'
+    '<p>B.</p></content></paragraph></article>'
+    '<article eId="art_964_b"><paragraph eId="art_964_b/para_1"><content>'
+    '<p>C.</p></content></paragraph></article>'
+    '<article eId="art_964_c"><paragraph eId="art_964_c/para_1"><content>'
+    '<p>D.</p></content></paragraph></article></chapter>'
+    '</body></act></akomaNtoso>')
+
+_SINGLE_LEVEL_NOTE = (
+    "Fassung gemäss Anhang Ziff. 2 des BG vom 19. Dez. 2003 über die "
+    "elektronische Signatur, in Kraft seit 1. Jan. 2005 "
+    "(AS 2004 5085; BBl 2001 5679).")
+_CHAPTER_NOTE = (
+    "Ursprünglich: Sechster Abschnitt und Art. 964a–964f. Eingefügt durch "
+    "Ziff. I des BG vom 19. Juni 2020 (Aktienrecht), in Kraft seit "
+    "1. Jan. 2021 (AS 2020 4005; BBl 2017 399).")
+
+
+def _container_document() -> bytes:
+    return _CONTAINER_DOC.format(single=_SINGLE_LEVEL_NOTE,
+                                 block=_CHAPTER_NOTE).encode("utf-8")
+
+
+def test_a_level_wrapping_one_article_anchors_to_that_article():
+    """Fedlex puts the article's marginal-note heading on a wrapping
+    <level> and hangs the amendment note off the heading. Attributing it to
+    the single article beneath is not inheritance -- it is the same "which
+    provision is this about" walk, corrected for where the heading lives."""
+    rows = [r for r in an.extract(_container_document())
+            if r.e_id == "art_60"]
+    assert len(rows) == 1
+    assert rows[0].anchor_level == an.ANCHOR_ARTICLE
+    assert rows[0].container_articles is None
+    assert rows[0].as_reference == "AS 2004 5085"
+    assert rows[0].effective_date == datetime.date(2005, 1, 1)
+
+
+def test_a_note_on_a_multi_article_container_is_stored_once_against_it():
+    rows = an.extract(_container_document())
+    chapter = [r for r in rows if r.e_id == "chap_7"]
+    assert len(chapter) == 1
+    assert chapter[0].anchor_level == an.ANCHOR_CONTAINER
+    assert chapter[0].container_articles == 3
+    assert chapter[0].as_reference == "AS 2020 4005"
+
+
+def test_a_container_note_is_never_pushed_down_to_its_articles():
+    """The measurement behind the choice: inheriting the container notes on
+    the German OR would have turned 782 rows into 1,590, and 498 of those
+    (31%) are contradicted by the receiving article's OWN footnotes naming a
+    LATER amending act -- worst case, "Fassung gemäss BG vom 18. Dez. 1936"
+    on part_3 asserting that the 1936 Act worded art. 964a, a provision
+    inserted in 2021. A row naming the wrong act is worse than no row."""
+    rows = an.extract(_container_document())
+    inherited = [r for r in rows
+                 if r.e_id in {"art_964_a", "art_964_b", "art_964_c"}]
+    assert inherited == []
+
+
+def test_a_note_with_no_eid_bearing_ancestor_is_still_dropped():
+    """The only remaining drop: a preamble note has no real identifier to
+    anchor to, and a synthetic one would put a made-up value in a column
+    callers read as a citation. One such note on the German and French OR."""
+    doc = ('<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0">'
+           '<act><preamble><p>Vorbemerkung<authorialNote><p>' + REPEALED +
+           '</p></authorialNote></p></preamble></act></akomaNtoso>')
+    assert an.extract(doc.encode("utf-8")) == []
+
+
+def test_the_full_or_record_is_complete_but_for_the_unanchorable():
+    """Anchoring is not a heuristic that happens to catch most notes: every
+    amendment event in the fixture is stored under one anchor or the other,
+    and the two counts partition the total."""
+    rows = an.extract(FIXTURE.read_bytes())
+    article = [r for r in rows if r.anchor_level == an.ANCHOR_ARTICLE]
+    container = [r for r in rows if r.anchor_level == an.ANCHOR_CONTAINER]
+    assert article and container
+    assert len(article) + len(container) == len(rows)
+    assert all(r.container_articles is None for r in article)
+    assert all(r.container_articles is not None for r in container)

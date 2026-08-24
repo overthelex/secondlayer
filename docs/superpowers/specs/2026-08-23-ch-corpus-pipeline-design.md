@@ -137,7 +137,7 @@ SPARQL-ендпойнт `https://fedlex.data.admin.ch/sparqlendpoint`, онто�
 
 - `196_ch_court_pipeline.sql` — черга на `ch_court_decisions`
 - `197_ch_legislation_corpus.sql` — `ch_act`, `ch_act_version`, `ch_act_article`, `ch_act_change`
-- `198_ch_as_bbl.sql` — `ch_as_act`, `ch_act_amendment_link`, `ch_article_provenance`
+- `198_ch_as_bbl.sql` — `ch_as_act`, `ch_act_as_link`, `ch_article_provenance`
 
 Номери 193–195 зайняті незакоміченою роботою по ЄРАУ і UK на інших гілках; `main` стоїть на 192.
 
@@ -200,7 +200,7 @@ ENG та ROH; `jolux:titleShort` несе абревіатуру («OR», «CO»
 `as_id`, `eli_uri`, `collection` (`AS` \| `BBl`), `publication_date`, `title_{de,fr,it}`,
 `pdf_url`, `xml_url`, `metadata_json`.
 
-**`ch_act_amendment_link`** — зв'язок акта AS з актом СЗ.
+**`ch_act_as_link`** — зв'язок акта AS з актом СЗ.
 `as_id`, `act_id`, `relation_type`.
 
 ⚠⚠ **Заміряно 23.08.2026: у jolux немає предиката «змінює».** Перелічив усі предикати
@@ -306,7 +306,7 @@ HTML → текст. PDF → `pdftotext -layout`.
 
 ### 7.12 Законодавство: `as-bbl`
 
-Обхід 369 181 `jolux:Act` → `ch_as_act`, і зв'язки «акт-правка → акт СЗ» → `ch_act_amendment_link`.
+Обхід 369 181 `jolux:Act` → `ch_as_act`, і зв'язки «акт-правка → акт СЗ» → `ch_act_as_link`.
 Це найдовша стадія за обсягом і йде останньою, щоб не блокувати корисніші дані.
 
 ## 8. Дисципліна ресурсів

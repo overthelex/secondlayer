@@ -274,6 +274,10 @@ def _unsupported_lang(lang: str) -> ValueError:
         "read as zero matches rather than an error.")
 
 
+ANCHOR_ARTICLE = "article"
+ANCHOR_CONTAINER = "container"
+
+
 @dataclass(frozen=True)
 class Provenance:
     e_id: str
@@ -283,6 +287,20 @@ class Provenance:
     effective_date: datetime.date | None
     source_act_date: datetime.date | None
     raw_note: str
+    # WHAT e_id names. "article": this note is about that one provision --
+    # the ordinary case, and the only shape a consumer asking "how was
+    # art. 620 amended" wants. "container": the note is attached to a
+    # <chapter>/<title>/<level>/<part>/<proviso>/<transitional> and is a
+    # statement about the block as a whole, NOT about any particular
+    # article inside it. See _anchor_of() for why the two are separated
+    # instead of the second being inherited down or dropped.
+    anchor_level: str = ANCHOR_ARTICLE
+    # For a container row, how many <article> elements sit beneath that
+    # container in THIS edition -- the number that tells a reader whether
+    # the row is nearly a point statement (1 would have been promoted to an
+    # article anchor; 2 is close) or a sweeping one (part_3, 525 articles).
+    # None for an article row, where the question does not arise.
+    container_articles: int | None = None
 
 
 def _parse_date(fragment: str | None) -> datetime.date | None:
@@ -522,22 +540,88 @@ def _is_amendment(parsed: dict, lang: str) -> bool:
 
 
 def _owning_article(element) -> str | None:
-    """Walk up from a note to the nearest enclosing <article>'s eId.
+    """Walk up from a note to the nearest enclosing <article>'s eId, or None.
 
     Notes carry no eId of their own (measured: with_eId=0 on both the
     fixture and the full OR), so this walk is the only way to attribute one
-    to a provision. A note that never reaches an <article> -- one attached
-    to the act as a whole, e.g. a top-level SR cross-reference -- returns
-    None and extract() drops it: Provenance.e_id is NOT NULL, and
-    ch_article_provenance.e_id is NOT NULL (migration 198), so inventing a
-    synthetic anchor to keep such a row would put a made-up value in a
-    column callers treat as a real citation.
+    to a provision. See _anchor_of() for what happens when it returns None.
     """
     parent = element.getparent()
     while parent is not None:
         if parent.tag == _AKN_ARTICLE:
             return parent.get("eId")
         parent = parent.getparent()
+    return None
+
+
+def _anchor_of(element) -> tuple[str, str, int | None] | None:
+    """(e_id, anchor_level, container_articles) for one note, or None.
+
+    An earlier version of this module returned only the enclosing article
+    and dropped everything else as NOT NULL hygiene. That drop is not
+    hygiene: Fedlex attaches an insertion or an act-wide terminology change
+    ONCE, to the enclosing <chapter>/<title>/<level>/<part>/<proviso>/
+    <transitional>, and never repeats it on the articles underneath.
+    Measured on the three cached full OR editions, counting only notes that
+    parse as a real amendment event: de 93 of 875 (10.6%), fr 92 of 886
+    (10.4%), it 92 of 873 (10.5%). The shortfall is not random -- it is
+    concentrated exactly on newly inserted blocks and act-wide terminology
+    changes, which is what a reader asks about.
+
+    Two shapes, separated because the evidence separates them cleanly:
+
+    * A <level> whose ONLY article is its direct child. Fedlex puts the
+      article's own marginal-note heading on a wrapping <level>
+      ("lvl_G" heading "Verjährung" wrapping art_60) and hangs the
+      amendment note off that heading. The note is about that one article
+      and nothing else. Measured: 51 of the 93 German orphans are exactly
+      this, and ALL 51 are a <level> that is the direct parent of exactly
+      one <article> -- zero indirect cases, in any of the three languages.
+      These are attributed to the article. This is not inheritance; it is
+      the same "which provision is this note about" walk, corrected for
+      where Fedlex actually hangs the heading.
+
+    * Anything else -- 2 to 525 articles beneath. The note is stored ONCE,
+      against the container, and is NEVER pushed down to the articles
+      inside. Inheriting it would have produced 1,590 rows from 782 real
+      ones on the German OR, and 498 of those 1,590 (31%) are directly
+      contradicted by the receiving article's OWN footnotes, which name a
+      LATER amending act than the container note does. The worst single
+      case: "Fassung gemäss BG vom 18. Dez. 1936 ... (AS 53 185)" on
+      part_3, which would assert that the 1936 Act gave art. 964a -- a
+      provision inserted in 2021 -- its current wording. A row naming the
+      wrong act as the amending one is worse than no row at all, so the
+      container keeps the note and the articles beneath are left to their
+      own.
+
+    Only a note with no eId-bearing ancestor at all is still dropped (one
+    preamble note on the German and French OR, none on the Italian) --
+    there is no real identifier to anchor it to, and a synthetic one would
+    put a made-up value in a column callers read as a citation.
+    """
+    article = _owning_article(element)
+    if article:
+        return (article, ANCHOR_ARTICLE, None)
+
+    parent = element.getparent()
+    fallback = None
+    while parent is not None:
+        e_id = parent.get("eId")
+        if e_id:
+            articles = parent.findall(".//" + _AKN_ARTICLE)
+            if len(articles) == 1 and articles[0].getparent() is parent:
+                return (articles[0].get("eId"), ANCHOR_ARTICLE, None)
+            if articles:
+                return (e_id, ANCHOR_CONTAINER, len(articles))
+            # An eId-bearing ancestor with no article under it at all (a
+            # <paragraph> inside a <transitional>) is a worse anchor than
+            # the block it sits in: keep walking, and only fall back to it
+            # if nothing above holds an article either.
+            if fallback is None:
+                fallback = e_id
+        parent = parent.getparent()
+    if fallback is not None:
+        return (fallback, ANCHOR_CONTAINER, 0)
     return None
 
 
@@ -566,15 +650,27 @@ def extract(xml: bytes, lang: str = "de") -> list[Provenance]:
     neither effective_date nor source_act_date, measured on the full OR)
     under some invented tiebreak this module has no basis for choosing.
 
-    Three kinds of note contribute no row, all deliberate: one that never
-    reaches an enclosing <article> (see _owning_article), a plain
-    cross-reference ("SR 943.03") with neither a recognised action nor an
-    AS/BBl reference, and one that has an AS reference but is not actually
-    describing a change to THIS article -- a bracketed publication history
-    of a different act, a "Die Änderungen können unter AS ... konsultiert
-    werden" pointer, or a bare citation with no surrounding sentence (see
-    _is_amendment() for the full reasoning; the brief's original rule
-    missed all three of these).
+    NOT EVERY ROW IS ABOUT ONE ARTICLE. `anchor_level` says which: rows
+    with anchor_level == "article" name a provision; rows with
+    anchor_level == "container" name a <chapter>/<title>/<level>/<part>/
+    <proviso>/<transitional> and are a statement about that whole block,
+    with `container_articles` giving how many articles sit inside it. A
+    consumer asking "how was art. 620 amended" must filter on
+    anchor_level = 'article'; one building an act's amendment history wants
+    both. The container rows are ~10% of the events in the OR and are
+    concentrated on newly inserted blocks and act-wide terminology changes
+    -- see _anchor_of() for the measurement and for why they are stored
+    once against the container rather than pushed down to the articles
+    inside it.
+
+    Two kinds of note contribute no row, both deliberate: one with no
+    eId-bearing ancestor at all (see _anchor_of), and one that has neither
+    a recognised action nor an AS/BBl reference, or has a reference but is
+    not describing a change to THIS provision -- a bracketed publication
+    history of a different act, a "Die Änderungen können unter AS ...
+    konsultiert werden" pointer, or a bare citation with no surrounding
+    sentence (see _is_amendment() for the full reasoning; the brief's
+    original rule missed all three of these).
     """
     if lang not in _ACTIONS:
         raise _unsupported_lang(lang)
@@ -582,9 +678,10 @@ def extract(xml: bytes, lang: str = "de") -> list[Provenance]:
     root = akn._root(xml)
     rows: list[Provenance] = []
     for note in root.iter(_AKN_AUTHORIAL_NOTE):
-        e_id = _owning_article(note)
-        if not e_id:
+        anchor = _anchor_of(note)
+        if anchor is None:
             continue
+        e_id, anchor_level, container_articles = anchor
         full_text = " ".join("".join(note.itertext()).split())
         for event_text in _split_events(full_text, lang):
             parsed = parse_note(event_text, lang=lang)
@@ -598,5 +695,7 @@ def extract(xml: bytes, lang: str = "de") -> list[Provenance]:
                 effective_date=parsed["effective_date"],
                 source_act_date=parsed["source_act_date"],
                 raw_note=full_text,
+                anchor_level=anchor_level,
+                container_articles=container_articles,
             ))
     return rows

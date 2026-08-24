@@ -2691,7 +2691,7 @@ git commit -m "feat(ch): project the new corpus back into ch_legislation, plus g
 | 7.10 `parse-akn` | Tasks 5, 6 |
 | 7.11 `diff` | Task 7 |
 | 9 Gate E | Task 8 step 5 |
-| 6.2 `ch_as_act`, `ch_act_amendment_link` | **Plan 3** |
+| 6.2 `ch_as_act`, `ch_act_as_link` | **Plan 3** |
 | 7.12 `as-bbl` | **Plan 3** |
 | 10 deltas | **Plan 3** |
 

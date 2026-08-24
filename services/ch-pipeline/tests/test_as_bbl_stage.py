@@ -47,7 +47,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_amendment_link", "ch_as_act",
+        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
                   "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
         c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
@@ -158,7 +158,7 @@ def test_links_a_cc_act_to_its_basic_act(conn):
     written = basic_act_stage.link(conn, {"work": CC, "basicAct": OC})
     assert written == 1
     row = conn.execute(
-        "SELECT relation_type FROM ch_act_amendment_link").fetchone()
+        "SELECT relation_type FROM ch_act_as_link").fetchone()
     assert row[0] == "basic_act"
 
 
@@ -169,21 +169,21 @@ def test_linking_twice_does_not_duplicate(conn):
     second = basic_act_stage.link(conn, {"work": CC, "basicAct": OC})
     assert second == 0
     assert conn.execute(
-        "SELECT count(*) FROM ch_act_amendment_link").fetchone()[0] == 1
+        "SELECT count(*) FROM ch_act_as_link").fetchone()[0] == 1
 
 
 def test_a_link_whose_cc_act_is_unknown_writes_nothing(conn):
     as_bbl_stage.upsert_as_act(conn, {"act": OC})
     assert basic_act_stage.link(conn, {"work": "https://cc/never", "basicAct": OC}) == 0
     assert conn.execute(
-        "SELECT count(*) FROM ch_act_amendment_link").fetchone()[0] == 0
+        "SELECT count(*) FROM ch_act_as_link").fetchone()[0] == 0
 
 
 def test_a_link_whose_as_act_is_unknown_writes_nothing(conn):
     acts_stage.upsert_act(conn, {"work": CC, "srNotation": "220"})
     assert basic_act_stage.link(conn, {"work": CC, "basicAct": "https://oc/never"}) == 0
     assert conn.execute(
-        "SELECT count(*) FROM ch_act_amendment_link").fetchone()[0] == 0
+        "SELECT count(*) FROM ch_act_as_link").fetchone()[0] == 0
 
 
 # --------------------------------------------------------------------------
