@@ -5,8 +5,8 @@
 # codebase, split by deploy target, not by fork:
 #   - lawrider.ch      = AWS prod (this workflow) -- multi-jurisdiction
 #                        (CH, UK, NL, PL, ... and UA), blue-green.
-#   - legal.org.ua     = local.lex prod (deploy-legal-ua.yml) -- the UA
-#                        product, deployed straight on the runner's box.
+#   - legal.org.ua     = local.lex prod -- deployed by ci-local-deploy.yml's
+#                        own deploy-local job on cthulhu (label local-deploy).
 # Which jurisdictions a target serves is env-side (.env.prod on the box),
 # never a code fork.
 #
@@ -16,10 +16,13 @@
 # - Phase 2: After approval, switch production traffic to new color
 # - Triggered by successful CI or manually via workflow_dispatch
 #
-# NOTE until the domain cutover: the AWS box still answers as legal.org.ua,
-# so VITE_API_URL and the preview host below keep those names. At cutover,
-# set the repo variable LAWRIDER_API_URL=https://lawrider.ch -- the build
-# picks it up with no YAML change -- and rename the preview host on the box.
+# NOTE until the domain cutover: the AWS box still answers as legal.org.ua.
+# The REAL prod frontend image takes VITE_API_URL from a build arg in
+# deployment/docker-compose.prod.yml (now overridable via VITE_API_URL_PROD
+# in the box's .env.prod); the LAWRIDER_API_URL repo variable below covers
+# only this workflow's pre-deploy TEST build. Cutover therefore means: set
+# VITE_API_URL_PROD in .env.prod on the box, set the repo variable for test
+# parity, and rename the preview host -- no YAML change.
 ##############################################################################
 name: 'Deploy lawrider.ch (AWS)'
 
@@ -84,8 +87,12 @@ jobs:
 
       - name: Resolve final change flags
         id: final
+        env:
+          # Through the environment, never interpolated into the script:
+          # a workflow_dispatch input is attacker-adjacent text, and
+          # ${{ }} substitution into bash is an injection point.
+          INPUT_SERVICES: ${{ github.event.inputs.services }}
         run: |
-          INPUT_SERVICES="${{ github.event.inputs.services }}"
 
           if [ -n "$INPUT_SERVICES" ]; then
             # Manual override: parse comma-separated service names

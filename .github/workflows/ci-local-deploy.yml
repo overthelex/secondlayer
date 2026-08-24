@@ -1,13 +1,18 @@
 ##############################################################################
-# Pipeline: CI — build & test
-# - Runs on self-hosted runner (local.lex)
-# - Builds and tests all changed services; deploys NOTHING itself
-#   (the header used to claim it deployed the local environment — it never
-#   had a deploy job; that gap is why deploys to local.lex were manual)
-# - On success it fans out to BOTH prod deploys via workflow_run:
-#     deploy-legal-ua.yml  -> legal.org.ua on local.lex (auto)
-#     deploy-lawrider.yml  -> lawrider.ch on AWS (blue-green, gated)
-# - Triggered on merge to main
+# Pipeline: CI + deploy legal.org.ua (local.lex prod)
+#
+# Two-prod topology (2026-08): one codebase, two products, split by deploy
+# target and env, never by fork:
+#   - legal.org.ua = the local environment on cthulhu (local.lex), deployed
+#     by THIS workflow's deploy-local job after build-and-test succeeds.
+#     Now that the box serves real users, that deploy IS a prod deploy.
+#   - lawrider.ch  = AWS (deploy-lawrider.yml), blue-green over SSH,
+#     triggered by this workflow's success via workflow_run.
+# Which jurisdictions a target serves is env-side (.env.local / .env.prod).
+#
+# - Runs on self-hosted runners; deploy-local pins the `local-deploy` label
+#   (unique to cthulhu — `local` alone also matches the prod runner).
+# - Triggered on merge to main, or manually (deploy/no_cache inputs)
 ##############################################################################
 name: 'CI/CD: Local Build & Test'
 

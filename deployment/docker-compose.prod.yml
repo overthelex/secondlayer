@@ -810,7 +810,7 @@ services:
       dockerfile: lexwebapp/Dockerfile
       args:
         - BUILD_ENV=production
-        - VITE_API_URL=https://legal.org.ua
+        - VITE_API_URL=${VITE_API_URL_PROD:-https://legal.org.ua}
         - VITE_API_KEY=${VITE_API_KEY_PROD:-REDACTED_SL_KEY_PROD}
         - VITE_ENABLE_SSE_STREAMING=true
         - VITE_ENABLE_ALL_MCP_TOOLS=true
@@ -857,7 +857,7 @@ services:
       dockerfile: platform/Dockerfile
       args:
         - BUILD_ENV=production
-        - VITE_API_URL=https://platform.legal.org.ua
+        - VITE_API_URL=${VITE_PLATFORM_API_URL_PROD:-https://platform.legal.org.ua}
         - GIT_SHA=${GIT_SHA:-unknown}
     image: platform-prod:latest
     container_name: platform-prod

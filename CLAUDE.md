@@ -23,9 +23,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Production deployment is fully automated via CI/CD. Merge PR to main triggers the pipeline. NEVER deploy manually via SSH.
 - CI/CD runs on self-hosted runners (on local.lex). **Two prods, one codebase** (split is env-side, never a code fork):
-  - `ci-local-deploy.yml` — push to main: builds and tests only (deploys nothing itself)
-  - `deploy-legal-ua.yml` — after successful CI (or manual): deploys **legal.org.ua prod on local.lex** from a persistent clone (`LEX_DEPLOY_REPO`), marker tags `deploy-lex-*`
-  - `deploy-lawrider.yml` — after successful CI or manual: blue-green deploy to **lawrider.ch on AWS** via SSH (marker tags remain `deploy-prod-*`)
+  - `ci-local-deploy.yml` — push to main: builds, tests, and its `deploy-local` job deploys **legal.org.ua prod on cthulhu/local.lex** (runner label `local-deploy` — never plain `local`, which also matches the prod runner)
+  - `deploy-lawrider.yml` — after successful CI or manual: blue-green deploy to **lawrider.ch on AWS** via SSH (marker tags remain `deploy-prod-*`; domain cutover = `VITE_API_URL_PROD` in the box's `.env.prod` + `LAWRIDER_API_URL` repo variable for the CI test build)
 - Blue-green deployment: prod uses `.active-colors` file in `deployment/` to track which color (blue/green) is active per service group (backend, frontend). New deploys go to the inactive color, then traffic is switched.
 - Nginx must be `--force-recreated` after ANY upstream/backend change (bind mount staleness).
 - Never manually recreate prod containers; use the deploy pipeline.
