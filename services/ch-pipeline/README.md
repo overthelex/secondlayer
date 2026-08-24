@@ -781,6 +781,29 @@ spiders — so `AG_OG` and `AG_VG` both mapping to `AG_Gerichte` is routine,
 and advancing one of the two while restoring the other would retire a real
 night's growth at whichever court lost the coin toss.
 
+It covers **document**-level failures too, for the same reason one level
+down. `index_stage` counts a document whose JSON 404s, decodes badly or
+fails to write in `report.failed` and carries on — one bad file must not
+cost a court — and reports the count per spider in `failed_per_spider`. A
+spider with any such failure has its baseline held back exactly as a failed
+listing does, because the snapshot counter is the only record those
+documents were ever supposed to be here. The cost is accepted: a document
+that fails *permanently* keeps its court on the nightly re-walk list until
+somebody looks, which is the escalating signal — the alternative is a legal
+corpus that quietly stops containing a decision.
+
+A listing that returns HTTP 200 and names **zero** documents is a failed
+spider, not an empty court. All 54 spiders are established courts with
+documents already in the corpus, so zero entries is a parse or layout
+failure by construction. Both shapes of it fail — an Apache index that
+rendered nothing, and a body that is not a directory listing at all — and
+the `Index of` marker in the first chunk only decides which of the two the
+log names, because nothing else separates them (an empty Apache index still
+carries its Parent Directory link, and so does a changed template, and so
+does a 200 error page). A court that genuinely emptied would therefore be
+reported failed every night: a loud, cheap, visible false alarm, taken
+deliberately over a broken parser reporting a clean zero.
+
 **Legislation.** Re-runs `acts` and `versions` in full — both are idempotent
 upserts over the whole graph, and the whole graph is a few minutes of SPARQL,
 which is simpler and more reliable than trying to filter by a modification

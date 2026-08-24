@@ -237,13 +237,15 @@ class _FakeAsyncFetcher:
         return self._by_url[url]
 
 
-def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=()):
+def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=(),
+                          failed_per_spider=None):
     seen = {"index": None, "fetch": [], "extract": [], "load": []}
 
     def fake_index(settings, spiders):
         seen["index"] = spiders
-        return index_stage.IndexReport(inserted=inserted,
-                                       failed_spiders=list(failed_spiders))
+        return index_stage.IndexReport(
+            inserted=inserted, failed_spiders=list(failed_spiders),
+            failed_per_spider=dict(failed_per_spider or {}))
 
     def fake_fetch(settings, limit=None, spider=None):
         seen["fetch"].append(spider)
@@ -757,3 +759,93 @@ def test_the_unmapped_warning_keeps_escalating_across_nights(
                for m in seen[0]), seen[0]
     assert any("12 of 12 detected new document(s) still unindexed" in m
                for m in seen[1]), seen[1]
+
+
+# --- Document-level failures must hold the baseline back too ---
+#
+# index_stage counts a document whose JSON 404s or decodes badly in
+# report.failed and moves on, correctly. But the delta then advanced that
+# court's snapshot counter anyway, so tomorrow saw no growth and those
+# documents left the corpus permanently, in silence -- the same defect
+# failed_spiders already closed one level up.
+
+def test_growth_is_not_retired_for_a_spider_whose_documents_failed(
+        tmp_path, monkeypatch, conn):
+    """The listing loaded fine; two of its documents did not. Night 2 against
+    the same snapshot must still see the court as changed."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch, inserted=98,
+                          failed_per_spider={"CH_BGer": 2})
+
+    first = delta.run_decisions(_settings(tmp_path),
+                                fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+    assert first.spiders == ["CH_BGer"]
+
+    second = delta.run_decisions(_settings(tmp_path),
+                                 fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+    assert second.spiders == ["CH_BGer"], \
+        "a court whose documents did not land must still look changed next run"
+
+
+def test_a_document_failure_rolls_back_every_court_code_of_that_spider(
+        tmp_path, monkeypatch, conn):
+    """Several snapshot keys routinely resolve to one spider (the real
+    2026-08-23 file carries 131 court codes against 54 spiders), and the
+    baseline is keyed by snapshot key -- so rolling back one of them would
+    retire the other court's growth as though it had been indexed."""
+    _seed(conn, "ECLI:1", "AG_Gerichte", "AG_OG_001")
+    _seed(conn, "ECLI:2", "AG_Gerichte", "AG_VG_001")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"AG_OG": 10, "AG_VG": 20}, "total_alle": 30}
+    _stub_decision_stages(monkeypatch, failed_per_spider={"AG_Gerichte": 1})
+
+    delta.run_decisions(_settings(tmp_path),
+                        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    state = delta._load_state(_settings(tmp_path))
+    assert "AG_OG" not in state and "AG_VG" not in state, \
+        "both court codes of the spider must be held back, not one"
+
+
+def test_a_clean_walk_still_advances_the_baseline(tmp_path, monkeypatch, conn):
+    """The guard must fire on real failures only: a night where every
+    document landed has to retire its growth, or the delta re-walks the whole
+    corpus forever."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch, inserted=100,
+                          failed_per_spider={"CH_BGer": 0})
+
+    delta.run_decisions(_settings(tmp_path),
+                        fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+    second = delta.run_decisions(_settings(tmp_path),
+                                 fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    assert second.spiders == []
+    assert delta._load_state(_settings(tmp_path)) == {"CH_BGer": 100}
+
+
+def test_a_document_level_failure_is_reported_at_warning(
+        tmp_path, monkeypatch, conn, caplog):
+    """Held-back growth that nobody is told about is just a delta that never
+    finishes. The warning names the spider and how many of its documents did
+    not land."""
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    url = delta.snapshot_url(datetime.date(2026, 8, 20))
+    snapshot = {"total": {"CH_BGer": 100}, "total_alle": 100}
+    _stub_decision_stages(monkeypatch, failed_per_spider={"CH_BGer": 3})
+
+    with caplog.at_level(logging.WARNING):
+        delta.run_decisions(_settings(tmp_path),
+                            fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
+
+    assert any("CH_BGer:3" in r.getMessage() for r in caplog.records
+               if r.levelno == logging.WARNING), caplog.text

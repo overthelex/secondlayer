@@ -29,6 +29,15 @@ class IndexReport:
     # "a whole court was never enumerated" are not the same finding, and
     # folding them together would hide the second inside the first.
     failed_spiders: list[str] = field(default_factory=list)
+    # spider -> how many of ITS documents failed. `failed` alone is a corpus
+    # total, and the caller that needs this cannot use a total: delta.py
+    # holds a spider's snapshot baseline back when tonight's walk did not
+    # actually land its documents, and "somewhere in the run, 3 documents
+    # failed" does not say whose baseline to hold. Without the attribution
+    # the delta advanced every baseline anyway and the failed documents were
+    # dropped from the corpus permanently and silently -- the same defect
+    # failed_spiders was introduced to close, one level down.
+    failed_per_spider: dict[str, int] = field(default_factory=dict)
 
 
 _UPSERT = """
@@ -127,39 +136,106 @@ def upsert(conn, fields: es_document.DocumentFields, available: set[str]) -> str
     return "inserted" if inserted else "updated"
 
 
-async def _listing_inventory(fetcher: Fetcher, spider: str) -> dict[str, frozenset[str]]:
-    """doc_id -> available extensions, streamed rather than buffered.
+class EmptyListing(RuntimeError):
+    """A listing that came back 200 and named no documents at all.
+
+    Its own type rather than a bare RuntimeError so the message an operator
+    reads names the finding instead of a stack frame, and so a test can
+    assert on the distinction below rather than on a substring.
+    """
+
+
+# Apache's autoindex puts "Index of /docs/{SPIDER}" in both the <title> and
+# the <h1>, so it is in the first chunk of every real listing. It is the one
+# cheap thing that separates "the directory rendered, and was empty" from
+# "the server sent us something that is not a directory listing at all" --
+# an error page served with 200, a template change, a JS-driven index. Both
+# are failures for an established court (see _index_spider), so the marker
+# does not gate the failure; it decides which sentence the operator gets.
+_APACHE_INDEX_MARKER = "Index of"
+
+
+async def _listing_inventory(fetcher: Fetcher,
+                             spider: str) -> tuple[dict[str, frozenset[str]], str]:
+    """(doc_id -> available extensions, a description of the body), streamed
+    rather than buffered.
 
     Measured: the CH_BGer listing is 116,000,062 bytes and takes 132.9 s.
     Fetcher.text() holds all of it as one string and _HREF.findall then
     materialises ~400,000 more strings on top of that. Streaming holds one
     64 KB chunk plus the inventory itself, and the inventory's extension
     sets are interned down to eight shared frozensets.
+
+    The second element is diagnosis only, and it is built from the FIRST
+    chunk alone -- scanning 116 MB for a marker to describe an outcome would
+    cost more than the outcome is worth.
     """
     bits: dict[str, int] = {}
     buffer = ""
+    seen_chars = 0
+    shape = "empty body"
     async for chunk in fetcher.stream_text(es_listing.listing_url(spider)):
+        if not seen_chars:
+            shape = ("an Apache directory index" if _APACHE_INDEX_MARKER in chunk
+                     else "NOT an Apache directory index")
+        seen_chars += len(chunk)
         buffer += chunk
         for doc_id, bit in es_listing.iter_listing_entries([buffer]):
             bits[doc_id] = bits.get(doc_id, 0) | bit
         buffer = es_listing.carry_over(buffer)
     for doc_id, bit in es_listing.iter_listing_entries([buffer]):
         bits[doc_id] = bits.get(doc_id, 0) | bit
-    return {doc_id: es_listing.extension_set(value) for doc_id, value in bits.items()}
+    inventory = {doc_id: es_listing.extension_set(value)
+                 for doc_id, value in bits.items()}
+    return inventory, f"{shape}, {seen_chars} chars"
 
 
 async def _index_spider(fetcher: Fetcher, conn, spider: str, report: IndexReport) -> None:
-    inventory = await _listing_inventory(fetcher, spider)
+    inventory, shape = await _listing_inventory(fetcher, spider)
     log.info("%s: %d documents in the listing", spider, len(inventory))
     report.per_spider[spider] = len(inventory)
+
+    # An HTTP 200 whose body matches zero document links used to read as a
+    # perfectly healthy court that happens to publish nothing. Every one of
+    # the 54 spiders in ALL_SPIDERS is an established court with documents
+    # already in the corpus, so for any of them a zero-entry listing is a
+    # parser or layout failure, never an empty court -- and read as health it
+    # is silent: delta.py advances that court's snapshot baseline and its real
+    # growth is retired without ever having been walked.
+    #
+    # The two shapes an empty result can have -- Apache rendered an index and
+    # it held nothing, versus the server sent something that is not a listing
+    # at all -- are BOTH failures here, so the marker in _listing_inventory
+    # decides only which sentence the operator gets, not whether we fail. The
+    # trade is deliberate and it is the one this corpus wants: a court that
+    # genuinely emptied would be reported failed every night (a loud, cheap,
+    # visible false alarm) rather than a broken parser reporting a clean zero
+    # (invisible corpus loss). There is no third signal that separates them:
+    # an empty Apache index still carries its Parent Directory href, and so
+    # does a changed template and so does a 200 error page, so counting
+    # non-document links buys nothing.
+    if not inventory:
+        raise EmptyListing(
+            f"{spider}: the listing returned a body but named no documents "
+            f"({shape}); for an established court that is a parse or layout "
+            f"failure, not an empty court")
 
     async def one(doc_id: str, available: set[str]) -> None:
         try:
             data = await fetcher.json(
                 es_listing.document_url(spider, doc_id, "json"))
-        except FetchError as exc:
+        # ValueError, not only FetchError: Fetcher.json() hands the body to
+        # json.loads, so ONE malformed document raises json.JSONDecodeError
+        # (a ValueError) rather than a FetchError -- and that escaped this
+        # handler, escaped the gather, and landed in the spider-level guard,
+        # putting the WHOLE court into failed_spiders over a single bad file.
+        # UnicodeDecodeError is a ValueError too, so a body with broken bytes
+        # takes the same per-document path.
+        except (FetchError, ValueError) as exc:
             log.warning("%s/%s: %s", spider, doc_id, exc)
             report.failed += 1
+            report.failed_per_spider[spider] = \
+                report.failed_per_spider.get(spider, 0) + 1
             return
         # A malformed payload or a write error (e.g. a collision the ON CONFLICT
         # target does not cover) must not cancel the other 499 documents in this
@@ -171,6 +247,8 @@ async def _index_spider(fetcher: Fetcher, conn, spider: str, report: IndexReport
         except Exception as exc:
             log.error("%s/%s: %s", spider, doc_id, exc)
             report.failed += 1
+            report.failed_per_spider[spider] = \
+                report.failed_per_spider.get(spider, 0) + 1
             return
         if outcome == "inserted":
             report.inserted += 1
@@ -256,9 +334,12 @@ def main(argv: list[str] | None = None) -> IndexReport:
     else:
         selected = None
     result = run(Settings.from_env(), selected)
-    log.info("inserted=%d updated=%d failed=%d failed_spiders=%s",
+    log.info("inserted=%d updated=%d failed=%d failed_spiders=%s "
+             "failed_per_spider=%s",
              result.inserted, result.updated, result.failed,
-             ",".join(result.failed_spiders) or "none")
+             ",".join(result.failed_spiders) or "none",
+             ",".join(f"{s}:{n}" for s, n in
+                      sorted(result.failed_per_spider.items())) or "none")
     return result
 
 

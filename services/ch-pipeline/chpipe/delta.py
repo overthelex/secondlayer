@@ -403,8 +403,34 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     # doing so tells tomorrow's comparison nothing changed there, silently
     # retiring tonight's real growth forever. Roll back EVERY key that
     # resolved to the failed spider, not one of them -- see `actionable`.
+    #
+    # DOCUMENT-level failures need the identical treatment, and did not have
+    # it. index_stage counts a document whose JSON 404s, decodes badly or
+    # fails to write in report.failed and moves on -- correctly, one bad file
+    # must not cost a court -- but the baseline then advanced over it anyway,
+    # so those documents were dropped from the corpus permanently and in
+    # silence. The snapshot counter is the only record that they were ever
+    # supposed to be here. A spider is therefore held back if its listing
+    # failed OR if any of its documents did.
+    #
+    # The cost is real and accepted: a document that fails PERMANENTLY (a
+    # JSON entscheidsuche will never serve) keeps its court on the nightly
+    # re-walk list until somebody looks. That is the escalating signal, the
+    # same shape as the unmapped-key WARNING above -- and the alternative is
+    # a corpus that quietly stops containing a decision. For a legal
+    # database that is not a trade worth making.
     failed = set(index_report.failed_spiders)
-    for spider in sorted(failed & set(actionable)):
+    incomplete = {spider for spider, n in index_report.failed_per_spider.items()
+                  if n}
+    if incomplete - failed:
+        log.warning(
+            "delta(%s): %s had document-level failures (%s); their snapshot "
+            "baselines are held back, so these courts are re-walked tomorrow "
+            "rather than having tonight's growth retired unindexed",
+            day, ",".join(sorted(incomplete - failed)),
+            ",".join(f"{s}:{index_report.failed_per_spider[s]}"
+                     for s in sorted(incomplete - failed)))
+    for spider in sorted((failed | incomplete) & set(actionable)):
         hold_back(actionable[spider])
 
     _save_state(settings, next_state)

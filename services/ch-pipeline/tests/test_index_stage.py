@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import json
+import logging
 import os
 import pathlib
 import psycopg
@@ -347,3 +348,151 @@ def test_a_protected_row_is_not_stamped_with_an_error_it_never_hit(conn):
         "SELECT stage, last_error FROM ch_court_decisions").fetchone()
     assert row[0] == "extracted"
     assert row[1] is None
+
+
+# --- One bad file must not cost a court, and an unreadable listing must not
+# read as a healthy empty one ---
+#
+# These go through the REAL Fetcher over an httpx.MockTransport rather than a
+# hand-written double: the defect in the first test is that Fetcher.json()
+# raises json.JSONDecodeError rather than FetchError, so a double that
+# chooses its own exception type cannot prove anything about it.
+
+import httpx                                                   # noqa: E402
+from chpipe.config import Settings as _Settings                 # noqa: E402
+from chpipe.http import Fetcher as _RealFetcher                 # noqa: E402
+
+_GOOD_ID = "ZG_OG_001_Z1-2020-5_2022-02-18"
+_LISTING = (f'<html><head><title>Index of /docs/ZG_Obergericht</title></head>'
+            f'<body><h1>Index of /docs/ZG_Obergericht</h1>'
+            f'<a href="/docs/">Parent Directory</a>'
+            f'<a href="{_GOOD_ID}.json">a</a><a href="{_GOOD_ID}.pdf">a</a>'
+            f'<a href="BAD_DOC.json">b</a><a href="BAD_DOC.pdf">b</a>'
+            f'</body></html>')
+_EMPTY_LISTING = ('<html><head><title>Index of /docs/ZG_Obergericht</title></head>'
+                  '<body><h1>Index of /docs/ZG_Obergericht</h1>'
+                  '<a href="/docs/">Parent Directory</a></body></html>')
+_NOT_A_LISTING = "<html><body><h1>503 Service Unavailable</h1></body></html>"
+
+
+def _mock_transport(conn, monkeypatch, handler):
+    transport = httpx.MockTransport(handler)
+    real = _RealFetcher
+
+    class Injected:
+        def __init__(self, *a, **kw):
+            kw.setdefault("concurrency", 1)
+            self._f = real(retries=1, backoff=0.0, transport=transport,
+                           **{k: v for k, v in kw.items() if k == "concurrency"})
+
+        async def __aenter__(self):
+            return await self._f.__aenter__()
+
+        async def __aexit__(self, *exc):
+            return await self._f.__aexit__(*exc)
+
+    monkeypatch.setattr(index_stage, "Fetcher", Injected)
+    monkeypatch.setattr(index_stage.db, "connect", lambda s: conn)
+    monkeypatch.setattr(conn, "close", lambda: None, raising=False)
+    return _Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
+                     http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                     load_ceiling=0.0, max_attempts=3)
+
+
+def test_one_malformed_document_json_does_not_cost_the_whole_spider(conn, monkeypatch):
+    """Fetcher.json() hands the body to json.loads, so a single truncated
+    file raises json.JSONDecodeError -- not FetchError. That escaped the
+    per-document handler, escaped the gather and landed in the spider-level
+    guard, so one bad file put the entire court into failed_spiders and
+    every other document of it went unindexed."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING)
+        if "BAD_DOC" in url:
+            return httpx.Response(200, text='{"Signatur": "ZG_OG_001", ')
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == [], \
+        "one malformed document must not retire the whole court"
+    assert report.inserted == 1
+    assert report.failed == 1
+    assert {r[0] for r in conn.execute(
+        "SELECT doc_id FROM ch_court_decisions").fetchall()} == {_GOOD_ID}
+
+
+def test_a_failed_document_is_attributed_to_its_own_spider(conn, monkeypatch):
+    """`failed` alone is a corpus total, and delta.py cannot hold a baseline
+    back with a total -- it has to know WHOSE documents did not land."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING)
+        if "BAD_DOC" in url:
+            return httpx.Response(404)
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_per_spider == {"ZG_Obergericht": 1}
+    assert report.inserted == 1
+
+
+def test_a_listing_that_names_no_documents_is_a_failed_spider(conn, monkeypatch):
+    """An HTTP 200 matching zero entries used to read as a healthy court that
+    publishes nothing, so delta.py advanced its baseline and retired its real
+    growth unwalked. Every spider in ALL_SPIDERS is an established court, so
+    for any of them this is a parse or layout failure, never an empty
+    court."""
+    def handler(request):
+        return httpx.Response(200, text=_EMPTY_LISTING)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == ["ZG_Obergericht"]
+    assert report.inserted == 0
+
+
+def test_an_unrecognised_listing_body_is_named_as_such(conn, monkeypatch, caplog):
+    """Both shapes fail -- an empty Apache index and a body that is not a
+    listing at all -- but the operator has to be told which one, because the
+    two need different fixes. The Apache marker is the only cheap signal that
+    separates them, and it decides the sentence, not the outcome."""
+    def handler(request):
+        return httpx.Response(200, text=_NOT_A_LISTING)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    with caplog.at_level(logging.ERROR, logger="chpipe.stages.index_stage"):
+        report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == ["ZG_Obergericht"]
+    assert "NOT an Apache directory index" in caplog.text
+
+
+def test_a_populated_listing_is_not_treated_as_empty(conn, monkeypatch):
+    """The guard must fire on zero entries only -- a court that IS enumerable
+    must never land in failed_spiders."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING.replace(
+                '<a href="BAD_DOC.json">b</a><a href="BAD_DOC.pdf">b</a>', ""))
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == []
+    assert report.failed_per_spider == {}
+    assert report.inserted == 1
