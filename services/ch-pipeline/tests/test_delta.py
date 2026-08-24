@@ -144,7 +144,7 @@ def test_court_code_spider_map_strips_the_chamber_suffix(conn):
     _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
     _seed(conn, "ECLI:2", "ZG_Obergericht", "ZG_OG_002")
     mapping = delta.court_code_spider_map(conn)
-    assert mapping == {"ZG_OG": "ZG_Obergericht"}
+    assert mapping == {"ZG_OG": ("ZG_Obergericht",)}
 
 
 def test_court_code_spider_map_is_partial_by_construction(conn):
@@ -153,21 +153,21 @@ def test_court_code_spider_map_is_partial_by_construction(conn):
     _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
     mapping = delta.court_code_spider_map(conn)
     assert "AG_Gerichte" not in mapping
-    assert set(mapping.values()) == {"ZG_Obergericht"}
+    assert set(mapping.values()) == {("ZG_Obergericht",)}
 
 
-def test_court_code_spider_map_keeps_the_first_spider_on_a_conflict(conn, caplog):
-    """Two real spiders reporting under one stripped court code. Both names
-    are real directory names, because the mapping only admits those."""
-    _seed(conn, "ECLI:1", "AG_Gerichte", "XX_YY_001")
-    _seed(conn, "ECLI:2", "AG_Weitere", "XX_YY_002")
-    with caplog.at_level(logging.WARNING):
+def test_court_code_spider_map_keeps_every_spider_under_an_ambiguous_code(conn, caplog):
+    """Two real spiders reporting under one stripped court code -- VD_TC on
+    the loaded prod corpus (VD_TC_004 is VD_FindInfo's, VD_TC_031 is
+    VD_Omni's). Keeping "the first one" routed the other's growth to a
+    re-index that could never contain it. Both are kept, sorted, so the
+    mapping is the same on every run."""
+    _seed(conn, "ECLI:1", "AG_Weitere", "XX_YY_002")
+    _seed(conn, "ECLI:2", "AG_Gerichte", "XX_YY_001")
+    with caplog.at_level(logging.INFO):
         mapping = delta.court_code_spider_map(conn)
-    # Was `in ("SpiderA", "SpiderB")`, which cannot fail for any mapping
-    # that has the key at all. The query now carries its own ORDER BY, so
-    # "the first one seen" is a promise and can be named.
-    assert mapping == {"XX_YY": "AG_Gerichte"}
-    assert "maps to both" in caplog.text
+    assert mapping == {"XX_YY": ("AG_Gerichte", "AG_Weitere")}
+    assert "re-indexes both" in caplog.text
 
 
 def test_court_code_spider_map_drops_a_spider_that_is_no_longer_a_directory(
@@ -181,7 +181,7 @@ def test_court_code_spider_map_drops_a_spider_that_is_no_longer_a_directory(
     _seed(conn, "ECLI:2", "ZH_Handelsgericht_alt", "ZH_HG_001")
     with caplog.at_level(logging.WARNING):
         mapping = delta.court_code_spider_map(conn)
-    assert mapping == {"ZG_OG": "ZG_Obergericht"}
+    assert mapping == {"ZG_OG": ("ZG_Obergericht",)}
     assert "ZH_Handelsgericht_alt" in caplog.text
 
 
@@ -929,3 +929,24 @@ def test_a_corrupt_state_file_makes_the_run_re_walk_rather_than_retire(
                                  fetcher_factory=lambda: _FakeAsyncFetcher({url: snapshot}))
 
     assert report.spiders == ["CH_BGer"]
+
+
+def test_run_decisions_reindexes_every_spider_under_an_ambiguous_court_code(
+        tmp_path, monkeypatch, conn):
+    """The VD_TC case end to end: one grown court-code key, two spiders with
+    chambers under it, both walked. Pre-fix only the first was."""
+    _seed(conn, "ECLI:1", "VD_FindInfo", "VD_TC_004")
+    _seed(conn, "ECLI:2", "VD_Omni", "VD_TC_031")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    snapshot = {"total": {"VD_TC": 40}, "total_alle": 40}
+    fetcher = _FakeAsyncFetcher({
+        delta.snapshot_url(datetime.date(2026, 8, 20)): snapshot,
+    })
+    seen = _stub_decision_stages(monkeypatch)
+
+    report = delta.run_decisions(_settings(tmp_path),
+                                 fetcher_factory=lambda: fetcher)
+
+    assert sorted(report.spiders) == ["VD_FindInfo", "VD_Omni"]
+    assert sorted(seen["index"]) == ["VD_FindInfo", "VD_Omni"]
