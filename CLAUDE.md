@@ -22,14 +22,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Deployment
 
 - Production deployment is fully automated via CI/CD. Merge PR to main triggers the pipeline. NEVER deploy manually via SSH.
-- CI/CD runs on a self-hosted runner (`local.legal.org.ua`). Two pipelines:
-  - `ci-local-deploy.yml` — triggered on push to main: builds, tests, deploys to local environment
-  - `deploy-prod.yml` — triggered after successful local CI or manually via workflow_dispatch: blue-green deploy to prod via SSH
+- CI/CD runs on self-hosted runners (on local.lex). **Two prods, one codebase** (split is env-side, never a code fork):
+  - `ci-local-deploy.yml` — push to main: builds and tests only (deploys nothing itself)
+  - `deploy-legal-ua.yml` — after successful CI (or manual): deploys **legal.org.ua prod on local.lex** from a persistent clone (`LEX_DEPLOY_REPO`), marker tags `deploy-lex-*`
+  - `deploy-lawrider.yml` — after successful CI or manual: blue-green deploy to **lawrider.ch on AWS** via SSH (marker tags remain `deploy-prod-*`)
 - Blue-green deployment: prod uses `.active-colors` file in `deployment/` to track which color (blue/green) is active per service group (backend, frontend). New deploys go to the inactive color, then traffic is switched.
 - Nginx must be `--force-recreated` after ANY upstream/backend change (bind mount staleness).
 - Never manually recreate prod containers; use the deploy pipeline.
 - After making changes to CI/CD workflows or Dockerfiles, verify the build passes locally or check for missing dependencies (e.g., `npm ci` requires lock files, volume mounts in docker-compose). Never assume CI will pass without validation.
-- There is NO stage environment — only local and prod.
+- There is NO stage environment. There are TWO prods: legal.org.ua (local.lex, UA product) and lawrider.ch (AWS, multi-jurisdiction incl. CH/UK/NL/PL).
 - After deploying, always check container health and logs for errors.
 - After making code changes, always rebuild Docker images before testing (`docker compose build <service>` then `docker compose up -d`). Never test against stale containers.
 - Local dev runs in Docker. Do NOT attempt to restart backend processes directly — always use docker compose commands.

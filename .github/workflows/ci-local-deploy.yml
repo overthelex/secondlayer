@@ -1,8 +1,12 @@
 ##############################################################################
-# Pipeline: Local CI/CD
-# - Runs on self-hosted runner (local.legal.org.ua)
-# - Builds and tests all changed services in local Docker environment
-# - Deploys changed services to local environment for integration testing
+# Pipeline: CI — build & test
+# - Runs on self-hosted runner (local.lex)
+# - Builds and tests all changed services; deploys NOTHING itself
+#   (the header used to claim it deployed the local environment — it never
+#   had a deploy job; that gap is why deploys to local.lex were manual)
+# - On success it fans out to BOTH prod deploys via workflow_run:
+#     deploy-legal-ua.yml  -> legal.org.ua on local.lex (auto)
+#     deploy-lawrider.yml  -> lawrider.ch on AWS (blue-green, gated)
 # - Triggered on merge to main
 ##############################################################################
 name: 'CI/CD: Local Build & Test'
