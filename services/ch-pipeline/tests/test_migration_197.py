@@ -238,3 +238,89 @@ def test_the_version_table_still_carries_everything_a_stage_does_write(conn):
             "akn_xml", "full_text", "article_count", "stage", "attempts",
             "last_error", "failed_stage", "fetched_at", "stage_updated_at"} \
         <= _cols(conn, "ch_act_version")
+
+
+# --- The stage machines and the status vocabulary, enforced not merely
+# described. Every allowed set below was enumerated from the writers:
+# versions_stage's INSERT, fetch_xml_stage/parse_akn_stage's
+# complete_version, db.fail_version(), acts_stage's INSERT, and
+# fedlex_queries.status_code(). ---
+
+def test_version_stage_rejects_a_value_no_stage_ever_writes(conn):
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+                     "date_applicability, stage) "
+                     "VALUES (1,'https://x/1/2020','de','2020-01-01','loaded')")
+
+
+def test_version_stage_rejects_diff_and_projection(conn):
+    """failed_stage lists them; `stage` must not. diff and projection work on
+    parsed rows in place and never advance them, so a row that SAT at either
+    would be invisible to every claim query -- and
+    db.retry_failed_versions(conn, stage='diff') is an operator one keystroke
+    away from putting a whole backlog there."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    for bad in ("diff", "projection"):
+        with pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, "
+                         "lang, date_applicability, stage) "
+                         "VALUES (1,%s,'de','2020-01-01',%s)",
+                         (f"https://x/1/{bad}", bad))
+
+
+def test_version_stage_accepts_every_value_a_stage_writes(conn):
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri) VALUES (1,'https://x/1')")
+    for i, stage in enumerate(("discovered", "fetched", "parsed", "failed"), 1):
+        conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+                     "date_applicability, stage) VALUES (1,%s,'de','2020-01-01',%s)",
+                     (f"https://x/1/cons{i}", stage))
+    assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 4
+
+
+def test_act_stage_rejects_a_stage_nothing_writes(conn):
+    """ch_act has no stage machine: acts_stage's INSERT writes 'discovered'
+    and nothing moves it on. Widening this is a migration, not an accident."""
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute("INSERT INTO ch_act (eli_work_uri, stage) "
+                     "VALUES ('https://x/1','fetched')")
+
+
+def test_act_stage_accepts_the_one_value_acts_stage_writes(conn):
+    conn.execute("INSERT INTO ch_act (eli_work_uri, stage) VALUES ('https://x/1','discovered')")
+    conn.execute("INSERT INTO ch_act (eli_work_uri) VALUES ('https://x/2')")   # the default
+    assert conn.execute("SELECT count(*) FROM ch_act WHERE stage='discovered'").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("bad", [2, 4, -1, 99])
+def test_enforcement_status_rejects_a_code_outside_the_verified_vocabulary(conn, bad):
+    """status_code() reads whatever integer sits at the tail of the
+    enforcement-status URI, and in_force is GENERATED AS
+    (enforcement_status = 0) -- so an unrecognised code would have been
+    rendered as "not in force" with nothing noticing."""
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute("INSERT INTO ch_act (eli_work_uri, enforcement_status) "
+                     "VALUES ('https://x/1', %s)", (bad,))
+
+
+def test_enforcement_status_accepts_the_three_verified_codes_and_null(conn):
+    """NULL is legal on purpose: ~4,296 works publish no status, and the
+    twelve works asserting two contradictory ones are stored NULL by
+    acts_stage._resolve_status()."""
+    for i, code in enumerate((0, 1, 3, None), 1):
+        conn.execute("INSERT INTO ch_act (eli_work_uri, enforcement_status) "
+                     "VALUES (%s, %s)", (f"https://x/{i}", code))
+    assert conn.execute("SELECT count(*) FROM ch_act").fetchone()[0] == 4
+
+
+def test_is_idempotent_with_the_new_constraints_against_a_populated_table(conn):
+    """Re-applying must be a no-op even when the tables already hold rows the
+    constraints have to validate again -- the shape a prod re-run has."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, enforcement_status, stage) "
+                 "VALUES (1,'https://x/1',0,'discovered')")
+    conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+                 "date_applicability, stage) "
+                 "VALUES (1,'https://x/1/2020','de','2020-01-01','parsed')")
+    conn.execute(MIGRATION.read_text())
+    conn.execute(MIGRATION.read_text())
+    assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 1

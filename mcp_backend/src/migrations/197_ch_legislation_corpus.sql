@@ -142,6 +142,60 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- The queue's own stage column, constrained to what the code actually writes.
+-- Enumerated from the writers, not from the schema's imagination:
+-- versions_stage's INSERT ('discovered'), fetch_xml_stage's complete_version
+-- ('fetched'), parse_akn_stage's complete_version ('parsed'), and
+-- db.fail_version()'s CASE ('failed'). Nothing else assigns this column.
+--
+-- NOT 'diff' and NOT 'projection', even though failed_stage above lists
+-- them: those two stages operate on parsed rows in place and never advance
+-- them, so no row ever SITS at either (see this migration's COMMENT ON
+-- ch_act_version.failed_stage). db.retry_failed_versions(conn, stage='diff')
+-- is the one call that could write one, and it is an operator typing a stage
+-- name by hand -- exactly the case a CHECK should refuse rather than let a
+-- whole backlog settle into a stage no claim query will ever ask for.
+DO $$ BEGIN
+    ALTER TABLE public.ch_act_version
+        ADD CONSTRAINT ch_act_version_stage_chk
+        CHECK (stage IN ('discovered', 'fetched', 'parsed', 'failed'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ch_act has no stage machine at all: acts_stage's INSERT writes
+-- 'discovered' and no statement anywhere in the pipeline ever moves it on.
+-- A one-value CHECK is what that fact looks like written down. The column
+-- exists (and stays) because a work's discovery is a real event a later
+-- stage may want to advance -- but the day something does, this constraint
+-- has to be widened deliberately, in a migration, rather than the corpus
+-- quietly acquiring a second stage nothing queries for.
+DO $$ BEGIN
+    ALTER TABLE public.ch_act
+        ADD CONSTRAINT ch_act_stage_chk
+        CHECK (stage IN ('discovered'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- The verified vocabulary, enforced rather than only described. NULL stays
+-- legal: ~4,296 works publish no status, and the twelve works that assert
+-- two contradictory ones are stored as NULL on purpose (acts_stage
+-- ._resolve_status()).
+--
+-- fedlex_queries.status_code() reads whatever integer sits at the tail of
+-- the enforcement-status URI, so a fourth code appearing in the vocabulary
+-- would flow straight into this column today -- and in_force, which is
+-- GENERATED AS (enforcement_status = 0), would render it as "not in force"
+-- without anything noticing. This trades that silent recall for precision:
+-- an unrecognised code now raises, acts_stage's per-row guard counts it in
+-- ActsReport.errors, and a human decides what the code means before the
+-- corpus asserts anything about the act's force.
+DO $$ BEGIN
+    ALTER TABLE public.ch_act
+        ADD CONSTRAINT ch_act_enforcement_status_chk
+        CHECK (enforcement_status IS NULL OR enforcement_status IN (0, 1, 3));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 COMMENT ON TABLE public.ch_act_change IS
     'Computed per-article difference between consecutive consolidated editions. '
     'This is the amendment history; Fedlex does not publish it directly.';
