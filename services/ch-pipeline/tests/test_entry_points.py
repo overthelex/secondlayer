@@ -18,15 +18,15 @@ import pathlib
 import pytest
 
 from chpipe import config
-from chpipe.stages import (extract_stage, fetch_stage, index_stage,
-                           load_stage, ocr_stage)
+from chpipe.stages import (citations_stage, extract_stage, fetch_stage,
+                           index_stage, load_stage, ocr_stage)
 
 FAKE = config.Settings(dsn="postgresql://unused@127.0.0.1:1/unused",
                        raw_dir=pathlib.Path("/tmp"), http_concurrency=1,
                        cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
                        max_attempts=3)
 
-CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage]
+CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage, citations_stage]
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +55,7 @@ def _report(module):
         ocr_stage: ocr_stage.OcrReport,
         load_stage: load_stage.LoadReport,
         index_stage: index_stage.IndexReport,
+        citations_stage: citations_stage.CitationsReport,
     }[module]()
 
 
