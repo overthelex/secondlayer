@@ -133,8 +133,12 @@ ${registryDescriptions}
     // Without it a document snippet is computed for every matching row and only
     // then thrown away by the sort — see RegistryDef.outerColumns for the
     // measurement.
+    // The outer ORDER BY is not decoration: SQL does not carry a subquery's
+    // ordering into the enclosing query, so without it the page could come back
+    // in executor order. It sorts at most `limit` rows.
     const dataSql = def.outerColumns
       ? `SELECT ${def.outerColumns} FROM (${innerSql}) t`
+        + (def.outerOrderBy ? `\n      ORDER BY ${def.outerOrderBy}` : '')
       : innerSql;
 
     const countSql = `SELECT COUNT(*) AS total FROM ${def.table} WHERE ${fullWhere}`;

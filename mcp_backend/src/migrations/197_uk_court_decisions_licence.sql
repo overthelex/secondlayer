@@ -29,7 +29,12 @@ UPDATE uk_court_decisions
    SET licence = CASE WHEN source = 'tna' THEN 'open-justice' ELSE 'unknown' END
  WHERE licence IS NULL;
 
+-- 'unknown' and not 'open-justice'. Defaulting to a named licence would stamp
+-- that licence onto rows from a source that has not been checked yet -- BAILII,
+-- Scotland, Northern Ireland -- and a licence filter would then be confidently
+-- wrong in the direction that matters. An importer that knows its licence sets
+-- it explicitly; anything that does not is flagged as unclassified.
 ALTER TABLE uk_court_decisions
-    ALTER COLUMN licence SET DEFAULT 'open-justice';
+    ALTER COLUMN licence SET DEFAULT 'unknown';
 
 CREATE INDEX IF NOT EXISTS idx_uk_court_licence ON uk_court_decisions (licence);

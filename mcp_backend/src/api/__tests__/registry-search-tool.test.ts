@@ -550,6 +550,13 @@ describe('aggregate mode (LEXAI-1820)', () => {
       }
       expect(offenders).toEqual([]);
     });
+
+    it('every deferred projection also declares its outer ordering', () => {
+      const missing = Object.entries(REGISTRY_CATALOG)
+        .filter(([, def]) => def.outerColumns && !def.outerOrderBy)
+        .map(([key]) => key);
+      expect(missing).toEqual([]);
+    });
   });
 
   // A snippet in a flat query is computed for every matching row and then thrown
@@ -569,6 +576,8 @@ describe('aggregate mode (LEXAI-1820)', () => {
       const sql = calls[0].sql;
       expect(sql).toMatch(/^SELECT t\./);
       expect(sql).toContain('FROM (SELECT');
+      // A subquery's ORDER BY does not survive into the enclosing query.
+      expect(sql.trimEnd()).toMatch(/ORDER BY t\.decision_date DESC NULLS LAST$/);
       // The LIMIT belongs to the inner query, before the snippet is computed.
       expect(sql.indexOf('LIMIT')).toBeLessThan(sql.lastIndexOf(') t'));
       // The COUNT query is unaffected by the wrapping.

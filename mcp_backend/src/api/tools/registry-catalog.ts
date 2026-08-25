@@ -51,6 +51,14 @@ export interface RegistryDef {
    * body of a document stays out of the response.
    */
   outerColumns?: string;
+  /**
+   * Ordering for the outer select. Required whenever `outerColumns` is set:
+   * a subquery's ORDER BY is not carried by SQL semantics into the enclosing
+   * query, so without this the page would come back in whatever order the
+   * executor happened to produce. Cheap — it sorts at most `limit` rows, the
+   * inner ORDER BY having already chosen which rows those are.
+   */
+  outerOrderBy?: string;
 }
 
 export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
@@ -679,6 +687,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     selectColumns: 'archive_file, doc_file, doc_kind, decision_no, decision_date, extracted, body_text',
     outerColumns: "t.archive_file, t.doc_file, t.doc_kind, t.decision_no, t.decision_date, t.extracted, left(t.body_text || '', 600) AS snippet",
     orderBy: 'decision_date DESC NULLS LAST',
+    outerOrderBy: 't.decision_date DESC NULLS LAST',
     emptyMessage: 'Рішень АМКУ не знайдено',
     fields: [
       { name: 'text', description: 'Ключові слова у тексті рішення', match: 'fts_simple', columns: ['body_text'] },
@@ -697,6 +706,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     selectColumns: 'convocation, sitting_date, doc_kind, source_file, body_text',
     outerColumns: "t.convocation, t.sitting_date, t.doc_kind, t.source_file, left(t.body_text || '', 600) AS snippet",
     orderBy: 'sitting_date DESC NULLS LAST',
+    outerOrderBy: 't.sitting_date DESC NULLS LAST',
     emptyMessage: 'Стенограм не знайдено',
     fields: [
       { name: 'text', description: 'Ключові слова у тексті стенограми', match: 'fts_simple', columns: ['body_text'] },
@@ -762,6 +772,10 @@ Rows are per version, so one section can appear several times with different val
     selectColumns: 'leg_id, valid_from::text AS valid_from, provision_label, provision_type, title, n_chars, provision_uri, text',
     outerColumns: "t.leg_id, t.valid_from, t.provision_label, t.provision_type, t.title, t.n_chars, t.provision_uri, left(t.text || '', 800) AS snippet",
     orderBy: 'uk_legislation_provisions.valid_from DESC NULLS LAST, leg_id, ord',
+    // `ord` is not carried out of the subquery, so the outer sort tie-breaks on
+    // leg_id only. The inner ORDER BY has already chosen the page; this just
+    // fixes the order it is presented in.
+    outerOrderBy: 't.valid_from DESC NULLS LAST, t.leg_id',
     emptyMessage: 'No UK legislation text found matching criteria',
     defaultLimit: 20,
     maxLimit: 50,
@@ -811,6 +825,7 @@ Licence: Find Case Law judgments are published under the Open Justice Licence. R
     selectColumns: 'id, neutral_citation, case_number, court_code, court_name, decision_date::text AS decision_date, judge, parties, licence, source_url, full_text',
     outerColumns: "t.id, t.neutral_citation, t.case_number, t.court_code, t.court_name, t.decision_date, t.judge, t.parties, t.licence, t.source_url, left(t.full_text || '', 400) AS snippet",
     orderBy: 'uk_court_decisions.decision_date DESC NULLS LAST',
+    outerOrderBy: 't.decision_date DESC NULLS LAST',
     emptyMessage: 'No UK judgments found matching criteria',
     defaultLimit: 20,
     maxLimit: 50,
