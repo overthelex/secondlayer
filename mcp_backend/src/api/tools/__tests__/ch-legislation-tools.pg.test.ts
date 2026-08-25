@@ -118,6 +118,16 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       [versionDe2020]
     );
 
+    // article_number is not unique within a version: transitional provisions carry the
+    // same number nested under a disposition path (e_id like 'disp_u17/art_7'). The
+    // top-level article (e_id 'art_336', no '/') must be the one chosen by default, with
+    // this one surfaced via other_matches instead of silently shadowing it.
+    await client.query(
+      `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+       VALUES ($1, 'disp_u17/art_336', '336', 'Übergangsbestimmung zu Art. 336', 'Übergangsrecht zu Art. 336.', 3)`,
+      [versionDe2020]
+    );
+
     await client.query(
       `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
        VALUES ($1, 'art_336', '336', 'Protection contre le congé', 'Le congé est annulable.', 1)`,
@@ -201,6 +211,69 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.version.date_end_applicability).toBeNull();
     });
 
+    it('prefers the top-level article over a transitional-provision duplicate, and surfaces the duplicate in other_matches', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2026-01-01',
+      });
+      const body = parse(result!);
+
+      expect(body.article.e_id).toBe('art_336');
+      expect(body.article.text).toContain('neu');
+      expect(body.other_matches).toEqual([
+        { e_id: 'disp_u17/art_336', marginal_note: 'Übergangsbestimmung zu Art. 336' },
+      ]);
+    });
+
+    it('reports an empty other_matches for an article with no duplicate', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336a',
+        as_of: '2026-01-01',
+      });
+      const body = parse(result!);
+
+      expect(body.other_matches).toEqual([]);
+    });
+
+    it('adds a Ukrainian note when the selected edition is the latest and other editions exist', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2026-01-01',
+      });
+      const body = parse(result!);
+
+      expect(body.other_editions).toBe(1);
+      expect(body.note).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('adds a Ukrainian note about the sole machine-readable edition when other_editions is 0', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        lang: 'fr',
+        as_of: '2026-01-01',
+      });
+      const body = parse(result!);
+
+      expect(body.other_editions).toBe(0);
+      expect(body.note).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+      expect(body.note).toMatch(/PDF/);
+    });
+
+    it('omits the note when the selected edition is not the latest one', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2016-06-01',
+      });
+      const body = parse(result!);
+
+      expect(body.note).toBeUndefined();
+    });
+
     it('reports article_not_found for 336a at as_of 2016-06-01 (not yet inserted)', async () => {
       const result = await tools.executeTool('ch_get_act_article', {
         sr_number: '220',
@@ -239,6 +312,15 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.article.text).toContain('congé');
     });
 
+    it('reports a not_found error with entity "act" for an unknown sr_number', async () => {
+      const result = await tools.executeTool('ch_get_act_article', { sr_number: '999999', article: '1' });
+      const body = parse(result!);
+
+      expect(body.error).toBe('not_found');
+      expect(body.entity).toBe('act');
+      expect(body.sr_number).toBe('999999');
+    });
+
     it('rejects a malformed as_of with a Ukrainian error message', async () => {
       const result = await tools.executeTool('ch_get_act_article', {
         sr_number: '220',
@@ -269,6 +351,79 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.provenance).toHaveLength(1);
       expect(body.provenance[0].as_reference).toBe('AS 2019 1234');
       expect(body.provenance[0].e_id).toBe('art_336_a');
+
+      expect(body.changes_truncated).toBe(false);
+      expect(body.provenance_truncated).toBe(false);
+    });
+
+    it('reports changes_truncated when the 200-row cap is hit', async () => {
+      await client.query(
+        `INSERT INTO ch_act_change (act_id, lang, from_version_id, to_version_id, e_id, article_number, change_type, date_applicability)
+         SELECT $1, 'de', $2, $3, 'bulk_' || g, g::text, 'modified', '2020-01-01'
+           FROM generate_series(1, 205) AS g`,
+        [actId, versionDe2015, versionDe2020]
+      );
+
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '220' });
+      const body = parse(result!);
+
+      expect(body.changes).toHaveLength(200);
+      expect(body.changes_truncated).toBe(true);
+    });
+
+    it('rejects an unsupported lang with a Ukrainian error message', async () => {
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '220', lang: 'en' });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('reports a not_found error with entity "act" for an unknown sr_number', async () => {
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '999999' });
+      const body = parse(result!);
+
+      expect(body.error).toBe('not_found');
+      expect(body.entity).toBe('act');
+      expect(body.sr_number).toBe('999999');
+    });
+  });
+
+  describe('deterministic act selection for a duplicated sr_number', () => {
+    beforeEach(async () => {
+      // enforcement_status = 0 (in force) must win over a more recent date_entry_force
+      // on a not-in-force act sharing the same sr_number.
+      await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/dup/aaa', '999', 'AAA', 'Not in force, later date', '2020-01-01', 3)`
+      );
+      await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/dup/bbb', '999', 'BBB', 'In force, earlier date', '2010-01-01', 0)`
+      );
+
+      // Both in force: the later date_entry_force wins.
+      await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/dup/ccc', '888', 'CCC', 'In force, earlier date', '2015-01-01', 0)`
+      );
+      await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/dup/ddd', '888', 'DDD', 'In force, later date', '2020-01-01', 0)`
+      );
+    });
+
+    it('prefers the in-force act over a not-in-force one with a later date_entry_force', async () => {
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '999' });
+      const body = parse(result!);
+
+      expect(body.abbreviation).toBe('BBB');
+    });
+
+    it('prefers the act with the later date_entry_force when both are in force', async () => {
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '888' });
+      const body = parse(result!);
+
+      expect(body.abbreviation).toBe('DDD');
     });
   });
 });

@@ -47,6 +47,42 @@ describe('extractChEvidence', () => {
       expect(d.externalUrl).toBe('https://example.org/decision.html');
       expect(d.docId).toBe('doc123');
       expect(d.status).toBe('active');
+      // rank 0.234 scaled to 0..100 and rounded
+      expect(d.relevance).toBe(23);
+    });
+
+    it('defaults relevance to 100 when rank is absent', () => {
+      const data = {
+        results: [{
+          ecli: 'ECLI:CH:BGER:2020:1C.1.2020',
+          court_name: 'Bundesgericht',
+          docket_number: '1C_1/2020',
+          decision_date: '2020-01-01',
+          decision_date_unknown: false,
+          abstract: 'No rank here.',
+        }],
+        total_count: 1, has_more: false, limit: 20, offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_court_decisions', data);
+      expect(result.decisions[0].relevance).toBe(100);
+    });
+
+    it('shows a Ukrainian "unknown date" marker in the date slot when decision_date_unknown is true', () => {
+      const data = {
+        results: [{
+          ecli: 'ECLI:CH:BGER:2021:2C.2.2021',
+          court_name: 'Bundesgericht',
+          docket_number: '2C_2/2021',
+          decision_date: null,
+          decision_date_unknown: true,
+          abstract: 'Unknown date case.',
+        }],
+        total_count: 1, has_more: false, limit: 20, offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_court_decisions', data);
+      expect(result.decisions[0].date).toBe('Дата невідома (джерело)');
     });
 
     it('falls back to pdf_url when html_url is missing, and abstract when snippet is missing', () => {
@@ -145,6 +181,29 @@ describe('extractChEvidence', () => {
       expect(result.decisions).toHaveLength(0);
       expect(result.citations).toHaveLength(0);
     });
+
+    it('returns empty evidence for a not_loaded error payload', () => {
+      const data = { error: 'not_loaded', ecli: 'ECLI:X', doc_id: null, stage: 'indexed' };
+      const result = extractChEvidence('ch_get_court_decision', data);
+      expect(result.decisions).toHaveLength(0);
+      expect(result.citations).toHaveLength(0);
+    });
+
+    it('shows a Ukrainian "unknown date" marker in the date slot when decision_date_unknown is true', () => {
+      const data = {
+        ecli: 'ECLI:CH:BGER:2019:9C.1.2019',
+        doc_id: 'doc789',
+        court_code: 'BGer',
+        court_name: 'Bundesgericht',
+        docket_number: '9C_1/2019',
+        decision_date: null,
+        decision_date_unknown: true,
+        abstract: 'Abstract.',
+        html_url: 'https://example.org/d.html',
+      };
+      const result = extractChEvidence('ch_get_court_decision', data);
+      expect(result.decisions[0].date).toBe('Дата невідома (джерело)');
+    });
   });
 
   describe('ch_search_legislation', () => {
@@ -181,6 +240,33 @@ describe('extractChEvidence', () => {
       expect(c.url).toBe('https://fedlex.admin.ch/eli/cc/27/317_321_377');
       expect(typeof c.text).toBe('string');
       expect(c.text.length).toBeGreaterThan(0);
+      // articleNumber carries the abbreviation so RegulationsTab renders the Fedlex link
+      // (it only shows citation.url inside the articleNumber badge block).
+      expect(c.articleNumber).toBe('OR');
+    });
+
+    it('falls back to the sr_number for articleNumber when abbreviation is absent', () => {
+      const data = {
+        results: [
+          {
+            act_id: 2,
+            sr_number: '210',
+            abbreviation: null,
+            title: 'Zivilgesetzbuch',
+            title_de: 'Zivilgesetzbuch',
+            date_entry_force: '1912-01-01',
+            date_no_longer_in_force: null,
+            in_force: true,
+            editions_count: 5,
+            latest_edition_date: '2022-01-01',
+            eli_work_uri: 'https://fedlex.admin.ch/eli/cc/24/233_245_233',
+          },
+        ],
+        total_count: 1, has_more: false, limit: 20, offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_legislation', data);
+      expect(result.citations[0].articleNumber).toBe('210');
     });
   });
 
@@ -230,29 +316,31 @@ describe('extractChEvidence', () => {
   });
 
   describe('ch_get_act_history', () => {
-    it('maps changes to Citation[] with title `${change_type} ${date_applicability}`', () => {
+    it('maps changes to Citation[] with a Ukrainian change-type label in the title', () => {
       const data = {
         sr_number: '220',
         abbreviation: 'OR',
         editions: [],
         changes: [
-          { date_applicability: '2020-01-01', change_type: 'amended', article_number: '336', e_id: 'art_336' },
-          { date_applicability: '2015-01-01', change_type: 'inserted', article_number: '336a', e_id: 'art_336a' },
+          { date_applicability: '2020-01-01', change_type: 'modified', article_number: '336', e_id: 'art_336' },
+          { date_applicability: '2015-01-01', change_type: 'added', article_number: '336a', e_id: 'art_336a' },
+          { date_applicability: '2022-01-01', change_type: 'repealed', article_number: '337', e_id: 'art_337' },
         ],
         provenance: [],
       };
 
       const result = extractChEvidence('ch_get_act_history', data);
-      expect(result.citations).toHaveLength(2);
-      expect(result.citations[0].npaTitle).toBe('amended 2020-01-01');
+      expect(result.citations).toHaveLength(3);
+      expect(result.citations[0].npaTitle).toBe('змінено 2020-01-01');
       expect(result.citations[0].articleNumber).toBe('336');
-      expect(result.citations[1].npaTitle).toBe('inserted 2015-01-01');
+      expect(result.citations[1].npaTitle).toBe('додано 2015-01-01');
+      expect(result.citations[2].npaTitle).toBe('скасовано 2022-01-01');
     });
 
     it('caps citations at 50 items', () => {
       const changes = Array.from({ length: 80 }, (_, i) => ({
         date_applicability: `2020-01-${String((i % 28) + 1).padStart(2, '0')}`,
-        change_type: 'amended',
+        change_type: 'modified',
         article_number: String(i),
         e_id: `art_${i}`,
       }));

@@ -21,6 +21,8 @@ import { logger } from '../../utils/logger.js';
 const MAX_FULL_TEXT_CHARS = 80000;
 const ABSTRACT_PREVIEW_CHARS = 600;
 const PLACEHOLDER_DATE = '2021-01-01';
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const LANGS = ['de', 'fr', 'it'];
 
 const FTS_PREDICATE =
   `to_tsvector('simple', coalesce(parties,'') || ' ' || coalesce(abstract,'') || ' ' || coalesce(full_text,'')) @@ plainto_tsquery('simple', $1)`;
@@ -37,7 +39,7 @@ export class ChCourtTools extends BaseToolHandler {
         annotations: { title: 'Пошук судових рішень Швейцарії', readOnlyHint: true },
         description: `Повнотекстовий пошук по корпусу судових рішень Швейцарії (federal + 26 кантональних судів, джерело entscheidsuche.ch).
 
-Фільтри: court_code (напр. BGer), canton (напр. ZH, TI), lang (de/fr/it), date_from/date_to (YYYY-MM-DD).
+Фільтри: court_code (напр. CH_BGer_001, ZH_OG_003; префікс CH_BGer шукає всі палати), canton (двобуквений код кантону або CH для федеральних судів, напр. ZH, TI), lang (de/fr/it), date_from/date_to (YYYY-MM-DD).
 Рішення без встановленої дати (плейсхолдер джерела) повертаються з decision_date: null, decision_date_unknown: true, і виключаються з фільтрів за датою.
 Результати відсортовані за релевантністю (rank), потім за датою.
 Далі: ch_get_court_decision для повного тексту рішення (ECLI або doc_id).`,
@@ -45,8 +47,8 @@ export class ChCourtTools extends BaseToolHandler {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Пошуковий запит (повний текст, анотація, сторони)' },
-            court_code: { type: 'string', description: 'Код суду, напр. BGer' },
-            canton: { type: 'string', description: 'Код кантону, напр. ZH, TI, GE' },
+            court_code: { type: 'string', description: 'Код суду, напр. CH_BGer_001, ZH_OG_003; префікс CH_BGer шукає всі палати' },
+            canton: { type: 'string', description: 'Двобуквений код кантону або CH для федеральних судів, напр. ZH, TI, GE' },
             lang: { type: 'string', enum: ['de', 'fr', 'it'], description: 'Мова рішення' },
             date_from: { type: 'string', description: 'Дата від (YYYY-MM-DD)' },
             date_to: { type: 'string', description: 'Дата до (YYYY-MM-DD)' },
@@ -61,7 +63,8 @@ export class ChCourtTools extends BaseToolHandler {
         annotations: { title: 'Картка судового рішення Швейцарії', readOnlyHint: true },
         description: `Повна картка судового рішення Швейцарії за ECLI або doc_id (потрібен один з них).
 
-Повертає повний текст (full_text), обрізаний до 80 000 символів (full_text_truncated, full_text_length — реальна довжина), сторони, анотацію, джерело тексту (html/pdf/ocr) та якість вилучення тексту.`,
+Повертає повний текст (full_text), обрізаний до 80 000 символів (full_text_truncated, full_text_length — реальна довжина), сторони, анотацію, джерело тексту (html/pdf/ocr) та якість вилучення тексту.
+Рішення, що ще не пройшло обробку (stage ≠ loaded), повертає { error: 'not_loaded', ecli, stage } замість тексту.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -89,10 +92,13 @@ export class ChCourtTools extends BaseToolHandler {
     if (!query || !String(query).trim()) {
       return this.wrapResponse('Вкажіть query — пошуковий запит по судових рішеннях.');
     }
-    if (date_from && !/^\d{4}-\d{2}-\d{2}$/.test(String(date_from))) {
+    if (lang && !LANGS.includes(String(lang))) {
+      return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
+    }
+    if (date_from && !DATE_RE.test(String(date_from))) {
       return this.wrapResponse('date_from має бути у форматі YYYY-MM-DD.');
     }
-    if (date_to && !/^\d{4}-\d{2}-\d{2}$/.test(String(date_to))) {
+    if (date_to && !DATE_RE.test(String(date_to))) {
       return this.wrapResponse('date_to має бути у форматі YYYY-MM-DD.');
     }
 
@@ -106,7 +112,14 @@ export class ChCourtTools extends BaseToolHandler {
       const filters: string[] = [];
       let pi = 3;
 
-      if (court_code) { filters.push(`court_code = $${pi}`); values.push(String(court_code)); pi++; }
+      // court_code is chamber-granular (e.g. CH_BGer_001, ZH_OG_003; 440 distinct values in
+      // prod). An exact match still works, and a caller can also pass a bare prefix like
+      // CH_BGer to match every chamber under it — the underscore in the LIKE pattern is
+      // escaped so it does not act as a single-char wildcard.
+      if (court_code) {
+        filters.push(`(court_code = $${pi} OR court_code LIKE $${pi} || '\\_%')`);
+        values.push(String(court_code)); pi++;
+      }
       if (canton) { filters.push(`canton = $${pi}`); values.push(String(canton)); pi++; }
       if (lang) { filters.push(`languages[1] = $${pi}`); values.push(String(lang)); pi++; }
       // A placeholder date never satisfies a date-range filter, regardless of its literal
@@ -127,10 +140,10 @@ export class ChCourtTools extends BaseToolHandler {
         SELECT ecli, doc_id, court_code, court_name, chamber, canton,
                CASE WHEN decision_date = $2::date THEN NULL
                     ELSE to_char(decision_date, 'YYYY-MM-DD') END AS decision_date,
-               (decision_date = $2::date) AS decision_date_unknown,
+               COALESCE(decision_date = $2::date, true) AS decision_date_unknown,
                docket_number, languages,
                left(coalesce(abstract, ''), ${ABSTRACT_PREVIEW_CHARS}) AS abstract,
-               ts_headline('simple', coalesce(abstract,'') || ' ' || left(coalesce(full_text,''), 20000),
+               ts_headline('simple', coalesce(abstract,'') || ' ' || coalesce(full_text,''),
                            plainto_tsquery('simple', $1), 'MaxWords=40, MinWords=15') AS snippet,
                html_url, pdf_url,
                ts_rank_cd(to_tsvector('simple', coalesce(abstract,'')), plainto_tsquery('simple', $1)) AS rank,
@@ -140,7 +153,8 @@ export class ChCourtTools extends BaseToolHandler {
            AND ${FTS_PREDICATE}
            ${filters.length ? 'AND ' + filters.join(' AND ') : ''}
          ORDER BY rank DESC,
-                  (CASE WHEN decision_date = $2::date THEN NULL ELSE decision_date END) DESC NULLS LAST
+                  (CASE WHEN decision_date = $2::date THEN NULL ELSE decision_date END) DESC NULLS LAST,
+                  ecli
          LIMIT $${limIdx} OFFSET $${offIdx}`;
 
       const rows = (await this.db.query(sql, values)).rows;
@@ -167,15 +181,34 @@ export class ChCourtTools extends BaseToolHandler {
         `SELECT ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
                 to_char(decision_date, 'YYYY-MM-DD') AS decision_date, docket_number, languages,
                 parties, abstract, full_text, text_source, text_quality, html_url, pdf_url, json_url
-           FROM ch_court_decisions WHERE ${column} = $1`,
+           FROM ch_court_decisions WHERE ${column} = $1 AND stage = 'loaded'`,
         [value]
       )).rows[0];
 
       if (!row) {
+        // Distinguish "no such row" from "row exists but is still in the pipeline" — a
+        // non-loaded row has no reliable text yet, but reporting it as not_found would
+        // hide that it exists and is just not ready.
+        const stageRow = (await this.db.query(
+          `SELECT ecli, doc_id, stage FROM ch_court_decisions WHERE ${column} = $1`,
+          [value]
+        )).rows[0];
+
+        if (stageRow) {
+          return this.wrapResponse({
+            error: 'not_loaded',
+            ecli: stageRow.ecli,
+            doc_id: stageRow.doc_id,
+            stage: stageRow.stage,
+            message: `Це рішення ще не опрацьоване (стадія: ${stageRow.stage}) і поки не має надійного тексту.`,
+          });
+        }
+
         return this.wrapResponse({ error: 'not_found', ecli: ecli ? String(ecli) : null, doc_id: doc_id ? String(doc_id) : null });
       }
 
       const isPlaceholderDate = row.decision_date === PLACEHOLDER_DATE;
+      const isUnknownDate = isPlaceholderDate || row.decision_date == null;
 
       const fullText = row.full_text ?? '';
       const fullTextLength = fullText.length;
@@ -190,8 +223,8 @@ export class ChCourtTools extends BaseToolHandler {
         chamber: row.chamber,
         canton: row.canton,
         decision_type: row.decision_type,
-        decision_date: isPlaceholderDate ? null : row.decision_date,
-        decision_date_unknown: isPlaceholderDate,
+        decision_date: isUnknownDate ? null : row.decision_date,
+        decision_date_unknown: isUnknownDate,
         docket_number: row.docket_number,
         languages: row.languages,
         parties: row.parties,

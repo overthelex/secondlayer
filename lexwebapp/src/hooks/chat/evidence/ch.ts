@@ -20,6 +20,25 @@ const CH_LEGISLATION_TOOLS = new Set(['ch_search_legislation', 'ch_get_act_artic
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
+const UNKNOWN_DATE_LABEL = 'Дата невідома (джерело)';
+
+const CH_CHANGE_TYPE_LABELS: Record<string, string> = {
+  added: 'додано',
+  modified: 'змінено',
+  repealed: 'скасовано',
+};
+
+function chChangeTypeLabel(changeType: unknown): string {
+  const key = String(changeType || '');
+  return CH_CHANGE_TYPE_LABELS[key] || key;
+}
+
+function chRelevance(row: ToolResultData): number {
+  if (row.rank == null) return 100;
+  const scaled = Math.round(Number(row.rank) * 100);
+  if (!Number.isFinite(scaled)) return 100;
+  return Math.max(0, Math.min(100, scaled));
+}
 
 function chDecisionTitle(row: ToolResultData): string {
   const court = row.court_name || row.court_code || '';
@@ -41,9 +60,9 @@ function toDecision(row: ToolResultData): Decision {
     id: row.ecli || `ch-${row.doc_id || Math.random().toString(36).slice(2, 8)}`,
     number: chDecisionTitle(row),
     court: row.court_name || row.court_code || '',
-    date: row.decision_date || '',
+    date: row.decision_date_unknown ? UNKNOWN_DATE_LABEL : (row.decision_date || ''),
     summary: chDecisionSummary(row),
-    relevance: 100,
+    relevance: chRelevance(row),
     status: 'active',
     externalUrl: row.html_url || row.pdf_url || undefined,
     docId: row.doc_id ? String(row.doc_id) : undefined,
@@ -57,7 +76,7 @@ function extractChCourtEvidence(toolName: string, parsed: ToolResultData): Evide
     const rows = Array.isArray(parsed.results) ? parsed.results : [];
     for (const row of rows) decisions.push(toDecision(row));
   } else if (toolName === 'ch_get_court_decision') {
-    // Error payload: { error: 'not_found', ecli, doc_id }
+    // Error payloads: { error: 'not_found', ecli, doc_id } | { error: 'not_loaded', ecli, doc_id, stage }
     if (!parsed.error && (parsed.ecli || parsed.doc_id)) {
       decisions.push(toDecision(parsed));
     }
@@ -85,6 +104,10 @@ function chActSearchCitation(row: ToolResultData): Citation {
     text: formatLegislationText(text),
     source: npaTitle,
     npaTitle,
+    // RegulationsTab only renders the source link inside the articleNumber badge block —
+    // a search result has no article, so the abbreviation (or SR number, when no
+    // abbreviation exists) stands in for it so the Fedlex link actually shows up.
+    articleNumber: row.abbreviation ? String(row.abbreviation) : (row.sr_number ? String(row.sr_number) : undefined),
     url: row.eli_work_uri || undefined,
   };
 }
@@ -108,12 +131,13 @@ function chArticleCitation(parsed: ToolResultData): Citation {
 }
 
 function chHistoryCitation(parsed: ToolResultData, change: ToolResultData): Citation {
-  const npaTitle = `${change.change_type} ${change.date_applicability}`;
+  const label = chChangeTypeLabel(change.change_type);
+  const npaTitle = `${label} ${change.date_applicability}`;
   const actLabel = parsed.abbreviation
     ? `${parsed.abbreviation} (SR ${parsed.sr_number})`
     : `SR ${parsed.sr_number}`;
   return {
-    text: `${change.change_type} — ст. ${change.article_number}, редакція від ${change.date_applicability}.`,
+    text: `${label} — ст. ${change.article_number}, редакція від ${change.date_applicability}.`,
     source: actLabel,
     npaTitle,
     articleNumber: change.article_number ? String(change.article_number) : undefined,
@@ -127,12 +151,12 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
     const rows = Array.isArray(parsed.results) ? parsed.results : [];
     for (const row of rows) citations.push(chActSearchCitation(row));
   } else if (toolName === 'ch_get_act_article') {
-    // Error payloads: { error: 'act_not_found' | 'no_edition_for_date' | 'article_not_found', ... }
+    // Error payloads: { error: 'not_found', entity: 'act' } | { error: 'no_edition_for_date' } | { error: 'article_not_found' }
     if (!parsed.error && parsed.article) {
       citations.push(chArticleCitation(parsed));
     }
   } else if (toolName === 'ch_get_act_history') {
-    // Error payload: { error: 'act_not_found', sr_number }
+    // Error payload: { error: 'not_found', entity: 'act', sr_number }
     if (!parsed.error && Array.isArray(parsed.changes)) {
       for (const change of parsed.changes.slice(0, MAX_HISTORY_CITATIONS)) {
         citations.push(chHistoryCitation(parsed, change));

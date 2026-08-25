@@ -33,6 +33,8 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
   const ECLI_FR = 'ECLI:CH:BGER:2021:6B.100.2021';
   const ECLI_IT = 'ECLI:CH:TI:2023:CA.5.2023';
   const ECLI_FAILED = 'ECLI:CH:BGER:2019:5A.1.2019';
+  const ECLI_NULL_DATE = 'ECLI:CH:BGER:2020:7B.5.2020';
+  const ECLI_CHAMBER = 'ECLI:CH:BGER:2022:9C.4.2022';
 
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
@@ -110,6 +112,34 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
           NULL, NULL, NULL, 'failed')`,
       [ECLI_FAILED, 'CH_BGER_003']
     );
+
+    await client.query(
+      `INSERT INTO ch_court_decisions
+         (ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
+          decision_date, docket_number, languages, parties, abstract, full_text,
+          html_url, pdf_url, json_url, stage)
+       VALUES
+         ($1, $2, 'CH_BGer', 'BGer', 'Bundesgericht', NULL, NULL,
+          'Urteil', NULL, '7B_5/2020', ARRAY['de'], 'E. gegen F.',
+          'Datum unbekannt NullDateMarkerABC',
+          'Das Datum dieses Entscheids ist im Quellsystem nicht bekannt.',
+          'https://entscheidsuche.ch/html/CH_BGER_005', 'https://entscheidsuche.ch/pdf/CH_BGER_005', 'https://entscheidsuche.ch/json/CH_BGER_005', 'loaded')`,
+      [ECLI_NULL_DATE, 'CH_BGER_005']
+    );
+
+    await client.query(
+      `INSERT INTO ch_court_decisions
+         (ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
+          decision_date, docket_number, languages, parties, abstract, full_text,
+          html_url, pdf_url, json_url, stage)
+       VALUES
+         ($1, $2, 'CH_BGer', 'CH_BGer_004', 'Bundesgericht', 'IV. Kammer', 'CH',
+          'Urteil', '2022-01-01', '9C_4/2022', ARRAY['de'], 'G. gegen H.',
+          'Kammerspezifischer Fall ChamberMarkerABC',
+          'Dieser Fall betrifft eine spezifische Kammer des Bundesgerichts.',
+          'https://entscheidsuche.ch/html/CH_BGER_006', 'https://entscheidsuche.ch/pdf/CH_BGER_006', 'https://entscheidsuche.ch/json/CH_BGER_006', 'loaded')`,
+      [ECLI_CHAMBER, 'CH_BGER_006']
+    );
   });
 
   describe('ch_search_court_decisions', () => {
@@ -167,6 +197,44 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
       expect(eclis).not.toContain(ECLI_FAILED);
       expect(eclis.sort()).toEqual([ECLI_DE, ECLI_FR, ECLI_IT].sort());
     });
+
+    it('reports decision_date_unknown for a row with a NULL decision_date', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', { query: 'NullDateMarkerABC' });
+      const body = parse(result!);
+
+      expect(body.results).toHaveLength(1);
+      expect(body.results[0].ecli).toBe(ECLI_NULL_DATE);
+      expect(body.results[0].decision_date).toBeNull();
+      expect(body.results[0].decision_date_unknown).toBe(true);
+    });
+
+    it('matches a chamber-granular court_code by prefix, but not an unrelated prefix', async () => {
+      const matched = parse((await tools.executeTool('ch_search_court_decisions', {
+        query: 'ChamberMarkerABC', court_code: 'CH_BGer',
+      }))!);
+      expect(matched.results.map((r: any) => r.ecli)).toEqual([ECLI_CHAMBER]);
+
+      const unmatched = parse((await tools.executeTool('ch_search_court_decisions', {
+        query: 'ChamberMarkerABC', court_code: 'ZH_OG',
+      }))!);
+      expect(unmatched.results).toHaveLength(0);
+    });
+
+    it('matches an exact court_code with no chambers', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', {
+        query: 'SharedMarkerXYZ', court_code: 'TI_CA',
+      });
+      const body = parse(result!);
+
+      expect(body.results.map((r: any) => r.ecli)).toEqual([ECLI_IT]);
+    });
+
+    it('rejects an unsupported lang with a Ukrainian error message', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', { query: 'Kündigung', lang: 'en' });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
   });
 
   describe('ch_get_court_decision', () => {
@@ -188,6 +256,25 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
 
       expect(body.error).toBe('not_found');
       expect(body.ecli).toBe('ECLI:CH:BGER:9999:0.0.0');
+    });
+
+    it('returns a not_loaded error, not the full row, for a decision still in the pipeline', async () => {
+      const result = await tools.executeTool('ch_get_court_decision', { ecli: ECLI_FAILED });
+      const body = parse(result!);
+
+      expect(body.error).toBe('not_loaded');
+      expect(body.ecli).toBe(ECLI_FAILED);
+      expect(body.stage).toBe('failed');
+      expect(body.full_text).toBeUndefined();
+      expect(body.message).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('reports decision_date_unknown for a row with a NULL decision_date', async () => {
+      const result = await tools.executeTool('ch_get_court_decision', { ecli: ECLI_NULL_DATE });
+      const body = parse(result!);
+
+      expect(body.decision_date).toBeNull();
+      expect(body.decision_date_unknown).toBe(true);
     });
 
     it('reports a Ukrainian error message when neither ecli nor doc_id is given', async () => {

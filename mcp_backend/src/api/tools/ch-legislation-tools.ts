@@ -57,7 +57,8 @@ in_force_only (типово true) — лише чинні акти (enforcement_
 Потрібні sr_number (напр. 220) та article (напр. 336 або 336a). as_of типово — сьогодні.
 Редакція обирається за date_applicability <= as_of < date_end_applicability (відкрита, якщо end = NULL).
 Якщо жодна редакція не покриває as_of — { error: 'no_edition_for_date', earliest_edition }.
-Якщо редакція є, але статті немає — { error: 'article_not_found', available_examples }.`,
+Якщо редакція є, але статті немає — { error: 'article_not_found', available_examples }.
+article_number не унікальний в межах редакції (перехідні положення можуть повторювати номер статті) — обирається стаття верхнього рівня, інші збіги повертаються в other_matches.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -135,7 +136,8 @@ in_force_only (типово true) — лише чинні акти (enforcement_
                        WHEN lower(abbreviation) = lower($1) THEN 1
                        ELSE 2 END,
                   in_force DESC,
-                  date_entry_force DESC NULLS LAST
+                  date_entry_force DESC NULLS LAST,
+                  a.act_id
          LIMIT $3 OFFSET $4`;
 
       const rows = (await this.db.query(sql, [...values, lim, off])).rows;
@@ -167,12 +169,14 @@ in_force_only (типово true) — лише чинні акти (enforcement_
     try {
       const act = (await this.db.query(
         `SELECT act_id, sr_number, abbreviation, title_de, title_fr, title_it
-           FROM ch_act WHERE sr_number = $1`,
+           FROM ch_act WHERE sr_number = $1
+          ORDER BY enforcement_status = 0 DESC, date_entry_force DESC NULLS LAST
+          LIMIT 1`,
         [String(sr_number)]
       )).rows[0];
 
       if (!act) {
-        return this.wrapResponse({ error: 'act_not_found', sr_number: String(sr_number) });
+        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number) });
       }
 
       let asOfDate: string;
@@ -209,16 +213,20 @@ in_force_only (типово true) — лише чинні акти (enforcement_
         });
       }
 
-      const articleRow = (await this.db.query(
+      // article_number is not unique within a version (a transitional provision can repeat
+      // the number of the article it amends under a disposition path, e.g.
+      // 'disp_u17/art_7'). The top-level provision (e_id without a '/') is preferred;
+      // anything else matching the same number is reported via other_matches instead of
+      // silently winning or losing depending on ordinal order.
+      const articleMatches = (await this.db.query(
         `SELECT e_id, article_number, marginal_note, text
            FROM ch_act_article
           WHERE version_id = $1 AND article_number = $2
-          ORDER BY ordinal
-          LIMIT 1`,
+          ORDER BY (e_id LIKE '%/%'), ordinal`,
         [edition.version_id, String(article)]
-      )).rows[0];
+      )).rows;
 
-      if (!articleRow) {
+      if (articleMatches.length === 0) {
         const examples = (await this.db.query(
           `SELECT article_number FROM ch_act_article
             WHERE version_id = $1
@@ -233,11 +241,24 @@ in_force_only (типово true) — лише чинні акти (enforcement_
         });
       }
 
-      const otherEditions = (await this.db.query(
-        `SELECT count(*) AS n FROM ch_act_version
-          WHERE act_id = $1 AND lang = $2 AND stage = 'parsed' AND version_id <> $3`,
-        [act.act_id, String(lang), edition.version_id]
+      const [articleRow, ...otherMatches] = articleMatches;
+
+      const editionsMeta = (await this.db.query(
+        `SELECT count(*)::int AS total, to_char(max(date_applicability), 'YYYY-MM-DD') AS latest_date
+           FROM ch_act_version
+          WHERE act_id = $1 AND lang = $2 AND stage = 'parsed'`,
+        [act.act_id, String(lang)]
       )).rows[0];
+
+      const otherEditionsCount = Math.max(Number(editionsMeta?.total ?? 1) - 1, 0);
+      const isLatestEdition = editionsMeta?.latest_date === edition.date_applicability;
+
+      let note: string | undefined;
+      if (isLatestEdition) {
+        note = otherEditionsCount > 0
+          ? `Це текст редакції, чинної станом на ${asOfDate}. Крім неї, для цього акта доступно ще ${otherEditionsCount} машиночитаних редакцій.`
+          : 'На Fedlex для цього акта доступна лише одна машиночитана редакція; попередні редакції існують лише у форматі PDF.';
+      }
 
       return this.wrapResponse({
         sr_number: act.sr_number,
@@ -257,7 +278,9 @@ in_force_only (типово true) — лише чинні акти (enforcement_
           marginal_note: articleRow.marginal_note,
           text: articleRow.text,
         },
-        other_editions: Number(otherEditions?.n ?? 0),
+        other_matches: otherMatches.map((r: any) => ({ e_id: r.e_id, marginal_note: r.marginal_note })),
+        other_editions: otherEditionsCount,
+        ...(note ? { note } : {}),
       });
     } catch (error: any) {
       logger.error('ch_get_act_article error', { error: error.message });
@@ -279,12 +302,14 @@ in_force_only (типово true) — лише чинні акти (enforcement_
 
     try {
       const act = (await this.db.query(
-        `SELECT act_id, sr_number, abbreviation FROM ch_act WHERE sr_number = $1`,
+        `SELECT act_id, sr_number, abbreviation FROM ch_act WHERE sr_number = $1
+          ORDER BY enforcement_status = 0 DESC, date_entry_force DESC NULLS LAST
+          LIMIT 1`,
         [String(sr_number)]
       )).rows[0];
 
       if (!act) {
-        return this.wrapResponse({ error: 'act_not_found', sr_number: String(sr_number) });
+        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number) });
       }
 
       const articleFilter = article ? String(article) : null;
@@ -331,7 +356,9 @@ in_force_only (типово true) — лише чинні акти (enforcement_
         abbreviation: act.abbreviation,
         editions,
         changes,
+        changes_truncated: changes.length === 200,
         provenance,
+        provenance_truncated: provenance.length === 200,
       });
     } catch (error: any) {
       logger.error('ch_get_act_history error', { error: error.message });
