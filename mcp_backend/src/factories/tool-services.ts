@@ -29,6 +29,8 @@ import { NextcloudTools } from '../api/tools/nextcloud-tools.js';
 import { CourtStatusTools } from '../api/tools/court-status-tools.js';
 import { OpenDataTools } from '../api/tools/opendata-tools.js';
 import { NpaTools } from '../api/tools/npa-tools.js';
+import { ChCourtTools } from '../api/tools/ch-court-tools.js';
+import { ChLegislationTools } from '../api/tools/ch-legislation-tools.js';
 import { AmcuPracticeTools } from '../api/tools/amcu-practice-tools.js';
 import { SpendingTools } from '../api/tools/spending-tools.js';
 import { OpenDataRegistriesTools } from '../api/tools/opendata-registries-tools.js';
@@ -179,6 +181,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new OpenDataTools(coreServices.db));
   // Full НПА corpus (schema `npa`) — 293K acts, distinct from the ~655 curated legislation acts
   toolRegistry.registerHandler(new NpaTools(coreServices.db));
+  toolRegistry.registerHandler(new ChCourtTools(coreServices.db));
+  toolRegistry.registerHandler(new ChLegislationTools(coreServices.db));
   // Semantic layer over АМКУ decisions (Qdrant amcu_bge_cls); keyword search stays in search_registry
   toolRegistry.registerHandler(new AmcuPracticeTools(coreServices.db));
   toolRegistry.registerHandler(new SpendingTools(coreServices.db));

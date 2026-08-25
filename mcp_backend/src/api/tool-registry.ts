@@ -34,6 +34,7 @@ export interface RemoteServiceConfig {
 /** Per-tool timeout overrides (ms). Tools not listed use DEFAULT_TOOL_TIMEOUT_MS. */
 const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   search_court_decisions: 120_000,
+  ch_search_court_decisions: 120_000,
   get_case_documents_chain: 120_000,
   edrsr_court_decisions_by_court: 90_000,
   // Semantic candidate retrieval (qdrant/HNSW) + a "standard" LLM holding-classification

@@ -52,7 +52,11 @@ const COURT_TOOLS = [
 
 export function extractCourtEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
   const decisions: Decision[] = [];
-  if (!COURT_TOOLS.some((t) => toolName.includes(t) || toolName === t)) {
+  // `ch_` (Swiss) tools are handled by ch.ts. Names like `ch_search_court_decisions` and
+  // `ch_get_court_decision` contain the EDRSR tool names as substrings, so without this
+  // guard the loose `includes` match below would also fire here against CH row shapes
+  // and produce bogus reyestr.court.gov.ua links.
+  if (toolName.startsWith('ch_') || !COURT_TOOLS.some((t) => toolName.includes(t) || toolName === t)) {
     return { decisions, citations: [], documents: [] };
   }
 

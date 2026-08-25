@@ -7,6 +7,20 @@ import { BookOpen, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { ExpandableCard, EmptyTabState } from './ExpandableCard';
 import { useExpandableCards } from '../../hooks/useExpandableCards';
 
+/**
+ * Host shown next to an article link: zakon.rada.gov.ua for UA, fedlex.admin.ch for CH,
+ * whatever the source is. When the URL doesn't parse, fall back to the raw url string
+ * (trimmed to 40 chars) rather than a hard-coded UA host — a malformed non-UA source url
+ * must never be mislabeled as zakon.rada.gov.ua.
+ */
+export function linkHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return String(url).slice(0, 40);
+  }
+}
+
 interface Citation {
   text: string;
   source: string;
@@ -99,7 +113,7 @@ export function RegulationsTab({ citations, onOpenModal }: RegulationsTabProps) 
                           className="inline-flex items-center gap-0.5 text-[9.5px] text-zinc-400 hover:text-zinc-700 transition-colors duration-100"
                         >
                           <ExternalLink size={9} strokeWidth={2} />
-                          zakon.rada.gov.ua
+                          {linkHost(articleUrl)}
                         </a>
                       )}
                     </div>
