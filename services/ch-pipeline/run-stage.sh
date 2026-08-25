@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # One stage, under supervision, with a log. Usage:
 #
-#   decisions:    ./run-stage.sh index|fetch|extract|ocr|load [spider]
+#   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
+#   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #
 # The optional second argument means different things to the two halves, so
 # it is dispatched explicitly rather than exported as both: for the decisions
-# stages it is a spider name (CHPIPE_SPIDER), for `diff` it is a language
-# (CHPIPE_LANG, default de). The legislation stages take no spider at all.
+# stages -- `citations` included, same CHPIPE_SPIDER family -- it is a spider
+# name, for `diff` it is a language (CHPIPE_LANG, default de). `aliases` and
+# `citations-resolve` take no second argument at all, same as the legislation
+# stages below.
 set -euo pipefail
 
 STAGE="${1:?stage required}"
@@ -36,7 +39,7 @@ export CHPIPE_RAW_DIR=/data/ch-corpus/raw
 MODULE="chpipe.stages.${STAGE//-/_}_stage"
 
 case "$STAGE" in
-  index|fetch|extract|ocr|load)
+  index|fetch|extract|ocr|load|citations)
     ARG="${POS:-${CHPIPE_SPIDER:-}}"
     export CHPIPE_SPIDER="$ARG"
     ;;
@@ -44,7 +47,7 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

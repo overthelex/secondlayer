@@ -80,3 +80,19 @@ def test_cite_kind_check(conn):
         conn.execute(
             "INSERT INTO ch_case_citations (from_ecli, to_raw, cite_kind) "
             "VALUES ('ECLI:CH:1', 'BGE 142 III 102', 'foo')")
+
+
+def _indexes(conn, table):
+    return {r[0] for r in conn.execute(
+        "SELECT indexname FROM pg_indexes WHERE tablename = %s", (table,)).fetchall()}
+
+
+def test_creates_the_docket_and_pending_resolution_indexes(conn):
+    """Step 4's resolution UPDATE ... FROM statements filter
+    ch_court_decisions on docket_number and ch_legislation_citations /
+    ch_case_citations on match_method IS NULL -- these partial indexes are
+    what keeps that a seek instead of a sequential scan over millions of
+    rows."""
+    assert "idx_ch_court_docket" in _indexes(conn, "ch_court_decisions")
+    assert "idx_ch_leg_cit_pending" in _indexes(conn, "ch_legislation_citations")
+    assert "idx_ch_case_cit_pending" in _indexes(conn, "ch_case_citations")

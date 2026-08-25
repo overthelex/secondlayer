@@ -340,6 +340,7 @@ def _accepted_stage_names() -> set[str]:
 
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
+                "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act"}
     assert _accepted_stage_names() == expected
@@ -379,6 +380,19 @@ def test_the_usage_comment_names_every_stage_run_stage_accepts():
 from chpipe import delta as delta_module
 
 
+def _stub_resolve(monkeypatch, calls=None):
+    """citations_resolve_stage.run() is the third guarded step delta.main()
+    runs after both halves -- stubbed out in every test below that reaches
+    main() so it never opens a real connection against the FAKE dsn no_env
+    hands out."""
+    def fake(settings, resolve_all=False):
+        if calls is not None:
+            calls.append(settings)
+        return delta_module.citations_resolve_stage.ResolveReport()
+
+    monkeypatch.setattr(delta_module.citations_resolve_stage, "run", fake)
+
+
 def test_delta_main_is_reachable(monkeypatch, no_renice):
     """no_env (autouse) already patches Settings.from_env for every test in
     this file, delta.main() included."""
@@ -386,6 +400,7 @@ def test_delta_main_is_reachable(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_resolve(monkeypatch)
     result = delta_module.main()
     assert isinstance(result, delta_module.DeltaReport)
 
@@ -395,6 +410,7 @@ def test_delta_main_renices_exactly_once_at_nice_io(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_resolve(monkeypatch)
     delta_module.main()
     assert no_renice == [throttle.NICE_IO], \
         "delta.main() must renice once, standing in for every stage's own main()"
@@ -430,12 +446,13 @@ def test_a_failing_decisions_half_does_not_skip_the_legislation_half(
 
     monkeypatch.setattr(delta_module, "run_decisions", boom)
     monkeypatch.setattr(delta_module, "run_legislation", legislation)
+    _stub_resolve(monkeypatch, called)
 
     # Still raises: run-delta.sh's marker reports the exit status, and a
     # night where half the job died must not print OK.
     with pytest.raises(RuntimeError, match="entscheidsuche is down"):
         delta_module.main()
-    assert called == ["decisions", "legislation"]
+    assert called == ["decisions", "legislation", FAKE]
 
 
 def test_a_failing_legislation_half_still_reports_the_decisions_half(
@@ -447,6 +464,7 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_resolve(monkeypatch)
 
     with caplog.at_level("INFO"):
         with pytest.raises(RuntimeError, match="fedlex 503"):
@@ -455,7 +473,28 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
-                       "projected=0 failed=legislation"]
+                       "projected=0 resolved(acts=0 editions=0 articles=0 "
+                       "cases=0) failed=legislation"]
+
+
+def test_citations_resolve_still_runs_once_when_a_half_failed(
+        monkeypatch, no_renice):
+    """citations-resolve is the third guarded step: it belongs after BOTH
+    halves regardless of which one (if either) failed, since whatever raw
+    edges citations_stage already wrote are worth resolving even on a night
+    the legislation half died."""
+    monkeypatch.setattr(delta_module, "run_decisions",
+                        lambda settings, **kw: delta_module.DeltaReport())
+    monkeypatch.setattr(
+        delta_module, "run_legislation",
+        lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    calls = []
+    _stub_resolve(monkeypatch, calls)
+
+    with pytest.raises(RuntimeError, match="fedlex 503"):
+        delta_module.main()
+
+    assert calls == [FAKE]
 
 
 # --- run-stage.sh must not clobber an env-only spider ---

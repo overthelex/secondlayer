@@ -11,6 +11,7 @@ import psycopg
 import pytest
 from psycopg.rows import dict_row
 
+from chpipe import db
 from chpipe.config import Settings
 from chpipe.stages import citations_stage
 
@@ -50,7 +51,9 @@ def conn(settings):
                 court_code text,
                 decision_date date,
                 full_text text,
-                stage text
+                stage text,
+                docket_number text,
+                updated_at timestamptz DEFAULT now()
             )
         """)
         c.execute(MIGRATION_196.read_text())
@@ -179,3 +182,44 @@ def test_a_spider_filter_only_claims_that_spider(conn, settings):
     ).fetchone()
     assert row_g["citations_extracted_at"] is not None
     assert row_h["citations_extracted_at"] is None
+
+
+def test_re_extraction_unstamps_a_decision_for_the_next_citations_run(conn, settings):
+    """db.complete(..., 'extracted', ...) is the statement extract_stage and
+    ocr_stage both use to write new full_text -- a decision that gets new
+    text must be re-scanned for citations, not left stamped against the OLD
+    text it was extracted from. citations_extracted_at must therefore go
+    back to NULL whenever a row is completed into 'extracted', not just
+    stay wherever the previous citations_stage run left it."""
+    _row(conn, "ECLI:I", "i", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.")
+
+    first = citations_stage.run(settings)
+    assert first.decisions == 1
+    stamped = conn.execute(
+        "SELECT citations_extracted_at FROM ch_court_decisions WHERE ecli = 'ECLI:I'"
+    ).fetchone()
+    assert stamped["citations_extracted_at"] is not None
+
+    # A re-extraction with new text, exactly as extract_stage/ocr_stage write
+    # it: db.complete(..., 'extracted', full_text=..., text_quality=...).
+    db.complete(conn, "i", "extracted", full_text="art. 336 OR", text_quality=0.9)
+    reextracted = conn.execute(
+        "SELECT citations_extracted_at, stage FROM ch_court_decisions "
+        "WHERE ecli = 'ECLI:I'").fetchone()
+    assert reextracted["citations_extracted_at"] is None
+    assert reextracted["stage"] == "extracted"
+
+    # load_stage is what would move it back to 'loaded' in the real
+    # pipeline; done directly here since this test is about
+    # citations_stage's own claim query, not load's.
+    conn.execute("UPDATE ch_court_decisions SET stage = 'loaded' WHERE ecli = 'ECLI:I'")
+
+    second = citations_stage.run(settings)
+    assert second.decisions == 1
+    # The re-scan is over the NEW text ("art. 336 OR"), so "OR" must show up
+    # -- the old "Cst." row from the first pass is a different citation
+    # (different abbr_raw) and stays, insert_citations() being additive.
+    leg_abbrs = {r["abbr_raw"] for r in conn.execute(
+        "SELECT abbr_raw FROM ch_legislation_citations WHERE from_ecli = 'ECLI:I'"
+    ).fetchall()}
+    assert "OR" in leg_abbrs

@@ -86,6 +86,10 @@ def test_a_missing_raw_file_raises_so_the_row_can_be_refetched(tmp_path):
 # is 3 levels down from the repo root.
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
+# db.complete() unconditionally clears citations_extracted_at on the
+# 'extracted' branch (migration 199's column) -- every test here that
+# reaches that branch needs it applied, same as test_citations_stage.py.
+MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 
 @pytest.fixture
@@ -106,6 +110,7 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION.read_text())
+        c.execute(MIGRATION_199.read_text())
         yield c
 
 

@@ -31,9 +31,10 @@ import pytest
 
 from chpipe import delta
 from chpipe.config import Settings
-from chpipe.stages import (acts_stage, diff_stage, extract_stage, fetch_stage,
-                           fetch_xml_stage, index_stage, load_stage,
-                           parse_akn_stage, project_legacy_stage,
+from chpipe.stages import (acts_stage, citations_resolve_stage,
+                           citations_stage, diff_stage, extract_stage,
+                           fetch_stage, fetch_xml_stage, index_stage,
+                           load_stage, parse_akn_stage, project_legacy_stage,
                            provenance_stage, versions_stage)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
@@ -242,7 +243,7 @@ def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=(),
     """`requeued_first_pass`: spider -> how many cards extract re-queues on
     its FIRST call for that spider (0 on later calls), to exercise the
     second lap in run_decisions."""
-    seen = {"index": None, "fetch": [], "extract": [], "load": []}
+    seen = {"index": None, "fetch": [], "extract": [], "load": [], "citations": []}
     requeue = dict(requeued_first_pass or {})
 
     def fake_index(settings, spiders):
@@ -263,10 +264,15 @@ def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=(),
         seen["load"].append(spider)
         return load_stage.LoadReport()
 
+    def fake_citations(settings, limit=None, spider=None):
+        seen["citations"].append(spider)
+        return citations_stage.CitationsReport()
+
     monkeypatch.setattr(index_stage, "run", fake_index)
     monkeypatch.setattr(fetch_stage, "run", fake_fetch)
     monkeypatch.setattr(extract_stage, "run", fake_extract)
     monkeypatch.setattr(load_stage, "run", fake_load)
+    monkeypatch.setattr(citations_stage, "run", fake_citations)
     return seen
 
 
@@ -975,3 +981,72 @@ def test_a_card_requeued_during_the_delta_gets_a_second_lap_the_same_night(
     assert seen["fetch"].count("ZH_Obergericht") == 2, "one extra lap for the spider that re-queued"
     assert seen["fetch"].count("CH_BGer") == 1, "and none for one that did not"
     assert seen["load"].count("ZH_Obergericht") == 2
+    # citations_stage runs once per load -- twice for the spider that got
+    # the second lap, once for the one that did not.
+    assert seen["citations"].count("ZH_Obergericht") == 2
+    assert seen["citations"].count("CH_BGer") == 1
+
+
+# --- citations_stage/citations_resolve_stage wired into the nightly delta ---
+
+def test_citations_runs_once_per_grown_spider(tmp_path, monkeypatch, conn):
+    _seed(conn, "ECLI:1", "ZH_Obergericht", "ZH_OG_003")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    snapshot = {"total": {"ZH_OG": 13}, "total_alle": 13}
+    fetcher = _FakeAsyncFetcher({
+        delta.snapshot_url(datetime.date(2026, 8, 20)): snapshot,
+    })
+    seen = _stub_decision_stages(monkeypatch)
+
+    delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
+
+    assert seen["citations"] == ["ZH_Obergericht"]
+
+
+def test_main_runs_citations_resolve_exactly_once_after_both_halves(
+        tmp_path, monkeypatch):
+    """citations_resolve_stage is not a per-spider stage like citations_stage
+    -- it runs once, after run_decisions and run_legislation have both had
+    their turn, resolving whatever raw edges exist across the whole corpus
+    rather than being scoped to what changed tonight."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_decisions",
+                        lambda settings, fetcher_factory=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+    calls = []
+    monkeypatch.setattr(
+        citations_resolve_stage, "run",
+        lambda settings, resolve_all=False: calls.append(settings) or
+        citations_resolve_stage.ResolveReport())
+
+    delta.main()
+
+    assert len(calls) == 1
+
+
+def test_main_still_runs_citations_resolve_once_when_a_half_fails(
+        tmp_path, monkeypatch):
+    """The guard shape the two existing halves already have: a failure in
+    run_decisions or run_legislation must not skip citations-resolve, and
+    must not stop it running exactly once. The failure still propagates
+    (main() re-raises after every half has had its turn)."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+
+    def boom(settings, fetcher_factory=None):
+        raise RuntimeError("simulated decisions failure")
+
+    monkeypatch.setattr(delta, "run_decisions", boom)
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+    calls = []
+    monkeypatch.setattr(
+        citations_resolve_stage, "run",
+        lambda settings, resolve_all=False: calls.append(settings) or
+        citations_resolve_stage.ResolveReport())
+
+    with pytest.raises(RuntimeError, match="simulated decisions failure"):
+        delta.main()
+
+    assert len(calls) == 1

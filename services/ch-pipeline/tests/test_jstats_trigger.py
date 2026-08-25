@@ -35,6 +35,10 @@ from chpipe.stages import extract_stage, load_stage
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 MIGRATION_156 = _REPO_ROOT / "mcp_backend/src/migrations/156_jurisdiction_fulltext_stats.sql"
+# db.complete() unconditionally clears citations_extracted_at on the
+# 'extracted' branch (migration 199's column) -- extract_stage.run() below
+# reaches it, so this fixture needs the column applied too.
+MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -105,6 +109,7 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION_196.read_text())
+        c.execute(MIGRATION_199.read_text())
         _install_jstats(c)
         yield c
 

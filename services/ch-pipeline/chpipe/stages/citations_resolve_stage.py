@@ -185,7 +185,12 @@ UPDATE ch_legislation_citations c
 # number; 'ecli' matches ecli directly. Every row citations_stage ever wrote
 # gets a match_method here, including 'unresolved' when nothing matched --
 # see the module docstring for why that, like unresolved_abbr, is terminal
-# rather than retried on every ordinary run.
+# rather than retried on every ordinary run. `, d.ecli` closes out the
+# remaining tie -- two decisions (both CH_BGer, or both some other spider)
+# can legitimately share one docket_number (a correction, a re-publication),
+# and without a final deterministic key the CH_BGer-preference ORDER BY alone
+# leaves the pick to whatever order Postgres returns matching rows in, which
+# is not guaranteed stable run to run.
 _RESOLVE_CASES = """
 UPDATE ch_case_citations c
    SET to_ecli = best.ecli,
@@ -201,7 +206,7 @@ UPDATE ch_case_citations c
                                     AND d.spider = 'CH_BGE')
            OR (c2.cite_kind = 'docket' AND d.docket_number = c2.to_raw)
            OR (c2.cite_kind = 'ecli' AND d.ecli = c2.to_raw)
-        ORDER BY (c2.cite_kind = 'docket' AND d.spider = 'CH_BGer') DESC
+        ORDER BY (c2.cite_kind = 'docket' AND d.spider = 'CH_BGer') DESC, d.ecli
         LIMIT 1
   ) best ON true
  WHERE c.id = c2.id

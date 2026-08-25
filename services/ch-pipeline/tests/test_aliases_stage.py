@@ -43,7 +43,8 @@ def conn(settings):
         # shape as test_migration_199.py.
         c.execute("""
             CREATE TABLE ch_court_decisions (
-                ecli text PRIMARY KEY, spider text, doc_id text, stage text)
+                ecli text PRIMARY KEY, spider text, doc_id text, stage text,
+                docket_number text)
         """)
         # minimal shape of migration 197's ch_act -- just the columns
         # aliases_stage reads.

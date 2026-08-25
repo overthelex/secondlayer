@@ -65,10 +65,20 @@ CREATE TABLE IF NOT EXISTS public.ch_legislation_citations (
 );
 CREATE INDEX IF NOT EXISTS idx_ch_leg_cit_article ON public.ch_legislation_citations (article_id) WHERE article_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ch_leg_cit_act ON public.ch_legislation_citations (act_id, article) WHERE act_id IS NOT NULL;
+-- citations_resolve_stage's step 1/4 entry points both scan
+-- "WHERE match_method IS NULL" -- every row citations_stage has extracted
+-- and nothing has ever tried to resolve. Without this, that scan is
+-- sequential over the whole table on every resolve run, not just the first.
+CREATE INDEX IF NOT EXISTS idx_ch_leg_cit_pending ON public.ch_legislation_citations (id) WHERE match_method IS NULL;
+CREATE INDEX IF NOT EXISTS idx_ch_case_cit_pending ON public.ch_case_citations (id) WHERE match_method IS NULL;
 
 ALTER TABLE public.ch_court_decisions ADD COLUMN IF NOT EXISTS citations_extracted_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_ch_court_cit_queue ON public.ch_court_decisions (spider, doc_id)
     WHERE stage = 'loaded' AND citations_extracted_at IS NULL;
+-- citations_resolve_stage's step 4 (case resolution) matches to_raw against
+-- ch_court_decisions.docket_number for both the 'bge' and 'docket'
+-- cite_kinds -- the lookup this stage runs most, over the whole corpus.
+CREATE INDEX IF NOT EXISTS idx_ch_court_docket ON public.ch_court_decisions (docket_number) WHERE docket_number IS NOT NULL;
 
 COMMENT ON TABLE public.ch_act_alias IS
     'Maps the abbreviation a decision actually writes (OR, CO, Cst., StGB) to the '

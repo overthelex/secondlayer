@@ -92,11 +92,16 @@ HTML documents are an order of magnitude cheaper: 0.16 ms to extract and
 
 ## Stages
 
-    index   enumerate documents, write metadata, fill decision_date
-    fetch   download the body (html preferred, pdf otherwise)
-    extract body -> text, with a measured quality score
-    ocr     re-read the pdfs whose text layer failed the gate
-    load    read the stored text back and promote the row to loaded
+    index              enumerate documents, write metadata, fill decision_date
+    fetch              download the body (html preferred, pdf otherwise)
+    extract            body -> text, with a measured quality score
+    ocr                re-read the pdfs whose text layer failed the gate
+    load               read the stored text back and promote the row to loaded
+    aliases            seed ch_act_alias from ch_act's own abbreviation, title
+                       parentheses, and a curated map -- no spider, no argument
+    citations          extract raw case/statute citations from `loaded` text
+    citations-resolve  resolve those raw edges to acts, editions, articles
+                       and court decisions -- no spider, no argument
 
 Re-running `index` is the normal ongoing operation (spec section 10) and is
 safe: a row already at `fetched`, `extracted`, `ocr_pending` or `loaded`
@@ -128,6 +133,9 @@ different `stage` values.
     ./run-stage.sh index                # all 54 spiders
     ./run-stage.sh index CH_BVGer       # one spider
     ./run-stage.sh fetch CH_BVGer       # one spider
+    ./run-stage.sh citations CH_BVGer   # one spider -- same CHPIPE_SPIDER family
+    ./run-stage.sh aliases              # no second argument
+    ./run-stage.sh citations-resolve    # no second argument
 
 `index`'s spider filter went through `CHPIPE_SPIDER` from the start for
 `fetch`/`extract`/`ocr`/`load`, but `index_stage.py`'s `__main__` originally
@@ -732,6 +740,126 @@ which is a deliberate change of meaning for that column.
 - [ ] **Read `unaccounted_rows()` after `project-legacy`** and decide, in
       writing, what happens to the survivors.
 
+## Citation graph
+
+Three stages, run in this order, that turn `ch_court_decisions.full_text`
+into a graph of who cites what: `aliases` (act abbreviation → SR number),
+`citations` (raw edges, per decision), `citations-resolve` (raw edges →
+resolved rows). Migration 199 is the schema: `ch_act_alias`,
+`ch_case_citations`, `ch_legislation_citations`, plus
+`ch_court_decisions.citations_extracted_at`.
+
+**`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
+writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
+corpus keys on — from three additive, idempotent sources: `ch_act`'s own
+German `abbreviation` column, the abbreviation Fedlex puts in parentheses at
+the end of each language's title, and a hand-curated map for the acts whose
+title carries no parenthesised abbreviation at all (the big codes: OR, ZGB,
+StGB, Cst. …). Re-running it after `ch_act` gains new acts, or after the
+curated map grows, costs nothing beyond what actually changed.
+
+**`citations`** claims decisions sitting at `loaded` with
+`citations_extracted_at IS NULL`, runs `chpipe.citations` over each one's
+text in a thread pool, and writes the raw edges it finds — BGE/docket/ECLI
+case references into `ch_case_citations`, article references into
+`ch_legislation_citations` — then stamps `citations_extracted_at`. This is
+extraction only: nothing here resolves a citation to the row it points at.
+A decision whose extraction raises is still stamped (one bad text must not
+park it in the claim query forever); the exception is logged and counted in
+`failed` rather than retried.
+
+**A decision that gets NEW text must be re-scanned, not left stamped
+against the OLD text.** `db.complete(conn, doc_id, 'extracted', ...)` — the
+statement both `extract_stage` and `ocr_stage` use to write `full_text` —
+unconditionally clears `citations_extracted_at` back to `NULL` whenever it
+moves a row to `'extracted'`. The next `load` puts the row back at `loaded`,
+and the next `citations` run picks it up again, over the new text, exactly
+like a decision that has never been scanned at all.
+
+**`citations-resolve`** is four `UPDATE ... FROM` statements, run in a fixed
+order because each one's input is the previous one's output, over the
+raw edges `citations` wrote:
+
+1. **act** — `abbr_raw` (+ `lang`) → `ch_act_alias` → `sr_number`/`act_id`.
+   Among the acts `ch_act_alias` names for that abbreviation (matched on the
+   citation's own language, or an alias marked `any`), prefer the one whose
+   `[date_entry_force, date_no_longer_in_force)` actually contains the
+   citation's `from_date`; failing that (no `from_date`, or none covers it),
+   prefer the act currently in force, then the one with the latest
+   `date_entry_force`. `match_method` becomes `act_only` on a hit,
+   `unresolved_abbr` when `ch_act_alias` has nothing for that abbreviation/
+   language at all.
+2. **edition** — `act_id` (+ `lang`, `from_date`) → `ch_act_version` →
+   `version_id`. The parsed edition whose
+   `[date_applicability, date_end_applicability)` contains `from_date`, or —
+   when `from_date` is `NULL` — **the parsed edition with the greatest
+   `date_applicability` not in the future** (`latest_edition`). Tries the
+   citation's own language first and falls back to `de` only when nothing in
+   that language satisfies the date condition.
+3. **article** — `version_id` (+ article number) → `ch_act_article` →
+   `article_id`. Several rows can share the same bare `article_number` (a
+   top-level `art_336` and a transitional-provision `disp_u17/art_336` both
+   carry `article_number = '336'`); the path-shaped `e_id` (contains `/`) is
+   the one that loses — a top-level article is always preferred over a
+   transitional duplicate of the same number.
+4. **case** — `to_raw` (+ `cite_kind`) → `ch_court_decisions.ecli`. `bge`
+   matches `docket_number` restricted to `spider = 'CH_BGE'` (ATF/DTF
+   numbers are only ever CH_BGE's own docket format); `docket` matches
+   `docket_number` under any spider, preferring `CH_BGer` when several
+   decisions carry the same docket number, and breaking any remaining tie on
+   `ecli` so a docket number shared by two decisions (a correction, a
+   re-publication) resolves to the same one every run rather than to
+   whatever order Postgres happens to return matching rows in; `ecli`
+   matches `ecli` directly.
+
+Steps 1 and 4 are the two entry points — each picks up every row whose
+`match_method` is still `NULL`, i.e. every row `citations` has extracted and
+nothing has ever tried to resolve, and each sets `match_method` to a
+*terminal* value even on failure (`unresolved_abbr` / `unresolved`) so a
+plain re-run finds nothing left to do there. Steps 2 and 3 are the one path
+that legitimately gets a second try without `CHPIPE_CIT_RESOLVE_ALL`: a row
+that found its act but not yet an edition stays at `act_only` rather than a
+dead end, and a row that found its edition but not yet an article keeps
+`article_id NULL` under `edition_at_date`/`latest_edition` — so if
+`versions-stage`/`parse-akn` later fill in the edition or article this row
+was missing, the next ordinary `citations-resolve` run picks it up again.
+Steps 1 and 4 do not get that same second chance: `ch_act_alias` and
+`ch_court_decisions` both grow over time (a new alias, a newly indexed
+decision), and re-scanning the full `unresolved_abbr`/`unresolved` backlog on
+every run to catch that would turn a bounded set-based pass into an
+unbounded one.
+
+**`CHPIPE_CIT_RESOLVE_ALL=1`** is the deliberate, operator-driven way to pay
+that cost when the alias map or the decision corpus has grown enough to be
+worth it: it resets every column this stage owns back to `NULL`/`false` —
+only on rows a previous run actually touched (`match_method IS NOT NULL`),
+so a fresh corpus with nothing resolved yet pays nothing extra — then runs
+the same four statements, which recompute everything now that
+`match_method` is `NULL` again everywhere.
+
+    CHPIPE_CIT_RESOLVE_ALL=1 ./run-stage.sh citations-resolve
+
+**The `2021-01-01` placeholder.** `decision_date` on the CH_BGer rows
+migration 196 enrolled is `2021-01-01` for every one of them — the source's
+placeholder for "no decision date known", not a real fact about when any of
+those decisions were handed down. `citations_stage._from_date()` maps that
+exact date back to `NULL` before it is ever written into
+`ch_case_citations.from_date` / `ch_legislation_citations.from_date` —
+citing it as a real `from_date` would assert a fact the source never had,
+and it would silently make every one of those citations resolve as though
+decided on 1 January 2021 (step 2's date-interval match, step 1's
+in-force-at-that-date preference). A citation with `from_date IS NULL` is
+exactly what falls through to the `latest_edition` branch of step 2 instead.
+
+`chpipe/reports_cit.py`'s `summary(conn)` is the citation graph's own
+numbers: extraction totals per `cite_kind`, resolution shares overall and
+per language, counts per `match_method`, the top 20 unresolved
+abbreviations (what the alias map should be extended with next), the top 20
+most-cited BGE rulings, and how much of the loaded corpus `citations` has
+actually reached (`stamped` vs `loaded`). Run it as
+`python -m chpipe.reports_cit` (reads `CHPIPE_DSN`, prints JSON) or call
+`reports_cit.summary(conn)` directly.
+
 ## Deltas
 
 Once the backfill for both halves is done, `run-delta.sh` is what keeps them
@@ -868,6 +996,21 @@ fails the gate accumulate at `ocr_pending` and are cleared by a supervised
 unattended cron job must never be the thing that decides to spend CPU on
 that queue.
 
+**Citation graph.** `citations` runs once per grown spider, right after that
+spider's `load` (twice if extract's second lap ran too — see above), so a
+decision's citation graph is only ever as many nights stale as its text is.
+`citations-resolve` is not per-spider: it runs once, after BOTH halves have
+had their turn, resolving whatever raw edges exist across the whole corpus —
+this is a third independent guard, not folded into the decisions/legislation
+try/except above, because a failure in either half must not skip it (raw
+edges from an earlier run, or from decisions that DID land tonight even if
+legislation died, are still worth resolving) and its own failure must not
+be swallowed by theirs. `aliases` is **not** part of the nightly delta —
+`ch_act`'s abbreviation and title columns change only when a whole new act
+appears (which `acts` already re-runs in full every night), and the curated
+map is a manual, occasional edit; run `./run-stage.sh aliases` by hand after
+either.
+
 **Priority.** `run_decisions`/`run_legislation` call each stage's `run()`
 directly, not its `main()`, so none of the individual `renice()` calls each
 stage's own `main()` would normally trigger actually fire. `chpipe.delta.main()`
@@ -875,15 +1018,15 @@ calls `throttle.renice(throttle.NICE_IO)` once at start-up to stand in for
 all of them, guarded by `assert throttle.NICE_IO == throttle.NICE_CPU` right
 before the call — `NICE_IO` and `NICE_CPU` are both 10 today, and every
 stage this script reaches (including `parse-akn`, the one CPU-bound stage in
-the mix) resolves to one or the other, so one call reproduces what a
-sequence of each stage's own `main()` would have set, without stacking
-`os.nice()`'s cumulative increment once per stage. If the two constants ever
-diverge, the assertion fails loudly instead of silently reniceing `parse-akn`
-at the wrong priority with no test able to catch it after the fact
-(`os.nice()` cannot be corrected back in-process). The load-average ceiling
-needs no extra wiring here: it already lives inside `extract_stage.run()`
-and `parse_akn_stage.run()` themselves, so calling `run()` directly still
-gets it.
+the mix, and `citations`, the other one) resolves to one or the other, so
+one call reproduces what a sequence of each stage's own `main()` would have
+set, without stacking `os.nice()`'s cumulative increment once per stage. If
+the two constants ever diverge, the assertion fails loudly instead of
+silently reniceing `parse-akn` at the wrong priority with no test able to
+catch it after the fact (`os.nice()` cannot be corrected back in-process).
+The load-average ceiling needs no extra wiring here: it already lives inside
+`extract_stage.run()`, `citations_stage.run()` and `parse_akn_stage.run()`
+themselves, so calling `run()` directly still gets it.
 
 Compared to `run-stage.sh`, the wrapper itself carries a few things a
 supervised one-off invocation can get away without:
@@ -917,6 +1060,7 @@ supervised one-off invocation can get away without:
     grep 'resolve to no spider' /data/ch-corpus/logs/delta.log | tail -5
     psql -c "SELECT stage, count(*) FROM ch_court_decisions GROUP BY 1"
     psql -c "SELECT stage, count(*) FROM ch_act_version GROUP BY 1"
+    python -m chpipe.reports_cit   # citation graph totals and resolution shares
 
 **Recovering from a night that did not work:** the delta is restartable and
 idempotent by construction — every stage it calls upserts, and

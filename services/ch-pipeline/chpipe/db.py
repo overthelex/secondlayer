@@ -144,6 +144,16 @@ def complete(conn, doc_id: str, next_stage: str, **fields) -> None:
                    "failed_stage = NULL", "stage_updated_at = now()",
                    "updated_at = now()"]
     params: list = [next_stage]
+    if next_stage == "extracted":
+        # New text means the citation graph's extraction is stale: whatever
+        # ch_case_citations/ch_legislation_citations rows citations_stage
+        # wrote came from the OLD full_text, and citations_extracted_at
+        # being non-NULL would hide this row from claim_for_citations
+        # forever. Unconditional, not gated on a caller-supplied field --
+        # both extract_stage and ocr_stage reach 'extracted' through this
+        # same call, and a citation-graph concern has no business being
+        # something either has to remember to pass in.
+        assignments.append("citations_extracted_at = NULL")
     for column, value in fields.items():
         assignments.append(f"{column} = %s")
         params.append(value)

@@ -243,3 +243,30 @@ def test_resolve_all_recomputes_even_terminal_rows(seeded, settings):
 
     cases = _case_rows(seeded)
     assert cases["BGE 142 III 102"]["to_ecli"] == "ECLI:BGE1"
+
+
+def test_a_shared_docket_number_resolves_the_same_way_every_run(conn, settings):
+    """Two CH_BGer decisions can legitimately carry the same docket_number
+    (a correction, a re-published ruling). Without a final tiebreak on the
+    ORDER BY, which of the two 'wins' is whatever order Postgres happens to
+    return matching rows in -- not guaranteed stable across runs, and not
+    even guaranteed stable within one run's plan choice. `, d.ecli` makes it
+    the same answer (the lexicographically smallest ecli) every time."""
+    _decision(conn, "ECLI:CH_BGer:2", "CH_BGer", "4A_99/2020")
+    _decision(conn, "ECLI:CH_BGer:1", "CH_BGer", "4A_99/2020")
+    _case_citation(conn, "ECLI:Z", "4A_99/2020", "docket")
+
+    citations_resolve_stage.run(settings)
+    first = conn.execute(
+        "SELECT to_ecli FROM ch_case_citations WHERE from_ecli = 'ECLI:Z'"
+    ).fetchone()["to_ecli"]
+
+    conn.execute(
+        "UPDATE ch_case_citations SET to_ecli = NULL, resolved = false, "
+        "match_method = NULL WHERE from_ecli = 'ECLI:Z'")
+    citations_resolve_stage.run(settings)
+    second = conn.execute(
+        "SELECT to_ecli FROM ch_case_citations WHERE from_ecli = 'ECLI:Z'"
+    ).fetchone()["to_ecli"]
+
+    assert first == second == "ECLI:CH_BGer:1"
