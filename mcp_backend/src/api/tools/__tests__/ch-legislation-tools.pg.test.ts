@@ -26,6 +26,15 @@ function parse(result: { content: Array<{ type: string; text: string }> }): any 
   return JSON.parse(result.content[0].text);
 }
 
+// This suite applies migrations and TRUNCATEs tables against whatever CH_TEST_DATABASE_URL
+// points to. Refuse to run against anything that isn't obviously a disposable test database.
+if (DSN) {
+  const dbName = new URL(DSN).pathname.split('/').pop() || '';
+  if (!dbName.includes('test')) {
+    throw new Error('CH_TEST_DATABASE_URL must point to a database whose name contains "test"');
+  }
+}
+
 describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
   let client: Client;
   let tools: ChLegislationTools;
@@ -385,6 +394,54 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.error).toBe('not_found');
       expect(body.entity).toBe('act');
       expect(body.sr_number).toBe('999999');
+    });
+
+    it('rejects a calendar-invalid as_of (2025-13-01) with a Ukrainian format error, not a DB error', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2025-13-01',
+      });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/YYYY-MM-DD/);
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('correlates provenance to the article number per edition, not globally across editions', async () => {
+      // Same e_id ('art_7') resolves to a different article_number in each edition — a
+      // parsed-globally lookup would wrongly pull provenance from both editions for a query
+      // on article '7'. Provenance must only surface from the edition where art_7 IS
+      // article 7 (versionDe2015 here); the versionDe2020 row (art_7 == '7a' there) must not
+      // leak in, even though it shares the same e_id.
+      await client.query(
+        `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+         VALUES ($1, 'art_7', '7', 'Art. 7 in the 2015 edition', 'Text 7 (2015).', 10)`,
+        [versionDe2015]
+      );
+      await client.query(
+        `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+         VALUES ($1, 'art_7', '7a', 'art_7 renumbered to 7a in the 2020 edition', 'Text 7a (2020).', 10)`,
+        [versionDe2020]
+      );
+
+      await client.query(
+        `INSERT INTO ch_article_provenance (version_id, e_id, action, as_reference, effective_date, raw_note, anchor_level)
+         VALUES ($1, 'art_7', 'inserted', 'AS 2015 0007 (from 2015 edition)', '2015-01-01', 'note', 'article')`,
+        [versionDe2015]
+      );
+      await client.query(
+        `INSERT INTO ch_article_provenance (version_id, e_id, action, as_reference, effective_date, raw_note, anchor_level)
+         VALUES ($1, 'art_7', 'amended', 'AS 2020 0007 (from 2020 edition)', '2020-01-01', 'note', 'article')`,
+        [versionDe2020]
+      );
+
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '220', article: '7' });
+      const body = parse(result!);
+
+      expect(body.provenance).toHaveLength(1);
+      expect(body.provenance[0].action).toBe('inserted');
+      expect(body.provenance[0].as_reference).toBe('AS 2015 0007 (from 2015 edition)');
     });
   });
 

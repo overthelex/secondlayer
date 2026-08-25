@@ -25,6 +25,15 @@ function parse(result: { content: Array<{ type: string; text: string }> }): any 
   return JSON.parse(result.content[0].text);
 }
 
+// This suite applies migrations and TRUNCATEs tables against whatever CH_TEST_DATABASE_URL
+// points to. Refuse to run against anything that isn't obviously a disposable test database.
+if (DSN) {
+  const dbName = new URL(DSN).pathname.split('/').pop() || '';
+  if (!dbName.includes('test')) {
+    throw new Error('CH_TEST_DATABASE_URL must point to a database whose name contains "test"');
+  }
+}
+
 describeIfPg('ChCourtTools (real PostgreSQL)', () => {
   let client: Client;
   let tools: ChCourtTools;
@@ -257,6 +266,27 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
       const text = result!.content[0].text;
 
       expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects a calendar-invalid date_from (2024-02-31) with a Ukrainian format error, not a DB error', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', {
+        query: 'Kündigung',
+        date_from: '2024-02-31',
+      });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/YYYY-MM-DD/);
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects a calendar-invalid date_to (2024-02-31) with a Ukrainian format error', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', {
+        query: 'Kündigung',
+        date_to: '2024-02-31',
+      });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/YYYY-MM-DD/);
     });
   });
 

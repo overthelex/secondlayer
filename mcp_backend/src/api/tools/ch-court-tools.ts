@@ -17,11 +17,11 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { isValidIsoDate } from './ch-date-utils.js';
 
 const MAX_FULL_TEXT_CHARS = 80000;
 const ABSTRACT_PREVIEW_CHARS = 600;
 const PLACEHOLDER_DATE = '2021-01-01';
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const LANGS = ['de', 'fr', 'it'];
 
 const FTS_PREDICATE =
@@ -95,10 +95,10 @@ export class ChCourtTools extends BaseToolHandler {
     if (lang && !LANGS.includes(String(lang))) {
       return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
     }
-    if (date_from && !DATE_RE.test(String(date_from))) {
+    if (date_from && !isValidIsoDate(String(date_from))) {
       return this.wrapResponse('date_from має бути у форматі YYYY-MM-DD.');
     }
-    if (date_to && !DATE_RE.test(String(date_to))) {
+    if (date_to && !isValidIsoDate(String(date_to))) {
       return this.wrapResponse('date_to має бути у форматі YYYY-MM-DD.');
     }
 
@@ -151,6 +151,10 @@ export class ChCourtTools extends BaseToolHandler {
                ts_headline('simple', coalesce(abstract,'') || ' ' || coalesce(full_text,''),
                            plainto_tsquery('simple', $1), 'MaxWords=40, MinWords=15') AS snippet,
                html_url, pdf_url,
+               -- Ranking on abstract only (not parties||abstract||full_text) is deliberate: ranking over the
+               -- full vector recomputes a tsvector of the whole decision text per matching row (up to ~525K
+               -- rows for a common term, measured 788ms), turning sub-second searches multi-second; abstract
+               -- covers 972K/1.22M loaded decisions, the rest fall back to date order below.
                ts_rank_cd(to_tsvector('simple', coalesce(abstract,'')), plainto_tsquery('simple', $1)) AS rank,
                count(*) OVER() AS _total_count
           FROM ch_court_decisions

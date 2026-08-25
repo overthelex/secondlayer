@@ -7,12 +7,17 @@ import { BookOpen, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { ExpandableCard, EmptyTabState } from './ExpandableCard';
 import { useExpandableCards } from '../../hooks/useExpandableCards';
 
-/** Host shown next to an article link: zakon.rada.gov.ua for UA, fedlex.admin.ch for CH, whatever the source is. */
-function linkHost(url: string): string {
+/**
+ * Host shown next to an article link: zakon.rada.gov.ua for UA, fedlex.admin.ch for CH,
+ * whatever the source is. When the URL doesn't parse, fall back to the raw url string
+ * (trimmed to 40 chars) rather than a hard-coded UA host — a malformed non-UA source url
+ * must never be mislabeled as zakon.rada.gov.ua.
+ */
+export function linkHost(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
   } catch {
-    return 'zakon.rada.gov.ua';
+    return String(url).slice(0, 40);
   }
 }
 

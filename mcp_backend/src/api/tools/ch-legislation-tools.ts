@@ -17,8 +17,8 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { isValidIsoDate } from './ch-date-utils.js';
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const LANGS = ['de', 'fr', 'it'];
 
 export class ChLegislationTools extends BaseToolHandler {
@@ -162,7 +162,7 @@ article_number не унікальний в межах редакції (пер�
     if (!LANGS.includes(String(lang))) {
       return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
     }
-    if (as_of && !DATE_RE.test(String(as_of))) {
+    if (as_of && !isValidIsoDate(String(as_of))) {
       return this.wrapResponse('as_of має бути у форматі YYYY-MM-DD.');
     }
 
@@ -335,17 +335,18 @@ article_number не унікальний в межах редакції (пер�
         [act.act_id, String(lang), articleFilter]
       )).rows;
 
+      // e_id is only meaningful within its own edition (version_id) — the same e_id can
+      // denote a different article_number in another edition. Correlate the article-number
+      // filter to the provenance row's own version, not across every version of the act.
       const provenance = (await this.db.query(
         `SELECT p.e_id, p.action, p.as_reference, p.bbl_reference,
                 to_char(p.effective_date, 'YYYY-MM-DD') AS effective_date
            FROM ch_article_provenance p
            JOIN ch_act_version v ON v.version_id = p.version_id
           WHERE v.act_id = $1 AND v.lang = $2
-            AND ($3::text IS NULL OR p.e_id IN (
-                  SELECT DISTINCT a.e_id
-                    FROM ch_act_article a
-                    JOIN ch_act_version v2 ON v2.version_id = a.version_id
-                   WHERE v2.act_id = $1 AND a.article_number = $3))
+            AND ($3::text IS NULL OR EXISTS (
+                  SELECT 1 FROM ch_act_article a
+                   WHERE a.version_id = p.version_id AND a.e_id = p.e_id AND a.article_number = $3))
           ORDER BY p.effective_date DESC NULLS LAST
           LIMIT 200`,
         [act.act_id, String(lang), articleFilter]

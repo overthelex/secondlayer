@@ -268,6 +268,30 @@ describe('extractChEvidence', () => {
       const result = extractChEvidence('ch_search_legislation', data);
       expect(result.citations[0].articleNumber).toBe('210');
     });
+
+    it('never puts a literal "null" in npaTitle when title is absent', () => {
+      const data = {
+        results: [
+          {
+            act_id: 3,
+            sr_number: '220',
+            abbreviation: 'OR',
+            title: null,
+            date_entry_force: '1912-01-01',
+            date_no_longer_in_force: null,
+            in_force: true,
+            editions_count: 2,
+            latest_edition_date: '2020-01-01',
+            eli_work_uri: 'https://fedlex.admin.ch/eli/cc/27/317_321_377',
+          },
+        ],
+        total_count: 1, has_more: false, limit: 20, offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_legislation', data);
+      expect(result.citations[0].npaTitle).toBe('(SR 220)');
+      expect(result.citations[0].npaTitle).not.toContain('null');
+    });
   });
 
   describe('ch_get_act_article', () => {
@@ -313,6 +337,34 @@ describe('extractChEvidence', () => {
       const result = extractChEvidence('ch_get_act_article', data);
       expect(result.citations).toHaveLength(0);
     });
+
+    it('never puts a literal "null" in npaTitle when abbreviation is absent', () => {
+      const data = {
+        sr_number: '220',
+        abbreviation: null,
+        title: 'Obligationenrecht',
+        lang: 'de',
+        as_of: '2020-01-01',
+        version: {
+          version_id: 55,
+          date_applicability: '2016-06-01',
+          date_end_applicability: '2020-01-01',
+          eli_consolidation_uri: 'https://fedlex.admin.ch/eli/cc/27/317_321_377/2016-06-01',
+        },
+        article: {
+          e_id: 'art_336',
+          article_number: '336',
+          marginal_note: 'B. Kündigungsschutz',
+          text: 'Text.',
+        },
+        other_editions: 3,
+      };
+
+      const result = extractChEvidence('ch_get_act_article', data);
+      const c = result.citations[0];
+      expect(c.npaTitle).toBe('Art. 336 (SR 220)');
+      expect(c.npaTitle).not.toContain('null');
+    });
   });
 
   describe('ch_get_act_history', () => {
@@ -354,6 +406,75 @@ describe('extractChEvidence', () => {
       const data = { error: 'act_not_found', sr_number: '999' };
       const result = extractChEvidence('ch_get_act_history', data);
       expect(result.citations).toHaveLength(0);
+    });
+
+    it('maps editions to Citation[]', () => {
+      const data = {
+        sr_number: '220',
+        abbreviation: 'OR',
+        editions: [
+          { date_applicability: '2015-01-01', date_end_applicability: '2020-01-01', article_count: 1 },
+          { date_applicability: '2020-01-01', date_end_applicability: null, article_count: 2 },
+        ],
+        changes: [],
+        provenance: [],
+      };
+
+      const result = extractChEvidence('ch_get_act_history', data);
+      expect(result.citations).toHaveLength(2);
+      expect(result.citations[0].npaTitle).toBe('Редакція 2015-01-01 — 2020-01-01');
+      expect(result.citations[1].npaTitle).toBe('Редакція 2020-01-01 — донині');
+      expect(result.citations[0].source).toBe('OR (SR 220)');
+    });
+
+    it('maps provenance to Citation[] with a title from action/effective_date and a body from as_reference/bbl_reference', () => {
+      const data = {
+        sr_number: '220',
+        abbreviation: 'OR',
+        editions: [],
+        changes: [],
+        provenance: [
+          {
+            e_id: 'art_336_a', action: 'inserted', as_reference: 'AS 2019 1234',
+            bbl_reference: 'BBl 2018 1667', effective_date: '2020-01-01',
+          },
+          { e_id: 'art_337', action: null, as_reference: null, bbl_reference: null, effective_date: null },
+        ],
+      };
+
+      const result = extractChEvidence('ch_get_act_history', data);
+      expect(result.citations).toHaveLength(2);
+      expect(result.citations[0].npaTitle).toBe('inserted 2020-01-01');
+      expect(result.citations[0].text).toBe('AS 2019 1234; BBl 2018 1667');
+      // action/effective_date both absent: falls back to 'зміна' with nothing trailing
+      expect(result.citations[1].npaTitle).toBe('зміна');
+      expect(result.citations[1].text).toBe('');
+    });
+
+    it('caps editions and provenance at 50 items each, independently of changes', () => {
+      const editions = Array.from({ length: 60 }, (_, i) => ({
+        date_applicability: `20${String(i % 100).padStart(2, '0')}-01-01`, date_end_applicability: null,
+      }));
+      const provenance = Array.from({ length: 60 }, (_, i) => ({
+        e_id: `art_${i}`, action: 'modified', as_reference: `AS ${i}`, bbl_reference: null, effective_date: '2020-01-01',
+      }));
+      const data = { sr_number: '220', abbreviation: 'OR', editions, changes: [], provenance };
+
+      const result = extractChEvidence('ch_get_act_history', data);
+      expect(result.citations).toHaveLength(100);
+    });
+
+    it('yields evidence from editions and provenance when changes is empty', () => {
+      const data = {
+        sr_number: '220',
+        abbreviation: 'OR',
+        editions: [{ date_applicability: '2020-01-01', date_end_applicability: null }],
+        changes: [],
+        provenance: [{ e_id: 'art_1', action: 'modified', as_reference: 'AS 1', bbl_reference: null, effective_date: '2020-01-01' }],
+      };
+
+      const result = extractChEvidence('ch_get_act_history', data);
+      expect(result.citations).toHaveLength(2);
     });
   });
 

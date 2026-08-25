@@ -86,7 +86,8 @@ function extractChCourtEvidence(toolName: string, parsed: ToolResultData): Evide
 }
 
 function chActTitle(act: ToolResultData): string {
-  return act.sr_number ? `${act.title} (SR ${act.sr_number})` : String(act.title || '');
+  const title = act.title ? String(act.title) : '';
+  return act.sr_number ? [title, `(SR ${act.sr_number})`].filter(Boolean).join(' ') : title;
 }
 
 function chActSearchCitation(row: ToolResultData): Citation {
@@ -115,7 +116,11 @@ function chActSearchCitation(row: ToolResultData): Citation {
 function chArticleCitation(parsed: ToolResultData): Citation {
   const article = parsed.article || {};
   const version = parsed.version || {};
-  const npaTitle = `Art. ${article.article_number} ${parsed.abbreviation} (SR ${parsed.sr_number})`;
+  const npaTitle = [
+    article.article_number ? `Art. ${article.article_number}` : undefined,
+    parsed.abbreviation ? String(parsed.abbreviation) : undefined,
+    parsed.sr_number ? `(SR ${parsed.sr_number})` : undefined,
+  ].filter(Boolean).join(' ');
   const editionInterval = version.date_applicability
     ? `${version.date_applicability} — ${version.date_end_applicability || 'донині'}`
     : undefined;
@@ -130,17 +135,39 @@ function chArticleCitation(parsed: ToolResultData): Citation {
   };
 }
 
+function chActLabel(parsed: ToolResultData): string {
+  return parsed.abbreviation
+    ? `${parsed.abbreviation} (SR ${parsed.sr_number})`
+    : `SR ${parsed.sr_number}`;
+}
+
 function chHistoryCitation(parsed: ToolResultData, change: ToolResultData): Citation {
   const label = chChangeTypeLabel(change.change_type);
   const npaTitle = `${label} ${change.date_applicability}`;
-  const actLabel = parsed.abbreviation
-    ? `${parsed.abbreviation} (SR ${parsed.sr_number})`
-    : `SR ${parsed.sr_number}`;
   return {
     text: `${label} — ст. ${change.article_number}, редакція від ${change.date_applicability}.`,
-    source: actLabel,
+    source: chActLabel(parsed),
     npaTitle,
     articleNumber: change.article_number ? String(change.article_number) : undefined,
+  };
+}
+
+function chEditionCitation(parsed: ToolResultData, edition: ToolResultData): Citation {
+  const npaTitle = `Редакція ${edition.date_applicability} — ${edition.date_end_applicability ?? 'донині'}`;
+  return {
+    text: npaTitle,
+    source: chActLabel(parsed),
+    npaTitle,
+  };
+}
+
+function chProvenanceCitation(parsed: ToolResultData, row: ToolResultData): Citation {
+  const npaTitle = `${row.action ?? 'зміна'} ${row.effective_date ?? ''}`.trim();
+  const body = [row.as_reference, row.bbl_reference].filter(Boolean).join('; ');
+  return {
+    text: body,
+    source: chActLabel(parsed),
+    npaTitle,
   };
 }
 
@@ -156,10 +183,24 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
       citations.push(chArticleCitation(parsed));
     }
   } else if (toolName === 'ch_get_act_history') {
-    // Error payload: { error: 'not_found', entity: 'act', sr_number }
-    if (!parsed.error && Array.isArray(parsed.changes)) {
-      for (const change of parsed.changes.slice(0, MAX_HISTORY_CITATIONS)) {
-        citations.push(chHistoryCitation(parsed, change));
+    // Error payload: { error: 'not_found', entity: 'act', sr_number }. Changes, editions, and
+    // provenance are independent arrays — a history with no changes (e.g. no article filter
+    // hit, or the act has no per-article diff data) still yields evidence from the others.
+    if (!parsed.error) {
+      if (Array.isArray(parsed.changes)) {
+        for (const change of parsed.changes.slice(0, MAX_HISTORY_CITATIONS)) {
+          citations.push(chHistoryCitation(parsed, change));
+        }
+      }
+      if (Array.isArray(parsed.editions)) {
+        for (const edition of parsed.editions.slice(0, MAX_HISTORY_CITATIONS)) {
+          citations.push(chEditionCitation(parsed, edition));
+        }
+      }
+      if (Array.isArray(parsed.provenance)) {
+        for (const row of parsed.provenance.slice(0, MAX_HISTORY_CITATIONS)) {
+          citations.push(chProvenanceCitation(parsed, row));
+        }
       }
     }
   }
