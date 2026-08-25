@@ -212,11 +212,28 @@ def parse_articles(xml: bytes) -> list[Article]:
 
 
 def _articles_of(root) -> list[Article]:
+    """Every <article> in document order, keyed by an eId that is unique
+    WITHIN THIS DOCUMENT even when Fedlex's is not.
+
+    Fedlex repeats eIds inside one file: cantonal constitutions (SR 131.224.2,
+    SR 131.218) carry `art_1..art_N` in the body and again in a transitional
+    part with no path prefix, and SR 281.1's English edition uses `art_79`
+    for article 85 -- an authoring error, its <num> says 85. On the first
+    prod run 118 editions of 51 acts could not be stored because
+    ux_ch_act_article (version_id, e_id) correctly refuses a duplicate. The
+    first occurrence keeps the bare eId; each later one gets `#2`, `#3`, ...
+    in document order, which is deterministic across editions as long as the
+    document's structure is, so the change log keys on it like any other id.
+    """
     articles: list[Article] = []
+    seen: dict[str, int] = {}
     for ordinal, element in enumerate(root.iter(_AKN + "article"), start=1):
         e_id = element.get("eId")
         if not e_id:
             continue
+        seen[e_id] = seen.get(e_id, 0) + 1
+        if seen[e_id] > 1:
+            e_id = f"{e_id}#{seen[e_id]}"
         # Strip authorial notes (and capture their text) before reading num,
         # heading or body text off this element, so none of the three picks
         # up a footnote's wording. See Article.notes and _strip_notes().
@@ -239,7 +256,8 @@ def _articles_of(root) -> list[Article]:
                            if heading_element is not None else None),
             text=text,
             ordinal=ordinal,
-            parent_e_id=e_id.rsplit("/", 1)[0] if "/" in e_id else None,
+            parent_e_id=(e_id.split("#", 1)[0].rsplit("/", 1)[0]
+                         if "/" in e_id else None),
             notes=notes,
         ))
     return articles
