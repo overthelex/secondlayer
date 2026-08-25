@@ -238,8 +238,12 @@ class _FakeAsyncFetcher:
 
 
 def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=(),
-                          failed_per_spider=None):
+                          failed_per_spider=None, requeued_first_pass=None):
+    """`requeued_first_pass`: spider -> how many cards extract re-queues on
+    its FIRST call for that spider (0 on later calls), to exercise the
+    second lap in run_decisions."""
     seen = {"index": None, "fetch": [], "extract": [], "load": []}
+    requeue = dict(requeued_first_pass or {})
 
     def fake_index(settings, spiders):
         seen["index"] = spiders
@@ -253,7 +257,7 @@ def _stub_decision_stages(monkeypatch, inserted=0, failed_spiders=(),
 
     def fake_extract(settings, limit=None, spider=None):
         seen["extract"].append(spider)
-        return extract_stage.ExtractReport()
+        return extract_stage.ExtractReport(requeued_for_pdf=requeue.pop(spider, 0))
 
     def fake_load(settings, limit=None, spider=None):
         seen["load"].append(spider)
@@ -950,3 +954,24 @@ def test_run_decisions_reindexes_every_spider_under_an_ambiguous_court_code(
 
     assert sorted(report.spiders) == ["VD_FindInfo", "VD_Omni"]
     assert sorted(seen["index"]) == ["VD_FindInfo", "VD_Omni"]
+
+
+def test_a_card_requeued_during_the_delta_gets_a_second_lap_the_same_night(
+        tmp_path, monkeypatch, conn):
+    """First nightly run: extract re-queued 33 HTML cards for their PDF and
+    nothing fetched them until the next night. One more fetch -> extract ->
+    load for that spider, only when extract asked, and only once."""
+    _seed(conn, "ECLI:1", "ZH_Obergericht", "ZH_OG_003")
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 20))
+    _use_conn(monkeypatch, conn)
+    snapshot = {"total": {"ZH_OG": 13, "CH_BGer": 5}, "total_alle": 18}
+    fetcher = _FakeAsyncFetcher({
+        delta.snapshot_url(datetime.date(2026, 8, 20)): snapshot,
+    })
+    seen = _stub_decision_stages(monkeypatch, requeued_first_pass={"ZH_Obergericht": 2})
+
+    delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
+
+    assert seen["fetch"].count("ZH_Obergericht") == 2, "one extra lap for the spider that re-queued"
+    assert seen["fetch"].count("CH_BGer") == 1, "and none for one that did not"
+    assert seen["load"].count("ZH_Obergericht") == 2
