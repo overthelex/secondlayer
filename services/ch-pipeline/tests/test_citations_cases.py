@@ -83,6 +83,13 @@ def test_ecli_bger_form_unchanged():
     assert refs[0].raw == "ECLI:CH:BGER:2017:4A.22.2017"
 
 
+def test_ecli_trailing_sentence_dot_is_stripped():
+    refs = extract_cases("Vgl. ECLI:CH:BGER:2017:4A.22.2017.")
+    assert len(refs) == 1
+    assert refs[0].kind == "ecli"
+    assert refs[0].raw == "ECLI:CH:BGER:2017:4A.22.2017"
+
+
 def test_ecli_entscheidsuche_style_with_underscores_and_hyphens():
     text = "ECLI:CH:BGE:CH_BGE_004_BGE-115-II-300_1989"
     refs = extract_cases(text)
