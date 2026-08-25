@@ -452,8 +452,21 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     index_report = index_stage.run(settings, spiders)
     for spider in spiders:
         fetch_stage.run(settings, spider=spider)
-        extract_stage.run(settings, spider=spider)
+        extracted = extract_stage.run(settings, spider=spider)
         load_stage.run(settings, spider=spider)
+        # extract sends an HTML card with a PDF behind it back to `indexed`
+        # (db.requeue_for_pdf). Inside a single-lap run nothing came back
+        # for it, so on the first nightly run 33 such rows sat in `indexed`
+        # until the next night. One more lap, only when needed and only
+        # once: a second requeue would mean the PDF was a phantom, and that
+        # row retires through fetch's own attempts.
+        if getattr(extracted, "requeued_for_pdf", 0):
+            log.info("delta(%s): %s re-queued %d HTML card(s) for their PDF; "
+                     "fetching those now rather than tomorrow",
+                     day, spider, extracted.requeued_for_pdf)
+            fetch_stage.run(settings, spider=spider)
+            extract_stage.run(settings, spider=spider)
+            load_stage.run(settings, spider=spider)
 
     # index_stage.run() swallows a per-spider listing failure into
     # `failed_spiders` rather than raising -- deliberately, so one flaky
