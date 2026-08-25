@@ -10,6 +10,7 @@ import collections
 import datetime
 import json
 import math
+import pathlib
 
 import pytest
 
@@ -624,3 +625,118 @@ def test_an_unpriced_model_fails_on_the_gate_path_before_any_client_call(tmp_pat
                     models=("eu.anthropic.claude-not-priced-v9",),
                     sample_per_lang=1, client=client, confirm=True)
     assert client.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Durability: a crash must not cost an already-paid answer
+# ---------------------------------------------------------------------------
+
+def test_a_complete_final_object_missing_only_its_newline_is_kept(tmp_path):
+    """A process killed between `f.write(obj + "\\n")`'s bytes reaching the
+    page cache and the newline landing leaves a COMPLETE, parseable object
+    with no trailing newline. That answer was paid for; cutting it back to
+    the previous line throws it away and the next run re-asks the item.
+    Only the newline is missing, so only the newline is added."""
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "one", "verdict": {}}) + "\n"
+        + json.dumps({"id": "two", "verdict": {}}),
+        encoding="utf-8")
+
+    run_llm._truncate_partial_line(f)
+
+    assert [json.loads(line)["id"]
+            for line in f.read_text(encoding="utf-8").splitlines()] == ["one", "two"]
+    assert f.read_bytes().endswith(b"\n")
+    assert run_llm._done_ids(f) == {"one", "two"}
+
+
+def test_an_unparseable_final_suffix_is_still_truncated(tmp_path):
+    """The other half of the same crash window: the object itself is only
+    half written. There is nothing to keep, and appending after it would
+    glue the next result onto the stump."""
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "one", "verdict": {}}) + "\n" + '{"id": "half", "ans',
+        encoding="utf-8")
+
+    run_llm._truncate_partial_line(f)
+
+    assert f.read_text(encoding="utf-8") == json.dumps({"id": "one", "verdict": {}}) + "\n"
+
+
+def test_a_lone_unparseable_line_with_no_earlier_newline_is_removed(tmp_path):
+    f = tmp_path / "results.jsonl"
+    f.write_text('{"id": "half", "ans', encoding="utf-8")
+    run_llm._truncate_partial_line(f)
+    assert f.read_text(encoding="utf-8") == ""
+
+
+def test_a_resumed_run_does_not_re_ask_an_item_whose_newline_was_lost(tmp_path):
+    """End to end: the crash left i1's complete answer without a newline;
+    the resumed run must skip i1 and only call the client for i2."""
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    _write_items(items_dir, "de", [_item("i1", question="q1"), _item("i2", question="q2")])
+
+    out_dir.mkdir(parents=True)
+    results = out_dir / "results-llm-haiku-4-5.jsonl"
+    results.write_text(json.dumps({"id": "i1", "verdict": {}}), encoding="utf-8")
+
+    client = FakeClient(answers={"q1": GOLD_TEXT, "q2": GOLD_TEXT})
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                sample_per_lang=2, client=client, confirm=True)
+
+    assert client.calls == ["q2"]
+    assert [line["id"] for line in _read_jsonl(results)] == ["i1", "i2"]
+
+
+def test_each_result_line_is_fsynced_before_the_next_item_is_asked(tmp_path, monkeypatch):
+    """A flush() only hands the bytes to the kernel. A host that loses power
+    before the kernel writes them back loses answers that were already paid
+    for, and the resumed run pays for them again."""
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    _write_items(items_dir, "de", [_item("i1", question="q1"), _item("i2", question="q2")])
+
+    synced: list[int] = []
+    real_fsync = run_llm.os.fsync
+    monkeypatch.setattr(run_llm.os, "fsync",
+                        lambda fd: (synced.append(fd), real_fsync(fd))[1])
+
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                sample_per_lang=2,
+                client=FakeClient(answers={"q1": GOLD_TEXT, "q2": GOLD_TEXT}),
+                confirm=True)
+
+    assert len(synced) == 2
+
+
+# ---------------------------------------------------------------------------
+# A requested language with no item file
+# ---------------------------------------------------------------------------
+
+def test_a_missing_item_file_for_a_requested_language_raises(tmp_path):
+    """Silently treating the language as empty reports a benchmark run over
+    two languages when only one was ever asked -- a smaller, quieter number
+    that still calls itself the CH-PiT score."""
+    items_dir = tmp_path / "items"
+    _write_items(items_dir, "de", [_item("i1")])
+
+    with pytest.raises(FileNotFoundError, match="bench-fr.jsonl"):
+        run_llm._read_items_by_lang(items_dir, ("de", "fr"))
+
+
+def test_a_present_but_empty_item_file_is_not_an_error(tmp_path):
+    items_dir = tmp_path / "items"
+    _write_items(items_dir, "de", [])
+    assert run_llm._read_items_by_lang(items_dir, ("de",)) == {"de": []}
+
+
+def test_boto3_is_a_declared_runtime_dependency():
+    """`_bedrock_client()` imports boto3 lazily so the estimate-only path
+    needs no AWS SDK, but a CHPIPE_BENCH_CONFIRM=1 run always reaches it.
+    An undeclared import is an ImportError on a machine that installed only
+    requirements.txt -- after the operator already typed the confirmation."""
+    reqs = (pathlib.Path(__file__).parent.parent / "requirements.txt").read_text()
+    assert any(line.strip().startswith("boto3") for line in reqs.splitlines())

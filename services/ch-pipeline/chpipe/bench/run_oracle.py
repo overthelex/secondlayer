@@ -71,6 +71,11 @@ SELECT act_id
  LIMIT 1
 """
 
+# `%(as_of)s <= date_end_applicability`, inclusive, matches the product
+# resolver: ch_get_act_article was fixed to the same boundary in PR #2344
+# (an edition IS in force on its own date_end_applicability), so this query
+# and the tool it mirrors agree on an old edition's last day -- the exact
+# date every `before` item asks about.
 _EDITION_SQL = """
 SELECT version_id
   FROM ch_act_version

@@ -101,13 +101,14 @@ def _act(conn, act_id, sr_number, abbreviation=None, enforcement_status=0):
         (act_id, f"https://x/act/{act_id}", sr_number, abbreviation, enforcement_status))
 
 
-def _version(conn, version_id, act_id, lang, date_applicability, date_end_applicability=None):
+def _version(conn, version_id, act_id, lang, date_applicability, date_end_applicability=None,
+             stage="parsed"):
     conn.execute(
         "INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, lang, "
         "date_applicability, date_end_applicability, stage) "
-        "VALUES (%s, %s, %s, %s, %s, %s, 'parsed')",
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
         (version_id, act_id, f"https://x/act/{act_id}/{version_id}", lang,
-         date_applicability, date_end_applicability))
+         date_applicability, date_end_applicability, stage))
 
 
 def _article(conn, version_id, e_id, article_number, text, ordinal=0):
@@ -198,7 +199,10 @@ def test_build_writes_two_items_per_language(settings, seeded, tmp_path):
     fr_items = _read_jsonl(tmp_path / "bench-fr.jsonl")
     assert len(de_items) == 2
     assert len(fr_items) == 2
-    assert [it["kind"] for it in de_items] == sorted(it["kind"] for it in de_items)
+    # Both halves of the one selected change, written in id order (which is
+    # a hash order, so it says nothing about `kind` -- see
+    # test_items_are_sorted_by_id).
+    assert {it["kind"] for it in de_items} == {"before", "after"}
 
 
 def test_item_carries_the_exact_act_id(settings, seeded, tmp_path):
@@ -225,9 +229,15 @@ def test_not_in_force_act_is_excluded_entirely(settings, seeded, tmp_path):
     build.build(settings, langs=("de", "fr"), out_dir=tmp_path, now=_NOW)
     de_items = _read_jsonl(tmp_path / "bench-de.jsonl")
     assert all(it["sr_number"] != "999" for it in de_items)
-    # Not counted anywhere: excluded by the JOIN before Python ever sees it.
-    assert "not_in_force" not in json.loads(
-        (tmp_path / "build-report.json").read_text())["de"]["skipped"]
+    # Not counted anywhere: excluded by the JOIN before Python ever sees it,
+    # so the in-force act's own two changes are the whole population and
+    # `identical_or_short` (art_337) is the only skip reason recorded. An
+    # "not_in_force" not in skipped assertion would be vacuous -- build()
+    # never writes such a key -- so assert the totals instead.
+    report_de = json.loads(
+        (tmp_path / "build-report.json").read_text())["de"]
+    assert report_de["changes_considered"] == 2
+    assert report_de["skipped"] == {"identical_or_short": 1}
 
 
 def test_items_are_sorted_by_id(settings, seeded, tmp_path):
@@ -376,3 +386,130 @@ def test_unambiguous_article_alongside_an_ambiguous_one_still_builds(
     assert report.per_lang["de"]["skipped"] == {"ambiguous_article": 1}
     items = _read_jsonl(tmp_path / "bench-de.jsonl")
     assert {it["article_number"] for it in items} == {"8"}
+
+
+def test_change_with_no_article_number_is_skipped(settings, conn, tmp_path):
+    """A `modified` change whose article_number never parsed. The ambiguity
+    guard's `NOT EXISTS (... x.article_number = ch.article_number ...)`
+    cannot see it -- SQL NULL compares equal to nothing, so both subqueries
+    find no row and the change looks unambiguous. It would then ship an item
+    whose question names article `None`. Excluded up front, counted under
+    its own reason so the cost is visible in build-report.json.
+    """
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 6, "668", abbreviation="WW", enforcement_status=0)
+    _version(conn, 601, 6, "de", old_date, old_end_date)
+    _version(conn, 602, 6, "de", change_date, None)
+    _article(conn, 601, "art_9", None, OLD_TEXT)
+    _article(conn, 602, "art_9", None, NEW_TEXT)
+    _change(conn, 6, "de", 601, 602, "art_9", None, change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 1
+    assert report.per_lang["de"]["selected"] == 0
+    assert report.per_lang["de"]["items"] == 0
+    assert report.per_lang["de"]["skipped"] == {"no_article_number": 1}
+    assert (tmp_path / "bench-de.jsonl").read_text() == ""
+
+
+def test_a_null_article_number_is_not_counted_as_ambiguous(settings, conn, tmp_path):
+    """The NULL-article-number exclusion and the ambiguity exclusion are
+    separate populations: a NULL-numbered change must not inflate
+    `ambiguous_article`, and an ambiguous change must not inflate
+    `no_article_number`. Both counted once, under their own reason."""
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 7, "669", abbreviation="VV", enforcement_status=0)
+    _version(conn, 701, 7, "de", old_date, old_end_date)
+    _version(conn, 702, 7, "de", change_date, None)
+    for version_id, text in ((701, OLD_TEXT), (702, NEW_TEXT)):
+        _article(conn, version_id, "art_7", "7", text, ordinal=0)
+        _article(conn, version_id, "disp_u17/art_7", "7", text, ordinal=1)
+        _article(conn, version_id, "art_9", None, text, ordinal=2)
+    _change(conn, 7, "de", 701, 702, "art_7", "7", change_date)
+    _change(conn, 7, "de", 701, 702, "art_9", None, change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 2
+    assert report.per_lang["de"]["skipped"] == {
+        "ambiguous_article": 1, "no_article_number": 1}
+
+
+def test_a_change_whose_new_edition_is_not_parsed_is_excluded(settings, conn, tmp_path):
+    """run_oracle resolves editions with `stage = 'parsed'`. A change built
+    on an edition that never reached that stage is an item the oracle can
+    only answer `no_edition_for_date` -- the builder must not ship it, and
+    must not count it either."""
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 8, "670", abbreviation="UU", enforcement_status=0)
+    _version(conn, 801, 8, "de", old_date, old_end_date)
+    _version(conn, 802, 8, "de", change_date, None, stage="fetched")
+    _article(conn, 801, "art_4", "4", OLD_TEXT)
+    _article(conn, 802, "art_4", "4", NEW_TEXT)
+    _change(conn, 8, "de", 801, 802, "art_4", "4", change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 0
+    assert report.per_lang["de"]["items"] == 0
+    assert (tmp_path / "bench-de.jsonl").read_text() == ""
+
+
+def test_a_change_whose_old_edition_is_not_parsed_is_excluded(settings, conn, tmp_path):
+    """The mirror of the previous test: the guard is on BOTH version joins,
+    not just the one the item's `after` half quotes."""
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 9, "671", abbreviation="TT", enforcement_status=0)
+    _version(conn, 901, 9, "de", old_date, old_end_date, stage="fetched")
+    _version(conn, 902, 9, "de", change_date, None)
+    _article(conn, 901, "art_4", "4", OLD_TEXT)
+    _article(conn, 902, "art_4", "4", NEW_TEXT)
+    _change(conn, 9, "de", 901, 902, "art_4", "4", change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 0
+    assert report.per_lang["de"]["items"] == 0
+
+
+def test_build_refuses_to_write_duplicate_item_ids(settings, seeded, tmp_path,
+                                                   monkeypatch):
+    """Item ids are the join key report.load_items_by_id() uses -- an
+    `items[item["id"]] = item` assignment -- so a collision silently drops
+    one item's results from every report. item_id()'s payload (lang, act_id,
+    sr_number, e_id, as_of) is meant to make that unreachable, and
+    ch_act_change's own ux_ch_act_change unique constraint on
+    (to_version_id, e_id) blocks the one duplicate-row shape that could
+    still produce it, so the guard is forced here rather than seeded: a
+    degenerate item_id() stands in for whatever future payload change would
+    reintroduce the collision. build() must fail loudly rather than write a
+    file whose ids do not identify its items."""
+    monkeypatch.setattr(build, "item_id", lambda *args: "collide")
+
+    with pytest.raises(ValueError, match="duplicate item id"):
+        build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+
+def test_item_id_payload_includes_the_act_id(settings, seeded, tmp_path):
+    """The ids on disk are the ones item_id() produces for this item's own
+    act -- pinned here so a change to the payload cannot silently reshuffle
+    every id in the corpus without a test noticing."""
+    build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+    de_items = {it["kind"]: it for it in _read_jsonl(tmp_path / "bench-de.jsonl")}
+    assert de_items["before"]["id"] == build.item_id(
+        "de", 1, "220", "art_336", datetime.date(2020, 12, 31))
+    assert de_items["after"]["id"] == build.item_id(
+        "de", 1, "220", "art_336", datetime.date(2021, 1, 1))

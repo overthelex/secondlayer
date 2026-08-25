@@ -13,6 +13,8 @@ DB-free, same as the rest of this file.
 """
 import json
 
+import pytest
+
 from chpipe.bench import report
 
 
@@ -325,3 +327,62 @@ def test_rescore_writes_a_sibling_rescored_file_and_leaves_the_input_alone(tmp_p
     # The original input file's stored (wrong) verdict is untouched.
     stored_lines = [json.loads(line) for line in results_path.read_text().splitlines()]
     assert stored_lines[0]["verdict"] == _WRONG_STORED_VERDICT
+
+
+def test_markdown_reports_both_mean_coverages():
+    """summarise() computes mean_gold_coverage / mean_distractor_coverage and
+    CARD.md promises both, but the printed table dropped them -- so the one
+    view a reader actually looks at could not show HOW WELL an answer
+    grounded, only which bucket it fell in."""
+    items = {"b1": _item("b1", kind="before"), "b2": _item("b2", kind="before")}
+    lines = [_line("b1", gold=1.0, distractor=0.0),
+             _line("b2", gold=0.5, distractor=0.25)]
+    md = report.markdown(report.summarise(lines, items))
+    rows = md.strip().splitlines()
+
+    assert "mean gold cov" in rows[0]
+    assert "mean distractor cov" in rows[0]
+    header = [c.strip() for c in rows[0].strip("|").split("|")]
+    all_row = [c.strip() for c in rows[2].strip("|").split("|")]
+    assert len(all_row) == len(header)
+    assert all_row[header.index("mean gold cov")] == "0.750"
+    assert all_row[header.index("mean distractor cov")] == "0.125"
+
+
+def test_read_jsonl_ignores_only_a_truncated_final_line(tmp_path):
+    """An interrupted Bedrock run leaves a partial final line. report.main()
+    must still report the items that DID complete rather than raising."""
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "one"}) + "\n" + '{"id": "half", "ans',
+        encoding="utf-8")
+    assert report._read_jsonl(f) == [{"id": "one"}]
+
+
+def test_read_jsonl_still_rejects_a_malformed_interior_line(tmp_path):
+    """Only the LAST line can be explained by truncation. Corruption in the
+    middle of a file is a real defect and must not be summarised over."""
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "one"}) + "\n" + '{"id": "half", "ans' + "\n"
+        + json.dumps({"id": "three"}) + "\n",
+        encoding="utf-8")
+    with pytest.raises(json.JSONDecodeError):
+        report._read_jsonl(f)
+
+
+def test_main_summarises_a_results_file_with_a_truncated_final_line(tmp_path):
+    items_dir = tmp_path / "items"
+    items_dir.mkdir()
+    (items_dir / "bench-de.jsonl").write_text(
+        json.dumps({"id": "one", "lang": "de", "kind": "before",
+                    "gold_is_current": False}) + "\n",
+        encoding="utf-8")
+    results = tmp_path / "results.jsonl"
+    results.write_text(
+        json.dumps(_line("one")) + "\n" + '{"id": "half", "sys',
+        encoding="utf-8")
+
+    summary = report.main(["--results", str(results), "--items", str(items_dir),
+                           "--out", str(tmp_path / "report.json")])
+    assert summary["de"]["haiku-4-5"]["all"]["n"] == 1

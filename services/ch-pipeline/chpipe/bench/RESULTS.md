@@ -19,9 +19,14 @@ Skip counts from the build (`build-report.json`):
 | fr | 20,090 | 11,860 | 5,000 | 839 | 6,316 | 1,075 | 262 | 6 | 9,226 |
 | it | 15,731 | 11,219 | 5,000 | 292 | 3,083 | 1,137 | 292 | 12 | 8,567 |
 
-The largest skip reason in every language is `no_abbreviation` for German,
-and `capped` for all three once the per-language item cap of 5,000 is
-reached, the builder stops even though more eligible changes remain.
+The largest skip count in every language is `capped` (de 7,556, fr 9,226,
+it 8,567): once the per-language item cap of 5,000 is reached the builder
+stops, even though more eligible changes remain. The largest non-cap reason
+is `no_abbreviation` in every language too (de 4,022, fr 6,316, it 3,083) --
+an act this benchmark's question templates cannot name.
+
+These counts predate the `no_article_number` and parsed-editions-only
+exclusions added in review (see `build.py`), so a rebuild will move them.
 
 ## as_of year distribution (all 15,000 items)
 

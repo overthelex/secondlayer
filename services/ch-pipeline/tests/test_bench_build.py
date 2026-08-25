@@ -175,7 +175,7 @@ def test_make_items_before_uses_the_old_editions_last_day_across_a_gap():
     assert after["as_of"] == "2021-01-01"
     assert before["change_date"] == "2021-01-01"
     # the id and the rendered question follow as_of, not change_date - 1
-    assert before["id"] == build.item_id("de", "220", "art_336", datetime.date(2020, 6, 30))
+    assert before["id"] == build.item_id("de", 1, "220", "art_336", datetime.date(2020, 6, 30))
     assert "30. Juni 2020" in before["question"]
 
 
@@ -216,8 +216,8 @@ def test_make_items_ids_are_stable_and_distinct():
     assert after_a["id"] == after_b["id"]
     # distinct between before/after (different as_of)
     assert before_a["id"] != after_a["id"]
-    assert before_a["id"] == build.item_id("de", "220", "art_336", datetime.date(2020, 12, 31))
-    assert after_a["id"] == build.item_id("de", "220", "art_336", datetime.date(2021, 1, 1))
+    assert before_a["id"] == build.item_id("de", 1, "220", "art_336", datetime.date(2020, 12, 31))
+    assert after_a["id"] == build.item_id("de", 1, "220", "art_336", datetime.date(2021, 1, 1))
     assert len(before_a["id"]) == 16
 
 
@@ -451,3 +451,34 @@ def test_build_lang_counts_only_changes_beyond_the_cap_as_capped():
     # Two changes fill the cap of 4 exactly; only the third is unused.
     assert len(items) == 4
     assert lang_report["skipped"]["capped"] == 1
+
+
+def test_build_lang_trims_an_overshooting_last_change_and_counts_it_capped():
+    """The cap is on ITEMS, and a change yields one or two of them, so the
+    last change the loop consumes can push the total one past the cap. The
+    tail is trimmed and the trimmed item counted as `capped` -- otherwise
+    the file would hold cap+1 items and the report would say cap.
+    """
+    rows = [_two_item_row(i) for i in (1, 2, 3)]
+    items, lang_report = build._build_lang(
+        rows, "de", per_lang_cap=5, per_act_cap=50, rng=random.Random(0))
+
+    # Two changes give 4 items (< 5), so the loop consumes a third and
+    # lands on 6; one item is trimmed back off.
+    assert len(items) == 5
+    assert lang_report["items"] == 5
+    assert lang_report["skipped"]["capped"] == 1
+
+
+# --- item ids carry the act identity ---------------------------------------
+
+def test_item_id_distinguishes_two_acts_sharing_one_sr_number():
+    """More than one ch_act row can carry the same sr_number (a predecessor
+    act and its successor filed under the same number). Without act_id in
+    the payload, two such acts amended on the same date in the same article
+    collide on one id, and report.load_items_by_id() silently drops one of
+    the two items."""
+    a = build.item_id("de", 1, "220", "art_336", datetime.date(2021, 1, 1))
+    b = build.item_id("de", 2, "220", "art_336", datetime.date(2021, 1, 1))
+    assert a != b
+    assert len(a) == len(b) == 16

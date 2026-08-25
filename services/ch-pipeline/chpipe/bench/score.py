@@ -69,6 +69,23 @@ distractor unit; that is why the gold-side test is checked first and the
 wrong-version test additionally requires gold_coverage <= 0.2 (an answer
 holding the added wording is grounded in gold, whatever else it contains).
 
+A SHARE OF THE DISTRACTOR'S UNITS IS NOT ENOUGH ON ITS OWN
+Because that share counts SHARED paragraphs too, a long article can clear
+the 0.8 bar without the answer ever reproducing the wording the amendment
+replaced: five shared paragraphs out of six units is 0.833, and an answer
+quoting only those five said nothing about which edition it read. So the
+fallback carries a second condition -- the answer must contain at least one
+unit the distractor edition has and the gold text does not, at the same
+8-character floor ("the amendment's old wording"). Membership in gold's
+unit set, NOT "is a substring of the gold text": those differ exactly for a
+distractor paragraph nested inside a gold paragraph ("Er ist zu
+begruenden." inside "Er ist zu begruenden und zu unterzeichnen."), which is
+the commonest amendment shape and precisely the wrong-version answer this
+fallback exists to catch. When no such unit exists -- every distractor
+paragraph is also a gold paragraph, the amendment only appended text -- the
+fallback cannot fire, and should not: nothing an answer can quote from the
+old edition would fail to be explained by a partial quote of the new one.
+
 TWO MINIMUM UNIT LENGTHS: 25 EVERYWHERE, 8 FOR THIS FALLBACK ONLY
 `distractor_all_coverage` is computed over `units(distractor,
 min_len=_MIN_FALLBACK_UNIT_LEN)` (8 normalised characters), not the normal
@@ -635,13 +652,17 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     in which case only an exact match counts), and applies the 0.6/0.2
     thresholds to gold_coverage and distractor_coverage to pick a label,
     falling back to distractor_all_coverage -- measured over a SEPARATE,
-    lower-floor (8-char, not 25) unit set, and judged against its own 0.8
-    threshold -- for the wrong-version test when the distractor-only set is
-    empty (a pure-addition amendment -- see "WRONG-VERSION DETECTION WHEN
-    THE DISTRACTOR-ONLY SET IS EMPTY" and "TWO MINIMUM UNIT LENGTHS" in the
-    module docstring).
+    lower-floor (8-char, not 25) unit set, judged against its own 0.8
+    threshold, AND requiring that the answer reproduce at least one unit
+    the distractor edition has and the gold text does not -- for the
+    wrong-version test when the distractor-only set is empty (a
+    pure-addition amendment -- see "WRONG-VERSION DETECTION WHEN THE
+    DISTRACTOR-ONLY SET IS EMPTY" and "TWO MINIMUM UNIT LENGTHS" in the
+    module docstring, and the `amended_units` comment below for why the
+    coverage share alone is not enough).
     """
     norm_answer = normalise(answer)
+    norm_gold = normalise(gold)
     gold_only_list, distractor_only_list, shared_list = discriminating_units(gold, distractor)
     gold_only, distractor_only, shared_units = (
         set(gold_only_list),
@@ -652,7 +673,7 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     distractor_units = set(units(distractor))
     disc_gold, disc_distractor = _discriminating_units(
         gold_only, distractor_only, gold_units, distractor_units,
-        normalise(gold), normalise(distractor))
+        norm_gold, normalise(distractor))
 
     gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
     distractor_coverage = _coverage(distractor_only, norm_answer, disc_distractor)
@@ -668,6 +689,41 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     distractor_all_units = set(units(distractor, min_len=_MIN_FALLBACK_UNIT_LEN))
     distractor_all_coverage = _coverage(distractor_all_units, norm_answer, disc_distractor)
 
+    # The fallback's second, non-negotiable condition: the answer must
+    # reproduce at least one unit that belongs to the DISTRACTOR EDITION
+    # ALONE -- the wording the amendment replaced -- and not merely the
+    # paragraphs both editions share. distractor_all_coverage is a share of
+    # ALL of the distractor's units at the 8-character floor, and on a long
+    # article most of those are shared paragraphs; five shared paragraphs
+    # out of six units is 0.833, so an answer that never touches the
+    # amendment at all could clear the 0.8 bar and be filed as
+    # `grounded_wrong_version` on the strength of text that says nothing
+    # about which edition was read.
+    #
+    # "Belongs to the distractor alone" is membership in the distractor's
+    # unit set but not in the gold text's, at the SAME 8-character floor --
+    # not "is not a substring of the gold text". The two differ exactly for
+    # a distractor paragraph that sits INSIDE a gold paragraph, which is the
+    # commonest amendment shape there is: gold "Er ist zu begruenden und zu
+    # unterzeichnen." against distractor "Er ist zu begruenden." An answer
+    # quoting the latter reproduces the old edition verbatim and misses the
+    # amendment -- the wrong-version answer this fallback exists to catch --
+    # yet a substring test would call that unit shared and withdraw the
+    # label. Paragraph identity is the right grain: the unit is the old
+    # paragraph, and gold does not have it.
+    #
+    # When no such unit exists at all -- every distractor paragraph is also
+    # a gold paragraph, i.e. the amendment only appended text and touched
+    # nothing -- the fallback cannot fire, and should not: there is no
+    # wording an answer could reproduce that quoting part of the gold text
+    # would not equally explain.
+    gold_all_units = set(units(gold, min_len=_MIN_FALLBACK_UNIT_LEN))
+    amended_units = distractor_all_units - gold_all_units
+    amended_found = any(
+        (u in norm_answer) if u in disc_distractor else _unit_found(u, norm_answer)
+        for u in amended_units
+    )
+
     # Gold first: on a gold-superset item a correct answer scores 1.0 on
     # distractor_all_coverage as well, so the fallback below must never get
     # the chance to relabel it.
@@ -675,7 +731,8 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
         label = "grounded_correct"
     elif gold_coverage <= _WEAK and (
         distractor_coverage >= _STRONG
-        or (not distractor_only and distractor_all_coverage >= _FALLBACK_STRONG)
+        or (not distractor_only and distractor_all_coverage >= _FALLBACK_STRONG
+            and amended_found)
     ):
         label = "grounded_wrong_version"
     else:

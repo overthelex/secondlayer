@@ -45,7 +45,8 @@ log = logging.getLogger(__name__)
 REPORT_FILENAME = "report.json"
 
 _COLUMNS = ("n", "errors", "correct %", "wrong version %", "ungrounded %",
-            "correct % (gold current)", "correct % (gold superseded)", "score")
+            "correct % (gold current)", "correct % (gold superseded)",
+            "mean gold cov", "mean distractor cov", "score")
 
 # The "all" bucket's key in a (lang, system) entry, alongside one key per
 # `kind`. Not sorted alphabetically with the kinds -- "after" would sort
@@ -65,12 +66,31 @@ _ERROR_KEYS = ("error", "oracle_error")
 
 
 def _read_jsonl(path: pathlib.Path) -> list[dict[str, Any]]:
+    """Read PATH as JSONL, tolerating a truncated FINAL line only.
+
+    An interrupted Bedrock run leaves a partial object at the end of its
+    results file (run_llm.py repairs it on the next run, but report.py may
+    well be pointed at it first). Raising there would mean an interrupted
+    run cannot be reported at all, when every completed item in the file is
+    perfectly readable. A malformed line ANYWHERE ELSE cannot be explained
+    by truncation -- it is corruption, and summarising over it would report
+    a quietly short count -- so those still raise. Same rule, and same
+    reason, as run_llm._read_jsonl_file().
+    """
     lines: list[dict[str, Any]] = []
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                lines.append(json.loads(line))
+    raw = path.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(raw):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            lines.append(json.loads(line))
+        except json.JSONDecodeError:
+            if i == len(raw) - 1:
+                log.warning("%s: dropping a truncated final line (%d chars)",
+                            path, len(line))
+                break
+            raise
     return lines
 
 
@@ -212,7 +232,14 @@ def summarise(result_lines: list[dict[str, Any]],
 def markdown(summary: dict[str, dict[str, dict[str, dict[str, Any]]]]) -> str:
     """Render SUMMARISE()'s output as a Markdown table, one row per (lang,
     system, kind) with the (lang, system) totals on an `all` row, sorted by
-    lang then system then bucket for a stable, diffable report."""
+    lang then system then bucket for a stable, diffable report.
+
+    Both mean coverages are columns, not just the label shares: the shares
+    say which bucket an answer fell in, the coverages say how much of each
+    edition's discriminating wording it actually reproduced, which is what
+    distinguishes a system that quotes the right edition from one that
+    gestures at it. CARD.md documents both as reported numbers.
+    """
     header = "| lang | system | kind | " + " | ".join(_COLUMNS) + " |"
     separator = "| --- | --- | --- | " + " | ".join("---" for _ in _COLUMNS) + " |"
     rows = [header, separator]
@@ -223,7 +250,7 @@ def markdown(summary: dict[str, dict[str, dict[str, dict[str, Any]]]]) -> str:
                 rows.append(
                     "| {lang} | {system} | {kind} | {n} | {errors} | {correct:.1f} | "
                     "{wrong:.1f} | {ungrounded:.1f} | {cur:.1f} | {sup:.1f} | "
-                    "{score:.3f} |".format(
+                    "{gold_cov:.3f} | {dist_cov:.3f} | {score:.3f} |".format(
                         lang=lang, system=system, kind=kind, n=s["n"],
                         errors=s["errors"],
                         correct=s["share_correct"] * 100,
@@ -231,6 +258,8 @@ def markdown(summary: dict[str, dict[str, dict[str, dict[str, Any]]]]) -> str:
                         ungrounded=s["share_ungrounded"] * 100,
                         cur=s["share_correct_gold_current"] * 100,
                         sup=s["share_correct_gold_superseded"] * 100,
+                        gold_cov=s["mean_gold_coverage"],
+                        dist_cov=s["mean_distractor_coverage"],
                         score=s["score"],
                     )
                 )

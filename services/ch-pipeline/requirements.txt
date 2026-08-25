@@ -1,5 +1,8 @@
 httpx>=0.27,<0.29
 psycopg[binary]>=3.1,<4
 lxml>=5.2,<6
+# chpipe.bench.run_llm imports boto3 lazily (the cost-estimate path needs no
+# AWS SDK), but every confirmed CHPIPE_BENCH_CONFIRM=1 run reaches it.
+boto3>=1.34,<2
 pytest>=8.2,<9
 pytest-asyncio>=0.23,<0.25

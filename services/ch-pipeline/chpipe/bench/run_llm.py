@@ -201,12 +201,21 @@ def _read_items_by_lang(items_path: pathlib.Path, langs: tuple[str, ...],
     for lang in langs:
         items: list[dict[str, Any]] = []
         f = items_path / f"bench-{lang}.jsonl"
-        if f.exists():
-            with f.open(encoding="utf-8") as fh:
-                for line in fh:
-                    line = line.strip()
-                    if line:
-                        items.append(json.loads(line))
+        # A requested language whose item file is missing is a wiring error
+        # (wrong --items directory, a build that never ran that language),
+        # not an empty benchmark. Treating it as zero items silently reports
+        # a two-language run over one language's items, under the same name
+        # and with the same headline score. An existing but empty file is a
+        # different statement -- the build ran and selected nothing -- and
+        # stays legal.
+        if not f.exists():
+            raise FileNotFoundError(
+                f"no benchmark items for lang {lang!r}: {f}")
+        with f.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    items.append(json.loads(line))
         by_lang[lang] = items
     return by_lang
 
@@ -457,9 +466,21 @@ def _read_jsonl_file(path: pathlib.Path) -> list[dict[str, Any]]:
 
 
 def _truncate_partial_line(path: pathlib.Path) -> None:
-    """Cut PATH back to its last complete line, if it does not end in a
-    newline. Without this, appending the next result would glue it onto the
-    stump a crashed write left behind and corrupt both lines.
+    """Repair PATH's last line when the file does not end in a newline.
+    Without this, appending the next result would glue it onto the stump a
+    crashed write left behind and corrupt both lines.
+
+    A missing trailing newline has TWO causes, and they need opposite
+    repairs. The write is `f.write(json.dumps(result) + "\n")` followed by a
+    flush, so a process killed inside that window can leave either half a
+    JSON object (nothing to keep) or a COMPLETE object whose newline never
+    landed. The second is an answer that was already asked, already scored
+    and already paid for; cutting it back to the previous line throws the
+    money away and makes the resumed run buy the same answer twice. So the
+    trailing bytes are parsed: if they are a valid JSON object, only the
+    newline is missing and only the newline is added; if they are not, the
+    suffix is unparseable and is dropped, with a warning naming how much was
+    lost.
     """
     if not path.exists():
         return
@@ -467,9 +488,20 @@ def _truncate_partial_line(path: pathlib.Path) -> None:
     if not data or data.endswith(b"\n"):
         return
     cut = data.rfind(b"\n")
-    log.warning("%s: truncating %d trailing bytes with no newline",
-                path, len(data) - (cut + 1))
-    path.write_bytes(data[:cut + 1] if cut >= 0 else b"")
+    tail = data[cut + 1:]
+    try:
+        json.loads(tail.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        log.warning("%s: truncating %d trailing bytes with no newline",
+                    path, len(tail))
+        path.write_bytes(data[:cut + 1] if cut >= 0 else b"")
+    else:
+        # Complete, parseable, already paid for -- keep it, and give it the
+        # newline the crash cost it.
+        log.warning("%s: completing a %d-byte final line that lost its newline",
+                    path, len(tail))
+        with path.open("ab") as f:
+            f.write(b"\n")
 
 
 def _done_ids(results_file: pathlib.Path) -> set[str]:
@@ -576,7 +608,13 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
                 # repair on the next run, and there is no reason to widen
                 # that window on purpose.
                 f.write(json.dumps(result, ensure_ascii=False) + "\n")
+                # flush() only hands the bytes to the kernel; fsync() is what
+                # gets them onto stable storage. A host that dies in between
+                # loses answers that were already billed, and the resumed run
+                # pays Bedrock for them a second time -- an fsync per item is
+                # cheap against that.
                 f.flush()
+                os.fsync(f.fileno())
 
         # Recomputed from the full file, not just this call's new lines --
         # a resumed run must report the true total (see docstring above).

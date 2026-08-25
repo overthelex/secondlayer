@@ -560,3 +560,81 @@ def test_fallback_answer_quoting_the_full_gold_text_is_grounded_correct():
     assert v.label == "grounded_correct"
     assert v.gold_coverage == 1.0
     assert v.distractor_coverage == 0.0
+
+
+# --- the fallback needs the amendment's OWN old wording, not just shared
+# paragraphs ---------------------------------------------------------------
+#
+# The 0.8 fallback threshold is a share of ALL of the distractor's units at
+# the 8-char floor, and on a long article most of those units are the
+# paragraphs the two editions SHARE. With enough shared paragraphs an answer
+# that quotes only them clears 0.8 without ever reproducing the wording the
+# amendment actually replaced -- five shared paragraphs out of six units is
+# 0.833 -- and was labelled `grounded_wrong_version` on the strength of text
+# that says nothing about which edition the answerer read. The fallback now
+# additionally requires that at least one distractor unit which is NOT one
+# of the gold text's own units (the amendment's old wording, visible only at
+# the 8-char floor here) be found in the answer.
+
+_SHARED_PARAS = "\n".join(
+    f"{i} Diese Bestimmung regelt die Kündigungsfristen im "
+    f"Arbeitsverhältnis nach Absatz {i} der gesetzlichen Vorgaben."
+    for i in range(1, 6)
+)
+GOLD_MANY_SHARED = (
+    _SHARED_PARAS
+    + "\n6 Er ist zu begründen und von der Vorsitzenden zu unterzeichnen."
+)
+DISTRACTOR_MANY_SHARED = _SHARED_PARAS + "\n6 Er ist zu begründen."
+
+
+def test_many_shared_fallback_fixture_has_the_shape_the_bug_needs():
+    """Pins the fixture: distractor_only is empty (so the fallback is the
+    only wrong-version signal), the shared paragraphs dominate the 8-char
+    fallback unit set, and the distractor's own amended paragraph is short
+    enough to exist only in that wider set."""
+    _gold_only, distractor_only, shared = s.discriminating_units(
+        GOLD_MANY_SHARED, DISTRACTOR_MANY_SHARED)
+    assert distractor_only == []
+    assert len(shared) == 5
+    fallback_units = s.units(DISTRACTOR_MANY_SHARED, min_len=8)
+    assert len(fallback_units) == 6
+    assert "er ist zu begründen" in fallback_units
+    assert "er ist zu begründen" not in s.units(DISTRACTOR_MANY_SHARED)
+
+
+def test_many_shared_answer_quoting_only_the_shared_paragraphs_is_ungrounded():
+    answer = _SHARED_PARAS
+    v = s.score(answer, GOLD_MANY_SHARED, DISTRACTOR_MANY_SHARED)
+    # It clears the 0.8 fallback bar on shared text alone ...
+    assert v.distractor_all_coverage >= 0.8
+    assert v.gold_coverage == 0.0
+    # ... and must still not be called a wrong-version answer.
+    assert v.label == "ungrounded"
+
+
+def test_many_shared_answer_quoting_the_full_old_text_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_MANY_SHARED, GOLD_MANY_SHARED, DISTRACTOR_MANY_SHARED)
+    assert v.label == "grounded_wrong_version"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_all_coverage == 1.0
+
+
+def test_many_shared_answer_quoting_the_full_gold_text_is_grounded_correct():
+    v = s.score(GOLD_MANY_SHARED, GOLD_MANY_SHARED, DISTRACTOR_MANY_SHARED)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+
+
+def test_pure_addition_of_whole_paragraphs_cannot_reach_the_fallback():
+    """When every one of the distractor's units is also a unit of the gold
+    text -- the amendment only APPENDED a paragraph and touched nothing --
+    there is no old wording an answer could reproduce that quoting part of
+    the gold text would not equally explain. The fallback must not fire at
+    all, however high the coverage."""
+    distractor = _SHARED_PARAS
+    gold = (_SHARED_PARAS
+            + "\n6 Er ist zu begründen und von der Vorsitzenden zu unterzeichnen.")
+    v = s.score(distractor, gold, distractor)
+    assert v.distractor_all_coverage == 1.0
+    assert v.label == "ungrounded"

@@ -96,6 +96,16 @@ pair only if all of the following hold:
   containing `/`), and changes on any number that some other `e_id` in
   either edition also carries, are excluded and counted as
   `ambiguous_article`.
+- **The article number parsed at all.** A change whose `article_number` is
+  NULL cannot be named by any question template, and the ambiguity test
+  above cannot see it either (SQL NULL compares equal to nothing, so both
+  duplicate-number subqueries come up empty and the change looks
+  unambiguous). Excluded first, counted as `no_article_number`.
+- **Both editions are `parsed`.** The resolver a system is measured against
+  only ever returns a `parsed` edition, so a change built on an edition
+  that never reached that stage would be scored as a system failure on an
+  item the corpus cannot express. Both version joins require it, so builder
+  and oracle share one edition population.
 - **The two editions do not overlap.** The old edition's
   `date_end_applicability` must be NULL, or strictly earlier than the new
   edition's `date_applicability`. Fedlex sometimes re-issues a
@@ -173,7 +183,7 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 
 | field | type | meaning |
 |---|---|---|
-| `id` | string | stable id, first 16 hex chars of `sha1(f"{lang}\|{sr_number}\|{e_id}\|{as_of}")` |
+| `id` | string | stable id, first 16 hex chars of `sha1(f"{lang}\|{act_id}\|{sr_number}\|{e_id}\|{as_of}")` — `act_id` is in the payload because more than one act can share an SR number, and two such acts amended in the same article on the same date would otherwise collide on one id |
 | `lang` | string | `de`, `fr`, or `it` |
 | `act_id` | integer | the exact `ch_act` row this item's editions come from — resolve editions by this, not by `sr_number` alone, since more than one act can share a SR number (a predecessor act and its successor filed under the same number) |
 | `sr_number` | string | the act's Systematische Rechtssammlung number (e.g. `"220"`) |
@@ -344,11 +354,19 @@ and it is not free. Four consequences to read a CH-PiT number with:
 `distractor_coverage <= 0.2`, and is tested first. `grounded_wrong_version`
 requires `gold_coverage <= 0.2` and either `distractor_coverage >= 0.6` or —
 when there are no distractor-only units at all, the pure-addition case above
-— `distractor_all_coverage >= 0.8`. That fallback threshold is deliberately
-higher than the 0.6 used everywhere else, in exchange for the lower 8-char
-unit floor described above: it requires the answer to actually cover the
-distractor's short, amendment-adjacent wording, not merely the unchanged
-paragraph sitting next to it. Everything else —
+— `distractor_all_coverage >= 0.8` **and** the answer containing at least
+one unit the distractor edition has and the gold text does not (the
+amendment's old wording, at the same 8-char floor). That fallback threshold
+is deliberately higher than the 0.6 used everywhere else, in exchange for
+the lower 8-char unit floor described above; the extra unit condition is
+what stops a long article's shared paragraphs from carrying the 0.8 share
+on their own (five shared paragraphs out of six units is 0.833). "Has and
+gold does not" is unit-set membership, not substring containment: a
+distractor paragraph nested inside a gold paragraph ("Er ist zu
+begründen." inside "Er ist zu begründen und zu unterzeichnen.") is exactly
+the wrong-version answer this fallback exists to catch. When no such unit
+exists at all — every distractor paragraph is also a gold paragraph, the
+amendment only appended text — the fallback cannot fire. Everything else —
 including an answer that clears neither floor, or one that clears 0.6 on
 one side while also leaking past 0.2 on the other — is `ungrounded`.
 
@@ -482,21 +500,20 @@ built. See `RESULTS.md` for the full year-by-year table.
   wording of its own to find and is dropped. A benchmark built this way
   therefore under-represents repeals relative to their share of real
   amendment traffic.
-- **The `distractor_all_coverage` fallback is a coarse signal, not proof the
-  amendment-adjacent wording specifically was found.** It is a share over
-  *all* of distractor's units (8-char floor, 0.8 threshold — see Scorer),
-  not just the short unit the amendment actually touched. On a
-  pure-addition item with several distractor units, an answer that
-  reproduces most of the unrelated, unchanged paragraphs without ever
-  quoting the changed one can still clear 0.8 if the other units carry
-  enough of the share on their own. The 8-char floor and the 0.8 threshold
-  close the common two-unit case — quoting a single unrelated paragraph is
-  no longer enough by itself to read `grounded_wrong_version` (previously
-  it was: an answer holding only paragraph 1 of a two-paragraph article
-  could score `distractor_all_coverage` 1.0 and get mislabelled) — but the
-  fallback remains structurally less precise than `distractor_coverage`'s
-  proper distractor-only partition, which is scoped to exactly the
-  discriminating wording.
+- **The `distractor_all_coverage` fallback is a coarser signal than
+  `distractor_coverage`.** Its share is measured over *all* of distractor's
+  units (8-char floor, 0.8 threshold — see Scorer), not just the unit the
+  amendment actually touched, so on a long article the shared paragraphs
+  dominate the arithmetic. The label no longer rests on that share alone —
+  the fallback additionally requires the answer to reproduce a unit gold
+  does not have, which is what makes it a statement about the amendment
+  rather than about the article — but the share itself is still a blunt
+  instrument next to `distractor_coverage`'s proper distractor-only
+  partition, which is scoped to exactly the discriminating wording. The
+  price of the extra condition is the pure-addition-of-whole-paragraphs
+  shape: when every distractor paragraph is also a gold paragraph, no
+  answer can be labelled `grounded_wrong_version` at all, and an answer
+  reciting the old edition reads `ungrounded`.
 - **`before` items are dated by the edition, not by the change.** An
   item's `as_of` is the gold edition's last day in force, which is the
   change date minus one day only when the two editions are contiguous.

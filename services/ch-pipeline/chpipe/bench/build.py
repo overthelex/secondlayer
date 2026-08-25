@@ -5,7 +5,7 @@ The top half (select_change / item_id / make_items) is pure -- no DB, no
 I/O -- given the rows the bottom half's SQL fetches, it decides whether a
 change is worth turning into a benchmark item, builds the item pair, and
 gives every item a stable id. The bottom half (build() / main()) is the
-Task 3 DB glue: two SQL queries per language against ch_act_change joined to
+Task 3 DB glue: three SQL queries per language against ch_act_change joined to
 ch_act/ch_act_version/ch_act_article/ch_act_alias, sampling in Python, and
 a JSONL + build-report.json write. See
 docs/superpowers/plans/2026-08-25-ch-pit-benchmark.md, "### Item (JSONL
@@ -76,15 +76,25 @@ def select_change(old_text: str, new_text: str) -> bool:
     return norm_old != norm_new
 
 
-def item_id(lang: str, sr_number: str, e_id: str, as_of: Any) -> str:
+def item_id(lang: str, act_id: Any, sr_number: str, e_id: str, as_of: Any) -> str:
     """Stable item id: first 16 hex chars of
-    sha1(f"{lang}|{sr_number}|{e_id}|{as_of}"). AS_OF may be a
+    sha1(f"{lang}|{act_id}|{sr_number}|{e_id}|{as_of}"). AS_OF may be a
     datetime.date (formatted as its ISO date, e.g. "2020-12-31") or an
     already-ISO-formatted string -- either way the hashed payload is the
     same string, so ids are stable however the caller passes the date.
+
+    ACT_ID IS PART OF THE PAYLOAD, not just sr_number. More than one ch_act
+    row can carry the same SR number (a predecessor act and its successor
+    filed under the same number -- the same reason make_items() stamps
+    act_id onto every item rather than letting consumers re-derive an act
+    from sr_number). Two such acts amended in the same article number on
+    the same date would otherwise collide on one id, and
+    report.load_items_by_id() -- an `items[item["id"]] = item` assignment --
+    would silently keep one of the two and drop the other's results from
+    every report.
     """
     as_of_str = as_of.isoformat() if isinstance(as_of, (datetime.date, datetime.datetime)) else str(as_of)
-    payload = f"{lang}|{sr_number}|{e_id}|{as_of_str}"
+    payload = f"{lang}|{act_id}|{sr_number}|{e_id}|{as_of_str}"
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -234,7 +244,7 @@ def make_items(
             continue
 
         items.append({
-            "id": item_id(lang, sr_number, e_id, as_of),
+            "id": item_id(lang, change_row["act_id"], sr_number, e_id, as_of),
             "lang": lang,
             "act_id": change_row["act_id"],
             "sr_number": sr_number,
@@ -259,12 +269,13 @@ def make_items(
 # Task 3: DB glue
 # ---------------------------------------------------------------------------
 #
-# Two SQL queries per language -- _CHANGE_SQL, which fetches the usable
-# rows, and _AMBIGUOUS_COUNT_SQL, which counts what the first one's
-# ambiguity guard excluded (see below). _CHANGE_SQL: ch_act_change (a
-# 'modified' row in that language) joined to its act (in force only -- enforcement_status = 0),
-# the two editions either side of the change, and the article text in each
-# edition, keyed on (version_id, e_id) exactly like select_change/make_items
+# Three SQL queries per language -- _CHANGE_SQL, which fetches the usable
+# rows, and _AMBIGUOUS_COUNT_SQL / _NO_ARTICLE_NUMBER_COUNT_SQL, which count
+# what the first one's two guards excluded (see below). _CHANGE_SQL:
+# ch_act_change (a 'modified' row in that language) joined to its act (in
+# force only -- enforcement_status = 0),
+# the two editions either side of the change (both `parsed`), and the
+# article text in each edition, keyed on (version_id, e_id) exactly like select_change/make_items
 # above expect. The abbreviation is resolved in the same query rather than a
 # second round-trip: German reads ch_act.abbreviation directly; French and
 # Italian look it up in ch_act_alias for that language, preferring a
@@ -293,6 +304,19 @@ def make_items(
 # the same predicate over the same joins) under the `ambiguous_article` skip
 # reason, so build-report.json shows how much of the corpus this costs
 # rather than hiding it in a smaller `changes_considered`.
+#
+# A NULL ARTICLE NUMBER IS EXCLUDED BEFORE ANY OF THAT (_HAS_ARTICLE_NUMBER).
+# The ambiguity guard is written as two NOT EXISTS subqueries comparing
+# `x.article_number = ch.article_number`, and SQL NULL compares equal to
+# nothing: for a change whose article number never parsed, both subqueries
+# find no row and the change sails through as "unambiguous". The builder
+# would then ship an item whose question names article `None` -- literally
+# unanswerable, and scored as a model failure. So the NULL test runs first,
+# as its own predicate with its own skip reason (`no_article_number`), which
+# also keeps the two populations disjoint: a NULL-numbered change must not
+# inflate `ambiguous_article`, and vice versa.
+_HAS_ARTICLE_NUMBER = "ch.article_number IS NOT NULL"
+
 _UNAMBIGUOUS = """
     ch.e_id NOT LIKE '%%/%%'
     AND NOT EXISTS (
@@ -307,14 +331,26 @@ _UNAMBIGUOUS = """
            AND x.e_id <> ch.e_id)
 """
 
-# The FROM/JOIN spine both queries below share, so the row set they filter
-# is the same one by construction rather than by two copies staying in sync.
+# The FROM/JOIN spine all three queries below share, so the row set they
+# filter is the same one by construction rather than by copies staying in
+# sync.
+#
+# BOTH VERSION JOINS REQUIRE stage = 'parsed'. run_oracle.py's _EDITION_SQL
+# -- like the product tool it mirrors -- only ever resolves a `parsed`
+# edition, so an item built on an edition that never reached that stage is
+# one the oracle can only answer `no_edition_for_date`: a dataset defect
+# reported as a system failure. Filtering here rather than in Python keeps
+# the builder's population and the oracle's population the same by
+# construction, and keeps `changes_considered` honest -- such a change is
+# not a change this benchmark declined, it is one the corpus cannot express.
 _CHANGE_FROM = """
 FROM ch_act_change ch
 JOIN ch_act a
     ON a.act_id = ch.act_id AND a.enforcement_status = 0
-JOIN ch_act_version old_ver ON old_ver.version_id = ch.from_version_id
-JOIN ch_act_version new_ver ON new_ver.version_id = ch.to_version_id
+JOIN ch_act_version old_ver
+    ON old_ver.version_id = ch.from_version_id AND old_ver.stage = 'parsed'
+JOIN ch_act_version new_ver
+    ON new_ver.version_id = ch.to_version_id AND new_ver.stage = 'parsed'
 JOIN ch_act_article old_art
     ON old_art.version_id = ch.from_version_id AND old_art.e_id = ch.e_id
 JOIN ch_act_article new_art
@@ -348,6 +384,7 @@ LEFT JOIN LATERAL (
      LIMIT 1
 ) alias ON %(lang)s <> 'de'
 WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
+  AND """ + _HAS_ARTICLE_NUMBER + """
   AND (""" + _UNAMBIGUOUS + """)
 ORDER BY ch.act_id, ch.change_id
 """
@@ -359,7 +396,19 @@ _AMBIGUOUS_COUNT_SQL = """
 SELECT count(*) AS n
 """ + _CHANGE_FROM + """
 WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
+  AND """ + _HAS_ARTICLE_NUMBER + """
   AND NOT (""" + _UNAMBIGUOUS + """)
+"""
+
+# How many changes the NULL-article-number guard threw away -- same joins,
+# the negation of _HAS_ARTICLE_NUMBER. Counted separately from
+# _AMBIGUOUS_COUNT_SQL (which now also requires a non-NULL number) so the
+# two exclusions never account for the same row twice.
+_NO_ARTICLE_NUMBER_COUNT_SQL = """
+SELECT count(*) AS n
+""" + _CHANGE_FROM + """
+WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
+  AND ch.article_number IS NULL
 """
 
 # Skip reasons build() itself can add to make_items()'s own
@@ -368,6 +417,7 @@ WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
 _SKIP_NO_ABBREVIATION = "no_abbreviation"
 _SKIP_IDENTICAL = "identical_or_short"
 _SKIP_AMBIGUOUS = "ambiguous_article"
+_SKIP_NO_ARTICLE_NUMBER = "no_article_number"
 _SKIP_CAPPED = "capped"
 
 
@@ -397,7 +447,7 @@ class BuildReport:
 
 def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
                 per_act_cap: int, rng: random.Random,
-                ambiguous: int = 0,
+                ambiguous: int = 0, no_article_number: int = 0,
                 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """No I/O: given the rows _CHANGE_SQL already fetched for one language,
     run the full selection pipeline and return (items, lang_report).
@@ -417,15 +467,18 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
     very end, once selection is finished, so id order never influences
     which items get kept.
 
-    AMBIGUOUS is the count build() got from _AMBIGUOUS_COUNT_SQL: changes
-    the SQL already excluded for resolving to more than one article text
-    (see _UNAMBIGUOUS). It is added to both `changes_considered` and the
-    `ambiguous_article` skip count, so `changes_considered` stays "every
-    'modified' change on an in-force act in this language" and the skip
-    reasons account for the difference, rather than the exclusion showing
-    up as a mysteriously smaller total.
+    AMBIGUOUS and NO_ARTICLE_NUMBER are the counts build() got from
+    _AMBIGUOUS_COUNT_SQL and _NO_ARTICLE_NUMBER_COUNT_SQL: changes the SQL
+    already excluded for resolving to more than one article text (see
+    _UNAMBIGUOUS) and for having no parsed article number at all (see
+    _HAS_ARTICLE_NUMBER). Each is added to both `changes_considered` and its
+    own skip count, so `changes_considered` stays "every 'modified' change
+    on an in-force act with two parsed editions in this language" and the
+    skip reasons account for the difference, rather than the exclusions
+    showing up as a mysteriously smaller total. The two SQL predicates are
+    disjoint, so no change is counted under both.
     """
-    changes_considered = len(rows) + ambiguous
+    changes_considered = len(rows) + ambiguous + no_article_number
     skipped_counts: dict[str, int] = {}
 
     def _bump(reason: str, n: int = 1) -> None:
@@ -433,6 +486,8 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
 
     if ambiguous:
         _bump(_SKIP_AMBIGUOUS, ambiguous)
+    if no_article_number:
+        _bump(_SKIP_NO_ARTICLE_NUMBER, no_article_number)
 
     eligible: list[Mapping[str, Any]] = []
     for row in rows:
@@ -547,10 +602,28 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
                 rows = cur.fetchall()
                 cur.execute(_AMBIGUOUS_COUNT_SQL, {"lang": lang})
                 ambiguous = cur.fetchone()["n"]
+                cur.execute(_NO_ARTICLE_NUMBER_COUNT_SQL, {"lang": lang})
+                no_article_number = cur.fetchone()["n"]
             rng = random.Random(f"{seed}:{lang}")
             items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng,
-                                             ambiguous=ambiguous)
+                                             ambiguous=ambiguous,
+                                             no_article_number=no_article_number)
             per_lang_report[lang] = lang_report
+
+            # Ids are the join key every consumer uses -- report.py builds
+            # {id: item} with a plain assignment, so a collision drops one
+            # item's results from every report without a word. item_id()'s
+            # payload is meant to make that impossible; if it ever does
+            # happen, fail here rather than write a file whose ids do not
+            # identify its items.
+            seen: set[str] = set()
+            for item in items:
+                if item["id"] in seen:
+                    raise ValueError(
+                        f"duplicate item id {item['id']!r} in bench-{lang}.jsonl "
+                        f"(act_id={item['act_id']} e_id={item['e_id']!r} "
+                        f"as_of={item['as_of']!r})")
+                seen.add(item["id"])
 
             out_file = out_path / f"bench-{lang}.jsonl"
             with out_file.open("w", encoding="utf-8") as f:
