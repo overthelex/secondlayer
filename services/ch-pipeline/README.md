@@ -1185,6 +1185,9 @@ apart from a "grounded in the wrong edition" one. See
 every JSONL field, the scorer's thresholds and why they are set where they
 are, the licence, and known limits. This section is only the commands.
 
+First run results (build 2026-08-25, oracle 1.000, Haiku 4.5 0.000, Sonnet
+4.6 0.003) are in `chpipe/bench/RESULTS.md`.
+
 Not a `run-stage.sh` dispatch target — the benchmark is an occasional,
 hand-triggered export and evaluation run, not a nightly pipeline stage.
 Run each step from `services/ch-pipeline`.
