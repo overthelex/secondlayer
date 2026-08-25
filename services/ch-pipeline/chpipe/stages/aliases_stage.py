@@ -4,7 +4,7 @@ idempotent:
   fedlex_abbreviation  ch_act.abbreviation, the German abbreviation Fedlex
                        supplies directly on the act ("OR", "ZGB"). German
                        only -- Fedlex does not carry an fr/it equivalent
-                       column, see the migration 197 note on that column.
+                       column (acts_stage writes only the German titleShort).
 
   title_paren          the abbreviation Fedlex puts in parentheses at the
                        end of title_de/title_fr/title_it, via
@@ -43,7 +43,7 @@ _FROM_ABBREVIATION = """
 INSERT INTO ch_act_alias (abbr, lang, sr_number, source)
 SELECT abbreviation, 'de', sr_number, 'fedlex_abbreviation'
   FROM ch_act
- WHERE abbreviation IS NOT NULL AND sr_number IS NOT NULL
+ WHERE abbreviation IS NOT NULL AND abbreviation <> '' AND sr_number IS NOT NULL
 ON CONFLICT DO NOTHING
 """
 
