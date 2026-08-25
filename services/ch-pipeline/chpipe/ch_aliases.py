@@ -80,8 +80,11 @@ CURATED: dict[str, dict[str, tuple[str, ...]]] = {
     "272": {"de": ("ZPO",), "fr": ("CPC",), "it": ("CPC",)},
     "281.1": {"de": ("SchKG",), "fr": ("LP",), "it": ("LEF",)},
     "311.0": {"de": ("StGB",), "fr": ("CP",), "it": ("CP",)},
-    "312.0": {"de": ("StPO",), "fr": ("CPP",), "it": ("CPP",)},
-    "173.110": {"de": ("BGG",), "fr": ("LTF",), "it": ("LTF",)},
+    # 312.0 carries both the StPO (2011-) and the repealed Bundesstrafrechtspflege
+    # (BStP / PPF / PP); the resolver picks the act in force on the decision date.
+    "312.0": {"de": ("StPO", "BStP"), "fr": ("CPP", "PPF"), "it": ("CPP", "PP")},
+    # 173.110 also names the repealed Bundesrechtspflegegesetz (OG / OJ / OG).
+    "173.110": {"de": ("BGG", "OG"), "fr": ("LTF", "OJ"), "it": ("LTF", "OG")},
     "172.021": {"de": ("VwVG",), "fr": ("PA",), "it": ("PA",)},
     "173.32": {"de": ("VGG",), "fr": ("LTAF",), "it": ("LTAF",)},
     "235.1": {"de": ("DSG",), "fr": ("LPD",), "it": ("LPD",)},
@@ -92,7 +95,8 @@ CURATED: dict[str, dict[str, tuple[str, ...]]] = {
     "832.20": {"de": ("UVG",), "fr": ("LAA",), "it": ("LAINF",)},
     "831.40": {"de": ("BVG",), "fr": ("LPP",), "it": ("LPP",)},
     "837.0": {"de": ("AVIG",), "fr": ("LACI",), "it": ("LADI",)},
-    "142.20": {"de": ("AIG",), "fr": ("LEI",), "it": ("LStrI",)},
+    # 142.20: AIG since 2019, AuG 2008-2018, ANAG before; fr LEI / LEtr / LSEE.
+    "142.20": {"de": ("AIG", "AuG", "ANAG"), "fr": ("LEI", "LEtr", "LSEE"), "it": ("LStrI", "LStr", "LDDS")},
     "142.31": {"de": ("AsylG",), "fr": ("LAsi",), "it": ("LAsi",)},
     # 641.10 (StG / LT) is deliberately omitted: it names a cantonal tax
     # act, not anything ch_act carries -- see the module docstring.
