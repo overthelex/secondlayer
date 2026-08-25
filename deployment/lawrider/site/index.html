@@ -107,6 +107,15 @@
   .papers li{padding:14px 0;border-bottom:1px solid var(--band-rule);font-size:15px}
   .papers .id{font-size:12px;letter-spacing:.06em;color:var(--gold);display:block;margin-bottom:3px;font-variant-numeric:tabular-nums}
 
+  .chart{margin:24px 0 8px}
+  .chart svg{width:100%;height:auto;display:block;overflow:visible}
+  .chart .bar{fill:var(--gold)}
+  .chart .bar.ytd{opacity:.55}
+  .chart .bar.future{fill:none;stroke:var(--gold);stroke-width:1.5;stroke-dasharray:3 3}
+  .chart .axis{stroke:var(--rule);stroke-width:1}
+  .chart text{font-family:var(--sans);font-size:12px;fill:var(--muted)}
+  .chart .val{font-variant-numeric:tabular-nums;fill:var(--ink)}
+  .chart figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.5}
   .steps{list-style:none;padding:0;margin:18px 0 0;counter-reset:s}
   .steps li{counter-increment:s;position:relative;padding:0 0 18px 34px;font-size:15.5px;color:var(--muted)}
   .steps li::before{
@@ -203,9 +212,11 @@
       <tr><td data-i18n="spec2">Jurisdictions</td><td>20+</td></tr>
       <tr><td data-i18n="spec3">Citation graph</td><td data-i18n="spec3v">330,000,000 edges</td></tr>
       <tr><td data-i18n="spec4">In production since</td><td data-i18n="spec4v">February 2026</td></tr>
+      <tr><td data-i18n="spec6">Swiss court decisions, full text</td><td data-i18n="spec6v">1,200,000+</td></tr>
+      <tr><td data-i18n="spec7">Swiss federal acts in force, full text</td><td data-i18n="spec7v">5,075 of 5,075</td></tr>
       <tr><td data-i18n="spec5">Tool calls against the corpus, Jun–Aug 2026</td><td>2,050</td></tr>
     </table>
-    <p class="note" data-i18n="whatNote">Swiss federal legislation is indexed in full; roughly a quarter of it is held at full text today. We would rather state that than imply a finished cross-border product.</p>
+    <p class="note" data-i18n="whatNote">Swiss federal law is held in full: every act in force, in German, French and Italian, as 37,607 consolidated versions with their in-force intervals, 1.76 million articles in all. Court decisions come from every federal and cantonal court that publishes, updated nightly. We would rather state the scope than imply a finished cross-border product.</p>
   </section>
 
   <div class="band">
@@ -225,12 +236,43 @@
     <p class="label" data-i18n="curLabel">Current work</p>
     <h2 data-i18n="curH2">Point-in-Time Swiss Law</h2>
     <p data-i18n="curP1">A statutory article is not one document. Article 336 of the Code of Obligations in 2015 and in 2026 are different texts under the same identifier. Fedlex publishes every consolidated version with its in-force dates; a corpus scraped from the web keeps one snapshot and throws the interval away. A model trained on it will state repealed law with total confidence, and nothing in the output marks it as dead.</p>
+    <figure class="chart">
+      <svg viewBox="0 0 660 230" role="img" aria-labelledby="chartTitle">
+        <title id="chartTitle" data-i18n="curChartTitle">Consolidated versions of Swiss federal acts entering into force, per year</title>
+        <line class="axis" x1="8" y1="196.0" x2="652" y2="196.0"/>
+        <rect class="bar" x="8.0" y="114.5" width="68.2" height="81.5" rx="1"/>
+        <text class="val" x="42.1" y="107.5" text-anchor="middle">671</text>
+        <text class="yr" x="42.1" y="218" text-anchor="middle">2020</text>
+        <rect class="bar" x="90.2" y="51.5" width="68.2" height="144.5" rx="1"/>
+        <text class="val" x="124.4" y="44.5" text-anchor="middle">1,190</text>
+        <text class="yr" x="124.4" y="218" text-anchor="middle">2021</text>
+        <rect class="bar" x="172.5" y="42.6" width="68.2" height="153.4" rx="1"/>
+        <text class="val" x="206.6" y="35.6" text-anchor="middle">1,263</text>
+        <text class="yr" x="206.6" y="218" text-anchor="middle">2022</text>
+        <rect class="bar" x="254.8" y="40.7" width="68.2" height="155.3" rx="1"/>
+        <text class="val" x="288.9" y="33.7" text-anchor="middle">1,279</text>
+        <text class="yr" x="288.9" y="218" text-anchor="middle">2023</text>
+        <rect class="bar" x="337.0" y="47.7" width="68.2" height="148.3" rx="1"/>
+        <text class="val" x="371.1" y="40.7" text-anchor="middle">1,221</text>
+        <text class="yr" x="371.1" y="218" text-anchor="middle">2024</text>
+        <rect class="bar" x="419.2" y="70.4" width="68.2" height="125.6" rx="1"/>
+        <text class="val" x="453.4" y="63.4" text-anchor="middle">1,034</text>
+        <text class="yr" x="453.4" y="218" text-anchor="middle">2025</text>
+        <rect class="bar ytd" x="501.5" y="90.6" width="68.2" height="105.4" rx="1"/>
+        <text class="val" x="535.6" y="83.6" text-anchor="middle">868</text>
+        <text class="yr" x="535.6" y="218" text-anchor="middle">2026</text>
+        <rect class="bar future" x="583.8" y="181.8" width="68.2" height="14.2" rx="1"/>
+        <text class="val" x="617.9" y="174.8" text-anchor="middle">117</text>
+        <text class="yr" x="617.9" y="218" text-anchor="middle">2027+</text>
+      </svg>
+      <figcaption data-i18n="curChartCap">Consolidated versions of Swiss federal acts entering into force, per year, counted from the versions Fedlex publishes in machine-readable form: complete for recent years, partial before 2020. 2026 is the year to date; 117 versions are already scheduled for 2027 and later.</figcaption>
+    </figure>
     <ol class="steps">
-      <li data-i18n="step1"><b>Ingest.</b> Every consolidated version from Fedlex, in German, French and Italian, with source, licence, amending act and in-force interval recorded at ingest.</li>
-      <li data-i18n="step2"><b>Diff.</b> Consecutive versions compared into a machine-readable amendment ledger, so any text can be traced to what it superseded and when.</li>
-      <li data-i18n="step3"><b>Measure.</b> An open benchmark and scorer that answer one question: was the answer grounded in the version of the article valid on the date asked?</li>
+      <li data-i18n="step1"><b>Ingest.</b> Done. Every consolidated version Fedlex publishes in machine-readable form, in German, French and Italian, with source, licence, amending act and in-force interval recorded at ingest: 37,607 versions of 17,293 acts.</li>
+      <li data-i18n="step2"><b>Diff.</b> Done. Consecutive versions compared into a machine-readable amendment ledger, so any text can be traced to what it superseded and when: roughly 25,000 article-level changes per language so far.</li>
+      <li data-i18n="step3"><b>Measure.</b> In progress. An open benchmark and scorer that answer one question: was the answer grounded in the version of the article valid on the date asked?</li>
     </ol>
-    <p class="note" data-i18n="curNote">Corpus and scorer are published openly, so the numbers can be re-run by anyone who doubts them.</p>
+    <p class="note" data-i18n="curNote">Corpus and scorer will be published openly, so the numbers can be re-run by anyone who doubts them.</p>
   </section>
 
   <div class="bleed"></div>
@@ -270,7 +312,9 @@
       spec3:"Zitationsgraph", spec3v:"330'000'000 Kanten",
       spec4:"Produktiv seit", spec4v:"Februar 2026",
       spec5:"Werkzeugaufrufe auf dem Korpus, Jun–Aug 2026",
-      whatNote:"Das schweizerische Bundesrecht ist vollständig erschlossen; rund ein Viertel liegt heute im Volltext vor. Wir sagen das lieber, als ein fertiges grenzüberschreitendes Produkt zu suggerieren.",
+      spec6:"Schweizer Gerichtsentscheide im Volltext", spec6v:"1'200'000+",
+      spec7:"Geltende Bundeserlasse im Volltext", spec7v:"5'075 von 5'075",
+      whatNote:"Das schweizerische Bundesrecht liegt vollständig vor: jeder geltende Erlass, auf Deutsch, Französisch und Italienisch, als 37'607 konsolidierte Fassungen mit ihren Geltungsintervallen, insgesamt 1,76 Millionen Artikel. Die Gerichtsentscheide stammen von allen eidgenössischen und kantonalen Gerichten, die publizieren, und werden nächtlich nachgeführt. Wir nennen lieber den Umfang, als ein fertiges grenzüberschreitendes Produkt zu suggerieren.",
       evLabel:"Belege",
       evH2:"Wir veröffentlichen die Messwerte, auch die unvorteilhaften",
       evP1:"Vertrauenswürdigkeit ist keine Behauptung, die wir über unser System aufstellen. Sie ist eine Grösse, die wir bei jeder Anfrage berechnen und protokollieren. <strong>In den letzten dreissig Tagen lag der Belegtreue-Wert im Mittel bei 93 von 100.</strong> Wenn er sich bewegt, sagen wir es.",
@@ -280,10 +324,12 @@
       curLabel:"Aktuelle Arbeit",
       curH2:"Schweizer Recht, stichtagsgenau",
       curP1:"Ein Gesetzesartikel ist nicht ein Dokument. Art. 336 OR im Jahr 2015 und im Jahr 2026 sind verschiedene Texte unter derselben Bezeichnung. Fedlex veröffentlicht jede konsolidierte Fassung mit ihren Inkraftsetzungsdaten; ein aus dem Web geschöpftes Korpus behält eine Momentaufnahme und wirft das Zeitintervall weg. Ein darauf trainiertes Modell gibt aufgehobenes Recht mit voller Überzeugung wieder, und nichts in der Ausgabe weist es als tot aus.",
-      step1:"<b>Erfassen.</b> Jede konsolidierte Fassung aus Fedlex, auf Deutsch, Französisch und Italienisch, mit Quelle, Lizenz, Änderungserlass und Geltungsintervall bereits bei der Aufnahme.",
-      step2:"<b>Vergleichen.</b> Aufeinanderfolgende Fassungen werden zu einem maschinenlesbaren Änderungsjournal verglichen, sodass sich zu jedem Text nachvollziehen lässt, was er wann abgelöst hat.",
-      step3:"<b>Messen.</b> Ein offener Benchmark samt Bewertungsprogramm für genau eine Frage: stützte sich die Antwort auf jene Fassung des Artikels, die am gefragten Stichtag galt?",
-      curNote:"Korpus und Bewertungsprogramm werden offen veröffentlicht, damit die Zahlen von jedem nachgerechnet werden können, der ihnen misstraut.",
+      curChartTitle:"In Kraft getretene konsolidierte Fassungen von Bundeserlassen, pro Jahr",
+      curChartCap:"In Kraft getretene konsolidierte Fassungen von Bundeserlassen, pro Jahr, gezählt anhand der Fassungen, die Fedlex maschinenlesbar publiziert: vollständig für die letzten Jahre, lückenhaft vor 2020. 2026 bis heute; 117 Fassungen sind bereits für 2027 und später terminiert.",
+      step1:"<b>Erfassen.</b> Erledigt. Jede konsolidierte Fassung, die Fedlex maschinenlesbar publiziert, auf Deutsch, Französisch und Italienisch, mit Quelle, Lizenz, Änderungserlass und Geltungsintervall bereits bei der Aufnahme: 37'607 Fassungen von 17'293 Erlassen.",
+      step2:"<b>Vergleichen.</b> Erledigt. Aufeinanderfolgende Fassungen werden zu einem maschinenlesbaren Änderungsjournal verglichen, sodass sich zu jedem Text nachvollziehen lässt, was er wann abgelöst hat: bisher rund 25'000 Änderungen auf Artikelebene je Sprache.",
+      step3:"<b>Messen.</b> In Arbeit. Ein offener Benchmark samt Bewertungsprogramm für genau eine Frage: stützte sich die Antwort auf jene Fassung des Artikels, die am gefragten Stichtag galt?",
+      curNote:"Korpus und Bewertungsprogramm werden offen veröffentlicht werden, damit die Zahlen von jedem nachgerechnet werden können, der ihnen misstraut.",
       conLabel:"Kontakt", conH2:"Sprechen Sie mit uns",
       conP1:"Am nützlichsten sind wir für Menschen, die ohnehin vermuten, dass eine KI-Antwort zum Recht geprüft gehört, und die eine Zahl dafür wollen, wie oft sie danebenliegt.",
       conEmail:"E-Mail", conBased:"Sitz", conBasedV:"Zürich, Schweiz",
@@ -303,7 +349,9 @@
       spec3:"Graphe de citations", spec3v:"330 000 000 d'arêtes",
       spec4:"En production depuis", spec4v:"février 2026",
       spec5:"Appels d'outils sur le corpus, juin–août 2026",
-      whatNote:"Le droit fédéral suisse est indexé intégralement ; environ un quart est aujourd'hui disponible en texte intégral. Nous préférons le dire plutôt que laisser croire à un produit transfrontalier achevé.",
+      spec6:"Décisions judiciaires suisses en texte intégral", spec6v:"1 200 000+",
+      spec7:"Actes fédéraux en vigueur en texte intégral", spec7v:"5 075 sur 5 075",
+      whatNote:"Le droit fédéral suisse est disponible dans son intégralité : chaque acte en vigueur, en allemand, français et italien, sous forme de 37 607 versions consolidées avec leurs intervalles de validité, soit 1,76 million d'articles. Les décisions judiciaires proviennent de tous les tribunaux fédéraux et cantonaux qui publient, avec une mise à jour chaque nuit. Nous préférons énoncer le périmètre plutôt que laisser croire à un produit transfrontalier achevé.",
       evLabel:"Preuves",
       evH2:"Nous publions les mesures, y compris celles qui nous desservent",
       evP1:"La fiabilité n'est pas une affirmation que nous portons sur notre système. C'est une grandeur que nous calculons à chaque requête et que nous consignons. <strong>Sur les trente derniers jours, le score d'ancrage s'établit en moyenne à 93 sur 100.</strong> Quand il bouge, nous le disons.",
@@ -313,10 +361,12 @@
       curLabel:"Travaux en cours",
       curH2:"Le droit suisse à la date exacte",
       curP1:"Un article de loi n'est pas un document. L'art. 336 CO en 2015 et en 2026 sont deux textes différents sous la même référence. Fedlex publie chaque version consolidée avec ses dates d'entrée en vigueur ; un corpus aspiré sur le web n'en garde qu'un instantané et jette l'intervalle. Un modèle entraîné là-dessus énoncera du droit abrogé avec un aplomb total, et rien dans la sortie ne signale qu'il est mort.",
-      step1:"<b>Collecter.</b> Chaque version consolidée de Fedlex, en allemand, français et italien, avec source, licence, acte modificateur et intervalle de validité enregistrés dès la collecte.",
-      step2:"<b>Comparer.</b> Les versions successives sont comparées en un journal des modifications lisible par machine, de sorte que tout texte se rattache à ce qu'il a remplacé et à quelle date.",
-      step3:"<b>Mesurer.</b> Un référentiel ouvert et son évaluateur, pour une seule question : la réponse s'appuyait-elle sur la version de l'article en vigueur à la date demandée ?",
-      curNote:"Corpus et évaluateur sont publiés ouvertement, afin que les chiffres puissent être refaits par quiconque en doute.",
+      curChartTitle:"Versions consolidées d'actes fédéraux suisses entrées en vigueur, par année",
+      curChartCap:"Versions consolidées d'actes fédéraux suisses entrées en vigueur, par année, comptées à partir des versions que Fedlex publie sous forme lisible par machine : complètes pour les dernières années, partielles avant 2020. 2026 : année en cours ; 117 versions sont déjà programmées pour 2027 et au-delà.",
+      step1:"<b>Collecter.</b> Fait. Chaque version consolidée que Fedlex publie sous forme lisible par machine, en allemand, français et italien, avec source, licence, acte modificateur et intervalle de validité enregistrés dès la collecte : 37 607 versions de 17 293 actes.",
+      step2:"<b>Comparer.</b> Fait. Les versions successives sont comparées en un journal des modifications lisible par machine, de sorte que tout texte se rattache à ce qu'il a remplacé et à quelle date : environ 25 000 modifications au niveau de l'article par langue à ce jour.",
+      step3:"<b>Mesurer.</b> En cours. Un référentiel ouvert et son évaluateur, pour une seule question : la réponse s'appuyait-elle sur la version de l'article en vigueur à la date demandée ?",
+      curNote:"Corpus et évaluateur seront publiés ouvertement, afin que les chiffres puissent être refaits par quiconque en doute.",
       conLabel:"Contact", conH2:"Parlons-en",
       conP1:"Nous sommes surtout utiles à ceux qui soupçonnent déjà qu'une réponse d'IA sur le droit mérite d'être vérifiée, et qui veulent un chiffre sur la fréquence de ses erreurs.",
       conEmail:"Courriel", conBased:"Siège", conBasedV:"Zurich, Suisse",
