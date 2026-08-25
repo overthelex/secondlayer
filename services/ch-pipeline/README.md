@@ -1196,7 +1196,8 @@ Run each step from `services/ch-pipeline`.
 Reads `ch_act_change` per language, applies the selection rules (modified
 rows only, both texts >= 200 normalised chars and not the same string once
 normalised, the act in force, the article number unambiguous within both
-editions, an abbreviation resolvable for that language, at least one
+editions, an abbreviation resolvable for that language, the two editions
+not overlapping in the days they claim to be in force, at least one
 discriminating unit — see CARD.md, "Construction"), samples down to the
 caps (50 changes per act, 5,000 items per language, seeded per language),
 and writes `bench-de.jsonl`, `bench-fr.jsonl`, `bench-it.jsonl` plus
@@ -1210,7 +1211,11 @@ Each surviving change yields an `after` item dated on the change itself and
 a `before` item dated on the **old edition's last day in force** (its
 inclusive `date_end_applicability`) — not simply the change date minus one
 day, which can fall in a gap where Fedlex published no consolidation and no
-edition answers the question at all. Whichever half of a pair has the
+edition answers the question at all. A change whose old edition's end date
+reaches into the new edition's validity is dropped whole
+(`overlapping_editions`): on such a day two editions are in force at once
+and a covering lookup returns the newer one, so no date is left to ask
+about. Whichever half of a pair has the
 shorter, wholly-contained text as its gold is dropped (the `after` half of a
 deletion, the `before` half of an addition): there is no wording there that
 could tell a correct answer from a wrong one. Both rules are spelled out in

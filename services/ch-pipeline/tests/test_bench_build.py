@@ -312,6 +312,68 @@ def test_make_items_drops_the_half_whose_gold_is_a_subset_of_the_distractor():
     assert skipped[0]["as_of"] == "2021-01-01"
 
 
+# --- overlapping editions ---------------------------------------------------
+#
+# Fedlex sometimes re-issues a consolidation without retracting the previous
+# edition's end date, so the old edition's date_end_applicability lands ON
+# or AFTER the new edition's date_applicability and both claim the same day
+# as in force. A covering lookup on the old edition's own last day then
+# returns the NEWER edition, and the `before` item's gold answer scores
+# grounded_wrong_version against its own gold: 13 items on the prod build.
+# There is no date left to ask about, so the whole change is dropped.
+
+
+def test_make_items_drops_change_whose_editions_overlap():
+    # old edition ends 2021-01-05, new edition starts 2021-01-01: the two
+    # overlap by five days, and 2021-01-05 resolves to the NEW edition.
+    old_row = dict(OLD_ROW, date_end_applicability=datetime.date(2021, 1, 5))
+
+    items, skipped = build.make_items(CHANGE_ROW, old_row, NEW_ROW, "OR", "de")
+
+    assert items == []
+    assert [s["kind"] for s in skipped] == ["before", "after"]
+    assert {s["reason"] for s in skipped} == {"overlapping_editions"}
+    assert skipped[0]["e_id"] == "art_336"
+    assert skipped[0]["sr_number"] == "220"
+
+
+def test_make_items_drops_change_whose_editions_abut_on_the_same_day():
+    # The boundary case: end date == the new edition's start date. Still an
+    # overlap, because date_end_applicability is INCLUSIVE -- both editions
+    # are in force on 2021-01-01.
+    old_row = dict(OLD_ROW, date_end_applicability=datetime.date(2021, 1, 1))
+
+    items, skipped = build.make_items(CHANGE_ROW, old_row, NEW_ROW, "OR", "de")
+
+    assert items == []
+    assert all(s["reason"] == "overlapping_editions" for s in skipped)
+
+
+def test_make_items_keeps_change_whose_editions_do_not_overlap():
+    # The normal case, and the gap case (an edition that ends months before
+    # the next one starts) -- neither is an overlap and both are kept.
+    for end in (datetime.date(2020, 12, 31), datetime.date(2020, 6, 30)):
+        items, skipped = build.make_items(
+            CHANGE_ROW, dict(OLD_ROW, date_end_applicability=end), NEW_ROW,
+            "OR", "de")
+        assert [item["kind"] for item in items] == ["before", "after"]
+        assert skipped == []
+
+
+def test_build_lang_counts_overlapping_editions_in_the_report():
+    rows = [dict(_two_item_row(i),
+                 old_date_end_applicability=datetime.date(2021, 1, 5))
+            for i in (1, 2)]
+    items, lang_report = build._build_lang(
+        rows, "de", per_lang_cap=10, per_act_cap=50, rng=random.Random(0))
+
+    assert items == []
+    # one record per dropped half, the same convention no_discriminating_unit
+    # is counted under
+    assert lang_report["skipped"]["overlapping_editions"] == 4
+    assert lang_report["selected"] == 2
+
+
 # --- _build_lang: the language cap counts ITEMS, not changes ----------------
 #
 # A change contributes at most two items, but often only one (the other

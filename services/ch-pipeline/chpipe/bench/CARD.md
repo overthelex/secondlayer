@@ -97,6 +97,20 @@ pair only if all of the following hold:
   containing `/`), and changes on any number that some other `e_id` in
   either edition also carries, are excluded and counted as
   `ambiguous_article`.
+- **The two editions do not overlap.** The old edition's
+  `date_end_applicability` must be NULL, or strictly earlier than the new
+  edition's `date_applicability`. Fedlex sometimes re-issues a
+  consolidation without retracting the previous edition's end date, leaving
+  two editions that both claim the same day (or days) as in force. Since
+  `date_end_applicability` is inclusive, an end date equal to the new
+  edition's start date is already an overlap. For such a change there is no
+  date the `before` question can ask about: a covering lookup on the old
+  edition's own last day returns the NEWER edition, and the item's gold
+  answer scores `grounded_wrong_version` against its own gold (13 items on
+  the prod build before this rule). Both halves are dropped, not just
+  `before` — the same overlap makes the change date itself ambiguous, with
+  only the resolver's ordering deciding which edition wins. Counted as
+  `overlapping_editions`.
 - **The edition pair has at least one discriminating unit.** Splitting both
   texts into paragraph- or sentence-level units (see Scorer), the edition
   valid on the query date must contain at least one unit that is *not*
@@ -147,8 +161,8 @@ regardless of whether French was built alongside German and Italian or on
 its own.
 
 Every skip reason above (`no_abbreviation`, `identical_or_short`,
-`ambiguous_article`, `no_discriminating_unit`, plus `capped` for anything
-left unused by the two caps) is counted in `build-report.json`, per
+`ambiguous_article`, `overlapping_editions`, `no_discriminating_unit`, plus
+`capped` for anything left unused by the two caps) is counted in `build-report.json`, per
 language, alongside `changes_considered`, `selected` and `items`.
 `changes_considered` is every `modified` change on an in-force act in that
 language, including the ones excluded in SQL, so the skip counts account
@@ -242,20 +256,40 @@ failed.
 number or short word and leaves the rest of the paragraph untouched (e.g.
 "180 days" becomes "30 days"). Two such near-identical paragraphs can score
 above 0.92 on plain string similarity even though they mean different
-things. For any gold-only unit that scores 0.92 or higher against **any**
-of the distractor's units (and vice versa), fuzzy matching is switched off
-for that unit: it may only be found by an **exact** substring match in the
-normalised answer, never by the fuzzy window match described next. This is
-what lets the scorer catch the one-number-changed case, which is the hard
-case the benchmark exists to test.
+things. The rule, in one sentence: **if fuzzy matching would find this unit
+in the other edition, fuzzy matching is not allowed for it.** Such a unit
+is *discriminating*: it may only be found by an **exact** substring match
+in the normalised answer, never by the fuzzy window match described next.
+This is what lets the scorer catch the one-number-changed case, which is
+the hard case the benchmark exists to test.
 
-The comparison deliberately runs against *all* of the other edition's
-units, shared ones included, not only its discriminating ones. An
-amendment that appends a short clause leaves the old paragraph shared (it
-sits inside the new one) and the pair ~0.95 similar with nothing in the
-distractor-only set to pair against — and an answer reciting the old
-paragraph would then fuzzy-match the new one and score as correct. That is
-the same failure, arriving through the containment rule instead.
+A unit is flagged discriminating when either test fires:
+
+- **Window test.** The unit is run through the *same* fuzzy window match
+  (same window lengths, same 0.92 threshold) against the other edition's
+  whole normalised text. Asking the flag question with the matching
+  function is what makes the scorer self-consistent rather than merely
+  stricter: against an answer that quotes the other edition verbatim, the
+  flag test and the match test are the same computation on the same string,
+  so the unit is either flagged (exact-only, correctly not found) or
+  unflagged (and the window match correctly fails too). Either way the
+  cross-edition false positive cannot happen. Without this test, 222+ items
+  on the prod oracle run scored `ungrounded` on a word-for-word correct
+  answer — e.g. SR 142.203 Art. 3, where an amendment both rewords a phrase
+  and appends a clause, leaving a distractor-only sentence that scores only
+  0.84 pairwise against the gold sentence but window-matches inside the gold
+  text above 0.92.
+- **Unit-pair test.** The unit scores 0.92 or higher against **any** of the
+  other edition's units, shared ones included. This is kept alongside the
+  window test, not replaced by it: the window match only probes windows of
+  roughly 0.8x, 1.0x and 1.2x the unit's length, so when the other
+  edition's whole text is *shorter* than 0.8x the unit — a one-paragraph
+  article with a clause appended — no window exists and the test cannot
+  fire, on a pair that is 0.96 similar unit to unit. The comparison runs
+  against all of the other edition's units, shared ones included, because
+  containment files a unit as shared exactly when it sits inside the other
+  edition's text, which is itself the near-duplicate relationship this
+  guard exists to catch.
 
 **Fuzzy window match (0.92).** For a unit that is not a discriminating
 unit, if it does not occur verbatim in the normalised answer, the scorer

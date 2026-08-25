@@ -6,6 +6,8 @@ GOLD and DISTRACTOR share paragraph 1 verbatim (unaffected by the amendment)
 and diverge in paragraphs 2 and 3 (the amendment itself) -- the same shape
 Task 3's builder will hand the scorer: two adjacent editions of one article.
 """
+from difflib import SequenceMatcher
+
 from chpipe.bench import score as s
 
 GOLD = (
@@ -373,8 +375,27 @@ def test_short_addition_flags_the_gold_unit_as_discriminating():
     # only come from the shared unit, i.e. from comparing against ALL units
     disc_gold, _disc_distractor = s._discriminating_units(
         set(gold_only), set(distractor_only),
-        set(s.units(GOLD_SHORT_ADD)), set(s.units(DISTRACTOR_SHORT_ADD)))
+        set(s.units(GOLD_SHORT_ADD)), set(s.units(DISTRACTOR_SHORT_ADD)),
+        s.normalise(GOLD_SHORT_ADD), s.normalise(DISTRACTOR_SHORT_ADD))
     assert disc_gold == set(gold_only)
+
+
+def test_short_addition_flag_comes_from_the_unit_pair_test_not_the_window_test():
+    """The window test cannot see this pair, which is why the unit-pair
+    test is kept OR-ed alongside it rather than replaced by it.
+
+    The gold unit is longer than the distractor's WHOLE text, and
+    `_window_found` only probes windows of ~0.8x/1.0x/1.2x the unit's
+    length: 1.0x and 1.2x do not fit in the distractor text at all, and the
+    0.8x window can only ever cover 80% of a unit that is otherwise
+    identical, which caps its ratio below 0.92. Pairwise the same two
+    strings score 0.96."""
+    gold_unit = s.units(GOLD_SHORT_ADD)[0]
+    norm_distractor = s.normalise(DISTRACTOR_SHORT_ADD)
+    assert len(gold_unit) > len(norm_distractor)
+    assert s._window_found(gold_unit, norm_distractor) is False
+    distractor_unit = s.units(DISTRACTOR_SHORT_ADD)[0]
+    assert SequenceMatcher(None, gold_unit, distractor_unit).ratio() >= s._WINDOW_RATIO
 
 
 def test_short_addition_old_wording_in_prose_is_not_scored_correct():
@@ -388,3 +409,93 @@ def test_short_addition_gold_verbatim_is_still_grounded_correct():
     assert v.label == "grounded_correct"
     assert v.gold_coverage == 1.0
     assert v.distractor_coverage == 0.0
+
+
+# --- The window test: "if fuzzy matching would find it in the other
+# edition, fuzzy matching is not allowed for it" ---------------------------
+#
+# Regression fixture for the shape that cost 222+ items on the prod oracle
+# run: SR 142.203 Art. 3, an amendment that both rewords a phrase and
+# appends a clause. The distractor sentence is NOT a substring of gold (so
+# it lands in distractor_only, not in shared, and containment does not save
+# it), and pairwise it scores only 0.84 against the gold sentence -- under
+# the line, so the old unit-pair-only guard left it unflagged. But it DOES
+# window-match inside the gold text at >= 0.92, so a word-for-word correct
+# answer scored gold_coverage 1.0 AND distractor_coverage 1.0: `ungrounded`.
+
+DISTRACTOR_142203 = (
+    "1 Diese Verordnung gilt nicht für EU- und EFTA-Angehörige und ihre "
+    "Familienangehörigen, die unter das Freizügigkeitsabkommen fallen."
+)
+GOLD_142203 = (
+    "1 Diese Verordnung gilt nicht für EU- und EFTA-Angehörige und ihre "
+    "Familienangehörigen, die unter die Freizügigkeitsabkommen fallen, "
+    "soweit diese Abkommen auf sie anwendbar sind."
+)
+
+
+def test_reworded_and_extended_sentence_is_distractor_only_and_below_the_pair_ratio():
+    """Pins the fixture to the shape the bug needs: distractor_only is
+    non-empty (containment does not file the old sentence as shared,
+    because a word inside it changed too), the pairwise ratio is BELOW
+    _WINDOW_RATIO (so the unit-pair test alone cannot flag it), and the
+    window match against the other edition's text is ABOVE it (so the
+    window test can, and must)."""
+    gold_only, distractor_only, shared = s.discriminating_units(
+        GOLD_142203, DISTRACTOR_142203)
+    assert len(gold_only) == 1 and len(distractor_only) == 1 and shared == []
+    assert SequenceMatcher(None, gold_only[0], distractor_only[0]).ratio() < s._WINDOW_RATIO
+    assert s._window_found(distractor_only[0], s.normalise(GOLD_142203)) is True
+
+
+def test_reworded_and_extended_gold_verbatim_is_grounded_correct():
+    v = s.score(GOLD_142203, GOLD_142203, DISTRACTOR_142203)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0
+
+
+def test_reworded_and_extended_distractor_verbatim_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_142203, GOLD_142203, DISTRACTOR_142203)
+    assert v.label == "grounded_wrong_version"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_coverage == 1.0
+
+
+# --- Fedlex's literal "[tab]" token ----------------------------------------
+#
+# Some Fedlex plain-text extractions carry a literal five-character token
+# "[tab]" where the XML had a tabulation, e.g. SR 312.1's articles, whose
+# paragraphs read "[tab] 1 ...". normalise() leaves it verbatim -- it is
+# not whitespace as far as Python is concerned, and there is no rule that
+# would touch it. That is fine and deliberate: the token appears
+# identically in BOTH editions of an article, so it cancels out of every
+# comparison the scorer makes. Documented here so a future reader does not
+# "fix" it and change every unit boundary in the corpus at once.
+
+DISTRACTOR_TAB = (
+    "[tab] 1 Die zuständige Behörde hört das Kind in geeigneter Weise "
+    "persönlich an, sofern nicht sein Alter oder andere wichtige Gründe "
+    "dagegen sprechen.\n"
+    "[tab] 2 Über die Anhörung wird nur das für den Entscheid Wesentliche "
+    "protokolliert."
+)
+GOLD_TAB = DISTRACTOR_TAB.replace(
+    "in geeigneter Weise persönlich", "in angemessener Weise persönlich")
+
+
+def test_normalise_keeps_the_literal_tab_token_verbatim():
+    assert s.normalise("[tab] 1 Der Antrag ist zu begründen.") == (
+        "[tab] 1 der antrag ist zu begründen.")
+    assert "[tab]" in s.normalise(DISTRACTOR_TAB)
+
+
+def test_tab_token_articles_still_score_both_ways():
+    # The marker sits ahead of the paragraph number, so _PARAGRAPH_MARKER
+    # (which anchors the number at the start of a line) does not fire and
+    # units() falls back to sentence splitting. Both editions carry the
+    # token identically, so it is inert either way.
+    assert all(u.startswith("[tab]") for u in s.units(DISTRACTOR_TAB))
+    assert s.score(GOLD_TAB, GOLD_TAB, DISTRACTOR_TAB).label == "grounded_correct"
+    assert s.score(DISTRACTOR_TAB, GOLD_TAB, DISTRACTOR_TAB).label == (
+        "grounded_wrong_version")

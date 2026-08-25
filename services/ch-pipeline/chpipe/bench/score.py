@@ -143,23 +143,45 @@ would read 1.0/1.0, and the label would come out `ungrounded` for a
 perfectly-grounded answer -- exactly backwards, and worse than useless
 for a benchmark whose entire point is catching this kind of amendment.
 
-The fix: before matching, every gold-only unit is compared against ALL of
-the distractor's units -- shared ones included, not just the
-distractor-only ones -- with `SequenceMatcher.ratio()` on their normalised
-forms, and vice versa (see `_discriminating_units()`). All of them,
-because containment (above) files a unit as shared exactly when it sits
-inside the other edition's text, which is itself a near-duplicate
-relationship: append a short clause to a paragraph and the old paragraph
-is shared, the new one gold-only, and the pair is ~0.95 similar with no
-distractor-only unit anywhere to flag it against. Any unit with a
-counterpart at or above `_WINDOW_RATIO` (0.92 -- the same constant, reused
-rather than duplicated, since it is the same "these two strings are
-suspiciously similar" test) is a DISCRIMINATING unit: for that unit, and that unit
-only, fuzzy window matching is switched off, and it may be found only by
-an exact substring match of its normalised form in the normalised answer
-(see `_coverage()`'s `exact_only` parameter). Units with no
-near-duplicate on the other side are unaffected and keep the normal
-substring-or-window behaviour.
+The fix, in one sentence: IF FUZZY MATCHING WOULD FIND THIS UNIT IN THE
+OTHER EDITION, FUZZY MATCHING IS NOT ALLOWED FOR IT. Concretely, each
+gold-only unit is put through `_window_found()` against the DISTRACTOR's
+whole normalised text (and vice versa) -- the same function, the same
+window lengths, the same 0.92 threshold that `_coverage()` will later use
+against the answer. A unit that clears it is a DISCRIMINATING unit: for
+that unit, and that unit only, fuzzy window matching is switched off, and
+it may be found only by an exact substring match of its normalised form in
+the normalised answer (see `_coverage()`'s `exact_only` parameter). Units
+that do not are unaffected and keep the normal substring-or-window
+behaviour.
+
+Asking the flag question with the matching function is what makes the
+scorer self-consistent instead of merely stricter: against an answer that
+is the OTHER edition verbatim, the flag test and the match test are then
+literally the same call on the same string, so a unit is either flagged
+(exact-only, correctly not found) or unflagged (and the window match
+correctly fails too). The cross-edition false positive cannot survive
+either branch.
+
+An earlier version asked a weaker question -- unit against the other
+edition's UNITS, pairwise, `SequenceMatcher.ratio() >= _WINDOW_RATIO` --
+and let 222+ prod-oracle items through: SR 142.203 art. 3, where an
+amendment both rewords a phrase and appends a clause, leaves a
+distractor-only sentence whose pairwise ratio to the gold sentence is 0.84
+(below the line, so unflagged) but which window-matches inside the gold
+text at >= 0.92. Gold-verbatim answers scored gold_coverage 1.0 AND
+distractor_coverage 1.0, i.e. `ungrounded`.
+
+The pairwise test is KEPT alongside the window test, OR-ed, because the
+window test does not subsume it: `_window_found` only probes windows of
+~0.8x/1.0x/1.2x the unit's length, so when the other edition's whole text
+is shorter than 0.8x the unit -- a one-paragraph article with a clause
+appended -- there is no window to probe and the test returns False on a
+pair that is 0.96 similar unit to unit (measured: the GOLD_SHORT_ADD
+fixture in tests/test_bench_score.py). The pairwise test also runs against
+ALL of the other edition's units, shared ones included, because
+containment (above) files a unit as shared exactly when it sits inside the
+other edition's text, which is itself a near-duplicate relationship.
 
 This has a real, deliberate cost: an answer that gets the discriminating
 number exactly right but has an unrelated typo elsewhere in the SAME
@@ -430,34 +452,96 @@ def discriminating_units(gold: str, distractor: str) -> tuple[list[str], list[st
 def _discriminating_units(
     gold_only: set[str], distractor_only: set[str],
     gold_units: set[str], distractor_units: set[str],
+    norm_gold: str, norm_distractor: str,
 ) -> tuple[set[str], set[str]]:
-    """Flag the "only" units that have a near-duplicate (ratio >=
-    _WINDOW_RATIO) among the OTHER edition's units -- see module docstring
-    "DISCRIMINATING PAIRS". Those units may only be found by exact
-    substring match; everything else keeps the normal substring-or-window
-    behaviour.
+    """Flag the "only" units for which fuzzy matching must be switched off
+    -- see module docstring "DISCRIMINATING PAIRS". Those units may only be
+    found by exact substring match; everything else keeps the normal
+    substring-or-window behaviour.
 
-    The comparison is against ALL of the other edition's units, not only
-    its "only" ones. Containment (see "CONTAINMENT, NOT EQUALITY") files a
-    unit as `shared` precisely when it sits inside the other edition's
-    text, which is exactly the near-duplicate relationship this guard
-    exists to catch: for an amendment that appends a short clause, the old
-    paragraph is shared, the new one is gold-only, and the two are ~0.95
-    similar. Comparing only the "only" sets would leave that pair unguarded
-    -- the gold unit would have no counterpart to be flagged against, and
-    an answer reciting the OLD paragraph could window-match the new one and
-    be scored `grounded_correct`. Which is the exact failure the guard was
-    written for, reintroduced through the other door.
+    TWO TESTS, OR-ed. A unit is discriminating when EITHER holds. They are
+    listed here in order of importance and evaluated in the opposite order,
+    cheapest first -- `or` short-circuits and the result does not depend on
+    which fires.
+
+    1. WINDOW TEST (the primary one): `_window_found(unit, <the other
+       edition's whole normalised text>)` -- i.e. the exact question "would
+       the fuzzy matcher find this unit in the other edition?", asked with
+       the very same function, window lengths and threshold that
+       `_coverage()` will later use against the ANSWER. If the answer is
+       yes, fuzzy matching is not allowed for this unit, because a verbatim
+       quotation of the OTHER edition would then "find" it and the unit
+       would prove nothing.
+
+       Running the identical computation in both places is what makes the
+       scorer self-consistent rather than merely stricter: for an answer
+       that is the other edition verbatim, the flag test and the match test
+       are the same call on the same string, so the unit is either flagged
+       (and then exact-match-only, and correctly not found) or not flagged
+       (and then the window match correctly fails too). Either way the
+       cross-edition false positive cannot happen. Measured on the prod
+       oracle run, 222+ items scored `ungrounded` on a word-for-word
+       correct answer for want of exactly this test: SR 142.203 art. 3,
+       where the distractor sentence is not a substring of gold (so it is
+       distractor-only, not shared) but does window-match inside gold at
+       >= 0.92, driving distractor_coverage to 1.0 alongside gold_coverage
+       1.0.
+
+    2. UNIT-PAIR TEST (kept, not subsumed): a near-duplicate (ratio >=
+       _WINDOW_RATIO) among ALL of the other edition's units, shared ones
+       included. It is tempting to think the window test covers this, and
+       it does not: `_window_found` only probes windows of ~0.8x, 1.0x and
+       1.2x the unit's length, so when the other edition's whole text is
+       SHORTER than 0.8x the unit, no window exists at all and the window
+       test returns False even for a pair that is 0.96 similar unit to
+       unit. Measured on tests/test_bench_score.py's GOLD_SHORT_ADD /
+       DISTRACTOR_SHORT_ADD fixture (a one-paragraph article with an 18-
+       character clause appended): unit-pair ratio 0.96, window test False.
+       Dropping this test would let an answer reciting the OLD paragraph
+       inside a little extra prose window-match the NEW one and score
+       `grounded_correct`.
+
+    The unit-pair comparison runs against ALL of the other edition's units,
+    not only its "only" ones. Containment (see "CONTAINMENT, NOT EQUALITY")
+    files a unit as `shared` precisely when it sits inside the other
+    edition's text, which is exactly the near-duplicate relationship this
+    guard exists to catch: for an amendment that appends a short clause,
+    the old paragraph is shared, the new one is gold-only, and the two are
+    ~0.95 similar. Comparing only the "only" sets would leave that pair
+    unguarded.
+
+    NORM_GOLD / NORM_DISTRACTOR are the two editions' whole normalise()'d
+    texts. `_window_found`'s _MAX_WINDOW_ANSWER_LEN cap applies to them
+    unchanged and is deliberately not special-cased: an article text past
+    20,000 characters would also be past the cap as an ANSWER, so window
+    matching is off on both sides at once and the two stay consistent --
+    which is the property this function exists to preserve. (Article texts
+    are far below it: p90 ~2,200 characters.)
+
+    Flagging is monotone -- OR-ing a second test can only add units, never
+    remove them -- and adding a unit only ever turns a fuzzy match into an
+    exact one, so no answer that was found before becomes lost unless it
+    was found by fuzzy matching, which is precisely what is being withdrawn.
+    A verbatim answer is unaffected either way.
     """
+    # The cheap test first: `or` short-circuits, and the unit-pair test is
+    # O(units) SequenceMatcher calls against the pairs of units where the
+    # window test is O(text length / step). Same result either way; on the
+    # commonest amendment shape (one number changed) the pair test fires
+    # immediately and the window scan is never run. Measured on a
+    # ten-paragraph article: 2 ms per score() this way, 22 ms with the
+    # window test first.
     disc_gold = {
         g for g in gold_only
         if any(SequenceMatcher(None, g, d).ratio() >= _WINDOW_RATIO
                for d in distractor_units)
+        or _window_found(g, norm_distractor)
     }
     disc_distractor = {
         d for d in distractor_only
         if any(SequenceMatcher(None, d, g).ratio() >= _WINDOW_RATIO
                for g in gold_units)
+        or _window_found(d, norm_gold)
     }
     return disc_gold, disc_distractor
 
@@ -501,7 +585,8 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     gold_units = set(units(gold))
     distractor_units = set(units(distractor))
     disc_gold, disc_distractor = _discriminating_units(
-        gold_only, distractor_only, gold_units, distractor_units)
+        gold_only, distractor_only, gold_units, distractor_units,
+        normalise(gold), normalise(distractor))
 
     gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
     distractor_coverage = _coverage(distractor_only, norm_answer, disc_distractor)

@@ -36,6 +36,12 @@ log = logging.getLogger(__name__)
 # a change.
 _MIN_TEXT_LEN = 200
 
+# make_items()' own skip reasons (build() adds more of its own further
+# down, see _SKIP_* there). Public because run_oracle/report and the tests
+# refer to them by name rather than by string literal.
+SKIP_NO_DISCRIMINATING_UNIT = "no_discriminating_unit"
+SKIP_OVERLAPPING_EDITIONS = "overlapping_editions"
+
 # Provenance fields stamped on every item -- see the plan's item schema.
 SOURCE = "Fedlex (fedlex.admin.ch)"
 LICENCE = "Fedlex data may be reused free of charge with source attribution"
@@ -141,6 +147,24 @@ def make_items(
     tiebreak is not guaranteed to land back on the exact act this item's
     editions came from.
 
+    OVERLAPPING EDITIONS ARE DROPPED WHOLE. When the old edition's
+    `date_end_applicability` is not NULL and is >= the NEW edition's
+    `date_applicability`, the two editions claim the same day (or days) as
+    in force -- Fedlex re-issues a consolidation under a date that does not
+    retract the previous one's end date. There is then no date this change
+    can be asked about unambiguously: on the old edition's own last day a
+    covering lookup (`date_applicability <= as_of AND
+    (date_end_applicability IS NULL OR date_end_applicability >= as_of)`,
+    newest first -- what the product tool and run_oracle both do) returns
+    the NEWER edition, so the `before` item's gold answer is scored
+    `grounded_wrong_version` against its own gold. Measured on the prod
+    build: 13 `before` items. The `after` half is dropped with it rather
+    than kept, because the same overlap makes the change date itself
+    ambiguous -- both editions cover it, and only the resolver's ordering
+    decides which one wins. Skip reason `overlapping_editions`, one record
+    per half, so the build report counts it the same way as
+    `no_discriminating_unit`.
+
     Either half is dropped -- and reported in the second return value
     instead of the first -- when its gold text has no gold-only unit
     relative to its distractor (score.discriminating_units(gold, distractor)
@@ -169,6 +193,22 @@ def make_items(
     change_date_str = _iso(change_date)
 
     old_end = old_row["date_end_applicability"]
+
+    # Overlapping editions: the old edition is still "in force" on the day
+    # the new one starts. Nothing downstream can resolve such a pair -- see
+    # the docstring -- so the whole change is dropped, both halves.
+    if old_end is not None and old_end >= new_row["date_applicability"]:
+        return [], [
+            {
+                "kind": kind,
+                "reason": SKIP_OVERLAPPING_EDITIONS,
+                "as_of": _iso(old_end if kind == "before" else change_date),
+                "e_id": e_id,
+                "sr_number": sr_number,
+            }
+            for kind in ("before", "after")
+        ]
+
     before_as_of = old_end if old_end is not None else change_date - datetime.timedelta(days=1)
 
     variants = (
@@ -186,7 +226,7 @@ def make_items(
         if not gold_only:
             skipped.append({
                 "kind": kind,
-                "reason": "no_discriminating_unit",
+                "reason": SKIP_NO_DISCRIMINATING_UNIT,
                 "as_of": _iso(as_of),
                 "e_id": e_id,
                 "sr_number": sr_number,
@@ -323,7 +363,8 @@ WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
 """
 
 # Skip reasons build() itself can add to make_items()'s own
-# "no_discriminating_unit" (see make_items' docstring).
+# "no_discriminating_unit" and "overlapping_editions" (see make_items'
+# docstring).
 _SKIP_NO_ABBREVIATION = "no_abbreviation"
 _SKIP_IDENTICAL = "identical_or_short"
 _SKIP_AMBIGUOUS = "ambiguous_article"
