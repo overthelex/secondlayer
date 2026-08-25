@@ -563,6 +563,13 @@ def test_a_trailing_dash_is_not_a_cantonal_suffix():
     assert refs("Art. 8 ZGB- und weiter") == [("ZGB", "8", None, "de")]
 
 
+def test_a_cantonal_suffix_wins_over_a_keyword_from_another_language():
+    """"LPA-GE" is Geneva's act, cited in French whatever keyword the
+    sentence happens to use around it. "Abs." is a German keyword, but the
+    canton suffix must decide the language here, not the keyword."""
+    assert refs("Art. 5 Abs. 1 LPA-GE") == [("LPA-GE", "5", "1", "fr")]
+
+
 # --------------------------------------------------------------------------
 # Digit-suffixed ordinances ("OPP 2", "BVV 2")
 # --------------------------------------------------------------------------
@@ -588,6 +595,24 @@ def test_a_two_letter_abbreviation_takes_no_digit_suffix():
 
 def test_digit_suffix_at_the_end_of_a_sentence():
     assert refs("Cela découle de l'art. 13 OPP 2.") == [("OPP 2", "13", None, "fr")]
+
+
+def test_fr_opp_1_is_french():
+    assert refs("art. 5 OPP 1") == [("OPP 1", "5", None, "fr")]
+
+
+def test_fr_opp_3_is_french():
+    """OPP 3 (pillar 3a) is cited as often as OPP 2 in social-insurance case
+    law; only OPP 2 had a language mapping."""
+    assert refs("art. 5 OPP 3") == [("OPP 3", "5", None, "fr")]
+
+
+def test_de_bvv_1_is_german():
+    assert refs("Art. 5 BVV 1") == [("BVV 1", "5", None, "de")]
+
+
+def test_de_bvv_3_is_german():
+    assert refs("Art. 5 BVV 3") == [("BVV 3", "5", None, "de")]
 
 
 # --------------------------------------------------------------------------
@@ -617,6 +642,23 @@ def test_a_range_of_exactly_five_is_still_a_citation():
 
 def test_a_wide_range_drops_only_its_own_endpoints():
     assert refs("Art. 4, 308-327a ZPO") == [("ZPO", "4", None, "de")]
+
+
+def test_a_wide_range_is_dropped_even_when_the_cap_cuts_the_list():
+    """The output cap is _MAX_LIST=8. With seven items ahead of it, the far
+    endpoint of "8-100" is the ninth item scanned and never makes it into the
+    capped list on its own -- range detection has to work off the full scan,
+    not the already-capped items, or the near endpoint "8" is emitted as an
+    ordinary citation instead of being dropped with its (invisible) partner."""
+    assert refs("Art. 1, 2, 3, 4, 5, 6, 7, 8-100 ZPO") == [
+        ("ZPO", "1", None, "de"),
+        ("ZPO", "2", None, "de"),
+        ("ZPO", "3", None, "de"),
+        ("ZPO", "4", None, "de"),
+        ("ZPO", "5", None, "de"),
+        ("ZPO", "6", None, "de"),
+        ("ZPO", "7", None, "de"),
+    ]
 
 
 def test_a_wide_range_written_with_bis():

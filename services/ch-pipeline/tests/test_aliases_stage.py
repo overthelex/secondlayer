@@ -174,6 +174,47 @@ def test_a_unique_title_abbreviation_is_still_inserted(conn, settings):
     assert ("LPA", "fr", "455", "title_paren") in _aliases(conn)
 
 
+def test_a_stale_title_paren_alias_is_reconciled_away_when_ambiguous(conn, settings):
+    """A title_paren alias that was unique when a first run seeded it can
+    become ambiguous once a later ch_act load adds a second act with the
+    same title abbreviation. `ON CONFLICT DO NOTHING` only protects the
+    fresh insert -- it never removes the stale row, so citations would keep
+    resolving to the act that no longer uniquely owns the abbreviation
+    unless the run itself reconciles the table."""
+    _act(conn, "455", title_fr="Loi federale du 16 decembre 2005 sur la "
+                              "protection des animaux (LPA)")
+    _act(conn, "220", abbreviation="OR")
+
+    aliases_stage.run(settings)
+    assert ("LPA", "fr", "455", "title_paren") in _aliases(conn)
+
+    _act(conn, "131.231", title_fr="Constitution du canton de Vaud du "
+                                  "14 avril 2003 (LPA)")
+    aliases_stage.run(settings)
+
+    aliases = _aliases(conn)
+    assert not any(a[0] == "LPA" and a[1] == "fr" and a[3] == "title_paren"
+                  for a in aliases)
+    # curated and fedlex_abbreviation rows are untouched by reconciliation --
+    # only title_paren rows are ever deleted.
+    assert ("OR", "de", "220", "fedlex_abbreviation") in aliases
+    assert ("CO", "fr", "220", "curated") in aliases
+
+
+def test_a_title_paren_alias_the_act_no_longer_carries_is_removed(conn, settings):
+    """A title_paren row can also go stale because the act's title changed
+    (a Fedlex re-publish, a corrected title) and no ch_act row claims that
+    abbreviation any more. Reconciliation removes it even though there is no
+    ambiguity -- it is simply not among what this run would seed."""
+    conn.execute(
+        "INSERT INTO ch_act_alias (abbr, lang, sr_number, source) "
+        "VALUES ('OLDABBR', 'fr', '999', 'title_paren')")
+
+    aliases_stage.run(settings)
+
+    assert not any(a[0] == "OLDABBR" for a in _aliases(conn))
+
+
 def test_the_same_abbreviation_in_two_languages_is_not_ambiguous(conn, settings):
     """Ambiguity is per (abbr, lang): one act's German and Italian titles may
     both end in the same abbreviation without either being ambiguous."""

@@ -95,6 +95,31 @@ def _from_titles(conn, lang: str) -> int:
                  ", ".join(ambiguous[:20]))
     pairs = {(abbr, lang, next(iter(srs)), "title_paren")
              for abbr, srs in claimed.items() if len(srs) == 1}
+
+    # Reconcile: a title_paren row an earlier run inserted can go stale in
+    # two ways a later ch_act load exposes -- the abbreviation it named
+    # becomes ambiguous (a second act now claims it too), or the act's title
+    # changed and no longer carries that abbreviation at all. `ON CONFLICT
+    # DO NOTHING` below only guards against re-inserting a duplicate; it
+    # never removes a row this pass would not (re-)seed, so without this a
+    # stale alias sits in `ch_act_alias` forever and citations keep
+    # resolving to the act that no longer uniquely owns it. `curated` and
+    # `fedlex_abbreviation` rows are untouched -- this only ever deletes
+    # `title_paren` rows for the language just computed.
+    existing = conn.execute(
+        "SELECT abbr, sr_number FROM ch_act_alias "
+        "WHERE lang = %s AND source = 'title_paren'", (lang,)).fetchall()
+    target = {(abbr, sr) for abbr, _lang, sr, _source in pairs}
+    stale = {(r["abbr"], r["sr_number"]) for r in existing} - target
+    if stale:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "DELETE FROM ch_act_alias WHERE abbr = %s AND lang = %s "
+                "AND sr_number = %s AND source = 'title_paren'",
+                sorted((abbr, lang, sr) for abbr, sr in stale))
+        log.info("aliases: %s stale title_paren rows removed in %s",
+                 len(stale), lang)
+
     if not pairs:
         return 0
     with conn.cursor() as cur:

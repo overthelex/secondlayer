@@ -789,7 +789,7 @@ four rules in `chpipe/citations.py`, each trading a handful of real
 citations for a much larger number of invented ones:
 
 - A **cantonal suffix** stays on the abbreviation (`LPA-VD`, `LPA-GE`, and
-  the other 26 canton codes). `ch_act_alias` carries federal acts only, so
+  the other 24 canton codes). `ch_act_alias` carries federal acts only, so
   these stay at `unresolved_abbr` — which is right: cut down to "LPA" they
   resolved to the *federal* animal-protection act (SR 455) the court never
   mentioned.

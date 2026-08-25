@@ -434,11 +434,15 @@ _ABBR_LANG = {
     "CO": "fr", "CC": "fr", "CP": "fr", "CPP": "fr", "CPC": "fr",
     "Cst.": "fr", "LTF": "fr", "LP": "fr", "LPD": "fr", "CEDH": "fr",
     "Cost.": "it", "LEF": "it", "CEDU": "it",
-    # The two occupational-pension ordinances, which only exist in the
-    # digit-suffixed form ("OPP 2" / "BVV 2" are the same act in two
-    # languages) and are among the most-cited ordinances in social-insurance
-    # case law.
-    "OPP 2": "fr", "BVV 2": "de",
+    # The occupational-pension ordinances, which only exist in the
+    # digit-suffixed form ("OPP 1/2/3" / "BVV 1/2/3" are the same three acts
+    # in two languages) and are among the most-cited ordinances in
+    # social-insurance case law. Italian also calls all three "OPP", which
+    # would collide with the French entries in this abbr-only map -- left
+    # unmapped, an Italian "OPP" citation falls through to the French
+    # default rather than getting its own (wrong) entry here.
+    "OPP 1": "fr", "OPP 2": "fr", "OPP 3": "fr",
+    "BVV 1": "de", "BVV 2": "de", "BVV 3": "de",
 }
 
 # The cantonal suffix carries a language signal of its own: a decision citing
@@ -632,9 +636,16 @@ def extract_statutes(text: str) -> list[StatuteRef]:
                     keywords += _quals(tm)
             keywords += _quals(im)
 
-            if len(items) < _MAX_LIST:
-                items.append((im.group("article"), paragraphs))
-                ranged.append(is_range)
+            # Appended unconditionally, not capped at _MAX_LIST here: a wide
+            # range's far endpoint can be the ninth-or-later item scanned
+            # ("Art. 1, 2, 3, 4, 5, 6, 7, 8-100 ZPO"), and if the cap cut it
+            # from `items` before _drop_wide_ranges ever saw it, the near
+            # endpoint already in the capped list would be emitted as an
+            # ordinary citation instead of being dropped with its invisible
+            # partner. The cap is applied after range-dropping instead,
+            # below -- still bounded, by _MAX_SCAN, while scanning.
+            items.append((im.group("article"), paragraphs))
+            ranged.append(is_range)
 
             sm = _ITEM_SEP.match(text, pos)
             if sm is None:
@@ -642,7 +653,7 @@ def extract_statutes(text: str) -> list[StatuteRef]:
             pos = sm.end()
             is_range = sm.group(0).strip() in _RANGE_SEPS
 
-        items = _drop_wide_ranges(items, ranged)
+        items = _drop_wide_ranges(items, ranged)[:_MAX_LIST]
         if not items:
             continue
         am = _ABBR.match(text, pos)
@@ -653,9 +664,9 @@ def extract_statutes(text: str) -> list[StatuteRef]:
             continue
 
         lang = (
-            _keyword_lang(keywords)
+            _canton_lang(abbr)
+            or _keyword_lang(keywords)
             or _HEAD_LANG.get(hm.group(1).lower())
-            or _canton_lang(abbr)
             or _ABBR_LANG.get(abbr)
             or "de"
         )
