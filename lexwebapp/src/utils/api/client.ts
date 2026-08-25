@@ -6,22 +6,10 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 import { showToast } from '../toast';
 import { toastT } from '../../i18n/toast-i18n';
 
-// Validate API URL against allowed origins
-const ALLOWED_API_ORIGINS = [
-  'https://legal.org.ua',
-  'https://local.legal.org.ua',
-  'https://stage.legal.org.ua',
-  'http://localhost:3000',
-  'http://localhost:8080',
-];
+// Base URL and its validation live in one place — see ./base
+import { API_BASE } from './base';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-if (!ALLOWED_API_ORIGINS.some(origin => API_URL.startsWith(origin))) {
-  throw new Error(
-    `Invalid VITE_API_URL: "${API_URL}". Must start with one of: ${ALLOWED_API_ORIGINS.join(', ')}`
-  );
-}
+export const API_URL = API_BASE;
 
 // Token refresh state
 let isRefreshing = false;
