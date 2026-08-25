@@ -45,6 +45,10 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
   const ECLI_NULL_DATE = 'ECLI:CH:BGER:2020:7B.5.2020';
   const ECLI_CHAMBER = 'ECLI:CH:BGER:2022:9C.4.2022';
   const ECLI_LOOKALIKE = 'ECLI:CH:XX:2022:LOOK.1.2022';
+  // CH_BGer/CH_BGE carry the source's three-language header {de,fr,it} verbatim in
+  // `languages` regardless of the decision's real language — the real language sits in
+  // metadata_json->>'Sprache'.
+  const ECLI_SPRACHE_FR = 'ECLI:CH:BGER:2024:5A.9.2024';
 
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
@@ -166,6 +170,23 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
           'https://entscheidsuche.ch/html/CH_BGER_006', 'https://entscheidsuche.ch/pdf/CH_BGER_006', 'https://entscheidsuche.ch/json/CH_BGER_006', 'loaded')`,
       [ECLI_CHAMBER, 'CH_BGER_006']
     );
+
+    // The source's three-language header, with the real language only recoverable from
+    // metadata_json->>'Sprache'. languages[1] is 'de' here, but the decision is French.
+    await client.query(
+      `INSERT INTO ch_court_decisions
+         (ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
+          decision_date, docket_number, languages, metadata_json, parties, abstract, full_text,
+          html_url, pdf_url, json_url, stage)
+       VALUES
+         ($1, $2, 'CH_BGer', 'BGer', 'Bundesgericht', 'II. droit civil', NULL,
+          'Arrêt', '2024-04-04', '5A_9/2024', ARRAY['de','fr','it'], '{"Sprache": "fr"}'::jsonb,
+          'M. contre N.',
+          'Résiliation abusive du bail SpracheMarkerDEF',
+          'La résiliation abusive du bail a été constatée par le tribunal.',
+          'https://entscheidsuche.ch/html/CH_BGER_007', 'https://entscheidsuche.ch/pdf/CH_BGER_007', 'https://entscheidsuche.ch/json/CH_BGER_007', 'loaded')`,
+      [ECLI_SPRACHE_FR, 'CH_BGER_007']
+    );
   });
 
   describe('ch_search_court_decisions', () => {
@@ -193,7 +214,7 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
       expect(body.results.map((r: any) => r.ecli)).toEqual([ECLI_IT]);
     });
 
-    it('filters by lang using languages[1]', async () => {
+    it('filters by lang falling back to languages[1] when metadata_json has no Sprache', async () => {
       const result = await tools.executeTool('ch_search_court_decisions', {
         query: 'SharedMarkerXYZ',
         lang: 'it',
@@ -202,6 +223,29 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
 
       expect(body.results).toHaveLength(1);
       expect(body.results[0].ecli).toBe(ECLI_IT);
+      expect(body.results[0].lang).toBe('it');
+    });
+
+    it('filters by lang using metadata_json->>Sprache when languages is the source header {de,fr,it}', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', {
+        query: 'SpracheMarkerDEF',
+        lang: 'fr',
+      });
+      const body = parse(result!);
+
+      expect(body.results).toHaveLength(1);
+      expect(body.results[0].ecli).toBe(ECLI_SPRACHE_FR);
+      expect(body.results[0].lang).toBe('fr');
+    });
+
+    it('does not match lang de for a decision whose Sprache is fr, even though languages[1] is de', async () => {
+      const result = await tools.executeTool('ch_search_court_decisions', {
+        query: 'SpracheMarkerDEF',
+        lang: 'de',
+      });
+      const body = parse(result!);
+
+      expect(body.results).toHaveLength(0);
     });
 
     it('filters by canton', async () => {
@@ -301,6 +345,14 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
       expect(body.full_text_truncated).toBe(false);
       expect(body.full_text_length).toBe(body.full_text.length);
       expect(body.full_text).toContain('résiliation abusive');
+    });
+
+    it('reports lang from metadata_json->>Sprache, not languages[1]', async () => {
+      const result = await tools.executeTool('ch_get_court_decision', { ecli: ECLI_SPRACHE_FR });
+      const body = parse(result!);
+
+      expect(body.languages).toEqual(['de', 'fr', 'it']);
+      expect(body.lang).toBe('fr');
     });
 
     it('returns a not_found error for an unknown ecli', async () => {
