@@ -153,6 +153,8 @@ def fetch(session, limiter, url, tries=4):
     status, or a code above the HTTP range for a fetch that succeeded but is
     unusable.
       900 = empty body   901 = served 200 but not an Atom feed   599 = gave up
+    A scope truncated by --max-pages is recorded as 903 by crawl_scope, so a
+    silent cap stays visible and outstanding rather than looking complete.
     """
     for attempt in range(tries):
         limiter.wait()
@@ -316,10 +318,12 @@ ON CONFLICT (effect_id) DO UPDATE SET
     notes = EXCLUDED.notes,
     origin = EXCLUDED.origin,
     modified = EXCLUDED.modified
--- The local UnappliedEffects pass must never overwrite a row the feed already
--- placed: the feed states Applied and the item XML cannot. Everything else wins
--- on a newer Modified, so a refresh is idempotent and an out-of-order page is
--- harmless.
+-- Precedence is by ORIGIN and nothing else. The local UnappliedEffects pass must
+-- never overwrite a row the feed already placed, because the feed states Applied
+-- and the item XML cannot; a feed row always wins, including over an older feed
+-- row. Modified is stored but deliberately NOT part of this predicate: within a
+-- run the feed serves each effect once per scope, and a later crawl is meant to
+-- refresh unconditionally rather than to be refused as stale.
 WHERE EXCLUDED.origin = 'changes-feed'
    OR uk_legislation_effects.origin = 'unapplied'
 """
@@ -439,6 +443,15 @@ def crawl_scope(leg_type, year, session, limiter, cur, keep_raw, max_pages):
                 # this thread was bound to and quietly spend another IP's budget.
                 url = re.sub(r"^http://", "https://", link.get("href") or "")
                 break
+    if url and status == 200:
+        # The page ceiling was hit with a rel="next" still outstanding. Recording
+        # this as 200 would mark a truncated scope complete and the worklist
+        # would never come back to it — a silent cap, which is the one failure
+        # mode a resumable crawler must not have. 903 keeps it outstanding and
+        # visible in idx_uk_eff_scope_bad.
+        status = 903
+        print(f"  !! {leg_type}/{year}: hit --max-pages={max_pages}, scope truncated",
+              flush=True)
     return {"pages": pages, "entries": entries, "total": total,
             "status": status, "newest": newest}
 
@@ -479,7 +492,32 @@ def crawl_local(cur, batch=2000):
     return seen
 
 
-def finalise(cur):
+FINALISE_GUARD = """
+SELECT (SELECT count(*) FROM uk_legislation_effect_scopes WHERE http_status = 200),
+       (SELECT count(*) FROM (SELECT DISTINCT leg_type, year FROM uk_legislation
+                               WHERE year IS NOT NULL) w)
+"""
+
+
+def finalise(cur, force=False):
+    """Recompute the derived columns. Refuses to run on a partial crawl.
+
+    uk_legislation.unapplied_effects is filled by stage 2 from each item's own
+    XML, so recomputing it from an incomplete effects table does not leave a
+    stale number, it overwrites a good one with zero. The opt-in flag alone is
+    not enough of a guard: --finalise --types ukpga is also opt-in and would
+    still clobber every act outside that type. So check the scope table against
+    the full worklist and refuse unless they match.
+    """
+    cur.execute(FINALISE_GUARD)
+    done, wanted = cur.fetchone()
+    if done < wanted and not force:
+        print(f"REFUSING to finalise: {done} of {wanted} scopes completed. "
+              f"unapplied_effects would be recomputed from a partial effects "
+              f"table and zeroed on every act whose scopes were not fetched. "
+              f"Finish the crawl, or pass --force-finalise if you know better.",
+              flush=True)
+        return
     cur.execute(FILL_RA)
     print(f"royal_assent_date filled on {cur.rowcount} effects", flush=True)
     cur.execute(RECOUNT)
@@ -509,6 +547,8 @@ def main():
     # effects table is still partial does not leave a stale number, it overwrites a
     # good one with zero: a --limit 3 smoke test on 2026-08-24 zeroed the counter on
     # 33,434 acts. Only pass --finalise after a full crawl.
+    ap.add_argument("--force-finalise", action="store_true",
+                    help="run the recount even though scopes are outstanding")
     ap.add_argument("--finalise", action="store_true",
                     help="recompute royal_assent_date and unapplied_effects. Run this "
                          "ONLY after a complete crawl -- on a partial one it zeroes "
@@ -529,7 +569,7 @@ def main():
         crawl_local(cur)
         if args.source == "unapplied":
             if args.finalise:
-                finalise(cur)
+                finalise(cur, args.force_finalise)
             return
 
     q = WORKLIST
@@ -550,7 +590,7 @@ def main():
     print(f"outstanding scopes: {len(work)}", flush=True)
     if not work:
         if args.finalise:
-            finalise(cur)
+            finalise(cur, args.force_finalise)
         return
 
     if args.source_ips == "auto":
@@ -630,7 +670,7 @@ def main():
             print(f"    {k}: {verdicts[k]}", flush=True)
 
     if args.finalise:
-        finalise(cur)
+        finalise(cur, args.force_finalise)
 
 
 if __name__ == "__main__":

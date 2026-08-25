@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS uk_legislation_effect_scopes (
     -- npa.* verdict convention, same as stages 2-3: an HTTP status, or a code above
     -- the HTTP range for a fetch that returned 200 but is unusable.
     --   900 = empty body   901 = 200 but not an Atom feed   599 = gave up retrying
+    --   903 = truncated by the loader's page ceiling, so the scope is incomplete
+    --         and must stay in the worklist rather than read as finished
     http_status   INTEGER,
     last_modified TIMESTAMPTZ,
     fetched_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
