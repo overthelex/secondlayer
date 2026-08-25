@@ -33,7 +33,9 @@ const FTS_PREDICATE =
 // federal judgment. The real language sits in metadata_json->>'Sprache' ('de'/'fr'/'it')
 // for those spiders. Cantonal spiders are single-language or properly ordered, and have
 // no Sprache key, so the fallback to languages[1] covers them unchanged.
-const LANG_EXPR = `COALESCE(metadata_json->>'Sprache', languages[1])`;
+// Sprache is trusted only when it is exactly one of the three languages after
+// trimming and lower-casing; anything else falls back to languages[1].
+const LANG_EXPR = `COALESCE(CASE WHEN lower(btrim(metadata_json->>'Sprache')) IN ('de','fr','it') THEN lower(btrim(metadata_json->>'Sprache')) END, languages[1])`;
 
 export class ChCourtTools extends BaseToolHandler {
   constructor(private db: any) {
