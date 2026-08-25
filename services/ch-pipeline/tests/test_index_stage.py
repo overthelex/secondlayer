@@ -137,13 +137,16 @@ def test_a_failed_row_recovering_a_body_clears_its_stale_error(conn):
 
 
 def test_html_url_survives_a_reindex_where_the_listing_transiently_drops_html(conn):
-    """Finding 2: html_url is the one optional column that was not protected
-    by COALESCE — a transient listing gap must not null out a working URL."""
+    """Finding 2: a transient listing gap must not null out a WORKING URL --
+    one this row has fetched before (text_source = 'html' is the receipt).
+    A URL that was never fetched gets no such protection: see the
+    phantom-pdf tests below for why."""
     f = _fields()
     index_stage.upsert(conn, f, {"json", "html"})
     before = conn.execute(
         "SELECT html_url FROM ch_court_decisions").fetchone()[0]
     assert before.endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.html")
+    conn.execute("UPDATE ch_court_decisions SET text_source = 'html', stage = 'fetched'")
 
     index_stage.upsert(conn, f, {"json", "pdf"})
     row = conn.execute(
@@ -513,3 +516,39 @@ def test_a_reindex_keeps_the_pdf_preference_extract_recorded(conn):
     assert row[0] == "pdf", "the preference must survive a re-index"
     assert row[1] and row[2], "both URLs restored from the listing, as before"
     assert row[3] == "indexed"
+
+
+# --- a body URL the listing does not offer and this row never fetched is dropped ---
+
+def test_a_never_fetched_pdf_url_is_dropped_when_the_listing_has_no_pdf(conn):
+    """The old importer built pdf_urls by pattern. On the first prod backfill
+    2,521 documents carried one although their listing had only .html and
+    .json; every one answered 404, and `pdf_url IS NOT NULL` sent them
+    round a re-queue loop. A URL that was never fetched (no receipt in
+    text_source or pdf_sha256) and is not on offer now is not kept."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf'")
+    index_stage.upsert(conn, f, {"json", "html"})
+    row = conn.execute("SELECT pdf_url, html_url FROM ch_court_decisions").fetchone()
+    assert row[0] is None, "a phantom pdf_url must not survive a re-index"
+    assert row[1], "the html the listing offers is still there"
+
+
+def test_a_fetched_pdf_url_survives_a_transient_listing_gap(conn):
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    conn.execute("UPDATE ch_court_decisions SET text_source = 'pdf', pdf_sha256 = 'abc', stage = 'loaded'")
+    index_stage.upsert(conn, f, {"json"})
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] and row[0].endswith(".pdf"), "a PDF this row has fetched keeps its URL through a gap"
+
+
+def test_a_url_the_listing_offers_again_comes_straight_back(conn):
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf'")
+    index_stage.upsert(conn, f, {"json", "html"})          # dropped
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})   # listing now offers it
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] and row[0].endswith("/ZG_OG_001_Z1-2020-5_2022-02-18.pdf")
