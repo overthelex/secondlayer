@@ -164,3 +164,64 @@ def test_normalise_nfkc_and_quotes():
     assert "­" not in result
     assert "—" not in result
     assert "“" not in result and "”" not in result
+
+
+# --- Discriminating pairs: a gold-only/distractor-only unit pair that is
+# itself near-identical (a single number changed, e.g. "180 Tagen" vs "30
+# Tagen") is exactly the amendment shape this benchmark exists to catch.
+# Regression fixture for the bug the fuzzy window match let through: a
+# 0.98-ratio single-paragraph pair where BOTH the gold-verbatim and the
+# distractor-verbatim answer used to "find" the other edition's unit too,
+# via window matching, and score() returned ungrounded for both.
+
+GOLD_DISC = "1 Die Frist beträgt innert 180 Tagen nach Zustellung des Entscheids an die Partei."
+DISTRACTOR_DISC = "1 Die Frist beträgt innert 30 Tagen nach Zustellung des Entscheids an die Partei."
+
+
+def test_discriminating_unit_gold_verbatim_is_grounded_correct():
+    v = s.score(GOLD_DISC, GOLD_DISC, DISTRACTOR_DISC)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0
+
+
+def test_discriminating_unit_distractor_verbatim_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_DISC, GOLD_DISC, DISTRACTOR_DISC)
+    assert v.label == "grounded_wrong_version"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_coverage == 1.0
+
+
+def test_discriminating_unit_survives_cosmetic_variation():
+    # Doubled whitespace and a soft hyphen are cosmetic and normalise()
+    # erases both (collapses whitespace, deletes the soft hyphen outright),
+    # so the *normalised* form is still an exact match -- discriminating
+    # units require exactness post-normalisation, not exactness of the raw
+    # string. (Unlike inserted quote characters, which are real characters
+    # with no cancelling rule and correctly break an exact match -- see
+    # normalise()'s docstring on why quotes are unified, not deleted.)
+    answer = (
+        "1  Die  Frist beträgt innert 180 Tagen nach Zu­stellung des "
+        "Entscheids an die Partei."
+    )
+    v = s.score(answer, GOLD_DISC, DISTRACTOR_DISC)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0
+
+
+def test_discriminating_unit_rejects_typos_even_though_number_is_right():
+    # Trade-off, deliberate and documented in the module docstring: once a
+    # unit is flagged discriminating, fuzzy window matching is switched
+    # off for it entirely, so an otherwise-harmless typo elsewhere in the
+    # SAME paragraph now sinks the match even though the discriminating
+    # number ("180 Tagen") is untouched and correct. Two one-letter typos,
+    # in "Zustellung" and "Entscheids", neither anywhere near "180 Tagen".
+    answer = GOLD_DISC.replace("Zustellung", "Zustollung").replace(
+        "Entscheids", "Entscheeds"
+    )
+    assert answer != GOLD_DISC
+    v = s.score(answer, GOLD_DISC, DISTRACTOR_DISC)
+    assert v.label == "ungrounded"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_coverage == 0.0

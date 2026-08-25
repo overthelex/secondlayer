@@ -81,6 +81,43 @@ attempted; window matching is skipped and such a unit counts as not found
 unless it occurs verbatim. This is a deliberate trade: on a runaway answer,
 recall on near-verbatim-but-typo'd units is sacrificed for the calculation
 staying bounded.
+
+DISCRIMINATING PAIRS: WHEN FUZZY MATCHING MUST NOT BE ALLOWED AT ALL
+A Fedlex amendment often changes exactly one number, or one short word, and
+leaves the rest of the paragraph untouched -- "180 Tagen" becomes "30
+Tagen", nothing else in the sentence moves. That is precisely the case
+window matching (see above) cannot reliably reject: an ~80-character
+paragraph that differs from its counterpart by one digit still scores
+around 0.92-0.98 on SequenceMatcher, because character-level similarity
+does not know that "180" and "30" mean different things -- it only sees
+that most of the string is unchanged. Measured directly on this pair: 0.98.
+Left as-is, BOTH the gold-verbatim answer and the distractor-verbatim
+answer would "window-match" the OTHER edition's unit too, both coverages
+would read 1.0/1.0, and the label would come out `ungrounded` for a
+perfectly-grounded answer -- exactly backwards, and worse than useless
+for a benchmark whose entire point is catching this kind of amendment.
+
+The fix: before matching, every gold-only unit is compared against every
+distractor-only unit with `SequenceMatcher.ratio()` on their normalised
+forms (see `_discriminating_units()`). Any unit involved in a cross-pair at
+or above `_WINDOW_RATIO` (0.92 -- the same constant, reused rather than
+duplicated, since it is the same "these two strings are suspiciously
+similar" test) is a DISCRIMINATING unit: for that unit, and that unit
+only, fuzzy window matching is switched off, and it may be found only by
+an exact substring match of its normalised form in the normalised answer
+(see `_coverage()`'s `exact_only` parameter). Units with no
+near-duplicate on the other side are unaffected and keep the normal
+substring-or-window behaviour.
+
+This has a real, deliberate cost: an answer that gets the discriminating
+number exactly right but has an unrelated typo elsewhere in the SAME
+paragraph now scores that unit as not found, where a non-discriminating
+unit would have tolerated the typo (see
+test_discriminating_unit_rejects_typos_even_though_number_is_right). That
+trade is accepted on purpose -- for a pair this close, "probably the same
+paragraph" is not a safe substitute for "quotes the discriminating wording
+exactly," and silently allowing fuzzy matching here is precisely the bug
+this section exists to close.
 """
 from __future__ import annotations
 
@@ -268,10 +305,35 @@ def _unit_found(unit: str, answer: str) -> bool:
     return _window_found(unit, answer)
 
 
-def _coverage(unit_set: set[str], answer: str) -> float:
+def _discriminating_units(
+    gold_only: set[str], distractor_only: set[str]
+) -> tuple[set[str], set[str]]:
+    """Cross-compare every gold-only unit against every distractor-only
+    unit and flag the ones that are near-duplicates of each other (ratio
+    >= _WINDOW_RATIO) -- see module docstring "DISCRIMINATING PAIRS".
+    Those units may only be found by exact substring match; everything
+    else keeps the normal substring-or-window behaviour.
+    """
+    disc_gold: set[str] = set()
+    disc_distractor: set[str] = set()
+    for g in gold_only:
+        for d in distractor_only:
+            if SequenceMatcher(None, g, d).ratio() >= _WINDOW_RATIO:
+                disc_gold.add(g)
+                disc_distractor.add(d)
+    return disc_gold, disc_distractor
+
+
+def _coverage(
+    unit_set: set[str], answer: str, exact_only: frozenset[str] = frozenset()
+) -> float:
     if not unit_set:
         return 0.0
-    found = sum(1 for u in unit_set if _unit_found(u, answer))
+    found = 0
+    for u in unit_set:
+        ok = (u in answer) if u in exact_only else _unit_found(u, answer)
+        if ok:
+            found += 1
     return found / len(unit_set)
 
 
@@ -282,9 +344,11 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     See the module docstring for the full reasoning; in short: units() both
     candidate texts, partitions the union into gold-only / distractor-only
     / shared, measures what fraction of each partition's units occur in
-    ANSWER (verbatim or via a high-similarity window match), and applies
-    the 0.6/0.2 thresholds to gold_coverage and distractor_coverage to pick
-    a label.
+    ANSWER (verbatim, or via a high-similarity window match unless the unit
+    is part of a "discriminating pair" -- see module docstring
+    "DISCRIMINATING PAIRS" -- in which case only an exact match counts),
+    and applies the 0.6/0.2 thresholds to gold_coverage and
+    distractor_coverage to pick a label.
     """
     norm_answer = normalise(answer)
     gold_units = set(units(gold))
@@ -292,9 +356,10 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     shared_units = gold_units & distractor_units
     gold_only = gold_units - shared_units
     distractor_only = distractor_units - shared_units
+    disc_gold, disc_distractor = _discriminating_units(gold_only, distractor_only)
 
-    gold_coverage = _coverage(gold_only, norm_answer)
-    distractor_coverage = _coverage(distractor_only, norm_answer)
+    gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
+    distractor_coverage = _coverage(distractor_only, norm_answer, disc_distractor)
     shared_coverage = _coverage(shared_units, norm_answer)
 
     if gold_coverage >= _STRONG and distractor_coverage <= _WEAK:
