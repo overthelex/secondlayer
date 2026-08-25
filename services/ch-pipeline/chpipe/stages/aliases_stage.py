@@ -1,5 +1,8 @@
-"""Seeds ch_act_alias (migration 199) from three sources, all additive and
-idempotent:
+"""Seeds ch_act_alias (migration 199) from three sources, idempotent but
+NOT purely additive: title-derived rows (source title_paren) are reconciled
+on every run, so an abbreviation that has become ambiguous (claimed by
+more than one SR number in a language) is DELETED before the current
+unambiguous set is inserted. Curated and Fedlex rows are never removed.
 
   fedlex_abbreviation  ch_act.abbreviation, the German abbreviation Fedlex
                        supplies directly on the act ("OR", "ZGB"). German
@@ -64,16 +67,62 @@ def _from_titles(conn, lang: str) -> int:
     a bare date in parentheses, no comma, no match), so re-deriving that
     logic in SQL would be a second implementation to keep in sync with the
     first.
+
+    **An abbreviation two different acts both claim is not seeded at all.**
+    "(KV)" ends the title of every cantonal constitution filed under SR
+    131.xxx, so seeding it maps one abbreviation onto 26 acts -- and a Uri
+    court's "Art. 12 KV" then resolves to whichever of them
+    citations-resolve's ranking happens to reach first (it resolved to
+    Appenzell's). An alias that names 26 acts identifies none of them: the
+    citation is better left at `unresolved_abbr`, which is visible in
+    reports_cit's top-unresolved list, than resolved to the wrong act, which
+    is not visible anywhere. Ambiguity is per (abbr, lang) and per SR number:
+    two rows of the same act are one act, and the same abbreviation in two
+    languages is two independent aliases. The other two sources are
+    unaffected -- `curated` is hand-checked and `fedlex_abbreviation` is
+    Fedlex's own assertion about one act.
     """
     col = _TITLE_COLUMNS[lang]
     rows = conn.execute(
         f"SELECT sr_number, {col} AS title FROM ch_act "
         f"WHERE {col} IS NOT NULL AND sr_number IS NOT NULL").fetchall()
-    pairs = set()
+    claimed: dict[str, set[str]] = {}
     for row in rows:
         abbr = aliases_from_title(row["title"])
         if abbr:
-            pairs.add((abbr, lang, row["sr_number"], "title_paren"))
+            claimed.setdefault(abbr, set()).add(row["sr_number"])
+    ambiguous = sorted(a for a, srs in claimed.items() if len(srs) > 1)
+    if ambiguous:
+        log.info("aliases: %s title_paren abbreviations ambiguous in %s, "
+                 "not seeded: %s", len(ambiguous), lang,
+                 ", ".join(ambiguous[:20]))
+    pairs = {(abbr, lang, next(iter(srs)), "title_paren")
+             for abbr, srs in claimed.items() if len(srs) == 1}
+
+    # Reconcile: a title_paren row an earlier run inserted can go stale in
+    # two ways a later ch_act load exposes -- the abbreviation it named
+    # becomes ambiguous (a second act now claims it too), or the act's title
+    # changed and no longer carries that abbreviation at all. `ON CONFLICT
+    # DO NOTHING` below only guards against re-inserting a duplicate; it
+    # never removes a row this pass would not (re-)seed, so without this a
+    # stale alias sits in `ch_act_alias` forever and citations keep
+    # resolving to the act that no longer uniquely owns it. `curated` and
+    # `fedlex_abbreviation` rows are untouched -- this only ever deletes
+    # `title_paren` rows for the language just computed.
+    existing = conn.execute(
+        "SELECT abbr, sr_number FROM ch_act_alias "
+        "WHERE lang = %s AND source = 'title_paren'", (lang,)).fetchall()
+    target = {(abbr, sr) for abbr, _lang, sr, _source in pairs}
+    stale = {(r["abbr"], r["sr_number"]) for r in existing} - target
+    if stale:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "DELETE FROM ch_act_alias WHERE abbr = %s AND lang = %s "
+                "AND sr_number = %s AND source = 'title_paren'",
+                sorted((abbr, lang, sr) for abbr, sr in stale))
+        log.info("aliases: %s stale title_paren rows removed in %s",
+                 len(stale), lang)
+
     if not pairs:
         return 0
     with conn.cursor() as cur:

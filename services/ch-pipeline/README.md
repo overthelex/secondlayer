@@ -769,6 +769,45 @@ title carries no parenthesised abbreviation at all (the big codes: OR, ZGB,
 StGB, Cst. …). Re-running it after `ch_act` gains new acts, or after the
 curated map grows, costs nothing beyond what actually changed.
 
+**A title-derived abbreviation two acts both claim is not seeded at all.**
+"(KV)" ends the title of every cantonal constitution filed under SR 131.xxx,
+so seeding it maps one abbreviation onto 26 acts — and a Uri court's
+"Art. 12 KV" then resolves to whichever of them step 1's ranking reaches
+first (it resolved to Appenzell's). An alias that names 26 acts identifies
+none of them, and a citation left at `unresolved_abbr` is visible in
+`reports_cit`'s top-unresolved list while a citation resolved to the wrong
+act is visible nowhere. The skip is per (abbr, lang) and per SR number — two
+`ch_act` rows of the same act are one act — and it applies to `title_paren`
+only: `curated` is hand-checked and `fedlex_abbreviation` is Fedlex's own
+assertion about one act. Each run logs how many abbreviations it skipped per
+language.
+
+**What `citations` deliberately does not extract.** A 200-row judged sample
+of resolved statute citations from the first full backfill measured 98%
+extraction, 97.4% act and 100% article accuracy; the misses it found are
+four rules in `chpipe/citations.py`, each trading a handful of real
+citations for a much larger number of invented ones:
+
+- A **cantonal suffix** stays on the abbreviation (`LPA-VD`, `LPA-GE`, and
+  the other 24 canton codes). `ch_act_alias` carries federal acts only, so
+  these stay at `unresolved_abbr` — which is right: cut down to "LPA" they
+  resolved to the *federal* animal-protection act (SR 455) the court never
+  mentioned.
+- A **single-digit ordinance suffix** stays too (`OPP 2`, `BVV 2`) — "OPP"
+  alone resolved to an unrelated aviation ordinance. Bounded to an
+  abbreviation of at least three letters followed by one space, one digit
+  1–3 and a non-digit, so "Art. 5 OR 2019" stays "OR".
+- A **range wider than five article numbers** drops both its endpoints:
+  "Kommentar zu den Art. 308-327a ZPO" is a commentary's scope, not two
+  articles applied to the case. "Art. 8-10 ZGB" is unaffected. Failure
+  mode: a court really applying two articles more than five apart in one
+  range loses both.
+- A **paragraph number above 12** ends the paragraph list and starts an
+  article list: "art. 5 al. 1 et 2, 9, 26 et 36 Cst." is five articles of
+  the constitution, not a paragraph 36 of article 5. "Art. 42 Abs. 1 und 2
+  BGG" is unaffected. Failure mode: a genuine paragraph 13 or beyond, and
+  everything after it, is re-read as further articles.
+
 **`citations`** claims decisions sitting at `loaded` with
 `citations_extracted_at IS NULL`, runs `chpipe.citations` over each one's
 text in a thread pool, and writes the raw edges it finds — BGE/docket/ECLI
