@@ -17,6 +17,7 @@ import { extractRadaEvidence } from './rada';
 import { extractRegistryEvidence } from './registry';
 import { extractProceduralEvidence } from './procedural';
 import { extractDDEvidence } from './dd';
+import { extractChEvidence } from './ch';
 
 function mergeEvidence(target: EvidenceResult, source: EvidenceResult): void {
   target.decisions.push(...source.decisions);
@@ -46,6 +47,7 @@ export function extractEvidenceFromToolResult(
   mergeEvidence(result, extractRegistryEvidence(toolName, parsed));
   mergeEvidence(result, extractProceduralEvidence(toolName, parsed));
   mergeEvidence(result, extractDDEvidence(toolName, parsed));
+  mergeEvidence(result, extractChEvidence(toolName, parsed));
 
   return result;
 }
