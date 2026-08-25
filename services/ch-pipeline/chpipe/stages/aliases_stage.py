@@ -1,5 +1,8 @@
-"""Seeds ch_act_alias (migration 199) from three sources, all additive and
-idempotent:
+"""Seeds ch_act_alias (migration 199) from three sources, idempotent but
+NOT purely additive: title-derived rows (source title_paren) are reconciled
+on every run, so an abbreviation that has become ambiguous (claimed by
+more than one SR number in a language) is DELETED before the current
+unambiguous set is inserted. Curated and Fedlex rows are never removed.
 
   fedlex_abbreviation  ch_act.abbreviation, the German abbreviation Fedlex
                        supplies directly on the act ("OR", "ZGB"). German
