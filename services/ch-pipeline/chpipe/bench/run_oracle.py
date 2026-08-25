@@ -31,8 +31,8 @@ date_end_applicability is INCLUSIVE (verified on prod 2026-08-23: 19,428
 consecutive parsed editions of the same act+lang have
 next.date_applicability = prev.date_end_applicability + 1 day). The old `<`
 predicate treated an edition's last day as already uncovered, which is why
-7,356 of 7,390 "before" items (as_of = change_date - 1 day, i.e. the old
-edition's last day) came back `no_edition_for_date` on prod.
+7,356 of 7,390 "before" items (as_of = the old edition's last day in force
+-- see build.make_items) came back `no_edition_for_date` on prod.
 
 Resolving by `act_id` (when present) rather than `sr_number` fixes a second,
 independent failure: several `ch_act` rows can share one `sr_number` (the
@@ -176,7 +176,8 @@ def run(settings: Settings, items_path: str | pathlib.Path, out_path: str | path
     chpipe.bench.score.score() against its own gold/distractor, and write
     `{out_path}/results-oracle.jsonl`, one line per item:
     `{id, system: "oracle", lang, answer, verdict: {label, gold_coverage,
-    distractor_coverage, shared_coverage}, oracle_error?}`.
+    distractor_coverage, shared_coverage, distractor_all_coverage},
+    oracle_error?}`.
 
     Scoring happens inside this run (not a separate pass) because the
     oracle's answer is never persisted anywhere else -- unlike an LLM run,
@@ -211,6 +212,7 @@ def run(settings: Settings, items_path: str | pathlib.Path, out_path: str | path
                         "gold_coverage": verdict.gold_coverage,
                         "distractor_coverage": verdict.distractor_coverage,
                         "shared_coverage": verdict.shared_coverage,
+                        "distractor_all_coverage": verdict.distractor_all_coverage,
                     },
                 }
                 if oracle_error is not None:

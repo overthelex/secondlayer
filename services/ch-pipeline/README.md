@@ -1206,6 +1206,16 @@ The "texts differ" rule is an inequality, not a similarity threshold: a
 ratio gate would drop the one-number amendment this benchmark is built to
 ask about. See CARD.md, "Construction".
 
+Each surviving change yields an `after` item dated on the change itself and
+a `before` item dated on the **old edition's last day in force** (its
+inclusive `date_end_applicability`) — not simply the change date minus one
+day, which can fall in a gap where Fedlex published no consolidation and no
+edition answers the question at all. Whichever half of a pair has the
+shorter, wholly-contained text as its gold is dropped (the `after` half of a
+deletion, the `before` half of an addition): there is no wording there that
+could tell a correct answer from a wrong one. Both rules are spelled out in
+CARD.md, "Construction".
+
 **2. Run the oracle.**
 
     python -m chpipe.bench.run_oracle --items /data/ch-corpus/bench --out /data/ch-corpus/bench

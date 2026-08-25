@@ -39,10 +39,15 @@ CHANGE_ROW = {
     "date_applicability": datetime.date(2021, 1, 1),
 }
 
+# date_end_applicability is the LAST DAY the edition is in force
+# (inclusive), so the old edition ends the day before the new one starts --
+# 2020-12-31, not 2021-01-01. make_items() reads this field to date the
+# `before` item, so getting the convention wrong here would silently make
+# `before` and `after` ask about the same day.
 OLD_ROW = {
     "version_id": 123,
     "date_applicability": datetime.date(2015, 1, 1),
-    "date_end_applicability": datetime.date(2021, 1, 1),
+    "date_end_applicability": datetime.date(2020, 12, 31),
     "eli_consolidation_uri": "https://fedlex.data.admin.ch/eli/cc/27/317_321_377/20150101",
     "text": OLD_TEXT,
 }
@@ -153,6 +158,37 @@ def test_make_items_as_of_values():
     assert after["change_date"] == "2021-01-01"
 
 
+def test_make_items_before_uses_the_old_editions_last_day_across_a_gap():
+    """Consecutive parsed editions can leave a GAP: everything between the
+    old edition's date_end_applicability and the new edition's
+    date_applicability is a hole with no parsed edition in it (Fedlex
+    published no XML for the intervening consolidations). change_date - 1
+    day lands in that hole, and the `before` question then has no answer in
+    the database at all -- 192 items came back `no_edition_for_date` from
+    the oracle on the prod build for exactly this reason. The old edition's
+    own last day in force is the date to ask about."""
+    old_row = dict(OLD_ROW, date_end_applicability=datetime.date(2020, 6, 30))
+    items, skipped = build.make_items(CHANGE_ROW, old_row, NEW_ROW, "OR", "de")
+    assert skipped == []
+    before, after = items
+    assert before["as_of"] == "2020-06-30"
+    assert after["as_of"] == "2021-01-01"
+    assert before["change_date"] == "2021-01-01"
+    # the id and the rendered question follow as_of, not change_date - 1
+    assert before["id"] == build.item_id("de", "220", "art_336", datetime.date(2020, 6, 30))
+    assert "30. Juni 2020" in before["question"]
+
+
+def test_make_items_before_falls_back_to_change_date_minus_one_without_an_end_date():
+    """Only when the old edition carries no date_end_applicability at all
+    is there nothing better to use than the day before the change."""
+    old_row = dict(OLD_ROW, date_end_applicability=None)
+    items, _skipped = build.make_items(CHANGE_ROW, old_row, NEW_ROW, "OR", "de")
+    before, _after = items
+    assert before["as_of"] == "2020-12-31"
+    assert before["gold_is_current"] is True
+
+
 def test_make_items_gold_and_distractor_swap():
     items, _skipped = build.make_items(CHANGE_ROW, OLD_ROW, NEW_ROW, "OR", "de")
     before, after = items
@@ -165,8 +201,8 @@ def test_make_items_gold_and_distractor_swap():
     assert after["gold"]["version_id"] == 124
     assert after["distractor"]["version_id"] == 123
     assert before["gold"]["eli"] == OLD_ROW["eli_consolidation_uri"]
-    assert before["gold"]["date_end_applicability"] == "2021-01-01"
-    assert after["distractor"]["date_end_applicability"] == "2021-01-01"
+    assert before["gold"]["date_end_applicability"] == "2020-12-31"
+    assert after["distractor"]["date_end_applicability"] == "2020-12-31"
     assert after["gold"]["date_end_applicability"] is None
 
 
@@ -236,6 +272,44 @@ def test_make_items_drops_item_with_no_discriminating_unit():
     assert skipped[0]["kind"] == "before"
     assert skipped[0]["reason"] == "no_discriminating_unit"
     assert skipped[0]["as_of"] == "2020-12-31"
+
+
+def test_make_items_drops_the_half_whose_gold_is_a_subset_of_the_distractor():
+    """A repeal of one SENTENCE inside a paragraph, not of a whole
+    paragraph: the shorter edition's paragraph is a substring of the longer
+    one's, so it contributes no gold-only unit and the half where it is
+    gold is undecidable -- nothing an answer contains can prove it meant
+    the shorter edition, since a correct answer is textually a fragment of
+    the wrong one. Under the old equality-based partition the two
+    paragraphs were merely unequal and the item was shipped unscoreable.
+    See score.py, "CONTAINMENT, NOT EQUALITY".
+    """
+    p1 = (
+        "1 Diese Bestimmung regelt die Mitführung von Kindern auf "
+        "Fahrrädern nach den Vorgaben dieser Verordnung im Einzelnen."
+    )
+    long_p2 = (
+        "2 Kinder dürfen auf einem Nachlaufteil an ein- und zweiplätzigen "
+        "Fahrrädern mitgeführt werden, sofern sie das zwölfte Altersjahr "
+        "noch nicht vollendet haben und einen Velohelm tragen."
+    )
+    short_p2 = (
+        "2 Kinder dürfen auf einem Nachlaufteil an ein- und zweiplätzigen "
+        "Fahrrädern mitgeführt werden."
+    )
+    long_text = p1 + "\n" + long_p2
+    short_text = p1 + "\n" + short_p2
+
+    old_row = dict(OLD_ROW, text=long_text)
+    new_row = dict(NEW_ROW, text=short_text)
+
+    items, skipped = build.make_items(CHANGE_ROW, old_row, new_row, "OR", "de")
+
+    assert [item["kind"] for item in items] == ["before"]
+    assert len(skipped) == 1
+    assert skipped[0]["kind"] == "after"
+    assert skipped[0]["reason"] == "no_discriminating_unit"
+    assert skipped[0]["as_of"] == "2021-01-01"
 
 
 # --- _build_lang: the language cap counts ITEMS, not changes ----------------

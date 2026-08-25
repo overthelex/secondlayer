@@ -115,9 +115,23 @@ def make_items(
     eli_consolidation_uri and text for the edition valid before/after the
     change.
 
-    `before`: as_of = change_date - 1 day, gold = OLD_ROW, distractor =
-    NEW_ROW. `after`: as_of = change_date, gold = NEW_ROW, distractor =
-    OLD_ROW.
+    `before`: as_of = the OLD edition's last day in force, gold = OLD_ROW,
+    distractor = NEW_ROW. `after`: as_of = change_date, gold = NEW_ROW,
+    distractor = OLD_ROW.
+
+    THE OLD EDITION'S LAST DAY, NOT change_date - 1. `date_end_applicability`
+    is inclusive (the last day the edition is in force), so when it is
+    present it IS the date the `before` question must ask about. It is
+    usually change_date - 1 day, but not always: consecutive parsed editions
+    can leave a GAP -- an edition whose date_end_applicability is 2020-06-30
+    followed by one starting 2021-01-01, because the intervening editions
+    were never published as XML (see CARD.md, "Known limits"). For those,
+    change_date - 1 day falls in the hole, no edition covers it, and the
+    question is unanswerable from the database: measured on the prod build,
+    192 `before` items came back `no_edition_for_date` from the oracle for
+    exactly this reason. Only when the old edition has no
+    date_end_applicability at all (it is somehow still open-ended despite a
+    later edition existing) does this fall back to change_date - 1 day.
 
     CHANGE_ROW's act_id is stamped onto every output item as item["act_id"]
     -- run_oracle.py (and any consumer resolving an edition for this item)
@@ -154,8 +168,11 @@ def make_items(
     article_number = change_row["article_number"]
     change_date_str = _iso(change_date)
 
+    old_end = old_row["date_end_applicability"]
+    before_as_of = old_end if old_end is not None else change_date - datetime.timedelta(days=1)
+
     variants = (
-        ("before", change_date - datetime.timedelta(days=1), old_row, new_row),
+        ("before", before_as_of, old_row, new_row),
         ("after", change_date, new_row, old_row),
     )
 

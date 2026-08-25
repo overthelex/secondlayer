@@ -99,18 +99,34 @@ pair only if all of the following hold:
   `ambiguous_article`.
 - **The edition pair has at least one discriminating unit.** Splitting both
   texts into paragraph- or sentence-level units (see Scorer), the edition
-  valid on the query date must contain at least one unit that is *not* also
-  present, word-for-word, in the other edition. If it doesn't — the whole
-  visible change is something this scorer's unit-level matching cannot
-  represent as a difference — the item is dropped (`no_discriminating_unit`)
-  rather than shipped unscoreable.
+  valid on the query date must contain at least one unit that is *not*
+  contained, word-for-word, anywhere in the other edition's text. If it
+  doesn't — the whole visible change is something this scorer's unit-level
+  matching cannot represent as a difference — the item is dropped
+  (`no_discriminating_unit`) rather than shipped unscoreable.
+
+  **Pure deletions are not benchmarkable this way.** When an amendment only
+  removes wording — a sentence struck from a paragraph, with nothing added —
+  the shorter edition's text is entirely contained in the longer one's, so
+  the half whose gold is the shorter edition has no discriminating unit and
+  is dropped. This is not a scorer limitation to be tuned away: a correct
+  answer is textually a fragment of the wrong answer, so nothing an answer
+  *contains* can prove which of the two it meant. (The half whose gold is
+  the longer edition is unaffected and is kept, so a deletion still
+  contributes one item, not two.)
 
 A change that survives all of the above produces **two items**, `before` and
 `after`:
 
-- `before`: `as_of` = the change's `date_applicability` minus one day; gold
-  = the edition valid before the change; distractor = the edition valid
-  after it.
+- `before`: `as_of` = the gold edition's **last day in force** — its
+  `date_end_applicability`, which is inclusive. This is usually the change
+  date minus one day, but not always: consecutive parsed editions can leave
+  a gap, since Fedlex did not publish XML for every consolidation, and the
+  day before the change can fall in that gap where no edition exists to
+  answer the question at all. Only when the old edition carries no
+  `date_end_applicability` does the builder fall back to the change date
+  minus one day. Gold = the edition valid before the change; distractor =
+  the edition valid after it.
 - `after`: `as_of` = the change's `date_applicability` itself; gold = the
   edition valid after the change; distractor = the edition valid before it.
 
@@ -193,23 +209,53 @@ tell one edition from another, and short strings inflate similarity scores
 by chance.
 
 **Partition.** The gold and distractor texts' units are compared against
-each other and split three ways: **gold-only** (wording in gold but not in
-distractor — evidence the answer quotes gold), **distractor-only** (the
-mirror image), and **shared** (identical in both — present in both, so
-finding it is evidence of neither). Coverage is the fraction of each
-partition's units found in the answer; shared-coverage is reported for
-diagnostics only and never decides the label.
+each other and split three ways: **gold-only** (a unit of gold whose
+normalised form does not occur anywhere in the distractor's normalised
+text — evidence the answer quotes gold), **distractor-only** (the mirror
+image), and **shared** (everything else: a unit contained in the other
+edition's text, so finding it is evidence of neither). Coverage is the
+fraction of each partition's units found in the answer; shared-coverage is
+reported for diagnostics only and never decides the label.
+
+The test is **containment, not equality**, and that matters for the
+commonest amendment shape there is. When an amendment adds words to a
+paragraph, the old paragraph is a substring of the new one: the two units
+are not equal, but every answer quoting the new (correct) wording verbatim
+necessarily contains the old wording too. Treating the old paragraph as
+distractor-only therefore scored word-for-word correct answers as
+`ungrounded` — 1,097 items on the first full build did exactly that.
+Under containment the old paragraph is shared, and only the added wording
+discriminates.
+
+**`distractor_all_coverage`.** Containment has a consequence: for an
+amendment that only adds wording, *no* unit is distractor-only, so
+`distractor_coverage` is 0.0 by construction and an answer reciting the old
+edition could never be caught as wrong-version. So the scorer also reports
+`distractor_all_coverage`, the share of **all** the distractor's units —
+distractor-only and shared alike — found in the answer, and uses it as the
+wrong-version signal in exactly that case (see Labels). It is a diagnostic
+everywhere else: on such an item a correct answer scores 1.0 on it too,
+which is why it is only ever consulted after the gold-side test has already
+failed.
 
 **Discriminating pairs.** A Fedlex amendment often changes exactly one
 number or short word and leaves the rest of the paragraph untouched (e.g.
 "180 days" becomes "30 days"). Two such near-identical paragraphs can score
 above 0.92 on plain string similarity even though they mean different
-things. For any gold-only unit that has a distractor-only unit scoring
-0.92 or higher against it (and vice versa), fuzzy matching is switched off
+things. For any gold-only unit that scores 0.92 or higher against **any**
+of the distractor's units (and vice versa), fuzzy matching is switched off
 for that unit: it may only be found by an **exact** substring match in the
 normalised answer, never by the fuzzy window match described next. This is
 what lets the scorer catch the one-number-changed case, which is the hard
 case the benchmark exists to test.
+
+The comparison deliberately runs against *all* of the other edition's
+units, shared ones included, not only its discriminating ones. An
+amendment that appends a short clause leaves the old paragraph shared (it
+sits inside the new one) and the pair ~0.95 similar with nothing in the
+distractor-only set to pair against — and an answer reciting the old
+paragraph would then fuzzy-match the new one and score as correct. That is
+the same failure, arriving through the containment rule instead.
 
 **Fuzzy window match (0.92).** For a unit that is not a discriminating
 unit, if it does not occur verbatim in the normalised answer, the scorer
@@ -243,8 +289,10 @@ and it is not free. Four consequences to read a CH-PiT number with:
   is scored as grounding in neither — not as correct.
 
 **Labels.** `grounded_correct` requires `gold_coverage >= 0.6` and
-`distractor_coverage <= 0.2`. `grounded_wrong_version` is the mirror:
-`distractor_coverage >= 0.6` and `gold_coverage <= 0.2`. Everything else —
+`distractor_coverage <= 0.2`, and is tested first. `grounded_wrong_version`
+requires `gold_coverage <= 0.2` and either `distractor_coverage >= 0.6` or —
+when there are no distractor-only units at all, the pure-addition case above
+— `distractor_all_coverage >= 0.6`. Everything else —
 including an answer that clears neither floor, or one that clears 0.6 on
 one side while also leaking past 0.2 on the other — is `ungrounded`.
 
@@ -339,6 +387,17 @@ headline `score`, as the point-in-time grounding number.
   `gold_is_current` and the report splits the correct-answer share on it;
   the `gold_is_current = false` share is the one that measures what the
   benchmark is named after.
+- **Amendments that only delete wording contribute one item, not two.**
+  See Construction: the half whose gold is the shorter edition has no
+  wording of its own to find and is dropped. A benchmark built this way
+  therefore under-represents repeals relative to their share of real
+  amendment traffic.
+- **`before` items are dated by the edition, not by the change.** An
+  item's `as_of` is the gold edition's last day in force, which is the
+  change date minus one day only when the two editions are contiguous.
+  Where Fedlex's XML consolidations skip an edition, `as_of` sits further
+  back — still a date on which the gold text was genuinely in force, but
+  not always adjacent to `change_date`.
 - **No cantonal law.** CH-PiT covers only federal acts (the corpus this
   pipeline builds from Fedlex's federal SR collection); cantonal statutes
   are out of scope entirely.

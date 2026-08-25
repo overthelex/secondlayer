@@ -19,26 +19,72 @@ each candidate text is split into UNITS (paragraphs, falling back to
 sentences -- see `units()`) and partitioned three ways relative to the
 *other* candidate:
 
-  * gold-only units    -- wording that appears in GOLD but not DISTRACTOR;
-                           finding these is evidence the answer quoted GOLD.
+  * gold-only units    -- wording that appears in GOLD and is NOT contained
+                           anywhere in DISTRACTOR's text; finding these is
+                           evidence the answer quoted GOLD.
   * distractor-only     -- the mirror image; evidence for DISTRACTOR.
-  * shared units        -- wording identical in both editions (e.g. an
-                           unamended paragraph); finding these is evidence
-                           of neither, since both editions would satisfy it.
+  * shared units        -- everything else: a unit of one edition that is
+                           contained, word for word, in the other edition's
+                           text. Finding one is evidence of neither, since
+                           an answer quoting either edition contains it.
+
+CONTAINMENT, NOT EQUALITY (why "shared" is not just set intersection)
+The partition tests SUBSTRING CONTAINMENT of a unit in the *other
+edition's whole normalised text*, not equality between the two unit sets.
+An earlier version intersected the sets, and got the commonest Fedlex
+amendment shape exactly backwards: when an amendment ADDS words to a
+paragraph, the old paragraph is a strict prefix/substring of the new one,
+so the two units are not equal and the old one was filed as
+"distractor-only" -- yet every correct answer, which quotes the new
+paragraph verbatim, necessarily CONTAINS the old wording too. Both
+coverages then read 1.0 and the verbatim-gold answer was labelled
+`ungrounded`. Measured on the prod build: 1,097 items scored that way, all
+of them answers that were word-for-word correct. Under containment the old
+paragraph is `shared` instead, so quoting gold no longer counts as
+evidence for the distractor.
 
 Coverage is computed separately for each partition (the fraction of that
 partition's units found in the answer), and the label is decided from
-gold_coverage and distractor_coverage alone -- shared_coverage is reported
-for diagnostics (a run where shared_coverage is high but both
-gold_coverage and distractor_coverage are low usually means the answer
-paraphrased the unchanged parts of the article and never got near the
-amendment) but never drives the label, since by construction it cannot
-discriminate between the two editions.
+gold_coverage and distractor_coverage (plus distractor_all_coverage in the
+one case below) -- shared_coverage is reported for diagnostics (a run
+where shared_coverage is high but both gold_coverage and
+distractor_coverage are low usually means the answer paraphrased the
+unchanged parts of the article and never got near the amendment) but never
+drives the label, since by construction it cannot discriminate between the
+two editions.
+
+WRONG-VERSION DETECTION WHEN THE DISTRACTOR-ONLY SET IS EMPTY
+Containment has a direct consequence: for a pure-addition amendment (gold
+is a strict superset of distractor) NO distractor unit is distractor-only,
+so distractor_coverage is 0.0 by construction and could never reach the
+0.6 floor -- an answer that recites the OLD wording would fall through to
+`ungrounded` instead of being caught as wrong-version, which is the single
+thing this benchmark exists to detect. So a second signal is computed:
+`distractor_all_coverage`, the share of ALL of DISTRACTOR's units (not just
+the distractor-only ones) found in the answer. It is used only as a
+fallback, and only when the distractor-only set is empty -- see "LABEL
+THRESHOLDS" below. It cannot be used unconditionally, because in the
+superset case a perfectly correct gold answer also contains every
+distractor unit; that is why the gold-side test is checked first and the
+wrong-version test additionally requires gold_coverage <= 0.2 (an answer
+holding the added wording is grounded in gold, whatever else it contains).
+
+The mirror case -- a pure DELETION, gold is a strict subset of distractor
+-- leaves the GOLD-only set empty, and no fallback can rescue it: a
+correct answer is textually a fragment of the wrong answer, so nothing an
+answer contains can prove it meant the shorter edition. Such an item is
+undecidable by design, and build.make_items() drops it at build time
+(`no_discriminating_unit`, via discriminating_units()) rather than shipping
+it. Pure deletions of a whole sentence are therefore not benchmarkable this
+way; see CARD.md, "Construction."
 
 LABEL THRESHOLDS: 0.6 / 0.2
 `grounded_correct` requires gold_coverage >= 0.6 AND distractor_coverage
-<= 0.2; `grounded_wrong_version` is the mirror (distractor_coverage >= 0.6,
-gold_coverage <= 0.2). Everything else -- including an answer that clears
+<= 0.2; `grounded_wrong_version` is the mirror (gold_coverage <= 0.2 AND
+either distractor_coverage >= 0.6, or -- when there are no distractor-only
+units at all, see "WRONG-VERSION DETECTION" above -- distractor_all_coverage
+>= 0.6). The gold test is applied first, so an answer that clears both is
+`grounded_correct`. Everything else -- including an answer that clears
 neither 0.6 floor, or one that clears 0.6 on one side but also leaks past
 0.2 on the other -- is `ungrounded`. The two thresholds are deliberately
 not complementary (0.6 + 0.2 = 0.8, not 1.0): an article can have as few as
@@ -97,12 +143,18 @@ would read 1.0/1.0, and the label would come out `ungrounded` for a
 perfectly-grounded answer -- exactly backwards, and worse than useless
 for a benchmark whose entire point is catching this kind of amendment.
 
-The fix: before matching, every gold-only unit is compared against every
-distractor-only unit with `SequenceMatcher.ratio()` on their normalised
-forms (see `_discriminating_units()`). Any unit involved in a cross-pair at
-or above `_WINDOW_RATIO` (0.92 -- the same constant, reused rather than
-duplicated, since it is the same "these two strings are suspiciously
-similar" test) is a DISCRIMINATING unit: for that unit, and that unit
+The fix: before matching, every gold-only unit is compared against ALL of
+the distractor's units -- shared ones included, not just the
+distractor-only ones -- with `SequenceMatcher.ratio()` on their normalised
+forms, and vice versa (see `_discriminating_units()`). All of them,
+because containment (above) files a unit as shared exactly when it sits
+inside the other edition's text, which is itself a near-duplicate
+relationship: append a short clause to a paragraph and the old paragraph
+is shared, the new one gold-only, and the pair is ~0.95 similar with no
+distractor-only unit anywhere to flag it against. Any unit with a
+counterpart at or above `_WINDOW_RATIO` (0.92 -- the same constant, reused
+rather than duplicated, since it is the same "these two strings are
+suspiciously similar" test) is a DISCRIMINATING unit: for that unit, and that unit
 only, fuzzy window matching is switched off, and it may be found only by
 an exact substring match of its normalised form in the normalised answer
 (see `_coverage()`'s `exact_only` parameter). Units with no
@@ -192,16 +244,27 @@ class Verdict:
     `label` is one of "grounded_correct" (answer's article wording matches
     the edition valid on the query date), "grounded_wrong_version" (matches
     the adjacent edition instead) or "ungrounded" (neither, or a mix of
-    both -- see module docstring). The three coverage fields are shares in
-    [0.0, 1.0] of the corresponding unit partition found in the answer; a
-    partition with zero units always reports coverage 0.0 (never NaN, never
+    both -- see module docstring). The four coverage fields are shares in
+    [0.0, 1.0] of the corresponding unit set found in the answer; a set
+    with zero units always reports coverage 0.0 (never NaN, never
     undefined), including shared_coverage.
+
+    gold_coverage / distractor_coverage / shared_coverage are over the
+    three-way partition (see module docstring "WHY UNIT-LEVEL...").
+    `distractor_all_coverage` is over ALL of the distractor's units,
+    distractor-only and shared alike; it overlaps the other two on purpose,
+    and exists as the wrong-version fallback for a pure-addition amendment
+    where the distractor-only set is empty (see "WRONG-VERSION DETECTION
+    WHEN THE DISTRACTOR-ONLY SET IS EMPTY"). Read it as a diagnostic
+    everywhere else -- on a gold-superset item a correct answer scores 1.0
+    on it too.
     """
 
     label: str
     gold_coverage: float
     distractor_coverage: float
     shared_coverage: float
+    distractor_all_coverage: float = 0.0
 
 
 def normalise(s: str) -> str:
@@ -330,6 +393,18 @@ def discriminating_units(gold: str, distractor: str) -> tuple[list[str], list[st
     drop such a pair from the benchmark rather than ship an unscoreable
     item.
 
+    A unit is "only" one edition's when its normalised form is NOT a
+    substring of the OTHER edition's normalised text; anything contained in
+    the other text is shared, even when the two units are not equal as
+    strings (see module docstring "CONTAINMENT, NOT EQUALITY"). Since a
+    unit is by construction a substring of its own text, two identical
+    units still land in `shared`, exactly as an equality test would have
+    put them -- containment is strictly the more inclusive rule, never the
+    other way round. Note the asymmetry it allows, which an intersection
+    cannot express: for a pure-addition amendment, the old paragraph is
+    shared (it sits inside the new one) while the new paragraph is
+    gold-only.
+
     Not to be confused with the private `_discriminating_units()` below,
     which does something different: given an already-computed gold_only/
     distractor_only split, it finds the near-duplicate *cross-pairs*
@@ -344,28 +419,46 @@ def discriminating_units(gold: str, distractor: str) -> tuple[list[str], list[st
     """
     gold_units = set(units(gold))
     distractor_units = set(units(distractor))
-    shared = gold_units & distractor_units
-    gold_only = gold_units - shared
-    distractor_only = distractor_units - shared
+    norm_gold = normalise(gold)
+    norm_distractor = normalise(distractor)
+    gold_only = {u for u in gold_units if u not in norm_distractor}
+    distractor_only = {u for u in distractor_units if u not in norm_gold}
+    shared = (gold_units | distractor_units) - gold_only - distractor_only
     return sorted(gold_only), sorted(distractor_only), sorted(shared)
 
 
 def _discriminating_units(
-    gold_only: set[str], distractor_only: set[str]
+    gold_only: set[str], distractor_only: set[str],
+    gold_units: set[str], distractor_units: set[str],
 ) -> tuple[set[str], set[str]]:
-    """Cross-compare every gold-only unit against every distractor-only
-    unit and flag the ones that are near-duplicates of each other (ratio
-    >= _WINDOW_RATIO) -- see module docstring "DISCRIMINATING PAIRS".
-    Those units may only be found by exact substring match; everything
-    else keeps the normal substring-or-window behaviour.
+    """Flag the "only" units that have a near-duplicate (ratio >=
+    _WINDOW_RATIO) among the OTHER edition's units -- see module docstring
+    "DISCRIMINATING PAIRS". Those units may only be found by exact
+    substring match; everything else keeps the normal substring-or-window
+    behaviour.
+
+    The comparison is against ALL of the other edition's units, not only
+    its "only" ones. Containment (see "CONTAINMENT, NOT EQUALITY") files a
+    unit as `shared` precisely when it sits inside the other edition's
+    text, which is exactly the near-duplicate relationship this guard
+    exists to catch: for an amendment that appends a short clause, the old
+    paragraph is shared, the new one is gold-only, and the two are ~0.95
+    similar. Comparing only the "only" sets would leave that pair unguarded
+    -- the gold unit would have no counterpart to be flagged against, and
+    an answer reciting the OLD paragraph could window-match the new one and
+    be scored `grounded_correct`. Which is the exact failure the guard was
+    written for, reintroduced through the other door.
     """
-    disc_gold: set[str] = set()
-    disc_distractor: set[str] = set()
-    for g in gold_only:
-        for d in distractor_only:
-            if SequenceMatcher(None, g, d).ratio() >= _WINDOW_RATIO:
-                disc_gold.add(g)
-                disc_distractor.add(d)
+    disc_gold = {
+        g for g in gold_only
+        if any(SequenceMatcher(None, g, d).ratio() >= _WINDOW_RATIO
+               for d in distractor_units)
+    }
+    disc_distractor = {
+        d for d in distractor_only
+        if any(SequenceMatcher(None, d, g).ratio() >= _WINDOW_RATIO
+               for g in gold_units)
+    }
     return disc_gold, disc_distractor
 
 
@@ -388,12 +481,15 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
 
     See the module docstring for the full reasoning; in short: units() both
     candidate texts, partitions the union into gold-only / distractor-only
-    / shared, measures what fraction of each partition's units occur in
-    ANSWER (verbatim, or via a high-similarity window match unless the unit
-    is part of a "discriminating pair" -- see module docstring
-    "DISCRIMINATING PAIRS" -- in which case only an exact match counts),
-    and applies the 0.6/0.2 thresholds to gold_coverage and
-    distractor_coverage to pick a label.
+    / shared by containment in the other text, measures what fraction of
+    each partition's units occur in ANSWER (verbatim, or via a
+    high-similarity window match unless the unit is part of a
+    "discriminating pair" -- see module docstring "DISCRIMINATING PAIRS" --
+    in which case only an exact match counts), and applies the 0.6/0.2
+    thresholds to gold_coverage and distractor_coverage to pick a label,
+    falling back to distractor_all_coverage for the wrong-version test when
+    the distractor-only set is empty (a pure-addition amendment -- see
+    "WRONG-VERSION DETECTION WHEN THE DISTRACTOR-ONLY SET IS EMPTY").
     """
     norm_answer = normalise(answer)
     gold_only_list, distractor_only_list, shared_list = discriminating_units(gold, distractor)
@@ -402,15 +498,25 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
         set(distractor_only_list),
         set(shared_list),
     )
-    disc_gold, disc_distractor = _discriminating_units(gold_only, distractor_only)
+    gold_units = set(units(gold))
+    distractor_units = set(units(distractor))
+    disc_gold, disc_distractor = _discriminating_units(
+        gold_only, distractor_only, gold_units, distractor_units)
 
     gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
     distractor_coverage = _coverage(distractor_only, norm_answer, disc_distractor)
     shared_coverage = _coverage(shared_units, norm_answer)
+    distractor_all_coverage = _coverage(distractor_units, norm_answer, disc_distractor)
 
+    # Gold first: on a gold-superset item a correct answer scores 1.0 on
+    # distractor_all_coverage as well, so the fallback below must never get
+    # the chance to relabel it.
     if gold_coverage >= _STRONG and distractor_coverage <= _WEAK:
         label = "grounded_correct"
-    elif distractor_coverage >= _STRONG and gold_coverage <= _WEAK:
+    elif gold_coverage <= _WEAK and (
+        distractor_coverage >= _STRONG
+        or (not distractor_only and distractor_all_coverage >= _STRONG)
+    ):
         label = "grounded_wrong_version"
     else:
         label = "ungrounded"
@@ -420,4 +526,5 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
         gold_coverage=gold_coverage,
         distractor_coverage=distractor_coverage,
         shared_coverage=shared_coverage,
+        distractor_all_coverage=distractor_all_coverage,
     )

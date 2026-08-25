@@ -419,6 +419,7 @@ def _answer_item(client: Any, model_id: str, model_short: str,
             "gold_coverage": verdict.gold_coverage,
             "distractor_coverage": verdict.distractor_coverage,
             "shared_coverage": verdict.shared_coverage,
+            "distractor_all_coverage": verdict.distractor_all_coverage,
         },
     }
     if error is not None:

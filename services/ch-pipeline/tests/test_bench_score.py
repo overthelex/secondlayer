@@ -233,3 +233,158 @@ def test_discriminating_unit_rejects_typos_even_though_number_is_right():
     assert v.label == "ungrounded"
     assert v.gold_coverage == 0.0
     assert v.distractor_coverage == 0.0
+
+
+# --- Containment: an amendment that ADDS words to a paragraph --------------
+#
+# The commonest Fedlex amendment shape, and the one an equality-based
+# partition got exactly backwards: the old paragraph is a substring of the
+# new one, so an answer quoting the new (correct) wording verbatim also
+# "contains" the old wording. Under set intersection the old paragraph was
+# distractor-only, both coverages read 1.0, and a word-for-word correct
+# answer was labelled `ungrounded` -- 1,097 items on the prod build. Under
+# containment the old paragraph is shared and only the added wording
+# discriminates. Modelled on a real case (SR 741.11 Art. 63, the
+# Nachlaufteil paragraph).
+
+DISTRACTOR_ADD = (
+    "1 Der Anhänger darf nur an einem dafür ausgerüsteten Fahrrad "
+    "mitgeführt werden.\n"
+    "2 Kinder dürfen auf einem Nachlaufteil gemäss Artikel 210 Absatz 5 "
+    "VTS an ein- und zweiplätzigen Fahrrädern mitgeführt werden."
+)
+
+GOLD_ADD = (
+    "1 Der Anhänger darf nur an einem dafür ausgerüsteten Fahrrad "
+    "mitgeführt werden.\n"
+    "2 Kinder dürfen auf einem Nachlaufteil gemäss Artikel 210 Absatz 5 "
+    "VTS an ein- und zweiplätzigen Fahrrädern mitgeführt werden, sofern "
+    "sie das zwölfte Altersjahr noch nicht vollendet haben und einen "
+    "Velohelm tragen."
+)
+
+
+def test_added_words_leave_the_old_paragraph_shared_not_distractor_only():
+    gold_only, distractor_only, shared = s.discriminating_units(GOLD_ADD, DISTRACTOR_ADD)
+    assert len(gold_only) == 1
+    assert "velohelm tragen" in gold_only[0]
+    # the old paragraph sits inside the new one, so it discriminates nothing
+    assert distractor_only == []
+    assert len(shared) == 2
+
+
+def test_superset_gold_verbatim_is_grounded_correct():
+    v = s.score(GOLD_ADD, GOLD_ADD, DISTRACTOR_ADD)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0
+    # the correct answer contains every distractor unit too -- which is
+    # precisely why distractor_all_coverage may only be consulted after the
+    # gold test has already failed.
+    assert v.distractor_all_coverage == 1.0
+
+
+def test_superset_distractor_verbatim_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_ADD, GOLD_ADD, DISTRACTOR_ADD)
+    assert v.label == "grounded_wrong_version"
+    assert v.gold_coverage == 0.0
+    # nothing is distractor-only here, so the label rests entirely on the
+    # all-units fallback
+    assert v.distractor_coverage == 0.0
+    assert v.distractor_all_coverage == 1.0
+
+
+def test_superset_unrelated_prose_is_still_ungrounded():
+    # The all-units fallback must not turn every non-gold answer into
+    # "wrong version": it fires only when the distractor's own wording is
+    # actually there.
+    v = s.score(UNRELATED, GOLD_ADD, DISTRACTOR_ADD)
+    assert v.label == "ungrounded"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_all_coverage == 0.0
+
+
+# --- Containment: the mirror case, a DELETED sentence ----------------------
+#
+# Gold is a strict subset of distractor, so gold has no discriminating unit
+# at all and no fallback can rescue it: a correct answer is a fragment of
+# the wrong one. The item is undecidable and build.make_items() drops it --
+# see tests/test_bench_build.py's
+# test_make_items_drops_the_half_whose_gold_is_a_subset_of_the_distractor.
+
+GOLD_DEL = DISTRACTOR_ADD
+DISTRACTOR_DEL = GOLD_ADD
+
+
+def test_deleted_sentence_leaves_gold_with_no_discriminating_unit():
+    gold_only, distractor_only, _shared = s.discriminating_units(GOLD_DEL, DISTRACTOR_DEL)
+    assert gold_only == []
+    assert len(distractor_only) == 1
+
+
+def test_deleted_sentence_gold_verbatim_cannot_be_scored_correct():
+    # Not a defect in the scorer: with nothing in gold that is not also in
+    # distractor there is no evidence to find. Documented as a known limit
+    # (CARD.md, "Construction") and dropped at build time rather than
+    # shipped as an item no system could pass.
+    v = s.score(GOLD_DEL, GOLD_DEL, DISTRACTOR_DEL)
+    assert v.gold_coverage == 0.0
+    assert v.label == "ungrounded"
+
+
+def test_deleted_sentence_distractor_verbatim_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_DEL, GOLD_DEL, DISTRACTOR_DEL)
+    assert v.label == "grounded_wrong_version"
+    assert v.distractor_coverage == 1.0
+
+
+# --- Containment must not disarm the discriminating-pair guard -------------
+#
+# A short appended clause makes the old paragraph a substring of the new one
+# (so it is SHARED, not distractor-only) AND leaves the pair ~0.95 similar.
+# If the guard only cross-compared the two "only" sets, the gold unit would
+# have nothing to be flagged against, fuzzy window matching would stay on,
+# and an answer reciting the OLD paragraph could window-match the NEW one --
+# scoring the wrong edition as `grounded_correct`, the exact bug the guard
+# was written for, reintroduced through the other door. Measured on the
+# fixtures below: with the guard restricted to the "only" sets,
+# gold_coverage comes out 1.0 for an answer that quotes only the old
+# wording. The guard therefore compares against ALL of the other edition's
+# units.
+
+DISTRACTOR_SHORT_ADD = (
+    "1 Wer eine Sache, die ihm anvertraut worden ist, unrechtmässig in "
+    "seinem oder eines anderen Nutzen verwendet, wird mit Freiheitsstrafe "
+    "bis zu fünf Jahren oder Geldstrafe bestraft."
+)
+GOLD_SHORT_ADD = DISTRACTOR_SHORT_ADD[:-1] + " und zu begründen."
+
+# The old wording plus a little prose -- long enough that a full-unit-length
+# window exists for the fuzzy matcher to work with, which is what makes this
+# shape dangerous and a bare quotation of the old paragraph harmless.
+DISTRACTOR_SHORT_ADD_IN_PROSE = DISTRACTOR_SHORT_ADD + " Diese Fassung galt damals."
+
+
+def test_short_addition_flags_the_gold_unit_as_discriminating():
+    gold_only, distractor_only, shared = s.discriminating_units(
+        GOLD_SHORT_ADD, DISTRACTOR_SHORT_ADD)
+    assert len(gold_only) == 1 and distractor_only == [] and len(shared) == 1
+    # nothing in the distractor-only set to pair against -- the flag can
+    # only come from the shared unit, i.e. from comparing against ALL units
+    disc_gold, _disc_distractor = s._discriminating_units(
+        set(gold_only), set(distractor_only),
+        set(s.units(GOLD_SHORT_ADD)), set(s.units(DISTRACTOR_SHORT_ADD)))
+    assert disc_gold == set(gold_only)
+
+
+def test_short_addition_old_wording_in_prose_is_not_scored_correct():
+    v = s.score(DISTRACTOR_SHORT_ADD_IN_PROSE, GOLD_SHORT_ADD, DISTRACTOR_SHORT_ADD)
+    assert v.gold_coverage == 0.0
+    assert v.label == "grounded_wrong_version"
+
+
+def test_short_addition_gold_verbatim_is_still_grounded_correct():
+    v = s.score(GOLD_SHORT_ADD, GOLD_SHORT_ADD, DISTRACTOR_SHORT_ADD)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0
