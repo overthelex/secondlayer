@@ -533,3 +533,141 @@ def test_capitalised_ordinary_word_after_an_article_is_not_an_act():
 def test_the_two_dotted_constitution_abbreviations_survive_that_rule():
     assert refs("art. 8 Cst.") == [("Cst.", "8", None, "fr")]
     assert refs("art. 8 Cost.") == [("Cost.", "8", None, "it")]
+
+
+# --------------------------------------------------------------------------
+# Cantonal abbreviations: the "-VD" suffix belongs to the abbreviation
+# --------------------------------------------------------------------------
+
+def test_fr_cantonal_suffix_stays_part_of_the_abbreviation():
+    """"LPA-VD" is the Vaud administrative-procedure act. Cut down to "LPA"
+    it resolved to the federal animal-protection act (SR 455) -- a wrong act,
+    not a missing one. Kept whole it matches no federal alias and stays
+    unresolved, which is the truthful outcome for a cantonal act."""
+    assert refs("art. 5 LPA-VD") == [("LPA-VD", "5", None, "fr")]
+
+
+def test_fr_geneva_cantonal_suffix():
+    assert refs("art. 60 LPA-GE") == [("LPA-GE", "60", None, "fr")]
+
+
+def test_de_cantonal_suffix_of_a_german_canton_defaults_to_german():
+    assert refs("Art. 3 VRG-ZH") == [("VRG-ZH", "3", None, "de")]
+
+
+def test_a_two_letter_suffix_that_is_not_a_canton_is_not_kept():
+    assert refs("Art. 5 LPA-XY") == [("LPA", "5", None, "de")]
+
+
+def test_a_trailing_dash_is_not_a_cantonal_suffix():
+    assert refs("Art. 8 ZGB- und weiter") == [("ZGB", "8", None, "de")]
+
+
+# --------------------------------------------------------------------------
+# Digit-suffixed ordinances ("OPP 2", "BVV 2")
+# --------------------------------------------------------------------------
+
+def test_fr_digit_suffixed_ordinance_keeps_its_digit():
+    """"OPP 2" truncated to "OPP" resolved to an aviation ordinance."""
+    assert refs("art. 13 OPP 2") == [("OPP 2", "13", None, "fr")]
+
+
+def test_de_digit_suffixed_ordinance_keeps_its_digit():
+    assert refs("Art. 27 BVV 2") == [("BVV 2", "27", None, "de")]
+
+
+def test_a_year_after_the_abbreviation_is_not_a_digit_suffix():
+    """The digit must be followed by a non-digit, so a four-digit year never
+    becomes a one-digit suffix."""
+    assert refs("Art. 5 OR 2019") == [("OR", "5", None, "de")]
+
+
+def test_a_two_letter_abbreviation_takes_no_digit_suffix():
+    assert refs("Art. 5 OR 2") == [("OR", "5", None, "de")]
+
+
+def test_digit_suffix_at_the_end_of_a_sentence():
+    assert refs("Cela découle de l'art. 13 OPP 2.") == [("OPP 2", "13", None, "fr")]
+
+
+# --------------------------------------------------------------------------
+# Commentary ranges: a wide range is a coverage description, not a citation
+# --------------------------------------------------------------------------
+
+def test_a_wide_range_drops_both_endpoints():
+    """"Kommentar zu den Art. 308-327a ZPO" is a commentary's scope, not two
+    articles the court applied."""
+    assert refs("Kommentar zu den Art. 308-327a ZPO") == []
+    assert refs("Art. 308-327a ZPO") == []
+
+
+def test_a_narrow_range_still_yields_its_two_endpoints():
+    assert refs("Art. 8-10 ZGB") == [
+        ("ZGB", "8", None, "de"),
+        ("ZGB", "10", None, "de"),
+    ]
+
+
+def test_a_range_of_exactly_five_is_still_a_citation():
+    assert refs("Art. 8-13 ZGB") == [
+        ("ZGB", "8", None, "de"),
+        ("ZGB", "13", None, "de"),
+    ]
+
+
+def test_a_wide_range_drops_only_its_own_endpoints():
+    assert refs("Art. 4, 308-327a ZPO") == [("ZPO", "4", None, "de")]
+
+
+def test_a_wide_range_written_with_bis():
+    assert refs("Art. 308 bis 327a ZPO") == []
+
+
+def test_a_wide_list_that_is_not_a_range_is_untouched():
+    assert refs("Art. 308 und 327a ZPO") == [
+        ("ZPO", "308", None, "de"),
+        ("ZPO", "327a", None, "de"),
+    ]
+
+
+# --------------------------------------------------------------------------
+# A paragraph list that turns into an article list
+# --------------------------------------------------------------------------
+
+def test_fr_paragraph_list_stops_at_a_number_too_large_to_be_a_paragraph():
+    """"art. 5 al. 1 et 2, 9, 26 et 36 Cst." cites five articles' worth of
+    constitution, not a paragraph 36. 26 is past any real paragraph count, so
+    the list is an article list from the comma that introduced it on."""
+    assert refs("art. 5 al. 1 et 2, 9, 26 et 36 Cst.") == [
+        ("Cst.", "5", "1", "fr"),
+        ("Cst.", "5", "2", "fr"),
+        ("Cst.", "9", None, "fr"),
+        ("Cst.", "26", None, "fr"),
+        ("Cst.", "36", None, "fr"),
+    ]
+
+
+def test_de_paragraph_list_without_a_comma_cuts_at_the_large_number():
+    assert refs("Art. 5 Abs. 1 und 26 BV") == [
+        ("BV", "5", "1", "de"),
+        ("BV", "26", None, "de"),
+    ]
+
+
+def test_a_paragraph_list_of_plausible_numbers_is_still_paragraphs():
+    assert refs("Art. 42 Abs. 1 und 2 BGG") == [
+        ("BGG", "42", "1", "de"),
+        ("BGG", "42", "2", "de"),
+    ]
+    assert refs("Art. 5 Abs. 1, 2 und 3 BV") == [
+        ("BV", "5", "1", "de"),
+        ("BV", "5", "2", "de"),
+        ("BV", "5", "3", "de"),
+    ]
+
+
+def test_a_paragraph_of_exactly_twelve_is_still_a_paragraph():
+    assert refs("Art. 5 Abs. 1 und 12 BV") == [
+        ("BV", "5", "1", "de"),
+        ("BV", "5", "12", "de"),
+    ]

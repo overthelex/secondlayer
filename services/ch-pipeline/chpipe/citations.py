@@ -60,6 +60,27 @@ yields two articles. Ranges are NOT expanded: "Art. 8-10 ZGB" yields the two
 endpoints 8 and 10 only, because expanding it would invent articles that may
 not exist.
 
+The abbreviation may carry a suffix, and both kinds must survive: a cantonal
+"-VD"/"-GE" ("LPA-VD" is Vaud's administrative-procedure act, not the federal
+LPA) and a single-digit ordinance number ("OPP 2", "BVV 2", never "OR 2019").
+See _ABBR for the exact shapes and why each is bounded the way it is.
+
+Two precision rules drop or re-read what looks like a citation but is not:
+
+  wide range        A range spanning more than _MAX_RANGE_SPAN article
+                    numbers is a coverage description, not an applied
+                    citation -- "Kommentar zu den Art. 308-327a ZPO" names a
+                    commentary's scope. Both endpoints are dropped.
+
+  large paragraph   A number larger than _MAX_PARAGRAPH in a paragraph
+                    continuation list ends the paragraph list: "art. 5 al. 1
+                    et 2, 9, 26 et 36 Cst." cites five articles, not a
+                    paragraph 36. See _scan_paragraphs for where the cut
+                    falls.
+
+Both carry a documented failure mode at their constant, and both trade a
+handful of real citations for a much larger number of invented ones.
+
 A *qualifier* list is not a paragraph list and not an article list: "Art. 3
 Abs. 1 Ziff. 2 und 3 VwVG" is one citation (article 3, paragraph 1), not two
 paragraphs and not two articles. The qualifier's own list is consumed with
@@ -339,8 +360,38 @@ _ITEM_SEP = re.compile(
     _GAP + r"(?:,|;|/|-|–|—|sowie|nonché|oder|und|ed|et|ou|bis|à|e|o)" + _GAP + r"(?=\d)"
 )
 
-# The act abbreviation the whole list shares: uppercase-initial, 2-12 letters.
-_ABBR = re.compile(_GAP + r"([A-ZÄÖÜ][A-Za-zÄÖÜäöü]{1,11})\.?(?![A-Za-zÄÖÜäöüéèàç0-9])")
+# The 26 cantons' two-letter codes. A hyphenated suffix drawn from this list
+# belongs to the abbreviation: "LPA-VD" is Vaud's administrative-procedure
+# act and "LPA-GE" is Geneva's, neither of which is the federal LPA (SR 455,
+# animal protection) that "LPA" alone resolves to. Cutting the suffix off
+# does not lose a citation, it invents a wrong one -- the federal act the
+# court never mentioned. Kept whole, the abbreviation matches no federal
+# alias (ch_act_alias carries federal acts only) and the citation stays at
+# `unresolved_abbr`, which is the truthful outcome for a cantonal act.
+_CANTONS = (
+    "AG|AI|AR|BE|BL|BS|FR|GE|GL|GR|JU|LU|NE|NW|OW|SG|SH|SO|SZ|TG|TI|UR"
+    "|VD|VS|ZG|ZH"
+)
+
+# The act abbreviation the whole list shares: uppercase-initial, 2-12 letters,
+# optionally carrying a cantonal suffix ("LPA-VD") or a single-digit ordinance
+# suffix ("OPP 2", "BVV 2").
+#
+# The digit branch is tried first and is deliberately narrow: at least three
+# letters, exactly one space, one digit 1-3, and a non-digit after it. Swiss
+# ordinances that share a base abbreviation are numbered exactly this way
+# (OPP 1/OPP 2/OPP 3, BVV 1/BVV 2/BVV 3), and "OPP" alone resolved to an
+# unrelated aviation ordinance. The non-digit lookahead is what keeps a year
+# out: "Art. 5 OR 2019" must stay "OR", not become "OR 2". The three-letter
+# floor keeps the two-letter abbreviations that are routinely followed by a
+# number ("RS 351.1", "SR 210", "OR 2") whole.
+_ABBR = re.compile(
+    _GAP
+    + r"("
+    + r"[A-ZÄÖÜ][A-Za-zÄÖÜäöü]{2,11}[ ][1-3](?!\d)"
+    + rf"|[A-ZÄÖÜ][A-Za-zÄÖÜäöü]{{1,11}}(?:-(?:{_CANTONS})(?![A-Za-zÄÖÜäöü]))?"
+    + r")\.?(?![A-Za-zÄÖÜäöüéèàç0-9])"
+)
 
 # Tokens that fill the abbreviation slot but are not acts. Compared on the
 # lowercased, dot-stripped token. RS/SR introduce a systematic number
@@ -383,10 +434,47 @@ _ABBR_LANG = {
     "CO": "fr", "CC": "fr", "CP": "fr", "CPP": "fr", "CPC": "fr",
     "Cst.": "fr", "LTF": "fr", "LP": "fr", "LPD": "fr", "CEDH": "fr",
     "Cost.": "it", "LEF": "it", "CEDU": "it",
+    # The two occupational-pension ordinances, which only exist in the
+    # digit-suffixed form ("OPP 2" / "BVV 2" are the same act in two
+    # languages) and are among the most-cited ordinances in social-insurance
+    # case law.
+    "OPP 2": "fr", "BVV 2": "de",
+}
+
+# The cantonal suffix carries a language signal of its own: a decision citing
+# "LPA-VD" or "LPA-GE" is written in French whatever keywords it happens to
+# use. Only the monolingual cantons are listed -- the bilingual ones (BE, FR,
+# GR, VS) would be a guess, so they fall through to the default like any
+# other abbreviation.
+_CANTON_LANG = {
+    "GE": "fr", "JU": "fr", "NE": "fr", "VD": "fr",
+    "TI": "it",
 }
 
 _MAX_LIST = 8    # references emitted per article list / per paragraph list
 _MAX_SCAN = 64   # items consumed past the cap before giving up on the list
+
+# The widest span a range may cover and still be read as a citation of its two
+# endpoints. Past it, the range is a *coverage description* -- "Kommentar zu
+# den Art. 308-327a ZPO" names a commentary's scope, not two articles the
+# court applied to the case -- and both endpoints are dropped rather than
+# recorded as applied citations. Failure mode: a court that really does apply
+# two articles more than five apart in one range loses both.
+_MAX_RANGE_SPAN = 5
+
+# The separators that make an article list a *range* rather than an
+# enumeration. "Art. 308 und 327a ZPO" is two citations however far apart the
+# two articles are; only a range says "everything between these".
+_RANGE_SEPS = frozenset({"-", "–", "—", "bis", "à"})
+
+# The largest number that can still be a paragraph in a paragraph list. Swiss
+# articles hardly ever run past a dozen paragraphs, so a larger number in a
+# continuation list is the next *article* -- "art. 5 al. 1 et 2, 9, 26 et 36
+# Cst." cites five articles of the constitution, not a paragraph 36 of
+# article 5. Failure mode: an article with a genuine paragraph 13 or beyond
+# (they exist, e.g. in tax and social-insurance acts) has that paragraph and
+# everything after it re-read as further articles of the same act.
+_MAX_PARAGRAPH = 12
 
 
 def _normalise_abbr(word: str) -> str | None:
@@ -419,6 +507,38 @@ def _keyword_lang(keywords: list[str]) -> str | None:
     return None
 
 
+def _canton_lang(abbr: str) -> str | None:
+    """The language a cantonal suffix implies, for the monolingual cantons."""
+    base, _, suffix = abbr.partition("-")
+    return _CANTON_LANG.get(suffix) if base else None
+
+
+def _number(article: str) -> int:
+    """The numeric part of an article number: "327a" -> 327. _ITEM guarantees
+    the token starts with digits, so this never fails."""
+    return int(re.match(r"\d+", article).group())
+
+
+def _drop_wide_ranges(
+    items: list[tuple[str, list[str]]], ranged: list[bool],
+) -> list[tuple[str, list[str]]]:
+    """Drop both endpoints of every range wider than _MAX_RANGE_SPAN.
+
+    Only the endpoints of the offending range go: "Art. 4, 308-327a ZPO"
+    keeps article 4 and drops 308 and 327a.
+    """
+    drop: set[int] = set()
+    for i in range(1, len(items)):
+        if not ranged[i]:
+            continue
+        if _number(items[i][0]) - _number(items[i - 1][0]) > _MAX_RANGE_SPAN:
+            drop.add(i - 1)
+            drop.add(i)
+    if not drop:
+        return items
+    return [item for i, item in enumerate(items) if i not in drop]
+
+
 def _scan_paragraphs(text: str, pos: int, paragraphs: list[str]) -> tuple[int, bool]:
     """Consume "und 2", "et 3", ... after a paragraph; append up to the cap.
 
@@ -427,20 +547,45 @@ def _scan_paragraphs(text: str, pos: int, paragraphs: list[str]) -> tuple[int, b
     itself followed by a paragraph keyword -- otherwise it is the next article
     of the list, as in "art. 207 cpv. 2 e 228 LT" (228 is an article) and
     "art. 134 cpv. 2 e 142 cpv. 4 LIFD" (142 is an article).
+
+    Those two tests decide one element at a time. A third one needs the whole
+    run in hand, so the run is collected first and committed afterwards: if
+    ANY number in it is larger than _MAX_PARAGRAPH the run is not a paragraph
+    list at all but an article list that a paragraph keyword introduced --
+    "art. 5 al. 1 et 2, 9, 26 et 36 Cst.". The cut is made at the *comma* that
+    opened the enumeration rather than at the large number itself (26 here),
+    because the comma is what separates items where "et"/"und" binds a
+    paragraph pair: everything from the comma on is left unconsumed for the
+    caller's own _ITEM_SEP scan to read as articles, so "1 et 2" stays two
+    paragraphs of article 5 and "9, 26 et 36" become three articles. With no
+    comma before the large number, the cut falls on the number itself.
     """
-    consumed = 0
-    while consumed < _MAX_SCAN:
-        cm = _PARA_CONT.match(text, pos)
+    run: list[tuple[int, str, str]] = []   # (end offset, number, separator text)
+    scan = pos
+    while len(run) < _MAX_SCAN:
+        cm = _PARA_CONT.match(text, scan)
         if cm is None:
             break
         number = cm.group(1)
         if len(number) > 2 or _PARA_AHEAD.match(text, cm.end()):
             break
-        pos = cm.end()
-        consumed += 1
+        run.append((cm.end(), number, cm.group(0)))
+        scan = cm.end()
+
+    cut = len(run)
+    wide = next((i for i, (_, n, _s) in enumerate(run)
+                 if int(n) > _MAX_PARAGRAPH), None)
+    if wide is not None:
+        cut = wide
+        for i in range(wide + 1):
+            if "," in run[i][2] or ";" in run[i][2]:
+                cut = i
+                break
+
+    for _end, number, _sep in run[:cut]:
         if len(paragraphs) < _MAX_LIST:
             paragraphs.append(number)
-    return pos, consumed > 0
+    return (run[cut - 1][0] if cut else pos), cut > 0
 
 def extract_statutes(text: str) -> list[StatuteRef]:
     """Extract statute-article references (e.g. "art. 336a CO") from `text`.
@@ -454,8 +599,10 @@ def extract_statutes(text: str) -> list[StatuteRef]:
     for hm in _HEAD.finditer(text):
         pos = hm.end()
         items: list[tuple[str, list[str]]] = []   # (article, paragraphs)
+        ranged: list[bool] = []   # item i is the far end of a range from i-1
         keywords: list[str] = []
         scanned = 0
+        is_range = False
 
         while scanned < _MAX_SCAN:
             im = _ITEM.match(text, pos)
@@ -487,12 +634,15 @@ def extract_statutes(text: str) -> list[StatuteRef]:
 
             if len(items) < _MAX_LIST:
                 items.append((im.group("article"), paragraphs))
+                ranged.append(is_range)
 
             sm = _ITEM_SEP.match(text, pos)
             if sm is None:
                 break
             pos = sm.end()
+            is_range = sm.group(0).strip() in _RANGE_SEPS
 
+        items = _drop_wide_ranges(items, ranged)
         if not items:
             continue
         am = _ABBR.match(text, pos)
@@ -505,6 +655,7 @@ def extract_statutes(text: str) -> list[StatuteRef]:
         lang = (
             _keyword_lang(keywords)
             or _HEAD_LANG.get(hm.group(1).lower())
+            or _canton_lang(abbr)
             or _ABBR_LANG.get(abbr)
             or "de"
         )

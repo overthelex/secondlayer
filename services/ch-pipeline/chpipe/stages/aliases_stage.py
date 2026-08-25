@@ -64,16 +64,37 @@ def _from_titles(conn, lang: str) -> int:
     a bare date in parentheses, no comma, no match), so re-deriving that
     logic in SQL would be a second implementation to keep in sync with the
     first.
+
+    **An abbreviation two different acts both claim is not seeded at all.**
+    "(KV)" ends the title of every cantonal constitution filed under SR
+    131.xxx, so seeding it maps one abbreviation onto 26 acts -- and a Uri
+    court's "Art. 12 KV" then resolves to whichever of them
+    citations-resolve's ranking happens to reach first (it resolved to
+    Appenzell's). An alias that names 26 acts identifies none of them: the
+    citation is better left at `unresolved_abbr`, which is visible in
+    reports_cit's top-unresolved list, than resolved to the wrong act, which
+    is not visible anywhere. Ambiguity is per (abbr, lang) and per SR number:
+    two rows of the same act are one act, and the same abbreviation in two
+    languages is two independent aliases. The other two sources are
+    unaffected -- `curated` is hand-checked and `fedlex_abbreviation` is
+    Fedlex's own assertion about one act.
     """
     col = _TITLE_COLUMNS[lang]
     rows = conn.execute(
         f"SELECT sr_number, {col} AS title FROM ch_act "
         f"WHERE {col} IS NOT NULL AND sr_number IS NOT NULL").fetchall()
-    pairs = set()
+    claimed: dict[str, set[str]] = {}
     for row in rows:
         abbr = aliases_from_title(row["title"])
         if abbr:
-            pairs.add((abbr, lang, row["sr_number"], "title_paren"))
+            claimed.setdefault(abbr, set()).add(row["sr_number"])
+    ambiguous = sorted(a for a, srs in claimed.items() if len(srs) > 1)
+    if ambiguous:
+        log.info("aliases: %s title_paren abbreviations ambiguous in %s, "
+                 "not seeded: %s", len(ambiguous), lang,
+                 ", ".join(ambiguous[:20]))
+    pairs = {(abbr, lang, next(iter(srs)), "title_paren")
+             for abbr, srs in claimed.items() if len(srs) == 1}
     if not pairs:
         return 0
     with conn.cursor() as cur:

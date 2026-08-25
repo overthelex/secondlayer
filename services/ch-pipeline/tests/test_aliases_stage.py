@@ -146,3 +146,53 @@ def test_report_total_matches_the_table(conn, settings):
     report = aliases_stage.run(settings)
     assert report.total == conn.execute(
         "SELECT count(*) AS n FROM ch_act_alias").fetchone()["n"]
+
+
+def test_an_ambiguous_title_abbreviation_is_not_inserted(conn, settings):
+    """"(KV)" ends the French/German title of every cantonal constitution
+    under SR 131.xxx, so seeding it would map one abbreviation to 26 acts and
+    a Uri court's "Art. 12 KV" would resolve to whichever one step 1 ranked
+    first. An abbreviation a title parenthesis gives to more than one act in
+    the same language identifies nothing, so it is not seeded at all."""
+    _act(conn, "455", title_fr="Loi federale du 16 decembre 2005 sur la "
+                              "protection des animaux (LPA)")
+    _act(conn, "131.231", title_fr="Constitution du canton de Vaud du "
+                                  "14 avril 2003 (LPA)")
+
+    aliases_stage.run(settings)
+
+    assert not any(a[0] == "LPA" and a[1] == "fr" and a[3] == "title_paren"
+                  for a in _aliases(conn))
+
+
+def test_a_unique_title_abbreviation_is_still_inserted(conn, settings):
+    _act(conn, "455", title_fr="Loi federale du 16 decembre 2005 sur la "
+                              "protection des animaux (LPA)")
+
+    aliases_stage.run(settings)
+
+    assert ("LPA", "fr", "455", "title_paren") in _aliases(conn)
+
+
+def test_the_same_abbreviation_in_two_languages_is_not_ambiguous(conn, settings):
+    """Ambiguity is per (abbr, lang): one act's German and Italian titles may
+    both end in the same abbreviation without either being ambiguous."""
+    _act(conn, "935.62", title_de="Bundesgesetz über die Dolmetscher (DolmG)",
+        title_it="Legge federale sugli interpreti (DolmG)")
+
+    aliases_stage.run(settings)
+
+    aliases = _aliases(conn)
+    assert ("DolmG", "de", "935.62", "title_paren") in aliases
+    assert ("DolmG", "it", "935.62", "title_paren") in aliases
+
+
+def test_two_rows_of_the_same_act_are_not_ambiguous(conn, settings):
+    """Two ch_act rows can carry the same sr_number (two editions of the same
+    act). One SR number is one act, whatever the row count."""
+    _act(conn, "455", title_fr="Loi federale sur la protection des animaux (LPA)")
+    _act(conn, "455", title_fr="Loi federale sur la protection des animaux (LPA)")
+
+    aliases_stage.run(settings)
+
+    assert ("LPA", "fr", "455", "title_paren") in _aliases(conn)
