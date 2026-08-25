@@ -30,6 +30,13 @@ export const V2_TOOL_NAMES = new Set<string>([
   // Повний корпус НПА (schema `npa`) — 293K актів / 439K редакцій, поза кураторськими ~655
   'search_npa',
   'get_npa_act',
+  // Швейцарія (CH) — судові рішення (entscheidsuche.ch) та федеральне законодавство
+  // (Fedlex): пошук, точковий у часі текст статті, історія змін акта.
+  'ch_search_court_decisions',
+  'ch_get_court_decision',
+  'ch_search_legislation',
+  'ch_get_act_article',
+  'ch_get_act_history',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',
