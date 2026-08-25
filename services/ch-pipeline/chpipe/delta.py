@@ -73,7 +73,8 @@ from dataclasses import dataclass, field
 from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
-from .stages import (acts_stage, diff_stage, extract_stage, fetch_stage,
+from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
+                     citations_stage, diff_stage, extract_stage, fetch_stage,
                      fetch_xml_stage, index_stage, load_stage,
                      parse_akn_stage, project_legacy_stage,
                      provenance_stage, versions_stage)
@@ -454,6 +455,12 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
         fetch_stage.run(settings, spider=spider)
         extracted = extract_stage.run(settings, spider=spider)
         load_stage.run(settings, spider=spider)
+        # citations_stage claims whatever just landed at `loaded` for this
+        # spider -- run right after load, in the same per-spider lap, so a
+        # decision's citation graph is only ever as many nights stale as its
+        # text is, not built up as a separate backlog the resolve pass has
+        # to wait on.
+        citations_stage.run(settings, spider=spider)
         # extract sends an HTML card with a PDF behind it back to `indexed`
         # (db.requeue_for_pdf). Inside a single-lap run nothing came back
         # for it, so on the first nightly run 33 such rows sat in `indexed`
@@ -467,6 +474,7 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
             fetch_stage.run(settings, spider=spider)
             extract_stage.run(settings, spider=spider)
             load_stage.run(settings, spider=spider)
+            citations_stage.run(settings, spider=spider)
 
     # index_stage.run() swallows a per-spider listing failure into
     # `failed_spiders` rather than raising -- deliberately, so one flaky
@@ -564,16 +572,17 @@ def main() -> DeltaReport:
     the individual renice() calls index_stage.main(), fetch_stage.main() etc.
     would normally make happen actually fire. This call is what stands in
     for all of them. NICE_IO and NICE_CPU are both 10 (see throttle.py), and
-    every stage this module touches (index/fetch/extract/load on the
-    decisions side, acts/versions/fetch-xml on the legislation side, plus
-    parse-akn, the one CPU stage in the mix) resolves to one of those two
-    values -- so a single renice(NICE_IO) here reproduces exactly what an
-    unattended sequence of each stage's own main() would have set, without
-    stacking os.nice()'s cumulative increment once per stage. wait_for_capacity
-    is NOT called again here: it already lives inside extract_stage.run()
-    and parse_akn_stage.run() themselves (the CPU-bound stages, and the only
-    ones that check it even from main()), so calling run() directly still
-    gets it -- only renice needed reproducing.
+    every stage this module touches (index/fetch/extract/load/citations on
+    the decisions side, acts/versions/fetch-xml on the legislation side,
+    parse-akn, the one CPU stage in the mix, and citations-resolve after
+    both) resolves to one of those two values -- so a single renice(NICE_IO)
+    here reproduces exactly what an unattended sequence of each stage's own
+    main() would have set, without stacking os.nice()'s cumulative increment
+    once per stage. wait_for_capacity
+    is NOT called again here: it already lives inside extract_stage.run(),
+    citations_stage.run() and parse_akn_stage.run() themselves (the
+    CPU-bound stages, and the only ones that check it even from main()), so
+    calling run() directly still gets it -- only renice needed reproducing.
     """
     from . import throttle
     logging.basicConfig(level=logging.INFO,
@@ -615,12 +624,51 @@ def main() -> DeltaReport:
             failures.append((name, exc))
             reports[name] = DeltaReport()
 
+    # citations_resolve_stage is a third, independent guarded step -- not
+    # folded into the loop above because it returns a ResolveReport, not a
+    # DeltaReport, and because it belongs after BOTH halves regardless of
+    # which one (if either) failed: ch_legislation_citations references acts
+    # and ch_case_citations references decisions, so whatever raw edges
+    # citations_stage already wrote -- this run or an earlier one -- are
+    # worth resolving even on a night the legislation half died. Same guard
+    # shape as the loop: logged in full, appended to `failures`, and never
+    # allowed to swallow (or be swallowed by) the other two.
+    #
+    # aliases_stage comes immediately before it, guarded the same way and for
+    # the same reason it exists at all: step 1 of resolution looks the
+    # citation's abbreviation up in ch_act_alias, and the legislation half
+    # that just ran may have discovered acts whose abbreviation is not in
+    # that table yet. Seeding after the resolve instead of before it would
+    # leave every citation of a newly discovered act stamped
+    # 'unresolved_abbr' -- a TERMINAL state that no ordinary run revisits
+    # (see citations_resolve_stage's docstring), so those citations would
+    # stay unresolved until an operator ran CHPIPE_CIT_RESOLVE_ALL by hand.
+    # Its own guard, not a shared one: a failing alias seed must still leave
+    # the resolve pass to run over the edges already extracted.
+    try:
+        alias_report = aliases_stage.run(settings)
+        log.info("delta: aliases inserted=%d total=%d",
+                 alias_report.inserted, alias_report.total)
+    except Exception as exc:                    # noqa: BLE001 -- see above
+        log.exception("delta: the alias seed failed")
+        failures.append(("aliases", exc))
+
+    resolve_report = citations_resolve_stage.ResolveReport()
+    try:
+        resolve_report = citations_resolve_stage.run(settings)
+    except Exception as exc:                    # noqa: BLE001 -- see above
+        log.exception("delta: the citations-resolve half failed")
+        failures.append(("citations-resolve", exc))
+
     decisions, legislation = reports["decisions"], reports["legislation"]
     log.info("delta: spiders=%s new_documents=%d new_versions=%d "
-             "new_changes=%d new_provenance=%d projected=%d failed=%s",
+             "new_changes=%d new_provenance=%d projected=%d "
+             "resolved(acts=%d editions=%d articles=%d cases=%d) failed=%s",
              decisions.spiders, decisions.new_documents,
              legislation.new_versions, legislation.new_changes,
              legislation.new_provenance, legislation.projected,
+             resolve_report.acts, resolve_report.editions,
+             resolve_report.articles, resolve_report.cases,
              ",".join(name for name, _ in failures) or "none")
     if failures:
         raise failures[0][1]

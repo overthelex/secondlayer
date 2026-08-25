@@ -7,6 +7,8 @@ import pytest
 from chpipe.config import Settings
 from chpipe.stages import ocr_stage
 
+from conftest import apply_migration_199
+
 
 def test_pauses_at_or_above_the_ceiling():
     assert ocr_stage.should_pause(load_ceiling=6.0, load1=6.0) is True
@@ -34,6 +36,10 @@ def test_a_zero_ceiling_disables_the_guard():
 # test_ocr_stage.py is 3 levels down from the repo root.
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
+# db.complete() unconditionally clears citations_extracted_at on the
+# 'extracted' branch (migration 199's column), and ocr_stage reaches that
+# branch on a recovered scan -- needs the column applied, same as
+# test_citations_stage.py.
 
 
 @pytest.fixture
@@ -54,6 +60,9 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 

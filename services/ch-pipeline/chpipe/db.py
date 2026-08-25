@@ -144,6 +144,16 @@ def complete(conn, doc_id: str, next_stage: str, **fields) -> None:
                    "failed_stage = NULL", "stage_updated_at = now()",
                    "updated_at = now()"]
     params: list = [next_stage]
+    if next_stage == "extracted":
+        # New text means the citation graph's extraction is stale: whatever
+        # ch_case_citations/ch_legislation_citations rows citations_stage
+        # wrote came from the OLD full_text, and citations_extracted_at
+        # being non-NULL would hide this row from claim_for_citations
+        # forever. Unconditional, not gated on a caller-supplied field --
+        # both extract_stage and ocr_stage reach 'extracted' through this
+        # same call, and a citation-graph concern has no business being
+        # something either has to remember to pass in.
+        assignments.append("citations_extracted_at = NULL")
     for column, value in fields.items():
         assignments.append(f"{column} = %s")
         params.append(value)
@@ -427,6 +437,117 @@ def failed_by_stage_versions(conn) -> list[tuple[str | None, int]]:
         cur.execute("SELECT failed_stage, count(*) FROM ch_act_version "
                     "WHERE stage = 'failed' GROUP BY 1 ORDER BY 2 DESC")
         return [(r[0], r[1]) for r in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Citations queue: a flag column (citations_extracted_at) on the same
+# ch_court_decisions table, not a stage transition -- citations_stage does
+# not move a row off 'loaded', it only stamps it once its text has been
+# scanned successfully. There is deliberately no attempts/backoff predicate
+# here (unlike claim() above): a decision whose extraction raises is left
+# unstamped (see citations_stage.run(), which keeps its existing edges rather
+# than deleting them for a batch that produced no replacement), so it does
+# land back in this query on the next run -- one extraction attempt per run,
+# no backoff, and the run itself skips the ones it has already failed so a
+# poison text cannot stall the queue behind it.
+# ---------------------------------------------------------------------------
+
+_CLAIM_CITATIONS_COLUMNS = "ecli, doc_id, spider, court_code, decision_date, full_text"
+
+
+def claim_for_citations(conn, limit: int, spider: str | None = None) -> list[dict]:
+    """Rows sitting at `loaded` that have not had citations extracted yet.
+
+    FOR UPDATE SKIP LOCKED, same caveat as claim(): not a distributed lock
+    under autocommit (the row lock releases the moment the SELECT
+    completes), so one process per stage is the supported model.
+    """
+    sql = ("SELECT " + _CLAIM_CITATIONS_COLUMNS + " FROM ch_court_decisions "
+           "WHERE stage = 'loaded' AND citations_extracted_at IS NULL")
+    params: list = []
+    if spider:
+        sql += " AND spider = %s"
+        params.append(spider)
+    sql += " ORDER BY spider, doc_id LIMIT %s FOR UPDATE SKIP LOCKED"
+    params.append(limit)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def delete_citations(conn, eclis: list[str]) -> None:
+    """Drop every edge these decisions currently have, ahead of re-inserting
+    the ones their CURRENT text produces.
+
+    Callers pass ONLY the decisions whose extraction succeeded: this is a
+    delete with no transaction around the insert that follows it (the
+    connection is autocommit -- see connect()), so a decision listed here
+    whose replacement edges never arrive loses the ones it had.
+
+    A decision only re-enters claim_for_citations() after complete(->
+    'extracted') cleared its citations_extracted_at, i.e. after it was given
+    new text. ON CONFLICT DO NOTHING in insert_citations() makes an edge the
+    new text still contains collide harmlessly with the row already there --
+    but an edge the new text no longer contains has nothing to collide with,
+    and left alone it outlives the text it came from forever. Deleting the
+    decision's edges first makes the batch a replacement rather than an
+    addition.
+
+    Scoped to from_ecli, so a re-extracted decision only ever drops its own
+    edges -- never the ones some other decision wrote pointing at it.
+    """
+    if not eclis:
+        return
+    conn.execute("DELETE FROM ch_case_citations WHERE from_ecli = ANY(%s)", (eclis,))
+    conn.execute("DELETE FROM ch_legislation_citations WHERE from_ecli = ANY(%s)",
+                 (eclis,))
+
+
+def insert_citations(conn, case_rows: list[tuple], statute_rows: list[tuple]) -> None:
+    """One executemany per edge table, each with ON CONFLICT DO NOTHING.
+
+    ON CONFLICT DO NOTHING is what makes stamp_citations() safe to skip after
+    a failed insert: the same batch re-claimed on a later run re-inserts the
+    same rows, which collide into the ones that already made it in rather
+    than duplicating or erroring.
+
+    case_rows: (from_ecli, to_raw, cite_kind, citation_context, from_date, from_court)
+    statute_rows: (from_ecli, abbr_raw, article, paragraph, lang, citation_context, from_date)
+    """
+    if case_rows:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO ch_case_citations "
+                "(from_ecli, to_raw, cite_kind, citation_context, from_date, from_court) "
+                "VALUES (%s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT DO NOTHING",
+                case_rows,
+            )
+    if statute_rows:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO ch_legislation_citations "
+                "(from_ecli, abbr_raw, article, paragraph, lang, citation_context, from_date) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT DO NOTHING",
+                statute_rows,
+            )
+
+
+def stamp_citations(conn, eclis: list[str]) -> None:
+    """Mark decisions as having had citations extracted. Called only after
+    insert_citations() has succeeded for the same batch (see
+    citations_stage.run()) -- a row must never be stamped ahead of the edges
+    it was supposed to produce, and a row whose extraction RAISED must not be
+    stamped at all: stamping it would retire it from the queue forever with
+    whatever edges it happened to have."""
+    if not eclis:
+        return
+    conn.execute(
+        "UPDATE ch_court_decisions SET citations_extracted_at = now() "
+        "WHERE ecli = ANY(%s)",
+        (eclis,),
+    )
 
 
 def retry_failed_versions(conn, stage: str | None = None,

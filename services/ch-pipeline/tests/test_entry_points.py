@@ -18,15 +18,15 @@ import pathlib
 import pytest
 
 from chpipe import config
-from chpipe.stages import (extract_stage, fetch_stage, index_stage,
-                           load_stage, ocr_stage)
+from chpipe.stages import (citations_stage, extract_stage, fetch_stage,
+                           index_stage, load_stage, ocr_stage)
 
 FAKE = config.Settings(dsn="postgresql://unused@127.0.0.1:1/unused",
                        raw_dir=pathlib.Path("/tmp"), http_concurrency=1,
                        cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
                        max_attempts=3)
 
-CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage]
+CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage, citations_stage]
 
 
 @pytest.fixture(autouse=True)
@@ -55,6 +55,7 @@ def _report(module):
         ocr_stage: ocr_stage.OcrReport,
         load_stage: load_stage.LoadReport,
         index_stage: index_stage.IndexReport,
+        citations_stage: citations_stage.CitationsReport,
     }[module]()
 
 
@@ -133,13 +134,14 @@ def test_index_with_neither_walks_every_spider(monkeypatch):
 
 from chpipe import throttle
 from chpipe.stages import (acts_stage, as_bbl_stage, basic_act_stage,
-                           diff_stage, fetch_xml_stage, parse_akn_stage,
-                           project_legacy_stage, provenance_stage,
-                           versions_stage)
+                           citations_resolve_stage, diff_stage, fetch_xml_stage,
+                           parse_akn_stage, project_legacy_stage,
+                           provenance_stage, versions_stage)
 
 LEGISLATION_STAGES = [acts_stage, versions_stage, fetch_xml_stage,
                       parse_akn_stage, diff_stage, project_legacy_stage,
-                      provenance_stage, as_bbl_stage, basic_act_stage]
+                      provenance_stage, as_bbl_stage, basic_act_stage,
+                      citations_resolve_stage]
 
 _LEG_REPORT = {
     acts_stage: lambda: acts_stage.ActsReport(),
@@ -151,6 +153,7 @@ _LEG_REPORT = {
     provenance_stage: lambda: provenance_stage.ProvenanceReport(),
     as_bbl_stage: lambda: as_bbl_stage.AsReport(),
     basic_act_stage: lambda: basic_act_stage.LinkReport(),
+    citations_resolve_stage: lambda: citations_resolve_stage.ResolveReport(),
 }
 
 # Spec section 8. fetch-xml, acts and versions are network walks that still
@@ -161,6 +164,9 @@ _LEG_REPORT = {
 # walk over jolux:Act, the same shape as acts/versions; basic-act is a short
 # join over rows those walks already discovered -- neither is a multi-hour
 # CPU stage, so both take NICE_IO like acts/versions/fetch-xml/project-legacy.
+# citations-resolve is four UPDATE ... FROM statements executed and waited
+# on -- the work happens inside Postgres, not this process -- so it takes
+# NICE_IO for the same reason aliases_stage does.
 EXPECTED_NICE = {
     acts_stage: throttle.NICE_IO,
     versions_stage: throttle.NICE_IO,
@@ -171,6 +177,7 @@ EXPECTED_NICE = {
     provenance_stage: throttle.NICE_CPU,
     as_bbl_stage: throttle.NICE_IO,
     basic_act_stage: throttle.NICE_IO,
+    citations_resolve_stage: throttle.NICE_IO,
 }
 
 
@@ -279,6 +286,37 @@ def test_an_empty_lang_is_not_a_language_for_provenance(monkeypatch, no_renice):
     assert seen["kwargs"]["lang"] == "de"
 
 
+def test_citations_resolve_honours_chpipe_cit_resolve_all(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "1")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is True
+
+
+def test_citations_resolve_defaults_to_first_pass_only(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.delenv("CHPIPE_CIT_RESOLVE_ALL", raising=False)
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
+
+
+def test_an_empty_chpipe_cit_resolve_all_is_not_a_yes(monkeypatch, no_renice):
+    """run-stage.sh exports its variables unconditionally, so "" reaches the
+    entry point whenever the flag was not set on the command line -- the
+    same shape as the CHPIPE_SPIDER/CHPIPE_LANG bugs above."""
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
+
+
+def test_chpipe_cit_resolve_all_0_is_not_a_yes(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "0")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
+
+
 # --- run-stage.sh's own usage line ---
 # It read `index|fetch|extract|ocr|load` long after six more stages existed,
 # and its wrapper is the only way any of them is actually invoked on prod.
@@ -302,6 +340,7 @@ def _accepted_stage_names() -> set[str]:
 
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
+                "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act"}
     assert _accepted_stage_names() == expected
@@ -341,6 +380,25 @@ def test_the_usage_comment_names_every_stage_run_stage_accepts():
 from chpipe import delta as delta_module
 
 
+def _stub_resolve(monkeypatch, calls=None):
+    """aliases_stage.run() and citations_resolve_stage.run() are the two
+    guarded steps delta.main() runs after both halves -- stubbed out in every
+    test below that reaches main() so neither opens a real connection against
+    the FAKE dsn no_env hands out. Only the resolve call is recorded in
+    `calls`: these tests are about main()'s composition of the two corpus
+    halves, and the alias seed's own placement has its own test in
+    tests/test_delta.py."""
+    def fake(settings, resolve_all=False):
+        if calls is not None:
+            calls.append(settings)
+        return delta_module.citations_resolve_stage.ResolveReport()
+
+    monkeypatch.setattr(delta_module.citations_resolve_stage, "run", fake)
+    monkeypatch.setattr(
+        delta_module.aliases_stage, "run",
+        lambda settings: delta_module.aliases_stage.AliasReport())
+
+
 def test_delta_main_is_reachable(monkeypatch, no_renice):
     """no_env (autouse) already patches Settings.from_env for every test in
     this file, delta.main() included."""
@@ -348,6 +406,7 @@ def test_delta_main_is_reachable(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_resolve(monkeypatch)
     result = delta_module.main()
     assert isinstance(result, delta_module.DeltaReport)
 
@@ -357,6 +416,7 @@ def test_delta_main_renices_exactly_once_at_nice_io(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_resolve(monkeypatch)
     delta_module.main()
     assert no_renice == [throttle.NICE_IO], \
         "delta.main() must renice once, standing in for every stage's own main()"
@@ -392,12 +452,13 @@ def test_a_failing_decisions_half_does_not_skip_the_legislation_half(
 
     monkeypatch.setattr(delta_module, "run_decisions", boom)
     monkeypatch.setattr(delta_module, "run_legislation", legislation)
+    _stub_resolve(monkeypatch, called)
 
     # Still raises: run-delta.sh's marker reports the exit status, and a
     # night where half the job died must not print OK.
     with pytest.raises(RuntimeError, match="entscheidsuche is down"):
         delta_module.main()
-    assert called == ["decisions", "legislation"]
+    assert called == ["decisions", "legislation", FAKE]
 
 
 def test_a_failing_legislation_half_still_reports_the_decisions_half(
@@ -409,6 +470,7 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_resolve(monkeypatch)
 
     with caplog.at_level("INFO"):
         with pytest.raises(RuntimeError, match="fedlex 503"):
@@ -417,7 +479,28 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
-                       "projected=0 failed=legislation"]
+                       "projected=0 resolved(acts=0 editions=0 articles=0 "
+                       "cases=0) failed=legislation"]
+
+
+def test_citations_resolve_still_runs_once_when_a_half_failed(
+        monkeypatch, no_renice):
+    """citations-resolve is the third guarded step: it belongs after BOTH
+    halves regardless of which one (if either) failed, since whatever raw
+    edges citations_stage already wrote are worth resolving even on a night
+    the legislation half died."""
+    monkeypatch.setattr(delta_module, "run_decisions",
+                        lambda settings, **kw: delta_module.DeltaReport())
+    monkeypatch.setattr(
+        delta_module, "run_legislation",
+        lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    calls = []
+    _stub_resolve(monkeypatch, calls)
+
+    with pytest.raises(RuntimeError, match="fedlex 503"):
+        delta_module.main()
+
+    assert calls == [FAKE]
 
 
 # --- run-stage.sh must not clobber an env-only spider ---
