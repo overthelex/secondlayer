@@ -286,6 +286,7 @@ def test_confirmed_run_writes_one_scored_result_line_per_item(tmp_path):
         assert r["input_tokens"] == 11
         assert r["output_tokens"] == 22
         assert isinstance(r["latency_s"], float)
+        assert r["retries"] == 0
         assert "error" not in r
         assert r["verdict"]["label"] == "grounded_correct"
 
@@ -365,5 +366,127 @@ def test_throttling_error_retries_then_succeeds(tmp_path, monkeypatch):
     assert "error" not in result
     assert result["answer"] == GOLD_TEXT
     assert result["verdict"]["label"] == "grounded_correct"
+    assert result["retries"] == 2
     assert len(client.calls) == 3  # 2 throttled + 1 success
     assert sleeps == [1, 2]  # exponential backoff schedule, first two steps
+
+
+def test_latency_excludes_backoff_sleep_time(tmp_path, monkeypatch):
+    """A deterministic fake clock: `converse()` itself advances it by a
+    fixed amount per call, `time.sleep()` advances it by the sleep
+    duration. If backoff sleeps leaked into `latency_s`, the recorded
+    latency for the throttled item below would include the 1s + 2s backoff
+    (3.0s+); it must not.
+    """
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    items = [_item("throttled", kind="before", question="q-throttled")]
+    _write_items(items_dir, "de", items)
+
+    clock = {"t": 0.0}
+    monkeypatch.setattr(run_llm.time, "monotonic", lambda: clock["t"])
+
+    def fake_sleep(seconds):
+        clock["t"] += seconds
+
+    monkeypatch.setattr(run_llm.time, "sleep", fake_sleep)
+
+    class SlowFakeClient(FakeClient):
+        def converse(self, *args, **kwargs):
+            clock["t"] += 0.01  # each converse() call "takes" 10ms
+            return super().converse(*args, **kwargs)
+
+    client = SlowFakeClient(answers={"q-throttled": GOLD_TEXT}, throttle_for={"q-throttled": 2})
+
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+               sample_per_lang=1, client=client, confirm=True)
+
+    result = _read_jsonl(out_dir / "results-llm-haiku-4-5.jsonl")[0]
+    assert result["retries"] == 2
+    # 3 converse() calls x 10ms each; the 1s + 2s backoff sleeps (3.0s
+    # total, visible in clock["t"] ending at 3.03) must not be counted.
+    assert result["latency_s"] == pytest.approx(0.03)
+    assert clock["t"] == pytest.approx(3.03)
+
+
+# ---------------------------------------------------------------------------
+# Crash safety and resumability
+# ---------------------------------------------------------------------------
+
+class CrashOnNthCallClient:
+    """Answers normally until the Nth `converse()` call, then raises
+    KeyboardInterrupt -- simulates a real crash (Ctrl-C, an OOM kill), which
+    is not `Exception` and therefore not caught anywhere in
+    `_answer_item`/`_call_with_retries`: it propagates straight out of
+    run(), which is exactly the scenario the incremental, flush-per-line
+    writes exist to survive.
+    """
+
+    def __init__(self, answers, crash_on_call):
+        self.answers = answers
+        self.crash_on_call = crash_on_call
+        self.calls: list[str] = []
+
+    def converse(self, modelId, system, messages, inferenceConfig):
+        question = messages[0]["content"][0]["text"]
+        self.calls.append(question)
+        if len(self.calls) == self.crash_on_call:
+            raise KeyboardInterrupt("simulated crash")
+        return {
+            "output": {"message": {"content": [{"text": self.answers[question]}]}},
+            "usage": {"inputTokens": 5, "outputTokens": 5},
+        }
+
+
+def test_crash_on_third_item_leaves_two_lines_already_on_disk(tmp_path):
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    items = [
+        _item("i1", kind="before", question="q1"),
+        _item("i2", kind="after", question="q2"),
+        _item("i3", kind="before", question="q3"),
+    ]
+    _write_items(items_dir, "de", items)
+
+    client = CrashOnNthCallClient(
+        answers={"q1": GOLD_TEXT, "q2": GOLD_TEXT, "q3": GOLD_TEXT}, crash_on_call=3)
+
+    with pytest.raises(KeyboardInterrupt):
+        run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                   sample_per_lang=3, client=client, confirm=True)
+
+    results = _read_jsonl(out_dir / "results-llm-haiku-4-5.jsonl")
+    assert len(results) == 2
+    assert {r["id"] for r in results} == {"i1", "i2"}
+
+
+def test_rerun_after_crash_skips_done_items_and_only_calls_client_for_the_rest(tmp_path):
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    items = [
+        _item("i1", kind="before", question="q1"),
+        _item("i2", kind="after", question="q2"),
+        _item("i3", kind="before", question="q3"),
+    ]
+    _write_items(items_dir, "de", items)
+
+    crashing_client = CrashOnNthCallClient(
+        answers={"q1": GOLD_TEXT, "q2": GOLD_TEXT, "q3": GOLD_TEXT}, crash_on_call=3)
+    with pytest.raises(KeyboardInterrupt):
+        run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                   sample_per_lang=3, client=crashing_client, confirm=True)
+
+    resume_client = FakeClient(answers={"q3": GOLD_TEXT})
+    report = run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                         sample_per_lang=3, client=resume_client, confirm=True)
+
+    assert report.confirmed is True
+    assert resume_client.calls == ["q3"]  # only the un-answered item was asked
+
+    results = _read_jsonl(out_dir / "results-llm-haiku-4-5.jsonl")
+    assert len(results) == 3
+    assert {r["id"] for r in results} == {"i1", "i2", "i3"}
+
+    report_json = json.loads((out_dir / "llm-run-report.json").read_text())
+    assert report_json["actual"][run_llm.HAIKU]["answered"] == 3
+    assert report_json["actual"][run_llm.HAIKU]["errors"] == 0

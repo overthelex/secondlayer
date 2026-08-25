@@ -35,7 +35,25 @@ boto3 bedrock-runtime shape `{"output": {"message": {"content": [{"text":
 ...}]}}, "usage": {"inputTokens": n, "outputTokens": m}}`. Tests always pass
 a fake client; the real one (_bedrock_client()) imports boto3 lazily so this
 module -- and every test that imports it -- never requires boto3 to be
-installed.
+installed. `latency_s` on a result line times only the `converse()` calls
+themselves (summed across retries); time spent asleep in backoff is
+excluded, and a separate `retries` count records how many attempts a
+throttled item needed.
+
+Crash safety / resumability: a real run has already paid Bedrock for every
+answer it received before a crash, so results are never held in memory and
+written once at the end -- each `results-llm-{model_short}.jsonl` is opened
+in append mode and every line is written and flushed the moment
+`_answer_item` returns it (see run()). Re-running with the same `out_dir`
+reads whatever ids are already in that file first and skips those items
+entirely -- no client call, no rewritten line -- so an interrupted run
+(Ctrl-C, an OOM kill, a crashed host) resumes rather than re-paying for
+answers it already has. `llm-run-report.json` is written after every model
+finishes (not only once at the very end) for the same reason, and its
+`actual` counts are always recomputed from the full contents of each
+results file -- including lines a previous, interrupted run already wrote
+-- so a resumed run's report reflects the true total, not just this
+invocation's delta.
 """
 from __future__ import annotations
 
@@ -274,30 +292,45 @@ def _is_throttling(exc: Exception) -> bool:
     return "Throttling" in name or "ServiceUnavailable" in name
 
 
-def _call_with_retries(client: Any, model_id: str, question: str) -> dict[str, Any]:
+def _call_with_retries(client: Any, model_id: str, question: str,
+                       stats: dict[str, Any]) -> dict[str, Any]:
     """Call `client.converse()` for one item's QUESTION, retrying up to
     `_MAX_RETRIES` times with exponential backoff (`_BACKOFF_SECONDS`) when
     the exception looks like Bedrock throttling/overload (see
     _is_throttling()). Any other exception -- or a throttling exception
     that has exhausted its retries -- propagates to the caller, which
     records it on the item rather than aborting the run (see
-    _answer_item()).
+    _answer_item()); a KeyboardInterrupt/SystemExit is not `Exception` and
+    is never caught here, so a real crash still propagates all the way out
+    of run() (see run()'s docstring on crash safety).
+
+    STATS is mutated in place with `latency_s` (the sum of time spent
+    actually inside `converse()`, across every attempt -- excluding
+    `time.sleep()` backoff) and `retries` (how many attempts beyond the
+    first were needed), so the caller can read both even when this
+    function ultimately raises rather than returns.
     """
     attempt = 0
     while True:
+        t0 = time.monotonic()
         try:
-            return client.converse(
+            response = client.converse(
                 modelId=model_id,
                 system=[{"text": _SYSTEM_PROMPT}],
                 messages=[{"role": "user", "content": [{"text": question}]}],
                 inferenceConfig={"maxTokens": 2048, "temperature": 0},
             )
         except Exception as exc:
+            stats["latency_s"] += time.monotonic() - t0
             if _is_throttling(exc) and attempt < _MAX_RETRIES:
+                stats["retries"] = attempt + 1
                 time.sleep(_BACKOFF_SECONDS[min(attempt, len(_BACKOFF_SECONDS) - 1)])
                 attempt += 1
                 continue
             raise
+        stats["latency_s"] += time.monotonic() - t0
+        stats["retries"] = attempt
+        return response
 
 
 def _answer_item(client: Any, model_id: str, model_short: str,
@@ -309,22 +342,24 @@ def _answer_item(client: Any, model_id: str, model_short: str,
     recorded with `answer: ""`, zero tokens, and an `error` field carrying
     the exception's type and message -- and is scored, same as any other
     answer, so an unreachable model shows up as `ungrounded` in report.py's
-    tally rather than silently vanishing from the count.
+    tally rather than silently vanishing from the count. A
+    KeyboardInterrupt/SystemExit is not caught by this either -- it
+    propagates out of run()'s item loop, which is exactly the crash this
+    module's incremental writes are built to survive.
     """
-    t0 = time.monotonic()
     error: str | None = None
     answer = ""
     input_tokens = 0
     output_tokens = 0
+    stats: dict[str, Any] = {"latency_s": 0.0, "retries": 0}
     try:
-        response = _call_with_retries(client, model_id, item["question"])
+        response = _call_with_retries(client, model_id, item["question"], stats)
         answer = response["output"]["message"]["content"][0]["text"]
         usage = response.get("usage") or {}
         input_tokens = usage.get("inputTokens", 0)
         output_tokens = usage.get("outputTokens", 0)
     except Exception as exc:  # noqa: BLE001 -- recorded per item, not fatal (see module docstring)
         error = f"{type(exc).__name__}: {exc}"
-    latency_s = time.monotonic() - t0
 
     verdict = score.score(answer, item["gold"]["text"], item["distractor"]["text"])
     result: dict[str, Any] = {
@@ -335,7 +370,8 @@ def _answer_item(client: Any, model_id: str, model_short: str,
         "answer": answer,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
-        "latency_s": latency_s,
+        "latency_s": stats["latency_s"],
+        "retries": stats["retries"],
         "verdict": {
             "label": verdict.label,
             "gold_coverage": verdict.gold_coverage,
@@ -348,6 +384,37 @@ def _answer_item(client: Any, model_id: str, model_short: str,
     return result
 
 
+def _read_jsonl_file(path: pathlib.Path) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    if not path.exists():
+        return lines
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                lines.append(json.loads(line))
+    return lines
+
+
+def _done_ids(results_file: pathlib.Path) -> set[str]:
+    """Ids already answered and on disk in RESULTS_FILE, from a previous
+    (possibly interrupted) run -- see run()'s docstring on resumability.
+    """
+    return {line["id"] for line in _read_jsonl_file(results_file)}
+
+
+def _write_report(out_path: pathlib.Path, est: dict[str, Any], actual: dict[str, Any],
+                  started: str, finished: str) -> None:
+    report_dict = {
+        "estimate": est,
+        "actual": actual,
+        "started": started,
+        "finished": finished,
+    }
+    (out_path / REPORT_FILENAME).write_text(
+        json.dumps(report_dict, ensure_ascii=False, indent=2))
+
+
 def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
         langs: tuple[str, ...] = ("de", "fr", "it"),
         models: tuple[str, ...] = (HAIKU, SONNET),
@@ -357,18 +424,30 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
     """Sample `sample_per_lang` items per language from
     `{items_dir}/bench-{lang}.jsonl` (see sample_items()), price the sample
     against MODELS (see estimate()), and -- only if `confirm` is True --
-    ask every model in MODELS to answer every sampled item via CLIENT,
-    writing `{out_dir}/results-llm-{model_short}.jsonl` per model and
-    `{out_dir}/llm-run-report.json` once, then return an LlmRunReport.
+    ask every model in MODELS to answer every sampled item via CLIENT.
 
     Without `confirm=True` this prints the estimate as JSON to stdout and
     returns immediately with `confirmed=False` -- CLIENT is never touched
     at all (see module docstring "Cost gate"); main() turns that into exit
     code 2.
 
-    NOW fixes both `started` and `finished` in the written report when
-    given (tests); production callers (main()) leave it None and each
-    timestamp is the real wall clock at that point in the run.
+    Confirmed path -- crash-safe and resumable (see module docstring): for
+    each model, `{out_dir}/results-llm-{model_short}.jsonl` is opened in
+    append mode; any item whose id is already in that file (from a prior
+    run) is skipped without calling CLIENT; every other item is answered
+    and its line written and flushed immediately, so a crash mid-model
+    (including one that propagates straight out of this function, e.g.
+    Ctrl-C / KeyboardInterrupt, which is not caught anywhere in this call
+    chain) leaves every already-answered item safely on disk. Calling
+    run() again with the same `out_dir` picks up exactly where it left
+    off. `{out_dir}/llm-run-report.json` is (re)written after every model
+    finishes, not only once at the end, with `actual` recomputed from each
+    results file's full contents -- so the report is accurate even if the
+    run is later interrupted before the next model starts.
+
+    NOW fixes `started` (and every `finished` this run writes) when given
+    (tests); production callers (main()) leave it None and each timestamp
+    is the real wall clock at that point in the run.
     """
     sample = sample_items(items_dir, langs, sample_per_lang, seed)
     est = estimate(sample, models)
@@ -387,20 +466,25 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
     total_usd = 0.0
     for model in models:
         model_short = _MODEL_SHORT.get(model, model)
-        results: list[dict[str, Any]] = []
-        answered = 0
-        errors = 0
-        input_tokens_sum = 0
-        output_tokens_sum = 0
-        for item in sample:
-            result = _answer_item(client, model, model_short, item)
-            results.append(result)
-            input_tokens_sum += result["input_tokens"]
-            output_tokens_sum += result["output_tokens"]
-            if "error" in result:
-                errors += 1
-            else:
-                answered += 1
+        out_file = out_path / RESULTS_TEMPLATE.format(model_short=model_short)
+
+        skip_ids = _done_ids(out_file)
+        with out_file.open("a", encoding="utf-8") as f:
+            for item in sample:
+                if item["id"] in skip_ids:
+                    continue
+                result = _answer_item(client, model, model_short, item)
+                f.write(json.dumps(result, ensure_ascii=False))
+                f.write("\n")
+                f.flush()
+
+        # Recomputed from the full file, not just this call's new lines --
+        # a resumed run must report the true total (see docstring above).
+        all_results = _read_jsonl_file(out_file)
+        answered = sum(1 for r in all_results if "error" not in r)
+        errors = sum(1 for r in all_results if "error" in r)
+        input_tokens_sum = sum(r.get("input_tokens", 0) for r in all_results)
+        output_tokens_sum = sum(r.get("output_tokens", 0) for r in all_results)
 
         price = _PRICES[model]
         usd = (input_tokens_sum / 1_000_000 * price["in"]
@@ -414,24 +498,15 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
             "output_tokens": output_tokens_sum,
             "usd": usd,
         }
+        actual["total_usd"] = total_usd
 
-        out_file = out_path / RESULTS_TEMPLATE.format(model_short=model_short)
-        with out_file.open("w", encoding="utf-8") as f:
-            for result in results:
-                f.write(json.dumps(result, ensure_ascii=False))
-                f.write("\n")
+        finished_so_far = (_iso(now) if now is not None
+                           else _iso(datetime.datetime.now(datetime.timezone.utc)))
+        _write_report(out_path, est, actual, started, finished_so_far)
 
-    actual["total_usd"] = total_usd
-    finished = _iso(now) if now is not None else _iso(datetime.datetime.now(datetime.timezone.utc))
-
-    report_dict = {
-        "estimate": est,
-        "actual": actual,
-        "started": started,
-        "finished": finished,
-    }
-    (out_path / REPORT_FILENAME).write_text(
-        json.dumps(report_dict, ensure_ascii=False, indent=2))
+    finished = (_iso(now) if now is not None
+               else _iso(datetime.datetime.now(datetime.timezone.utc)))
+    _write_report(out_path, est, actual, started, finished)
 
     return LlmRunReport(confirmed=True, estimate=est, actual=actual,
                          started=started, finished=finished, sample_size=len(sample))
