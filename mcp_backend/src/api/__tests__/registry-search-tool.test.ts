@@ -457,4 +457,135 @@ describe('aggregate mode (LEXAI-1820)', () => {
     expect(text).toContain('фільтр');
     expect(calls).toHaveLength(0);
   });
+
+  // The UK corpus is the first registry whose FTS index is built over a
+  // concatenation rather than a single column, so these assertions are about
+  // the index being reachable at all, not about cosmetics.
+  describe('UK registries', () => {
+    it('all four UK registries are in the enum', () => {
+      db = makeDb(() => ({ rows: [] }));
+      tool = new RegistrySearchTool(db);
+      const registryEnum = tool.getToolDefinitions()[0].inputSchema.properties.registry.enum;
+      for (const key of ['uk_legislation', 'uk_legislation_provisions',
+                         'uk_legislation_effects', 'uk_court_decisions']) {
+        expect(registryEnum).toContain(key);
+      }
+    });
+
+    it('judgment FTS reproduces idx_uk_court_fts verbatim, not to_tsvector(full_text)', async () => {
+      db = makeDb(() => ({ rows: [{ id: 'x', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'uk_court_decisions',
+        filters: { query: 'unfair dismissal' },
+      });
+
+      // Character for character the expression idx_uk_court_fts is built on.
+      // Anything else plans as a sequential scan over ~2 GB.
+      expect(calls[0].sql).toContain(
+        "to_tsvector('english', COALESCE(parties, '') || ' ' || COALESCE(abstract, '') || ' ' || COALESCE(full_text, '')) @@ plainto_tsquery('english', $1)",
+      );
+      expect(calls[0].sql).not.toContain("to_tsvector('english', full_text)");
+      expect(calls[0].params).toContain('unfair dismissal');
+    });
+
+    it('provision FTS matches idx_uk_prov_fts, which is on the bare column', async () => {
+      db = makeDb(() => ({ rows: [{ leg_id: 'ukpga/2006/46', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'uk_legislation_provisions',
+        filters: { query: 'directors duties' },
+      });
+
+      expect(calls[0].sql).toContain("to_tsvector('english', text) @@ plainto_tsquery('english', $1)");
+    });
+
+    it('never selects a whole judgment or provision body', () => {
+      // 56K characters per judgment: returning full_text for a page of results
+      // would blow the response budget on its own.
+      // The raw column is carried by the inner query as a toast pointer and
+      // dropped by the outer projection, so it never reaches the response.
+      expect(REGISTRY_CATALOG.uk_court_decisions.outerColumns).toContain("left(t.full_text || '', 400)");
+      expect(REGISTRY_CATALOG.uk_court_decisions.outerColumns).not.toMatch(/(^|[\s,])t\.full_text([\s,]|$)/);
+      expect(REGISTRY_CATALOG.uk_legislation_provisions.outerColumns).toContain("left(t.text || '', 800)");
+      expect(REGISTRY_CATALOG.uk_legislation_provisions.outerColumns).not.toMatch(/(^|[\s,])t\.text([\s,]|$)/);
+    });
+
+    it('exposes the licence on every judgment row', () => {
+      // Find Case Law is Open Justice Licence, legislation.gov.uk is OGL v3.0.
+      // A reader must not have to guess which one a result came under.
+      expect(REGISTRY_CATALOG.uk_court_decisions.selectColumns).toContain('licence');
+    });
+
+    it('effects registry can isolate the editorial backlog', async () => {
+      db = makeDb(() => ({ rows: [{ effect_id: 'key-1', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'uk_legislation_effects',
+        filters: { affected: 'ukpga/2006/46', applied: false },
+      });
+
+      expect(calls[0].sql).toContain('affected_id = $1');
+      expect(calls[0].sql).toContain('applied = $2');
+      expect(calls[0].params).toEqual(expect.arrayContaining(['ukpga/2006/46', false]));
+    });
+  });
+
+  // Regression guard for a live prod bug found 2026-08-25: a bare left()/substr()
+  // over a TOASTed text column can raise `invalid byte sequence for encoding
+  // "UTF8"` on PostgreSQL 15.16 — the byte-slice ends mid-character. It broke
+  // amcu_decisions and rada_stenograms in production, and 341 of the 54,453 UK
+  // judgments. Concatenating '' forces a full detoast first.
+  describe('TOAST slice guard', () => {
+    it('every text slice in the catalog forces a detoast', () => {
+      const offenders: string[] = [];
+      for (const [key, def] of Object.entries(REGISTRY_CATALOG)) {
+        const projections = `${def.selectColumns} ${def.outerColumns ?? ''}`;
+        for (const m of projections.matchAll(/\b(?:left|right|substr|substring)\s*\(\s*(?:t\.)?[A-Za-z_][A-Za-z0-9_]*\s*(\|\|)?/g)) {
+          if (!m[1]) offenders.push(`${key}: ${m[0].trim()}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
+
+  // A snippet in a flat query is computed for every matching row and then thrown
+  // away by the sort. Measured on prod: 2,250 ms against 31 ms for identical
+  // output over 12,019 matches at LIMIT 5.
+  describe('deferred projection', () => {
+    it('wraps the query so the snippet runs after the LIMIT', async () => {
+      db = makeDb(() => ({ rows: [{ id: 'x', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'uk_court_decisions',
+        filters: { court: 'uksc' },
+        limit: 5,
+      });
+
+      const sql = calls[0].sql;
+      expect(sql).toMatch(/^SELECT t\./);
+      expect(sql).toContain('FROM (SELECT');
+      // The LIMIT belongs to the inner query, before the snippet is computed.
+      expect(sql.indexOf('LIMIT')).toBeLessThan(sql.lastIndexOf(') t'));
+      // The COUNT query is unaffected by the wrapping.
+      expect(calls[1].sql).toContain('COUNT(*)');
+      expect(calls[1].sql).not.toContain('FROM (SELECT');
+    });
+
+    it('registries without outerColumns keep the flat query', async () => {
+      db = makeDb(() => ({ rows: [{ name: 'x', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'lawyers',
+        filters: { last_name: 'Іваненко' },
+      });
+
+      expect(calls[0].sql).not.toContain('FROM (SELECT');
+    });
+  });
 });
