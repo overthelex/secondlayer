@@ -32,6 +32,33 @@ export interface RegistryDef {
    * and `patents` (obj_type IN (1,2,6)).
    */
   baseWhere?: string;
+  /**
+   * Optional outer projection. When set, `selectColumns` becomes the INNER
+   * select of `SELECT <outerColumns> FROM (SELECT <selectColumns> ... ORDER BY
+   * ... LIMIT n) t`, and only the rows that survive the LIMIT reach these
+   * expressions.
+   *
+   * This exists for one measured reason. A snippet like
+   * `left(full_text || '', 400)` in a flat query is evaluated for every matching
+   * row before the sort, so it detoasts the whole corpus the filter matched, not
+   * the page the caller asked for. Measured on prod 2026-08-25, uk_court_decisions,
+   * 12,019 matches, LIMIT 5: 2,250 ms flat against 31 ms deferred, a 71x
+   * difference for identical output. The toast pointer survives the sort, so the
+   * inner query can carry the raw column at no cost.
+   *
+   * Qualify outer expressions with `t.`. Any raw column named in `selectColumns`
+   * but absent from `outerColumns` is fetched and then dropped, which is how the
+   * body of a document stays out of the response.
+   */
+  outerColumns?: string;
+  /**
+   * Ordering for the outer select. Required whenever `outerColumns` is set:
+   * a subquery's ORDER BY is not carried by SQL semantics into the enclosing
+   * query, so without this the page would come back in whatever order the
+   * executor happened to produce. Cheap — it sorts at most `limit` rows, the
+   * inner ORDER BY having already chosen which rows those are.
+   */
+  outerOrderBy?: string;
 }
 
 export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
@@ -653,8 +680,14 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     title: 'АМКУ — рішення та рекомендації',
     description: 'Пошук у рішеннях і рекомендаціях АМКУ (антимонопольна практика, концентрації, узгоджені дії). 6K документів; повнотекстовий пошук доступний для витягнутих текстів (docx). Пошук за текстом, номером рішення, типом, датою.',
     table: 'opendata_amcu_decisions',
-    selectColumns: 'archive_file, doc_file, doc_kind, decision_no, decision_date, extracted, left(body_text, 600) AS snippet',
+    // left(body_text || '', 600): see the note above the UK block. Unguarded, this
+    // registry raises `invalid byte sequence for encoding "UTF8": 0xd0` on prod
+    // today — Cyrillic is two bytes, so a byte-slice lands mid-character far more
+    // often than in English text.
+    selectColumns: 'archive_file, doc_file, doc_kind, decision_no, decision_date, extracted, body_text',
+    outerColumns: "t.archive_file, t.doc_file, t.doc_kind, t.decision_no, t.decision_date, t.extracted, left(t.body_text || '', 600) AS snippet",
     orderBy: 'decision_date DESC NULLS LAST',
+    outerOrderBy: 't.decision_date DESC NULLS LAST',
     emptyMessage: 'Рішень АМКУ не знайдено',
     fields: [
       { name: 'text', description: 'Ключові слова у тексті рішення', match: 'fts_simple', columns: ['body_text'] },
@@ -669,8 +702,11 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     title: 'ВРУ — стенограми пленарних засідань',
     description: 'Повнотекстовий пошук у стенограмах пленарних засідань Верховної Ради (намір законодавця). 6.8K документів усіх скликань. Пошук за текстом, скликанням, датою засідання, типом.',
     table: 'opendata_rada_stenograms',
-    selectColumns: 'convocation, sitting_date, doc_kind, source_file, left(body_text, 600) AS snippet',
+    // Same detoast guard as amcu_decisions; unguarded this raises 0xd1 on prod.
+    selectColumns: 'convocation, sitting_date, doc_kind, source_file, body_text',
+    outerColumns: "t.convocation, t.sitting_date, t.doc_kind, t.source_file, left(t.body_text || '', 600) AS snippet",
     orderBy: 'sitting_date DESC NULLS LAST',
+    outerOrderBy: 't.sitting_date DESC NULLS LAST',
     emptyMessage: 'Стенограм не знайдено',
     fields: [
       { name: 'text', description: 'Ключові слова у тексті стенограми', match: 'fts_simple', columns: ['body_text'] },
@@ -678,6 +714,138 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
       { name: 'doc_kind', description: 'Тип: stenogram (стенограма), agenda (порядок денний), stenpog (погоджувальна рада)', match: 'exact', columns: ['doc_kind'] },
       { name: 'date_from', description: 'Дата засідання від (YYYY-MM-DD)', match: 'gte', columns: ['sitting_date'] },
       { name: 'date_to', description: 'Дата засідання до (YYYY-MM-DD)', match: 'lte', columns: ['sitting_date'] },
+    ],
+  },
+  // ── UK (legislation.gov.uk + Find Case Law) ───────────────────────
+  //
+  // English descriptions, following the us_* block: these registries are not
+  // Ukrainian open data and the model answers about them in English.
+  //
+  // Two things below look like noise and are not.
+  //
+  // 1. `left(col || '', n)` rather than `left(col, n)`. On PostgreSQL 15.16
+  //    a bare left()/substr() over a TOASTed text value takes the byte-slice
+  //    path and can fail outright with `invalid byte sequence for encoding
+  //    "UTF8"`. Measured on prod 2026-08-25: 341 of the 54,453 judgments raise
+  //    it, 0.63%, while length() over the same column is fine on every row —
+  //    the data is valid, the slice is not. Concatenating an empty string
+  //    forces a full detoast first. Verified over all 54,453 judgments and all
+  //    1,262,603 provisions with no error.
+  //
+  // 2. The table name in orderBy. `decision_date::text AS decision_date` puts
+  //    an output alias in scope, and a bare ORDER BY binds to the alias, so the
+  //    sort would run on text rather than on the date column. ISO dates happen
+  //    to sort identically, but qualifying the name keeps the sort on the real
+  //    column and lets the btree index stay eligible.
+
+  uk_legislation: {
+    title: 'UK Legislation Register (158K acts)',
+    description: `The UK statute book from legislation.gov.uk: 158,317 items with 254,814 point-in-time versions. Acts of Parliament (ukpga), Statutory Instruments (uksi), Welsh SIs (wsi), Northern Ireland Orders in Council (nisi), Church Measures (ukcm), Local and Private Acts (ukla, ukppa), and pre-Union acts (aep, apgb). Open Government Licence v3.0.
+
+Use this to identify an act and read its status. Provision text lives in uk_legislation_provisions; amendments in uk_legislation_effects.
+
+unapplied_effects on a row is the editorial backlog: changes that are law but not yet written into the published text.`,
+    table: 'uk_legislation',
+    selectColumns: "id, leg_type, year, number, title, document_status, extent, enactment_date::text AS enactment_date, made_date::text AS made_date, coming_into_force::text AS coming_into_force, version_count, unapplied_effects, source_url",
+    orderBy: 'year DESC NULLS LAST, id',
+    emptyMessage: 'No UK legislation found matching criteria',
+    fields: [
+      { name: 'title', description: 'Act or instrument title, e.g. "Companies Act"', match: 'ilike', columns: ['title'] },
+      { name: 'id', description: 'legislation.gov.uk identifier, e.g. ukpga/2006/46', match: 'exact', columns: ['id'] },
+      { name: 'leg_type', description: 'ukpga (Act of Parliament), uksi (Statutory Instrument), wsi, nisi, ukcm, ukla, ukppa, aep, apgb', match: 'exact', columns: ['leg_type'] },
+      { name: 'year', description: 'Year of the act or instrument', match: 'exact', columns: ['year'], type: 'number' },
+      { name: 'number', description: 'Chapter or SI number within the year', match: 'exact', columns: ['number'] },
+      { name: 'status', description: 'revised (point-in-time text maintained) or final (enacted text only)', match: 'exact', columns: ['document_status'] },
+      { name: 'year_from', description: 'Year from', match: 'gte', columns: ['year'], type: 'number' },
+      { name: 'year_to', description: 'Year to', match: 'lte', columns: ['year'], type: 'number' },
+    ],
+  },
+
+  uk_legislation_provisions: {
+    title: 'UK Legislation Text (1.26M provisions)',
+    description: `Full-text search over 1,262,603 provisions — sections, articles, regulations, schedule paragraphs — of UK legislation, with the version date each one belongs to.
+
+Coverage caveat, measured rather than assumed: only 70,296 of the 158,317 items in the register have machine-readable text. The other 88,021 are published by legislation.gov.uk as scanned PDFs only (mostly pre-1988 Statutory Instruments and Local Acts), so a search that finds nothing for an older instrument means there is no text to search, not that the instrument does not exist.
+
+Rows are per version, so one section can appear several times with different valid_from dates; the newest is returned first.`,
+    table: 'uk_legislation_provisions',
+    selectColumns: 'leg_id, valid_from::text AS valid_from, provision_label, provision_type, title, n_chars, provision_uri, text',
+    outerColumns: "t.leg_id, t.valid_from, t.provision_label, t.provision_type, t.title, t.n_chars, t.provision_uri, left(t.text || '', 800) AS snippet",
+    orderBy: 'uk_legislation_provisions.valid_from DESC NULLS LAST, leg_id, ord',
+    // `ord` is not carried out of the subquery, so the outer sort tie-breaks on
+    // leg_id only. The inner ORDER BY has already chosen the page; this just
+    // fixes the order it is presented in.
+    outerOrderBy: 't.valid_from DESC NULLS LAST, t.leg_id',
+    emptyMessage: 'No UK legislation text found matching criteria',
+    defaultLimit: 20,
+    maxLimit: 50,
+    fields: [
+      { name: 'query', description: 'Full-text search in provision text (English)', match: 'fts', columns: ['text'] },
+      { name: 'leg_id', description: 'Restrict to one act, e.g. ukpga/2006/46', match: 'exact', columns: ['leg_id'] },
+      { name: 'label', description: 'Provision label, e.g. "s. 172" or "reg. 4"', match: 'ilike', columns: ['provision_label'] },
+      { name: 'provision_type', description: 'section, article, regulation, rule, paragraph, schedule', match: 'exact', columns: ['provision_type'] },
+      { name: 'heading', description: 'Provision heading', match: 'ilike', columns: ['title'] },
+      { name: 'version_from', description: 'Version in force from (YYYY-MM-DD)', match: 'gte', columns: ['valid_from'] },
+      { name: 'version_to', description: 'Version in force up to (YYYY-MM-DD)', match: 'lte', columns: ['valid_from'] },
+    ],
+  },
+
+  uk_legislation_effects: {
+    title: 'UK Changes to Legislation (1.21M amendments)',
+    description: `Every amendment legislation.gov.uk publishes: 1,213,289 effects, stated by the source rather than inferred from diffs. Each row says which provision of which act was changed, by which provision of which other act, of what kind, and from when.
+
+990,458 are applied — already written into the published text. 222,831 are NOT: they are law but the editorial text has not caught up, and they are invisible to anyone reading the act. 32,766 acts carry such a backlog.
+
+Search by the act that was changed (affected), by the act doing the changing (affecting), or by effect type.`,
+    table: 'uk_legislation_effects',
+    selectColumns: "effect_id, affected_id, affected_title, affected_provisions, effect_type, applied, in_force_date::text AS in_force_date, affecting_id, affecting_title, affecting_provisions, commencement_authority, notes",
+    orderBy: 'uk_legislation_effects.in_force_date DESC NULLS LAST',
+    emptyMessage: 'No UK amendments found matching criteria',
+    fields: [
+      { name: 'affected', description: 'Act that was changed, e.g. ukpga/2006/46', match: 'exact', columns: ['affected_id'] },
+      { name: 'affected_title', description: 'Title of the act that was changed', match: 'ilike', columns: ['affected_title'] },
+      { name: 'affecting', description: 'Act making the change, e.g. ukpga/2026/21', match: 'exact', columns: ['affecting_id'] },
+      { name: 'affecting_title', description: 'Title of the act making the change', match: 'ilike', columns: ['affecting_title'] },
+      { name: 'effect_type', description: 'coming into force, words substituted, inserted, repealed, omitted, revoked', match: 'ilike', columns: ['effect_type'] },
+      { name: 'applied', description: 'true = already in the published text; false = outstanding editorial backlog', match: 'exact', columns: ['applied'], type: 'boolean' },
+      { name: 'affected_year', description: 'Year of the act that was changed', match: 'exact', columns: ['affected_year'], type: 'number' },
+      { name: 'in_force_from', description: 'In force from (YYYY-MM-DD)', match: 'gte', columns: ['in_force_date'] },
+      { name: 'in_force_to', description: 'In force up to (YYYY-MM-DD)', match: 'lte', columns: ['in_force_date'] },
+    ],
+  },
+
+  uk_court_decisions: {
+    title: 'UK Court Judgments (54K decisions)',
+    description: `54,453 judgments from Find Case Law (The National Archives), 2001-2026, full text on 99.95% of rows. UK Supreme Court, Court of Appeal (Civil), High Court (Chancery, Administrative, Commercial, Family), Privy Council and UK tribunals.
+
+Coverage gaps worth knowing before relying on a nil result: no Court of Appeal (Criminal), no Scotland, no Northern Ireland, and the Administrative Court series stops at 2016.
+
+Licence: Find Case Law judgments are published under the Open Justice Licence. Rows carry the licence they arrived under.`,
+    table: 'uk_court_decisions',
+    selectColumns: 'id, neutral_citation, case_number, court_code, court_name, decision_date::text AS decision_date, judge, parties, licence, source_url, full_text',
+    outerColumns: "t.id, t.neutral_citation, t.case_number, t.court_code, t.court_name, t.decision_date, t.judge, t.parties, t.licence, t.source_url, left(t.full_text || '', 400) AS snippet",
+    orderBy: 'uk_court_decisions.decision_date DESC NULLS LAST',
+    outerOrderBy: 't.decision_date DESC NULLS LAST',
+    emptyMessage: 'No UK judgments found matching criteria',
+    defaultLimit: 20,
+    maxLimit: 50,
+    fields: [
+      // ftsExpression reproduces idx_uk_court_fts verbatim. Searching full_text
+      // alone would not match the index and would sequentially scan 2 GB.
+      {
+        name: 'query',
+        description: 'Full-text search across parties, abstract and judgment text (English)',
+        match: 'fts',
+        columns: ['full_text'],
+        ftsExpression: "COALESCE(parties, '') || ' ' || COALESCE(abstract, '') || ' ' || COALESCE(full_text, '')",
+      },
+      { name: 'citation', description: 'Neutral citation, e.g. [2021] UKSC 20', match: 'ilike', columns: ['neutral_citation'] },
+      { name: 'case_number', description: 'Court case number', match: 'exact', columns: ['case_number'] },
+      { name: 'court', description: 'Court code, e.g. uksc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm, ewhc/fam, ukpc', match: 'exact', columns: ['court_code'] },
+      { name: 'parties', description: 'Party names', match: 'ilike', columns: ['parties'] },
+      { name: 'judge', description: 'Judge name', match: 'ilike', columns: ['judge'] },
+      { name: 'date_from', description: 'Decision date from (YYYY-MM-DD)', match: 'gte', columns: ['decision_date'] },
+      { name: 'date_to', description: 'Decision date to (YYYY-MM-DD)', match: 'lte', columns: ['decision_date'] },
     ],
   },
 };

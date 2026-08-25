@@ -40,6 +40,10 @@ const ALLOWED_TABLES: Set<string> = new Set([
   'opendata_spending_state', 'opendata_spending_local',
   // EDRNPA
   'opendata_edrnpa_cards', 'opendata_edrnpa_texts',
+  // UK — legislation.gov.uk (OGL v3.0) and Find Case Law
+  'uk_legislation', 'uk_legislation_versions', 'uk_legislation_provisions',
+  'uk_legislation_effects', 'uk_legislation_amendment_history',
+  'uk_court_decisions',
 ]);
 
 const FORBIDDEN_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXECUTE|SET\s+(?!LOCAL\s+statement_timeout|TRANSACTION))\b/i;
@@ -169,7 +173,7 @@ export class AnalyzeDataTool extends BaseToolHandler {
     const referencedTables = this.extractTableNames(normalized);
     const forbidden = referencedTables.filter(t => !ALLOWED_TABLES.has(t));
     if (forbidden.length > 0) {
-      return `Таблиці не дозволені: ${forbidden.join(', ')}. Дозволені: edrsr_*, opendata_*, judges*, vrp_*, vkks_*, nbu_banks.`;
+      return `Таблиці не дозволені: ${forbidden.join(', ')}. Дозволені: edrsr_*, opendata_*, judges*, vrp_*, vkks_*, nbu_banks, uk_*.`;
     }
 
     return null;
