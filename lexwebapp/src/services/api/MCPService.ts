@@ -60,6 +60,7 @@ export type CitationWarning =
     };
 
 import type { Decision, Citation, VaultDocument } from '../../types/models/Message';
+import { API_BASE } from '../../utils/api/base';
 
 export interface EvidenceEnvelope {
   decisions: Decision[];
@@ -95,7 +96,7 @@ export class MCPService extends BaseService {
 
   constructor() {
     super();
-    const baseUrl = import.meta.env.VITE_API_URL || 'https://stage.legal.org.ua';
+    const baseUrl = API_BASE;
     this.API_URL = `${baseUrl}/api`;
     this.TOOLS_URL = `${baseUrl}/api/v1/tools`;
     this.API_KEY =

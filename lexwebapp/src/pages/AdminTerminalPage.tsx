@@ -9,6 +9,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+import { API_BASE } from '../utils/api/base';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -47,7 +48,7 @@ export function AdminTerminalPage() {
       return;
     }
 
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://stage.legal.org.ua';
+    const apiUrl = API_BASE;
     // Convert http(s):// to ws(s)://
     const wsUrl = apiUrl.replace(/^http/, 'ws') + '/api/admin/terminal?token=' + encodeURIComponent(token);
 

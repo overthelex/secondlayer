@@ -5,8 +5,9 @@
  * 2. Browser signals (navigator.language, Intl timezone) — works even with VPN
  * 3. Merges both signals, browser wins on conflict (user's actual device settings)
  */
+import { API_BASE } from '../../utils/api/base';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = API_BASE;
 
 export interface GeoInfo {
   country: string;       // ISO 3166-1 alpha-2 (e.g., "UA", "US")

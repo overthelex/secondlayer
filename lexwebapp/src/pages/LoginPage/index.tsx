@@ -36,6 +36,7 @@ import { toastT } from '../../i18n/toast-i18n';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { GDPRModal } from './GDPRModal';
 import { useLoginPageT, setLocale as setI18nLocale, type Locale } from '../../i18n/locales';
+import { API_BASE } from '../../utils/api/base';
 
 function LanguageSwitcher() {
   const { locale } = useLoginPageT();
@@ -71,7 +72,7 @@ function isInAppBrowser(): boolean {
     || (/Android.*wv\b/.test(ua));
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = API_BASE;
 const BASE_URL = API_URL.replace(/\/api$/, '');
 
 type AuthMethod = 'password' | 'hardware-key' | 'phone-key';

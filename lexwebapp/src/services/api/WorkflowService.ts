@@ -4,6 +4,7 @@
 
 import { BaseService } from '../base/BaseService';
 import type { WorkflowSet, Workflow } from '../../types/models/Workflow';
+import { API_BASE } from '../../utils/api/base';
 
 export interface WorkflowSSECallbacks {
   onStepStart?: (data: { workflowId: string; stepId: number; stepIndex: number; totalSteps: number; tool: string; purpose: string }) => void;
@@ -53,7 +54,7 @@ export class WorkflowService extends BaseService {
 
   executeWorkflow(id: string, callbacks: WorkflowSSECallbacks): () => void {
     const token = localStorage.getItem('auth_token');
-    const baseUrl = import.meta.env.VITE_API_URL || '';
+    const baseUrl = API_BASE;
 
     const abortController = new AbortController();
 
