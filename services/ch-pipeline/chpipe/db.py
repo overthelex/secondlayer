@@ -452,7 +452,7 @@ def failed_by_stage_versions(conn) -> list[tuple[str | None, int]]:
 # poison text cannot stall the queue behind it.
 # ---------------------------------------------------------------------------
 
-_CLAIM_CITATIONS_COLUMNS = "ecli, doc_id, spider, court_code, decision_date, full_text"
+_CLAIM_CITATIONS_COLUMNS = "ecli, doc_id, spider, court_code, decision_date, docket_number, full_text"
 
 
 def claim_for_citations(conn, limit: int, spider: str | None = None) -> list[dict]:
