@@ -76,6 +76,13 @@ Negative cases (must NOT be extracted):
     and qualifier keywords themselves, articles/prepositions/conjunctions in
     all three languages, and RS/SR which are followed by a systematic-number,
     not an abbreviation) guards that slot.
+  - "Art. 5\nArt. 6\nArt. 7 ZGB" -- only the third article has an act. The
+    head word is on the stop-list too, so a reference whose act is missing
+    yields nothing instead of citing "Art." as if it were a statute.
+  - "Art. 5 Abs. 1 Satz 2 BV" -- "Satz" is a qualifier, not the act. The
+    spelled-out qualifiers (Satz, Halbsatz, Ziffer, Buchstabe, Anhang, lettre,
+    chiffre, cifra, numero) are recognised alongside the abbreviated ones, and
+    are on the stop-list as a second line of defence.
 
 Statute references are deduplicated by (abbr, article, paragraph), keeping
 the first occurrence's context and language, and returned in order of first
@@ -180,14 +187,39 @@ _GAP = r"[^\S\n]*(?:\n[^\S\n]*)?"
 # Head words. "Art."/"art." plus the spelled-out and plural forms; the trailing
 # lookahead stops "Arterie" or "Artikelserie" from being read as a head.
 _HEAD = re.compile(
-    r"\b([Aa]rt(?:ikeln?|icles?|icoli|icolo|t)?)\.?(?![A-Za-zÄÖÜäöüéèàç])"
+    r"\b([Aa]rt(?:ikel[ns]?|icles?|icoli|icolo|t)?)\.?(?![A-Za-zÄÖÜäöüéèàç])"
 )
 
 # Paragraph keywords (Absatz / alinéa / capoverso and the ECHR's "par.").
 _PARA_KW = r"Absatz|Abs\.|alinéa|[Aa]l\.|capoverso|[Cc]pv\.|[Pp]ar\.|§"
 # Letter and number qualifiers. They are NOT paragraphs -- "Art. 95 lit. a BGG"
 # has no paragraph -- but they do carry a strong language signal.
-_QUAL_KW = r"litera|[Ll]it\.|[Bb]st\.|[Ll]ett\.|[Ll]et\.|[Zz]iff\.|[Cc]h\.|[Nn]o?\."
+#
+# The spelled-out forms matter as much as the abbreviated ones: without
+# "Satz"/"Ziffer"/"Buchstabe"/"Anhang" here, "Art. 5 Abs. 1 Satz 2 BV" stops
+# after the paragraph and "Satz" -- an uppercase-initial word of the right
+# length -- is read as the act.
+_QUAL_KW = (
+    r"[Bb]uchstaben?|[Hh]albsatz|[Zz]iffern?|[Aa]nhang|[Ss]atz|litera"
+    r"|lettres?|chiffres?|cifra|numeri|numero"
+    r"|[Ll]it\.|[Bb]st\.|[Ll]ett\.|[Ll]et\.|[Zz]iff\.|[Cc]h\.|[Nn]o?\."
+)
+# A qualifier value, and then the rest of a letter list: "lit. a und b",
+# "lit. a und lit. b", "lit. a, b und c". Without this the trailing letters are
+# left unconsumed and the abbreviation after them never binds, losing the whole
+# reference rather than just the extra letters. Bounded, like every other list.
+_QUAL_VAL = r"(?:[a-z](?:bis|ter)?|\d{1,3})(?!\w)"
+_LET_CONT = (
+    rf"(?:{_GAP}(?:,|;|und|oder|et|ed|ou|e|o)"
+    rf"(?:{_GAP}(?:{_QUAL_KW}))?{_GAP}[a-z](?:bis|ter)?(?!\w)){{0,7}}"
+)
+
+
+def _qual(group: str) -> str:
+    """One optional qualifier with its letter list, capturing under `group`."""
+    return rf"(?:{_GAP}(?P<{group}>{_QUAL_KW}){_GAP}{_QUAL_VAL}{_LET_CONT})?"
+
+
 # "und folgende" / "et suivants" / "e seguenti": consumed, never expanded.
 # The multi-letter markers are written without a full stop often enough
 # ("art. 8 ss CO") that the dot has to be optional for them -- but not for the
@@ -200,16 +232,16 @@ _FF = r"(?:(?:et|e)[ \t]+)?(?:(?:ff|ss|segg|seg)\.?|[fs]\.)(?!\w)"
 _ITEM = re.compile(
     _GAP + r"(?P<article>\d{1,4}[a-z]{0,6})(?!\w)"
     + rf"(?:{_GAP}(?P<pkw>{_PARA_KW}){_GAP}(?P<para>\d{{1,3}})(?!\w))?"
-    + rf"(?:{_GAP}(?P<q1>{_QUAL_KW}){_GAP}(?:[a-z](?:bis|ter)?|\d{{1,3}})(?!\w))?"
-    + rf"(?:{_GAP}(?P<q2>{_QUAL_KW}){_GAP}(?:[a-z](?:bis|ter)?|\d{{1,3}})(?!\w))?"
+    + _qual("q1")
+    + _qual("q2")
     + rf"(?:{_GAP}{_FF})?"
 )
 
 # Qualifiers and the ff. marker again, for the rare "al. 1 et 2 let. b" shape
 # where a paragraph list pushed them out of reach of _ITEM. Matches empty.
 _TAIL = re.compile(
-    rf"(?:{_GAP}(?P<q1>{_QUAL_KW}){_GAP}(?:[a-z](?:bis|ter)?|\d{{1,3}})(?!\w))?"
-    + rf"(?:{_GAP}(?P<q2>{_QUAL_KW}){_GAP}(?:[a-z](?:bis|ter)?|\d{{1,3}})(?!\w))?"
+    _qual("q1")
+    + _qual("q2")
     + rf"(?:{_GAP}{_FF})?"
 )
 
@@ -233,7 +265,9 @@ _ABBR = re.compile(_GAP + r"([A-ZÄÖÜ][A-Za-zÄÖÜäöü]{1,11})\.?(?![A-Za-z
 # ("RS 351.1"), never an abbreviation.
 _ABBR_STOP = frozenset(
     """uhr bst abs ziff lit al let ch cpv lett par n ff f ss seg segg
-       des der die das vom du de la le les della del dell und et e rs sr""".split()
+       des der die das vom du de la le les della del dell und et e rs sr
+       art artt artikel artikeln artikels article articles articolo articoli
+       absatz satz halbsatz anhang buchstabe buchstaben ziffer ziffern""".split()
 )
 
 # Abbreviations that genuinely carry a full stop; every other trailing dot is
@@ -242,13 +276,16 @@ _ABBR_KEEPS_DOT = frozenset({"cst", "cost"})
 
 _KEYWORD_LANG = {
     "absatz": "de", "abs": "de", "bst": "de", "ziff": "de", "lit": "de",
-    "litera": "de",
+    "litera": "de", "buchstabe": "de", "buchstaben": "de", "ziffer": "de",
+    "ziffern": "de", "satz": "de", "halbsatz": "de", "anhang": "de",
     "alinéa": "fr", "al": "fr", "let": "fr", "ch": "fr", "par": "fr",
+    "lettre": "fr", "lettres": "fr", "chiffre": "fr", "chiffres": "fr",
     "capoverso": "it", "cpv": "it", "lett": "it", "n": "it", "no": "it",
+    "cifra": "it", "numero": "it", "numeri": "it",
 }
 
 _HEAD_LANG = {
-    "artikel": "de", "artikeln": "de",
+    "artikel": "de", "artikeln": "de", "artikels": "de",
     "article": "fr", "articles": "fr",
     "articolo": "it", "articoli": "it", "artt": "it",
 }

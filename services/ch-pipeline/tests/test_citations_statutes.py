@@ -286,6 +286,109 @@ def test_statuteref_is_frozen_and_carries_context():
 
 
 # --------------------------------------------------------------------------
+# Spelled-out qualifiers: never the act abbreviation, never a paragraph
+# --------------------------------------------------------------------------
+
+def test_de_satz_qualifier_is_not_the_abbreviation():
+    assert refs("Art. 5 Abs. 1 Satz 2 BV") == [("BV", "5", "1", "de")]
+
+
+def test_de_satz_qualifier_after_a_paragraph_keeps_the_paragraph():
+    assert refs("Art. 336 Abs. 2 Satz 1 OR") == [("OR", "336", "2", "de")]
+
+
+def test_de_spelled_out_absatz_and_buchstabe():
+    assert refs("Art. 12 Absatz 3 Buchstabe b BV") == [("BV", "12", "3", "de")]
+
+
+def test_de_spelled_out_ziffer():
+    assert refs("Art. 8 Ziffer 1 EMRK") == [("EMRK", "8", None, "de")]
+
+
+def test_de_anhang_qualifier():
+    assert refs("Art. 4 Anhang 1 VwVG") == [("VwVG", "4", None, "de")]
+
+
+def test_de_halbsatz_qualifier():
+    assert refs("Art. 5 Halbsatz 2 BV") == [("BV", "5", None, "de")]
+
+
+def test_fr_spelled_out_chiffre():
+    assert refs("art. 8 chiffre 1 CEDH") == [("CEDH", "8", None, "fr")]
+
+
+def test_it_spelled_out_cifra():
+    assert refs("art. 8 cifra 1 CEDU") == [("CEDU", "8", None, "it")]
+
+
+def test_it_spelled_out_numero_infers_italian():
+    assert refs("art. 8 numero 1 LT") == [("LT", "8", None, "it")]
+
+
+def test_bare_spelled_out_qualifier_is_not_an_abbreviation():
+    assert refs("Art. 5 Absatz") == []
+    assert refs("Art. 5 Satz") == []
+    assert refs("Art. 5 Buchstabe") == []
+    assert refs("Art. 5 Ziffer") == []
+    assert refs("Art. 5 Anhang") == []
+
+
+# --------------------------------------------------------------------------
+# The head word must never fill the abbreviation slot
+# --------------------------------------------------------------------------
+
+def test_head_word_on_the_next_line_is_not_an_abbreviation():
+    assert refs("Art. 5\nArt. 6\nArt. 7 ZGB") == [("ZGB", "7", None, "de")]
+
+
+def test_head_word_on_the_same_line_is_not_an_abbreviation():
+    assert refs("Art. 8 Abs. 1 Art. 9 Abs. 2 ZGB") == [("ZGB", "9", "2", "de")]
+
+
+def test_spelled_out_head_word_is_not_an_abbreviation():
+    assert refs("Art. 5 Artikel 6 ZGB") == [("ZGB", "6", None, "de")]
+
+
+# --------------------------------------------------------------------------
+# Letter lists after lit./let./lettre
+# --------------------------------------------------------------------------
+
+def test_de_bare_letter_list_after_litera():
+    assert refs("Art. 8 Abs. 1 lit. a und b BGG") == [("BGG", "8", "1", "de")]
+
+
+def test_de_repeated_litera_keyword_in_a_letter_list():
+    assert refs("Art. 8 lit. a und lit. b BGG") == [("BGG", "8", None, "de")]
+
+
+def test_de_three_item_letter_list():
+    assert refs("Art. 8 lit. a, b und c BGG") == [("BGG", "8", None, "de")]
+
+
+def test_fr_spelled_out_lettre():
+    assert refs("art. 8 lettre b LTF") == [("LTF", "8", None, "fr")]
+
+
+def test_letter_list_does_not_swallow_a_following_article():
+    assert refs("Art. 8 lit. a und 9 lit. b OR") == [
+        ("OR", "8", None, "de"),
+        ("OR", "9", None, "de"),
+    ]
+
+
+def test_letter_list_does_not_swallow_an_ordinary_word():
+    assert refs("Art. 8 lit. a und der Rest") == []
+
+
+# --------------------------------------------------------------------------
+# Genitive head word
+# --------------------------------------------------------------------------
+
+def test_de_genitive_head_word():
+    assert refs("Artikels 8 ZGB") == [("ZGB", "8", None, "de")]
+
+
+# --------------------------------------------------------------------------
 # Performance: 2 MB of text in under a second
 # --------------------------------------------------------------------------
 
@@ -303,4 +406,17 @@ def test_two_megabytes_extract_in_under_a_second():
     elapsed = time.perf_counter() - started
 
     assert out, "the 2 MB fixture must still yield references"
+    assert elapsed < 1.0, f"extract_statutes took {elapsed:.3f}s on 2 MB"
+
+
+def test_two_megabytes_without_any_act_extract_in_under_a_second():
+    """Every reference dangles: the head word must not stand in for an act."""
+    text = "Art. 8 Abs. 1 " * (2_000_000 // 14 + 1)
+    assert len(text) >= 2_000_000
+
+    started = time.perf_counter()
+    out = extract_statutes(text)
+    elapsed = time.perf_counter() - started
+
+    assert out == []
     assert elapsed < 1.0, f"extract_statutes took {elapsed:.3f}s on 2 MB"
