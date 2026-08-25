@@ -274,6 +274,16 @@ def test_a_second_build_is_byte_identical(settings, seeded, tmp_path):
     assert first_report == second_report
 
 
+def test_a_language_sample_does_not_depend_on_the_langs_order(settings, seeded, tmp_path):
+    """Per-language seeding: fr's shuffle must not consume draws left over
+    from de's, so the same seed gives the same bench-fr.jsonl either way."""
+    a = tmp_path / "a"; b = tmp_path / "b"
+    build.build(settings, langs=("de", "fr"), out_dir=a, seed=20260825, now=_NOW)
+    build.build(settings, langs=("fr", "de"), out_dir=b, seed=20260825, now=_NOW)
+    assert (a / "bench-fr.jsonl").read_text() == (b / "bench-fr.jsonl").read_text()
+    assert (a / "bench-de.jsonl").read_text() == (b / "bench-de.jsonl").read_text()
+
+
 def test_no_abbreviation_is_skipped(settings, conn, tmp_path):
     """An in-force act with no de abbreviation and no fr/it alias at all:
     every change for it is dropped with reason no_abbreviation, before

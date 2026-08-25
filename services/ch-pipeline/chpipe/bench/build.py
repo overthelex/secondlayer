@@ -366,11 +366,10 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
     """Build bench-{lang}.jsonl for each of LANGS plus build-report.json, in
     OUT_DIR, against the database SETTINGS points to.
 
-    One `random.Random(seed)` instance is created here and handed to
-    _build_lang() for every language IN ORDER -- not a fresh one per
-    language -- so its state carries forward from one language's shuffle
-    into the next; the result is deterministic for a given (langs, seed)
-    pair but two languages do not draw the identical shuffle order.
+    Each language gets its own `random.Random(f"{seed}:{lang}")`, so a
+    language's sample depends only on (seed, lang), never on which other
+    languages were requested or in what order: bench-fr.jsonl is byte
+    identical whether langs is ("de", "fr") or ("fr", "de").
 
     NOW is accepted explicitly (rather than build() and its callees calling
     datetime.now() wherever built_at is needed) so the report's timestamp
@@ -384,7 +383,6 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
         now = datetime.datetime.now(datetime.timezone.utc)
     built_at = _iso(now)
 
-    rng = random.Random(seed)
     per_lang_report: dict[str, dict[str, Any]] = {}
 
     conn = db.connect(settings)
@@ -393,6 +391,7 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
             with conn.cursor() as cur:
                 cur.execute(_CHANGE_SQL, {"lang": lang})
                 rows = cur.fetchall()
+            rng = random.Random(f"{seed}:{lang}")
             items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng)
             per_lang_report[lang] = lang_report
 
