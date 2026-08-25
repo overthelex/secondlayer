@@ -35,6 +35,7 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
   const ECLI_FAILED = 'ECLI:CH:BGER:2019:5A.1.2019';
   const ECLI_NULL_DATE = 'ECLI:CH:BGER:2020:7B.5.2020';
   const ECLI_CHAMBER = 'ECLI:CH:BGER:2022:9C.4.2022';
+  const ECLI_LOOKALIKE = 'ECLI:CH:XX:2022:LOOK.1.2022';
 
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
@@ -125,6 +126,22 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
           'Das Datum dieses Entscheids ist im Quellsystem nicht bekannt.',
           'https://entscheidsuche.ch/html/CH_BGER_005', 'https://entscheidsuche.ch/pdf/CH_BGER_005', 'https://entscheidsuche.ch/json/CH_BGER_005', 'loaded')`,
       [ECLI_NULL_DATE, 'CH_BGER_005']
+    );
+
+    // A court whose code differs from CH_BGer only where CH_BGer has an underscore:
+    // a LIKE prefix match that does not escape '_' would take it for a chamber.
+    await client.query(
+      `INSERT INTO ch_court_decisions
+         (ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
+          decision_date, docket_number, languages, parties, abstract, full_text,
+          html_url, pdf_url, json_url, stage)
+       VALUES
+         ($1, $2, 'XX_Look', 'CHXBGer_004', 'Lookalike', NULL, 'XX',
+          'Urteil', '2022-02-02', 'LOOK_1/2022', ARRAY['de'], 'G. gegen H.',
+          'Lookalike ChamberMarkerABC',
+          'Ein Gericht mit einem Code, der CH_BGer nur im Unterstrich gleicht.',
+          NULL, NULL, NULL, 'loaded')`,
+      [ECLI_LOOKALIKE, 'XX_LOOK_001']
     );
 
     await client.query(
@@ -218,6 +235,12 @@ describeIfPg('ChCourtTools (real PostgreSQL)', () => {
         query: 'ChamberMarkerABC', court_code: 'ZH_OG',
       }))!);
       expect(unmatched.results).toHaveLength(0);
+
+      // '_' in the caller's prefix must be literal: CHXBGer_004 is not a CH_BGer chamber
+      const lookalike = parse((await tools.executeTool('ch_search_court_decisions', {
+        query: 'ChamberMarkerABC', court_code: 'CHXBGer',
+      }))!);
+      expect(lookalike.results.map((r: any) => r.ecli)).toEqual([ECLI_LOOKALIKE]);
     });
 
     it('matches an exact court_code with no chambers', async () => {

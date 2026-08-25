@@ -117,8 +117,13 @@ export class ChCourtTools extends BaseToolHandler {
       // CH_BGer to match every chamber under it — the underscore in the LIKE pattern is
       // escaped so it does not act as a single-char wildcard.
       if (court_code) {
-        filters.push(`(court_code = $${pi} OR court_code LIKE $${pi} || '\\_%')`);
-        values.push(String(court_code)); pi++;
+        // Two parameters: the exact code, and a LIKE pattern in which every
+        // '_' / '%' / '\\' of the caller's value is escaped, so 'CH_BGer' matches
+        // its chambers (CH_BGer_004) but not CHXBGer_004.
+        const code = String(court_code);
+        const pattern = code.replace(/[\\%_]/g, (ch) => '\\' + ch) + '\\_%';
+        filters.push(`(court_code = $${pi} OR court_code LIKE $${pi + 1} ESCAPE '\\')`);
+        values.push(code, pattern); pi += 2;
       }
       if (canton) { filters.push(`canton = $${pi}`); values.push(String(canton)); pi++; }
       if (lang) { filters.push(`languages[1] = $${pi}`); values.push(String(lang)); pi++; }
