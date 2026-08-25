@@ -38,6 +38,8 @@ import logging
 import pathlib
 from typing import Any
 
+from chpipe.bench import score
+
 log = logging.getLogger(__name__)
 
 REPORT_FILENAME = "report.json"
@@ -235,14 +237,58 @@ def markdown(summary: dict[str, dict[str, dict[str, dict[str, Any]]]]) -> str:
     return "\n".join(rows) + "\n"
 
 
+def _rescore_line(line: dict[str, Any],
+                   items_by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Return a copy of LINE with `verdict` recomputed from its stored
+    `answer` and the item's current gold/distractor text, via the CURRENT
+    chpipe.bench.score.score() -- not whatever version of score() scored it
+    when the results file was written. Used by --rescore (see main()) to
+    re-grade an existing results file against a newer scorer without paying
+    to re-run the model.
+
+    LINE is returned unchanged (same object, not a copy) when it cannot be
+    rescored: its id is not in ITEMS_BY_ID (an orphan line -- summarise()
+    already handles that case by bucketing it under kind "unknown"; rescore
+    has no gold/distractor to score it against either), or it carries no
+    `answer` field at all. Every line run_llm.py/run_oracle.py write does
+    carry `answer` (possibly "" on an error -- see those modules'
+    docstrings), so this second case is a defensive fallback, not the
+    common path.
+    """
+    item = items_by_id.get(line.get("id"))
+    if item is None or "answer" not in line:
+        return line
+    verdict = score.score(line["answer"], item["gold"]["text"], item["distractor"]["text"])
+    rescored = dict(line)
+    rescored["verdict"] = {
+        "label": verdict.label,
+        "gold_coverage": verdict.gold_coverage,
+        "distractor_coverage": verdict.distractor_coverage,
+        "shared_coverage": verdict.shared_coverage,
+        "distractor_all_coverage": verdict.distractor_all_coverage,
+    }
+    return rescored
+
+
 def main(argv: list[str] | None = None) -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
     """Entry point: `python -m chpipe.bench.report --results FILE [FILE ...]
-    --items DIR --out report.json`.
+    --items DIR --out report.json [--rescore]`.
 
     Reads every RESULTS file (one run_*.py output each -- pass more than
     one to compare systems in a single table), reduces them with
     summarise() against the items in --items, prints the Markdown table to
     stdout, and writes the summary as JSON to --out.
+
+    --rescore: before summarising, recompute every line's `verdict` from its
+    stored `answer` and the item's gold/distractor text with the CURRENT
+    score() (see _rescore_line()) -- e.g. after a scorer fix, to see how an
+    already-run, already-paid-for results file grades under the new rule
+    without re-asking the model. The report and the returned summary are
+    then built from the recomputed verdicts. The input RESULTS files
+    themselves are left untouched -- their stored verdicts are exactly what
+    was written when the run finished -- and each recomputed line set is
+    instead written to a sibling `<results>.rescored.jsonl` file next to its
+    input, so the rescored verdicts are inspectable on their own.
     """
     parser = argparse.ArgumentParser(
         description="Summarise CH point-in-time benchmark run(s)")
@@ -252,6 +298,11 @@ def main(argv: list[str] | None = None) -> dict[str, dict[str, dict[str, dict[st
                         help="directory holding bench-{lang}.jsonl item files")
     parser.add_argument("--out", default=REPORT_FILENAME,
                         help=f"path to write the JSON summary to (default: {REPORT_FILENAME})")
+    parser.add_argument("--rescore", action="store_true",
+                        help="recompute each line's verdict from its answer with the "
+                             "current score() before summarising, writing "
+                             "<results>.rescored.jsonl next to each input (the input "
+                             "files themselves are left untouched)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO,
@@ -259,8 +310,18 @@ def main(argv: list[str] | None = None) -> dict[str, dict[str, dict[str, dict[st
 
     items_by_id = load_items_by_id(args.items)
     result_lines: list[dict[str, Any]] = []
-    for path in args.results:
-        result_lines.extend(_read_jsonl(pathlib.Path(path)))
+    for path_str in args.results:
+        path = pathlib.Path(path_str)
+        lines = _read_jsonl(path)
+        if args.rescore:
+            lines = [_rescore_line(line, items_by_id) for line in lines]
+            rescored_path = path.with_suffix(".rescored.jsonl")
+            rescored_path.write_text(
+                "\n".join(json.dumps(line, ensure_ascii=False) for line in lines) + "\n"
+                if lines else "",
+                encoding="utf-8")
+            log.info("rescored %d lines: %s -> %s", len(lines), path, rescored_path)
+        result_lines.extend(lines)
 
     summary = summarise(result_lines, items_by_id)
     md = markdown(summary)

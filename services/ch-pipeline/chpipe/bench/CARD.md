@@ -220,7 +220,10 @@ units on Fedlex's numbered-paragraph markers (`1 `, `1bis `, `2 `, …), or,
 if the text has no such markers, into sentence-level units on `.`/`;`/`:`.
 A unit shorter than 25 normalised characters is discarded — too short to
 tell one edition from another, and short strings inflate similarity scores
-by chance.
+by chance. This 25-char floor is the default used everywhere in the scorer
+except one case: `distractor_all_coverage` (see below) is computed with an
+8-char floor instead, so a short but real distractor paragraph is not
+dropped out of that one computation.
 
 **Partition.** The gold and distractor texts' units are compared against
 each other and split three ways: **gold-only** (a unit of gold whose
@@ -251,6 +254,22 @@ wrong-version signal in exactly that case (see Labels). It is a diagnostic
 everywhere else: on such an item a correct answer scores 1.0 on it too,
 which is why it is only ever consulted after the gold-side test has already
 failed.
+
+This one computation uses a **lower unit-length floor: 8 normalised
+characters, not the usual 25.** Reusing the normal 25-char floor here
+reintroduced a version of the same bug this fallback exists to close: when
+the amendment's *old* (distractor) paragraph is itself short — e.g. a
+two-paragraph article where paragraph 2 changes from "Er ist zu
+begründen." (20 chars) to "Er ist zu begründen und zu unterzeichnen." — the
+25-char floor drops that paragraph out of the set entirely, leaving only
+the unrelated, unchanged paragraph 1. An answer that quotes *only* that
+unchanged paragraph then found the one unit that survived the filter,
+scored `distractor_all_coverage` 1.0, and was labelled
+`grounded_wrong_version` despite never touching the amendment. With the
+8-char floor the short paragraph is back in the set, and that same answer
+now scores 0.5 (one of two units found) — which is also why the fallback's
+own threshold was raised to 0.8 (see Labels): on a two-unit set, 0.5 still
+clears the normal 0.6 floor.
 
 **Discriminating pairs.** A Fedlex amendment often changes exactly one
 number or short word and leaves the rest of the paragraph untouched (e.g.
@@ -326,7 +345,11 @@ and it is not free. Four consequences to read a CH-PiT number with:
 `distractor_coverage <= 0.2`, and is tested first. `grounded_wrong_version`
 requires `gold_coverage <= 0.2` and either `distractor_coverage >= 0.6` or —
 when there are no distractor-only units at all, the pure-addition case above
-— `distractor_all_coverage >= 0.6`. Everything else —
+— `distractor_all_coverage >= 0.8`. That fallback threshold is deliberately
+higher than the 0.6 used everywhere else, in exchange for the lower 8-char
+unit floor described above: it requires the answer to actually cover the
+distractor's short, amendment-adjacent wording, not merely the unchanged
+paragraph sitting next to it. Everything else —
 including an answer that clears neither floor, or one that clears 0.6 on
 one side while also leaking past 0.2 on the other — is `ungrounded`.
 
@@ -426,6 +449,21 @@ headline `score`, as the point-in-time grounding number.
   wording of its own to find and is dropped. A benchmark built this way
   therefore under-represents repeals relative to their share of real
   amendment traffic.
+- **The `distractor_all_coverage` fallback is a coarse signal, not proof the
+  amendment-adjacent wording specifically was found.** It is a share over
+  *all* of distractor's units (8-char floor, 0.8 threshold — see Scorer),
+  not just the short unit the amendment actually touched. On a
+  pure-addition item with several distractor units, an answer that
+  reproduces most of the unrelated, unchanged paragraphs without ever
+  quoting the changed one can still clear 0.8 if the other units carry
+  enough of the share on their own. The 8-char floor and the 0.8 threshold
+  close the common two-unit case — quoting a single unrelated paragraph is
+  no longer enough by itself to read `grounded_wrong_version` (previously
+  it was: an answer holding only paragraph 1 of a two-paragraph article
+  could score `distractor_all_coverage` 1.0 and get mislabelled) — but the
+  fallback remains structurally less precise than `distractor_coverage`'s
+  proper distractor-only partition, which is scoped to exactly the
+  discriminating wording.
 - **`before` items are dated by the edition, not by the change.** An
   item's `as_of` is the gold edition's last day in force, which is the
   change date minus one day only when the two editions are contiguous.

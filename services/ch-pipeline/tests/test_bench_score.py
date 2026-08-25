@@ -499,3 +499,64 @@ def test_tab_token_articles_still_score_both_ways():
     assert s.score(GOLD_TAB, GOLD_TAB, DISTRACTOR_TAB).label == "grounded_correct"
     assert s.score(DISTRACTOR_TAB, GOLD_TAB, DISTRACTOR_TAB).label == (
         "grounded_wrong_version")
+
+
+# --- distractor_all_coverage fallback: a short old paragraph must not be
+# dropped out of the set --------------------------------------------------
+#
+# Regression fixture for the fallback bug: a pure-addition amendment (see
+# GOLD_ADD/DISTRACTOR_ADD above) whose OLD (distractor) paragraph is itself
+# short. Paragraph 1 is shared and unrelated to the amendment; paragraph 2
+# is the amendment itself, and the distractor's version of it -- "Er ist zu
+# begruenden." (20 normalised characters) -- is short enough that the
+# ordinary 25-char units() floor drops it out of distractor_units entirely,
+# leaving only paragraph 1 in the set the OLD fallback coverage was
+# computed over. An answer that quotes ONLY paragraph 1 (unrelated, never
+# touches the amendment) then read distractor_all_coverage 1.0 -- the one
+# surviving unit was found -- and was wrongly labelled
+# `grounded_wrong_version`. With the fallback computed over ALL of
+# distractor's units at the lower 8-char floor, and judged against 0.8
+# instead of 0.6, that answer now falls well short (0.5: one of the two
+# units, p1, found) and is `ungrounded`.
+
+_FALLBACK_P1 = (
+    "1 Der Entscheid wird den Parteien schriftlich in deutscher Sprache "
+    "eröffnet."
+)
+GOLD_FALLBACK = _FALLBACK_P1 + "\n2 Er ist zu begründen und zu unterzeichnen."
+DISTRACTOR_FALLBACK = _FALLBACK_P1 + "\n2 Er ist zu begründen."
+
+
+def test_fallback_distractor_short_paragraph_is_dropped_by_the_25_char_floor():
+    # Pins the shape the bug needs: distractor's amendment paragraph is
+    # real wording (not a stub), but under the normal units() floor it
+    # disappears from distractor_units, so distractor_only is empty and the
+    # fallback is the only signal that can catch a wrong-version answer.
+    assert "er ist zu begründen" not in s.units(DISTRACTOR_FALLBACK)
+    assert "er ist zu begründen" in s.units(DISTRACTOR_FALLBACK, min_len=8)
+    gold_only, distractor_only, _shared = s.discriminating_units(
+        GOLD_FALLBACK, DISTRACTOR_FALLBACK)
+    assert len(gold_only) == 1
+    assert distractor_only == []
+
+
+def test_fallback_answer_quoting_only_the_unchanged_paragraph_is_ungrounded():
+    answer = _FALLBACK_P1.split(" ", 1)[1]  # paragraph 1's text, unadorned
+    v = s.score(answer, GOLD_FALLBACK, DISTRACTOR_FALLBACK)
+    assert v.label == "ungrounded"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_all_coverage == 0.5
+
+
+def test_fallback_answer_quoting_the_full_old_text_is_grounded_wrong_version():
+    v = s.score(DISTRACTOR_FALLBACK, GOLD_FALLBACK, DISTRACTOR_FALLBACK)
+    assert v.label == "grounded_wrong_version"
+    assert v.gold_coverage == 0.0
+    assert v.distractor_all_coverage == 1.0
+
+
+def test_fallback_answer_quoting_the_full_gold_text_is_grounded_correct():
+    v = s.score(GOLD_FALLBACK, GOLD_FALLBACK, DISTRACTOR_FALLBACK)
+    assert v.label == "grounded_correct"
+    assert v.gold_coverage == 1.0
+    assert v.distractor_coverage == 0.0

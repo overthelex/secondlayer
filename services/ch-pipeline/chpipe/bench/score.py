@@ -69,6 +69,29 @@ distractor unit; that is why the gold-side test is checked first and the
 wrong-version test additionally requires gold_coverage <= 0.2 (an answer
 holding the added wording is grounded in gold, whatever else it contains).
 
+TWO MINIMUM UNIT LENGTHS: 25 EVERYWHERE, 8 FOR THIS FALLBACK ONLY
+`distractor_all_coverage` is computed over `units(distractor,
+min_len=_MIN_FALLBACK_UNIT_LEN)` (8 normalised characters), not the normal
+`units(distractor)` (25 -- see `_MIN_UNIT_LEN`). Reusing the 25-char set
+here re-created a version of the same bug this fallback exists to close:
+when the amendment's OLD paragraph is itself short -- e.g. a two-paragraph
+article where paragraph 2 changes from "Er ist zu begründen." (20 chars)
+to "Er ist zu begründen und zu unterzeichnen." (gold, a pure addition) --
+the 25-char filter drops distractor's paragraph 2 out of `units(distractor)`
+entirely, leaving only the unrelated, unchanged paragraph 1 in the set. An
+answer that quotes ONLY that unchanged paragraph then scored
+distractor_all_coverage 1.0 (the one distractor unit that survived the
+filter was found) and was labelled `grounded_wrong_version`, despite never
+touching the amendment. Lowering the minimum to 8 for this computation
+(and only this one -- discriminating_units(), the gold-only/distractor-only
+partition, and every other use of units() still apply the normal 25-char
+floor) puts the short paragraph back in the set an answer has to actually
+cover; see "LABEL THRESHOLDS" below for why the floor was also raised to
+0.8 to go with it. 8, not some smaller number, because it is short enough
+to admit a real short Fedlex paragraph like the "Er ist zu begründen."
+example while still being long enough that a stray word or two of
+unrelated prose in the answer cannot satisfy it by chance.
+
 The mirror case -- a pure DELETION, gold is a strict subset of distractor
 -- leaves the GOLD-only set empty, and no fallback can rescue it: a
 correct answer is textually a fragment of the wrong answer, so nothing an
@@ -78,12 +101,12 @@ undecidable by design, and build.make_items() drops it at build time
 it. Pure deletions of a whole sentence are therefore not benchmarkable this
 way; see CARD.md, "Construction."
 
-LABEL THRESHOLDS: 0.6 / 0.2
+LABEL THRESHOLDS: 0.6 / 0.2, 0.8 FOR THE FALLBACK
 `grounded_correct` requires gold_coverage >= 0.6 AND distractor_coverage
 <= 0.2; `grounded_wrong_version` is the mirror (gold_coverage <= 0.2 AND
 either distractor_coverage >= 0.6, or -- when there are no distractor-only
 units at all, see "WRONG-VERSION DETECTION" above -- distractor_all_coverage
->= 0.6). The gold test is applied first, so an answer that clears both is
+>= 0.8). The gold test is applied first, so an answer that clears both is
 `grounded_correct`. Everything else -- including an answer that clears
 neither 0.6 floor, or one that clears 0.6 on one side but also leaks past
 0.2 on the other -- is `ungrounded`. The two thresholds are deliberately
@@ -95,8 +118,22 @@ with the gap between 0.2 and 0.6 reserved for partitions with several units
 where the answer got some but not all of them right -- treated as
 ungrounded rather than guessed at, because a partial match to one edition's
 distinguishing wording is not evidence the model resolved the date
-correctly; it is at best evidence it is reciting from memory. The 0.6/0.2
-split point (rather than, say, 0.5/0.5) also builds in a bias toward
+correctly; it is at best evidence it is reciting from memory.
+
+`distractor_all_coverage`'s fallback threshold is 0.8, not 0.6, because it
+is measured over a set built with the lower 8-char floor (see "TWO MINIMUM
+UNIT LENGTHS" above): once the short, amendment-adjacent unit is back in
+the set alongside the unchanged paragraph(s) around it, an answer that
+quotes only the unchanged part now scores below 1.0 on it -- but with two
+units in the set, 0.5 (one of two found) still clears 0.2's mirror at 0.6.
+Raising the fallback floor to 0.8 closes that gap: on a two-unit set,
+finding only the unrelated unit reads 0.5, which no longer clears 0.8,
+while an answer that recites the OLD wording in full (both the unchanged
+paragraph and the short old wording) still reads 1.0 and clears it easily.
+0.8 is deliberately higher than the 0.6 used everywhere else in this
+scorer, in exchange for the lower 8-char admission floor.
+
+The 0.6/0.2 split point (rather than, say, 0.5/0.5) also builds in a bias toward
 `ungrounded` over a confident label when coverage is ambiguous, since a
 false `grounded_correct`/`grounded_wrong_version` corrupts an accuracy
 metric a paper will cite, while an `ungrounded` false negative just costs
@@ -200,9 +237,14 @@ import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-# Grounding thresholds -- see module docstring "LABEL THRESHOLDS: 0.6 / 0.2".
+# Grounding thresholds -- see module docstring "LABEL THRESHOLDS: 0.6 / 0.2,
+# 0.8 FOR THE FALLBACK".
 _STRONG = 0.6
 _WEAK = 0.2
+
+# distractor_all_coverage's own, higher fallback threshold -- see module
+# docstring "LABEL THRESHOLDS: 0.6 / 0.2, 0.8 FOR THE FALLBACK".
+_FALLBACK_STRONG = 0.8
 
 # Window-match similarity floor -- see module docstring "WINDOW-MATCH
 # THRESHOLD: 0.92".
@@ -215,8 +257,16 @@ _MAX_WINDOW_ANSWER_LEN = 20_000
 # A unit's normalised form shorter than this is discarded by units(): too
 # short to discriminate one edition from another (a bare "a." list marker,
 # a one-word repealed-paragraph stub), and short strings inflate
-# SequenceMatcher ratios by chance.
+# SequenceMatcher ratios by chance. This is units()'s default floor, used
+# everywhere except the one case below.
 _MIN_UNIT_LEN = 25
+
+# The lower floor used ONLY for the distractor_all_coverage fallback (see
+# module docstring "TWO MINIMUM UNIT LENGTHS: 25 EVERYWHERE, 8 FOR THIS
+# FALLBACK ONLY"): a short but real amendment-adjacent paragraph must not be
+# dropped out of that one computation, or an answer that quotes only an
+# unrelated, unchanged unit can end up as the only thing left to "cover".
+_MIN_FALLBACK_UNIT_LEN = 8
 
 # Fedlex paragraph numbering: "1 ", "2 ", "1bis ", "3ter ", "4a " at the
 # start of a line. The letter suffix is `[a-z]*` (not `[a-z]?`) because
@@ -272,14 +322,20 @@ class Verdict:
     undefined), including shared_coverage.
 
     gold_coverage / distractor_coverage / shared_coverage are over the
-    three-way partition (see module docstring "WHY UNIT-LEVEL...").
-    `distractor_all_coverage` is over ALL of the distractor's units,
-    distractor-only and shared alike; it overlaps the other two on purpose,
-    and exists as the wrong-version fallback for a pure-addition amendment
-    where the distractor-only set is empty (see "WRONG-VERSION DETECTION
-    WHEN THE DISTRACTOR-ONLY SET IS EMPTY"). Read it as a diagnostic
-    everywhere else -- on a gold-superset item a correct answer scores 1.0
-    on it too.
+    three-way partition (see module docstring "WHY UNIT-LEVEL...") built
+    from units() at the normal 25-char minimum (`_MIN_UNIT_LEN`).
+    `distractor_all_coverage` is different in TWO ways, not one: it is over
+    ALL of the distractor's units, distractor-only and shared alike
+    (overlapping the other two on purpose), AND those units are collected
+    with a lower 8-char minimum (`_MIN_FALLBACK_UNIT_LEN`), so it can include
+    a short distractor paragraph the 25-char partition above would have
+    dropped. It exists as the wrong-version fallback for a pure-addition
+    amendment where the distractor-only set is empty (see "WRONG-VERSION
+    DETECTION WHEN THE DISTRACTOR-ONLY SET IS EMPTY" and "TWO MINIMUM UNIT
+    LENGTHS" in the module docstring), and is judged against its own, higher
+    0.8 threshold rather than the 0.6 used elsewhere. Read it as a
+    diagnostic everywhere else -- on a gold-superset item a correct answer
+    scores 1.0 on it too.
     """
 
     label: str
@@ -335,7 +391,7 @@ def _split_paragraphs(text: str) -> list[str]:
     return chunks
 
 
-def units(text: str) -> list[str]:
+def units(text: str, min_len: int = _MIN_UNIT_LEN) -> list[str]:
     """Split TEXT into normalised, meaningful matching units.
 
     Tries paragraph-level splitting first, on Fedlex-style numbered
@@ -345,11 +401,18 @@ def units(text: str) -> list[str]:
     to sentence-level splitting on ". ", "; ", ": " (see _SENTENCE_SPLIT).
 
     Each candidate chunk is then normalise()'d, stripped of trailing
-    punctuation, and kept only if at least _MIN_UNIT_LEN (25) characters
-    long -- shorter than that (a lettered list marker "a.", a one-word
+    punctuation, and kept only if at least MIN_LEN characters long --
+    shorter than that (a lettered list marker "a.", a one-word
     repealed-paragraph stub) is not enough text to discriminate one
     article edition from another, and short strings inflate
     SequenceMatcher ratios by chance in the window-match step of score().
+
+    MIN_LEN defaults to _MIN_UNIT_LEN (25), the floor used for every normal
+    partition (gold-only/distractor-only/shared). score() calls this a
+    second time with min_len=_MIN_FALLBACK_UNIT_LEN (8) to build the set for
+    distractor_all_coverage only -- see the module docstring "TWO MINIMUM
+    UNIT LENGTHS: 25 EVERYWHERE, 8 FOR THIS FALLBACK ONLY" for why that one
+    computation needs a lower floor.
 
     Returns already-normalised strings (not the raw slices), since every
     caller (score()'s substring/window matching) needs the normalised form
@@ -359,7 +422,7 @@ def units(text: str) -> list[str]:
     result = []
     for chunk in chunks:
         norm = normalise(chunk).rstrip(_TRAILING_PUNCT)
-        if len(norm) >= _MIN_UNIT_LEN:
+        if len(norm) >= min_len:
             result.append(norm)
     return result
 
@@ -571,9 +634,12 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     "discriminating pair" -- see module docstring "DISCRIMINATING PAIRS" --
     in which case only an exact match counts), and applies the 0.6/0.2
     thresholds to gold_coverage and distractor_coverage to pick a label,
-    falling back to distractor_all_coverage for the wrong-version test when
-    the distractor-only set is empty (a pure-addition amendment -- see
-    "WRONG-VERSION DETECTION WHEN THE DISTRACTOR-ONLY SET IS EMPTY").
+    falling back to distractor_all_coverage -- measured over a SEPARATE,
+    lower-floor (8-char, not 25) unit set, and judged against its own 0.8
+    threshold -- for the wrong-version test when the distractor-only set is
+    empty (a pure-addition amendment -- see "WRONG-VERSION DETECTION WHEN
+    THE DISTRACTOR-ONLY SET IS EMPTY" and "TWO MINIMUM UNIT LENGTHS" in the
+    module docstring).
     """
     norm_answer = normalise(answer)
     gold_only_list, distractor_only_list, shared_list = discriminating_units(gold, distractor)
@@ -591,7 +657,16 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
     distractor_coverage = _coverage(distractor_only, norm_answer, disc_distractor)
     shared_coverage = _coverage(shared_units, norm_answer)
-    distractor_all_coverage = _coverage(distractor_units, norm_answer, disc_distractor)
+    # distractor_all_coverage fallback set: ALL of distractor's units, at
+    # the lower _MIN_FALLBACK_UNIT_LEN floor -- see "TWO MINIMUM UNIT
+    # LENGTHS" in the module docstring. disc_distractor stays valid as the
+    # exact_only set here: it is a subset of distractor_only, itself a
+    # subset of the normal (25-char) distractor_units, so every unit it
+    # names is also a member of this wider set; anything present only
+    # because of the lower floor is simply not in disc_distractor and keeps
+    # the normal substring-or-window match.
+    distractor_all_units = set(units(distractor, min_len=_MIN_FALLBACK_UNIT_LEN))
+    distractor_all_coverage = _coverage(distractor_all_units, norm_answer, disc_distractor)
 
     # Gold first: on a gold-superset item a correct answer scores 1.0 on
     # distractor_all_coverage as well, so the fallback below must never get
@@ -600,7 +675,7 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
         label = "grounded_correct"
     elif gold_coverage <= _WEAK and (
         distractor_coverage >= _STRONG
-        or (not distractor_only and distractor_all_coverage >= _STRONG)
+        or (not distractor_only and distractor_all_coverage >= _FALLBACK_STRONG)
     ):
         label = "grounded_wrong_version"
     else:
