@@ -9,10 +9,16 @@
  * ch-court-tools.ts's `stage = 'loaded'` rule).
  *
  * `ch_get_act_article` resolves an edition by date rather than by version_id: Fedlex
- * publishes point-in-time consolidations, and `date_applicability <=
- * as_of < date_end_applicability` (open-ended when NULL) is how a caller finds "the text
- * of article 336 as it stood on 2016-06-01". A date before the earliest machine-readable
- * edition is reported as `no_edition_for_date`, not a false 404 on the article itself.
+ * publishes point-in-time consolidations, and `date_applicability <= as_of AND (as_of <=
+ * date_end_applicability OR date_end_applicability IS NULL)` (open-ended when NULL) is
+ * how a caller finds "the text of article 336 as it stood on 2016-06-01".
+ * `date_end_applicability` is the LAST DAY the edition is in force (inclusive), not an
+ * exclusive end — verified against prod on 2026-08-23: across 19,428 consecutive parsed
+ * editions of the same act/lang, `next.date_applicability = prev.date_end_applicability +
+ * 1 day` (e.g. SR 220 de: 2021-01-01..2021-01-31, 2021-02-01..2021-04-30). A `<` predicate
+ * against `date_end_applicability` therefore skips the correct edition (or finds none) on
+ * an edition's own last day. A date before the earliest machine-readable edition is
+ * reported as `no_edition_for_date`, not a false 404 on the article itself.
  */
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
@@ -63,7 +69,7 @@ in_force_only (типово true) — лише чинні акти (enforcement_
         description: `Текст статті швейцарського закону (Fedlex) станом на конкретну дату (point-in-time consolidation).
 
 Потрібні sr_number (напр. 220) та article (напр. 336 або 336a). as_of типово — сьогодні.
-Редакція обирається за date_applicability <= as_of < date_end_applicability (відкрита, якщо end = NULL).
+Редакція чинна з date_applicability по date_end_applicability включно (відкрита, якщо end = NULL) — обирається та, для якої date_applicability <= as_of <= date_end_applicability.
 Якщо жодна редакція не покриває as_of — { error: 'no_edition_for_date', earliest_edition }.
 Якщо редакція є, але статті немає — { error: 'article_not_found', available_examples }.
 article_number не унікальний в межах редакції (перехідні положення можуть повторювати номер статті) — обирається стаття верхнього рівня, інші збіги повертаються в other_matches.`,
@@ -242,8 +248,14 @@ article_number не унікальний в межах редакції (пер�
                 to_char(date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability
            FROM ch_act_version
           WHERE act_id = $1 AND lang = $2 AND stage = 'parsed'
+            -- date_end_applicability is the LAST DAY the edition is in force (inclusive),
+            -- not an exclusive end. Verified against prod on 2026-08-23: across 19,428
+            -- consecutive parsed editions of the same act/lang, next.date_applicability =
+            -- prev.date_end_applicability + 1 day (e.g. SR 220 de: 2021-01-01..2021-01-31,
+            -- 2021-02-01..2021-04-30). A '<' predicate here would skip this edition (or find
+            -- none) on its own last day.
             AND date_applicability <= $3::date
-            AND (date_end_applicability IS NULL OR $3::date < date_end_applicability)
+            AND ($3::date <= date_end_applicability OR date_end_applicability IS NULL)
           ORDER BY date_applicability DESC
           LIMIT 1`,
         [act.act_id, String(lang), asOfDate]

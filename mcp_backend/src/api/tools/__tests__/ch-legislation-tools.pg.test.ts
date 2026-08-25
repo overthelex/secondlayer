@@ -2,10 +2,16 @@
  * Integration tests for ChLegislationTools against a real PostgreSQL.
  *
  * A mocked db.query cannot validate SQL, and the edition-selection window
- * (date_applicability <= as_of AND (date_end_applicability IS NULL OR as_of <
+ * (date_applicability <= as_of AND (date_end_applicability IS NULL OR as_of <=
  * date_end_applicability)) and the derived e_id join in ch_get_act_history only fail
  * at the server, not against a mock. Set CH_TEST_DATABASE_URL to run; skipped
  * otherwise.
+ *
+ * date_end_applicability is the LAST DAY an edition is in force (inclusive), not an
+ * exclusive end — verified against prod on 2026-08-23 across 19,428 consecutive parsed
+ * editions of the same act/lang (next.date_applicability = prev.date_end_applicability +
+ * 1 day). Fixtures below mirror that shape: consecutive editions with no gap and no
+ * overlap, e.g. [2015-01-01 .. 2019-12-31] followed by [2020-01-01 .. NULL].
  *
  *   CH_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55432/ch_tools_test npx jest ch-legislation-tools.pg
  */
@@ -89,7 +95,7 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
     const versionDe2015Result = await client.query(
       `INSERT INTO ch_act_version
          (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, article_count)
-       VALUES ($1, 'eli/cc/27/317_321_377/de/2015-01-01', 'de', '2015-01-01', '2020-01-01', 'parsed', 1)
+       VALUES ($1, 'eli/cc/27/317_321_377/de/2015-01-01', 'de', '2015-01-01', '2019-12-31', 'parsed', 1)
        RETURNING version_id`,
       [actId]
     );
@@ -282,7 +288,36 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
 
       expect(body.article.text).toContain('alt');
       expect(body.version.date_applicability).toBe('2015-01-01');
-      expect(body.version.date_end_applicability).toBe('2020-01-01');
+      expect(body.version.date_end_applicability).toBe('2019-12-31');
+    });
+
+    it('returns the alt text for 336 at as_of 2019-12-31, the last day the 2015 edition is in force', async () => {
+      // date_end_applicability is inclusive: 2019-12-31 is still within the 2015 edition,
+      // not already inside the 2020 one. A '<' predicate against date_end_applicability
+      // would wrongly skip this edition (or return no_edition_for_date) on this exact date.
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2019-12-31',
+      });
+      const body = parse(result!);
+
+      expect(body.article.text).toContain('alt');
+      expect(body.version.date_applicability).toBe('2015-01-01');
+      expect(body.version.date_end_applicability).toBe('2019-12-31');
+    });
+
+    it('returns the neu text for 336 at as_of 2020-01-01, the first day the 2020 edition is in force', async () => {
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2020-01-01',
+      });
+      const body = parse(result!);
+
+      expect(body.article.text).toContain('neu');
+      expect(body.version.date_applicability).toBe('2020-01-01');
+      expect(body.version.date_end_applicability).toBeNull();
     });
 
     it('returns the neu text for 336 at as_of 2026-01-01 (the 2020 edition)', async () => {
@@ -450,7 +485,7 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       const versionDe2010Result = await client.query(
         `INSERT INTO ch_act_version
            (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, article_count)
-         VALUES ($1, 'eli/cc/27/317_321_377/de/2010-01-01', 'de', '2010-01-01', '2015-01-01', 'parsed', 1)
+         VALUES ($1, 'eli/cc/27/317_321_377/de/2010-01-01', 'de', '2010-01-01', '2014-12-31', 'parsed', 1)
          RETURNING version_id`,
         [actId]
       );
