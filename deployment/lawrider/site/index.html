@@ -112,10 +112,27 @@
   .chart .bar{fill:var(--gold)}
   .chart .bar.ytd{opacity:.55}
   .chart .bar.future{fill:none;stroke:var(--gold);stroke-width:1.5;stroke-dasharray:3 3}
+  .chart .bar.open{opacity:.55}
   .chart .axis{stroke:var(--rule);stroke-width:1}
+  .chart .grid{stroke:var(--rule);stroke-width:1}
+  .chart .stem{stroke:var(--rule);stroke-width:1}
+  .chart .dot{fill:var(--gold);stroke:var(--paper);stroke-width:2}
   .chart text{font-family:var(--sans);font-size:12px;fill:var(--muted)}
+  .chart .tick{font-size:11px}
+  .chart .cat{fill:var(--ink)}
   .chart .val{font-variant-numeric:tabular-nums;fill:var(--ink)}
   .chart figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .chart h3{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);margin:0 0 10px}
+  table.data{width:100%;border-collapse:collapse;margin:24px 0 8px;font-size:14px}
+  table.data th,table.data td{padding:8px 6px;border-bottom:1px solid var(--rule);text-align:right;font-variant-numeric:tabular-nums;vertical-align:top}
+  table.data th{font-family:var(--sans);font-weight:600;color:var(--muted);font-size:12.5px}
+  table.data th:first-child,table.data td:first-child{text-align:left}
+  table.data td:first-child{color:var(--ink)}
+  table.data.pit td:first-child{white-space:nowrap}
+  .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.data .share{color:var(--ink)}
+  @media (max-width:560px){table.data{font-size:12.5px} table.data th,table.data td{padding:7px 3px}}
+  @media (max-width:560px){.chart .wide{overflow-x:auto;-webkit-overflow-scrolling:touch} .chart .wide svg{min-width:540px}}
   .steps{list-style:none;padding:0;margin:18px 0 0;counter-reset:s}
   .steps li{counter-increment:s;position:relative;padding:0 0 18px 34px;font-size:15.5px;color:var(--muted)}
   .steps li::before{
@@ -178,7 +195,7 @@
     <a class="brand" href="#top"><img src="data:image/png;base64,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" alt="Lawrider"><b>Lawrider</b></a>
     <div class="headright">
       <nav>
-        <a href="#what" data-i18n="nav1">What it is</a>
+        <a href="#what" data-i18n="nav1">What it is</a><a href="#data" data-i18n="nav4">Data</a>
         <a href="#evidence" data-i18n="nav2">Evidence</a>
         <a href="#contact" data-i18n="nav3">Contact</a>
       </nav>
@@ -208,15 +225,176 @@
     <p data-i18n="whatP1">Ask a legal question and a language model will answer in fluent prose, cite an article, and sound certain. What it cannot tell you is whether that article says what the answer claims, or whether it was even in force on the date in question.</p>
     <p data-i18n="whatP2">Lawrider is the Swiss company behind a legal research platform that has run in production since February 2026. Retrieval runs over primary sources, and every answer passes a chain of deterministic checks before a person reads it: citation validity, quote grounding, norm attribution, precedent status. Of nine such checks, exactly one calls a language model. The rest are database and graph queries, which is why their verdicts are reproducible.</p>
     <table class="specs">
-      <tr><td data-i18n="spec1">Court decisions indexed</td><td>135,000,000+</td></tr>
-      <tr><td data-i18n="spec2">Jurisdictions</td><td>20+</td></tr>
+      <tr><td data-i18n="spec1">Court decisions in the corpus</td><td data-i18n="spec1v">172,000,000+</td></tr>
+      <tr><td data-i18n="spec2">Jurisdictions</td><td data-i18n="spec2v">21 countries, plus ECtHR and CJEU</td></tr>
       <tr><td data-i18n="spec3">Citation graph</td><td data-i18n="spec3v">330,000,000 edges</td></tr>
       <tr><td data-i18n="spec4">In production since</td><td data-i18n="spec4v">February 2026</td></tr>
-      <tr><td data-i18n="spec6">Swiss court decisions, full text</td><td data-i18n="spec6v">1,200,000+</td></tr>
+      <tr><td data-i18n="spec6">Swiss court decisions, full text</td><td data-i18n="spec6v">1,218,989</td></tr>
       <tr><td data-i18n="spec7">Swiss federal acts in force, full text</td><td data-i18n="spec7v">5,075 of 5,075</td></tr>
+      <tr><td data-i18n="spec8">Swiss consolidated versions, with in-force intervals</td><td data-i18n="spec8v">37,607</td></tr>
+      <tr><td data-i18n="spec9">Citation links extracted from Swiss decisions</td><td data-i18n="spec9v">26,600,000+</td></tr>
       <tr><td data-i18n="spec5">Tool calls against the corpus, Jun–Aug 2026</td><td>2,050</td></tr>
     </table>
-    <p class="note" data-i18n="whatNote">Swiss federal law is held in full: every act in force, in German, French and Italian, as 37,607 consolidated versions with their in-force intervals, 1.76 million articles in all. Court decisions come from every federal and cantonal court that publishes, updated nightly. We would rather state the scope than imply a finished cross-border product.</p>
+    <p class="note" data-i18n="whatNote">Swiss federal law is held in full: every act in force, in German, French and Italian, as 37,607 consolidated versions with their in-force intervals, 1.76 million articles in all. Court decisions come from every federal and cantonal court that publishes, updated nightly. We would rather state the scope than imply a finished cross-border product. Every figure on this page was counted on the production database on 26 August 2026.</p>
+  </section>
+
+  <section id="data" class="wrap">
+    <p class="label" data-i18n="dataLabel">Data</p>
+    <h2 data-i18n="dataH2">Swiss litigation and legislation, measured over time</h2>
+    <p data-i18n="dataP1">The Swiss corpus is rebuilt from its sources, entscheidsuche.ch for court decisions and Fedlex for federal law, and refreshed every night. Two things matter for research: that the decisions reach back far enough to show how a line of case law formed, and that every act can be read as it stood on a given date.</p>
+    <figure class="chart">
+      <div class="wide"><svg viewBox="0 0 660 230" role="img" aria-labelledby="chDecTitle">
+        <title id="chDecTitle" data-i18n="chDecTitle">Swiss court decisions with full text, by year of decision</title>
+        <line class="grid" x1="44" y1="196.0" x2="652" y2="196.0"/>
+        <text class="tick" x="38" y="200.0" text-anchor="end">0</text>
+        <line class="grid" x1="44" y1="161.2" x2="652" y2="161.2"/>
+        <text class="tick" x="38" y="165.2" text-anchor="end">10,000</text>
+        <line class="grid" x1="44" y1="126.4" x2="652" y2="126.4"/>
+        <text class="tick" x="38" y="130.4" text-anchor="end">20,000</text>
+        <line class="grid" x1="44" y1="91.6" x2="652" y2="91.6"/>
+        <text class="tick" x="38" y="95.6" text-anchor="end">30,000</text>
+        <line class="grid" x1="44" y1="56.8" x2="652" y2="56.8"/>
+        <text class="tick" x="38" y="60.8" text-anchor="end">40,000</text>
+        <line class="grid" x1="44" y1="22.0" x2="652" y2="22.0"/>
+        <text class="tick" x="38" y="26.0" text-anchor="end">50,000</text>
+        <line class="axis" x1="44" y1="196" x2="652" y2="196"/>
+        <rect class="bar" x="46.3" y="151.0" width="18.0" height="45.0" rx="2"><title>2000: 12,933</title></rect>
+        <text class="val" x="55.3" y="145.0" text-anchor="middle">12,933</text>
+        <text class="yr" x="55.3" y="218" text-anchor="middle">2000</text>
+        <rect class="bar" x="68.8" y="147.4" width="18.0" height="48.6" rx="2"><title>2001: 13,957</title></rect>
+        <rect class="bar" x="91.3" y="146.8" width="18.0" height="49.2" rx="2"><title>2002: 14,136</title></rect>
+        <rect class="bar" x="113.8" y="126.3" width="18.0" height="69.7" rx="2"><title>2003: 20,037</title></rect>
+        <rect class="bar" x="136.3" y="121.4" width="18.0" height="74.6" rx="2"><title>2004: 21,442</title></rect>
+        <rect class="bar" x="158.9" y="115.6" width="18.0" height="80.4" rx="2"><title>2005: 23,095</title></rect>
+        <text class="yr" x="167.9" y="218" text-anchor="middle">2005</text>
+        <rect class="bar" x="181.4" y="111.1" width="18.0" height="84.9" rx="2"><title>2006: 24,389</title></rect>
+        <rect class="bar" x="203.9" y="91.1" width="18.0" height="104.9" rx="2"><title>2007: 30,138</title></rect>
+        <rect class="bar" x="226.4" y="93.1" width="18.0" height="102.9" rx="2"><title>2008: 29,582</title></rect>
+        <rect class="bar" x="248.9" y="71.8" width="18.0" height="124.2" rx="2"><title>2009: 35,694</title></rect>
+        <rect class="bar" x="271.4" y="66.6" width="18.0" height="129.4" rx="2"><title>2010: 37,179</title></rect>
+        <text class="yr" x="280.4" y="218" text-anchor="middle">2010</text>
+        <rect class="bar" x="294.0" y="63.0" width="18.0" height="133.0" rx="2"><title>2011: 38,231</title></rect>
+        <rect class="bar" x="316.5" y="47.0" width="18.0" height="149.0" rx="2"><title>2012: 42,804</title></rect>
+        <rect class="bar" x="339.0" y="48.3" width="18.0" height="147.7" rx="2"><title>2013: 42,441</title></rect>
+        <rect class="bar" x="361.5" y="43.3" width="18.0" height="152.7" rx="2"><title>2014: 43,872</title></rect>
+        <rect class="bar" x="384.0" y="37.7" width="18.0" height="158.3" rx="2"><title>2015: 45,482</title></rect>
+        <text class="yr" x="393.0" y="218" text-anchor="middle">2015</text>
+        <rect class="bar" x="406.6" y="34.4" width="18.0" height="161.6" rx="2"><title>2016: 46,426</title></rect>
+        <rect class="bar" x="429.1" y="27.7" width="18.0" height="168.3" rx="2"><title>2017: 48,358</title></rect>
+        <rect class="bar" x="451.6" y="20.5" width="18.0" height="175.5" rx="2"><title>2018: 50,422</title></rect>
+        <rect class="bar" x="474.1" y="19.1" width="18.0" height="176.9" rx="2"><title>2019: 50,829</title></rect>
+        <rect class="bar" x="496.6" y="18.4" width="18.0" height="177.6" rx="2"><title>2020: 51,033</title></rect>
+        <text class="val" x="505.6" y="12.4" text-anchor="middle">51,033</text>
+        <text class="yr" x="505.6" y="218" text-anchor="middle">2020</text>
+        <rect class="bar" x="519.1" y="30.3" width="18.0" height="165.7" rx="2"><title>2021: 47,628</title></rect>
+        <rect class="bar" x="541.7" y="34.5" width="18.0" height="161.5" rx="2"><title>2022: 46,395</title></rect>
+        <rect class="bar" x="564.2" y="31.2" width="18.0" height="164.8" rx="2"><title>2023: 47,369</title></rect>
+        <rect class="bar" x="586.7" y="39.0" width="18.0" height="157.0" rx="2"><title>2024: 45,111</title></rect>
+        <rect class="bar" x="609.2" y="43.3" width="18.0" height="152.7" rx="2"><title>2025: 43,891</title></rect>
+        <rect class="bar ytd" x="631.7" y="123.4" width="18.0" height="72.6" rx="2"><title>2026: 20,865</title></rect>
+        <text class="val" x="640.7" y="117.4" text-anchor="middle">20,865</text>
+        <text class="yr" x="640.7" y="218" text-anchor="middle">2026</text>
+      </svg></div>
+      <figcaption data-i18n="chDecCap">1,218,989 Swiss court decisions with clean full text, by year of decision: 474,809 from federal courts (the Federal Supreme Court and its published BGE/ATF, the Federal Administrative, Criminal and Patent Courts) and 744,180 from cantonal courts. The series starts in 1875; it is shown from 2000, when publication became systematic. A further 133,546 decisions are published by the source without a date and are left out of the chart, not out of the corpus. 2026 is the year to date.</figcaption>
+    </figure>
+    <figure class="chart">
+      <div class="wide"><svg viewBox="0 0 660 547" role="img" aria-labelledby="chCantTitle">
+        <title id="chCantTitle" data-i18n="chCantTitle">Swiss court decisions with full text, by canton</title>
+        <line class="grid" x1="92.0" y1="8" x2="92.0" y2="521"/>
+        <text class="tick" x="92.0" y="537" text-anchor="middle">0</text>
+        <line class="grid" x1="196.9" y1="8" x2="196.9" y2="521"/>
+        <text class="tick" x="196.9" y="537" text-anchor="middle">100,000</text>
+        <line class="grid" x1="301.8" y1="8" x2="301.8" y2="521"/>
+        <text class="tick" x="301.8" y="537" text-anchor="middle">200,000</text>
+        <line class="grid" x1="406.7" y1="8" x2="406.7" y2="521"/>
+        <text class="tick" x="406.7" y="537" text-anchor="middle">300,000</text>
+        <line class="grid" x1="511.5" y1="8" x2="511.5" y2="521"/>
+        <text class="tick" x="511.5" y="537" text-anchor="middle">400,000</text>
+        <line class="axis" x1="92" y1="8" x2="92" y2="521"/>
+        <text class="cat" x="84" y="22.0" text-anchor="end"><tspan data-i18n="lblFederal">Federal</tspan></text>
+        <rect class="bar" x="92" y="11.0" width="498.0" height="13" rx="2"><title><tspan data-i18n="lblFederal">Federal</tspan>: 474,809</title></rect>
+        <text class="val" x="596.0" y="22.0">474,809</text>
+        <text class="cat" x="84" y="41.0" text-anchor="end">VD</text>
+        <rect class="bar" x="92" y="30.0" width="279.6" height="13" rx="2"><title>VD: 266,571</title></rect>
+        <text class="val" x="377.6" y="41.0">266,571</text>
+        <text class="cat" x="84" y="60.0" text-anchor="end">ZH</text>
+        <rect class="bar" x="92" y="49.0" width="118.4" height="13" rx="2"><title>ZH: 112,901</title></rect>
+        <text class="val" x="216.4" y="60.0">112,901</text>
+        <text class="cat" x="84" y="79.0" text-anchor="end">GE</text>
+        <rect class="bar" x="92" y="68.0" width="96.0" height="13" rx="2"><title>GE: 91,504</title></rect>
+        <text class="val" x="194.0" y="79.0">91,504</text>
+        <text class="cat" x="84" y="98.0" text-anchor="end">TI</text>
+        <rect class="bar" x="92" y="87.0" width="61.8" height="13" rx="2"><title>TI: 58,956</title></rect>
+        <text class="val" x="159.8" y="98.0">58,956</text>
+        <text class="cat" x="84" y="117.0" text-anchor="end">BS</text>
+        <rect class="bar" x="92" y="106.0" width="28.5" height="13" rx="2"><title>BS: 27,138</title></rect>
+        <text class="val" x="126.5" y="117.0">27,138</text>
+        <text class="cat" x="84" y="136.0" text-anchor="end">SG</text>
+        <rect class="bar" x="92" y="125.0" width="28.4" height="13" rx="2"><title>SG: 27,048</title></rect>
+        <text class="val" x="126.4" y="136.0">27,048</text>
+        <text class="cat" x="84" y="155.0" text-anchor="end">BE</text>
+        <rect class="bar" x="92" y="144.0" width="22.3" height="13" rx="2"><title>BE: 21,278</title></rect>
+        <text class="val" x="120.3" y="155.0">21,278</text>
+        <text class="cat" x="84" y="174.0" text-anchor="end">BL</text>
+        <rect class="bar" x="92" y="163.0" width="21.5" height="13" rx="2"><title>BL: 20,461</title></rect>
+        <text class="val" x="119.5" y="174.0">20,461</text>
+        <text class="cat" x="84" y="193.0" text-anchor="end">GR</text>
+        <rect class="bar" x="92" y="182.0" width="20.4" height="13" rx="2"><title>GR: 19,475</title></rect>
+        <text class="val" x="118.4" y="193.0">19,475</text>
+        <text class="cat" x="84" y="212.0" text-anchor="end">AG</text>
+        <rect class="bar" x="92" y="201.0" width="19.8" height="13" rx="2"><title>AG: 18,916</title></rect>
+        <text class="val" x="117.8" y="212.0">18,916</text>
+        <text class="cat" x="84" y="231.0" text-anchor="end">FR</text>
+        <rect class="bar" x="92" y="220.0" width="15.4" height="13" rx="2"><title>FR: 14,678</title></rect>
+        <text class="val" x="113.4" y="231.0">14,678</text>
+        <text class="cat" x="84" y="250.0" text-anchor="end">LU</text>
+        <rect class="bar" x="92" y="239.0" width="14.0" height="13" rx="2"><title>LU: 13,351</title></rect>
+        <text class="val" x="112.0" y="250.0">13,351</text>
+        <text class="cat" x="84" y="269.0" text-anchor="end">SO</text>
+        <rect class="bar" x="92" y="258.0" width="13.7" height="13" rx="2"><title>SO: 13,050</title></rect>
+        <text class="val" x="111.7" y="269.0">13,050</text>
+        <text class="cat" x="84" y="288.0" text-anchor="end">NE</text>
+        <rect class="bar" x="92" y="277.0" width="8.1" height="13" rx="2"><title>NE: 7,690</title></rect>
+        <text class="val" x="106.1" y="288.0">7,690</text>
+        <text class="cat" x="84" y="307.0" text-anchor="end">VS</text>
+        <rect class="bar" x="92" y="296.0" width="7.3" height="13" rx="2"><title>VS: 6,929</title></rect>
+        <text class="val" x="105.3" y="307.0">6,929</text>
+        <text class="cat" x="84" y="326.0" text-anchor="end">SZ</text>
+        <rect class="bar" x="92" y="315.0" width="5.9" height="13" rx="2"><title>SZ: 5,611</title></rect>
+        <text class="val" x="103.9" y="326.0">5,611</text>
+        <text class="cat" x="84" y="345.0" text-anchor="end">AR</text>
+        <rect class="bar" x="92" y="334.0" width="5.2" height="13" rx="2"><title>AR: 4,979</title></rect>
+        <text class="val" x="103.2" y="345.0">4,979</text>
+        <text class="cat" x="84" y="364.0" text-anchor="end">TG</text>
+        <rect class="bar" x="92" y="353.0" width="3.7" height="13" rx="2"><title>TG: 3,524</title></rect>
+        <text class="val" x="101.7" y="364.0">3,524</text>
+        <text class="cat" x="84" y="383.0" text-anchor="end">ZG</text>
+        <rect class="bar" x="92" y="372.0" width="2.8" height="13" rx="2"><title>ZG: 2,714</title></rect>
+        <text class="val" x="100.8" y="383.0">2,714</text>
+        <text class="cat" x="84" y="402.0" text-anchor="end">UR</text>
+        <rect class="bar" x="92" y="391.0" width="2.4" height="13" rx="2"><title>UR: 2,300</title></rect>
+        <text class="val" x="100.4" y="402.0">2,300</text>
+        <text class="cat" x="84" y="421.0" text-anchor="end">SH</text>
+        <rect class="bar" x="92" y="410.0" width="1.6" height="13" rx="2"><title>SH: 1,551</title></rect>
+        <text class="val" x="99.6" y="421.0">1,551</text>
+        <text class="cat" x="84" y="440.0" text-anchor="end">NW</text>
+        <rect class="bar" x="92" y="429.0" width="1.3" height="13" rx="2"><title>NW: 1,208</title></rect>
+        <text class="val" x="99.3" y="440.0">1,208</text>
+        <text class="cat" x="84" y="459.0" text-anchor="end">JU</text>
+        <rect class="bar" x="92" y="448.0" width="1.2" height="13" rx="2"><title>JU: 1,175</title></rect>
+        <text class="val" x="99.2" y="459.0">1,175</text>
+        <text class="cat" x="84" y="478.0" text-anchor="end">GL</text>
+        <rect class="bar" x="92" y="467.0" width="1.0" height="13" rx="2"><title>GL: 724</title></rect>
+        <text class="val" x="98.8" y="478.0">724</text>
+        <text class="cat" x="84" y="497.0" text-anchor="end">AI</text>
+        <rect class="bar" x="92" y="486.0" width="1.0" height="13" rx="2"><title>AI: 145</title></rect>
+        <text class="val" x="98.2" y="497.0">145</text>
+        <text class="cat" x="84" y="516.0" text-anchor="end">OW</text>
+        <rect class="bar" x="92" y="505.0" width="1.0" height="13" rx="2"><title>OW: 10</title></rect>
+        <text class="val" x="98.0" y="516.0">10</text>
+      </svg></div>
+      <figcaption data-i18n="chCantCap">The same decisions by court of origin. All 26 cantons are present; the count reflects what each canton publishes, not what it decides. Texts are held in German, French and Italian, as the courts issued them, and 26.6 million citation links have been extracted from them: 8.95 million to other decisions, 17.7 million to articles of federal law.</figcaption>
+    </figure>
   </section>
 
   <div class="band">
@@ -237,35 +415,110 @@
     <h2 data-i18n="curH2">Point-in-Time Swiss Law</h2>
     <p data-i18n="curP1">A statutory article is not one document. Article 336 of the Code of Obligations in 2015 and in 2026 are different texts under the same identifier. Fedlex publishes every consolidated version with its in-force dates; a corpus scraped from the web keeps one snapshot and throws the interval away. A model trained on it will state repealed law with total confidence, and nothing in the output marks it as dead.</p>
     <figure class="chart">
-      <svg viewBox="0 0 660 230" role="img" aria-labelledby="chartTitle">
-        <title id="chartTitle" data-i18n="curChartTitle">Consolidated versions of Swiss federal acts entering into force, per year</title>
-        <line class="axis" x1="8" y1="196.0" x2="652" y2="196.0"/>
-        <rect class="bar" x="8.0" y="114.5" width="68.2" height="81.5" rx="1"/>
-        <text class="val" x="42.1" y="107.5" text-anchor="middle">671</text>
-        <text class="yr" x="42.1" y="218" text-anchor="middle">2020</text>
-        <rect class="bar" x="90.2" y="51.5" width="68.2" height="144.5" rx="1"/>
-        <text class="val" x="124.4" y="44.5" text-anchor="middle">1,190</text>
-        <text class="yr" x="124.4" y="218" text-anchor="middle">2021</text>
-        <rect class="bar" x="172.5" y="42.6" width="68.2" height="153.4" rx="1"/>
-        <text class="val" x="206.6" y="35.6" text-anchor="middle">1,263</text>
-        <text class="yr" x="206.6" y="218" text-anchor="middle">2022</text>
-        <rect class="bar" x="254.8" y="40.7" width="68.2" height="155.3" rx="1"/>
-        <text class="val" x="288.9" y="33.7" text-anchor="middle">1,279</text>
-        <text class="yr" x="288.9" y="218" text-anchor="middle">2023</text>
-        <rect class="bar" x="337.0" y="47.7" width="68.2" height="148.3" rx="1"/>
-        <text class="val" x="371.1" y="40.7" text-anchor="middle">1,221</text>
-        <text class="yr" x="371.1" y="218" text-anchor="middle">2024</text>
-        <rect class="bar" x="419.2" y="70.4" width="68.2" height="125.6" rx="1"/>
-        <text class="val" x="453.4" y="63.4" text-anchor="middle">1,034</text>
-        <text class="yr" x="453.4" y="218" text-anchor="middle">2025</text>
-        <rect class="bar ytd" x="501.5" y="90.6" width="68.2" height="105.4" rx="1"/>
-        <text class="val" x="535.6" y="83.6" text-anchor="middle">868</text>
-        <text class="yr" x="535.6" y="218" text-anchor="middle">2026</text>
-        <rect class="bar future" x="583.8" y="181.8" width="68.2" height="14.2" rx="1"/>
-        <text class="val" x="617.9" y="174.8" text-anchor="middle">117</text>
-        <text class="yr" x="617.9" y="218" text-anchor="middle">2027+</text>
+      <div class="wide"><svg viewBox="0 0 660 230" role="img" aria-labelledby="curChartTitle">
+        <title id="curChartTitle" data-i18n="curChartTitle">Consolidated versions of Swiss federal acts entering into force, per year</title>
+        <line class="grid" x1="44" y1="196.0" x2="652" y2="196.0"/>
+        <text class="tick" x="38" y="200.0" text-anchor="end">0</text>
+        <line class="grid" x1="44" y1="138.0" x2="652" y2="138.0"/>
+        <text class="tick" x="38" y="142.0" text-anchor="end">500</text>
+        <line class="grid" x1="44" y1="80.0" x2="652" y2="80.0"/>
+        <text class="tick" x="38" y="84.0" text-anchor="end">1,000</text>
+        <line class="grid" x1="44" y1="22.0" x2="652" y2="22.0"/>
+        <text class="tick" x="38" y="26.0" text-anchor="end">1,500</text>
+        <line class="axis" x1="44" y1="196" x2="652" y2="196"/>
+        <rect class="bar" x="46.0" y="190.8" width="17.7" height="5.2" rx="2"><title>2000: 45</title></rect>
+        <text class="val" x="54.9" y="184.8" text-anchor="middle">45</text>
+        <text class="yr" x="54.9" y="218" text-anchor="middle">2000</text>
+        <rect class="bar" x="67.7" y="191.9" width="17.7" height="4.1" rx="2"><title>2001: 35</title></rect>
+        <rect class="bar" x="89.4" y="189.9" width="17.7" height="6.1" rx="2"><title>2002: 53</title></rect>
+        <rect class="bar" x="111.1" y="189.7" width="17.7" height="6.3" rx="2"><title>2003: 54</title></rect>
+        <rect class="bar" x="132.9" y="187.8" width="17.7" height="8.2" rx="2"><title>2004: 71</title></rect>
+        <rect class="bar" x="154.6" y="188.6" width="17.7" height="7.4" rx="2"><title>2005: 64</title></rect>
+        <text class="yr" x="163.4" y="218" text-anchor="middle">2005</text>
+        <rect class="bar" x="176.3" y="187.2" width="17.7" height="8.8" rx="2"><title>2006: 76</title></rect>
+        <rect class="bar" x="198.0" y="184.7" width="17.7" height="11.3" rx="2"><title>2007: 97</title></rect>
+        <rect class="bar" x="219.7" y="183.1" width="17.7" height="12.9" rx="2"><title>2008: 111</title></rect>
+        <rect class="bar" x="241.4" y="185.6" width="17.7" height="10.4" rx="2"><title>2009: 90</title></rect>
+        <rect class="bar" x="263.1" y="182.5" width="17.7" height="13.5" rx="2"><title>2010: 116</title></rect>
+        <text class="yr" x="272.0" y="218" text-anchor="middle">2010</text>
+        <rect class="bar" x="284.9" y="179.2" width="17.7" height="16.8" rx="2"><title>2011: 145</title></rect>
+        <rect class="bar" x="306.6" y="181.2" width="17.7" height="14.8" rx="2"><title>2012: 128</title></rect>
+        <rect class="bar" x="328.3" y="158.5" width="17.7" height="37.5" rx="2"><title>2013: 323</title></rect>
+        <text class="val" x="337.1" y="152.5" text-anchor="middle">323</text>
+        <rect class="bar" x="350.0" y="177.1" width="17.7" height="18.9" rx="2"><title>2014: 163</title></rect>
+        <rect class="bar" x="371.7" y="176.4" width="17.7" height="19.6" rx="2"><title>2015: 169</title></rect>
+        <text class="yr" x="380.6" y="218" text-anchor="middle">2015</text>
+        <rect class="bar" x="393.4" y="169.1" width="17.7" height="26.9" rx="2"><title>2016: 232</title></rect>
+        <rect class="bar" x="415.1" y="168.2" width="17.7" height="27.8" rx="2"><title>2017: 240</title></rect>
+        <rect class="bar" x="436.9" y="151.7" width="17.7" height="44.3" rx="2"><title>2018: 382</title></rect>
+        <rect class="bar" x="458.6" y="152.4" width="17.7" height="43.6" rx="2"><title>2019: 376</title></rect>
+        <rect class="bar" x="480.3" y="118.2" width="17.7" height="77.8" rx="2"><title>2020: 671</title></rect>
+        <text class="yr" x="489.1" y="218" text-anchor="middle">2020</text>
+        <rect class="bar" x="502.0" y="58.0" width="17.7" height="138.0" rx="2"><title>2021: 1,190</title></rect>
+        <rect class="bar" x="523.7" y="49.5" width="17.7" height="146.5" rx="2"><title>2022: 1,263</title></rect>
+        <rect class="bar" x="545.4" y="47.6" width="17.7" height="148.4" rx="2"><title>2023: 1,279</title></rect>
+        <text class="val" x="554.3" y="41.6" text-anchor="middle">1,279</text>
+        <rect class="bar" x="567.1" y="54.4" width="17.7" height="141.6" rx="2"><title>2024: 1,221</title></rect>
+        <rect class="bar" x="588.9" y="76.1" width="17.7" height="119.9" rx="2"><title>2025: 1,034</title></rect>
+        <text class="yr" x="597.7" y="218" text-anchor="middle">2025</text>
+        <rect class="bar ytd" x="610.6" y="95.3" width="17.7" height="100.7" rx="2"><title>2026: 868</title></rect>
+        <text class="val" x="619.4" y="89.3" text-anchor="middle">868</text>
+        <rect class="bar future" x="632.3" y="182.4" width="17.7" height="13.6" rx="2"><title>2027+: 117</title></rect>
+        <text class="val" x="641.1" y="176.4" text-anchor="middle">117</text>
+        <text class="yr" x="641.1" y="218" text-anchor="middle">2027+</text>
+      </svg></div>
+      <figcaption data-i18n="curChartCap">Consolidated versions of Swiss federal acts entering into force, per year, counted from the versions Fedlex publishes in machine-readable form: 37,607 versions of 17,293 acts, in German, French and Italian each. Complete from 2020; for earlier years Fedlex has digitised only part of the historical versions, which is why the series ramps. 2026 is the year to date; 117 versions are already scheduled for 2027 and later.</figcaption>
+    </figure>
+    <figure class="chart">
+      <h3 data-i18n="chOrH3">Code of Obligations (SR 220): every consolidated version since 2021 and the interval it was in force</h3>
+      <svg viewBox="0 0 660 86" role="img" aria-labelledby="chOrTitle">
+        <title id="chOrTitle" data-i18n="chOrTitle">Code of Obligations: consolidated versions and in-force intervals since 2021</title>
+        <line class="grid" x1="8.0" y1="24" x2="8.0" y2="58"/>
+        <text class="yr" x="11.0" y="74">2021</text>
+        <line class="grid" x1="115.3" y1="24" x2="115.3" y2="58"/>
+        <text class="yr" x="118.3" y="74">2022</text>
+        <line class="grid" x1="222.7" y1="24" x2="222.7" y2="58"/>
+        <text class="yr" x="225.7" y="74">2023</text>
+        <line class="grid" x1="330.0" y1="24" x2="330.0" y2="58"/>
+        <text class="yr" x="333.0" y="74">2024</text>
+        <line class="grid" x1="437.6" y1="24" x2="437.6" y2="58"/>
+        <text class="yr" x="440.6" y="74">2025</text>
+        <line class="grid" x1="545.0" y1="24" x2="545.0" y2="58"/>
+        <text class="yr" x="548.0" y="74">2026</text>
+        <rect class="bar" x="9.0" y="30" width="6.8" height="22" rx="2"><title>2021-01-01 → 2021-01-31</title></rect>
+        <rect class="bar" x="18.1" y="30" width="23.9" height="22" rx="2"><title>2021-02-01 → 2021-04-30</title></rect>
+        <rect class="bar" x="44.3" y="30" width="15.6" height="22" rx="2"><title>2021-05-01 → 2021-06-30</title></rect>
+        <rect class="bar" x="62.2" y="30" width="51.8" height="22" rx="2"><title>2021-07-01 → 2021-12-31</title></rect>
+        <rect class="bar" x="116.3" y="30" width="105.0" height="22" rx="2"><title>2022-01-01 → 2022-12-31</title></rect>
+        <rect class="bar" x="223.7" y="30" width="9.2" height="22" rx="2"><title>2023-01-01 → 2023-02-08</title></rect>
+        <rect class="bar" x="235.1" y="30" width="57.7" height="22" rx="2"><title>2023-02-09 → 2023-08-31</title></rect>
+        <rect class="bar" x="295.1" y="30" width="33.6" height="22" rx="2"><title>2023-09-01 → 2023-12-31</title></rect>
+        <rect class="bar" x="331.0" y="30" width="105.3" height="22" rx="2"><title>2024-01-01 → 2024-12-31</title></rect>
+        <rect class="bar" x="438.6" y="30" width="53.0" height="22" rx="2"><title>2025-01-01 → 2025-07-07</title></rect>
+        <rect class="bar" x="493.9" y="30" width="22.7" height="22" rx="2"><title>2025-07-08 → 2025-09-30</title></rect>
+        <rect class="bar" x="518.9" y="30" width="24.8" height="22" rx="2"><title>2025-10-01 → 2025-12-31</title></rect>
+        <rect class="bar" x="546.0" y="30" width="78.0" height="22" rx="2"><title>2026-01-01 → 2026-09-30</title></rect>
+        <rect class="bar open" x="626.2" y="30" width="24.8" height="22" rx="2"><title>2026-10-01 → …</title></rect>
+        <text class="val" x="8" y="20">2021-01-01</text>
+        <text class="val" x="652" y="20" text-anchor="end">2026-10-01 →</text>
       </svg>
-      <figcaption data-i18n="curChartCap">Consolidated versions of Swiss federal acts entering into force, per year, counted from the versions Fedlex publishes in machine-readable form: complete for recent years, partial before 2020. 2026 is the year to date; 117 versions are already scheduled for 2027 and later.</figcaption>
+      <figcaption data-i18n="chOrCap">Fourteen versions of one act in under six years, several of them valid for a few weeks. Ask for Article 336 on any date and the system returns the text in force that day, taken from the version whose interval contains it, not the latest one.</figcaption>
+    </figure>
+    <figure class="chart">
+      <h3 data-i18n="pitH3">Can we return the text as it stood on a given date?</h3>
+      <div class="tblwrap"><table class="data pit">
+        <tr><th data-i18n="pitTh1">Date</th><th data-i18n="pitTh2">Acts in force today that already existed</th><th data-i18n="pitTh3">With the version valid that day</th><th data-i18n="pitTh4">Share</th></tr>
+        <tr><td>2000-01-01</td><td>2,365</td><td>1,371</td><td class="share">58%</td></tr>
+        <tr><td>2005-01-01</td><td>2,775</td><td>1,612</td><td class="share">58%</td></tr>
+        <tr><td>2010-01-01</td><td>3,395</td><td>2,023</td><td class="share">60%</td></tr>
+        <tr><td>2015-01-01</td><td>4,018</td><td>2,781</td><td class="share">69%</td></tr>
+        <tr><td>2020-01-01</td><td>4,618</td><td>3,991</td><td class="share">86%</td></tr>
+        <tr><td>2021-01-01</td><td>4,715</td><td>4,711</td><td class="share">99.9%</td></tr>
+        <tr><td>2023-01-01</td><td>4,934</td><td>4,931</td><td class="share">99.9%</td></tr>
+        <tr><td>2025-01-01</td><td>5,070</td><td>5,051</td><td class="share">99.6%</td></tr>
+        <tr><td>2026-08-26</td><td>5,075</td><td>5,049</td><td class="share">99.5%</td></tr>
+      </table></div>
+      <figcaption data-i18n="pitCap">Measured against every federal act in force today. For any date from 2021 onwards we hold the exact version for 99.5 per cent of them or more; going back, coverage falls to the share of historical versions Fedlex has published in machine-readable form. That ceiling belongs to the source, and we state it rather than fill it from scraped web pages.</figcaption>
     </figure>
     <ol class="steps">
       <li data-i18n="step1"><b>Ingest.</b> Done. Every consolidated version Fedlex publishes in machine-readable form, in German, French and Italian, with source, licence, amending act and in-force interval recorded at ingest: 37,607 versions of 17,293 acts.</li>
@@ -273,6 +526,136 @@
       <li data-i18n="step3"><b>Measure.</b> In progress. An open benchmark and scorer that answer one question: was the answer grounded in the version of the article valid on the date asked?</li>
     </ol>
     <p class="note" data-i18n="curNote">Corpus and scorer will be published openly, so the numbers can be re-run by anyone who doubts them.</p>
+  </section>
+
+  <section id="beyond" class="wrap">
+    <p class="label" data-i18n="othLabel">Beyond Switzerland</p>
+    <h2 data-i18n="othH2">The same database holds 22 further jurisdictions</h2>
+    <p data-i18n="othP1">Switzerland is the product. The other corpora sit on the same production database as searchable primary sources, ingested with the same discipline, and are what the cross-border figures above refer to. Court decisions per jurisdiction, exact counts, on a logarithmic scale:</p>
+    <figure class="chart">
+      <div class="wide"><svg viewBox="0 0 660 473" role="img" aria-labelledby="othTitle">
+        <title id="othTitle" data-i18n="othTitle">Court decisions per jurisdiction, logarithmic scale</title>
+        <line class="grid" x1="150.0" y1="8" x2="150.0" y2="445"/>
+        <text class="tick" x="150.0" y="461" text-anchor="middle">1K</text>
+        <line class="grid" x1="231.5" y1="8" x2="231.5" y2="445"/>
+        <text class="tick" x="231.5" y="461" text-anchor="middle">10K</text>
+        <line class="grid" x1="313.0" y1="8" x2="313.0" y2="445"/>
+        <text class="tick" x="313.0" y="461" text-anchor="middle">100K</text>
+        <line class="grid" x1="394.5" y1="8" x2="394.5" y2="445"/>
+        <text class="tick" x="394.5" y="461" text-anchor="middle">1M</text>
+        <line class="grid" x1="476.0" y1="8" x2="476.0" y2="445"/>
+        <text class="tick" x="476.0" y="461" text-anchor="middle">10M</text>
+        <line class="grid" x1="557.5" y1="8" x2="557.5" y2="445"/>
+        <text class="tick" x="557.5" y="461" text-anchor="middle">100M</text>
+        <text class="cat" x="142" y="21.5" text-anchor="end"><tspan data-i18n="jur_UA">Ukraine</tspan></text>
+        <line class="stem" x1="150" y1="17.5" x2="568.5" y2="17.5"/>
+        <circle class="dot" cx="568.5" cy="17.5" r="5"><title>Ukraine: 136,374,154</title></circle>
+        <text class="val" x="578.5" y="21.5">136,374,154</text>
+        <text class="cat" x="142" y="40.5" text-anchor="end"><tspan data-i18n="jur_IN">India</tspan></text>
+        <line class="stem" x1="150" y1="36.5" x2="496.0" y2="36.5"/>
+        <circle class="dot" cx="496.0" cy="36.5" r="5"><title>India: 17,587,325</title></circle>
+        <text class="val" x="506.0" y="40.5">17,587,325</text>
+        <text class="cat" x="142" y="59.5" text-anchor="end"><tspan data-i18n="jur_US">United States</tspan></text>
+        <line class="stem" x1="150" y1="55.5" x2="463.0" y2="55.5"/>
+        <circle class="dot" cx="463.0" cy="55.5" r="5"><title>United States: 6,919,155</title></circle>
+        <text class="val" x="473.0" y="59.5">6,919,155</text>
+        <text class="cat" x="142" y="78.5" text-anchor="end"><tspan data-i18n="jur_NL">Netherlands</tspan></text>
+        <line class="stem" x1="150" y1="74.5" x2="441.1" y2="74.5"/>
+        <circle class="dot" cx="441.1" cy="74.5" r="5"><title>Netherlands: 3,732,307</title></circle>
+        <text class="val" x="451.1" y="78.5">3,732,307</text>
+        <text class="cat" x="142" y="97.5" text-anchor="end"><tspan data-i18n="jur_PL">Poland</tspan></text>
+        <line class="stem" x1="150" y1="93.5" x2="431.4" y2="93.5"/>
+        <circle class="dot" cx="431.4" cy="93.5" r="5"><title>Poland: 2,830,010</title></circle>
+        <text class="val" x="441.4" y="97.5">2,830,010</text>
+        <text class="cat" x="142" y="116.5" text-anchor="end"><tspan data-i18n="jur_CH">Switzerland</tspan></text>
+        <line class="stem" x1="150" y1="112.5" x2="401.5" y2="112.5"/>
+        <circle class="dot" cx="401.5" cy="112.5" r="5"><title>Switzerland: 1,218,989</title></circle>
+        <text class="val" x="411.5" y="116.5">1,218,989</text>
+        <text class="cat" x="142" y="135.5" text-anchor="end"><tspan data-i18n="jur_CZ">Czechia</tspan></text>
+        <line class="stem" x1="150" y1="131.5" x2="389.6" y2="131.5"/>
+        <circle class="dot" cx="389.6" cy="131.5" r="5"><title>Czechia: 871,171</title></circle>
+        <text class="val" x="399.6" y="135.5">871,171</text>
+        <text class="cat" x="142" y="154.5" text-anchor="end"><tspan data-i18n="jur_FR">France</tspan></text>
+        <line class="stem" x1="150" y1="150.5" x2="382.8" y2="150.5"/>
+        <circle class="dot" cx="382.8" cy="150.5" r="5"><title>France: 718,940</title></circle>
+        <text class="val" x="392.8" y="154.5">718,940</text>
+        <text class="cat" x="142" y="173.5" text-anchor="end"><tspan data-i18n="jur_AE">United Arab Emirates</tspan></text>
+        <line class="stem" x1="150" y1="169.5" x2="366.0" y2="169.5"/>
+        <circle class="dot" cx="366.0" cy="169.5" r="5"><title>United Arab Emirates: 446,278</title></circle>
+        <text class="val" x="376.0" y="173.5">446,278</text>
+        <text class="cat" x="142" y="192.5" text-anchor="end"><tspan data-i18n="jur_LV">Latvia</tspan></text>
+        <line class="stem" x1="150" y1="188.5" x2="364.1" y2="188.5"/>
+        <circle class="dot" cx="364.1" cy="188.5" r="5"><title>Latvia: 423,762</title></circle>
+        <text class="val" x="374.1" y="192.5">423,762</text>
+        <text class="cat" x="142" y="211.5" text-anchor="end"><tspan data-i18n="jur_DE">Germany</tspan></text>
+        <line class="stem" x1="150" y1="207.5" x2="345.6" y2="207.5"/>
+        <circle class="dot" cx="345.6" cy="207.5" r="5"><title>Germany: 250,855</title></circle>
+        <text class="val" x="355.6" y="211.5">250,855</text>
+        <text class="cat" x="142" y="230.5" text-anchor="end"><tspan data-i18n="jur_ECHR">ECtHR (Strasbourg)</tspan></text>
+        <line class="stem" x1="150" y1="226.5" x2="339.2" y2="226.5"/>
+        <circle class="dot" cx="339.2" cy="226.5" r="5"><title>ECtHR (Strasbourg): 209,774</title></circle>
+        <text class="val" x="349.2" y="230.5">209,774</text>
+        <text class="cat" x="142" y="249.5" text-anchor="end"><tspan data-i18n="jur_EE">Estonia</tspan></text>
+        <line class="stem" x1="150" y1="245.5" x2="327.5" y2="245.5"/>
+        <circle class="dot" cx="327.5" cy="245.5" r="5"><title>Estonia: 150,594</title></circle>
+        <text class="val" x="337.5" y="249.5">150,594</text>
+        <text class="cat" x="142" y="268.5" text-anchor="end"><tspan data-i18n="jur_SE">Sweden</tspan></text>
+        <line class="stem" x1="150" y1="264.5" x2="305.1" y2="264.5"/>
+        <circle class="dot" cx="305.1" cy="264.5" r="5"><title>Sweden: 79,876</title></circle>
+        <text class="val" x="315.1" y="268.5">79,876</text>
+        <text class="cat" x="142" y="287.5" text-anchor="end"><tspan data-i18n="jur_HU">Hungary</tspan></text>
+        <line class="stem" x1="150" y1="283.5" x2="304.8" y2="283.5"/>
+        <circle class="dot" cx="304.8" cy="283.5" r="5"><title>Hungary: 79,300</title></circle>
+        <text class="val" x="314.8" y="287.5">79,300</text>
+        <text class="cat" x="142" y="306.5" text-anchor="end"><tspan data-i18n="jur_FI">Finland</tspan></text>
+        <line class="stem" x1="150" y1="302.5" x2="301.9" y2="302.5"/>
+        <circle class="dot" cx="301.9" cy="302.5" r="5"><title>Finland: 73,040</title></circle>
+        <text class="val" x="311.9" y="306.5">73,040</text>
+        <text class="cat" x="142" y="325.5" text-anchor="end"><tspan data-i18n="jur_UK">United Kingdom</tspan></text>
+        <line class="stem" x1="150" y1="321.5" x2="291.5" y2="321.5"/>
+        <circle class="dot" cx="291.5" cy="321.5" r="5"><title>United Kingdom: 54,453</title></circle>
+        <text class="val" x="301.5" y="325.5">54,453</text>
+        <text class="cat" x="142" y="344.5" text-anchor="end"><tspan data-i18n="jur_LT">Lithuania</tspan></text>
+        <line class="stem" x1="150" y1="340.5" x2="289.2" y2="340.5"/>
+        <circle class="dot" cx="289.2" cy="340.5" r="5"><title>Lithuania: 51,020</title></circle>
+        <text class="val" x="299.2" y="344.5">51,020</text>
+        <text class="cat" x="142" y="363.5" text-anchor="end"><tspan data-i18n="jur_LU">Luxembourg</tspan></text>
+        <line class="stem" x1="150" y1="359.5" x2="286.6" y2="359.5"/>
+        <circle class="dot" cx="286.6" cy="359.5" r="5"><title>Luxembourg: 47,426</title></circle>
+        <text class="val" x="296.6" y="363.5">47,426</text>
+        <text class="cat" x="142" y="382.5" text-anchor="end"><tspan data-i18n="jur_CJEU">CJEU (Luxembourg)</tspan></text>
+        <line class="stem" x1="150" y1="378.5" x2="284.5" y2="378.5"/>
+        <circle class="dot" cx="284.5" cy="378.5" r="5"><title>CJEU (Luxembourg): 44,655</title></circle>
+        <text class="val" x="294.5" y="382.5">44,655</text>
+        <text class="cat" x="142" y="401.5" text-anchor="end"><tspan data-i18n="jur_SG">Singapore</tspan></text>
+        <line class="stem" x1="150" y1="397.5" x2="233.9" y2="397.5"/>
+        <circle class="dot" cx="233.9" cy="397.5" r="5"><title>Singapore: 10,690</title></circle>
+        <text class="val" x="243.9" y="401.5">10,690</text>
+        <text class="cat" x="142" y="420.5" text-anchor="end"><tspan data-i18n="jur_BE">Belgium</tspan></text>
+        <line class="stem" x1="150" y1="416.5" x2="211.5" y2="416.5"/>
+        <circle class="dot" cx="211.5" cy="416.5" r="5"><title>Belgium: 5,681</title></circle>
+        <text class="val" x="221.5" y="420.5">5,681</text>
+        <text class="cat" x="142" y="439.5" text-anchor="end"><tspan data-i18n="jur_DK">Denmark</tspan></text>
+        <line class="stem" x1="150" y1="435.5" x2="198.3" y2="435.5"/>
+        <circle class="dot" cx="198.3" cy="435.5" r="5"><title>Denmark: 3,917</title></circle>
+        <text class="val" x="208.3" y="439.5">3,917</text>
+      </svg></div>
+      <figcaption data-i18n="othCap">Ukraine is the second full product, with its own tool surface and the 330-million-edge citation graph. The rest is data, held and measured, and we say so rather than count it as coverage.</figcaption>
+    </figure>
+    <figure class="chart">
+      <h3 data-i18n="legH3">Legislation with version history, beyond Switzerland</h3>
+      <div class="tblwrap"><table class="data">
+        <tr><th data-i18n="legTh1">Jurisdiction</th><th data-i18n="legTh2">Acts</th><th data-i18n="legTh3">Versions</th><th data-i18n="legTh4">Articles or provisions</th></tr>
+        <tr><td data-i18n="jur_UA">Ukraine</td><td>293,049</td><td>439,060</td><td>2,208,156</td></tr>
+        <tr><td data-i18n="jur_UK">United Kingdom</td><td>158,317</td><td>254,814</td><td>1,262,603</td></tr>
+        <tr><td data-i18n="jur_PL">Poland</td><td>164,213</td><td>164,206</td><td>5,546,084</td></tr>
+        <tr><td data-i18n="jur_NL">Netherlands</td><td>46,365</td><td>146,164</td><td>9,012,864</td></tr>
+        <tr><td data-i18n="jur_EU">European Union (EUR-Lex)</td><td>46,020</td><td>–</td><td>–</td></tr>
+        <tr><td data-i18n="jur_ES">Spain (BOE)</td><td>12,228</td><td>–</td><td>–</td></tr>
+        <tr><td data-i18n="jur_AE">United Arab Emirates</td><td>2,862</td><td>–</td><td>23,669</td></tr>
+      </table></div>
+      <figcaption data-i18n="legCap">The United Kingdom additionally carries 1,213,289 recorded amendment effects from legislation.gov.uk. Where a cell is empty, the source publishes a single consolidated text without version history.</figcaption>
+    </figure>
   </section>
 
   <div class="bleed"></div>
@@ -308,13 +691,13 @@
       whatH2:"Eine Recherche-Engine, keine Chat-Hülle",
       whatP1:"Stellen Sie einem Sprachmodell eine Rechtsfrage, und es antwortet in flüssiger Prosa, zitiert einen Artikel und klingt sicher. Was es Ihnen nicht sagen kann: ob dieser Artikel das hergibt, was die Antwort behauptet, und ob er zum fraglichen Zeitpunkt überhaupt in Kraft war.",
       whatP2:"Lawrider ist die Schweizer Gesellschaft hinter einer Rechtsrecherche-Plattform, die seit Februar 2026 produktiv läuft. Gesucht wird in den Primärquellen, und jede Antwort durchläuft eine Kette deterministischer Prüfungen, bevor ein Mensch sie liest: Zitatgültigkeit, Belegtreue der Zitate, Normzuordnung, Präjudizstatus. Von neun solchen Prüfungen ruft genau eine ein Sprachmodell auf. Der Rest sind Datenbank- und Graphabfragen, weshalb ihre Befunde reproduzierbar sind.",
-      spec1:"Erfasste Gerichtsentscheide", spec2:"Jurisdiktionen",
+      spec1:"Gerichtsentscheide im Korpus", spec2:"Jurisdiktionen",
       spec3:"Zitationsgraph", spec3v:"330'000'000 Kanten",
       spec4:"Produktiv seit", spec4v:"Februar 2026",
       spec5:"Werkzeugaufrufe auf dem Korpus, Jun–Aug 2026",
-      spec6:"Schweizer Gerichtsentscheide im Volltext", spec6v:"1'200'000+",
+      spec6:"Schweizer Gerichtsentscheide im Volltext", spec6v:"1'218'989",
       spec7:"Geltende Bundeserlasse im Volltext", spec7v:"5'075 von 5'075",
-      whatNote:"Das schweizerische Bundesrecht liegt vollständig vor: jeder geltende Erlass, auf Deutsch, Französisch und Italienisch, als 37'607 konsolidierte Fassungen mit ihren Geltungsintervallen, insgesamt 1,76 Millionen Artikel. Die Gerichtsentscheide stammen von allen eidgenössischen und kantonalen Gerichten, die publizieren, und werden nächtlich nachgeführt. Wir nennen lieber den Umfang, als ein fertiges grenzüberschreitendes Produkt zu suggerieren.",
+      whatNote:"Das schweizerische Bundesrecht liegt vollständig vor: jeder geltende Erlass, auf Deutsch, Französisch und Italienisch, als 37'607 konsolidierte Fassungen mit ihren Geltungsintervallen, insgesamt 1,76 Millionen Artikel. Die Gerichtsentscheide stammen von allen eidgenössischen und kantonalen Gerichten, die publizieren, und werden nächtlich nachgeführt. Wir nennen lieber den Umfang, als ein fertiges grenzüberschreitendes Produkt zu suggerieren. Jede Zahl auf dieser Seite wurde am 26. August 2026 auf der Produktionsdatenbank gezählt.",
       evLabel:"Belege",
       evH2:"Wir veröffentlichen die Messwerte, auch die unvorteilhaften",
       evP1:"Vertrauenswürdigkeit ist keine Behauptung, die wir über unser System aufstellen. Sie ist eine Grösse, die wir bei jeder Anfrage berechnen und protokollieren. <strong>In den letzten dreissig Tagen lag der Belegtreue-Wert im Mittel bei 93 von 100.</strong> Wenn er sich bewegt, sagen wir es.",
@@ -325,7 +708,7 @@
       curH2:"Schweizer Recht, stichtagsgenau",
       curP1:"Ein Gesetzesartikel ist nicht ein Dokument. Art. 336 OR im Jahr 2015 und im Jahr 2026 sind verschiedene Texte unter derselben Bezeichnung. Fedlex veröffentlicht jede konsolidierte Fassung mit ihren Inkraftsetzungsdaten; ein aus dem Web geschöpftes Korpus behält eine Momentaufnahme und wirft das Zeitintervall weg. Ein darauf trainiertes Modell gibt aufgehobenes Recht mit voller Überzeugung wieder, und nichts in der Ausgabe weist es als tot aus.",
       curChartTitle:"In Kraft getretene konsolidierte Fassungen von Bundeserlassen, pro Jahr",
-      curChartCap:"In Kraft getretene konsolidierte Fassungen von Bundeserlassen, pro Jahr, gezählt anhand der Fassungen, die Fedlex maschinenlesbar publiziert: vollständig für die letzten Jahre, lückenhaft vor 2020. 2026 bis heute; 117 Fassungen sind bereits für 2027 und später terminiert.",
+      curChartCap:"In Kraft getretene konsolidierte Fassungen von Bundeserlassen, pro Jahr, gezählt anhand der Fassungen, die Fedlex maschinenlesbar publiziert: 37'607 Fassungen von 17'293 Erlassen, je auf Deutsch, Französisch und Italienisch. Vollständig ab 2020; für frühere Jahre hat Fedlex nur einen Teil der historischen Fassungen digitalisiert, daher der Anstieg. 2026 bis heute; 117 Fassungen sind bereits für 2027 und später terminiert.",
       step1:"<b>Erfassen.</b> Erledigt. Jede konsolidierte Fassung, die Fedlex maschinenlesbar publiziert, auf Deutsch, Französisch und Italienisch, mit Quelle, Lizenz, Änderungserlass und Geltungsintervall bereits bei der Aufnahme: 37'607 Fassungen von 17'293 Erlassen.",
       step2:"<b>Vergleichen.</b> Erledigt. Aufeinanderfolgende Fassungen werden zu einem maschinenlesbaren Änderungsjournal verglichen, sodass sich zu jedem Text nachvollziehen lässt, was er wann abgelöst hat: bisher rund 25'000 Änderungen auf Artikelebene je Sprache.",
       step3:"<b>Messen.</b> In Arbeit. Ein offener Benchmark samt Bewertungsprogramm für genau eine Frage: stützte sich die Antwort auf jene Fassung des Artikels, die am gefragten Stichtag galt?",
@@ -334,7 +717,67 @@
       conP1:"Am nützlichsten sind wir für Menschen, die ohnehin vermuten, dass eine KI-Antwort zum Recht geprüft gehört, und die eine Zahl dafür wollen, wie oft sie danebenliegt.",
       conEmail:"E-Mail", conBased:"Sitz", conBasedV:"Zürich, Schweiz",
       conRes:"Forschung", conResV:"Google Scholar",
-      footCity:"Zürich", footTag:"Rechtsrecherche mit messbarer Belegtreue"
+      footCity:"Zürich", footTag:"Rechtsrecherche mit messbarer Belegtreue",
+      nav4:"Daten",
+      spec1v:"172'000'000+",
+      spec2v:"21 Länder sowie EGMR und EuGH",
+      spec8:"Konsolidierte Fassungen mit Geltungsintervall",
+      spec8v:"37'607",
+      spec9:"Aus Schweizer Entscheiden extrahierte Zitationen",
+      spec9v:"26'600'000+",
+      dataLabel:"Daten",
+      dataH2:"Schweizer Rechtsprechung und Gesetzgebung, über die Zeit gemessen",
+      dataP1:"Das Schweizer Korpus wird aus seinen Quellen aufgebaut, entscheidsuche.ch für Gerichtsentscheide und Fedlex für das Bundesrecht, und jede Nacht nachgeführt. Für die Recherche zählen zwei Dinge: dass die Entscheide weit genug zurückreichen, um die Entstehung einer Praxis zu zeigen, und dass jeder Erlass so gelesen werden kann, wie er an einem bestimmten Stichtag galt.",
+      chDecTitle:"Schweizer Gerichtsentscheide im Volltext, nach Entscheidjahr",
+      chDecCap:"1'218'989 Schweizer Gerichtsentscheide mit sauberem Volltext, nach Entscheidjahr: 474'809 von eidgenössischen Gerichten (Bundesgericht samt publizierten BGE, Bundesverwaltungs-, Bundesstraf- und Bundespatentgericht) und 744'180 von kantonalen Gerichten. Die Reihe beginnt 1875; gezeigt wird sie ab 2000, seit die Publikation systematisch ist. Weitere 133'546 Entscheide publiziert die Quelle ohne Datum; sie fehlen im Diagramm, nicht im Korpus. 2026 bis heute.",
+      chCantTitle:"Schweizer Gerichtsentscheide im Volltext, nach Kanton",
+      chCantCap:"Dieselben Entscheide nach Herkunftsgericht. Alle 26 Kantone sind vertreten; die Zahl spiegelt, was ein Kanton publiziert, nicht was er entscheidet. Die Texte liegen auf Deutsch, Französisch und Italienisch vor, wie die Gerichte sie erlassen haben, und daraus wurden 26,6 Millionen Zitationen extrahiert: 8,95 Millionen auf andere Entscheide, 17,7 Millionen auf Artikel des Bundesrechts.",
+      lblFederal:"Bund",
+      chOrH3:"Obligationenrecht (SR 220): jede konsolidierte Fassung seit 2021 und ihr Geltungsintervall",
+      chOrTitle:"Obligationenrecht: konsolidierte Fassungen und Geltungsintervalle seit 2021",
+      chOrCap:"Vierzehn Fassungen eines Erlasses in weniger als sechs Jahren, mehrere davon nur wenige Wochen gültig. Wer Art. 336 zu einem beliebigen Datum abfragt, erhält den an jenem Tag geltenden Text, aus der Fassung, deren Intervall das Datum enthält, nicht aus der jüngsten.",
+      pitH3:"Können wir den Text so liefern, wie er an einem Stichtag galt?",
+      pitTh1:"Stichtag",
+      pitTh2:"Heute geltende Erlasse, die damals schon bestanden",
+      pitTh3:"Davon mit der an jenem Tag gültigen Fassung",
+      pitTh4:"Anteil",
+      pitCap:"Gemessen an allen heute geltenden Bundeserlassen. Für jeden Stichtag ab 2021 halten wir die exakte Fassung für mindestens 99,5 Prozent davon; weiter zurück sinkt die Abdeckung auf den Anteil historischer Fassungen, die Fedlex maschinenlesbar publiziert hat. Diese Grenze setzt die Quelle, und wir nennen sie, statt sie mit abgegriffenen Webseiten zu füllen.",
+      othLabel:"Über die Schweiz hinaus",
+      othH2:"Dieselbe Datenbank hält 22 weitere Jurisdiktionen",
+      othP1:"Die Schweiz ist das Produkt. Die übrigen Korpora liegen auf derselben Produktionsdatenbank als durchsuchbare Primärquellen, mit derselben Sorgfalt erfasst, und sie sind es, worauf sich die grenzüberschreitenden Zahlen oben beziehen. Gerichtsentscheide je Jurisdiktion, exakt gezählt, auf logarithmischer Skala:",
+      othTitle:"Gerichtsentscheide je Jurisdiktion, logarithmische Skala",
+      othCap:"Die Ukraine ist das zweite vollständige Produkt, mit eigener Werkzeugoberfläche und dem Zitationsgraphen mit 330 Millionen Kanten. Der Rest sind Daten, gehalten und gemessen, und wir sagen das, statt sie als Abdeckung zu zählen.",
+      legH3:"Gesetzgebung mit Fassungsgeschichte, ausserhalb der Schweiz",
+      legTh1:"Jurisdiktion",
+      legTh2:"Erlasse",
+      legTh3:"Fassungen",
+      legTh4:"Artikel oder Bestimmungen",
+      legCap:"Für das Vereinigte Königreich liegen zusätzlich 1'213'289 erfasste Änderungswirkungen aus legislation.gov.uk vor. Wo eine Zelle leer ist, publiziert die Quelle einen einzigen konsolidierten Text ohne Fassungsgeschichte.",
+      jur_UA:"Ukraine",
+      jur_IN:"Indien",
+      jur_US:"Vereinigte Staaten",
+      jur_NL:"Niederlande",
+      jur_PL:"Polen",
+      jur_CH:"Schweiz",
+      jur_CZ:"Tschechien",
+      jur_FR:"Frankreich",
+      jur_AE:"Vereinigte Arabische Emirate",
+      jur_LV:"Lettland",
+      jur_DE:"Deutschland",
+      jur_ECHR:"EGMR (Strassburg)",
+      jur_EE:"Estland",
+      jur_SE:"Schweden",
+      jur_HU:"Ungarn",
+      jur_FI:"Finnland",
+      jur_UK:"Vereinigtes Königreich",
+      jur_LT:"Litauen",
+      jur_LU:"Luxemburg",
+      jur_CJEU:"EuGH (Luxemburg)",
+      jur_SG:"Singapur",
+      jur_BE:"Belgien",
+      jur_DK:"Dänemark",
+      jur_EU:"Europäische Union (EUR-Lex)",
+      jur_ES:"Spanien (BOE)"
     },
     fr: {
       nav1:"Ce que c'est", nav2:"Preuves", nav3:"Contact",
@@ -345,13 +788,13 @@
       whatH2:"Un moteur de recherche, pas une surcouche de chat",
       whatP1:"Posez une question de droit à un modèle de langue : il répondra dans une prose fluide, citera un article et paraîtra sûr de lui. Ce qu'il ne peut pas vous dire, c'est si cet article dit bien ce que la réponse affirme, ni s'il était seulement en vigueur à la date en cause.",
       whatP2:"Lawrider est la société suisse derrière une plateforme de recherche juridique en production depuis février 2026. La recherche porte sur les sources primaires, et chaque réponse traverse une chaîne de contrôles déterministes avant d'être lue : validité des citations, ancrage des passages cités, rattachement des normes, statut du précédent. Sur neuf contrôles de ce type, un seul appelle un modèle de langue. Les autres sont des requêtes en base et sur graphe, ce qui rend leurs verdicts reproductibles.",
-      spec1:"Décisions judiciaires indexées", spec2:"Juridictions",
+      spec1:"Décisions judiciaires dans le corpus", spec2:"Juridictions",
       spec3:"Graphe de citations", spec3v:"330 000 000 d'arêtes",
       spec4:"En production depuis", spec4v:"février 2026",
       spec5:"Appels d'outils sur le corpus, juin–août 2026",
-      spec6:"Décisions judiciaires suisses en texte intégral", spec6v:"1 200 000+",
+      spec6:"Décisions judiciaires suisses en texte intégral", spec6v:"1 218 989",
       spec7:"Actes fédéraux en vigueur en texte intégral", spec7v:"5 075 sur 5 075",
-      whatNote:"Le droit fédéral suisse est disponible dans son intégralité : chaque acte en vigueur, en allemand, français et italien, sous forme de 37 607 versions consolidées avec leurs intervalles de validité, soit 1,76 million d'articles. Les décisions judiciaires proviennent de tous les tribunaux fédéraux et cantonaux qui publient, avec une mise à jour chaque nuit. Nous préférons énoncer le périmètre plutôt que laisser croire à un produit transfrontalier achevé.",
+      whatNote:"Le droit fédéral suisse est disponible dans son intégralité : chaque acte en vigueur, en allemand, français et italien, sous forme de 37 607 versions consolidées avec leurs intervalles de validité, soit 1,76 million d'articles. Les décisions judiciaires proviennent de tous les tribunaux fédéraux et cantonaux qui publient, avec une mise à jour chaque nuit. Nous préférons énoncer le périmètre plutôt que laisser croire à un produit transfrontalier achevé. Chaque chiffre de cette page a été compté sur la base de production le 26 août 2026.",
       evLabel:"Preuves",
       evH2:"Nous publions les mesures, y compris celles qui nous desservent",
       evP1:"La fiabilité n'est pas une affirmation que nous portons sur notre système. C'est une grandeur que nous calculons à chaque requête et que nous consignons. <strong>Sur les trente derniers jours, le score d'ancrage s'établit en moyenne à 93 sur 100.</strong> Quand il bouge, nous le disons.",
@@ -362,7 +805,7 @@
       curH2:"Le droit suisse à la date exacte",
       curP1:"Un article de loi n'est pas un document. L'art. 336 CO en 2015 et en 2026 sont deux textes différents sous la même référence. Fedlex publie chaque version consolidée avec ses dates d'entrée en vigueur ; un corpus aspiré sur le web n'en garde qu'un instantané et jette l'intervalle. Un modèle entraîné là-dessus énoncera du droit abrogé avec un aplomb total, et rien dans la sortie ne signale qu'il est mort.",
       curChartTitle:"Versions consolidées d'actes fédéraux suisses entrées en vigueur, par année",
-      curChartCap:"Versions consolidées d'actes fédéraux suisses entrées en vigueur, par année, comptées à partir des versions que Fedlex publie sous forme lisible par machine : complètes pour les dernières années, partielles avant 2020. 2026 : année en cours ; 117 versions sont déjà programmées pour 2027 et au-delà.",
+      curChartCap:"Versions consolidées d'actes fédéraux suisses entrées en vigueur, par année, comptées à partir des versions que Fedlex publie sous forme lisible par machine : 37 607 versions de 17 293 actes, en allemand, français et italien chacune. Complètes à partir de 2020 ; pour les années antérieures, Fedlex n'a numérisé qu'une partie des versions historiques, d'où la montée de la série. 2026 : année en cours ; 117 versions sont déjà programmées pour 2027 et au-delà.",
       step1:"<b>Collecter.</b> Fait. Chaque version consolidée que Fedlex publie sous forme lisible par machine, en allemand, français et italien, avec source, licence, acte modificateur et intervalle de validité enregistrés dès la collecte : 37 607 versions de 17 293 actes.",
       step2:"<b>Comparer.</b> Fait. Les versions successives sont comparées en un journal des modifications lisible par machine, de sorte que tout texte se rattache à ce qu'il a remplacé et à quelle date : environ 25 000 modifications au niveau de l'article par langue à ce jour.",
       step3:"<b>Mesurer.</b> En cours. Un référentiel ouvert et son évaluateur, pour une seule question : la réponse s'appuyait-elle sur la version de l'article en vigueur à la date demandée ?",
@@ -371,7 +814,67 @@
       conP1:"Nous sommes surtout utiles à ceux qui soupçonnent déjà qu'une réponse d'IA sur le droit mérite d'être vérifiée, et qui veulent un chiffre sur la fréquence de ses erreurs.",
       conEmail:"Courriel", conBased:"Siège", conBasedV:"Zurich, Suisse",
       conRes:"Recherche", conResV:"Google Scholar",
-      footCity:"Zurich", footTag:"Recherche juridique à l'ancrage mesurable"
+      footCity:"Zurich", footTag:"Recherche juridique à l'ancrage mesurable",
+      nav4:"Données",
+      spec1v:"172 000 000+",
+      spec2v:"21 pays, plus la CEDH et la CJUE",
+      spec8:"Versions consolidées suisses avec intervalle de validité",
+      spec8v:"37 607",
+      spec9:"Citations extraites des décisions suisses",
+      spec9v:"26 600 000+",
+      dataLabel:"Données",
+      dataH2:"Jurisprudence et législation suisses, mesurées dans le temps",
+      dataP1:"Le corpus suisse est reconstruit à partir de ses sources, entscheidsuche.ch pour les décisions et Fedlex pour le droit fédéral, et rafraîchi chaque nuit. Deux choses comptent pour la recherche : que les décisions remontent assez loin pour montrer comment une jurisprudence s'est formée, et que chaque acte puisse être lu tel qu'il était en vigueur à une date donnée.",
+      chDecTitle:"Décisions judiciaires suisses en texte intégral, par année de décision",
+      chDecCap:"1 218 989 décisions judiciaires suisses en texte intégral propre, par année de décision : 474 809 des tribunaux fédéraux (Tribunal fédéral et ses ATF publiés, Tribunal administratif fédéral, Tribunal pénal fédéral, Tribunal fédéral des brevets) et 744 180 des tribunaux cantonaux. La série commence en 1875 ; elle est montrée à partir de 2000, quand la publication est devenue systématique. 133 546 décisions supplémentaires sont publiées par la source sans date ; elles manquent au graphique, pas au corpus. 2026 : année en cours.",
+      chCantTitle:"Décisions judiciaires suisses en texte intégral, par canton",
+      chCantCap:"Les mêmes décisions par tribunal d'origine. Les 26 cantons sont présents ; le nombre reflète ce qu'un canton publie, non ce qu'il juge. Les textes sont conservés en allemand, français et italien, tels que les tribunaux les ont rendus, et 26,6 millions de citations en ont été extraites : 8,95 millions vers d'autres décisions, 17,7 millions vers des articles du droit fédéral.",
+      lblFederal:"Fédéral",
+      chOrH3:"Code des obligations (RS 220) : chaque version consolidée depuis 2021 et son intervalle de validité",
+      chOrTitle:"Code des obligations : versions consolidées et intervalles de validité depuis 2021",
+      chOrCap:"Quatorze versions d'un seul acte en moins de six ans, plusieurs valables quelques semaines. Demandez l'art. 336 à n'importe quelle date : le système renvoie le texte en vigueur ce jour-là, tiré de la version dont l'intervalle contient la date, et non de la plus récente.",
+      pitH3:"Pouvons-nous restituer le texte tel qu'il était à une date donnée ?",
+      pitTh1:"Date",
+      pitTh2:"Actes en vigueur aujourd'hui qui existaient déjà",
+      pitTh3:"Dont la version valable ce jour-là",
+      pitTh4:"Part",
+      pitCap:"Mesuré sur tous les actes fédéraux en vigueur aujourd'hui. Pour toute date à partir de 2021, nous détenons la version exacte pour au moins 99,5 pour cent d'entre eux ; en remontant, la couverture tombe à la part des versions historiques que Fedlex a publiées sous forme lisible par machine. Ce plafond appartient à la source, et nous l'énonçons plutôt que de le combler avec des pages web aspirées.",
+      othLabel:"Au-delà de la Suisse",
+      othH2:"La même base contient 22 autres juridictions",
+      othP1:"La Suisse est le produit. Les autres corpus résident sur la même base de production comme sources primaires interrogeables, collectés avec la même discipline, et ce sont eux que désignent les chiffres transfrontaliers ci-dessus. Décisions judiciaires par juridiction, comptes exacts, sur échelle logarithmique :",
+      othTitle:"Décisions judiciaires par juridiction, échelle logarithmique",
+      othCap:"L'Ukraine est le second produit complet, avec sa propre surface d'outils et le graphe de citations à 330 millions d'arêtes. Le reste, ce sont des données, détenues et mesurées, et nous le disons plutôt que de les compter comme couverture.",
+      legH3:"Législation avec historique des versions, hors Suisse",
+      legTh1:"Juridiction",
+      legTh2:"Actes",
+      legTh3:"Versions",
+      legTh4:"Articles ou dispositions",
+      legCap:"Le Royaume-Uni porte en outre 1 213 289 effets de modification enregistrés depuis legislation.gov.uk. Là où une cellule est vide, la source publie un texte consolidé unique sans historique des versions.",
+      jur_UA:"Ukraine",
+      jur_IN:"Inde",
+      jur_US:"États-Unis",
+      jur_NL:"Pays-Bas",
+      jur_PL:"Pologne",
+      jur_CH:"Suisse",
+      jur_CZ:"Tchéquie",
+      jur_FR:"France",
+      jur_AE:"Émirats arabes unis",
+      jur_LV:"Lettonie",
+      jur_DE:"Allemagne",
+      jur_ECHR:"CEDH (Strasbourg)",
+      jur_EE:"Estonie",
+      jur_SE:"Suède",
+      jur_HU:"Hongrie",
+      jur_FI:"Finlande",
+      jur_UK:"Royaume-Uni",
+      jur_LT:"Lituanie",
+      jur_LU:"Luxembourg",
+      jur_CJEU:"CJUE (Luxembourg)",
+      jur_SG:"Singapour",
+      jur_BE:"Belgique",
+      jur_DK:"Danemark",
+      jur_EU:"Union européenne (EUR-Lex)",
+      jur_ES:"Espagne (BOE)"
     }
   };
 
