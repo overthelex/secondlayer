@@ -8,6 +8,8 @@ from chpipe import text_quality
 from chpipe.config import Settings
 from chpipe.stages import extract_stage
 
+from conftest import apply_migration_199
+
 
 def _settings(tmp_path) -> Settings:
     return Settings(dsn="postgresql://unused@127.0.0.1:1/unused", raw_dir=tmp_path,
@@ -89,7 +91,6 @@ MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 # db.complete() unconditionally clears citations_extracted_at on the
 # 'extracted' branch (migration 199's column) -- every test here that
 # reaches that branch needs it applied, same as test_citations_stage.py.
-MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 
 @pytest.fixture
@@ -110,15 +111,9 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION.read_text())
-        # Migration 199 indexes ch_act_article (version_id, article_number)
-        # for citations_resolve_stage's article lookup but does not create
-        # that table -- migration 197 does. Minimal shape of it here, the
-        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
-        # real 197-shaped table left by another test is used as it stands.
-        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
-                  "article_id bigserial PRIMARY KEY, version_id bigint, "
-                  "article_number text, e_id text, ordinal integer)")
-        c.execute(MIGRATION_199.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 

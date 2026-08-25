@@ -130,7 +130,12 @@ class StatuteRef:
     context: str
 
 
-_BGE = re.compile(r"\b(?:BGE|ATF|DTF)\s+(\d{1,3})\s+([IVX]{1,4}[ab]?)\s+(\d{1,4})\b")
+# The part is a volume division, and the reporter only ever had five of
+# them (I..V, with the Ia/Ib subdivisions) -- spelling them out rather
+# than accepting any run of I/V/X keeps "IIII", "IIX" and "X" (which are
+# not Roman numerals the reporter uses, and turn up in OCR noise and in
+# tables) from being read as case citations.
+_BGE = re.compile(r"\b(?:BGE|ATF|DTF)\s+(\d{1,3})\s+((?:IV|III|II|I|V)[ab]?)\s+(\d{1,4})\b")
 _DOCKET = re.compile(r"\b(\d[A-Z][._]\d{1,4}/\d{4})\b")
 _ECLI = re.compile(r"\bECLI:CH:[A-Z0-9]+:[A-Za-z0-9._:-]+")
 
@@ -312,16 +317,26 @@ _TAIL = re.compile(
     + rf"(?:{_GAP}{_FF})?"
 )
 
-# A further paragraph of the same article: "Abs. 1 und 2", "al. 1 et 3".
-_PARA_CONT = re.compile(_GAP + r"(?:,|;|und|et|ed|e|à|bis|-|–)" + _GAP + r"(\d{1,3})(?!\w)")
+# A further paragraph of the same article: "Abs. 1 und 2", "al. 1 et 3",
+# "Abs. 1 oder 2", "al. 1 ou 2", "cpv. 1 o 2". The disjunctions matter as much
+# as the conjunctions -- a court writing "Art. 8 Abs. 1 oder 2 ZGB" is citing
+# both paragraphs. No \b on the word alternatives (unlike _CONJ, whose values
+# are letters): what follows here must be a digit, so "e" cannot eat the "e"
+# of "et" and "o" cannot eat the "o" of "oder" -- the longer alternative is
+# listed first and a wrong one fails on the digit that must follow.
+_PARA_CONT = re.compile(
+    _GAP + r"(?:,|;|und|oder|et|ed|ou|e|o|à|bis|-|–)" + _GAP + r"(\d{1,3})(?!\w)")
 
 # A paragraph keyword right after a continuation number: the number was the
 # next *article*, not a further paragraph ("cpv. 2 e 142 cpv. 4").
 _PARA_AHEAD = re.compile(_GAP + rf"(?:{_PARA_KW})")
 
-# The next article of the same list: "336 und 336a", "207 cpv. 2 e 228", "8-10".
+# The next article of the same list: "336 und 336a", "207 cpv. 2 e 228",
+# "8-10", and the disjunctive forms every language writes just as often --
+# "Art. 8 oder 9 ZGB", "art. 8 ou 9 CC", "art. 8 o 9 CC". Same ordering rule
+# as _PARA_CONT: the longer word first, a digit required after.
 _ITEM_SEP = re.compile(
-    _GAP + r"(?:,|;|/|-|–|—|sowie|nonché|und|ed|et|bis|à|e)" + _GAP + r"(?=\d)"
+    _GAP + r"(?:,|;|/|-|–|—|sowie|nonché|oder|und|ed|et|ou|bis|à|e|o)" + _GAP + r"(?=\d)"
 )
 
 # The act abbreviation the whole list shares: uppercase-initial, 2-12 letters.

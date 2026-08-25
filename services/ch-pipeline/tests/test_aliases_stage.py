@@ -15,11 +15,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import aliases_stage
 
-# Derive repo root from this file's location: services/ch-pipeline/tests/…
-# is 3 levels down from the repo root -- same convention as
-# test_as_bbl_stage.py and test_migration_199.py.
-_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
-MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
+from conftest import apply_migration_199
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -58,15 +54,9 @@ def conn(settings):
                 title_it text,
                 enforcement_status int)
         """)
-        # Migration 199 indexes ch_act_article (version_id, article_number)
-        # for citations_resolve_stage's article lookup but does not create
-        # that table -- migration 197 does. Minimal shape of it here, the
-        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
-        # real 197-shaped table left by another test is used as it stands.
-        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
-                  "article_id bigserial PRIMARY KEY, version_id bigint, "
-                  "article_number text, e_id text, ordinal integer)")
-        c.execute(MIGRATION.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 

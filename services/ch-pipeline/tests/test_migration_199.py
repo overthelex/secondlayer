@@ -4,6 +4,8 @@ import pathlib
 import psycopg
 import pytest
 
+from conftest import apply_migration_199
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/test_migration_199.py
 # is 3 levels down from the repo root
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
@@ -32,18 +34,9 @@ def conn():
             )
         """)
         # ... and the same for migration 197's ch_act_article, which this
-        # migration indexes but does not create. IF NOT EXISTS so a real
-        # 197-shaped table left behind by another test is used as it stands.
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS ch_act_article (
-                article_id bigserial PRIMARY KEY,
-                version_id bigint,
-                article_number text,
-                e_id text,
-                ordinal integer
-            )
-        """)
-        c.execute(MIGRATION.read_text())
+        # migration indexes but does not create, then the migration itself.
+        # See tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 
@@ -92,6 +85,35 @@ def test_cite_kind_check(conn):
         conn.execute(
             "INSERT INTO ch_case_citations (from_ecli, to_raw, cite_kind) "
             "VALUES ('ECLI:CH:1', 'BGE 142 III 102', 'foo')")
+
+
+def test_case_match_method_check(conn):
+    """match_method is a closed vocabulary, same as cite_kind above: the two
+    exact-match methods citations_resolve_stage's step 4 writes plus the
+    terminal 'unresolved' it stamps when nothing matched. Anything else is a
+    typo in the resolver, and it must fail on the INSERT rather than quietly
+    land in the resolution reports."""
+    conn.execute(
+        "INSERT INTO ch_case_citations (from_ecli, to_raw, cite_kind, match_method) "
+        "VALUES ('ECLI:CH:1', 'BGE 142 III 102', 'bge', 'unresolved')")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO ch_case_citations (from_ecli, to_raw, cite_kind, match_method) "
+            "VALUES ('ECLI:CH:1', '4A_22/2017', 'docket', 'docket')")
+
+
+def test_legislation_match_method_check(conn):
+    """The legislation vocabulary is its own: unresolved_abbr / act_only /
+    edition_at_date / latest_edition. 'unresolved' belongs to the CASE table
+    and must be rejected here -- the two columns share a name, not a domain,
+    and a resolver that mixed them up would corrupt the per-method counts."""
+    conn.execute(
+        "INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, match_method) "
+        "VALUES ('ECLI:CH:1', 'OR', '1', 'act_only')")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, match_method) "
+            "VALUES ('ECLI:CH:1', 'OR', '2', 'unresolved')")
 
 
 def _indexes(conn, table):

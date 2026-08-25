@@ -775,9 +775,20 @@ text in a thread pool, and writes the raw edges it finds — BGE/docket/ECLI
 case references into `ch_case_citations`, article references into
 `ch_legislation_citations` — then stamps `citations_extracted_at`. This is
 extraction only: nothing here resolves a citation to the row it points at.
-A decision whose extraction raises is still stamped (one bad text must not
-park it in the claim query forever); the exception is logged and counted in
-`failed` rather than retried.
+A decision whose extraction raises is **not** stamped and **not** touched:
+it keeps whatever edges it already had and the next run tries again. The
+exception is logged with the decision's ecli and counted in `failed`. One
+bad text still must not park the queue, so the run remembers the eclis that
+raised and skips them in its later batches — a batch that is nothing but
+those ends the run with a warning naming the count. There is no attempt
+counter: a text that raises every night shows up in every night's log as
+`failed=N` plus that warning, which is the signal to go and look at it.
+
+`CHPIPE_CIT_BATCH` (default 200) sets how many decisions are claimed per
+batch. The claim selects `full_text` for the whole batch at once, so it is
+this stage's memory knob — turn it down on a host where long decisions make
+a batch too heavy. The queue is a flag column, so a smaller batch costs
+nothing but extra round-trips.
 
 **A decision that gets NEW text must be re-scanned, not left stamped
 against the OLD text.** `db.complete(conn, doc_id, 'extracted', ...)` — the
@@ -787,8 +798,10 @@ moves a row to `'extracted'`. The next `load` puts the row back at `loaded`,
 and the next `citations` run picks it up again, over the new text, exactly
 like a decision that has never been scanned at all — and that run **deletes
 the decision's existing edges before inserting** the ones its current text
-produces (`db.delete_citations`, scoped to the batch's own `from_ecli`
-values). Re-extraction is a replacement, not an addition: `ON CONFLICT DO
+produces (`db.delete_citations`, scoped to the `from_ecli` values of the
+decisions that extracted **cleanly** — a failed one keeps its edges,
+otherwise a re-extraction whose new text raises would delete real citations
+with nothing to put back). Re-extraction is a replacement, not an addition: `ON CONFLICT DO
 NOTHING` makes an edge the new text still contains collide harmlessly with
 the row already there, but an edge the new text no longer contains has
 nothing to collide with, and left alone it would outlive the text it came

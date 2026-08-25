@@ -148,7 +148,13 @@ SELECT count(*) AS resolved FROM updated WHERE act_id IS NOT NULL
 # date_applicability not in the future. Tries the citation's own language
 # first and falls back to 'de' only when nothing in that language satisfies
 # the date condition (ORDER BY (v.lang = c2.lang) DESC ranks an exact-language
-# match ahead of the fallback whenever both exist). Only rows that actually
+# match ahead of the fallback whenever both exist). `, v.version_id` closes
+# out the remaining tie the same way step 4's `, d.ecli` does: two parsed
+# editions of one act can legitimately share a date_applicability (a
+# correction re-published under the same date), and without a final
+# deterministic key the pick is whatever order Postgres happens to return
+# rows in -- so the same citation could resolve to a different edition, and
+# therefore a different article, from one run to the next. Only rows that actually
 # found an edition (best.version_id IS NOT NULL) get updated: a row that
 # found no edition at all -- in any language -- stays at match_method =
 # 'act_only', not overwritten with something that looks resolved.
@@ -172,7 +178,7 @@ UPDATE ch_legislation_citations c
                         OR c2.from_date < v.date_end_applicability))
              OR (c2.from_date IS NULL AND v.date_applicability <= CURRENT_DATE)
               )
-        ORDER BY (v.lang = c2.lang) DESC, v.date_applicability DESC
+        ORDER BY (v.lang = c2.lang) DESC, v.date_applicability DESC, v.version_id
         LIMIT 1
   ) best ON true
  WHERE c.id = c2.id

@@ -31,7 +31,9 @@
 -- NULL as distinct from every other NULL -- so without NULLS NOT DISTINCT,
 -- the same paragraph-less citation extracted twice (e.g. on a re-run of the
 -- extractor) would insert as two rows instead of colliding into one.
--- NULLS NOT DISTINCT requires PostgreSQL 15+; prod runs PostgreSQL 16.
+-- NULLS NOT DISTINCT requires PostgreSQL 15+. The deployment that applies
+-- these migrations runs postgres:15-alpine (deployment/docker-compose.prod.yml),
+-- which satisfies that -- but nothing PG16-only can be assumed here.
 --
 -- The CHECK constraints below are inline in each CREATE TABLE (not wrapped
 -- in the DO $$ ... EXCEPTION WHEN duplicate_object pattern migrations 197/198
@@ -56,11 +58,18 @@ CREATE TABLE IF NOT EXISTS public.ch_case_citations (
     cite_kind        text NOT NULL CHECK (cite_kind IN ('bge','docket','ecli')),
     to_ecli          text,
     resolved         boolean NOT NULL DEFAULT false,
-    match_method     text,               -- docket_exact | ecli_exact
+    match_method     text,               -- docket_exact | ecli_exact | unresolved
     citation_context text,               -- +/-120 chars around the first occurrence
     from_date        date,
     from_court       text,
-    UNIQUE (from_ecli, to_raw)
+    UNIQUE (from_ecli, to_raw),
+    -- Closed vocabulary, written only by citations_resolve_stage's step 4:
+    -- the two exact-match methods, or the terminal 'unresolved' it stamps on
+    -- a citation nothing in the corpus matches. NULL means "never attempted"
+    -- and is what step 4's own WHERE selects on, so it has to stay legal.
+    CONSTRAINT ch_case_cit_match_method_chk CHECK (
+        match_method IS NULL
+        OR match_method IN ('docket_exact','ecli_exact','unresolved'))
 );
 CREATE INDEX IF NOT EXISTS idx_ch_case_cit_to ON public.ch_case_citations (to_ecli) WHERE to_ecli IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ch_case_cit_unres ON public.ch_case_citations (cite_kind) WHERE NOT resolved;
@@ -80,7 +89,17 @@ CREATE TABLE IF NOT EXISTS public.ch_legislation_citations (
     match_method     text,               -- edition_at_date | latest_edition | act_only | unresolved_abbr
     citation_context text,
     from_date        date,
-    UNIQUE NULLS NOT DISTINCT (from_ecli, abbr_raw, article, paragraph)
+    UNIQUE NULLS NOT DISTINCT (from_ecli, abbr_raw, article, paragraph),
+    -- Closed vocabulary, written only by citations_resolve_stage's steps 1
+    -- and 2: 'unresolved_abbr' (terminal, no alias for the abbreviation),
+    -- 'act_only' (an act but no edition yet), then 'edition_at_date' /
+    -- 'latest_edition'. Step 3 resolves the article and leaves match_method
+    -- alone, so there is no separate value for it. NULL means "never
+    -- attempted" -- step 1's own WHERE selects on it.
+    CONSTRAINT ch_leg_cit_match_method_chk CHECK (
+        match_method IS NULL
+        OR match_method IN ('unresolved_abbr','act_only',
+                            'edition_at_date','latest_edition'))
 );
 CREATE INDEX IF NOT EXISTS idx_ch_leg_cit_article ON public.ch_legislation_citations (article_id) WHERE article_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ch_leg_cit_act ON public.ch_legislation_citations (act_id, article) WHERE act_id IS NOT NULL;

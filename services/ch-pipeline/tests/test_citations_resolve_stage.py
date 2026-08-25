@@ -15,12 +15,13 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import citations_resolve_stage
 
+from conftest import apply_migration_199
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_citations_resolve_stage.py is 3 levels down from the repo root (matches
 # the convention already used in tests/test_load_stage.py).
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
-MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -55,7 +56,9 @@ def conn(settings):
             )
         """)
         c.execute(MIGRATION_197.read_text())
-        c.execute(MIGRATION_199.read_text())
+        # 197 has just created the real ch_act_article, so the helper's
+        # IF NOT EXISTS stand-in is a no-op here and only 199 is applied.
+        apply_migration_199(c)
         yield c
 
 
@@ -339,3 +342,27 @@ def test_the_counters_count_resolutions_not_attempts(conn, settings):
     assert conn.execute(
         "SELECT count(*) AS n FROM ch_case_citations "
         "WHERE match_method = 'unresolved'").fetchone()["n"] == 1
+
+
+def test_editions_sharing_an_applicability_date_resolve_deterministically(
+        seeded, settings):
+    """Two parsed editions of one act can carry the same date_applicability
+    (Fedlex re-publishes a correction under the date it corrects). With only
+    (lang, date_applicability) in the ORDER BY, which of them the LATERAL
+    returns is whatever order Postgres happened to produce -- so the same
+    citation could resolve to a different edition, and therefore a different
+    article_id, from one run to the next. `, v.version_id` makes the pick a
+    property of the data instead of the plan."""
+    _version(seeded, 30, 1, "de", date(2020, 1, 1), None)
+    _article(seeded, 3001, 30, "art_336", "336", 50)
+
+    citations_resolve_stage.run(settings)
+    first = _leg_rows(seeded)["ECLI:B"]
+    assert first["version_id"] == 20, "the lower version_id breaks the tie"
+    assert first["article_id"] == 2001
+
+    # Same answer when the whole corpus is resolved again from scratch.
+    citations_resolve_stage.run(settings, resolve_all=True)
+    second = _leg_rows(seeded)["ECLI:B"]
+    assert second["version_id"] == first["version_id"]
+    assert second["article_id"] == first["article_id"]

@@ -443,10 +443,13 @@ def failed_by_stage_versions(conn) -> list[tuple[str | None, int]]:
 # Citations queue: a flag column (citations_extracted_at) on the same
 # ch_court_decisions table, not a stage transition -- citations_stage does
 # not move a row off 'loaded', it only stamps it once its text has been
-# scanned. There is deliberately no attempts/backoff predicate here (unlike
-# claim() above): a decision whose extraction raises is still stamped by the
-# stage itself (see citations_stage.run()), so a row that lands back in this
-# query on the next run is one nobody has looked at yet, not a retry.
+# scanned successfully. There is deliberately no attempts/backoff predicate
+# here (unlike claim() above): a decision whose extraction raises is left
+# unstamped (see citations_stage.run(), which keeps its existing edges rather
+# than deleting them for a batch that produced no replacement), so it does
+# land back in this query on the next run -- one extraction attempt per run,
+# no backoff, and the run itself skips the ones it has already failed so a
+# poison text cannot stall the queue behind it.
 # ---------------------------------------------------------------------------
 
 _CLAIM_CITATIONS_COLUMNS = "ecli, doc_id, spider, court_code, decision_date, full_text"
@@ -475,6 +478,11 @@ def claim_for_citations(conn, limit: int, spider: str | None = None) -> list[dic
 def delete_citations(conn, eclis: list[str]) -> None:
     """Drop every edge these decisions currently have, ahead of re-inserting
     the ones their CURRENT text produces.
+
+    Callers pass ONLY the decisions whose extraction succeeded: this is a
+    delete with no transaction around the insert that follows it (the
+    connection is autocommit -- see connect()), so a decision listed here
+    whose replacement edges never arrive loses the ones it had.
 
     A decision only re-enters claim_for_citations() after complete(->
     'extracted') cleared its citations_extracted_at, i.e. after it was given
@@ -530,7 +538,9 @@ def stamp_citations(conn, eclis: list[str]) -> None:
     """Mark decisions as having had citations extracted. Called only after
     insert_citations() has succeeded for the same batch (see
     citations_stage.run()) -- a row must never be stamped ahead of the edges
-    it was supposed to produce."""
+    it was supposed to produce, and a row whose extraction RAISED must not be
+    stamped at all: stamping it would retire it from the queue forever with
+    whatever edges it happened to have."""
     if not eclis:
         return
     conn.execute(

@@ -122,6 +122,22 @@ def test_dedup_preserves_first_occurrence_order():
 # Negative cases
 # --------------------------------------------------------------------------
 
+def test_an_invalid_roman_part_is_not_a_bge():
+    """The reporter's volume parts are I..V (with the Ia/Ib subdivisions) and
+    nothing else. Accepting any run of I/V/X let OCR noise and table columns
+    ("142 X 250", "100 IIII 5") through as case citations that can never
+    resolve to a decision."""
+    assert extract_cases("BGE 142 X 250") == []
+    assert extract_cases("BGE 100 IIII 5") == []
+    assert extract_cases("BGE 100 IIX 5") == []
+
+
+def test_every_valid_roman_part_is_still_a_bge():
+    for part in ("I", "II", "III", "IV", "V", "Ia", "Ib"):
+        refs = extract_cases(f"BGE 120 {part} 5")
+        assert [r.raw for r in refs] == [f"BGE 120 {part} 5"], part
+
+
 def test_bare_article_reference_is_not_a_bge():
     refs = extract_cases("Art. 142 III")
     assert refs == []

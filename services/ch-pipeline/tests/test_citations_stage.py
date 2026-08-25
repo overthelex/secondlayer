@@ -15,12 +15,13 @@ from chpipe import db
 from chpipe.config import Settings
 from chpipe.stages import citations_stage
 
+from conftest import apply_migration_199
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_citations_stage.py is 3 levels down from the repo root (matches the
 # convention already used in tests/test_load_stage.py).
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
-MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -57,15 +58,9 @@ def conn(settings):
             )
         """)
         c.execute(MIGRATION_196.read_text())
-        # Migration 199 indexes ch_act_article (version_id, article_number)
-        # for citations_resolve_stage's article lookup but does not create
-        # that table -- migration 197 does. Minimal shape of it here, the
-        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
-        # real 197-shaped table left by another test is used as it stands.
-        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
-                  "article_id bigserial PRIMARY KEY, version_id bigint, "
-                  "article_number text, e_id text, ordinal integer)")
-        c.execute(MIGRATION_199.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 
@@ -137,11 +132,14 @@ def test_a_null_full_text_is_stamped_with_zero_edges_and_not_a_failure(conn, set
     assert row["citations_extracted_at"] is not None
 
 
-def test_a_raising_extraction_is_counted_failed_and_still_stamped(conn, settings,
+def test_a_raising_extraction_is_counted_failed_and_left_unstamped(conn, settings,
                                                                    monkeypatch):
-    """One bad text must not block the queue: the row is counted in `failed`,
-    logged, and still stamped (so it is not re-claimed forever) -- but
-    last_error is left exactly as it was, because this stage never writes it."""
+    """A bad text must not block the queue AND must not be retired from it:
+    the row is counted in `failed` and logged, its stamp is left NULL so the
+    next run tries again, and last_error is left exactly as it was, because
+    this stage never writes it. The run itself is what keeps the unstamped
+    row from being re-extracted forever -- it skips the eclis it already
+    failed, so the decisions behind it still get scanned."""
     _row(conn, "ECLI:E", "e", "CH_BGer", date(2020, 1, 1), "boom text")
     _row(conn, "ECLI:F", "f", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.")
     conn.execute(
@@ -164,13 +162,103 @@ def test_a_raising_extraction_is_counted_failed_and_still_stamped(conn, settings
     row = conn.execute(
         "SELECT citations_extracted_at, last_error FROM ch_court_decisions "
         "WHERE ecli = 'ECLI:E'").fetchone()
-    assert row["citations_extracted_at"] is not None
+    assert row["citations_extracted_at"] is None, "a failure must stay claimable"
     assert row["last_error"] == "preexisting"
 
-    # The row that did not raise still got its citation written.
+    # The row that did not raise still got its citation written -- and its
+    # stamp, so the failure did not drag it back into the queue.
     leg_rows = conn.execute(
         "SELECT * FROM ch_legislation_citations WHERE from_ecli = 'ECLI:F'").fetchall()
     assert len(leg_rows) == 1
+    assert conn.execute(
+        "SELECT citations_extracted_at FROM ch_court_decisions WHERE ecli = 'ECLI:F'"
+    ).fetchone()["citations_extracted_at"] is not None
+
+    # ... and the next run (a fixed extractor) picks the failure up again.
+    monkeypatch.undo()
+    retry = citations_stage.run(settings)
+    assert retry.decisions == 1
+    assert retry.failed == 0
+    assert conn.execute(
+        "SELECT citations_extracted_at FROM ch_court_decisions WHERE ecli = 'ECLI:E'"
+    ).fetchone()["citations_extracted_at"] is not None
+
+
+def test_a_re_extraction_that_raises_keeps_the_edges_the_old_text_produced(
+        conn, settings, monkeypatch):
+    """The destructive combination: a decision that already HAS edges is
+    given new text (complete(-> 'extracted') clears its stamp), and the new
+    text raises. Deleting the batch's edges before inserting the replacements
+    would drop this decision's real citations with nothing to put back, and
+    stamping it would mean it is never claimed again -- silent, permanent
+    loss. The delete is therefore scoped to the decisions that extracted
+    cleanly, and the failure is left exactly as it was."""
+    _row(conn, "ECLI:M", "m", "CH_BGer", date(2020, 1, 1),
+        "art. 8 Cst. und BGE 142 III 102")
+    citations_stage.run(settings)
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:M'").fetchone()["n"] == 1
+
+    db.complete(conn, "m", "extracted", full_text="boom text", text_quality=0.9)
+    conn.execute("UPDATE ch_court_decisions SET stage = 'loaded' WHERE ecli = 'ECLI:M'")
+
+    real_extract_cases = citations_stage.citations.extract_cases
+
+    def flaky(text):
+        if text == "boom text":
+            raise RuntimeError("simulated extraction failure")
+        return real_extract_cases(text)
+
+    monkeypatch.setattr(citations_stage.citations, "extract_cases", flaky)
+
+    # No limit: the claim query keeps offering the unstamped failure, so this
+    # also pins the guard that stops the run from re-extracting it forever.
+    report = citations_stage.run(settings)
+    assert report.failed == 1
+
+    assert [r["abbr_raw"] for r in conn.execute(
+        "SELECT abbr_raw FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:M'").fetchall()] == ["Cst."]
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_case_citations "
+        "WHERE from_ecli = 'ECLI:M'").fetchone()["n"] == 1
+    assert conn.execute(
+        "SELECT citations_extracted_at FROM ch_court_decisions WHERE ecli = 'ECLI:M'"
+    ).fetchone()["citations_extracted_at"] is None
+
+
+def test_the_batch_size_is_configurable(conn, settings, monkeypatch):
+    """claim_for_citations() pulls full_text for the whole batch at once, so
+    the batch size is the stage's memory knob -- CHPIPE_CIT_BATCH is how an
+    operator turns it down on a host with long decisions and little RAM."""
+    for ecli, doc_id in (("ECLI:N", "n"), ("ECLI:O", "o"), ("ECLI:P", "p")):
+        _row(conn, ecli, doc_id, "CH_BGer", date(2020, 1, 1), "art. 8 Cst.")
+
+    limits: list[int] = []
+    real_claim = citations_stage.db.claim_for_citations
+
+    def spy(conn_, limit, spider=None):
+        limits.append(limit)
+        return real_claim(conn_, limit, spider=spider)
+
+    monkeypatch.setattr(citations_stage.db, "claim_for_citations", spy)
+    monkeypatch.setenv("CHPIPE_CIT_BATCH", "1")
+
+    report = citations_stage.run(settings)
+
+    assert report.decisions == 3
+    assert set(limits) == {1}, limits
+    assert len(limits) == 4          # three rows, then the empty claim
+
+
+def test_a_bad_batch_size_falls_back_to_the_default(monkeypatch):
+    monkeypatch.setenv("CHPIPE_CIT_BATCH", "not-a-number")
+    assert citations_stage._batch_size() == citations_stage.BATCH_SIZE
+    monkeypatch.setenv("CHPIPE_CIT_BATCH", "0")
+    assert citations_stage._batch_size() == citations_stage.BATCH_SIZE
+    monkeypatch.setenv("CHPIPE_CIT_BATCH", "7")
+    assert citations_stage._batch_size() == 7
 
 
 def test_a_spider_filter_only_claims_that_spider(conn, settings):

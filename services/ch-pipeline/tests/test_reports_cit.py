@@ -4,7 +4,6 @@ test like test_citations_stage.py and test_citations_resolve_stage.py.
 """
 import json
 import os
-import pathlib
 
 import psycopg
 import pytest
@@ -12,8 +11,7 @@ from psycopg.rows import dict_row
 
 from chpipe import reports_cit
 
-_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
-MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
+from conftest import apply_migration_199
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -35,15 +33,9 @@ def conn():
                 stage text
             )
         """)
-        # Migration 199 indexes ch_act_article (version_id, article_number)
-        # for citations_resolve_stage's article lookup but does not create
-        # that table -- migration 197 does. Minimal shape of it here, the
-        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
-        # real 197-shaped table left by another test is used as it stands.
-        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
-                  "article_id bigserial PRIMARY KEY, version_id bigint, "
-                  "article_number text, e_id text, ordinal integer)")
-        c.execute(MIGRATION_199.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         yield c
 
 

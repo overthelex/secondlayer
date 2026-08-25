@@ -32,13 +32,14 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import extract_stage, load_stage
 
+from conftest import apply_migration_199
+
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 MIGRATION_156 = _REPO_ROOT / "mcp_backend/src/migrations/156_jurisdiction_fulltext_stats.sql"
 # db.complete() unconditionally clears citations_extracted_at on the
 # 'extracted' branch (migration 199's column) -- extract_stage.run() below
 # reaches it, so this fixture needs the column applied too.
-MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -109,15 +110,9 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION_196.read_text())
-        # Migration 199 indexes ch_act_article (version_id, article_number)
-        # for citations_resolve_stage's article lookup but does not create
-        # that table -- migration 197 does. Minimal shape of it here, the
-        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
-        # real 197-shaped table left by another test is used as it stands.
-        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
-                  "article_id bigserial PRIMARY KEY, version_id bigint, "
-                  "article_number text, e_id text, ordinal integer)")
-        c.execute(MIGRATION_199.read_text())
+        # ch_act_article (migration 197's table, which 199 indexes but does
+        # not create) and migration 199 itself -- see tests/conftest.py.
+        apply_migration_199(c)
         _install_jstats(c)
         yield c
 
