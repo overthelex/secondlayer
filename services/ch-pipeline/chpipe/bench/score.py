@@ -305,6 +305,40 @@ def _unit_found(unit: str, answer: str) -> bool:
     return _window_found(unit, answer)
 
 
+def discriminating_units(gold: str, distractor: str) -> tuple[list[str], list[str], list[str]]:
+    """Partition GOLD and DISTRACTOR's units() relative to each other.
+
+    Public helper for chpipe.bench.build (Task 2): given the two candidate
+    texts for one article edition pair, return (gold_only, distractor_only,
+    shared) -- the same three-way partition score() computes internally to
+    decide grounding (see module docstring "WHY UNIT-LEVEL, NOT
+    WHOLE-STRING, MATCHING"). `gold_only` is the wording that makes GOLD
+    distinguishable from DISTRACTOR at all; an empty `gold_only` means no
+    answer, however well-grounded, could ever be told apart from one that
+    quoted DISTRACTOR instead -- the caller (build.make_items) uses that to
+    drop such a pair from the benchmark rather than ship an unscoreable
+    item.
+
+    Not to be confused with the private `_discriminating_units()` below,
+    which does something different: given an already-computed gold_only/
+    distractor_only split, it finds the near-duplicate *cross-pairs*
+    between the two sides (e.g. "...180 Tagen." vs "...30 Tagen.") that
+    score() must restrict to exact-match-only. This function runs the
+    partition step that precedes that; it does not do the cross-pairing
+    itself.
+
+    Lists are sorted for a deterministic return order (the underlying sets
+    have none); the elements themselves are already normalise()'d, per
+    units().
+    """
+    gold_units = set(units(gold))
+    distractor_units = set(units(distractor))
+    shared = gold_units & distractor_units
+    gold_only = gold_units - shared
+    distractor_only = distractor_units - shared
+    return sorted(gold_only), sorted(distractor_only), sorted(shared)
+
+
 def _discriminating_units(
     gold_only: set[str], distractor_only: set[str]
 ) -> tuple[set[str], set[str]]:
@@ -351,11 +385,12 @@ def score(answer: str, gold: str, distractor: str) -> Verdict:
     distractor_coverage to pick a label.
     """
     norm_answer = normalise(answer)
-    gold_units = set(units(gold))
-    distractor_units = set(units(distractor))
-    shared_units = gold_units & distractor_units
-    gold_only = gold_units - shared_units
-    distractor_only = distractor_units - shared_units
+    gold_only_list, distractor_only_list, shared_list = discriminating_units(gold, distractor)
+    gold_only, distractor_only, shared_units = (
+        set(gold_only_list),
+        set(distractor_only_list),
+        set(shared_list),
+    )
     disc_gold, disc_distractor = _discriminating_units(gold_only, distractor_only)
 
     gold_coverage = _coverage(gold_only, norm_answer, disc_gold)
