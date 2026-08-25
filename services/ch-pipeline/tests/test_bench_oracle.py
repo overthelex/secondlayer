@@ -319,8 +319,11 @@ def test_report_summarise_and_markdown(settings, seeded, tmp_path):
 
     assert set(summary.keys()) == {"de", "fr"}
     for lang in ("de", "fr"):
-        stats = summary[lang]["oracle"]
+        buckets = summary[lang]["oracle"]
+        assert set(buckets) == {"all", "before", "after"}
+        stats = buckets["all"]
         assert stats["n"] == 2
+        assert stats["errors"] == 0
         assert stats["grounded_correct"] == 2
         assert stats["grounded_wrong_version"] == 0
         assert stats["ungrounded"] == 0
@@ -330,7 +333,30 @@ def test_report_summarise_and_markdown(settings, seeded, tmp_path):
         assert stats["score"] == 1.0
         assert stats["mean_gold_coverage"] > 0
 
+        # One item per kind, and the pair splits cleanly on gold_is_current:
+        # `before`'s gold is the superseded edition, `after`'s is current.
+        assert buckets["before"]["n"] == 1
+        assert buckets["after"]["n"] == 1
+        assert stats["n_gold_current"] == 1
+        assert stats["correct_gold_current"] == 1
+        assert stats["n_gold_superseded"] == 1
+        assert stats["correct_gold_superseded"] == 1
+        assert stats["share_correct_gold_superseded"] == 1.0
+
     md = report.markdown(summary)
     assert "de" in md and "fr" in md and "oracle" in md
-    # One header + separator + one data row per (lang, system) -- 2 here.
-    assert len(md.strip().splitlines()) == 4
+    # Header + separator + (all, after, before) per (lang, system) -- 2 here.
+    assert len(md.strip().splitlines()) == 8
+
+
+def test_a_missing_item_file_is_an_error_not_a_silent_skip(settings, seeded, tmp_path):
+    """The oracle's whole value is its 100% score. Quietly skipping a
+    language whose bench-{lang}.jsonl is missing would report that 100%
+    over a smaller set than the caller asked for."""
+    items_dir = tmp_path / "items"
+    build.build(settings, langs=("de",), out_dir=items_dir, now=_NOW)
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        run_oracle.run(settings, items_path=items_dir, out_path=tmp_path / "out",
+                       langs=("de", "fr"))
+    assert "bench-fr.jsonl" in str(excinfo.value)

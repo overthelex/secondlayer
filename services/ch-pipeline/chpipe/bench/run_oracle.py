@@ -144,11 +144,23 @@ def _lookup(cur, item: dict[str, Any]) -> tuple[str, str | None]:
 
 
 def _read_items(items_path: pathlib.Path, langs: tuple[str, ...]) -> list[dict[str, Any]]:
+    """Read every requested language's item file.
+
+    A missing `bench-{lang}.jsonl` raises. The caller asked for that
+    language explicitly, so the file not being there means the build never
+    ran, ran with different --langs, or wrote somewhere else -- all bugs
+    the operator has to fix. Skipping silently would instead report a
+    perfect 100% oracle score over the languages that happened to exist,
+    which is the one number this run is supposed to be trusted on.
+    """
     items: list[dict[str, Any]] = []
     for lang in langs:
         f = items_path / f"bench-{lang}.jsonl"
         if not f.exists():
-            continue
+            raise FileNotFoundError(
+                f"no benchmark items for lang {lang!r}: {f} does not exist "
+                f"-- run `python -m chpipe.bench.build --langs {lang} --out "
+                f"{items_path}` first")
         with f.open(encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()

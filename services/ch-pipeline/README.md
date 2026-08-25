@@ -1194,12 +1194,17 @@ Run each step from `services/ch-pipeline`.
     python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
 
 Reads `ch_act_change` per language, applies the selection rules (modified
-rows only, both texts >= 200 chars and SequenceMatcher ratio < 0.9, the act
-in force, an abbreviation resolvable for that language, at least one
+rows only, both texts >= 200 normalised chars and not the same string once
+normalised, the act in force, the article number unambiguous within both
+editions, an abbreviation resolvable for that language, at least one
 discriminating unit — see CARD.md, "Construction"), samples down to the
 caps (50 changes per act, 5,000 items per language, seeded per language),
 and writes `bench-de.jsonl`, `bench-fr.jsonl`, `bench-it.jsonl` plus
 `build-report.json` (per-language counts and skip reasons) into `--out`.
+
+The "texts differ" rule is an inequality, not a similarity threshold: a
+ratio gate would drop the one-number amendment this benchmark is built to
+ask about. See CARD.md, "Construction".
 
 **2. Run the oracle.**
 
@@ -1234,7 +1239,13 @@ seeded the same way the builder's own sampling is. No retrieval: the model
 sees only the item's `question` field and the system prompt quoted in
 CARD.md, nothing from `gold`/`distractor`. Writes one
 `results-llm-{model}.jsonl` per model plus `llm-run-report.json` (the cost
-estimate alongside the actual token counts and spend).
+estimate alongside the actual per-model token counts and spend, with the
+combined spend in a top-level `actual_total_usd`).
+
+Interrupted runs resume: re-running with the same `--out` skips every item
+already answered, re-asks any item whose line records an error, and repairs
+a partial line left by a kill mid-write. Nothing already paid for is asked
+twice.
 
 **4. Report.**
 
@@ -1242,9 +1253,15 @@ estimate alongside the actual token counts and spend).
 
 Pass any number of `results-*.jsonl` files (oracle and/or one or more LLM
 runs) to compare them in a single table. Reduces every result line to
-per-(language, system) counts, label shares, mean coverages, and the
-"point-in-time grounding score" (the share of `grounded_correct`), prints
-a Markdown table to stdout, and writes the same summary as JSON to `--out`.
+per-(language, system, `kind`) counts — plus an `all` row per (language,
+system) — with label shares, mean coverages, an `errors` count, the
+correct-answer share split on `gold_is_current`, and the "point-in-time
+grounding score" (the share of `grounded_correct`); prints a Markdown table
+to stdout and writes the same summary as JSON to `--out`.
+
+Read the `gold_is_current = false` column, not the headline score: an item
+whose gold edition is still the current wording can be answered correctly
+by a system that recites today's text and never resolves the date at all.
 
 **Publication.** Building the benchmark, running the oracle and the
 baselines, and writing the report do not publish anything — no dataset

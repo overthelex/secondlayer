@@ -48,8 +48,9 @@ NEW_TEXT = (
 )
 
 # A pair long enough (>= 200 normalised chars) but only whitespace apart --
-# SequenceMatcher ratio 1.0, so select_change() rejects it. Measured
-# directly (see task-3 self-review): normalise() gives 203 chars each side.
+# normalise() folds the difference away entirely, so select_change() sees
+# one and the same string and rejects it. Measured directly (see task-3
+# self-review): normalise() gives 203 chars each side.
 _PADDING = " ".join(
     ["Diese Bestimmung regelt die Kündigungsfristen im Arbeitsverhältnis."] * 3)
 NEAR_OLD_TEXT = _PADDING
@@ -130,8 +131,8 @@ def _change(conn, act_id, lang, from_version_id, to_version_id, e_id, article_nu
 def seeded(conn):
     """One in-force act (SR 220, abbreviation OR in German, alias CO
     curated in French), two editions each for de/fr, and two 'modified'
-    changes per language: art_336 (a real change) and art_337 (near-
-    identical, must be skipped). Plus a second, NOT-in-force act (SR 999)
+    changes per language: art_336 (a real change) and art_337 (identical
+    after normalisation, must be skipped). Plus a second, NOT-in-force act (SR 999)
     with its own edition/article/change, which the SQL's `enforcement_status
     = 0` join must exclude entirely.
     """
@@ -186,12 +187,12 @@ def test_build_writes_two_items_per_language(settings, seeded, tmp_path):
     assert report.per_lang["de"]["changes_considered"] == 2
     assert report.per_lang["de"]["selected"] == 1
     assert report.per_lang["de"]["items"] == 2
-    assert report.per_lang["de"]["skipped"] == {"near_identical_or_short": 1}
+    assert report.per_lang["de"]["skipped"] == {"identical_or_short": 1}
 
     assert report.per_lang["fr"]["changes_considered"] == 2
     assert report.per_lang["fr"]["selected"] == 1
     assert report.per_lang["fr"]["items"] == 2
-    assert report.per_lang["fr"]["skipped"] == {"near_identical_or_short": 1}
+    assert report.per_lang["fr"]["skipped"] == {"identical_or_short": 1}
 
     de_items = _read_jsonl(tmp_path / "bench-de.jsonl")
     fr_items = _read_jsonl(tmp_path / "bench-fr.jsonl")
@@ -315,3 +316,63 @@ def test_no_abbreviation_is_skipped(settings, conn, tmp_path):
     assert report.per_lang["de"]["items"] == 0
     assert report.per_lang["de"]["skipped"] == {"no_abbreviation": 1}
     assert (tmp_path / "bench-de.jsonl").read_text() == ""
+
+
+def test_ambiguous_article_number_is_skipped(settings, conn, tmp_path):
+    """Two different e_ids carrying the SAME article_number inside one
+    edition -- a top-level `art_7` and a transitional-provisions
+    `disp_u17/art_7`, both numbered "7". The question template can only
+    name the article by its number, and run_oracle (like the product tool)
+    resolves a number to whichever e_id sorts first, so an item built on
+    either e_id is a coin flip. Both changes are excluded, and both are
+    counted under `ambiguous_article` rather than quietly vanishing.
+    """
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 4, "666", abbreviation="ZZ", enforcement_status=0)
+    _version(conn, 401, 4, "de", old_date, old_end_date)
+    _version(conn, 402, 4, "de", change_date, None)
+    for version_id, text in ((401, OLD_TEXT), (402, NEW_TEXT)):
+        _article(conn, version_id, "art_7", "7", text, ordinal=0)
+        _article(conn, version_id, "disp_u17/art_7", "7", text, ordinal=1)
+    _change(conn, 4, "de", 401, 402, "art_7", "7", change_date)
+    _change(conn, 4, "de", 401, 402, "disp_u17/art_7", "7", change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 2
+    assert report.per_lang["de"]["selected"] == 0
+    assert report.per_lang["de"]["items"] == 0
+    assert report.per_lang["de"]["skipped"] == {"ambiguous_article": 2}
+    assert (tmp_path / "bench-de.jsonl").read_text() == ""
+
+
+def test_unambiguous_article_alongside_an_ambiguous_one_still_builds(
+        settings, conn, tmp_path):
+    """The exclusion is per article number, not per act: art_8 is unique in
+    both editions and must still produce its two items even though art_7 in
+    the same act is ambiguous."""
+    old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
+    change_date = datetime.date(2021, 1, 1)
+
+    _act(conn, 5, "667", abbreviation="YY", enforcement_status=0)
+    _version(conn, 501, 5, "de", old_date, old_end_date)
+    _version(conn, 502, 5, "de", change_date, None)
+    for version_id, text in ((501, OLD_TEXT), (502, NEW_TEXT)):
+        _article(conn, version_id, "art_7", "7", text, ordinal=0)
+        _article(conn, version_id, "disp_u17/art_7", "7", text, ordinal=1)
+        _article(conn, version_id, "art_8", "8", text, ordinal=2)
+    _change(conn, 5, "de", 501, 502, "art_7", "7", change_date)
+    _change(conn, 5, "de", 501, 502, "art_8", "8", change_date)
+
+    report = build.build(settings, langs=("de",), out_dir=tmp_path, now=_NOW)
+
+    assert report.per_lang["de"]["changes_considered"] == 2
+    assert report.per_lang["de"]["selected"] == 1
+    assert report.per_lang["de"]["items"] == 2
+    assert report.per_lang["de"]["skipped"] == {"ambiguous_article": 1}
+    items = _read_jsonl(tmp_path / "bench-de.jsonl")
+    assert {it["article_number"] for it in items} == {"8"}

@@ -166,6 +166,14 @@ def test_normalise_nfkc_and_quotes():
     assert "“" not in result and "”" not in result
 
 
+def test_normalise_folds_the_ellipsis_character_to_three_periods():
+    """Same fold chpipe/diff_articles.normalise() applies: Fedlex writes a
+    struck-out paragraph as U+2026 in one place and as three periods in
+    another, inside the same act, so the two must compare equal."""
+    assert s.normalise("Art. 5 …") == s.normalise("Art. 5 ...")
+    assert "…" not in s.normalise("Aufgehoben …")
+
+
 # --- Discriminating pairs: a gold-only/distractor-only unit pair that is
 # itself near-identical (a single number changed, e.g. "180 Tagen" vs "30
 # Tagen") is exactly the amendment shape this benchmark exists to catch.

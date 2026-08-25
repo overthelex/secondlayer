@@ -5,9 +5,9 @@ The top half (select_change / item_id / make_items) is pure -- no DB, no
 I/O -- given the rows the bottom half's SQL fetches, it decides whether a
 change is worth turning into a benchmark item, builds the item pair, and
 gives every item a stable id. The bottom half (build() / main()) is the
-Task 3 DB glue: one SQL query per language against ch_act_change joined to
-ch_act/ch_act_version/ch_act_article/ch_act_alias, stratified sampling in
-Python, and a JSONL + build-report.json write. See
+Task 3 DB glue: two SQL queries per language against ch_act_change joined to
+ch_act/ch_act_version/ch_act_article/ch_act_alias, sampling in Python, and
+a JSONL + build-report.json write. See
 docs/superpowers/plans/2026-08-25-ch-pit-benchmark.md, "### Item (JSONL
 line)".
 """
@@ -18,11 +18,9 @@ import datetime
 import hashlib
 import json
 import logging
-import math
 import pathlib
 import random
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from typing import Any, Mapping
 
 from chpipe import db
@@ -33,11 +31,10 @@ log = logging.getLogger(__name__)
 
 # A change is only usable as a benchmark item if both editions have real
 # body text (>= 200 normalised characters -- see the plan's "Item (JSONL
-# line)" section) and actually differ (SequenceMatcher ratio < 0.9 on the
-# normalised text), so a single-space or whitespace-only re-typesetting
-# does not masquerade as a change.
+# line)" section) and are not the same string once normalised, so a
+# whitespace-only or punctuation-only re-typesetting does not masquerade as
+# a change.
 _MIN_TEXT_LEN = 200
-_MAX_SAME_RATIO = 0.9
 
 # Provenance fields stamped on every item -- see the plan's item schema.
 SOURCE = "Fedlex (fedlex.admin.ch)"
@@ -45,21 +42,32 @@ LICENCE = "Fedlex data may be reused free of charge with source attribution"
 
 
 def select_change(old_text: str, new_text: str) -> bool:
-    """True if OLD_TEXT -> NEW_TEXT is a real, substantial change worth
-    building a benchmark item pair from.
+    """True if OLD_TEXT -> NEW_TEXT is a real change worth building a
+    benchmark item pair from.
 
     Both texts must normalise() to at least 200 characters (rules out
-    stub/repealed articles with near-empty bodies) AND
-    difflib.SequenceMatcher(None, norm(old), norm(new)).ratio() must be
-    below 0.9 (rules out a version bump that only re-typesets punctuation
-    or whitespace without changing the wording).
+    stub/repealed articles with near-empty bodies) AND their normalised
+    forms must differ at all -- `normalise(old) != normalise(new)`.
+
+    NOT a similarity threshold, deliberately. An earlier version required
+    `SequenceMatcher(...).ratio() < 0.9` on the whole article, which threw
+    away precisely the amendment this benchmark exists to ask about: a
+    Fedlex change that swaps one figure ("180 Tagen" -> "30 Tagen") leaves
+    a multi-paragraph article ~0.98 similar to its predecessor, so the gate
+    silently dropped every one-token amendment and kept only wholesale
+    rewrites. Whether such a pair can be *scored* apart is a separate
+    question, answered separately and precisely by
+    score.discriminating_units() in make_items() -- at the unit level,
+    where a one-digit difference is visible -- not by a whole-article ratio
+    that cannot see it. All this function still rules out is a version bump
+    with no wording change at all (whitespace, soft hyphens, quote or dash
+    characters -- everything normalise() folds).
     """
     norm_old = score.normalise(old_text)
     norm_new = score.normalise(new_text)
     if len(norm_old) < _MIN_TEXT_LEN or len(norm_new) < _MIN_TEXT_LEN:
         return False
-    ratio = SequenceMatcher(None, norm_old, norm_new).ratio()
-    return ratio < _MAX_SAME_RATIO
+    return norm_old != norm_new
 
 
 def item_id(lang: str, sr_number: str, e_id: str, as_of: Any) -> str:
@@ -126,6 +134,15 @@ def make_items(
     in distractor, no answer could ever be scored as grounding in gold
     specifically, so the item would be unscoreable by design.
 
+    Every item also carries `gold_is_current`: True when the gold edition
+    has no `date_end_applicability` (it is still the edition in force
+    today). report.py splits the correct-answer share on this flag, because
+    the two halves measure different things -- an item whose gold is the
+    current wording can be answered correctly by a model that simply
+    recites today's text and ignores the date entirely, while an item whose
+    gold has been superseded cannot. A headline score that does not
+    separate them is not a measurement of date grounding.
+
     Returns (items, skipped): ITEMS is the list of item dicts that survived
     (0, 1 or 2 entries); SKIPPED is a list of
     {"kind", "reason", "as_of", "e_id", "sr_number"} dicts, one per dropped
@@ -171,6 +188,7 @@ def make_items(
             "kind": kind,
             "change_date": change_date_str,
             "question": templates.question(lang, article_number, abbr, sr_number, as_of),
+            "gold_is_current": gold_row["date_end_applicability"] is None,
             "gold": _edition(gold_row),
             "distractor": _edition(distractor_row),
             "source": SOURCE,
@@ -184,8 +202,10 @@ def make_items(
 # Task 3: DB glue
 # ---------------------------------------------------------------------------
 #
-# One SQL query, run once per language: ch_act_change (a 'modified' row in
-# that language) joined to its act (in force only -- enforcement_status = 0),
+# Two SQL queries per language -- _CHANGE_SQL, which fetches the usable
+# rows, and _AMBIGUOUS_COUNT_SQL, which counts what the first one's
+# ambiguity guard excluded (see below). _CHANGE_SQL: ch_act_change (a
+# 'modified' row in that language) joined to its act (in force only -- enforcement_status = 0),
 # the two editions either side of the change, and the article text in each
 # edition, keyed on (version_id, e_id) exactly like select_change/make_items
 # above expect. The abbreviation is resolved in the same query rather than a
@@ -198,6 +218,52 @@ def make_items(
 # ch_act_alias may hold no 'de' rows for an act with a real
 # ch_act.abbreviation, and querying it anyway would silently prefer nothing
 # over the real column.
+#
+# THE ARTICLE MUST BE UNAMBIGUOUS (_UNAMBIGUOUS). The question templates can
+# only name an article by its NUMBER ("Wie lautet Art. 7 OR ...?"), and
+# run_oracle -- like the product tool ch_get_act_article it mirrors --
+# resolves a number back to a row with `ORDER BY (e_id LIKE '%/%'), ordinal`.
+# Swiss acts routinely carry the same article number more than once inside
+# one edition: a top-level `art_7` and an `art_7` nested in a transitional-
+# provisions block (`disp_u17/art_7`). For such a number the question is
+# genuinely ambiguous -- two different texts answer it -- and whichever one
+# the item was built from, the oracle's tiebreak is a coin flip against it.
+# So two classes of change are excluded before anything else looks at them:
+#   * the change's own e_id is nested (contains "/"), i.e. it is not the row
+#     the number resolves to; and
+#   * some OTHER e_id in either edition carries the same article_number.
+# They are counted (by _AMBIGUOUS_COUNT_SQL, which applies the negation of
+# the same predicate over the same joins) under the `ambiguous_article` skip
+# reason, so build-report.json shows how much of the corpus this costs
+# rather than hiding it in a smaller `changes_considered`.
+_UNAMBIGUOUS = """
+    ch.e_id NOT LIKE '%%/%%'
+    AND NOT EXISTS (
+        SELECT 1 FROM ch_act_article x
+         WHERE x.version_id = ch.to_version_id
+           AND x.article_number = ch.article_number
+           AND x.e_id <> ch.e_id)
+    AND NOT EXISTS (
+        SELECT 1 FROM ch_act_article x
+         WHERE x.version_id = ch.from_version_id
+           AND x.article_number = ch.article_number
+           AND x.e_id <> ch.e_id)
+"""
+
+# The FROM/JOIN spine both queries below share, so the row set they filter
+# is the same one by construction rather than by two copies staying in sync.
+_CHANGE_FROM = """
+FROM ch_act_change ch
+JOIN ch_act a
+    ON a.act_id = ch.act_id AND a.enforcement_status = 0
+JOIN ch_act_version old_ver ON old_ver.version_id = ch.from_version_id
+JOIN ch_act_version new_ver ON new_ver.version_id = ch.to_version_id
+JOIN ch_act_article old_art
+    ON old_art.version_id = ch.from_version_id AND old_art.e_id = ch.e_id
+JOIN ch_act_article new_art
+    ON new_art.version_id = ch.to_version_id AND new_art.e_id = ch.e_id
+"""
+
 _CHANGE_SQL = """
 SELECT
     ch.act_id AS act_id,
@@ -216,15 +282,7 @@ SELECT
     new_ver.date_end_applicability AS new_date_end_applicability,
     new_ver.eli_consolidation_uri AS new_eli,
     new_art.text AS new_text
-FROM ch_act_change ch
-JOIN ch_act a
-    ON a.act_id = ch.act_id AND a.enforcement_status = 0
-JOIN ch_act_version old_ver ON old_ver.version_id = ch.from_version_id
-JOIN ch_act_version new_ver ON new_ver.version_id = ch.to_version_id
-JOIN ch_act_article old_art
-    ON old_art.version_id = ch.from_version_id AND old_art.e_id = ch.e_id
-JOIN ch_act_article new_art
-    ON new_art.version_id = ch.to_version_id AND new_art.e_id = ch.e_id
+""" + _CHANGE_FROM + """
 LEFT JOIN LATERAL (
     SELECT al.abbr
       FROM ch_act_alias al
@@ -233,13 +291,25 @@ LEFT JOIN LATERAL (
      LIMIT 1
 ) alias ON %(lang)s <> 'de'
 WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
+  AND (""" + _UNAMBIGUOUS + """)
 ORDER BY ch.act_id, ch.change_id
+"""
+
+# How many changes _CHANGE_SQL's ambiguity guard threw away -- the same
+# joins and the same predicate, negated, counted rather than fetched (these
+# rows carry two full article texts each and are never used).
+_AMBIGUOUS_COUNT_SQL = """
+SELECT count(*) AS n
+""" + _CHANGE_FROM + """
+WHERE ch.lang = %(lang)s AND ch.change_type = 'modified'
+  AND NOT (""" + _UNAMBIGUOUS + """)
 """
 
 # Skip reasons build() itself can add to make_items()'s own
 # "no_discriminating_unit" (see make_items' docstring).
 _SKIP_NO_ABBREVIATION = "no_abbreviation"
-_SKIP_NEAR_IDENTICAL = "near_identical_or_short"
+_SKIP_IDENTICAL = "identical_or_short"
+_SKIP_AMBIGUOUS = "ambiguous_article"
 _SKIP_CAPPED = "capped"
 
 
@@ -269,29 +339,42 @@ class BuildReport:
 
 def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
                 per_act_cap: int, rng: random.Random,
+                ambiguous: int = 0,
                 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """No I/O: given the rows _CHANGE_SQL already fetched for one language,
     run the full selection pipeline and return (items, lang_report).
 
     Pipeline: (1) drop rows with no abbreviation or that select_change()
-    rejects, recording why; (2) shuffle the survivors with RNG (the SAME
-    Random instance build() passes to every language in turn, so its state
-    carries forward across languages -- see build()'s docstring); (3) cap
-    per act (per_act_cap changes) then per language, applying the language
-    cap to CHANGES via ceil(per_lang_cap / 2) -- the most one change can
-    ever contribute is 2 items (before/after), so that many changes can
-    never itself cut a language short of its item cap; (4) call
-    make_items() on the survivors, which may drop a `before` or `after` half
-    for having no discriminating unit; (5) if the two-per-change ceiling
-    still overshoots (only possible when per_lang_cap is odd), trim the
-    tail. Items are sorted by id only at the very end, once selection is
-    finished, so id order never influences which items get kept.
+    rejects, recording why; (2) shuffle the survivors with RNG; (3) cap per
+    act (per_act_cap changes); (4) walk the survivors in shuffled order,
+    calling make_items() on each -- which may drop a `before` or `after`
+    half for having no discriminating unit -- and STOP as soon as the ITEM
+    count reaches per_lang_cap. The cap is on items, so the loop must be
+    driven by the item count: a change yields 1 or 2 items, never a fixed
+    number, and an earlier version that capped CHANGES at
+    ceil(per_lang_cap / 2) left the language short by one item for every
+    change whose `before` half was dropped. Every change the loop never
+    reached, plus any per-act overflow, is counted as `capped`; the tail is
+    trimmed if the last change overshot. Items are sorted by id only at the
+    very end, once selection is finished, so id order never influences
+    which items get kept.
+
+    AMBIGUOUS is the count build() got from _AMBIGUOUS_COUNT_SQL: changes
+    the SQL already excluded for resolving to more than one article text
+    (see _UNAMBIGUOUS). It is added to both `changes_considered` and the
+    `ambiguous_article` skip count, so `changes_considered` stays "every
+    'modified' change on an in-force act in this language" and the skip
+    reasons account for the difference, rather than the exclusion showing
+    up as a mysteriously smaller total.
     """
-    changes_considered = len(rows)
+    changes_considered = len(rows) + ambiguous
     skipped_counts: dict[str, int] = {}
 
     def _bump(reason: str, n: int = 1) -> None:
         skipped_counts[reason] = skipped_counts.get(reason, 0) + n
+
+    if ambiguous:
+        _bump(_SKIP_AMBIGUOUS, ambiguous)
 
     eligible: list[Mapping[str, Any]] = []
     for row in rows:
@@ -300,7 +383,7 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
             _bump(_SKIP_NO_ABBREVIATION)
             continue
         if not select_change(row["old_text"], row["new_text"]):
-            _bump(_SKIP_NEAR_IDENTICAL)
+            _bump(_SKIP_IDENTICAL)
             continue
         eligible.append(row)
 
@@ -319,14 +402,12 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
         act_capped_rows.append(row)
     capped = len(shuffled) - len(act_capped_rows)
 
-    max_changes = math.ceil(per_lang_cap / 2) if per_lang_cap > 0 else 0
-    lang_capped_rows = act_capped_rows[:max_changes]
-    capped += len(act_capped_rows) - len(lang_capped_rows)
-    if capped:
-        _bump(_SKIP_CAPPED, capped)
-
     items: list[dict[str, Any]] = []
-    for row in lang_capped_rows:
+    consumed = 0
+    for row in act_capped_rows:
+        if per_lang_cap and len(items) >= per_lang_cap:
+            break
+        consumed += 1
         change_row = {
             "act_id": row["act_id"],
             "sr_number": row["sr_number"],
@@ -353,9 +434,15 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
         for s in row_skipped:
             _bump(s["reason"])
 
+    # Only changes the loop never reached are "capped" -- everything it did
+    # consume is accounted for by the items it produced or by its own skip
+    # reasons.
+    capped += len(act_capped_rows) - consumed
     if per_lang_cap and len(items) > per_lang_cap:
-        _bump(_SKIP_CAPPED, len(items) - per_lang_cap)
+        capped += len(items) - per_lang_cap
         items = items[:per_lang_cap]
+    if capped:
+        _bump(_SKIP_CAPPED, capped)
 
     items.sort(key=lambda it: it["id"])
 
@@ -400,8 +487,11 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
             with conn.cursor() as cur:
                 cur.execute(_CHANGE_SQL, {"lang": lang})
                 rows = cur.fetchall()
+                cur.execute(_AMBIGUOUS_COUNT_SQL, {"lang": lang})
+                ambiguous = cur.fetchone()["n"]
             rng = random.Random(f"{seed}:{lang}")
-            items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng)
+            items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng,
+                                             ambiguous=ambiguous)
             per_lang_report[lang] = lang_report
 
             out_file = out_path / f"bench-{lang}.jsonl"

@@ -2,6 +2,7 @@
 formatting and item construction, no DB, no I/O.
 """
 import datetime
+import random
 
 from chpipe.bench import build, templates
 
@@ -106,15 +107,32 @@ def test_select_change_rejects_short_text():
     assert build.select_change(OLD_TEXT, "too short") is False
 
 
-def test_select_change_rejects_near_identical_text():
-    # Long enough, but only whitespace differs.
+def test_select_change_rejects_whitespace_only_change():
+    # Long enough, but only whitespace differs -- normalise() collapses it
+    # away, so the two texts are the same string and there is no change.
     padding = " ".join(["Diese Bestimmung regelt die Kündigungsfristen im Arbeitsverhältnis."] * 3)
-    almost_same = padding + "  "
-    assert build.select_change(padding, almost_same) is False
+    assert build.select_change(padding, padding + "  ") is False
+    assert build.select_change(padding, padding.replace(" ", "   ")) is False
+    assert build.select_change(padding, "\n".join(padding.split(" "))) is False
 
 
 def test_select_change_accepts_a_real_change():
     assert build.select_change(OLD_TEXT, NEW_TEXT) is True
+
+
+def test_select_change_accepts_a_one_number_change():
+    """The headline case: an amendment that swaps a single figure and
+    leaves the rest of the paragraph untouched. A SequenceMatcher ratio
+    gate would score this ~0.98 and throw it away; it is exactly the item
+    this benchmark exists to ask about."""
+    new_text = OLD_TEXT.replace("180 Tagen", "30 Tagen")
+    assert new_text != OLD_TEXT
+    assert build.select_change(OLD_TEXT, new_text) is True
+
+
+def test_select_change_accepts_a_one_character_change():
+    new_text = OLD_TEXT.replace("drei Monate", "zwei Monate")
+    assert build.select_change(OLD_TEXT, new_text) is True
 
 
 # --- make_items ---------------------------------------------------------------
@@ -218,3 +236,82 @@ def test_make_items_drops_item_with_no_discriminating_unit():
     assert skipped[0]["kind"] == "before"
     assert skipped[0]["reason"] == "no_discriminating_unit"
     assert skipped[0]["as_of"] == "2020-12-31"
+
+
+# --- _build_lang: the language cap counts ITEMS, not changes ----------------
+#
+# A change contributes at most two items, but often only one (the other
+# half loses its discriminating unit -- see the test above). Capping the
+# number of CHANGES at ceil(per_lang_cap / 2) therefore leaves the cap
+# unfilled whenever that happens; the loop must keep consuming eligible
+# changes until the ITEM count reaches the cap.
+
+_P1 = (
+    "1 Diese Bestimmung regelt die Kündigungsfristen im "
+    "Arbeitsverhältnis nach den gesetzlichen Vorgaben im Einzelnen."
+)
+_P2 = (
+    "2 Die Kündigungsfrist beträgt drei Monate, sofern nichts "
+    "anderes vereinbart wurde zwischen den beiden Vertragsparteien."
+)
+
+
+def _row(act_id: int, e_id: str, old_text: str, new_text: str) -> dict:
+    """One _CHANGE_SQL-shaped row, enough for _build_lang()."""
+    return {
+        "act_id": act_id,
+        "sr_number": str(200 + act_id),
+        "e_id": e_id,
+        "article_number": e_id.split("_")[-1],
+        "date_applicability": datetime.date(2021, 1, 1),
+        "abbreviation": "OR",
+        "old_version_id": 100 + act_id,
+        "old_date_applicability": datetime.date(2015, 1, 1),
+        "old_date_end_applicability": datetime.date(2020, 12, 31),
+        "old_eli": f"https://x/{act_id}/old",
+        "old_text": old_text,
+        "new_version_id": 200 + act_id,
+        "new_date_applicability": datetime.date(2021, 1, 1),
+        "new_date_end_applicability": None,
+        "new_eli": f"https://x/{act_id}/new",
+        "new_text": new_text,
+    }
+
+
+def _one_item_row(act_id: int) -> dict:
+    """A change that yields exactly ONE item: the new edition only adds a
+    paragraph, so `before` has no gold-only unit and is dropped."""
+    p3 = (
+        f"3 Sonderregelung Nummer {act_id} für befristete "
+        "Arbeitsverhältnisse mit außerordentlicher fristloser Kündigung."
+    )
+    return _row(act_id, f"art_{act_id}", _P1 + "\n" + _P2,
+                _P1 + "\n" + _P2 + "\n" + p3)
+
+
+def _two_item_row(act_id: int) -> dict:
+    return _row(act_id, f"art_{act_id}", OLD_TEXT, NEW_TEXT)
+
+
+def test_build_lang_fills_items_up_to_the_language_cap():
+    rows = [_one_item_row(i) for i in (1, 2, 3)]
+    items, lang_report = build._build_lang(
+        rows, "de", per_lang_cap=3, per_act_cap=50, rng=random.Random(0))
+
+    # Every change yields one item, so filling a cap of 3 needs all three
+    # changes -- a ceil(3/2) = 2 change budget would stop at 2 items.
+    assert len(items) == 3
+    assert lang_report["items"] == 3
+    assert all(item["kind"] == "after" for item in items)
+    assert lang_report["skipped"]["no_discriminating_unit"] == 3
+    assert "capped" not in lang_report["skipped"]
+
+
+def test_build_lang_counts_only_changes_beyond_the_cap_as_capped():
+    rows = [_two_item_row(i) for i in (1, 2, 3)]
+    items, lang_report = build._build_lang(
+        rows, "de", per_lang_cap=4, per_act_cap=50, rng=random.Random(0))
+
+    # Two changes fill the cap of 4 exactly; only the third is unused.
+    assert len(items) == 4
+    assert lang_report["skipped"]["capped"] == 1

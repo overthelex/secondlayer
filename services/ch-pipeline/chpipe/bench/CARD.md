@@ -66,10 +66,17 @@ pair only if all of the following hold:
 - **Both texts are substantial.** After normalisation (see Scorer, below),
   each edition's article text must be at least 200 characters. This rules
   out stub or largely-repealed articles with near-empty bodies.
-- **The texts actually differ.** `difflib.SequenceMatcher` on the two
-  normalised texts must score below 0.9. This rules out a "change" that is
-  only a re-typesetting of punctuation or whitespace, not a change in
-  wording.
+- **The texts actually differ.** The two normalised texts must not be the
+  same string. This rules out a "change" that is only a re-typesetting of
+  whitespace, soft hyphens or quote/dash characters, and nothing else.
+  Deliberately **not** a similarity threshold: an earlier version of this
+  rule required a `difflib.SequenceMatcher` ratio below 0.9, which threw
+  away precisely the amendment CH-PiT exists to ask about — a change that
+  swaps one figure leaves a multi-paragraph article ~0.98 similar to its
+  predecessor, so the gate kept only wholesale rewrites and silently
+  dropped every one-token amendment. Whether the pair can be *scored* apart
+  is a separate question, answered separately and at the unit level by the
+  discriminating-unit rule below, where a one-digit difference is visible.
 - **The act is in force.** `ch_act.enforcement_status = 0`. An act that has
   been repealed entirely is excluded — the benchmark asks about the live
   body of law, not archived history.
@@ -80,6 +87,16 @@ pair only if all of the following hold:
   no abbreviation for that language is skipped (`no_abbreviation`) — the
   question templates always name the act by its abbreviation and SR number,
   never by its full title.
+- **The article number is unambiguous.** The question can only name an
+  article by its number ("Wie lautet Art. 7 OR …?"), and a system resolving
+  that number back to a text has to pick one row. Swiss acts routinely
+  carry the same article number twice inside one edition — a top-level
+  `art_7` and an `art_7` nested in a transitional-provisions block
+  (`disp_u17/art_7`). For such a number the question is genuinely
+  ambiguous: two different texts answer it. Changes on a nested `e_id` (one
+  containing `/`), and changes on any number that some other `e_id` in
+  either edition also carries, are excluded and counted as
+  `ambiguous_article`.
 - **The edition pair has at least one discriminating unit.** Splitting both
   texts into paragraph- or sentence-level units (see Scorer), the edition
   valid on the query date must contain at least one unit that is *not* also
@@ -102,7 +119,10 @@ rule above, so a change can contribute 0, 1 or 2 items.
 
 **Caps and sampling.** At most 50 changes are kept per act (so one heavily
 amended act like the Code of Obligations cannot dominate the sample), and at
-most 5,000 items per language in total. Selection above the caps is random,
+most 5,000 items per language in total. The language cap is on ITEMS, and
+the builder consumes eligible changes until it is reached — a change yields
+one item or two, never a fixed number, so budgeting changes instead would
+leave the cap unfilled. Selection above the caps is random,
 seeded per language as `random.Random(f"{seed}:{lang}")` with
 `seed = 20260825` — each language's sample depends only on its own seed and
 its own eligible-change set, never on which other languages were built in
@@ -110,10 +130,13 @@ the same run or in what order. This makes `bench-fr.jsonl` byte-identical
 regardless of whether French was built alongside German and Italian or on
 its own.
 
-Every skip reason above (`no_abbreviation`, `near_identical_or_short`,
-`no_discriminating_unit`, plus `capped` for anything trimmed by the two
-caps) is counted in `build-report.json`, per language, alongside
-`changes_considered`, `selected` and `items`.
+Every skip reason above (`no_abbreviation`, `identical_or_short`,
+`ambiguous_article`, `no_discriminating_unit`, plus `capped` for anything
+left unused by the two caps) is counted in `build-report.json`, per
+language, alongside `changes_considered`, `selected` and `items`.
+`changes_considered` is every `modified` change on an in-force act in that
+language, including the ones excluded in SQL, so the skip counts account
+for the whole difference rather than the exclusions shrinking the total.
 
 ## Fields
 
@@ -132,6 +155,7 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 | `kind` | string | `before` or `after` — which side of the change `as_of` falls on |
 | `change_date` | string (ISO date) | the `ch_act_change` row's `date_applicability` this item pair is derived from |
 | `question` | string | the rendered natural-language question, in `lang` |
+| `gold_is_current` | boolean | true when `gold.date_end_applicability` is null, i.e. the gold edition is still the wording in force today. An item where this is true can be answered correctly by a system that simply recites the current text and ignores the date; only the `false` items measure point-in-time grounding. The report splits the correct-answer share on this flag |
 | `gold` | object | the edition valid on `as_of` — see below |
 | `distractor` | object | the adjacent edition (the other side of the same change) — see below |
 | `source` | string | always `"Fedlex (fedlex.admin.ch)"` |
@@ -194,6 +218,30 @@ length matches it with `SequenceMatcher.ratio() >= 0.92`. This tolerates a
 model re-typing a word slightly wrong, a stray OCR-style slip, or a typo,
 while still rejecting a paragraph that is merely topically similar.
 
+**Cost of the exact-match rule.** Switching fuzzy matching off for
+discriminating units is what makes the one-number case scoreable at all,
+and it is not free. Four consequences to read a CH-PiT number with:
+
+- **One character wrong in a discriminating unit means "not found."** An
+  answer that gets the amended figure exactly right but mistypes a word
+  elsewhere in the *same* paragraph scores that unit as missed. There is no
+  partial credit inside a discriminating unit.
+- **A long single-paragraph article is effectively a verbatim-only item.**
+  Units are paragraphs; an article that is one long paragraph is one long
+  unit, and if that unit is discriminating, the whole item can only be
+  scored `grounded_correct` by an answer that reproduces the entire
+  paragraph character-for-character after normalisation. Such items measure
+  verbatim recall as much as they measure date grounding.
+- **Answers over 20,000 characters get substring matching only.** Window
+  matching is skipped above that length (a bounded-calculation trade — see
+  the performance cap in `score.py`), so a runaway answer loses
+  near-verbatim credit even on non-discriminating units.
+- **A correct answer in the wrong language scores `ungrounded`.** Units are
+  compared against the item's own `gold.text`, which is in the item's
+  `lang`. A model that answers the German question with a correct French
+  quotation of the same article shares no units with either candidate and
+  is scored as grounding in neither — not as correct.
+
 **Labels.** `grounded_correct` requires `gold_coverage >= 0.6` and
 `distractor_coverage <= 0.2`. `grounded_wrong_version` is the mirror:
 `distractor_coverage >= 0.6` and `gold_coverage <= 0.2`. Everything else —
@@ -241,6 +289,14 @@ tokens. Every Bedrock call costs money; `run_llm.py` refuses to run without
 `CHPIPE_BENCH_CONFIRM=1`, printing a cost estimate first — see the README's
 bench section for the exact commands.
 
+**Reading the report.** `report.py` reduces a run to one row per (language,
+system, `kind`) plus an `all` row per (language, system), and reports on
+each row the label shares, the mean coverages, an `errors` count (result
+lines the system failed on — a Bedrock exception, or an oracle resolution
+step that came up empty), and the correct-answer share split on
+`gold_is_current`. Read the `gold_is_current = false` share, not the
+headline `score`, as the point-in-time grounding number.
+
 ## Known limits
 
 - **Machine-readable Fedlex editions only, mostly from 2020 onward.**
@@ -268,6 +324,21 @@ bench section for the exact commands.
   `change_date` fields are real dates read from `ch_act_version` and
   `ch_act_change` — 2021-01-01 appearing in an item is a real change date,
   never a stand-in for "unknown."
+- **Long unsegmented articles are near-unscoreable in practice.** The
+  scorer works on paragraph units. An article Fedlex publishes as a single
+  unnumbered block becomes one unit, so `grounded_correct` demands a
+  character-exact reproduction of the whole thing (see Scorer, "Cost of the
+  exact-match rule"). Such items are kept — they are real questions — but a
+  system's score on them reflects verbatim recall more than date
+  resolution, and a per-item length breakdown is worth looking at before
+  reading a headline number as a grounding measurement.
+- **Roughly half the items have a still-current gold edition.** The `after`
+  half of a pair whose change is the most recent one asks for wording that
+  is also today's wording, and reciting the current text answers it
+  correctly with no date reasoning at all. This is why every item carries
+  `gold_is_current` and the report splits the correct-answer share on it;
+  the `gold_is_current = false` share is the one that measures what the
+  benchmark is named after.
 - **No cantonal law.** CH-PiT covers only federal acts (the corpus this
   pipeline builds from Fedlex's federal SR collection); cantonal statutes
   are out of scope entirely.
@@ -277,9 +348,19 @@ bench section for the exact commands.
 From `services/ch-pipeline`:
 
 ```
+# 1. Build the items.
 python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
+
+# 2. Oracle. Must come back 100% grounded_correct before step 3 spends anything.
 python -m chpipe.bench.run_oracle --items /data/ch-corpus/bench --out /data/ch-corpus/bench
+
+# 3a. Bedrock baselines, DRY RUN: prints a JSON cost estimate, calls nothing, exits 2.
+python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+# 3b. Only once that estimate looks reasonable, run for real.
 CHPIPE_BENCH_CONFIRM=1 python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+# 4. Report.
 python -m chpipe.bench.report --results /data/ch-corpus/bench/results-oracle.jsonl /data/ch-corpus/bench/results-llm-haiku-4-5.jsonl /data/ch-corpus/bench/results-llm-sonnet-4-6.jsonl --items /data/ch-corpus/bench --out /data/ch-corpus/bench/report.json
 ```
 

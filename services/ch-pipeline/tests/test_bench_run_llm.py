@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from chpipe.bench import run_llm
+from chpipe.bench import report, run_llm
 
 # Same fixture text as test_bench_oracle.py / test_bench_build_db.py:
 # paragraph 1 unchanged, paragraphs 2/3 materially reworded, so score.score()
@@ -490,3 +490,137 @@ def test_rerun_after_crash_skips_done_items_and_only_calls_client_for_the_rest(t
     report_json = json.loads((out_dir / "llm-run-report.json").read_text())
     assert report_json["actual"][run_llm.HAIKU]["answered"] == 3
     assert report_json["actual"][run_llm.HAIKU]["errors"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Resume: errored lines, partial lines, and the report's shape
+# ---------------------------------------------------------------------------
+
+class ErrorThenSuccessClient:
+    """Raises on its first call for a question, answers on every later one."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls: list[str] = []
+
+    def converse(self, modelId, system, messages, inferenceConfig):
+        question = messages[0]["content"][0]["text"]
+        self.calls.append(question)
+        if self.calls.count(question) == 1:
+            raise RuntimeError("boom")
+        return {
+            "output": {"message": {"content": [{"text": self.answers[question]}]}},
+            "usage": {"inputTokens": 5, "outputTokens": 5},
+        }
+
+
+def test_done_ids_ignores_errored_lines(tmp_path):
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "ok", "verdict": {}}) + "\n"
+        + json.dumps({"id": "bad", "error": "RuntimeError: boom"}) + "\n",
+        encoding="utf-8")
+    assert run_llm._done_ids(f) == {"ok"}
+
+
+def test_done_ids_tolerates_a_truncated_last_line(tmp_path):
+    f = tmp_path / "results.jsonl"
+    f.write_text(
+        json.dumps({"id": "ok", "verdict": {}}) + "\n"
+        + '{"id": "half", "ans',
+        encoding="utf-8")
+    assert run_llm._done_ids(f) == {"ok"}
+
+
+def test_a_truncated_last_line_is_dropped_before_appending(tmp_path):
+    """A process killed mid-write leaves half a JSON object with no trailing
+    newline. Appending after it would glue the next result onto the stump and
+    corrupt both."""
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    _write_items(items_dir, "de", [_item("i1", question="q1")])
+
+    out_dir.mkdir(parents=True)
+    results = out_dir / "results-llm-haiku-4-5.jsonl"
+    results.write_text(
+        json.dumps({"id": "old", "verdict": {}}) + "\n" + '{"id": "half", "ans',
+        encoding="utf-8")
+
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                sample_per_lang=1, client=FakeClient(answers={"q1": GOLD_TEXT}),
+                confirm=True)
+
+    lines = results.read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["id"] for line in lines] == ["old", "i1"]
+
+
+def test_an_errored_item_is_re_asked_on_resume_and_the_new_line_supersedes(tmp_path):
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    _write_items(items_dir, "de", [_item("i1", question="q1")])
+
+    client = ErrorThenSuccessClient(answers={"q1": GOLD_TEXT})
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                sample_per_lang=1, client=client, confirm=True)
+    first = _read_jsonl(out_dir / "results-llm-haiku-4-5.jsonl")
+    assert len(first) == 1 and "error" in first[0]
+
+    run_llm.run(items_dir, out_dir, langs=("de",), models=(run_llm.HAIKU,),
+                sample_per_lang=1, client=client, confirm=True)
+    both = _read_jsonl(out_dir / "results-llm-haiku-4-5.jsonl")
+
+    assert client.calls == ["q1", "q1"]  # re-asked, not skipped
+    assert len(both) == 2
+    assert "error" in both[0] and "error" not in both[1]
+
+    # The run report counts the item once, and it is no longer an error.
+    report_json = json.loads((out_dir / "llm-run-report.json").read_text())
+    assert report_json["actual"][run_llm.HAIKU]["answered"] == 1
+    assert report_json["actual"][run_llm.HAIKU]["errors"] == 0
+
+    # And so does report.summarise(), which keeps the last error-free line.
+    summary = report.summarise(both, {"i1": _item("i1")})
+    assert summary["de"]["haiku-4-5"]["all"]["n"] == 1
+    assert summary["de"]["haiku-4-5"]["all"]["errors"] == 0
+    assert summary["de"]["haiku-4-5"]["all"]["grounded_correct"] == 1
+
+
+def test_run_report_actual_does_not_mix_models_with_a_scalar_total(tmp_path):
+    items_dir = tmp_path / "items"
+    out_dir = tmp_path / "out"
+    _write_items(items_dir, "de", [_item("i1", question="q1")])
+
+    run_llm.run(items_dir, out_dir, langs=("de",),
+                models=(run_llm.HAIKU, run_llm.SONNET), sample_per_lang=1,
+                client=FakeClient(answers={"q1": GOLD_TEXT}), confirm=True)
+
+    report_json = json.loads((out_dir / "llm-run-report.json").read_text())
+    actual = report_json["actual"]
+    assert set(actual) == {run_llm.HAIKU, run_llm.SONNET}
+    assert all(isinstance(v, dict) for v in actual.values())
+    assert report_json["actual_total_usd"] == pytest.approx(
+        actual[run_llm.HAIKU]["usd"] + actual[run_llm.SONNET]["usd"])
+
+
+# ---------------------------------------------------------------------------
+# An unpriced model
+# ---------------------------------------------------------------------------
+
+def test_estimate_names_the_unpriced_model_and_how_to_add_it():
+    with pytest.raises(ValueError) as excinfo:
+        run_llm.estimate([_item("i1")], ("eu.anthropic.claude-not-priced-v9",))
+    message = str(excinfo.value)
+    assert "eu.anthropic.claude-not-priced-v9" in message
+    assert "_PRICES" in message
+
+
+def test_an_unpriced_model_fails_on_the_gate_path_before_any_client_call(tmp_path):
+    items_dir = tmp_path / "items"
+    _write_items(items_dir, "de", [_item("i1", question="q1")])
+    client = FakeClient(answers={"q1": GOLD_TEXT})
+
+    with pytest.raises(ValueError):
+        run_llm.run(items_dir, tmp_path / "out", langs=("de",),
+                    models=("eu.anthropic.claude-not-priced-v9",),
+                    sample_per_lang=1, client=client, confirm=True)
+    assert client.calls == []

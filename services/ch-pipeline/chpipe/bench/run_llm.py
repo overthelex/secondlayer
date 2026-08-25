@@ -43,17 +43,33 @@ throttled item needed.
 Crash safety / resumability: a real run has already paid Bedrock for every
 answer it received before a crash, so results are never held in memory and
 written once at the end -- each `results-llm-{model_short}.jsonl` is opened
-in append mode and every line is written and flushed the moment
-`_answer_item` returns it (see run()). Re-running with the same `out_dir`
-reads whatever ids are already in that file first and skips those items
-entirely -- no client call, no rewritten line -- so an interrupted run
-(Ctrl-C, an OOM kill, a crashed host) resumes rather than re-paying for
-answers it already has. `llm-run-report.json` is written after every model
-finishes (not only once at the very end) for the same reason, and its
-`actual` counts are always recomputed from the full contents of each
-results file -- including lines a previous, interrupted run already wrote
--- so a resumed run's report reflects the true total, not just this
-invocation's delta.
+in append mode and every line is written (as one `write()`, object plus
+newline together) and flushed the moment `_answer_item` returns it (see
+run()). Re-running with the same `out_dir` reads whatever ids are already
+in that file first and skips those items entirely -- no client call, no
+rewritten line -- so an interrupted run (Ctrl-C, an OOM kill, a crashed
+host) resumes rather than re-paying for answers it already has.
+
+Three details make that resume safe rather than approximately safe:
+
+  * An item whose line carries an `error` is NOT treated as done. It is
+    re-asked, and the new line is appended after the old one; readers
+    (report.summarise, and run()'s own `actual` counts) keep the last
+    error-free line per id, so the retry supersedes the failure with no
+    in-place rewriting of a file the run is still appending to.
+  * A kill mid-`write()` leaves a partial JSON object with no trailing
+    newline. `_read_jsonl_file` drops an unparseable FINAL line (and only a
+    final one -- anywhere else is corruption, not truncation), and
+    `_truncate_partial_line` cuts the file back to its last newline before
+    the append handle is opened, so the next result cannot be glued onto
+    the stump.
+  * `llm-run-report.json` is written after every model finishes, not only
+    once at the very end, and its `actual` counts are recomputed from the
+    full contents of each results file -- including lines a previous,
+    interrupted run wrote -- so a resumed run's report reflects the true
+    total, not just this invocation's delta. `answered`/`errors` count
+    items (deduped by id); the token sums stay over every line, because a
+    failed attempt was billed too.
 """
 from __future__ import annotations
 
@@ -97,6 +113,28 @@ _PRICES: dict[str, dict[str, float]] = {
     SONNET: {"in": 3.00, "out": 15.00},
 }
 
+
+def _price(model: str) -> dict[str, float]:
+    """_PRICES[MODEL], or a ValueError naming the model and what to do.
+
+    `--models` takes arbitrary inference-profile ids, so a typo or a model
+    added to Bedrock but not to this table is routine. A bare KeyError with
+    a 60-character profile id as its whole message is not enough to act on,
+    and on the estimate path it would abort the one step whose job is to
+    tell the operator what the run costs.
+    """
+    price = _PRICES.get(model)
+    if price is None:
+        raise ValueError(
+            f"no price for model {model!r}. Add it to _PRICES in "
+            f"chpipe/bench/run_llm.py as "
+            f"{{{model!r}: {{'in': <USD per 1M input tokens>, "
+            f"'out': <USD per 1M output tokens>}}}}, using the eu-central-1 "
+            f"Bedrock price for that inference profile."
+        )
+    return price
+
+
 _SYSTEM_PROMPT = (
     "You are a Swiss legal database. Answer with the verbatim text of the "
     "requested article as in force on the given date, in the language of "
@@ -138,11 +176,14 @@ class LlmRunReport:
     """run()'s return value.
 
     `confirmed` is False on the cost-gate path (no client call happened,
-    `actual`/`started`/`finished` are all None) and True once a run actually
-    called the client. `estimate` is always present -- computed before the
-    gate check either way. `sample_size` is the number of items the run
-    would answer (gated) or did answer (confirmed), summed across languages
-    and independent of `models` (each model answers the same sample).
+    `actual`/`actual_total_usd`/`started`/`finished` are all None) and True
+    once a run actually called the client. `estimate` is always present --
+    computed before the gate check either way. `actual` maps model id to
+    that model's counts and spend, and nothing else -- the combined spend is
+    `actual_total_usd`, a sibling rather than an extra key inside `actual`.
+    `sample_size` is the number of items the run would answer (gated) or did
+    answer (confirmed), summed across languages and independent of `models`
+    (each model answers the same sample).
     """
 
     confirmed: bool
@@ -151,6 +192,7 @@ class LlmRunReport:
     started: str | None
     finished: str | None
     sample_size: int
+    actual_total_usd: float | None = None
 
 
 def _read_items_by_lang(items_path: pathlib.Path, langs: tuple[str, ...],
@@ -266,7 +308,7 @@ def estimate(items: list[dict[str, Any]], models: tuple[str, ...]) -> dict[str, 
         for item in items:
             input_tokens += _tokens(system_chars + len(item["question"]))
             output_tokens += _tokens(len(item["gold"]["text"])) + _OUTPUT_TOKEN_OVERHEAD
-        price = _PRICES[model]
+        price = _price(model)
         usd = (input_tokens / 1_000_000 * price["in"]
                + output_tokens / 1_000_000 * price["out"])
         result[model] = {
@@ -385,29 +427,76 @@ def _answer_item(client: Any, model_id: str, model_short: str,
 
 
 def _read_jsonl_file(path: pathlib.Path) -> list[dict[str, Any]]:
+    """Every parseable JSON object in PATH.
+
+    A process killed mid-`write()` leaves a partial object as the file's
+    last line, so an unparseable FINAL line is dropped with a warning
+    rather than raised on -- that is the expected shape of a crashed run,
+    and refusing to read the file would strand every answer already paid
+    for above it. An unparseable line anywhere else still raises: that is
+    corruption, not truncation.
+    """
     lines: list[dict[str, Any]] = []
     if not path.exists():
         return lines
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                lines.append(json.loads(line))
+    raw = path.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(raw):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            lines.append(json.loads(line))
+        except json.JSONDecodeError:
+            if i == len(raw) - 1:
+                log.warning("%s: dropping a truncated final line (%d chars)",
+                            path, len(line))
+                break
+            raise
     return lines
 
 
-def _done_ids(results_file: pathlib.Path) -> set[str]:
-    """Ids already answered and on disk in RESULTS_FILE, from a previous
-    (possibly interrupted) run -- see run()'s docstring on resumability.
+def _truncate_partial_line(path: pathlib.Path) -> None:
+    """Cut PATH back to its last complete line, if it does not end in a
+    newline. Without this, appending the next result would glue it onto the
+    stump a crashed write left behind and corrupt both lines.
     """
-    return {line["id"] for line in _read_jsonl_file(results_file)}
+    if not path.exists():
+        return
+    data = path.read_bytes()
+    if not data or data.endswith(b"\n"):
+        return
+    cut = data.rfind(b"\n")
+    log.warning("%s: truncating %d trailing bytes with no newline",
+                path, len(data) - (cut + 1))
+    path.write_bytes(data[:cut + 1] if cut >= 0 else b"")
+
+
+def _done_ids(results_file: pathlib.Path) -> set[str]:
+    """Ids in RESULTS_FILE that are ANSWERED -- error-free -- from a
+    previous (possibly interrupted) run; see run()'s docstring on
+    resumability.
+
+    An item whose only line carries an `error` is deliberately NOT here: a
+    throttle that outlasted its retries, or a transient Bedrock failure, is
+    worth one more attempt on the next run, and re-asking it costs the
+    price of one item. The new line is appended after the old one, and
+    report.summarise() keeps the last error-free line per id (see its
+    module docstring), so the retry supersedes the failure without anything
+    having to rewrite the file in place.
+    """
+    return {line["id"] for line in _read_jsonl_file(results_file)
+            if "error" not in line}
 
 
 def _write_report(out_path: pathlib.Path, est: dict[str, Any], actual: dict[str, Any],
-                  started: str, finished: str) -> None:
+                  total_usd: float, started: str, finished: str) -> None:
+    # `total_usd` is a sibling of `actual`, not a key inside it: `actual`
+    # maps model id -> per-model dict, and a float sitting among those made
+    # every consumer special-case one key before iterating models.
     report_dict = {
         "estimate": est,
         "actual": actual,
+        "actual_total_usd": total_usd,
         "started": started,
         "finished": finished,
     }
@@ -432,18 +521,24 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
     code 2.
 
     Confirmed path -- crash-safe and resumable (see module docstring): for
-    each model, `{out_dir}/results-llm-{model_short}.jsonl` is opened in
-    append mode; any item whose id is already in that file (from a prior
-    run) is skipped without calling CLIENT; every other item is answered
-    and its line written and flushed immediately, so a crash mid-model
-    (including one that propagates straight out of this function, e.g.
-    Ctrl-C / KeyboardInterrupt, which is not caught anywhere in this call
-    chain) leaves every already-answered item safely on disk. Calling
-    run() again with the same `out_dir` picks up exactly where it left
-    off. `{out_dir}/llm-run-report.json` is (re)written after every model
+    each model, `{out_dir}/results-llm-{model_short}.jsonl` is trimmed of
+    any partial trailing line and opened in append mode; any item already
+    ANSWERED in that file (an error-free line, from a prior run) is skipped
+    without calling CLIENT, while an item whose only line is an error is
+    re-asked; every answered item's line is written and flushed
+    immediately, so a crash mid-model (including one that propagates
+    straight out of this function, e.g. Ctrl-C / KeyboardInterrupt, which
+    is not caught anywhere in this call chain) leaves every already-
+    answered item safely on disk. Calling run() again with the same
+    `out_dir` picks up exactly where it left off.
+    `{out_dir}/llm-run-report.json` is (re)written after every model
     finishes, not only once at the end, with `actual` recomputed from each
     results file's full contents -- so the report is accurate even if the
     run is later interrupted before the next model starts.
+
+    Every model in MODELS is priced before anything is spent (estimate()
+    calls _price()), so an unpriced model id fails the whole run at the
+    gate rather than after the first model's answers are already paid for.
 
     NOW fixes `started` (and every `finished` this run writes) when given
     (tests); production callers (main()) leave it None and each timestamp
@@ -468,25 +563,38 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
         model_short = _MODEL_SHORT.get(model, model)
         out_file = out_path / RESULTS_TEMPLATE.format(model_short=model_short)
 
+        _truncate_partial_line(out_file)
         skip_ids = _done_ids(out_file)
         with out_file.open("a", encoding="utf-8") as f:
             for item in sample:
                 if item["id"] in skip_ids:
                     continue
                 result = _answer_item(client, model, model_short, item)
-                f.write(json.dumps(result, ensure_ascii=False))
-                f.write("\n")
+                # One write, not two: a kill between a bare object and its
+                # newline is the truncation _truncate_partial_line has to
+                # repair on the next run, and there is no reason to widen
+                # that window on purpose.
+                f.write(json.dumps(result, ensure_ascii=False) + "\n")
                 f.flush()
 
         # Recomputed from the full file, not just this call's new lines --
         # a resumed run must report the true total (see docstring above).
         all_results = _read_jsonl_file(out_file)
-        answered = sum(1 for r in all_results if "error" not in r)
-        errors = sum(1 for r in all_results if "error" in r)
+        # answered/errors count ITEMS, so a re-asked item that errored on an
+        # earlier run and succeeded on this one is one answered item, not one
+        # answered plus one error. Token sums stay over every line: those are
+        # money actually spent, and the failed attempt was billed too.
+        last_by_id: dict[Any, dict[str, Any]] = {}
+        for r in all_results:
+            previous = last_by_id.get(r["id"])
+            if previous is None or "error" not in r or "error" in previous:
+                last_by_id[r["id"]] = r
+        answered = sum(1 for r in last_by_id.values() if "error" not in r)
+        errors = sum(1 for r in last_by_id.values() if "error" in r)
         input_tokens_sum = sum(r.get("input_tokens", 0) for r in all_results)
         output_tokens_sum = sum(r.get("output_tokens", 0) for r in all_results)
 
-        price = _PRICES[model]
+        price = _price(model)
         usd = (input_tokens_sum / 1_000_000 * price["in"]
                + output_tokens_sum / 1_000_000 * price["out"])
         total_usd += usd
@@ -498,17 +606,17 @@ def run(items_dir: str | pathlib.Path, out_dir: str | pathlib.Path,
             "output_tokens": output_tokens_sum,
             "usd": usd,
         }
-        actual["total_usd"] = total_usd
 
         finished_so_far = (_iso(now) if now is not None
                            else _iso(datetime.datetime.now(datetime.timezone.utc)))
-        _write_report(out_path, est, actual, started, finished_so_far)
+        _write_report(out_path, est, actual, total_usd, started, finished_so_far)
 
     finished = (_iso(now) if now is not None
                else _iso(datetime.datetime.now(datetime.timezone.utc)))
-    _write_report(out_path, est, actual, started, finished)
+    _write_report(out_path, est, actual, total_usd, started, finished)
 
     return LlmRunReport(confirmed=True, estimate=est, actual=actual,
+                         actual_total_usd=total_usd,
                          started=started, finished=finished, sample_size=len(sample))
 
 

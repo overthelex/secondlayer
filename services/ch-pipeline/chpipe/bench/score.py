@@ -209,9 +209,19 @@ def normalise(s: str) -> str:
 
     NFKC (folds compatibility variants, e.g. full-width Latin letters, to
     their canonical form) -> lower-case -> unify quote and dash characters
-    (see _QUOTES/_DASHES above) -> drop soft hyphens (U+00AD, a Fedlex
-    line-break artefact with no semantic content) -> collapse whitespace
-    runs to a single space and strip the ends.
+    (see _QUOTES/_DASHES above) -> fold U+2026 HORIZONTAL ELLIPSIS to three
+    periods -> drop soft hyphens (U+00AD, a Fedlex line-break artefact with
+    no semantic content) -> collapse whitespace runs to a single space and
+    strip the ends.
+
+    The ellipsis fold is what chpipe/diff_articles.normalise() does too, and
+    for the same reason: Fedlex is not internally consistent about which
+    character it uses for a struck-out paragraph -- a single U+2026 in one
+    place, three literal periods in another, inside the same act -- so an
+    answer and the edition it quotes can disagree on it without disagreeing
+    on any wording. NFKC already decomposes U+2026 this way; the explicit
+    replace states the intent, and keeps this function's behaviour pinned to
+    diff_articles' even if the unicodedata pass ahead of it ever changes.
 
     This does NOT strip trailing punctuation from the *result* -- that is a
     per-unit step applied by units() after this function runs, since
@@ -223,6 +233,7 @@ def normalise(s: str) -> str:
     folded = folded.lower()
     folded = folded.translate(_QUOTES)
     folded = folded.translate(_DASHES)
+    folded = folded.replace("…", "...")
     folded = folded.replace(_SOFT_HYPHEN, "")
     return _WHITESPACE.sub(" ", folded).strip()
 
