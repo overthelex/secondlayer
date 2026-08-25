@@ -27,6 +27,16 @@ const LANGS = ['de', 'fr', 'it'];
 const FTS_PREDICATE =
   `to_tsvector('simple', coalesce(parties,'') || ' ' || coalesce(abstract,'') || ' ' || coalesce(full_text,'')) @@ plainto_tsquery('simple', $1)`;
 
+// CH_BGer / CH_BGE (the federal spiders) carry the source's three-language header
+// {de,fr,it} verbatim in `languages` for every row, regardless of the decision's actual
+// language — languages[1] is always 'de' there and never matches a French or Italian
+// federal judgment. The real language sits in metadata_json->>'Sprache' ('de'/'fr'/'it')
+// for those spiders. Cantonal spiders are single-language or properly ordered, and have
+// no Sprache key, so the fallback to languages[1] covers them unchanged.
+// Sprache is trusted only when it is exactly one of the three languages after
+// trimming and lower-casing; anything else falls back to languages[1].
+const LANG_EXPR = `COALESCE(CASE WHEN lower(btrim(metadata_json->>'Sprache')) IN ('de','fr','it') THEN lower(btrim(metadata_json->>'Sprache')) END, languages[1])`;
+
 export class ChCourtTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -49,7 +59,7 @@ export class ChCourtTools extends BaseToolHandler {
             query: { type: 'string', description: 'Пошуковий запит (повний текст, анотація, сторони)' },
             court_code: { type: 'string', description: 'Код суду, напр. CH_BGer_001, ZH_OG_003; префікс CH_BGer шукає всі палати' },
             canton: { type: 'string', description: 'Двобуквений код кантону або CH для федеральних судів, напр. ZH, TI, GE' },
-            lang: { type: 'string', enum: ['de', 'fr', 'it'], description: 'Мова рішення' },
+            lang: { type: 'string', enum: ['de', 'fr', 'it'], description: 'мова рішення (de/fr/it)' },
             date_from: { type: 'string', description: 'Дата від (YYYY-MM-DD)' },
             date_to: { type: 'string', description: 'Дата до (YYYY-MM-DD)' },
             limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
@@ -126,7 +136,7 @@ export class ChCourtTools extends BaseToolHandler {
         values.push(code, pattern); pi += 2;
       }
       if (canton) { filters.push(`canton = $${pi}`); values.push(String(canton)); pi++; }
-      if (lang) { filters.push(`languages[1] = $${pi}`); values.push(String(lang)); pi++; }
+      if (lang) { filters.push(`${LANG_EXPR} = $${pi}`); values.push(String(lang)); pi++; }
       // A placeholder date never satisfies a date-range filter, regardless of its literal
       // value — the row's date is not actually known.
       if (date_from) {
@@ -146,7 +156,7 @@ export class ChCourtTools extends BaseToolHandler {
                CASE WHEN decision_date = $2::date THEN NULL
                     ELSE to_char(decision_date, 'YYYY-MM-DD') END AS decision_date,
                COALESCE(decision_date = $2::date, true) AS decision_date_unknown,
-               docket_number, languages,
+               docket_number, languages, ${LANG_EXPR} AS lang,
                left(coalesce(abstract, ''), ${ABSTRACT_PREVIEW_CHARS}) AS abstract,
                ts_headline('simple', coalesce(abstract,'') || ' ' || coalesce(full_text,''),
                            plainto_tsquery('simple', $1), 'MaxWords=40, MinWords=15') AS snippet,
@@ -189,6 +199,7 @@ export class ChCourtTools extends BaseToolHandler {
       const row = (await this.db.query(
         `SELECT ecli, doc_id, spider, court_code, court_name, chamber, canton, decision_type,
                 to_char(decision_date, 'YYYY-MM-DD') AS decision_date, docket_number, languages,
+                ${LANG_EXPR} AS lang,
                 parties, abstract, full_text, text_source, text_quality, html_url, pdf_url, json_url
            FROM ch_court_decisions WHERE ${column} = $1 AND stage = 'loaded'`,
         [value]
@@ -236,6 +247,7 @@ export class ChCourtTools extends BaseToolHandler {
         decision_date_unknown: isUnknownDate,
         docket_number: row.docket_number,
         languages: row.languages,
+        lang: row.lang,
         parties: row.parties,
         abstract: row.abstract,
         full_text: truncated ? fullText.slice(0, MAX_FULL_TEXT_CHARS) : fullText,

@@ -44,6 +44,9 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
   let versionDe2020: string;
   let versionFr2020: string;
 
+  const SR_COMPTABILITE = '221.431';
+  const SR_CO_COMMERCIAL = '221.432';
+
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
     await client.connect();
@@ -156,6 +159,20 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
                'article')`,
       [versionDe2020]
     );
+
+    // Fixtures for the short-query word-boundary fix: "comptabilité" contains "co" as a
+    // substring but not as a standalone word, and must not match a "CO" search; the second
+    // act's title contains "CO" as a standalone word and must match.
+    await client.query(
+      `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, title_fr, title_it, date_entry_force, enforcement_status)
+       VALUES ('eli/cc/comptabilite', $1, 'XYZ', 'Buchführungsverordnung', 'Ordonnance sur la comptabilité', 'Ordinanza sulla contabilità', '2013-01-01', 0)`,
+      [SR_COMPTABILITE]
+    );
+    await client.query(
+      `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, title_fr, title_it, date_entry_force, enforcement_status)
+       VALUES ('eli/cc/co-commercial', $1, 'ZZZ', 'Handelsregisterverordnung', 'Ordonnance relative au CO commercial', 'Ordinanza CO commerciale', '2013-01-01', 0)`,
+      [SR_CO_COMMERCIAL]
+    );
   });
 
   describe('ch_search_legislation', () => {
@@ -190,6 +207,67 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       const row = body.results.find((r: any) => r.sr_number === '220');
       expect(row.editions_count).toBe(2);
       expect(row.latest_edition_date).toBe('2020-01-01');
+    });
+
+    it('matches a title containing the standalone word "CO", but not "comptabilité"', async () => {
+      const result = await tools.executeTool('ch_search_legislation', { query: 'CO', lang: 'fr' });
+      const body = parse(result!);
+
+      const srNumbers = body.results.map((r: any) => r.sr_number);
+      expect(srNumbers).toContain(SR_CO_COMMERCIAL);
+      expect(srNumbers).not.toContain(SR_COMPTABILITE);
+    });
+
+    it('still substring-matches a query longer than 5 characters', async () => {
+      const result = await tools.executeTool('ch_search_legislation', { query: 'comptabilité', lang: 'fr' });
+      const body = parse(result!);
+
+      expect(body.results.map((r: any) => r.sr_number)).toContain(SR_COMPTABILITE);
+    });
+
+    describe('with the ch_act_alias table present', () => {
+      beforeEach(async () => {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS ch_act_alias (
+            abbr text NOT NULL,
+            lang text NOT NULL,
+            sr_number text NOT NULL,
+            source text
+          )
+        `);
+        await client.query('TRUNCATE ch_act_alias');
+        await client.query(
+          `INSERT INTO ch_act_alias (abbr, lang, sr_number, source) VALUES ('CO', 'fr', '220', 'curated')`
+        );
+      });
+
+      afterEach(async () => {
+        await client.query('DROP TABLE IF EXISTS ch_act_alias');
+      });
+
+      it('ranks SR 220 first for query "CO" lang fr via the curated alias, ahead of the CO-commercial title match', async () => {
+        const result = await tools.executeTool('ch_search_legislation', { query: 'CO', lang: 'fr' });
+        const body = parse(result!);
+
+        expect(body.results.length).toBeGreaterThan(0);
+        expect(body.results[0].sr_number).toBe('220');
+      });
+    });
+
+    describe('without the ch_act_alias table', () => {
+      beforeEach(async () => {
+        await client.query('DROP TABLE IF EXISTS ch_act_alias');
+      });
+
+      it('returns no substring garbage: matches the standalone "CO" title, not "comptabilité", and OR (220) has no alias to rank on', async () => {
+        const result = await tools.executeTool('ch_search_legislation', { query: 'CO', lang: 'fr' });
+        const body = parse(result!);
+
+        const srNumbers = body.results.map((r: any) => r.sr_number);
+        expect(srNumbers).toContain(SR_CO_COMMERCIAL);
+        expect(srNumbers).not.toContain(SR_COMPTABILITE);
+        expect(srNumbers).not.toContain('220');
+      });
     });
   });
 
@@ -363,6 +441,39 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
 
       expect(body.changes_truncated).toBe(false);
       expect(body.provenance_truncated).toBe(false);
+    });
+
+    it('de-duplicates the same provenance footnote repeated across editions to a single row', async () => {
+      // A parsed footnote is carried verbatim on every edition that includes the article
+      // it documents — the same (e_id, action, as_reference, bbl_reference, effective_date)
+      // tuple would otherwise be reported once per edition.
+      const versionDe2010Result = await client.query(
+        `INSERT INTO ch_act_version
+           (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, article_count)
+         VALUES ($1, 'eli/cc/27/317_321_377/de/2010-01-01', 'de', '2010-01-01', '2015-01-01', 'parsed', 1)
+         RETURNING version_id`,
+        [actId]
+      );
+      const versionDe2010 = versionDe2010Result.rows[0].version_id;
+
+      await client.query(
+        `INSERT INTO ch_article_provenance (version_id, e_id, action, as_reference, effective_date, raw_note, anchor_level)
+         VALUES ($1, 'art_dup', 'amended', 'AS 2001 0099', '2001-01-01', 'note repeated across editions', 'article')`,
+        [versionDe2010]
+      );
+      await client.query(
+        `INSERT INTO ch_article_provenance (version_id, e_id, action, as_reference, effective_date, raw_note, anchor_level)
+         VALUES ($1, 'art_dup', 'amended', 'AS 2001 0099', '2001-01-01', 'note repeated across editions', 'article')`,
+        [versionDe2015]
+      );
+
+      const result = await tools.executeTool('ch_get_act_history', { sr_number: '220' });
+      const body = parse(result!);
+
+      const dupRows = body.provenance.filter((p: any) => p.e_id === 'art_dup');
+      expect(dupRows).toHaveLength(1);
+      expect(dupRows[0].action).toBe('amended');
+      expect(dupRows[0].as_reference).toBe('AS 2001 0099');
     });
 
     it('reports changes_truncated when the 200-row cap is hit', async () => {

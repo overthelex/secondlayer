@@ -21,6 +21,14 @@ import { isValidIsoDate } from './ch-date-utils.js';
 
 const LANGS = ['de', 'fr', 'it'];
 
+// Escapes POSIX/ARE regex metacharacters in a caller-supplied token before it is
+// embedded in a Postgres `~*` pattern (used for the word-bounded short-query title
+// match below) — the token itself is still sent as a bound parameter, this only makes
+// it safe to concatenate into the pattern string on the Postgres side.
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export class ChLegislationTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -113,10 +121,49 @@ article_number не унікальний в межах редакції (пер�
     const lim = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const off = Math.max(Number(offset) || 0, 0);
     const titleCol = `title_${lang}`;
+    const rawQuery = String(query);
 
     try {
-      const values: any[] = [String(query), String(lang)];
+      const values: any[] = [rawQuery, String(lang)];
+      let pi = 3;
       const forceFilter = in_force_only === false ? '' : 'AND enforcement_status = 0';
+
+      // A 1-5 char query with no whitespace is almost always an abbreviation (CO, OR,
+      // ZGB, StGB) — match the title on a word boundary instead of a bare ILIKE
+      // substring, so e.g. "CO" does not match inside "comptabilité" or other unrelated
+      // words. Longer / multi-word queries keep the original substring match.
+      const isShortToken = rawQuery.length >= 1 && rawQuery.length <= 5 && !/\s/.test(rawQuery);
+      let titleMatchExpr: string;
+      if (isShortToken) {
+        values.push(escapeRegexLiteral(rawQuery));
+        titleMatchExpr = `${titleCol} ~* ('\\m' || $${pi} || '\\M')`;
+        pi++;
+      } else {
+        titleMatchExpr = `${titleCol} ILIKE '%' || $1 || '%'`;
+      }
+
+      // ch_act_alias (abbr, lang, sr_number, source) is a curated table of non-German
+      // abbreviations (e.g. 'CO' → SR 220 in fr) that arrives with PR #2342 and may not
+      // exist yet. Guard its use with a runtime check so the SQL text never references
+      // the table when it is absent — referencing a nonexistent table is a hard error,
+      // not a zero-match no-op.
+      const aliasTableExists = (await this.db.query(
+        `SELECT to_regclass('public.ch_act_alias') IS NOT NULL AS alias_table_exists`
+      )).rows[0].alias_table_exists === true;
+
+      const aliasJoin = aliasTableExists
+        ? `LEFT JOIN LATERAL (
+             SELECT bool_or(al.lang = $2) AS lang_hit
+               FROM ch_act_alias al
+              WHERE al.sr_number = a.sr_number AND lower(al.abbr) = lower($1)
+           ) alias_match ON true`
+        : '';
+      const aliasMatchCond = aliasTableExists ? 'OR alias_match.lang_hit IS NOT NULL' : '';
+      const aliasTierCond = aliasTableExists ? 'WHEN alias_match.lang_hit IS NOT NULL THEN 1' : '';
+      const aliasTieBreak = aliasTableExists ? 'COALESCE(alias_match.lang_hit, false) DESC,' : '';
+
+      const limIdx = pi; values.push(lim); pi++;
+      const offIdx = pi; values.push(off); pi++;
 
       const sql = `
         SELECT act_id, sr_number, abbreviation,
@@ -130,17 +177,20 @@ article_number не унікальний в межах редакції (пер�
                  WHERE v.act_id = a.act_id AND v.lang = $2 AND v.stage = 'parsed') AS latest_edition_date,
                count(*) OVER() AS _total_count
           FROM ch_act a
-         WHERE (sr_number = $1 OR lower(abbreviation) = lower($1) OR ${titleCol} ILIKE '%' || $1 || '%')
+          ${aliasJoin}
+         WHERE (sr_number = $1 OR lower(abbreviation) = lower($1) ${aliasMatchCond} OR ${titleMatchExpr})
            ${forceFilter}
          ORDER BY CASE WHEN sr_number = $1 THEN 0
                        WHEN lower(abbreviation) = lower($1) THEN 1
+                       ${aliasTierCond}
                        ELSE 2 END,
+                  ${aliasTieBreak}
                   in_force DESC,
                   date_entry_force DESC NULLS LAST,
                   a.act_id
-         LIMIT $3 OFFSET $4`;
+         LIMIT $${limIdx} OFFSET $${offIdx}`;
 
-      const rows = (await this.db.query(sql, [...values, lim, off])).rows;
+      const rows = (await this.db.query(sql, values)).rows;
       return this.wrapSearchResults(rows, lim, off);
     } catch (error: any) {
       logger.error('ch_search_legislation error', { error: error.message });
@@ -338,19 +388,32 @@ article_number не унікальний в межах редакції (пер�
       // e_id is only meaningful within its own edition (version_id) — the same e_id can
       // denote a different article_number in another edition. Correlate the article-number
       // filter to the provenance row's own version, not across every version of the act.
-      const provenance = (await this.db.query(
-        `SELECT p.e_id, p.action, p.as_reference, p.bbl_reference,
-                to_char(p.effective_date, 'YYYY-MM-DD') AS effective_date
-           FROM ch_article_provenance p
-           JOIN ch_act_version v ON v.version_id = p.version_id
-          WHERE v.act_id = $1 AND v.lang = $2
-            AND ($3::text IS NULL OR EXISTS (
-                  SELECT 1 FROM ch_act_article a
-                   WHERE a.version_id = p.version_id AND a.e_id = p.e_id AND a.article_number = $3))
-          ORDER BY p.effective_date DESC NULLS LAST
+      //
+      // A parsed footnote is repeated verbatim on every edition that carries the article it
+      // documents, so the same (e_id, action, as_reference, bbl_reference, effective_date)
+      // tuple shows up once per edition. De-duplicate on that tuple, keeping the row from
+      // the earliest edition (smallest v.date_applicability) as the representative.
+      const provenanceRows = (await this.db.query(
+        `SELECT e_id, action, as_reference, bbl_reference, effective_date
+           FROM (
+             SELECT DISTINCT ON (p.e_id, p.action, p.as_reference, p.bbl_reference, p.effective_date)
+                    p.e_id, p.action, p.as_reference, p.bbl_reference,
+                    to_char(p.effective_date, 'YYYY-MM-DD') AS effective_date,
+                    p.effective_date AS effective_date_raw
+               FROM ch_article_provenance p
+               JOIN ch_act_version v ON v.version_id = p.version_id
+              WHERE v.act_id = $1 AND v.lang = $2
+                AND ($3::text IS NULL OR EXISTS (
+                      SELECT 1 FROM ch_act_article a
+                       WHERE a.version_id = p.version_id AND a.e_id = p.e_id AND a.article_number = $3))
+              ORDER BY p.e_id, p.action, p.as_reference, p.bbl_reference, p.effective_date,
+                       v.date_applicability ASC
+           ) dedup
+          ORDER BY effective_date_raw DESC NULLS LAST
           LIMIT 200`,
         [act.act_id, String(lang), articleFilter]
       )).rows;
+      const provenance = provenanceRows.map(({ effective_date_raw, ...rest }: any) => rest);
 
       return this.wrapResponse({
         sr_number: act.sr_number,
