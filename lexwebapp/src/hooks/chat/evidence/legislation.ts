@@ -57,7 +57,8 @@ function extractHierarchy(obj: ToolResultData) {
 
 export function extractLegislationEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
   const citations: Citation[] = [];
-  if (!LEGISLATION_TOOLS.some((t) => toolName.includes(t) || toolName === t)) {
+  // ch_search_legislation contains 'search_legislation' as a substring; Swiss tools have their own extractor (ch.ts)
+  if (toolName.startsWith('ch_') || !LEGISLATION_TOOLS.some((t) => toolName.includes(t) || toolName === t)) {
     return { decisions: [], citations, documents: [] };
   }
 
