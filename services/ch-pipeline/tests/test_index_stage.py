@@ -536,9 +536,11 @@ def test_a_never_fetched_pdf_url_is_dropped_when_the_listing_has_no_pdf(conn):
 
 
 def test_a_fetched_pdf_url_survives_a_transient_listing_gap(conn):
+    """pdf_sha256 alone is the receipt (text_source is deliberately NOT set
+    here, so the test cannot pass on the wrong half of the CASE)."""
     f = _fields()
     index_stage.upsert(conn, f, {"json", "pdf"})
-    conn.execute("UPDATE ch_court_decisions SET text_source = 'pdf', pdf_sha256 = 'abc', stage = 'loaded'")
+    conn.execute("UPDATE ch_court_decisions SET pdf_sha256 = 'abc', stage = 'loaded'")
     index_stage.upsert(conn, f, {"json"})
     row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
     assert row[0] and row[0].endswith(".pdf"), "a PDF this row has fetched keeps its URL through a gap"
@@ -552,3 +554,16 @@ def test_a_url_the_listing_offers_again_comes_straight_back(conn):
     index_stage.upsert(conn, f, {"json", "html", "pdf"})   # listing now offers it
     row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
     assert row[0] and row[0].endswith("/ZG_OG_001_Z1-2020-5_2022-02-18.pdf")
+
+
+def test_a_requeued_card_does_not_keep_a_phantom_pdf_url_through_a_gap(conn):
+    """The shape db.requeue_for_pdf() produces: text_source = 'pdf' asked
+    for, nothing fetched yet, pdf_sha256 NULL. If the listing has no PDF the
+    stored URL is a phantom and must go -- cubic's P1 on #2335."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf', "
+                 "text_source = 'pdf', stage = 'indexed'")
+    index_stage.upsert(conn, f, {"json", "html"})
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] is None

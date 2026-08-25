@@ -71,9 +71,12 @@ ON CONFLICT (ecli) DO UPDATE SET
                          WHEN ch_court_decisions.text_source = 'html'
                               THEN ch_court_decisions.html_url
                          ELSE NULL END,
+    -- pdf_sha256 alone is the PDF's receipt: text_source = 'pdf' is ALSO
+    -- what db.requeue_for_pdf() writes BEFORE any PDF was fetched (an HTML
+    -- card asking for its PDF), and a phantom pdf_url would have survived
+    -- through that shape on exactly the rows it hurts.
     pdf_url       = CASE WHEN EXCLUDED.pdf_url IS NOT NULL THEN EXCLUDED.pdf_url
-                         WHEN ch_court_decisions.text_source = 'pdf'
-                              OR ch_court_decisions.pdf_sha256 IS NOT NULL
+                         WHEN ch_court_decisions.pdf_sha256 IS NOT NULL
                               THEN ch_court_decisions.pdf_url
                          ELSE NULL END,
     json_url      = EXCLUDED.json_url,
