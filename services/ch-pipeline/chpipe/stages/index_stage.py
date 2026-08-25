@@ -58,8 +58,24 @@ ON CONFLICT (ecli) DO UPDATE SET
     docket_number = COALESCE(EXCLUDED.docket_number, ch_court_decisions.docket_number),
     abstract      = COALESCE(EXCLUDED.abstract, ch_court_decisions.abstract),
     languages     = COALESCE(EXCLUDED.languages, ch_court_decisions.languages),
-    html_url      = COALESCE(EXCLUDED.html_url, ch_court_decisions.html_url),
-    pdf_url       = COALESCE(EXCLUDED.pdf_url, ch_court_decisions.pdf_url),
+    -- A body URL the listing offers now always wins. One it does NOT offer
+    -- survives only if this row has actually fetched that body before
+    -- (text_source says so; pdf_sha256 is the PDF's receipt) -- that is
+    -- the transient-listing-gap case plan 1 protected. A URL that was never
+    -- fetched and is not on offer is dropped: on the first prod backfill
+    -- the old importer's pattern-built pdf_urls survived here for 2,521
+    -- documents whose listing had only .html/.json, every one answered 404,
+    -- and "pdf_url IS NOT NULL" meant nothing. If the file really exists,
+    -- the next listing that shows it puts the URL straight back.
+    html_url      = CASE WHEN EXCLUDED.html_url IS NOT NULL THEN EXCLUDED.html_url
+                         WHEN ch_court_decisions.text_source = 'html'
+                              THEN ch_court_decisions.html_url
+                         ELSE NULL END,
+    pdf_url       = CASE WHEN EXCLUDED.pdf_url IS NOT NULL THEN EXCLUDED.pdf_url
+                         WHEN ch_court_decisions.text_source = 'pdf'
+                              OR ch_court_decisions.pdf_sha256 IS NOT NULL
+                              THEN ch_court_decisions.pdf_url
+                         ELSE NULL END,
     json_url      = EXCLUDED.json_url,
     metadata_json = EXCLUDED.metadata_json,
     -- A row that has already done work keeps it. Only 'loaded' was protected
