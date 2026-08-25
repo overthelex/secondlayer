@@ -3,6 +3,7 @@ raw edges into ch_case_citations / ch_legislation_citations. A mocked DB
 cannot validate the executemany/ON CONFLICT DO NOTHING SQL, so this is a
 scratch-database test like test_load_stage.py and test_migration_199.py.
 """
+import datetime
 import os
 import pathlib
 from datetime import date
@@ -65,12 +66,24 @@ def conn(settings):
 
 
 def _row(conn, ecli, doc_id, court_code, decision_date, text, stage="loaded",
-        spider="CH_BGer"):
+        spider="CH_BGer", docket_number=None):
     conn.execute(
         "INSERT INTO ch_court_decisions "
-        "(ecli, spider, doc_id, court_code, decision_date, full_text, stage) "
-        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-        (ecli, spider, doc_id, court_code, decision_date, text, stage))
+        "(ecli, spider, doc_id, court_code, decision_date, full_text, stage, docket_number) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        (ecli, spider, doc_id, court_code, decision_date, text, stage, docket_number))
+
+
+def test_a_decision_does_not_cite_its_own_docket(conn, settings):
+    """The masthead repeats the decision's own docket; that is not an edge.
+    Other dockets in the same text still are."""
+    _row(conn, "ECLI:SELF", "self", "CH_BGer_004", datetime.date(2020, 5, 1),
+         "Urteil 4A_22/2017 vom 19. Juni 2017. Vgl. Urteil 4A_99/2016 und BGE 142 III 102.",
+         docket_number="4A_22/2017")
+    citations_stage.run(settings)
+    raws = sorted(r["to_raw"] for r in conn.execute(
+        "SELECT to_raw FROM ch_case_citations WHERE from_ecli = 'ECLI:SELF'").fetchall())
+    assert raws == ["4A_99/2016", "BGE 142 III 102"]
 
 
 def test_extracts_citations_and_stamps_loaded_decisions(conn, settings):

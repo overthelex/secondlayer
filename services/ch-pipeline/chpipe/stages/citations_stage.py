@@ -117,7 +117,14 @@ def extract_one(row) -> tuple[list, list]:
     chpipe.citations raises -- run() is the layer that turns that into a
     per-decision failure instead of aborting the batch."""
     text = row["full_text"] or ""
-    return citations.extract_cases(text), citations.extract_statutes(text)
+    cases = citations.extract_cases(text)
+    # A decision's masthead repeats its own docket ("Urteil 4A_22/2017 vom ...")
+    # and a BGE prints its own key; that is not a citation. Measured on the first
+    # full backfill: 3 of 42 sampled docket edges were the citing decision itself.
+    own = (row.get("docket_number") or "").strip()
+    if own:
+        cases = [c for c in cases if c.raw != own]
+    return cases, citations.extract_statutes(text)
 
 
 def run(settings: Settings, limit: int | None = None,
