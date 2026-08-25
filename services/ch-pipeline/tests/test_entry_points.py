@@ -134,13 +134,14 @@ def test_index_with_neither_walks_every_spider(monkeypatch):
 
 from chpipe import throttle
 from chpipe.stages import (acts_stage, as_bbl_stage, basic_act_stage,
-                           diff_stage, fetch_xml_stage, parse_akn_stage,
-                           project_legacy_stage, provenance_stage,
-                           versions_stage)
+                           citations_resolve_stage, diff_stage, fetch_xml_stage,
+                           parse_akn_stage, project_legacy_stage,
+                           provenance_stage, versions_stage)
 
 LEGISLATION_STAGES = [acts_stage, versions_stage, fetch_xml_stage,
                       parse_akn_stage, diff_stage, project_legacy_stage,
-                      provenance_stage, as_bbl_stage, basic_act_stage]
+                      provenance_stage, as_bbl_stage, basic_act_stage,
+                      citations_resolve_stage]
 
 _LEG_REPORT = {
     acts_stage: lambda: acts_stage.ActsReport(),
@@ -152,6 +153,7 @@ _LEG_REPORT = {
     provenance_stage: lambda: provenance_stage.ProvenanceReport(),
     as_bbl_stage: lambda: as_bbl_stage.AsReport(),
     basic_act_stage: lambda: basic_act_stage.LinkReport(),
+    citations_resolve_stage: lambda: citations_resolve_stage.ResolveReport(),
 }
 
 # Spec section 8. fetch-xml, acts and versions are network walks that still
@@ -162,6 +164,9 @@ _LEG_REPORT = {
 # walk over jolux:Act, the same shape as acts/versions; basic-act is a short
 # join over rows those walks already discovered -- neither is a multi-hour
 # CPU stage, so both take NICE_IO like acts/versions/fetch-xml/project-legacy.
+# citations-resolve is four UPDATE ... FROM statements executed and waited
+# on -- the work happens inside Postgres, not this process -- so it takes
+# NICE_IO for the same reason aliases_stage does.
 EXPECTED_NICE = {
     acts_stage: throttle.NICE_IO,
     versions_stage: throttle.NICE_IO,
@@ -172,6 +177,7 @@ EXPECTED_NICE = {
     provenance_stage: throttle.NICE_CPU,
     as_bbl_stage: throttle.NICE_IO,
     basic_act_stage: throttle.NICE_IO,
+    citations_resolve_stage: throttle.NICE_IO,
 }
 
 
@@ -278,6 +284,37 @@ def test_an_empty_lang_is_not_a_language_for_provenance(monkeypatch, no_renice):
     monkeypatch.setenv("CHPIPE_LANG", "")
     provenance_stage.main()
     assert seen["kwargs"]["lang"] == "de"
+
+
+def test_citations_resolve_honours_chpipe_cit_resolve_all(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "1")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is True
+
+
+def test_citations_resolve_defaults_to_first_pass_only(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.delenv("CHPIPE_CIT_RESOLVE_ALL", raising=False)
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
+
+
+def test_an_empty_chpipe_cit_resolve_all_is_not_a_yes(monkeypatch, no_renice):
+    """run-stage.sh exports its variables unconditionally, so "" reaches the
+    entry point whenever the flag was not set on the command line -- the
+    same shape as the CHPIPE_SPIDER/CHPIPE_LANG bugs above."""
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
+
+
+def test_chpipe_cit_resolve_all_0_is_not_a_yes(monkeypatch, no_renice):
+    seen = _capture_leg(monkeypatch, citations_resolve_stage)
+    monkeypatch.setenv("CHPIPE_CIT_RESOLVE_ALL", "0")
+    citations_resolve_stage.main()
+    assert seen["kwargs"]["resolve_all"] is False
 
 
 # --- run-stage.sh's own usage line ---
