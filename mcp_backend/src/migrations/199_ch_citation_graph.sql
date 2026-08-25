@@ -2,6 +2,23 @@
 -- Swiss citation graph: case-to-case and case-to-legislation citations
 -- extracted from ch_court_decisions full text.
 --
+-- APPLY THIS OUTSIDE THE 07:15 UTC DELTA WINDOW.
+--
+-- The migration runner applies a whole file as ONE implicit transaction, so
+-- every lock this file takes is held until its last statement commits. The
+-- ALTER TABLE below takes an ACCESS EXCLUSIVE lock on ch_court_decisions
+-- (1.22M rows) -- which blocks every reader and writer of that table -- and
+-- the two ch_court_decisions indexes after it are then built while that lock
+-- is still held. Those builds are tens of seconds on the production table,
+-- and that is how long the whole table is unavailable. Run against the delta
+-- and the delta's own writes queue behind it.
+--
+-- SET lock_timeout = '3s' is the first statement for the same reason: if
+-- ch_court_decisions is already busy, this file must fail fast and be
+-- retried in a quiet window rather than sit in the lock queue holding up
+-- everything that arrives behind it. The SET is session-local and lasts
+-- only for the session applying the migration.
+--
 -- ch_act_alias maps the abbreviation a decision actually writes ("OR", "CO",
 -- "Cst.", "StGB") to the SR number the legislation corpus (migration 197)
 -- keys on -- one abbreviation can mean different acts across languages
@@ -21,6 +38,8 @@
 -- use for constraints added to a pre-existing table): the CREATE TABLE
 -- itself is already guarded by IF NOT EXISTS, so on a second run the whole
 -- statement -- CHECK included -- is skipped rather than re-attempted.
+
+SET lock_timeout = '3s';
 
 CREATE TABLE IF NOT EXISTS public.ch_act_alias (
     abbr        text NOT NULL,          -- as written in texts: OR, CO, Cst., StGB
@@ -79,6 +98,14 @@ CREATE INDEX IF NOT EXISTS idx_ch_court_cit_queue ON public.ch_court_decisions (
 -- ch_court_decisions.docket_number for both the 'bge' and 'docket'
 -- cite_kinds -- the lookup this stage runs most, over the whole corpus.
 CREATE INDEX IF NOT EXISTS idx_ch_court_docket ON public.ch_court_decisions (docket_number) WHERE docket_number IS NOT NULL;
+
+-- citations_resolve_stage's step 3 (article resolution) looks an article up
+-- by (version_id, article_number). Migration 197 gives ch_act_article an
+-- index on article_number alone (every edition's article 8, across the whole
+-- corpus) and one on (version_id, ordinal) -- neither serves that lookup.
+-- Measured 6.6x on the composite. It lives here rather than in 197 because
+-- it exists for this stage: 197's own readers walk an edition by ordinal.
+CREATE INDEX IF NOT EXISTS idx_ch_act_article_version_number ON public.ch_act_article (version_id, article_number);
 
 COMMENT ON TABLE public.ch_act_alias IS
     'Maps the abbreviation a decision actually writes (OR, CO, Cst., StGB) to the '

@@ -749,6 +749,17 @@ resolved rows). Migration 199 is the schema: `ch_act_alias`,
 `ch_case_citations`, `ch_legislation_citations`, plus
 `ch_court_decisions.citations_extracted_at`.
 
+**Apply migration 199 outside the 07:15 UTC delta window.** The migration
+runner applies a whole file as one implicit transaction, so the `ALTER TABLE
+ch_court_decisions ADD COLUMN citations_extracted_at` holds an ACCESS
+EXCLUSIVE lock on a 1.22M-row table until the file's last statement commits
+— and the two `ch_court_decisions` indexes after it are built while that
+lock is still held (tens of seconds on the production table, during which
+nothing else can read or write it). The file's first statement is
+`SET lock_timeout = '3s'`, so if the table is already busy the migration
+fails fast and can be retried in a quiet window instead of queueing —
+and blocking everything that arrives behind it.
+
 **`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
 writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
 corpus keys on — from three additive, idempotent sources: `ch_act`'s own
@@ -774,21 +785,33 @@ statement both `extract_stage` and `ocr_stage` use to write `full_text` —
 unconditionally clears `citations_extracted_at` back to `NULL` whenever it
 moves a row to `'extracted'`. The next `load` puts the row back at `loaded`,
 and the next `citations` run picks it up again, over the new text, exactly
-like a decision that has never been scanned at all.
+like a decision that has never been scanned at all — and that run **deletes
+the decision's existing edges before inserting** the ones its current text
+produces (`db.delete_citations`, scoped to the batch's own `from_ecli`
+values). Re-extraction is a replacement, not an addition: `ON CONFLICT DO
+NOTHING` makes an edge the new text still contains collide harmlessly with
+the row already there, but an edge the new text no longer contains has
+nothing to collide with, and left alone it would outlive the text it came
+from forever.
 
 **`citations-resolve`** is four `UPDATE ... FROM` statements, run in a fixed
 order because each one's input is the previous one's output, over the
 raw edges `citations` wrote:
 
-1. **act** — `abbr_raw` (+ `lang`) → `ch_act_alias` → `sr_number`/`act_id`.
-   Among the acts `ch_act_alias` names for that abbreviation (matched on the
-   citation's own language, or an alias marked `any`), prefer the one whose
+1. **act** — `abbr_raw` → `ch_act_alias` → `sr_number`/`act_id`. Among the
+   acts `ch_act_alias` names for that abbreviation, prefer the one whose
+   alias is written in the citation's own language, then the one whose
    `[date_entry_force, date_no_longer_in_force)` actually contains the
    citation's `from_date`; failing that (no `from_date`, or none covers it),
    prefer the act currently in force, then the one with the latest
    `date_entry_force`. `match_method` becomes `act_only` on a hit,
-   `unresolved_abbr` when `ch_act_alias` has nothing for that abbreviation/
-   language at all.
+   `unresolved_abbr` when `ch_act_alias` has nothing for that abbreviation
+   at all. **Language ranks the candidates; it does not filter them.** A
+   citation's `lang` is what the extractor inferred, and it falls back to
+   `de` whenever no keyword in the reference decides — "les art. 9 et 10
+   LPGA" is French text with no paragraph keyword, so it arrives here as
+   `de`. Filtering on the language would refuse the `fr`-only LPGA alias and
+   park a perfectly resolvable citation at the terminal `unresolved_abbr`.
 2. **edition** — `act_id` (+ `lang`, `from_date`) → `ch_act_version` →
    `version_id`. The parsed edition whose
    `[date_applicability, date_end_applicability)` contains `from_date`, or —
@@ -828,6 +851,24 @@ Steps 1 and 4 do not get that same second chance: `ch_act_alias` and
 decision), and re-scanning the full `unresolved_abbr`/`unresolved` backlog on
 every run to catch that would turn a bounded set-based pass into an
 unbounded one.
+
+**What that second chance costs every night.** Steps 2 and 3 re-scan their
+whole backlog on every run, not just tonight's new rows: a citation of an
+act the legislation corpus has no *parsed* edition of (an act Fedlex
+publishes but `parse-akn` has not reached, or has no edition covering the
+citation's `from_date`) stays at `act_only` permanently, and step 2 probes
+it again every night for an edition that may never appear. The same holds
+for step 3 over rows sitting at `edition_at_date`/`latest_edition` with a
+`NULL` `article_id` — an article number the edition does not contain (a
+citation to a repealed article, or a misprint) is re-probed nightly.
+This is known and deliberate — it is what makes a newly parsed edition
+resolve by itself — and it is bounded: both probes are single indexed
+lookups per row (`idx_ch_act_version_act` on
+`(act_id, lang, date_applicability)` in migration 197, and
+`idx_ch_act_article_version_number` on `(version_id, article_number)` added
+in 199 for exactly this — measured 6.6x on the article probe). Watch it in `python -m chpipe.reports_cit`'s
+per-`match_method` counts: a permanently growing `act_only` count is the
+signal that the legislation half, not this stage, is what needs attention.
 
 **`CHPIPE_CIT_RESOLVE_ALL=1`** is the deliberate, operator-driven way to pay
 that cost when the alias map or the decision corpus has grown enough to be
@@ -999,17 +1040,36 @@ that queue.
 **Citation graph.** `citations` runs once per grown spider, right after that
 spider's `load` (twice if extract's second lap ran too — see above), so a
 decision's citation graph is only ever as many nights stale as its text is.
-`citations-resolve` is not per-spider: it runs once, after BOTH halves have
-had their turn, resolving whatever raw edges exist across the whole corpus —
-this is a third independent guard, not folded into the decisions/legislation
-try/except above, because a failure in either half must not skip it (raw
-edges from an earlier run, or from decisions that DID land tonight even if
-legislation died, are still worth resolving) and its own failure must not
-be swallowed by theirs. `aliases` is **not** part of the nightly delta —
-`ch_act`'s abbreviation and title columns change only when a whole new act
-appears (which `acts` already re-runs in full every night), and the curated
-map is a manual, occasional edit; run `./run-stage.sh aliases` by hand after
-either.
+`aliases` and `citations-resolve` are not per-spider: they run once each,
+after BOTH halves have had their turn and in that order — `aliases` first,
+because step 1 of resolution reads `ch_act_alias` and the legislation half
+that just ran may have discovered acts whose abbreviation is not in that
+table yet. Seeding after the resolve instead of before it would leave every
+citation of a newly discovered act stamped `unresolved_abbr`, a terminal
+state no ordinary run revisits, until an operator ran
+`CHPIPE_CIT_RESOLVE_ALL` by hand. Each is its own independent guard, not
+folded into the decisions/legislation try/except above: a failure in either
+half must not skip them (raw edges from an earlier run, or from decisions
+that DID land tonight even if legislation died, are still worth resolving),
+a failing alias seed must not cost that night its resolve pass, and neither
+failure may be swallowed by the others. `aliases` is cheap to re-run
+nightly — three `ON CONFLICT DO NOTHING` sources over `ch_act`, so it costs
+only what actually changed — and the curated map, still a manual edit, is
+picked up by the same nightly run rather than needing a separate one.
+
+**The first nightly delta after deploying the citation graph would try to
+backfill the whole corpus.** `citations` claims every decision at `loaded`
+with `citations_extracted_at IS NULL` — which, on the night migration 199
+first lands, is all 1.22M of them, not just the handful tonight's spiders
+grew. That is a multi-hour CPU job, and the delta would run it unattended,
+under `flock`, straight into the next morning. **Run the supervised backfill
+first** — `./run-stage.sh citations` (optionally per spider, and with
+`CHPIPE_LIMIT` to size the first batch), watched, until
+`python -m chpipe.reports_cit` shows `stamped` caught up with `loaded` —
+and only then let the nightly delta take over the tail. After that first
+backfill the nightly claim is bounded by what actually changed: a decision
+is only ever re-claimed when it gets new text (see the re-extraction rule in
+"Citation graph" above).
 
 **Priority.** `run_decisions`/`run_legislation` call each stage's `run()`
 directly, not its `main()`, so none of the individual `renice()` calls each

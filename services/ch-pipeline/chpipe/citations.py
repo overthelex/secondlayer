@@ -60,6 +60,14 @@ yields two articles. Ranges are NOT expanded: "Art. 8-10 ZGB" yields the two
 endpoints 8 and 10 only, because expanding it would invent articles that may
 not exist.
 
+A *qualifier* list is not a paragraph list and not an article list: "Art. 3
+Abs. 1 Ziff. 2 und 3 VwVG" is one citation (article 3, paragraph 1), not two
+paragraphs and not two articles. The qualifier's own list is consumed with
+the qualifier -- letters after a letter qualifier (lit./let./lett./
+Buchstabe), numbers after a number qualifier (Ziff./ch./n./Satz) -- and the
+paragraph continuation is scanned from the end of the paragraph number, not
+from the end of the qualifier that follows it.
+
 Language is inferred in this order, first hit wins:
   1. the paragraph / qualifier keyword  (Abs, Bst, Ziff, lit -> de;
      al, let, ch, par -> fr; cpv, lett, n -> it)
@@ -83,6 +91,11 @@ Negative cases (must NOT be extracted):
     spelled-out qualifiers (Satz, Halbsatz, Ziffer, Buchstabe, Anhang, lettre,
     chiffre, cifra, numero) are recognised alongside the abbreviated ones, and
     are on the stop-list as a second line of defence.
+  - "Art. 12\nJede Person hat Anspruch" -- a capitalised ordinary word is
+    never an act, whatever it happens to be. Every abbreviation the alias
+    table can hold carries at least two uppercase letters or is Cst./Cost.,
+    so one capital followed only by lowercase is the next sentence starting
+    where the act should have been.
 
 Statute references are deduplicated by (abbr, article, paragraph), keeping
 the first occurrence's context and language, and returned in order of first
@@ -199,25 +212,79 @@ _PARA_KW = r"Absatz|Abs\.|alinéa|[Aa]l\.|capoverso|[Cc]pv\.|[Pp]ar\.|§"
 # "Satz"/"Ziffer"/"Buchstabe"/"Anhang" here, "Art. 5 Abs. 1 Satz 2 BV" stops
 # after the paragraph and "Satz" -- an uppercase-initial word of the right
 # length -- is read as the act.
-_QUAL_KW = (
-    r"[Bb]uchstaben?|[Hh]albsatz|[Zz]iffern?|[Aa]nhang|[Ss]atz|litera"
-    r"|lettres?|chiffres?|cifra|numeri|numero"
-    r"|[Ll]it\.|[Bb]st\.|[Ll]ett\.|[Ll]et\.|[Zz]iff\.|[Cc]h\.|[Nn]o?\."
+# Split by the kind of value the qualifier takes, because the *list* that
+# follows the value differs with it: a letter qualifier's list is letters
+# ("lit. a und b"), a number qualifier's is numbers ("Ziff. 2 und 3"). One
+# shared letter-only list leaves " und 3" unconsumed after "Ziff. 2", and
+# whichever scan reaches it next then reads it as a further paragraph or a
+# further article -- either way "Art. 3 Abs. 1 Ziff. 2 und 3 VwVG" becomes
+# two citations instead of one.
+_LET_QUAL_KW = (
+    r"[Bb]uchstaben?|litera|lettres?"
+    r"|[Ll]it\.|[Bb]st\.|[Ll]ett\.|[Ll]et\."
 )
-# A qualifier value, and then the rest of a letter list: "lit. a und b",
-# "lit. a und lit. b", "lit. a, b und c". Without this the trailing letters are
-# left unconsumed and the abbreviation after them never binds, losing the whole
-# reference rather than just the extra letters. Bounded, like every other list.
-_QUAL_VAL = r"(?:[a-z](?:bis|ter)?|\d{1,3})(?!\w)"
+_NUM_QUAL_KW = (
+    r"[Hh]albsatz|[Zz]iffern?|[Aa]nhang|[Ss]atz"
+    r"|chiffres?|cifra|numeri|numero"
+    r"|[Zz]iff\.|[Cc]h\.|[Nn]o?\."
+)
+_QUAL_KW = rf"{_LET_QUAL_KW}|{_NUM_QUAL_KW}"
+
+# The conjunctions a qualifier list is written with. Every *word* alternative
+# carries a trailing \b: without it "e" matches the "e" of "et" and the "t"
+# that follows is read as the list's next letter, so "art. 5 al. 1 ch. 2 et 3
+# LTF" consumed " et" as a letter, left " 3 LTF" where the abbreviation was
+# expected, and dropped the whole reference. The punctuation alternatives get
+# no \b -- "- 2" is a legitimate continuation and a boundary after "-" would
+# reject it.
+_CONJ = r"(?:,|;|und\b|oder\b|et\b|ed\b|ou\b|e\b|o\b)"
+
+_LET_VAL = r"[a-z](?:bis|ter)?(?!\w)"
+_NUM_VAL = r"(?:\d{1,3}|[a-z](?:bis|ter)?)(?!\w)"
+
+# A number in a qualifier list that is itself followed by a paragraph or
+# qualifier keyword is not a further qualifier value at all -- it is the next
+# article of the list, carrying its own keyword ("Ziff. 1 und 9 Ziff. 2"),
+# the same reasoning _PARA_AHEAD applies to paragraph continuations.
+_NOT_NEXT_ITEM = rf"(?!{_GAP}(?:{_PARA_KW}|{_QUAL_KW}))"
+
+# The rest of a qualifier list: "lit. a und b", "lit. a und lit. b",
+# "lit. a, b und c", "Ziff. 2 und 3". Without this the trailing values are
+# left unconsumed and the abbreviation after them never binds, losing the
+# whole reference rather than just the extra values. Bounded, like every
+# other list.
 _LET_CONT = (
-    rf"(?:{_GAP}(?:,|;|und|oder|et|ed|ou|e|o)"
-    rf"(?:{_GAP}(?:{_QUAL_KW}))?{_GAP}[a-z](?:bis|ter)?(?!\w)){{0,7}}"
+    rf"(?:{_GAP}{_CONJ}"
+    rf"(?:{_GAP}(?:{_QUAL_KW}))?{_GAP}{_LET_VAL}){{0,7}}"
+)
+_NUM_CONT = (
+    rf"(?:{_GAP}{_CONJ}"
+    rf"(?:{_GAP}(?:{_QUAL_KW}))?{_GAP}{_NUM_VAL}{_NOT_NEXT_ITEM}){{0,7}}"
 )
 
 
 def _qual(group: str) -> str:
-    """One optional qualifier with its letter list, capturing under `group`."""
-    return rf"(?:{_GAP}(?P<{group}>{_QUAL_KW}){_GAP}{_QUAL_VAL}{_LET_CONT})?"
+    """One optional qualifier with its value list.
+
+    The keyword is captured under `group` for a letter-valued qualifier and
+    under `group + "n"` for a number-valued one: Python's `re` has no branch
+    reset, so the two branches cannot share a single group name. `_quals()`
+    reads both back in order.
+    """
+    return (
+        rf"(?:{_GAP}(?:"
+        rf"(?P<{group}>{_LET_QUAL_KW}){_GAP}{_LET_VAL}{_LET_CONT}"
+        rf"|(?P<{group}n>{_NUM_QUAL_KW}){_GAP}{_NUM_VAL}{_NUM_CONT}"
+        rf"))?"
+    )
+
+
+def _quals(match) -> list[str]:
+    """The qualifier keywords one _ITEM/_TAIL match captured, in written
+    order. Only one branch of each slot can have matched, so this is at most
+    two keywords."""
+    return [g for g in (match.group("q1"), match.group("q1n"),
+                        match.group("q2"), match.group("q2n")) if g]
 
 
 # "und folgende" / "et suivants" / "e seguenti": consumed, never expanded.
@@ -274,6 +341,10 @@ _ABBR_STOP = frozenset(
 # a sentence dot and gets stripped.
 _ABBR_KEEPS_DOT = frozenset({"cst", "cost"})
 
+# One capital and then nothing but lowercase: an ordinary word, not an act.
+# See _normalise_abbr() for why that is decidable without a stop-list.
+_ORDINARY_WORD = re.compile(r"^[A-ZÄÖÜ][a-zäöüéèàç]+$")
+
 _KEYWORD_LANG = {
     "absatz": "de", "abs": "de", "bst": "de", "ziff": "de", "lit": "de",
     "litera": "de", "buchstabe": "de", "buchstaben": "de", "ziffer": "de",
@@ -309,9 +380,20 @@ def _normalise_abbr(word: str) -> str | None:
     The full stop is decided here rather than copied from the text: "Cst." and
     "Cost." carry one, every other trailing dot is the end of a sentence.
     """
-    if word.lower() in _ABBR_STOP:
+    lowered = word.lower()
+    if lowered in _ABBR_STOP:
         return None
-    return word + "." if word.lower() in _ABBR_KEEPS_DOT else word
+    # A capitalised ordinary word is never an act. Every abbreviation the
+    # alias table can hold -- curated or derived from a Fedlex title --
+    # carries at least two uppercase letters (OR, ZGB, SchKG, LTF, EMRK) or
+    # is one of the two constitutions below, so one capital followed only by
+    # lowercase is the first word of the next sentence, which a line break
+    # ("Art. 12\nJede Person ...") puts exactly where the act belongs. The
+    # stop-list cannot cover this: it is a closed list, and the word that
+    # follows an article number is not.
+    if lowered not in _ABBR_KEEPS_DOT and _ORDINARY_WORD.match(word):
+        return None
+    return word + "." if lowered in _ABBR_KEEPS_DOT else word
 
 
 def _keyword_lang(keywords: list[str]) -> str | None:
@@ -371,12 +453,22 @@ def extract_statutes(text: str) -> list[StatuteRef]:
             if im.group("para"):
                 keywords.append(im.group("pkw"))
                 paragraphs.append(im.group("para"))
-                pos, extra = _scan_paragraphs(text, pos, paragraphs)
+                # Scanned from the end of the paragraph NUMBER, not the end
+                # of the whole item: _ITEM has already consumed any
+                # Ziff./ch./n./Satz qualifier sitting after it, and resuming
+                # from there reads that qualifier's own list ("Ziff. 2 und
+                # 3") as further paragraphs of the article. A continuation
+                # that really is a further paragraph starts immediately
+                # after the number, where no qualifier can have matched --
+                # so when this consumes anything, `after` is where _ITEM
+                # would have ended anyway.
+                after, extra = _scan_paragraphs(text, im.end("para"), paragraphs)
                 if extra:
+                    pos = after
                     tm = _TAIL.match(text, pos)
                     pos = tm.end()
-                    keywords += [g for g in (tm.group("q1"), tm.group("q2")) if g]
-            keywords += [g for g in (im.group("q1"), im.group("q2")) if g]
+                    keywords += _quals(tm)
+            keywords += _quals(im)
 
             if len(items) < _MAX_LIST:
                 items.append((im.group("article"), paragraphs))

@@ -6,7 +6,8 @@ not a cursor.
 Four UPDATE ... FROM statements, run in order because each one's input is
 the previous one's output:
 
-  1. acts:      abbr_raw (+ lang) -> ch_act_alias -> sr_number/act_id.
+  1. acts:      abbr_raw -> ch_act_alias -> sr_number/act_id (lang ranks
+                the candidates, it does not filter them -- see _RESOLVE_ACTS).
   2. editions:  act_id (+ lang, from_date) -> ch_act_version -> version_id.
   3. articles:  version_id (+ article) -> ch_act_article -> article_id.
   4. cases:     to_raw (+ cite_kind) -> ch_court_decisions -> to_ecli.
@@ -56,6 +57,14 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class ResolveReport:
+    """Rows each step RESOLVED, never rows it attempted.
+
+    Steps 2 and 3 only ever update a row that found what it was looking for,
+    so their rowcount already means this. Steps 1 and 4 stamp a terminal
+    match_method on every row they touch, resolved or not, so they count
+    through a CTE instead -- otherwise two of these four numbers would mean
+    "tried" and two would mean "succeeded" in the same log line.
+    """
     acts: int = 0
     editions: int = 0
     articles: int = 0
@@ -76,16 +85,33 @@ UPDATE ch_case_citations
 """
 
 # Step 1: abbr_raw -> act. Design rule 1 -- among the acts ch_act_alias names
-# for this abbreviation (matched on the citation's own language or an
-# alias marked 'any'), prefer the one whose [date_entry_force,
+# for this abbreviation, prefer the one whose alias is written in the
+# citation's own language, then the one whose [date_entry_force,
 # date_no_longer_in_force) actually contains from_date; failing that (no
 # from_date, or none covers it), prefer the one currently in force
 # (enforcement_status = 0), then the one with the latest date_entry_force --
 # a deterministic tiebreak over a's act_id closes out any remaining tie.
+#
+# Language RANKS the candidates, it does not filter them: a citation's `lang`
+# is what the extractor inferred, and it falls back to 'de' whenever no
+# keyword in the reference decides (chpipe/citations.py's inference order).
+# "les art. 9 et 10 LPGA" is French text with no paragraph keyword, so it
+# arrives here as 'de' -- and an `al.lang IN (c2.lang, 'any')` filter would
+# then refuse the fr-only LPGA alias and leave a perfectly resolvable
+# citation at unresolved_abbr, terminally. Ranking gets the same answer
+# whenever the language really is right and still resolves when it is not.
+#
 # match_method is set either way: 'act_only' when an act was found (editions
 # take it from there), 'unresolved_abbr' when ch_act_alias has nothing for
-# this abbr/lang at all -- see the module docstring for why that is terminal.
+# this abbr at all -- see the module docstring for why that is terminal.
+#
+# The UPDATE is wrapped in a data-modifying CTE so the statement can report
+# how many rows it RESOLVED rather than how many it touched: every row it
+# touches gets a terminal match_method, resolved or not, so a plain rowcount
+# here would count attempts while steps 2/3 count successes and the four
+# numbers in one report line would not be comparable.
 _RESOLVE_ACTS = """
+WITH updated AS (
 UPDATE ch_legislation_citations c
    SET sr_number = best.sr_number,
        act_id = best.act_id,
@@ -97,8 +123,8 @@ UPDATE ch_legislation_citations c
          FROM ch_act_alias al
          JOIN ch_act a ON a.sr_number = al.sr_number
         WHERE al.abbr = c2.abbr_raw
-          AND al.lang IN (c2.lang, 'any')
         ORDER BY
+          (al.lang = c2.lang) DESC,
           (c2.from_date IS NOT NULL
              AND a.date_entry_force IS NOT NULL
              AND a.date_entry_force <= c2.from_date
@@ -111,6 +137,9 @@ UPDATE ch_legislation_citations c
         LIMIT 1
   ) best ON true
  WHERE c.id = c2.id
+RETURNING c.act_id
+)
+SELECT count(*) AS resolved FROM updated WHERE act_id IS NOT NULL
 """
 
 # Step 2: act_id (+ lang, from_date) -> edition. Design rule 2 -- the parsed
@@ -192,6 +221,7 @@ UPDATE ch_legislation_citations c
 # leaves the pick to whatever order Postgres returns matching rows in, which
 # is not guaranteed stable run to run.
 _RESOLVE_CASES = """
+WITH updated AS (
 UPDATE ch_case_citations c
    SET to_ecli = best.ecli,
        resolved = (best.ecli IS NOT NULL),
@@ -210,6 +240,9 @@ UPDATE ch_case_citations c
         LIMIT 1
   ) best ON true
  WHERE c.id = c2.id
+RETURNING c.to_ecli
+)
+SELECT count(*) AS resolved FROM updated WHERE to_ecli IS NOT NULL
 """
 
 
@@ -222,8 +255,11 @@ def run(settings: Settings, resolve_all: bool = False) -> ResolveReport:
                 cur.execute(_RESET_LEGISLATION)
                 cur.execute(_RESET_CASES)
 
+            # fetchone(), not rowcount: both entry points are wrapped in a
+            # counting CTE (see _RESOLVE_ACTS) so all four counters report
+            # resolutions rather than attempts.
             cur.execute(_RESOLVE_ACTS)
-            report.acts = cur.rowcount
+            report.acts = cur.fetchone()["resolved"]
 
             cur.execute(_RESOLVE_EDITIONS)
             report.editions = cur.rowcount
@@ -232,7 +268,7 @@ def run(settings: Settings, resolve_all: bool = False) -> ResolveReport:
             report.articles = cur.rowcount
 
             cur.execute(_RESOLVE_CASES)
-            report.cases = cur.rowcount
+            report.cases = cur.fetchone()["resolved"]
     finally:
         conn.close()
     return report

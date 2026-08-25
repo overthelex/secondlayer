@@ -31,7 +31,7 @@ import pytest
 
 from chpipe import delta
 from chpipe.config import Settings
-from chpipe.stages import (acts_stage, citations_resolve_stage,
+from chpipe.stages import (acts_stage, aliases_stage, citations_resolve_stage,
                            citations_stage, diff_stage, extract_stage,
                            fetch_stage, fetch_xml_stage, index_stage,
                            load_stage, parse_akn_stage, project_legacy_stage,
@@ -1004,24 +1004,66 @@ def test_citations_runs_once_per_grown_spider(tmp_path, monkeypatch, conn):
     assert seen["citations"] == ["ZH_Obergericht"]
 
 
+def _stub_alias_and_resolve(monkeypatch, order: list):
+    """Both tail stages stubbed onto one order-preserving list, so a test can
+    assert not just that each ran once but that the alias seed ran FIRST."""
+    monkeypatch.setattr(
+        aliases_stage, "run",
+        lambda settings: order.append("aliases") or aliases_stage.AliasReport())
+    monkeypatch.setattr(
+        citations_resolve_stage, "run",
+        lambda settings, resolve_all=False: order.append("resolve") or
+        citations_resolve_stage.ResolveReport())
+
+
 def test_main_runs_citations_resolve_exactly_once_after_both_halves(
         tmp_path, monkeypatch):
     """citations_resolve_stage is not a per-spider stage like citations_stage
     -- it runs once, after run_decisions and run_legislation have both had
     their turn, resolving whatever raw edges exist across the whole corpus
-    rather than being scoped to what changed tonight."""
+    rather than being scoped to what changed tonight.
+
+    aliases_stage runs immediately before it, for the same reason and in that
+    order: the legislation half may have just discovered acts whose
+    abbreviations are not in ch_act_alias yet, and step 1 of resolution reads
+    that table. Seeding it after the resolve would leave every citation of a
+    newly discovered act at the terminal 'unresolved_abbr' until someone runs
+    CHPIPE_CIT_RESOLVE_ALL by hand."""
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
     monkeypatch.setattr(delta, "run_decisions",
                         lambda settings, fetcher_factory=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
+    order = []
+    _stub_alias_and_resolve(monkeypatch, order)
+
+    delta.main()
+
+    assert order == ["aliases", "resolve"]
+
+
+def test_main_still_resolves_when_the_alias_seed_fails(tmp_path, monkeypatch):
+    """Same guard shape as every other half: a failing alias seed is logged
+    and re-raised at the end, but it does not cost that night its resolution
+    pass over the edges already extracted."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_decisions",
+                        lambda settings, fetcher_factory=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+
+    def boom(settings):
+        raise RuntimeError("simulated alias failure")
+
+    monkeypatch.setattr(aliases_stage, "run", boom)
     calls = []
     monkeypatch.setattr(
         citations_resolve_stage, "run",
         lambda settings, resolve_all=False: calls.append(settings) or
         citations_resolve_stage.ResolveReport())
 
-    delta.main()
+    with pytest.raises(RuntimeError, match="simulated alias failure"):
+        delta.main()
 
     assert len(calls) == 1
 
@@ -1040,13 +1082,10 @@ def test_main_still_runs_citations_resolve_once_when_a_half_fails(
     monkeypatch.setattr(delta, "run_decisions", boom)
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
-    calls = []
-    monkeypatch.setattr(
-        citations_resolve_stage, "run",
-        lambda settings, resolve_all=False: calls.append(settings) or
-        citations_resolve_stage.ResolveReport())
+    order = []
+    _stub_alias_and_resolve(monkeypatch, order)
 
     with pytest.raises(RuntimeError, match="simulated decisions failure"):
         delta.main()
 
-    assert len(calls) == 1
+    assert order == ["aliases", "resolve"]

@@ -31,6 +31,18 @@ def conn():
                 docket_number text
             )
         """)
+        # ... and the same for migration 197's ch_act_article, which this
+        # migration indexes but does not create. IF NOT EXISTS so a real
+        # 197-shaped table left behind by another test is used as it stands.
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS ch_act_article (
+                article_id bigserial PRIMARY KEY,
+                version_id bigint,
+                article_number text,
+                e_id text,
+                ordinal integer
+            )
+        """)
         c.execute(MIGRATION.read_text())
         yield c
 
@@ -96,3 +108,26 @@ def test_creates_the_docket_and_pending_resolution_indexes(conn):
     assert "idx_ch_court_docket" in _indexes(conn, "ch_court_decisions")
     assert "idx_ch_leg_cit_pending" in _indexes(conn, "ch_legislation_citations")
     assert "idx_ch_case_cit_pending" in _indexes(conn, "ch_case_citations")
+
+
+def test_sets_a_lock_timeout_before_anything_else(conn):
+    """The migration runner applies the whole file as one implicit
+    transaction, so the ALTER TABLE's ACCESS EXCLUSIVE lock on
+    ch_court_decisions is held until the file's last statement commits --
+    through both ch_court_decisions index builds. A bounded lock_timeout is
+    what keeps that from queueing behind (and then blocking) the delta's own
+    writers indefinitely: the migration fails fast and is retried outside the
+    window instead."""
+    statements = [line.strip() for line in MIGRATION.read_text().splitlines()
+                  if line.strip() and not line.strip().startswith("--")]
+    assert statements[0] == "SET lock_timeout = '3s';"
+    # And it really took effect in the session the file was applied in.
+    assert conn.execute("SHOW lock_timeout").fetchone()[0] == "3s"
+
+
+def test_creates_the_article_resolution_index(conn):
+    """Step 3 of citations_resolve_stage looks an article up by
+    (version_id, article_number); migration 197 indexes article_number alone
+    and (version_id, ordinal), neither of which serves that lookup. Measured
+    6.6x on the composite."""
+    assert "idx_ch_act_article_version_number" in _indexes(conn, "ch_act_article")

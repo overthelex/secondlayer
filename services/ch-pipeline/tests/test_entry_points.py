@@ -381,16 +381,22 @@ from chpipe import delta as delta_module
 
 
 def _stub_resolve(monkeypatch, calls=None):
-    """citations_resolve_stage.run() is the third guarded step delta.main()
-    runs after both halves -- stubbed out in every test below that reaches
-    main() so it never opens a real connection against the FAKE dsn no_env
-    hands out."""
+    """aliases_stage.run() and citations_resolve_stage.run() are the two
+    guarded steps delta.main() runs after both halves -- stubbed out in every
+    test below that reaches main() so neither opens a real connection against
+    the FAKE dsn no_env hands out. Only the resolve call is recorded in
+    `calls`: these tests are about main()'s composition of the two corpus
+    halves, and the alias seed's own placement has its own test in
+    tests/test_delta.py."""
     def fake(settings, resolve_all=False):
         if calls is not None:
             calls.append(settings)
         return delta_module.citations_resolve_stage.ResolveReport()
 
     monkeypatch.setattr(delta_module.citations_resolve_stage, "run", fake)
+    monkeypatch.setattr(
+        delta_module.aliases_stage, "run",
+        lambda settings: delta_module.aliases_stage.AliasReport())
 
 
 def test_delta_main_is_reachable(monkeypatch, no_renice):

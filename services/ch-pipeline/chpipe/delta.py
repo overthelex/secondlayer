@@ -73,8 +73,8 @@ from dataclasses import dataclass, field
 from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
-from .stages import (acts_stage, citations_resolve_stage, citations_stage,
-                     diff_stage, extract_stage, fetch_stage,
+from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
+                     citations_stage, diff_stage, extract_stage, fetch_stage,
                      fetch_xml_stage, index_stage, load_stage,
                      parse_akn_stage, project_legacy_stage,
                      provenance_stage, versions_stage)
@@ -633,6 +633,26 @@ def main() -> DeltaReport:
     # worth resolving even on a night the legislation half died. Same guard
     # shape as the loop: logged in full, appended to `failures`, and never
     # allowed to swallow (or be swallowed by) the other two.
+    #
+    # aliases_stage comes immediately before it, guarded the same way and for
+    # the same reason it exists at all: step 1 of resolution looks the
+    # citation's abbreviation up in ch_act_alias, and the legislation half
+    # that just ran may have discovered acts whose abbreviation is not in
+    # that table yet. Seeding after the resolve instead of before it would
+    # leave every citation of a newly discovered act stamped
+    # 'unresolved_abbr' -- a TERMINAL state that no ordinary run revisits
+    # (see citations_resolve_stage's docstring), so those citations would
+    # stay unresolved until an operator ran CHPIPE_CIT_RESOLVE_ALL by hand.
+    # Its own guard, not a shared one: a failing alias seed must still leave
+    # the resolve pass to run over the edges already extracted.
+    try:
+        alias_report = aliases_stage.run(settings)
+        log.info("delta: aliases inserted=%d total=%d",
+                 alias_report.inserted, alias_report.total)
+    except Exception as exc:                    # noqa: BLE001 -- see above
+        log.exception("delta: the alias seed failed")
+        failures.append(("aliases", exc))
+
     resolve_report = citations_resolve_stage.ResolveReport()
     try:
         resolve_report = citations_resolve_stage.run(settings)

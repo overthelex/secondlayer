@@ -420,3 +420,59 @@ def test_two_megabytes_without_any_act_extract_in_under_a_second():
 
     assert out == []
     assert elapsed < 1.0, f"extract_statutes took {elapsed:.3f}s on 2 MB"
+
+
+# --------------------------------------------------------------------------
+# Number-valued qualifier lists ("Ziff. 2 und 3") are ONE citation
+# --------------------------------------------------------------------------
+
+def test_de_ziffer_list_is_not_a_second_paragraph():
+    assert refs("Art. 3 Abs. 1 Ziff. 2 und 3 VwVG") == [("VwVG", "3", "1", "de")]
+
+
+def test_it_numero_list_is_not_a_second_paragraph():
+    assert refs("art. 5 cpv. 1 n. 2 e 3 LIFD") == [("LIFD", "5", "1", "it")]
+
+
+def test_de_satz_list_is_not_a_second_paragraph():
+    assert refs("Art. 10 Abs. 1 Satz 2 und 3 BGG") == [("BGG", "10", "1", "de")]
+
+
+def test_a_real_paragraph_list_is_still_one_ref_per_paragraph():
+    """The other half of the same rule: a list that follows the *paragraph*
+    keyword with nothing in between really is a second paragraph."""
+    assert refs("Art. 42 Abs. 1 und 2 BGG") == [
+        ("BGG", "42", "1", "de"),
+        ("BGG", "42", "2", "de"),
+    ]
+    assert refs("art. 399 al. 1 et 3 CPP") == [
+        ("CPP", "399", "1", "fr"),
+        ("CPP", "399", "3", "fr"),
+    ]
+
+
+def test_fr_chiffre_list_after_an_alinea_keeps_the_whole_reference():
+    """The conjunction alternation used to match the "e" of "et" and then
+    read the "t" as the letter of a letter list, which left the abbreviation
+    out of reach and dropped the reference entirely rather than just the
+    extra chiffre."""
+    assert refs("art. 5 al. 1 ch. 2 et 3 LTF") == [("LTF", "5", "1", "fr")]
+
+
+# --------------------------------------------------------------------------
+# A capitalised ordinary word is never an act abbreviation
+# --------------------------------------------------------------------------
+
+def test_capitalised_ordinary_word_after_an_article_is_not_an_act():
+    """Every curated and title-derived abbreviation carries at least two
+    uppercase letters (OR, ZGB, SchKG, LTF) or is Cst./Cost. A token that is
+    one capital followed only by lowercase is an ordinary word -- the first
+    word of the next sentence, which a line break makes look like the act
+    slot."""
+    assert refs("Art. 12\nJede Person hat Anspruch") == []
+    assert refs("Art. 7\nSodann") == []
+
+
+def test_the_two_dotted_constitution_abbreviations_survive_that_rule():
+    assert refs("art. 8 Cst.") == [("Cst.", "8", None, "fr")]
+    assert refs("art. 8 Cost.") == [("Cost.", "8", None, "it")]

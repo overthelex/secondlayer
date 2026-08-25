@@ -34,6 +34,14 @@ def conn():
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION.read_text())
+        # Migration 199 indexes ch_act_article (version_id, article_number)
+        # for citations_resolve_stage's article lookup but does not create
+        # that table -- migration 197 does. Minimal shape of it here, the
+        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
+        # real 197-shaped table left by another test is used as it stands.
+        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
+                  "article_id bigserial PRIMARY KEY, version_id bigint, "
+                  "article_number text, e_id text, ordinal integer)")
         c.execute(MIGRATION_199.read_text())
         yield c
 

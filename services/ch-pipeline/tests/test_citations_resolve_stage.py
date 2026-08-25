@@ -154,13 +154,15 @@ def _case_rows(conn):
 def test_resolves_acts_editions_articles_and_cases(seeded, settings):
     report = citations_resolve_stage.run(settings)
 
-    # Every raw row is attempted once: 3 legislation edges, 3 case edges.
-    assert report.acts == 3
-    # Only the two OR/336 edges make it past act resolution (XYZ never finds
-    # an act at all).
+    # All four counters mean the same thing: rows this step RESOLVED, not
+    # rows it attempted. Two of the three legislation edges find an act
+    # (XYZ never does), and both of those go on to find an edition and an
+    # article; two of the three case edges find a decision (BGE 1 I 1 does
+    # not).
+    assert report.acts == 2
     assert report.editions == 2
     assert report.articles == 2
-    assert report.cases == 3
+    assert report.cases == 2
 
     leg = _leg_rows(seeded)
 
@@ -232,10 +234,10 @@ def test_resolve_all_recomputes_even_terminal_rows(seeded, settings):
 
     second = citations_resolve_stage.run(settings, resolve_all=True)
 
-    assert second.acts == 3
+    assert second.acts == 2
     assert second.editions == 2
     assert second.articles == 2
-    assert second.cases == 3
+    assert second.cases == 2
 
     leg = _leg_rows(seeded)
     assert leg["ECLI:A"]["article_id"] == 1001
@@ -270,3 +272,70 @@ def test_a_shared_docket_number_resolves_the_same_way_every_run(conn, settings):
     ).fetchone()["to_ecli"]
 
     assert first == second == "ECLI:CH_BGer:1"
+
+
+def test_an_alias_in_another_language_still_resolves(conn, settings):
+    """A citation's `lang` is a hint, not a fact: the extractor falls back to
+    'de' whenever no keyword decides, so "les art. 9 et 10 LPGA" -- French
+    text, no paragraph keyword -- arrives here as lang 'de'. Filtering
+    ch_act_alias on the language would drop it against an alias that exists
+    only under 'fr'. Language ranks candidates; it must not exclude them."""
+    _act(conn, 5, "830.1", enforcement_status=0, date_entry_force=date(2003, 1, 1))
+    _alias(conn, "LPGA", "fr", "830.1")
+    _leg_citation(conn, "ECLI:D", "LPGA", "9", None, "de", date(2018, 6, 1))
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT sr_number, act_id, match_method FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:D'").fetchone()
+    assert row["sr_number"] == "830.1"
+    assert row["act_id"] == 5
+    assert row["match_method"] == "act_only", "no edition exists, but the act resolved"
+
+
+def test_the_citations_language_still_wins_when_two_acts_share_an_abbreviation(
+        conn, settings):
+    """The other half of the same rule: dropping the language filter must not
+    cost the language *preference*. "CP" is the French penal code and the
+    Italian code of civil procedure; an Italian citation must get the Italian
+    act even though the French alias would win every remaining tiebreak (same
+    enforcement status, same entry-force date, lower act_id)."""
+    _act(conn, 6, "311.0", enforcement_status=0, date_entry_force=date(1942, 1, 1))
+    _act(conn, 7, "272", enforcement_status=0, date_entry_force=date(1942, 1, 1))
+    _alias(conn, "CP", "fr", "311.0")
+    _alias(conn, "CP", "it", "272")
+    _leg_citation(conn, "ECLI:E", "CP", "1", None, "it", None)
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT sr_number FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:E'").fetchone()
+    assert row["sr_number"] == "272"
+
+
+def test_the_counters_count_resolutions_not_attempts(conn, settings):
+    """One edge that resolves and one that cannot, for each of the two entry
+    points. Counting attempts made `acts`/`cases` mean something different
+    from `editions`/`articles` (which only ever counted rows they actually
+    updated), so a report line could not be read across its four numbers."""
+    _act(conn, 8, "220", enforcement_status=0, date_entry_force=date(1912, 1, 1))
+    _alias(conn, "OR", "de", "220")
+    _leg_citation(conn, "ECLI:F", "OR", "1", None, "de", None)
+    _leg_citation(conn, "ECLI:F", "NOPE", "1", None, "de", None)
+    _decision(conn, "ECLI:T", "CH_BGer", "4A_1/2020")
+    _case_citation(conn, "ECLI:F", "4A_1/2020", "docket")
+    _case_citation(conn, "ECLI:F", "4A_2/2020", "docket")
+
+    report = citations_resolve_stage.run(settings)
+
+    assert report.acts == 1
+    assert report.cases == 1
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_legislation_citations "
+        "WHERE match_method = 'unresolved_abbr'").fetchone()["n"] == 1, \
+        "the row that did not resolve is still stamped terminal"
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_case_citations "
+        "WHERE match_method = 'unresolved'").fetchone()["n"] == 1

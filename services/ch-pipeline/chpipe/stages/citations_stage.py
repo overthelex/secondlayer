@@ -20,11 +20,20 @@ flag is not a failure worth recording there.
 
 Per batch the order is: extract everything (in a thread pool -- this is
 CPU-bound Python holding the GIL, same shape as extract_stage's quality
-scoring), THEN one executemany per edge table, THEN the stamp. If the
-inserts raise, the exception propagates and the stamp for that batch never
-runs -- the claim query offers the same rows again on the next run, and
-ON CONFLICT DO NOTHING (see db.insert_citations) makes re-inserting the rows
-that already made it in a no-op rather than a duplicate or an error.
+scoring), THEN one delete per edge table for the batch's own decisions, THEN
+one executemany per edge table, THEN the stamp. If either write raises, the
+exception propagates and the stamp for that batch never runs -- the claim
+query offers the same rows again on the next run, which repeats the same
+delete-then-insert from scratch, and ON CONFLICT DO NOTHING (see
+db.insert_citations) makes re-inserting the rows that already made it in a
+no-op rather than a duplicate or an error.
+
+The delete is what makes a re-extraction a replacement instead of an
+addition: a decision is only re-claimed after complete(-> 'extracted')
+cleared its stamp, i.e. after it was given NEW text, and an edge the old
+text produced but the new one does not would otherwise survive forever
+(nothing collides with it, so ON CONFLICT never sees it). See
+db.delete_citations.
 """
 from __future__ import annotations
 
@@ -108,9 +117,11 @@ def run(settings: Settings, limit: int | None = None,
                                              ref.lang, ref.context, from_date))
                     stamped_eclis.append(ecli)
 
-                # Inserts first, then the stamp -- if the inserts raise, this
-                # batch is not stamped and the claim loop picks it up again
-                # on the next run. See the module docstring.
+                # Delete, then insert, then stamp -- if either write raises,
+                # this batch is not stamped and the claim loop picks it up
+                # again on the next run, re-deleting and re-inserting from
+                # scratch. See the module docstring.
+                db.delete_citations(conn, [r["ecli"] for r in rows])
                 db.insert_citations(conn, case_rows, statute_rows)
                 db.stamp_citations(conn, stamped_eclis)
 

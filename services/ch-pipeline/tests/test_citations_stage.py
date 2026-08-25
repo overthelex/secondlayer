@@ -57,6 +57,14 @@ def conn(settings):
             )
         """)
         c.execute(MIGRATION_196.read_text())
+        # Migration 199 indexes ch_act_article (version_id, article_number)
+        # for citations_resolve_stage's article lookup but does not create
+        # that table -- migration 197 does. Minimal shape of it here, the
+        # same way ch_court_decisions is stood up above; IF NOT EXISTS so a
+        # real 197-shaped table left by another test is used as it stands.
+        c.execute("CREATE TABLE IF NOT EXISTS ch_act_article ("
+                  "article_id bigserial PRIMARY KEY, version_id bigint, "
+                  "article_number text, e_id text, ordinal integer)")
         c.execute(MIGRATION_199.read_text())
         yield c
 
@@ -217,9 +225,59 @@ def test_re_extraction_unstamps_a_decision_for_the_next_citations_run(conn, sett
     second = citations_stage.run(settings)
     assert second.decisions == 1
     # The re-scan is over the NEW text ("art. 336 OR"), so "OR" must show up
-    # -- the old "Cst." row from the first pass is a different citation
-    # (different abbr_raw) and stays, insert_citations() being additive.
+    # -- and the "Cst." row from the first pass must NOT: it was extracted
+    # from text this decision no longer has.
     leg_abbrs = {r["abbr_raw"] for r in conn.execute(
         "SELECT abbr_raw FROM ch_legislation_citations WHERE from_ecli = 'ECLI:I'"
     ).fetchall()}
-    assert "OR" in leg_abbrs
+    assert leg_abbrs == {"OR"}
+
+
+def test_re_extraction_removes_the_edges_the_old_text_produced(conn, settings):
+    """A re-extraction replaces a decision's edges, it does not add to them.
+    ON CONFLICT DO NOTHING makes re-inserting the SAME edge harmless, but an
+    edge the new text no longer contains has nothing to collide with -- left
+    alone it survives forever, and the graph keeps serving a citation the
+    decision does not make."""
+    _row(conn, "ECLI:J", "j", "CH_BGer", date(2020, 1, 1),
+        "art. 8 Cst. und BGE 142 III 102")
+
+    citations_stage.run(settings)
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:J'").fetchone()["n"] == 1
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_case_citations "
+        "WHERE from_ecli = 'ECLI:J'").fetchone()["n"] == 1
+
+    # New text, with neither of the two references the first one carried.
+    db.complete(conn, "j", "extracted", full_text="art. 336 OR", text_quality=0.9)
+    conn.execute("UPDATE ch_court_decisions SET stage = 'loaded' WHERE ecli = 'ECLI:J'")
+
+    citations_stage.run(settings)
+
+    leg = conn.execute(
+        "SELECT abbr_raw FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:J'").fetchall()
+    assert [r["abbr_raw"] for r in leg] == ["OR"], "the Cst. edge is gone"
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_case_citations "
+        "WHERE from_ecli = 'ECLI:J'").fetchone()["n"] == 0, "the BGE edge is gone"
+
+
+def test_a_decision_whose_edges_are_deleted_does_not_touch_another_decisions(
+        conn, settings):
+    """The delete is scoped to the batch's own from_ecli values -- a
+    re-extracted decision must not take another decision's edges with it."""
+    _row(conn, "ECLI:K", "k", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.")
+    _row(conn, "ECLI:L", "l", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.")
+
+    citations_stage.run(settings)
+    db.complete(conn, "k", "extracted", full_text="art. 336 OR", text_quality=0.9)
+    conn.execute("UPDATE ch_court_decisions SET stage = 'loaded' WHERE ecli = 'ECLI:K'")
+
+    citations_stage.run(settings)
+
+    assert conn.execute(
+        "SELECT abbr_raw FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:L'").fetchone()["abbr_raw"] == "Cst."

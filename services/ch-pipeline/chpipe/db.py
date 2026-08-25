@@ -472,6 +472,29 @@ def claim_for_citations(conn, limit: int, spider: str | None = None) -> list[dic
         return cur.fetchall()
 
 
+def delete_citations(conn, eclis: list[str]) -> None:
+    """Drop every edge these decisions currently have, ahead of re-inserting
+    the ones their CURRENT text produces.
+
+    A decision only re-enters claim_for_citations() after complete(->
+    'extracted') cleared its citations_extracted_at, i.e. after it was given
+    new text. ON CONFLICT DO NOTHING in insert_citations() makes an edge the
+    new text still contains collide harmlessly with the row already there --
+    but an edge the new text no longer contains has nothing to collide with,
+    and left alone it outlives the text it came from forever. Deleting the
+    decision's edges first makes the batch a replacement rather than an
+    addition.
+
+    Scoped to from_ecli, so a re-extracted decision only ever drops its own
+    edges -- never the ones some other decision wrote pointing at it.
+    """
+    if not eclis:
+        return
+    conn.execute("DELETE FROM ch_case_citations WHERE from_ecli = ANY(%s)", (eclis,))
+    conn.execute("DELETE FROM ch_legislation_citations WHERE from_ecli = ANY(%s)",
+                 (eclis,))
+
+
 def insert_citations(conn, case_rows: list[tuple], statute_rows: list[tuple]) -> None:
     """One executemany per edge table, each with ON CONFLICT DO NOTHING.
 
