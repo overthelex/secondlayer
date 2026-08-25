@@ -311,3 +311,37 @@ def test_parse_edition_keeps_the_articles_notes():
 def test_parse_edition_produces_text_for_a_real_edition():
     _, text = akn.parse_edition(FIXTURE.read_bytes())
     assert len(text) > 1000
+
+
+# --- Fedlex repeats eIds inside one document ---
+
+_DUP_EIDS = b"""<?xml version="1.0" encoding="UTF-8"?>
+<akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act>
+<body>
+  <article eId="art_1"><num>Art. 1</num><content><p>Der Kanton Zug ist ein Freistaat.</p></content></article>
+  <article eId="art_2"><num>Art. 2</num><content><p>Zweiter Artikel.</p></content></article>
+</body>
+<conclusions>
+  <article eId="art_1"><num>Art. 1</num><content><p>Diese Verfassung tritt in Kraft.</p></content></article>
+  <article eId="art_1"><num>Art. 1</num><content><p>Dritte Fassung derselben Nummer.</p></content></article>
+</conclusions>
+</act></akomaNtoso>"""
+
+
+def test_a_repeated_eid_is_disambiguated_in_document_order():
+    """SR 131.218 and friends: `art_1` in the body and again in the
+    transitional part. The first keeps the bare id, later ones are
+    suffixed, so (version_id, e_id) stays unique and every article is
+    stored. 118 editions of 51 acts were refused before this."""
+    arts = akn.parse_articles(_DUP_EIDS)
+    assert [a.e_id for a in arts] == ["art_1", "art_2", "art_1#2", "art_1#3"]
+    assert len({a.e_id for a in arts}) == len(arts)
+    assert arts[2].text.startswith("Diese Verfassung")
+    assert arts[3].article_number == "1", "the number is the document's, untouched"
+
+
+def test_a_suffixed_eid_keeps_its_parent_path():
+    xml = _DUP_EIDS.replace(b'eId="art_1"', b'eId="disp_u1/art_1"')
+    arts = akn.parse_articles(xml)
+    assert arts[2].e_id == "disp_u1/art_1#2"
+    assert arts[2].parent_e_id == "disp_u1"
