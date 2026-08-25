@@ -827,7 +827,11 @@ raw edges `citations` wrote:
    park a perfectly resolvable citation at the terminal `unresolved_abbr`.
 2. **edition** — `act_id` (+ `lang`, `from_date`) → `ch_act_version` →
    `version_id`. The parsed edition whose
-   `[date_applicability, date_end_applicability)` contains `from_date`, or —
+   `[date_applicability, date_end_applicability]` contains `from_date` —
+   **`date_end_applicability` is inclusive**, the last day the edition is in
+   force, not the first day it no longer is (verified on prod: 19,428
+   consecutive parsed editions of the same act+lang have
+   `next.date_applicability = prev.date_end_applicability + 1 day`) — or,
    when `from_date` is `NULL` — **the parsed edition with the greatest
    `date_applicability` not in the future** (`latest_edition`). Tries the
    citation's own language first and falls back to `de` only when nothing in

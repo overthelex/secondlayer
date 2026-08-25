@@ -9,11 +9,14 @@ matching is wrong -- not that the "model" (the DB itself) got the date
 wrong.
 
 Selection, identical to getActArticle:
-  * act: `ch_act` by `sr_number`, preferring `enforcement_status = 0` then
-    the latest `date_entry_force` when more than one row shares the number.
+  * act: when the item carries an `act_id` (build.py's make_items() stamps
+    one on every item -- see below), that act_id is used directly. Older
+    item files without it fall back to `ch_act` by `sr_number`, preferring
+    `enforcement_status = 0` then the latest `date_entry_force` when more
+    than one row shares the number.
   * edition: the `stage = 'parsed'` `ch_act_version` of that act (and lang)
     with `date_applicability <= as_of AND (date_end_applicability IS NULL
-    OR as_of < date_end_applicability)`, latest `date_applicability` first.
+    OR as_of <= date_end_applicability)`, latest `date_applicability` first.
   * article: the `ch_act_article` row in that edition with
     `article_number = item.article_number`, preferring the top-level e_id
     (`ORDER BY (e_id LIKE '%/%'), ordinal`).
@@ -23,6 +26,25 @@ If any step comes up empty the answer is "" and the result line carries an
 "no_edition_for_date" or "article_not_found" -- rather than raising, so one
 bad item (e.g. a hand-crafted out-of-range as_of, used in tests to exercise
 this path) does not abort the whole run.
+
+date_end_applicability is INCLUSIVE (verified on prod 2026-08-23: 19,428
+consecutive parsed editions of the same act+lang have
+next.date_applicability = prev.date_end_applicability + 1 day). The old `<`
+predicate treated an edition's last day as already uncovered, which is why
+7,356 of 7,390 "before" items (as_of = change_date - 1 day, i.e. the old
+edition's last day) came back `no_edition_for_date` on prod.
+
+Resolving by `act_id` (when present) rather than `sr_number` fixes a second,
+independent failure: several `ch_act` rows can share one `sr_number` (the
+historical predecessor act and its successor, both filed under the same SR
+number), and `_ACT_SQL`'s enforcement_status/date_entry_force tiebreak can
+pick a *different* act row than the one whose editions the item was actually
+built from -- one with no `ch_act_version` covering `as_of` at all. That
+explains the 135 "after" items (as_of = change_date, not an edition-boundary
+date, so the inclusive-end fix alone did not touch them) that still came back
+`no_edition_for_date`: the builder always knows the exact act_id (it reads
+`ch.act_id` straight off `ch_act_change`), so it is no longer left to a
+sr_number-keyed guess.
 """
 from __future__ import annotations
 
@@ -54,7 +76,7 @@ SELECT version_id
   FROM ch_act_version
  WHERE act_id = %(act_id)s AND lang = %(lang)s AND stage = 'parsed'
    AND date_applicability <= %(as_of)s::date
-   AND (date_end_applicability IS NULL OR %(as_of)s::date < date_end_applicability)
+   AND (date_end_applicability IS NULL OR %(as_of)s::date <= date_end_applicability)
  ORDER BY date_applicability DESC
  LIMIT 1
 """
@@ -83,16 +105,29 @@ class RunReport:
 
 
 def _lookup(cur, item: dict[str, Any]) -> tuple[str, str | None]:
-    """Resolve ITEM's (sr_number, article_number, lang, as_of) to article
-    text the same way getActArticle would. Returns (answer, oracle_error);
-    ANSWER is "" and ORACLE_ERROR is set when any selection step fails."""
-    cur.execute(_ACT_SQL, {"sr_number": item["sr_number"]})
-    act = cur.fetchone()
-    if act is None:
-        return "", "act_not_found"
+    """Resolve ITEM's (act_id or sr_number, article_number, lang, as_of) to
+    article text the same way getActArticle would. Returns (answer,
+    oracle_error); ANSWER is "" and ORACLE_ERROR is set when any selection
+    step fails.
+
+    Prefers item["act_id"] when the item carries one (build.py's
+    make_items() always stamps it -- see this module's docstring): the
+    builder read that act_id straight off the ch_act_change row the item
+    was derived from, so it names the exact act whose editions cover the
+    item, whereas the sr_number fallback below re-derives an act via a
+    tiebreak that is not guaranteed to land on that same act when more than
+    one ch_act row shares the sr_number.
+    """
+    act_id = item.get("act_id")
+    if act_id is None:
+        cur.execute(_ACT_SQL, {"sr_number": item["sr_number"]})
+        act = cur.fetchone()
+        if act is None:
+            return "", "act_not_found"
+        act_id = act["act_id"]
 
     cur.execute(_EDITION_SQL, {
-        "act_id": act["act_id"], "lang": item["lang"], "as_of": item["as_of"],
+        "act_id": act_id, "lang": item["lang"], "as_of": item["as_of"],
     })
     edition = cur.fetchone()
     if edition is None:

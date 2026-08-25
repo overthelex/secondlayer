@@ -136,6 +136,7 @@ def seeded(conn):
     = 0` join must exclude entirely.
     """
     old_date = datetime.date(2015, 1, 1)
+    old_end_date = datetime.date(2020, 12, 31)
     change_date = datetime.date(2021, 1, 1)
 
     _act(conn, 1, "220", abbreviation="OR", enforcement_status=0)
@@ -143,9 +144,13 @@ def seeded(conn):
         "INSERT INTO ch_act_alias (abbr, lang, sr_number, source) "
         "VALUES ('CO', 'fr', '220', 'curated')")
 
-    _version(conn, 101, 1, "de", old_date, change_date)
+    # date_end_applicability is INCLUSIVE -- the old edition's last day in
+    # force is 2020-12-31, one day before the new edition's
+    # date_applicability, not the change date itself. See
+    # chpipe/bench/run_oracle.py's module docstring for the prod evidence.
+    _version(conn, 101, 1, "de", old_date, old_end_date)
     _version(conn, 102, 1, "de", change_date, None)
-    _version(conn, 103, 1, "fr", old_date, change_date)
+    _version(conn, 103, 1, "fr", old_date, old_end_date)
     _version(conn, 104, 1, "fr", change_date, None)
 
     for old_v, new_v in ((101, 102), (103, 104)):
@@ -195,6 +200,13 @@ def test_build_writes_two_items_per_language(settings, seeded, tmp_path):
     assert [it["kind"] for it in de_items] == sorted(it["kind"] for it in de_items)
 
 
+def test_item_carries_the_exact_act_id(settings, seeded, tmp_path):
+    build.build(settings, langs=("de", "fr"), out_dir=tmp_path, now=_NOW)
+    de_items = _read_jsonl(tmp_path / "bench-de.jsonl")
+    fr_items = _read_jsonl(tmp_path / "bench-fr.jsonl")
+    assert all(it["act_id"] == 1 for it in de_items + fr_items)
+
+
 def test_fr_item_uses_the_curated_alias_abbreviation(settings, seeded, tmp_path):
     build.build(settings, langs=("de", "fr"), out_dir=tmp_path, now=_NOW)
     fr_items = _read_jsonl(tmp_path / "bench-fr.jsonl")
@@ -239,7 +251,7 @@ def test_before_and_after_item_shape(settings, seeded, tmp_path):
     assert before["distractor"]["text"] == NEW_TEXT
     assert after["gold"]["text"] == NEW_TEXT
     assert before["gold"]["version_id"] == 101
-    assert before["gold"]["date_end_applicability"] == "2021-01-01"
+    assert before["gold"]["date_end_applicability"] == "2020-12-31"
     assert after["gold"]["date_end_applicability"] is None
     assert before["source"] == "Fedlex (fedlex.admin.ch)"
     assert before["licence"] == (

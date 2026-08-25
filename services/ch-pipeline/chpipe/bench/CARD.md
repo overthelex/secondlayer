@@ -123,6 +123,7 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 |---|---|---|
 | `id` | string | stable id, first 16 hex chars of `sha1(f"{lang}\|{sr_number}\|{e_id}\|{as_of}")` |
 | `lang` | string | `de`, `fr`, or `it` |
+| `act_id` | integer | the exact `ch_act` row this item's editions come from — resolve editions by this, not by `sr_number` alone, since more than one act can share a SR number (a predecessor act and its successor filed under the same number) |
 | `sr_number` | string | the act's Systematische Rechtssammlung number (e.g. `"220"`) |
 | `abbreviation` | string | the act's abbreviation in this language (e.g. `"OR"`, `"CO"`) |
 | `article_number` | string | the article number asked about (e.g. `"336"`) |
@@ -142,7 +143,7 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 |---|---|---|
 | `version_id` | integer | the `ch_act_version` row id |
 | `date_applicability` | string (ISO date) | the date this edition took effect |
-| `date_end_applicability` | string (ISO date) or null | the date this edition stopped applying, or null if still current |
+| `date_end_applicability` | string (ISO date) or null | the LAST DAY this edition was in force (inclusive), or null if still current -- the next edition's `date_applicability` is this date + 1 day |
 | `eli` | string | the edition's `eli_consolidation_uri`, Fedlex's own permanent identifier for it |
 | `text` | string | the article's text in this edition, verbatim from `ch_act_article.text` — no normalisation applied at build time |
 

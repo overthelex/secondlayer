@@ -111,6 +111,14 @@ def make_items(
     NEW_ROW. `after`: as_of = change_date, gold = NEW_ROW, distractor =
     OLD_ROW.
 
+    CHANGE_ROW's act_id is stamped onto every output item as item["act_id"]
+    -- run_oracle.py (and any consumer resolving an edition for this item)
+    should use it directly rather than re-deriving an act from sr_number:
+    more than one ch_act row can share a sr_number (a predecessor act and
+    its successor filed under the same number), and a sr_number-keyed
+    tiebreak is not guaranteed to land back on the exact act this item's
+    editions came from.
+
     Either half is dropped -- and reported in the second return value
     instead of the first -- when its gold text has no gold-only unit
     relative to its distractor (score.discriminating_units(gold, distractor)
@@ -154,6 +162,7 @@ def make_items(
         items.append({
             "id": item_id(lang, sr_number, e_id, as_of),
             "lang": lang,
+            "act_id": change_row["act_id"],
             "sr_number": sr_number,
             "abbreviation": abbr,
             "article_number": article_number,
