@@ -73,9 +73,12 @@ describe('CH tool surface registration', () => {
     });
 
     it('documents legal_form with the German labels the column actually holds', () => {
-      // legal_form is filtered with an equality match against ch_zefix_companies.legal_form,
-      // and that column is the label the LINDAS graph publishes — German, always. Offering
-      // 'Société anonyme' as an example documents a filter that can only return nothing.
+      // legal_form is filtered with a case-insensitive PREFIX match against
+      // ch_zefix_companies.legal_form, and that column is the label the LINDAS graph
+      // publishes — German, always, and sometimes a composite ("Gesellschaft mit
+      // beschränkter Haftung GMBH / SARL"), which is why the match is a prefix and not
+      // an equality. Offering 'Société anonyme' as an example would document a filter
+      // that can only return nothing.
       const tool = new ChRegistryTools(stubDb);
       const search = tool.getToolDefinitions().find(d => d.name === 'ch_search_companies')!;
       const doc = `${search.description} ${(search.inputSchema as any).properties.legal_form.description}`;
