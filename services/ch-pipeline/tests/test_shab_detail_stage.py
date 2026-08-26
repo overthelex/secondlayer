@@ -192,14 +192,76 @@ def test_a_row_already_fetched_is_not_claimed_again(conn, settings):
 def test_bankruptcies_are_claimed_before_the_register_and_newest_first(conn):
     """KK is a twelfth of HR's volume and it is the half that answers "is this
     counterparty bankrupt", so it goes first; within a rubric the newest
-    publication is the one a due-diligence question is about."""
+    publication is the one a due-diligence question is about.
+
+    Claimed one at a time rather than four at once on purpose: the claim is an
+    UPDATE ... RETURNING, and RETURNING states no order -- what the priority
+    has to guarantee is WHICH row the next claim takes, not the order rows
+    come back inside one batch."""
     _seed(conn, "hr-old", rubric="HR", date="2020-01-02")
     _seed(conn, "hr-new", rubric="HR", date="2026-08-25")
     _seed(conn, "kk-old", rubric="KK", date="2019-05-05")
     _seed(conn, "kk-new", rubric="KK", date="2026-08-24")
 
-    claimed = [r["shab_id"] for r in shab_detail_stage.claim(conn, 10)]
+    claimed = [shab_detail_stage.claim(conn, 1)[0]["shab_id"] for _ in range(4)]
     assert claimed == ["kk-new", "kk-old", "hr-new", "hr-old"]
+
+
+# --- the claim is exclusive ------------------------------------------------
+#
+# Observed on prod: two shab-detail workers against the same database fetched
+# the SAME publications. The claim was a bare SELECT ... FOR UPDATE SKIP
+# LOCKED on an autocommit connection, so the row locks were gone the moment
+# the SELECT returned and nothing on the row said "taken" -- the next claimer
+# (the second worker, or the nightly delta running beside the backfill) read
+# the identical head of the queue. Every fetched row still had
+# detail_attempts = 0 while the two workers logged 49 fetches/s against 33
+# rows/s of database progress. The claim now bumps the counter in the same
+# statement, which is a committed, visible mark rather than a lock.
+
+
+def test_two_claimers_never_get_the_same_row(conn, settings):
+    """Two connections, four rows, two rows each: disjoint and complete."""
+    for n in range(4):
+        _seed(conn, f"row-{n}", date=f"2026-08-2{n}")
+
+    with psycopg.connect(settings.dsn, autocommit=True, row_factory=dict_row) as a, \
+            psycopg.connect(settings.dsn, autocommit=True, row_factory=dict_row) as b:
+        first = {r["shab_id"] for r in shab_detail_stage.claim(a, 2)}
+        second = {r["shab_id"] for r in shab_detail_stage.claim(b, 2)}
+
+    assert first & second == set(), "the two workers claimed the same rows"
+    assert first | second == {f"row-{n}" for n in range(4)}
+
+
+def test_a_claim_marks_the_row_before_it_is_fetched(conn):
+    """The mark IS the attempt counter: no third state, no extra column, and
+    the same predicate retires a row that has been claimed three times without
+    ever stamping detail_fetched_at."""
+    _seed(conn, HR)
+    shab_detail_stage.claim(conn, 10)
+    assert _row(conn, HR)["detail_attempts"] == 1
+
+
+def test_a_claimed_row_waits_behind_every_unclaimed_one(conn):
+    """The bump is only a mark if the claim asks for rows below it. HR03 is
+    older and a claim ordered by date alone would hand HR back first; it does
+    not, because a row nobody has claimed outranks one somebody has."""
+    _seed(conn, HR, date="2026-08-25")
+    _seed(conn, HR03, date="2020-01-02")
+    assert [r["shab_id"] for r in shab_detail_stage.claim(conn, 1)] == [HR]
+    assert [r["shab_id"] for r in shab_detail_stage.claim(conn, 1)] == [HR03]
+
+
+def test_a_claimed_row_is_retried_once_nothing_is_unclaimed(conn):
+    """Retries are not dropped, they are deprioritised: a row a killed run or
+    a failed fetch left claimed comes back after the unclaimed queue drains,
+    and its third claim retires it."""
+    _seed(conn, HR)
+    for expected in (1, 2, 3):
+        assert len(shab_detail_stage.claim(conn, 10)) == 1
+        assert _row(conn, HR)["detail_attempts"] == expected
+    assert shab_detail_stage.claim(conn, 10) == []
 
 
 def test_the_claim_reads_the_index_instead_of_sorting(conn):
@@ -214,20 +276,30 @@ def test_the_claim_reads_the_index_instead_of_sorting(conn):
     index says, which tells us nothing about the 2.5M-row plan.
 
     Asserted with a non-empty poison set, because that exclusion is part of
-    the claim: it must stay a filter on the ordered index read."""
+    the claim: it must stay a filter on the ordered index read.
+
+    Asserted against the whole claim, UPDATE and all: the ordered read is now
+    a subquery of the statement that bumps detail_attempts, and wrapping it
+    is exactly the change that could push the planner into sorting."""
     _seed(conn, "hr-old", rubric="HR", date="2020-01-02")
     _seed(conn, "kk-new", rubric="KK", date="2026-08-24")
     conn.execute("ANALYZE ch_shab_publications")
     conn.execute("SET enable_seqscan = off")
     try:
-        plan = str(conn.execute(
+        # Both ceilings claim() passes: the unclaimed pass and the retry pass
+        # are the same statement, but only one of them runs on a busy queue
+        # and a plan regression in either is a regression in the claim.
+        plans = {ceiling: str(conn.execute(
             "EXPLAIN (FORMAT JSON) " + shab_detail_stage._CLAIM,
-            (shab_detail_stage.MAX_ATTEMPTS, ["kk-new"], 500)).fetchone())
+            (ceiling, ["kk-new"], 500)).fetchone())
+            for ceiling in (shab_detail_stage._UNCLAIMED,
+                            shab_detail_stage._RETRY)}
     finally:
         conn.execute("RESET enable_seqscan")
 
-    assert "idx_ch_shab_detail_queue" in plan
-    assert "Sort" not in plan
+    for ceiling, plan in plans.items():
+        assert "idx_ch_shab_detail_queue" in plan, ceiling
+        assert "Sort" not in plan, ceiling
 
 
 def test_an_exhausted_row_is_not_claimed(conn):
@@ -238,6 +310,9 @@ def test_an_exhausted_row_is_not_claimed(conn):
 # --- failure ---------------------------------------------------------------
 
 def test_a_server_error_burns_one_attempt_and_records_it(conn, settings):
+    """One increment per claim-and-outcome, and the claim is where it happens:
+    the failure path writes the error and retires a permanent failure, but it
+    must not add a second count to the one the claim already spent."""
     _seed(conn, HR)
     report = _run(settings, FakePortal(status={HR: 500}))
 
@@ -246,6 +321,20 @@ def test_a_server_error_burns_one_attempt_and_records_it(conn, settings):
     assert row["detail_fetched_at"] is None
     assert "500" in row["detail_error"]
     assert (report.fetched, report.failed) == (0, 1)
+
+
+def test_a_success_costs_the_same_one_attempt_as_a_failure(conn, settings):
+    """detail_attempts counts CLAIMS, not failures: the claim bumps it and no
+    outcome puts it back. A fetched row keeps its count and is simply never
+    claimed again, because detail_fetched_at is what takes it out of the
+    queue."""
+    _seed(conn, HR)
+    _run(settings, FakePortal())
+
+    row = _row(conn, HR)
+    assert row["detail_attempts"] == 1
+    assert row["detail_fetched_at"] is not None
+    assert shab_detail_stage.claim(conn, 10) == []
 
 
 def test_a_third_failure_retires_the_row(conn, settings):

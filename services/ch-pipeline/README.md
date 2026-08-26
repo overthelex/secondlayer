@@ -1075,7 +1075,17 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
   row, the legal form, the seat, the full publication text, fetched one XML
   per row from `/api/v1/publications/{id}/xml`. The queue *is* the two
   detail columns — `detail_fetched_at IS NULL AND detail_attempts < 3` — so
-  there is no separate claimed state to leak on a killed run.
+  there is no separate claimed state to leak on a killed run. Claiming a row
+  raises `detail_attempts` in the same statement that reads it, so
+  **`detail_attempts` counts claims, not fetch failures**: three claims that
+  never ended in a `detail_fetched_at` stamp retire the row, and a run killed
+  mid-batch costs the rows it was holding one claim each. The bump is what
+  makes the claim exclusive — `FOR UPDATE SKIP LOCKED` alone holds nothing on
+  an autocommit connection, and two workers sharing this queue were measured
+  fetching the same publications — so several workers, or the nightly delta
+  beside the standalone backfill, can drain it together. A claim prefers rows
+  nobody has claimed and only falls back to retrying claimed-but-unstamped
+  rows once there are none left.
 
 ## Env vars
 
@@ -1161,8 +1171,8 @@ reaped by the far end and only `Restart=always` notices.
 
 Nothing enforces any of this in code: with the tunnel down, `CHPIPE_SHAB_PROXY`
 still points at a dead loopback port and the stages fail their fetches the
-ordinary way — retries, then `detail_attempts`. Check the delta log for a
-`shab-list`/`shab-detail` step that claims rows and fetches none before
+ordinary way — retries, then the claim counter running out. Check the delta
+log for a `shab-list`/`shab-detail` step that claims rows and fetches none before
 suspecting the portal itself.
 
 ## The lossy-paging rule
