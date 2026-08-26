@@ -102,6 +102,42 @@ def _proxy(raw: str | None) -> str | None:
     return (raw or "").strip() or None
 
 
+def _shab_concurrency(raw: str | None) -> int:
+    """In-flight SHAB requests, i.e. the Fetcher's `concurrency=`.
+
+    On the local box this is a direct fetch and 4 is plenty. Through the
+    reverse SOCKS tunnel to prod (~0.4-0.7 s RTT per hop) throughput is
+    roughly concurrency / RTT regardless of CHPIPE_SHAB_RPS, so 4 in flight
+    caps a run at ~5-10 req/s no matter how high the rate limiter is set --
+    turning a 2.5M-row detail backfill into a multi-day run. Raising this
+    (together with CHPIPE_SHAB_RPS, which is the real ceiling once enough
+    requests are in flight) is how the tunnel gets its throughput back.
+
+    Same "" rule as the rest of this module: unset or blank is the default,
+    not zero. Bounded to [1, 32] for the same reason _load_ceiling refuses
+    non-finite -- 0 or negative is not concurrency, it is the stage doing
+    nothing while looking configured, and anything past 32 in-flight
+    requests against a federal gazette is not a raised ceiling, it is a
+    typo (a missing zero, a copy-pasted port number) that a nightly cron
+    job should refuse to start on rather than hammer amtsblattportal.ch
+    with.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return 4
+    try:
+        value = int(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"CHPIPE_SHAB_CONCURRENCY must be an integer between 1 and 32, "
+            f"got {raw!r}.") from exc
+    if not 1 <= value <= 32:
+        raise ValueError(
+            f"CHPIPE_SHAB_CONCURRENCY must be an integer between 1 and 32, "
+            f"got {raw!r}.")
+    return value
+
+
 def _backoff(raw: str | None) -> tuple[int, ...]:
     """"1,5,30" -> (1, 5, 30). An empty value means no wait at all."""
     if raw is None:
@@ -151,6 +187,11 @@ class Settings:
     # hosts are 19 small government servers; http_concurrency is the global
     # cap across all of them, this is the cap on any one of them.
     cantonal_per_host: int = 2
+    # In-flight requests the two SHAB stages hand their Fetcher. See
+    # _shab_concurrency() for why 4 (fine on a direct connection) stalls
+    # through the SOCKS tunnel to prod and has to be raised together with
+    # CHPIPE_SHAB_RPS.
+    shab_concurrency: int = 4
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -172,4 +213,6 @@ class Settings:
                 os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS")),
             shab_proxy=_proxy(os.environ.get("CHPIPE_SHAB_PROXY")),
             cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
+            shab_concurrency=_shab_concurrency(
+                os.environ.get("CHPIPE_SHAB_CONCURRENCY")),
         )

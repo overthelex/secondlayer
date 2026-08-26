@@ -509,3 +509,32 @@ def test_no_proxy_is_configured_by_default(conn, settings, monkeypatch):
     _run(settings, FakePortal())
 
     assert seen["proxy"] is None
+
+
+# --- CHPIPE_SHAB_CONCURRENCY -------------------------------------------
+#
+# Through the SOCKS tunnel to prod, throughput is roughly concurrency / RTT
+# regardless of CHPIPE_SHAB_RPS, so a fixed CONCURRENCY = 4 capped a
+# 2.5M-row detail backfill at ~5 req/s no matter how high the rate limiter
+# was set. Settings.shab_concurrency (CHPIPE_SHAB_CONCURRENCY) has to
+# actually reach the Fetcher this stage builds.
+
+def test_the_configured_concurrency_reaches_the_fetcher(conn, settings, monkeypatch):
+    _seed(conn, HR)
+    seen = _fetcher_spy(monkeypatch)
+    wide = dataclasses.replace(settings, shab_concurrency=16)
+
+    _run(wide, FakePortal())
+
+    assert seen["concurrency"] == 16
+
+
+def test_the_default_concurrency_reaches_the_fetcher(conn, settings, monkeypatch):
+    """settings fixture leaves shab_concurrency at its dataclass default (4),
+    same as the old module-level CONCURRENCY constant."""
+    _seed(conn, HR)
+    seen = _fetcher_spy(monkeypatch)
+
+    _run(settings, FakePortal())
+
+    assert seen["concurrency"] == settings.shab_concurrency == 4

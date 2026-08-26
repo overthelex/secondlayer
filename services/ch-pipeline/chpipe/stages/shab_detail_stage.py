@@ -26,11 +26,15 @@ Spelling the same order as `(rubric = 'KK') DESC` reads more obviously but is
 an expression no index covers: on 1M unfetched rows it sorted the whole set on
 every claim, 867 ms and a disk spill to hand out 500 rows.
 
-Politeness, same as shab-list: `Fetcher` caps in-flight requests at four and
-one stage-wide rate limiter caps the whole run at CHPIPE_SHAB_RPS (default 10)
-requests per second. 2.5M requests at 10/s is ~70 hours, which is why
-CHPIPE_SHAB_BUDGET_SECONDS exists -- the nightly delta stops on the clock and
-the backfill runs without a budget under tmux.
+Politeness, same as shab-list: `Fetcher` caps in-flight requests at
+CHPIPE_SHAB_CONCURRENCY (default 4) and one stage-wide rate limiter caps the
+whole run at CHPIPE_SHAB_RPS (default 10) requests per second. 2.5M requests
+at 10/s is ~70 hours, which is why CHPIPE_SHAB_BUDGET_SECONDS exists -- the
+nightly delta stops on the clock and the backfill runs without a budget under
+tmux. Through the SOCKS tunnel to prod (~0.4-0.7 s RTT) the default
+concurrency of 4 is the binding constraint, not RPS -- see
+chpipe/config.py's _shab_concurrency() -- so raise CHPIPE_SHAB_CONCURRENCY
+alongside CHPIPE_SHAB_RPS to actually use the RPS ceiling.
 
 This stage does NOT write ch_zefix_companies. A resolved UID is stored on the
 publication and nowhere else: ch_zefix_companies holds the register's CURRENT
@@ -42,6 +46,8 @@ Env:
     CHPIPE_LIMIT                  stop after N rows (a smoke run)
     CHPIPE_SHAB_BUDGET_SECONDS    stop after N seconds, checked between batches
     CHPIPE_SHAB_RPS               requests per second ceiling (default 10)
+    CHPIPE_SHAB_CONCURRENCY       in-flight requests (default 4) -- see the
+                                   module docstring's Politeness paragraph
 """
 from __future__ import annotations
 
@@ -60,7 +66,7 @@ from ..config import Settings
 from ..http import FetchError, Fetcher
 # One rate limiter implementation for the two amtsblattportal stages, not two:
 # they hit the same host and the ceiling is a property of that host.
-from .shab_list_stage import CONCURRENCY, _RateLimiter, rate_limit
+from .shab_list_stage import _RateLimiter, rate_limit
 
 log = logging.getLogger(__name__)
 
@@ -335,7 +341,7 @@ async def _run_async(settings: Settings, limit: int | None,
         # connection hangs -- so on the cloud box this goes through a reverse
         # SOCKS tunnel from the local server (CHPIPE_SHAB_PROXY). Only the two
         # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
-        async with Fetcher(concurrency=CONCURRENCY, retries=retries,
+        async with Fetcher(concurrency=settings.shab_concurrency, retries=retries,
                            backoff=backoff, transport=transport,
                            proxy=settings.shab_proxy) as fetcher:
             while True:
