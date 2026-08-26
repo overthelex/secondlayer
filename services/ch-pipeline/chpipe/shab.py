@@ -423,6 +423,23 @@ def detail_url(shab_id: str) -> str:
     return DETAIL_ENDPOINT.format(id=shab_id)
 
 
+# The shapes a UID is actually written in: bare digits (uidOrganisationId),
+# the rendered form (uid), either of them with the VAT suffix the register
+# appends for a company registered for MWST/TVA/IVA. Matched against the RAW
+# text, before any stripping: "Tel. 044 123 45 67 89" strips down to eleven
+# digits and "CHE-123.456.789.012" to twelve, but a field holding a phone
+# number or an over-long identifier is a field this parser has misread, and
+# the digit count alone cannot tell the difference between that and a UID
+# once the non-digits are gone.
+_UID_SHAPE = re.compile(
+    r"""^\s*
+        (?: CHE [-.\s]? )?              # the rendered form's prefix
+        \d{3} [-.\s]? \d{3} [-.\s]? \d{3}
+        (?: \s* (?: MWST | TVA | IVA ) )?   # registered for VAT
+        \s*$""",
+    re.VERBOSE | re.IGNORECASE)
+
+
 def canonical_uid(raw: str | None) -> str | None:
     """"344059939" or "CHE-344.059.939" -> "CHE-344.059.939".
 
@@ -431,13 +448,14 @@ def canonical_uid(raw: str | None) -> str | None:
     ch_zefix_companies.uid is the rendered form -- two spellings would mean a
     publication that never joins to its company.
 
-    Anything that is not exactly nine digits is None rather than a guess: the
-    UID is a checksummed nine-digit number, and a shorter one is not a UID
-    with a typo, it is a field this parser has misread.
+    Anything that is not written as a UID is None rather than a guess: the
+    UID is a checksummed nine-digit number, and text that merely contains
+    nine digits is not a UID with a typo, it is a field this parser has
+    misread.
     """
-    digits = _NON_DIGITS.sub("", raw or "")
-    if len(digits) != 9:
+    if not _UID_SHAPE.match(raw or ""):
         return None
+    digits = _NON_DIGITS.sub("", raw)
     return f"CHE-{digits[:3]}.{digits[3:6]}.{digits[6:]}"
 
 

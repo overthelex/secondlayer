@@ -337,6 +337,20 @@ def test_the_uid_is_canonical_even_though_the_xml_gives_bare_digits():
     assert shab.canonical_uid("") is None
     assert shab.canonical_uid(None) is None
     assert shab.canonical_uid("34405993") is None      # eight digits
+    assert shab.canonical_uid("CHE344059939") == "CHE-344.059.939"
+
+
+def test_only_text_written_as_a_uid_is_read_as_one():
+    """The shape is checked against the RAW text, not against what is left
+    after the non-digits are stripped. A phone number strips down to eleven
+    digits and an over-long identifier to twelve, but a company_uid is the
+    key every publication joins to its company on, and a field this parser
+    has misread must produce no key rather than a plausible one."""
+    assert shab.canonical_uid("CHE-123.456.789 MWST") == "CHE-123.456.789"
+    assert shab.canonical_uid("CHE-123.456.789 TVA") == "CHE-123.456.789"
+    assert shab.canonical_uid("Tel. 044 123 45 67 89") is None
+    assert shab.canonical_uid("CHE-123.456.789.012") is None
+    assert shab.canonical_uid("Konkursamt, 8001 Zürich, 044 123 45 67") is None
 
 
 def test_an_hr_detail_carries_the_purpose_and_the_capital():
