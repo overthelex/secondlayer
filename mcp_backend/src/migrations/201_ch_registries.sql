@@ -66,7 +66,26 @@ ALTER TABLE ch_shab_publications ADD COLUMN IF NOT EXISTS detail_error text;
 -- no-ops and the 129 definitions stay. They are here for databases created from this file alone.
 CREATE INDEX IF NOT EXISTS idx_ch_shab_uid ON ch_shab_publications (company_uid) WHERE company_uid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ch_shab_date ON ch_shab_publications (publication_date);
-CREATE INDEX IF NOT EXISTS idx_ch_shab_detail_queue ON ch_shab_publications (rubric, publication_date DESC) WHERE detail_fetched_at IS NULL;
+-- The shab-detail queue index. Both columns DESC, in that order, because the
+-- stage claims `ORDER BY rubric DESC, publication_date DESC` -- 'KK' > 'HR'
+-- lexicographically, so bankruptcies come first -- and a partial index is only
+-- worth having if the claim reads it in order. The earlier definition
+-- (rubric ASC, publication_date DESC) could not serve that ORDER BY at all:
+-- measured on 1M unfetched rows the claim sorted the whole set on every call,
+-- 867 ms with a disk spill, for 500 rows.
+--
+-- IF NOT EXISTS matches by NAME, so a database that already ran the older
+-- version of this migration would keep the useless index forever. Dropped
+-- first, and only when it is the old shape, so re-running this file on a
+-- corrected database is still a no-op.
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_indexes
+                WHERE indexname = 'idx_ch_shab_detail_queue'
+                  AND indexdef NOT LIKE '%rubric DESC%') THEN
+        DROP INDEX IF EXISTS idx_ch_shab_detail_queue;
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_ch_shab_detail_queue ON ch_shab_publications (rubric DESC, publication_date DESC) WHERE detail_fetched_at IS NULL;
 
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN

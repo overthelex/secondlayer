@@ -17,8 +17,14 @@ Order: KK before HR, newest first. KK is 215,853 publications against HR's
 2,293,215 and it is the half that answers "is this counterparty bankrupt", so
 a backfill stopped at any point has delivered the more valuable rubric; within
 a rubric the recent publications are the ones a due-diligence question is
-about. idx_ch_shab_detail_queue (rubric, publication_date DESC) WHERE
-detail_fetched_at IS NULL is the index behind that ORDER BY.
+about. Both of those come out of `ORDER BY rubric DESC, publication_date DESC`
+-- 'KK' sorts after 'HR', so a plain descending sort on the rubric puts
+bankruptcies first -- which is exactly the column order of
+idx_ch_shab_detail_queue (rubric DESC, publication_date DESC) WHERE
+detail_fetched_at IS NULL, so the claim reads the index and never sorts.
+Spelling the same order as `(rubric = 'KK') DESC` reads more obviously but is
+an expression no index covers: on 1M unfetched rows it sorted the whole set on
+every claim, 867 ms and a disk spill to hand out 500 rows.
 
 Politeness, same as shab-list: `Fetcher` caps in-flight requests at four and
 one stage-wide rate limiter caps the whole run at CHPIPE_SHAB_RPS (default 10)
@@ -84,14 +90,18 @@ class ShabDetailReport:
     skipped_exhausted: int = 0  # rows out of attempts, measured before the run
 
 
-# NULLS LAST on both keys: `(rubric = 'KK')` is NULL for a row whose rubric is
-# NULL, and a DESC sort puts NULLs first -- so a handful of rubric-less rows
-# would be served ahead of the whole KK backlog.
+# No NULLS clause anywhere, deliberately: DESC defaults to NULLS FIRST and so
+# does a DESC index, so the default is what matches idx_ch_shab_detail_queue
+# and keeps the plan free of a Sort node (asserted by an EXPLAIN test). The
+# cost is that a row with a NULL rubric -- shab-list writes one for every
+# publication, so this is a row that arrived some other way -- is claimed
+# ahead of KK and parsed as HR. One misparsed publication is cheaper than
+# sorting 2.5M rows on every claim.
 _CLAIM = """
 SELECT shab_id, rubric
   FROM ch_shab_publications
  WHERE detail_fetched_at IS NULL AND detail_attempts < %s
- ORDER BY (rubric = 'KK') DESC NULLS LAST, publication_date DESC NULLS LAST
+ ORDER BY rubric DESC, publication_date DESC
  LIMIT %s
    FOR UPDATE SKIP LOCKED
 """
@@ -143,6 +153,9 @@ SELECT legal_form_code AS code, legal_form AS name
 
 def claim(conn, limit: int) -> list[dict]:
     """Rows still owed a detail, most valuable first.
+
+    'KK' > 'HR', so `rubric DESC` is "bankruptcies before the register" AND is
+    an index-ordered read of idx_ch_shab_detail_queue. See _CLAIM.
 
     FOR UPDATE SKIP LOCKED reduces overlap between processes but is not a
     distributed lock under autocommit -- the row lock releases the moment the

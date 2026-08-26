@@ -111,12 +111,34 @@ def test_indexes(conn):
         assert "idx_ch_shab_name_trgm" not in shab_indexes
 
 
-def test_detail_queue_index_is_partial(conn):
+def test_detail_queue_index_is_partial_and_in_the_claims_own_order(conn):
+    """Both columns DESC, in that order. shab-detail claims
+    `ORDER BY rubric DESC, publication_date DESC` ('KK' > 'HR', so descending
+    is bankruptcies first), and an index that does not match that order is not
+    read in order at all: the earlier (rubric, publication_date DESC)
+    definition made the claim sort the whole unfetched set, measured at 867 ms
+    with a disk spill on 1M rows."""
     row = conn.execute(
         "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_ch_shab_detail_queue'").fetchone()
     assert row is not None
     assert "WHERE (detail_fetched_at IS NULL)" in row[0]
+    assert "rubric DESC" in row[0]
     assert "publication_date DESC" in row[0]
+
+
+def test_an_older_detail_queue_index_is_replaced(conn):
+    """IF NOT EXISTS matches by name, so a database that ran the first version
+    of this migration would keep the index that cannot serve the claim. The
+    migration drops it when -- and only when -- it is the old shape."""
+    conn.execute("DROP INDEX IF EXISTS idx_ch_shab_detail_queue")
+    conn.execute("CREATE INDEX idx_ch_shab_detail_queue ON ch_shab_publications "
+                 "(rubric, publication_date DESC) WHERE detail_fetched_at IS NULL")
+    conn.execute(MIGRATION.read_text())
+
+    indexdef = conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_ch_shab_detail_queue'"
+    ).fetchone()[0]
+    assert "rubric DESC" in indexdef
 
 
 def test_is_idempotent(conn):

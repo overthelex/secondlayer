@@ -201,6 +201,31 @@ def test_bankruptcies_are_claimed_before_the_register_and_newest_first(conn):
     assert claimed == ["kk-new", "kk-old", "hr-new", "hr-old"]
 
 
+def test_the_claim_reads_the_index_instead_of_sorting(conn):
+    """The queue is 2.5M rows and the claim runs once per 500 of them, so it
+    has to be an ordered read of idx_ch_shab_detail_queue rather than a sort of
+    everything unfetched. `ORDER BY (rubric = 'KK') DESC` was the same order
+    written as an expression no index covers: measured on 1M unfetched rows it
+    sorted the whole set on every call, 867 ms with a disk spill for 500 rows.
+
+    enable_seqscan is off for this assertion only: the fixture table holds a
+    handful of rows and the planner would seq-scan-and-sort them whatever the
+    index says, which tells us nothing about the 2.5M-row plan."""
+    _seed(conn, "hr-old", rubric="HR", date="2020-01-02")
+    _seed(conn, "kk-new", rubric="KK", date="2026-08-24")
+    conn.execute("ANALYZE ch_shab_publications")
+    conn.execute("SET enable_seqscan = off")
+    try:
+        plan = str(conn.execute(
+            "EXPLAIN (FORMAT JSON) " + shab_detail_stage._CLAIM,
+            (shab_detail_stage.MAX_ATTEMPTS, 500)).fetchone())
+    finally:
+        conn.execute("RESET enable_seqscan")
+
+    assert "idx_ch_shab_detail_queue" in plan
+    assert "Sort" not in plan
+
+
 def test_an_exhausted_row_is_not_claimed(conn):
     _seed(conn, HR, attempts=3)
     assert shab_detail_stage.claim(conn, 10) == []
