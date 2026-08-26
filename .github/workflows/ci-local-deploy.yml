@@ -44,7 +44,9 @@ jobs:
   # ─── Step 1: Detect what changed ─────────────────────────────────────
   detect-changes:
     name: Detect Changes
-    runs-on: [self-hosted, local]
+    # `local` матчится и на prod-runner — весь конвейер нового прода держим
+    # на его собственной машине
+    runs-on: [self-hosted, local-deploy]
     outputs:
       shared: ${{ steps.changes.outputs.shared }}
       backend: ${{ steps.changes.outputs.backend }}
@@ -87,7 +89,13 @@ jobs:
   # ─── Step 2: Build & test on local environment ─────────────────────
   build-and-test:
     name: Build & Test on Local
-    runs-on: [self-hosted, local-build]
+    # Пин на cthulhu-vm — виртуалку на local.lex. Лейбл `local-build` до
+    # 26.08 висел ещё и на prod-runner, поэтому сборка нового прода регулярно
+    # уезжала собираться на старом: кто из двух раннеров освободился первым,
+    # тот её и брал. Лишний лейбл с prod-runner снят, но пин оставляем в коде —
+    # чтобы возврат лейбла не вернул лотерею.
+    # Та же ловушка, что была у deploy-local с лейблом `local`.
+    runs-on: [self-hosted, cthulhu-vm]
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     env:
@@ -204,7 +212,7 @@ jobs:
   # ─── Step 2b: Self-heal build failures with Claude Code (DISABLED) ──
   self-heal-build:
     name: Self-Heal Build Failures
-    runs-on: [self-hosted, local]
+    runs-on: [self-hosted, local-deploy]
     needs: [detect-changes, build-and-test]
     if: false  # temporarily disabled — not producing useful fixes
     env:
