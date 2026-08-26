@@ -176,3 +176,30 @@ def test_an_empty_history_map_links_through_the_reference_and_fills_date_decisio
     assert dates == {"2017.026": datetime.date(2017, 3, 21), "2018.040": datetime.date(2018, 6, 5),
                      "2018.041": None}
     assert report.decision_dates_filled == 2
+
+EMPTY_FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "lexwork_empty_bs_unstructured.json"
+
+
+def test_an_edition_without_provisions_is_parsed_with_zero_articles(conn, settings):
+    """BS 251.700 (a Regierungsratsbeschluss whose whole text sits in the
+    header/footer, no article node): parsed, article_count 0, the text kept
+    as full_text, the reason counted -- and a requeue re-parses it to the
+    same state, which is what the LEXAI-2019 runbook relies on."""
+    vid = _fetched(conn, payload=EMPTY_FIXTURE.read_text())
+    report = cantonal_parse_stage.run(settings)
+    assert report.parsed == 1 and report.failed == 0 and report.articles == 0
+    assert report.empty == 1
+    assert report.empty_by_reason == {"unstructured_text": 1}
+    stage, text, count = conn.execute(
+        "SELECT stage, full_text, article_count FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()
+    assert stage == "parsed" and count == 0
+    assert "Antragsberechtigte Behörden und Stellen" in text
+    assert conn.execute("SELECT count(*) FROM ch_act_article WHERE version_id=%s",
+                        (vid,)).fetchone()[0] == 0
+    conn.execute("UPDATE ch_act_version SET stage='fetched', attempts=0 WHERE version_id=%s", (vid,))
+    again = cantonal_parse_stage.run(settings)
+    assert again.parsed == 1 and again.empty_by_reason == {"unstructured_text": 1}
+    assert conn.execute(
+        "SELECT stage, full_text, article_count FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone() == (stage, text, count)

@@ -51,6 +51,12 @@ class ParseReport:
     parsed: int = 0
     articles: int = 0
     empty: int = 0
+    # empty, split by lexwork.empty_reason(): annex_only / published_by_
+    # reference / placeholder / unstructured_text. 235 editions on prod sat
+    # at article_count 0 for two days as one opaque number before this was
+    # measured (LEXAI-2019); the split is what tells an operator whether a
+    # new zero is a host publishing pointers (fine) or a parser miss (not).
+    empty_by_reason: dict[str, int] = field(default_factory=dict)
     failed: int = 0
     lang_not_in_payload: int = 0
     # A modification table whose header vocabulary lexwork.py does not know:
@@ -160,6 +166,14 @@ def backfill_decision_dates(conn, version_ids: list[int]) -> int:
     return conn.execute(_BACKFILL_DECISION_DATES, (list(version_ids),)).rowcount
 
 
+def _reasons(report: ParseReport) -> str:
+    """' (annex_only=3 unstructured_text=1)' or '' -- the empty count's split,
+    for the log line."""
+    if not report.empty_by_reason:
+        return ""
+    return " (" + " ".join(f"{k}={v}" for k, v in sorted(report.empty_by_reason.items())) + ")"
+
+
 def run(settings: Settings, canton_code: str | None = None,
         limit: int | None = None) -> ParseReport:
     report = ParseReport()
@@ -230,12 +244,16 @@ def run(settings: Settings, canton_code: str | None = None,
                 report.decision_dates_filled += filled
                 if not articles:
                     report.empty += 1
+                    reason = lexwork.empty_reason(payload, row["lang"], text)
+                    report.empty_by_reason[reason] = report.empty_by_reason.get(reason, 0) + 1
+                    log.info("version %s: no articles (%s)", row["version_id"], reason)
             if remaining is not None:
                 remaining -= len(rows)
-            log.info("cantonal parsed=%d articles=%d empty=%d failed=%d "
+            log.info("cantonal parsed=%d articles=%d empty=%d%s failed=%d "
                      "lang_not_in_payload=%d tables_unrecognised=%d provenance=%d linked=%d "
                      "(matched=%d) decision_dates_filled=%d",
-                     report.parsed, report.articles, report.empty, report.failed,
+                     report.parsed, report.articles, report.empty,
+                     _reasons(report), report.failed,
                      report.lang_not_in_payload, report.tables_unrecognised,
                      report.provenance_rows, report.provenance_linked,
                      report.provenance_matched, report.decision_dates_filled)
@@ -254,9 +272,9 @@ def main() -> ParseReport:
     result = run(Settings.from_env(),
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
-    log.info("parsed=%d articles=%d empty=%d failed=%d lang_not_in_payload=%d "
+    log.info("parsed=%d articles=%d empty=%d%s failed=%d lang_not_in_payload=%d "
              "provenance=%d linked=%d (matched=%d) decision_dates_filled=%d",
-             result.parsed, result.articles, result.empty,
+             result.parsed, result.articles, result.empty, _reasons(result),
              result.failed, result.lang_not_in_payload, result.provenance_rows,
              result.provenance_linked, result.provenance_matched, result.decision_dates_filled)
     if result.tables_unrecognised:
