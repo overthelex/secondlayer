@@ -11,7 +11,10 @@ index leaves out. A registry number the host answers 404 to is counted as
 not_on_host, not failed.
 
 Per act: one ch_act row keyed on the act's canonical front-end URL, one
-ch_act_change_document row per amending act, and one ch_act_version row per
+ch_act_change_document row per amending act (AR publishes none: its
+change_documents/lightweight_index is `{}` and every act's
+change_documents is `[]`, status 426 acts, checked live 2026-08-26 --
+not a key the upsert misses, the host has nothing), and one ch_act_version row per
 (version, language of the canton) at stage 'discovered', source 'lexwork',
 whose xml_url is the version's show_as_json endpoint. The languages are
 cantons.py's expectation; a language the payload turns out not to have is
@@ -130,7 +133,12 @@ ON CONFLICT (jurisdiction, source_id, act_id) DO UPDATE SET
     number           = EXCLUDED.number,
     title            = EXCLUDED.title,
     date_publication = EXCLUDED.date_publication,
-    date_decision    = EXCLUDED.date_decision,
+    -- COALESCE'd: the record itself carries no decision date on 17 of 19
+    -- hosts (date_of_decision_string is "????"; only BE and FR write it
+    -- into the title), so it is backfilled from the provenance rows that
+    -- cite the document (cantonal_parse_stage / cantonal_relink_stage),
+    -- and the weekly re-walk must not put the NULL back.
+    date_decision    = COALESCE(EXCLUDED.date_decision, ch_act_change_document.date_decision),
     pdf_url          = EXCLUDED.pdf_url,
     metadata_json    = EXCLUDED.metadata_json,
     updated_at       = now()
