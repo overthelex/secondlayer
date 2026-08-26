@@ -92,7 +92,7 @@ def test_editions_are_compared_by_date_on_shared_acts_in_the_first_language(conn
     assert row["versions_lexwork"] == 8, "de rows of BE only: 5 + failed + short + 152.01's"
     assert row["versions_lexfind"] == 5
     assert row["date_matches"] == 3
-    assert row["date_mismatches"] == 3, "2026-01-01, 2019 (failed) and 2018 are not in LexFind"
+    assert row["date_mismatches"] == 2, "2026-01-01 and 2018 are parsed but not in LexFind; the failed 2019 row is not compared"
     assert row["date_future"] == 1, "2099-09-01 is not a mismatch, LexFind lists in-force versions only"
 
 
@@ -124,4 +124,4 @@ def test_the_stage_prints_one_block_per_canton(conn, settings, capsys):
     result = reports_cantonal_stage.run(settings, canton_code="BE")
     assert result.text.startswith("Gate F")
     assert "BE: acts lexwork 2 (in force 2) / lexfind 2 (active 1)" in result.text
-    assert "dates match 3 / mismatch 3 / future 1" in result.text
+    assert "dates match 3 / mismatch 2 / future 1" in result.text

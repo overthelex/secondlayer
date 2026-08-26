@@ -53,9 +53,13 @@ SELECT
 
 _VERSIONS = """
 WITH ours AS (
+    -- parsed editions only: a PDF-only edition (stage failed, reason
+    -- pdf_only) is reported in failed_by_reason and predates LexFind's
+    -- history anyway (FR 2026-08-26: 1,272 of 1,274 "mismatches" were those)
     SELECT a.sr_number, v.date_applicability
       FROM ch_act_version v JOIN ch_act a USING (act_id)
      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s
+       AND v.stage = 'parsed'
 ), theirs AS (
     SELECT r.systematic_number AS sr_number,
            to_date(e ->> 'version_active_since', 'DD.MM.YYYY') AS date_applicability
@@ -65,7 +69,8 @@ WITH ours AS (
     SELECT sr_number FROM ours INTERSECT SELECT sr_number FROM theirs
 )
 SELECT
-    (SELECT count(*) FROM ours) AS versions_lexwork,
+    (SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id)
+      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s) AS versions_lexwork,
     (SELECT coalesce(sum(version_count), 0) FROM ch_cantonal_registry WHERE canton = %(canton)s)
         AS versions_lexfind,
     (SELECT count(*) FROM ours o WHERE o.sr_number IN (SELECT sr_number FROM shared)
@@ -138,7 +143,7 @@ def gate_f(conn, canton: str | None = None) -> list[dict]:
 
 def format_gate_f(rows: list[dict]) -> str:
     out = ["Gate F: cantonal corpus against LexFind (acts by systematic number; "
-           "editions by date_applicability = version_active_since on shared acts)"]
+           "parsed editions by date_applicability = version_active_since on shared acts)"]
     for r in rows:
         out.append(
             f"{r['canton']}: acts lexwork {r['acts_lexwork']} (in force {r['in_force_lexwork']}) / "
