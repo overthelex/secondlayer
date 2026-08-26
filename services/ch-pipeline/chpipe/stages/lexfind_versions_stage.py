@@ -41,7 +41,11 @@ metadata and would overwrite ours weekly anyway.
 Dates. version_active_since is the start; version_inactive_since exists
 only on abrogated versions (2,495 in the 7 cantons) and is the abrogation
 date, i.e. the day the edition STOPPED applying, so the inclusive end is
-that minus one. Otherwise an edition ends the day before its successor
+that minus one. info_badge_date says the same thing for every abrogated
+or "removed" version (equal to version_inactive_since in all 2,495 cases
+that have both; the only end date of the 599 removed -- renumbered --
+acts whose newest version has none), and is read the same way, capped by
+the successor rule. Otherwise an edition ends the day before its successor
 starts -- the successor being the next dated version of the same act and
 language, LexFind's or another source's, whichever comes first. Same-day
 pairs are common (SZ: 955 of 3,238 versions; a "formless" correction is
@@ -209,8 +213,10 @@ def _parse_versions(entries: list[dict], counts: Counts) -> list[_Version]:
             counts.versions_unparseable_date += 1
             continue
         until = _date(entry.get("version_inactive_since"))
+        if until is None and entry.get("info_badge") in ("abrogated", "removed"):
+            until = _date(entry.get("info_badge_date"))
         if until is not None and until <= since:
-            # 8 of 2,495 on prod: an abrogation dated at or before the start.
+            # 8 of 2,495 on prod: an end dated at or before the start.
             # Not a range; let the successor rule (or nothing) close it.
             until = None
         langs = [lang for lang in entry.get("languages") or [] if lang]

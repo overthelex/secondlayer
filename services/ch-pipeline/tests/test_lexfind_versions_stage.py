@@ -36,10 +36,14 @@ def conn(settings):
         yield c
 
 
-def _v(vid, since, until=None, badge="not_current", langs=("de",), with_pdf=True, **extra):
-    """One versions_json entry as the registry holds it."""
+def _v(vid, since, until=None, badge="not_current", langs=("de",), with_pdf=True,
+       badge_date=None, **extra):
+    """One versions_json entry as the registry holds it. On prod every
+    abrogated version with version_inactive_since has info_badge_date equal
+    to it (2,495 of 2,495); the fixture mirrors that unless told otherwise."""
     entry = {"id": vid, "version_active_since": since, "version_inactive_since": until,
-             "info_badge": badge, "is_active": badge == "current", "languages": list(langs),
+             "info_badge": badge, "info_badge_date": badge_date or until,
+             "is_active": badge == "current", "languages": list(langs),
              "title": f"v{vid}", **extra}
     if with_pdf:
         entry["pdf_urls"] = {lang: lexfind_api.pdf_url(vid, lang) for lang in langs}
@@ -118,14 +122,21 @@ def sz(conn):
         _v(9201, "irgendwann", ),
         _v(9200, "01.01.2010", langs=()),
     ])
+    # 400.1: "removed" (renumbered, SZ 111.210 --> 111.200 on prod): no
+    # version_inactive_since anywhere, the removal date is info_badge_date.
+    # 599 such acts across the 7 cantons would otherwise keep an open edition.
+    _registry(conn, 1004, "SZ", "400.1", [
+        _v(9301, "01.01.2009", badge="removed", badge_date="31.12.2010"),
+        _v(9300, "01.01.2000", badge="removed", badge_date="31.12.2010"),
+    ], active=False)
 
 
 def test_all_materialises_acts_and_every_dated_version_with_its_pdf(conn, settings, sz):
     report = stage.run(settings, canton_code="SZ", scope="all")
     c = report.by_canton["SZ"]
     assert report.scope == {"SZ": "all"} and report.errors == 0
-    assert c.acts_created == 3 and c.acts_matched == 0
-    assert c.versions_inserted == 8 and c.versions_updated == 0
+    assert c.acts_created == 4 and c.acts_matched == 0
+    assert c.versions_inserted == 10 and c.versions_updated == 0
     assert c.versions_unparseable_date == 1 and c.versions_no_pdf == 1
     assert c.versions_skipped_existing == 0 and c.versions_same_day_shadow == 1
 
@@ -161,9 +172,15 @@ def test_all_materialises_acts_and_every_dated_version_with_its_pdf(conn, settin
         (D(1990, 1, 1), D(1994, 12, 31)),
         (D(1995, 1, 1), D(1999, 12, 31)),       # until 01.01.2000, exclusive
     ]
-    assert _open_editions(conn, "SZ") == [
-        (conn.execute("SELECT act_id FROM ch_act WHERE sr_number='200.1'").fetchone()[0], "de", 0)
-    ], "an abrogated act has no open edition; every other act/lang has exactly one"
+    removed = _versions(conn, "400.1", "SZ")
+    assert [(r[1], r[2]) for r in removed] == [
+        (D(2000, 1, 1), D(2008, 12, 31)),       # successor wins over the act-level badge date
+        (D(2009, 1, 1), D(2010, 12, 30)),       # info_badge_date 31.12.2010, exclusive
+    ]
+    closed = {conn.execute("SELECT act_id FROM ch_act WHERE sr_number=%s", (n,)).fetchone()[0]
+              for n in ("200.1", "400.1")}
+    assert _open_editions(conn, "SZ") == [(a, "de", 0) for a in sorted(closed)], \
+        "abrogated and removed acts have no open edition; every other act/lang has exactly one"
 
 
 def test_all_is_idempotent(conn, settings, sz):
@@ -172,10 +189,10 @@ def test_all_is_idempotent(conn, settings, sz):
     conn.execute("UPDATE ch_act_version SET stage = 'parsed' WHERE eli_consolidation_uri = 'lexfind:9003/de'")
     report = stage.run(settings, canton_code="SZ", scope="all")
     c = report.by_canton["SZ"]
-    assert c.acts_created == 0 and c.acts_matched == 3
-    assert c.versions_inserted == 0 and c.versions_updated == 8
+    assert c.acts_created == 0 and c.acts_matched == 4
+    assert c.versions_inserted == 0 and c.versions_updated == 10
     assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == before[0]
-    assert conn.execute("SELECT count(*) FROM ch_act").fetchone()[0] == 3
+    assert conn.execute("SELECT count(*) FROM ch_act").fetchone()[0] == 4
     assert conn.execute("SELECT stage FROM ch_act_version WHERE eli_consolidation_uri = "
                         "'lexfind:9003/de'").fetchone()[0] == "parsed", "stage is never touched"
 
