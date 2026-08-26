@@ -4,6 +4,7 @@ import pathlib
 
 import psycopg
 import pytest
+from conftest import reset_legislation_schema
 from chpipe import akn, db
 from chpipe.config import Settings
 from chpipe.http import FetchError
@@ -27,12 +28,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def conn():
     with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {"work": WORK, "srNotation": "220"})
         yield c
 

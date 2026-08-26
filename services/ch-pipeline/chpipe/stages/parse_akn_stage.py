@@ -116,7 +116,8 @@ def run(settings: Settings, limit: int | None = None) -> ParseReport:
             rows = db.claim_versions(
                 conn, "fetched", limit=size,
                 max_attempts=settings.max_attempts,
-                backoff_minutes=settings.retry_backoff_minutes)
+                backoff_minutes=settings.retry_backoff_minutes,
+                source="fedlex")
             if not rows:
                 break
             for row in rows:

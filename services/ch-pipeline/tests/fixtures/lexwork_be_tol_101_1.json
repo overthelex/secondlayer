@@ -1,0 +1,127 @@
+{
+ "text_of_law": {
+  "systematic_number": "101.1",
+  "systematic_number_hl": "101.1",
+  "title": "Verfassung des Kantons Bern",
+  "title_hl": "Verfassung des Kantons Bern",
+  "abbreviation": "KV",
+  "abbreviation_hl": "KV",
+  "enactment": "1995-01-01",
+  "date_of_decision": "1993-06-06",
+  "date_of_decision_multiple": false,
+  "publication_enactment": "2026-01-01",
+  "text_of_law_type_id": 3,
+  "text_of_law_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+  "pdf_link": "https://www.belex.sites.be.ch/api/de/versions/3147/pdf_file_with_annexes",
+  "canonical_link": "https://www.belex.sites.be.ch/app/de/texts_of_law/101.1",
+  "abrogated": false,
+  "abrogated_dates_str": null,
+  "abrogated_dates_str_short": null,
+  "abrogated_scheduled": false,
+  "abrogated_scheduled_date_str": null,
+  "abrogated_scheduled_date_str_short": null,
+  "version_uid": "f0fa50e075710313ee5b8a64dc3f2003",
+  "snippet_msg": null,
+  "snippet": null,
+  "current_version": {
+   "id": 3147,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.2026 (Beschlussdatum: 27.11.2023)",
+   "structured_document_id": 33807,
+   "title": "Verfassung des Kantons Bern",
+   "abbreviation": "KV"
+  },
+  "selected_version": {
+   "id": 3147,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.2026 (Beschlussdatum: 27.11.2023)",
+   "structured_document_id": 33807,
+   "title": "Verfassung des Kantons Bern",
+   "abbreviation": "KV",
+   "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+   "pdf_link_tol": "https://www.belex.sites.be.ch/api/de/versions/3147/pdf_file",
+   "pdf_link_tol_size": 1019694,
+   "pdf_link_annexes": null,
+   "pdf_link_tol_with_annexes": null,
+   "doc_link_tol": null,
+   "materials": [],
+   "external_links": [],
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    },
+    {
+     "language": {
+      "id": 3,
+      "iso639_1_code": "fr",
+      "iso639_2_code": "fra",
+      "name_native": "Français",
+      "priority": 2,
+      "position": 2,
+      "name": "Französisch"
+     }
+    }
+   ],
+   "annex_documents": []
+  },
+  "old_versions": [
+   {
+    "id": 3020,
+    "version_dates_str": "Version in Kraft von: 03.03.2024 bis: 31.12.2025 (Beschlussdatum: 03.03.2024)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 31418,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   },
+   {
+    "id": 2876,
+    "version_dates_str": "Version in Kraft von: 01.01.2024 bis: 02.03.2024 (Beschlussdatum: 12.03.2023)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 30568,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   }
+  ],
+  "future_versions": [],
+  "change_documents": [
+   {
+    "id": 2374,
+    "date_title_string": "Publikationsdatum 19.03.2025",
+    "number": "25-022",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4747/pdf_file",
+    "pdf_link_size": 233856,
+    "for_selected_version": true,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "19.03.2025",
+    "date_string": "19.03.2025",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 27.11.2023)",
+    "identifier_1": "19.03.2025",
+    "identifier_2": "25-022",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2301,
+    "date_title_string": "Publikationsdatum 17.04.2024",
+    "number": "24-018",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4601/pdf_file",
+    "pdf_link_size": 126536,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "17.04.2024",
+    "date_string": "17.04.2024",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 03.03.2024)",
+    "identifier_1": "17.04.2024",
+    "identifier_2": "24-018",
+    "external_links": [],
+    "materials": []
+   }
+  ]
+ }
+}

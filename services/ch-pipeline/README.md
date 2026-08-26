@@ -1290,6 +1290,66 @@ the `python3` child does not hold the lock fd and can keep running after the
 wrapper is gone) and kill the real process. Once nothing holds the fd, the
 lock releases itself.
 
+## Cantonal legislation (Lexwork, 19 cantons) and the LexFind registry
+
+Spec: `docs/superpowers/specs/2026-08-26-ch-cantonal-legislation-design.md`.
+Migration 201 adds `ch_act.jurisdiction` ('CH' or a canton code),
+`ch_act_version.source` ('fedlex' | 'lexwork'), `ch_act_change_document`
+(the canton's amending acts) and `ch_cantonal_registry` (LexFind's view of
+all 26 cantons). Cantonal acts live in the same tables as federal law, so
+`diff`, `project-legacy` and the point-in-time tools work unchanged; the
+MCP tools take an optional `canton`.
+
+Stages (`run-stage.sh <stage> [canton]`, `CHPIPE_CANTON` is the env twin):
+
+| stage | what it does |
+|---|---|
+| `lexfind-registry [canton]` | all 26 cantons (or one): every act and its version list from lexfind.ch into `ch_cantonal_registry`. ~33K acts, hours at 2 req/s; idempotent |
+| `cantonal-acts [canton]` | Lexwork host(s): acts + versions (stage `discovered`, source `lexwork`) + change documents. Driving set = host index + change-document index + the registry's numbers for the canton (that is how abrogated acts get in). Comma-separated codes allowed |
+| `cantonal-fetch [canton]` | show_as_json payload per version into `akn_xml` (+ audit copy `raw/cantonal/{version_id}.json`). One canton or all; sibling languages share one download |
+| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document`) |
+| `diff`, `project-legacy` | unchanged; `diff` walks cantonal acts too (`e_id` = Lexwork uid) |
+| `reports-cantonal [canton]` | Gate F: Lexwork corpus against the LexFind registry, quality counters, amendment counters |
+
+Backfill order, supervised (never let the first walk happen under the
+nightly flock): `lexfind-registry`, then `cantonal-acts BE` as a pilot,
+`cantonal-fetch BE`, `cantonal-parse BE`, `diff` (all langs of BE: de, fr),
+`reports-cantonal BE`, and read 20 articles against the site before the
+other 18 cantons. Then `project-legacy`. Only after Gate F is clean, seed
+the delta baseline: `raw/cantonal-state.json` is written by the first
+nightly run with today's date per canton and a warning (it walks nothing
+on that night); from the next night `run_cantonal` pages each host's
+`status/recent_changes` since the baseline and re-walks only the acts
+named there. A canton whose host fails keeps its baseline and is retried
+the next night. Weekly full re-walk (Sunday 04:00 UTC) alongside the OCR
+cron:
+
+    0 4 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh cantonal-acts
+    0 5 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh lexfind-registry
+
+Env: `CHPIPE_CANTONAL_PER_HOST` (default 2) caps requests in flight per
+cantonal host; `CHPIPE_HTTP_CONCURRENCY` still caps the total.
+`CHPIPE_LIMIT` bounds fetch/parse runs as for the federal stages.
+
+Failure reasons worth knowing: `language 'x' not in payload` means
+`cantons.py` expects a language the version does not have (a counted
+reason, not a bug in the version); `dates_unparsed` in `cantonal-acts`
+means a version date string the parser has not seen (fix the regex, the
+version was skipped, never defaulted); `not_on_host` is a LexFind number
+the host answers 404 to (BE: 288 old abrogated acts the host dropped, LexFind
+keeps them as PDFs); `pdf_only` in `cantonal-fetch` is a version the host
+holds only as a PDF (retired at once, reason in `last_error`); and
+`tables_unrecognised` in `cantonal-parse` is a modification table whose
+header vocabulary `lexwork.py` does not know yet: the edition parsed, its
+amendment history did not, add the host's words to `_HEADERS`.
+
+Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
+average payload, sibling languages share one download), parse ~1.6K rows/min,
+narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
+
+Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
+or their own portals; the registry already holds their acts and versions.
+
 ## Point-in-time benchmark (chpipe.bench)
 
 `chpipe/bench` is a separate package from the two pipelines above. It does

@@ -80,6 +80,10 @@ class Settings:
     # re-tuning the extractor wants, since the alternative is re-downloading
     # ~160 GB from a volunteer-run mirror.
     keep_raw_pdf: bool = False
+    # Per-host concurrency for the cantonal (Lexwork) stages. 19 cantonal
+    # hosts are 19 small government servers; http_concurrency is the global
+    # cap across all of them, this is the cap on any one of them.
+    cantonal_per_host: int = 2
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -97,4 +101,5 @@ class Settings:
             retry_backoff_minutes=_backoff(
                 os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
             keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
+            cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
         )

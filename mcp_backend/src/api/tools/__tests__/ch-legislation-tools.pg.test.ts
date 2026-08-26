@@ -63,6 +63,7 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       '196_ch_court_pipeline.sql',
       '197_ch_legislation_corpus.sql',
       '198_ch_as_bbl.sql',
+      '201_ch_cantonal_legislation.sql',
     ]) {
       await client.query(readFileSync(join(migrations, file), 'utf-8'));
     }
@@ -627,6 +628,55 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       const body = parse(result!);
 
       expect(body.abbreviation).toBe('DDD');
+    });
+  });
+
+  describe('a cantonal act sharing a federal sr_number (migration 201)', () => {
+    beforeEach(async () => {
+      // Cantonal collections reuse numbers freely; ZH 220 must never shadow SR 220
+      // for a caller that did not ask for a canton, and must be reachable for one that did.
+      const zh = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, jurisdiction, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('https://www.zh.ch/zhlex/220', 'ZH', '220', 'ZHX', 'Zuercher Erlass 220', '2021-01-01', 0)
+         RETURNING act_id`
+      );
+      await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, stage, article_count, source)
+         VALUES ($1, 'https://www.zh.ch/zhlex/220/v1', 'de', '2021-01-01', 'parsed', 1, 'lexwork')`,
+        [zh.rows[0].act_id]
+      );
+      const v = await client.query(`SELECT version_id FROM ch_act_version WHERE act_id = $1`, [zh.rows[0].act_id]);
+      await client.query(
+        `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+         VALUES ($1, 't-0--a-336', '336', 'Zuercher Randtitel', 'Kantonaler Text.', 0)`,
+        [v.rows[0].version_id]
+      );
+    });
+
+    it('answers federally by default', async () => {
+      const body = parse((await tools.executeTool('ch_get_act_article', {
+        sr_number: '220', article: '336', as_of: '2021-06-01',
+      }))!);
+      expect(body.jurisdiction).toBe('CH');
+      expect(body.abbreviation).toBe('OR');
+    });
+
+    it('answers for the canton when asked', async () => {
+      const body = parse((await tools.executeTool('ch_get_act_article', {
+        sr_number: '220', article: '336', as_of: '2021-06-01', canton: 'ZH',
+      }))!);
+      expect(body.jurisdiction).toBe('ZH');
+      expect(body.abbreviation).toBe('ZHX');
+      expect(body.article.text).toBe('Kantonaler Text.');
+    });
+
+    it('search scopes by canton and reports the jurisdiction', async () => {
+      const federal = parse((await tools.executeTool('ch_search_legislation', { query: '220' }))!);
+      expect(federal.results.map((r: any) => r.jurisdiction)).toEqual(['CH']);
+      const zh = parse((await tools.executeTool('ch_search_legislation', { query: '220', canton: 'ZH' }))!);
+      expect(zh.results.map((r: any) => r.jurisdiction)).toEqual(['ZH']);
+      const all = parse((await tools.executeTool('ch_search_legislation', { query: '220', canton: 'all' }))!);
+      expect(all.results.map((r: any) => r.jurisdiction).sort()).toEqual(['CH', 'ZH']);
     });
   });
 });

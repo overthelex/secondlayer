@@ -4,6 +4,7 @@
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
+#   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal [canton]
 #
 # The optional second argument means different things to the two halves, so
 # it is dispatched explicitly rather than exported as both: for the decisions
@@ -46,6 +47,12 @@ case "$STAGE" in
   diff|provenance)
     ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
+    ;;
+  lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal)
+    # A canton code (BE), a comma-separated list for the walks, or nothing
+    # for every canton the stage knows. Same env-survives rule as the others.
+    ARG="${POS:-${CHPIPE_CANTON:-}}"
+    export CHPIPE_CANTON="$ARG"
     ;;
   acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve)
     if [ -n "$POS" ]; then

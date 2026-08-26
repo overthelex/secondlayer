@@ -4,6 +4,7 @@ import urllib.parse
 import httpx
 import psycopg
 import pytest
+from conftest import reset_legislation_schema
 from chpipe import fedlex_queries as fq
 from chpipe import reports_leg
 from chpipe.sparql import SparqlClient
@@ -24,12 +25,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def conn():
     with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
+        reset_legislation_schema(c)
         yield c
 
 

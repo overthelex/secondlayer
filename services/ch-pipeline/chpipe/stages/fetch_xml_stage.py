@@ -174,7 +174,8 @@ async def _run_async(settings: Settings, limit: int | None) -> FetchXmlReport:
                 rows = db.claim_versions(
                     conn, "discovered", limit=size,
                     max_attempts=settings.max_attempts,
-                    backoff_minutes=settings.retry_backoff_minutes)
+                    backoff_minutes=settings.retry_backoff_minutes,
+                    source="fedlex")
                 if not rows:
                     break
 
