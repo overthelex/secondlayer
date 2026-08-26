@@ -348,6 +348,22 @@ def test_zefix_honours_chpipe_zefix_municipalities(monkeypatch, no_renice):
     assert seen["municipalities"] == [371, 700]
 
 
+def test_an_empty_zefix_municipality_list_means_every_municipality(
+        monkeypatch, no_renice):
+    """run-stage.sh exports its variables unconditionally, so the nightly
+    run reaches main() with CHPIPE_ZEFIX_MUNICIPALITIES="" -- and reading an
+    empty selection as a selection is exactly the CHPIPE_SPIDER bug this
+    file exists to prevent. An empty walk would also mean the sweep never
+    runs, because a restricted run never sweeps."""
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    monkeypatch.setenv("CHPIPE_ZEFIX_MUNICIPALITIES", "")
+    zefix_stage.main()
+    assert seen["municipalities"] is None
+
+
 # --- run-stage.sh's own usage line ---
 # It read `index|fetch|extract|ocr|load` long after six more stages existed,
 # and its wrapper is the only way any of them is actually invoked on prod.

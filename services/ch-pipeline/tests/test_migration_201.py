@@ -71,6 +71,20 @@ def _pg_trgm_installed(conn) -> bool:
         "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'").fetchone())
 
 
+def test_sets_a_lock_timeout_before_anything_else(conn):
+    """Same reasoning as migration 199, and the same assertion: the runner
+    applies the whole file as one implicit transaction, so the ALTER TABLEs'
+    ACCESS EXCLUSIVE locks on ch_zefix_companies and ch_shab_publications are
+    held through every index build that follows. A bounded lock_timeout is
+    what keeps that from queueing behind -- and then blocking -- the delta's
+    own writers: the migration fails fast and is retried outside the window."""
+    statements = [line.strip() for line in MIGRATION.read_text().splitlines()
+                  if line.strip() and not line.strip().startswith("--")]
+    assert statements[0] == "SET lock_timeout = '3s';"
+    # And it really took effect in the session the file was applied in.
+    assert conn.execute("SHOW lock_timeout").fetchone()[0] == "3s"
+
+
 def test_adds_columns(conn):
     assert {"municipality_id", "legal_form_code", "seen_at", "source_iri"} \
         <= _cols(conn, "ch_zefix_companies")

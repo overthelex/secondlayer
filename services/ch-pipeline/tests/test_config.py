@@ -77,3 +77,38 @@ def test_zero_is_still_the_deliberate_way_to_disable_the_guard(monkeypatch):
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
     monkeypatch.setenv("CHPIPE_LOAD_CEILING", "0")
     assert Settings.from_env().load_ceiling == 0.0
+
+
+# --- CHPIPE_SHAB_BUDGET_SECONDS: the same hole, in the same shape ---
+#
+# shab-detail stops on `time.monotonic() - started > budget`, and every
+# comparison against nan is False -- so a nightly delta set to nan drains a
+# 2.5M-row queue on a box serving live traffic instead of stopping after 90
+# minutes, with the setting printed in the log as though it were in effect.
+
+@pytest.mark.parametrize("bad", ["nan", "NaN", "inf", "-inf", "Infinity", "-1"])
+def test_a_non_finite_or_negative_shab_budget_is_refused(monkeypatch, bad):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_BUDGET_SECONDS", bad)
+    with pytest.raises(ValueError, match="CHPIPE_SHAB_BUDGET_SECONDS"):
+        Settings.from_env()
+
+
+def test_an_unset_shab_budget_is_ninety_minutes(monkeypatch):
+    """Unlike shab_detail_stage.budget_seconds(), which reads "" as "no
+    budget" for a supervised backfill, the nightly delta must never run
+    unbounded -- so here an absent or empty value is the default, not
+    permission."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.delenv("CHPIPE_SHAB_BUDGET_SECONDS", raising=False)
+    assert Settings.from_env().shab_budget_seconds == 5400.0
+    monkeypatch.setenv("CHPIPE_SHAB_BUDGET_SECONDS", "  ")
+    assert Settings.from_env().shab_budget_seconds == 5400.0
+
+
+def test_a_shab_budget_of_zero_is_one_batch_a_night(monkeypatch):
+    """0 is a real setting, not a typo: the loop checks the clock BETWEEN
+    batches, so a budget of 0 runs exactly one batch and stops."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_BUDGET_SECONDS", "0")
+    assert Settings.from_env().shab_budget_seconds == 0.0
