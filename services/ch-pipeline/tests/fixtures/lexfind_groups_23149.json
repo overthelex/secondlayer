@@ -1,0 +1,534 @@
+{
+ "id": 23149,
+ "systematic_number": "101",
+ "is_active": true,
+ "dta_urls": [
+  {
+   "language": "de",
+   "url": "/tol/21736/de",
+   "file_size": 367128,
+   "original_url": "https://www.zh.ch/de/politik-staat/gesetze-beschluesse/gesetzessammlung/zhlex-ls/erlass-101-2005_02_27-2006_01_01-129.html"
+  }
+ ],
+ "entity": {
+  "id": 26,
+  "abbreviation": "ZH",
+  "name": "Zürich",
+  "icon_endpoint": "/api/fe/entities/26/icon",
+  "image_endpoint": "/api/fe/entities/26/image"
+ },
+ "families": [
+  [
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/251719/de",
+       "file_size": 367128
+      }
+     ],
+     "id": 251719,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": null,
+     "previous_type": "formless",
+     "version_active_since": "01.07.2024",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "10.04.2025",
+     "is_active": true,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/240047/de",
+       "file_size": 366639
+      }
+     ],
+     "id": 240047,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.07.2024",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "01.07.2024",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/232714/de",
+       "file_size": 364087
+      }
+     ],
+     "id": 232714,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.04.2023",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "02.11.2023",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/229751/de",
+       "file_size": 363470
+      }
+     ],
+     "id": 229751,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.04.2023",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "03.04.2023",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/222637/de",
+       "file_size": 360206
+      }
+     ],
+     "id": 222637,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "revised",
+     "previous_type": "revised",
+     "version_active_since": "01.11.2022",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "01.11.2022",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/215173/de",
+       "file_size": 358479
+      }
+     ],
+     "id": 215173,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.01.2022",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "07.04.2022",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/211948/de",
+       "file_size": 358314
+      }
+     ],
+     "id": 211948,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.01.2022",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "01.01.2022",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120054/de",
+       "file_size": 358172
+      }
+     ],
+     "id": 120054,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.02.2018",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "24.10.2018",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120050/de",
+       "file_size": 357909
+      }
+     ],
+     "id": 120050,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "formless",
+     "previous_type": "formless",
+     "version_active_since": "01.02.2018",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "04.04.2018",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120047/de",
+       "file_size": 357717
+      }
+     ],
+     "id": 120047,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.02.2018",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "02.02.2018",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120044/de",
+       "file_size": 205618
+      }
+     ],
+     "id": 120044,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.05.2013",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "11.08.2016",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120041/de",
+       "file_size": 205833
+      }
+     ],
+     "id": 120041,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "formless",
+     "previous_type": "formless",
+     "version_active_since": "01.05.2013",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "08.11.2014",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120039/de",
+       "file_size": 205917
+      }
+     ],
+     "id": 120039,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "formless",
+     "previous_type": "formless",
+     "version_active_since": "01.05.2013",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "22.10.2014",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120037/de",
+       "file_size": 205583
+      }
+     ],
+     "id": 120037,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.05.2013",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "02.05.2013",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120033/de",
+       "file_size": 204971
+      }
+     ],
+     "id": 120033,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.01.2011",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "20.12.2011",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120030/de",
+       "file_size": 204634
+      }
+     ],
+     "id": 120030,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "version",
+     "continuation_type": "formless",
+     "previous_type": "revised",
+     "version_active_since": "01.01.2011",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "13.01.2011",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ],
+   [
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120028/de",
+       "file_size": 361639
+      }
+     ],
+     "id": 120028,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "revised",
+     "previous_type": "formless",
+     "version_active_since": "01.01.2006",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "08.01.2009",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120024/de",
+       "file_size": 339441
+      }
+     ],
+     "id": 120024,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "formless",
+     "continuation_type": "formless",
+     "previous_type": "formless",
+     "version_active_since": "01.01.2006",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "03.11.2006",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    },
+    {
+     "dtah_urls": [
+      {
+       "language": "de",
+       "url": "/tolv/120022/de",
+       "file_size": 311040
+      }
+     ],
+     "id": 120022,
+     "title": "Verfassung des Kantons Zürich",
+     "keywords": null,
+     "info_badge": "not_current",
+     "info_badge_date": null,
+     "type": "new",
+     "continuation_type": "formless",
+     "previous_type": null,
+     "version_active_since": "01.01.2006",
+     "family_active_since": "27.02.2005",
+     "version_inactive_since": null,
+     "version_found_at": "11.05.2006",
+     "is_active": false,
+     "category": {
+      "id": 3,
+      "name": "Verfassung"
+     }
+    }
+   ]
+  ]
+ ]
+}
