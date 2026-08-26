@@ -179,6 +179,36 @@ def test_an_unparseable_version_date_is_counted_and_the_version_skipped(conn, se
     assert report.acts == 3, "the act itself and its other versions are still written"
 
 
+def test_an_old_version_without_an_end_in_its_string_ends_before_its_successor(conn, settings):
+    """GR/VS strings carry no 'bis'; found on prod: 1,167 'current' GR editions for 591 acts."""
+    class NoEnds(Host):
+        def __call__(self, request):
+            response = super().__call__(request)
+            if request.url.path.endswith("/texts_of_law/101.1") and response.status_code == 200:
+                payload = response.json()
+                t = payload["text_of_law"]
+                t["old_versions"][0]["version_dates_str"] = \
+                    "Version in Kraft von: 03.03.2024 (wurde formlos berichtigt am: 05.05.2024) (Beschlussdatum: 03.03.2024)"
+                t["old_versions"][1]["version_dates_str"] = "Version in Kraft von: 01.01.2024 (Beschlussdatum: 12.03.2023)"
+                t["future_versions"] = [{"id": 9999, "version_dates_str":
+                    "Zukünftige Version in Kraft ab: 01.01.2027 (Beschlussdatum: 12.05.2026)"}]
+                return httpx.Response(200, json=payload)
+            return response
+    _run(settings, NoEnds())
+    rows = conn.execute(
+        "SELECT v.date_applicability, v.date_end_applicability FROM ch_act_version v JOIN ch_act a USING (act_id) "
+        "WHERE a.sr_number='101.1' AND v.lang='de' ORDER BY v.date_applicability").fetchall()
+    assert rows == [
+        (datetime.date(2024, 1, 1), datetime.date(2024, 3, 2)),
+        (datetime.date(2024, 3, 3), datetime.date(2025, 12, 31)),
+        (datetime.date(2026, 1, 1), None),      # the host's current_version
+        (datetime.date(2027, 1, 1), None),      # a future version
+    ]
+    assert conn.execute("SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id) "
+                        "WHERE a.sr_number='101.1' AND v.lang='de' AND v.date_end_applicability IS NULL "
+                        "AND v.date_applicability <= current_date").fetchone()[0] == 1
+
+
 def test_an_abrogated_act_is_recorded_as_no_longer_in_force(conn, settings):
     class Abrogated(Host):
         def __call__(self, request):

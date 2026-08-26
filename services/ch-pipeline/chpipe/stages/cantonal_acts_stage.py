@@ -30,6 +30,7 @@ semaphore in LexworkClient bounds the parallelism.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -225,8 +226,21 @@ def _versions_of(tol: dict) -> list[dict]:
 
 def upsert_versions(conn, canton: cantons.Canton, act_id: int, tol: dict,
                     report: ActsReport) -> int:
+    """One ch_act_version row per (version, language of the canton).
+
+    date_end_applicability is the host's "bis" when the string carries one;
+    when it does not (GR/VS write "Version in Kraft von: 01.01.2010 (wurde
+    formlos berichtigt am: ...)" with no end at all), an OLD version's end
+    is the day before its successor's start. Found on prod 2026-08-26 by
+    charting: GR had 1,167 "current" editions for 591 acts, because every
+    end-less old version read as current. The host's current_version and
+    future_versions keep a NULL end; nothing else does when a successor
+    exists.
+    """
     sysnr = tol["systematic_number"]
-    written = 0
+    current_id = (tol.get("current_version") or {}).get("id")
+    future_ids = {v.get("id") for v in tol.get("future_versions") or []}
+    parsed: list[tuple[dict, lexwork.VersionDates]] = []
     for version in _versions_of(tol):
         try:
             dates = lexwork.parse_version_dates(version.get("version_dates_str") or "")
@@ -235,13 +249,23 @@ def upsert_versions(conn, canton: cantons.Canton, act_id: int, tol: dict,
             _sample(report.dates_unparsed_samples,
                     f"{canton.code} {sysnr} v{version['id']}: {version.get('version_dates_str')!r}")
             continue
+        parsed.append((version, dates))
+    parsed.sort(key=lambda item: (item[1].date_applicability, item[0]["id"]))
+    written = 0
+    for index, (version, dates) in enumerate(parsed):
+        end = dates.date_end_applicability
+        is_open = version["id"] == current_id or version["id"] in future_ids
+        if end is None and not is_open and index + 1 < len(parsed):
+            successor = parsed[index + 1][1].date_applicability
+            if successor > dates.date_applicability:
+                end = successor - datetime.timedelta(days=1)
         for lang in canton.langs:
             conn.execute(_UPSERT_VERSION, {
                 "act_id": act_id,
                 "consolidation": cantons.deep_link(canton, sysnr, version["id"]),
                 "lang": lang,
                 "date_app": dates.date_applicability,
-                "date_end": dates.date_end_applicability,
+                "date_end": end,
                 "xml_url": cantons.show_as_json_url(canton, sysnr, version["id"]),
             })
             written += 1
