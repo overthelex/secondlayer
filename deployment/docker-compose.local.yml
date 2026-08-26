@@ -162,6 +162,37 @@ services:
         limits:
           memory: 26G
 
+  # Туннель Cloudflare для боевого домена. Живёт ЗДЕСЬ, а не на проде:
+  # существующий туннель local-legal терминируется на AWS-инстансе, и путь
+  # local.legal.org.ua зависит от него. Этот идёт Cloudflare → local.lex
+  # напрямую, поэтому прод для работы домена не нужен.
+  #
+  # Туннель legal-on-local, id 0e639b56-e3c0-4001-9712-67768e731b00.
+  # Маршруты (legal.org.ua и www → nginx-local:80) заданы на стороне
+  # Cloudflare — контейнеру нужен только токен.
+  cloudflared-legal:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-legal-local
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN_LEGAL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "cloudflared --version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    depends_on:
+      - nginx-local
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+
   redis-local:
     image: redis:7-alpine
     container_name: secondlayer-redis-local
