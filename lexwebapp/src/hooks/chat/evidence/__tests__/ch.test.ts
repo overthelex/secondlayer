@@ -586,7 +586,7 @@ describe('extractChEvidence', () => {
       seco: [{ ssid: '900001', primary_name: 'Muster Handels AG', programme: 'Ukraine' }],
       kantonsblatt: [{ publication_number: 'KB-1', title: 'Muster Handels AG' }],
       normalized_name: 'muster handels',
-      name_match_note: 'FINMA, SECO та кантональні відомості не публікують UID.',
+      name_match_note: 'FINMA та SECO не публікують UID; кантональні відомості зіставлені точно за UID.',
     };
 
     it('builds one company card document with the register hit counts', () => {
@@ -609,6 +609,29 @@ describe('extractChEvidence', () => {
       expect(doc.metadata?.snippet).toContain('Публікацій SHAB: 2');
       // The heuristic-match caveat must survive into the panel, not be dropped.
       expect(doc.metadata?.name_match_note).toBe(CARD.name_match_note);
+      // Nothing was capped here, so the counts are stated plainly.
+      expect(doc.metadata?.snippet).not.toContain('показано');
+    });
+
+    it('labels a capped section as a page, not as the company total', () => {
+      // ch_get_company returns at most 100 SHAB publications and 50 rows per register.
+      // A count that is really "the first 50 of however many" was being rendered as the
+      // company's total, so a card said "FINMA: 50" for a bank with 300 authorisations.
+      const result = extractChEvidence('ch_get_company', {
+        ...CARD,
+        shab_truncated: true,
+        bankruptcies_truncated: true,
+        finma_truncated: true,
+        seco_truncated: true,
+        kantonsblatt_truncated: true,
+      });
+
+      const doc = result.documents[0];
+      expect(doc.metadata?.snippet).toContain('Публікацій SHAB: показано 2');
+      expect(doc.metadata?.register_hits).toContain('FINMA: показано 1');
+      expect(doc.metadata?.register_hits).toContain('SECO (санкції): показано 1');
+      expect(doc.metadata?.register_hits).toContain('Кантональні відомості: показано 1');
+      expect(doc.metadata?.register_hits).toContain('SHAB KK (стягнення/банкрутство): показано 1');
     });
 
     it('falls back to the newest SHAB publication when Zefix records no purpose', () => {

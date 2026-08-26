@@ -244,7 +244,8 @@ function companyToDocument(row: ToolResultData, body: string, hasKkPublications:
   ].filter(Boolean).map(String).join(' · ');
 
   const shabLine = row.shab_count != null && Number(row.shab_count) > 0
-    ? `Публікацій SHAB: ${row.shab_count}${row.last_shab_date ? ` (остання: ${row.last_shab_date})` : ''}`
+    ? `Публікацій SHAB: ${chCount(row.shab_count, row.shab_count_capped === true)}`
+      + `${row.last_shab_date ? ` (остання: ${row.last_shab_date})` : ''}`
     : undefined;
 
   return {
@@ -263,6 +264,18 @@ function companyToDocument(row: ToolResultData, body: string, hasKkPublications:
       bankruptcy: hasKkPublications,
     },
   };
+}
+
+/**
+ * A register-hit count, honest about the cap.
+ *
+ * ch_get_company returns at most 100 SHAB publications and 50 rows per register, so the
+ * length of a section is not the company's total — it is what the tool was willing to
+ * hand over. The tool says which sections it cut (`*_truncated`), and a cut count is
+ * labelled "показано N" so the panel never presents a page as a total.
+ */
+function chCount(count: unknown, truncated: boolean): string {
+  return truncated ? `показано ${count}` : String(count);
 }
 
 function chCompanyBody(row: ToolResultData): string {
@@ -288,16 +301,27 @@ function chCompanyCardDocument(parsed: ToolResultData): VaultDocument {
     || String(newestShab.content || newestShab.title || '').slice(0, COMPANY_BODY_CHARS);
 
   const doc = companyToDocument(
-    { ...company, shab_count: shab.length, last_shab_date: newestShab.publication_date },
+    {
+      ...company,
+      // The card's SHAB count is the length of a capped list, unlike ch_search_companies'
+      // shab_count, which is a real count(*) — hence the flag travelling with it.
+      shab_count: shab.length,
+      shab_count_capped: parsed.shab_truncated === true,
+      last_shab_date: newestShab.publication_date,
+    },
     body,
     bankruptcies.length > 0
   );
 
   const registerHits = [
-    bankruptcies.length > 0 ? `Публікації SHAB KK (стягнення/банкрутство): ${bankruptcies.length}` : undefined,
-    finma.length > 0 ? `FINMA: ${finma.length}` : undefined,
-    seco.length > 0 ? `SECO (санкції): ${seco.length}` : undefined,
-    kantonsblatt.length > 0 ? `Кантональні відомості: ${kantonsblatt.length}` : undefined,
+    bankruptcies.length > 0
+      ? `Публікації SHAB KK (стягнення/банкрутство): ${chCount(bankruptcies.length, parsed.bankruptcies_truncated === true)}`
+      : undefined,
+    finma.length > 0 ? `FINMA: ${chCount(finma.length, parsed.finma_truncated === true)}` : undefined,
+    seco.length > 0 ? `SECO (санкції): ${chCount(seco.length, parsed.seco_truncated === true)}` : undefined,
+    kantonsblatt.length > 0
+      ? `Кантональні відомості: ${chCount(kantonsblatt.length, parsed.kantonsblatt_truncated === true)}`
+      : undefined,
   ].filter(Boolean).join(' \u2022 ');
 
   return {
