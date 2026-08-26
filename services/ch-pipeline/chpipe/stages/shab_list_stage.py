@@ -65,6 +65,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from xml.etree import ElementTree as ET
 
 import httpx
 
@@ -150,6 +151,15 @@ ON CONFLICT (rubric, month) DO UPDATE SET
 """
 
 _DONE = "SELECT rubric, month FROM ch_shab_progress WHERE done_at IS NOT NULL"
+
+# What one (rubric, month) is allowed to fail with without ending the stage:
+# the gazette refusing or mangling an answer. Deliberately NOT `Exception`.
+# The per-month guard exists so a bad WINDOW does not cost the 300 months
+# behind it, but catching everything also swallowed psycopg reporting that
+# the connection is gone -- after which every remaining month "failed" the
+# same way, the stage exited 0, and the run looked like a success that had
+# simply found nothing. A database fault is not a per-month problem.
+_PER_MONTH = (FetchError, httpx.HTTPError, ET.ParseError, ValueError)
 
 
 class _RateLimiter:
@@ -305,6 +315,13 @@ async def _walk_window(fetcher: Fetcher, limiter: _RateLimiter, conn,
         complete = True
         for half in halves:
             if isinstance(half, BaseException):
+                # Same rule as the per-month guard: a window may fail on the
+                # network or the parser and cost only itself, but anything
+                # else (psycopg, a bug in _upsert) is not a window's problem,
+                # and return_exceptions=True would otherwise turn it into an
+                # "incomplete month" and let the stage finish reporting 0.
+                if not isinstance(half, _PER_MONTH):
+                    raise half
                 log.warning("shab-list: %s %s..%s: %s", rubric, start, end, half)
                 complete = False
                 continue
@@ -399,7 +416,7 @@ async def _run_async(settings: Settings, months: int | None, rubrics,
                 try:
                     await _walk_month(fetcher, limiter, conn, rubric, month,
                                       size, report, today)
-                except Exception as exc:                    # noqa: BLE001
+                except _PER_MONTH as exc:
                     log.error("shab-list: %s %s: %s", rubric, month, exc)
     finally:
         conn.close()

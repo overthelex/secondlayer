@@ -466,6 +466,61 @@ def test_a_probe_that_fails_leaves_no_progress_claim_of_completeness(
     assert _rows(conn) == {}
 
 
+def test_a_malformed_page_costs_only_its_own_month(conn, settings):
+    """A body the parser cannot read is the same class of failure as a 500:
+    it is about that one window, so the months after it are still walked."""
+    portal = FakePortal(THREE)
+    original = portal._handle
+
+    def broken(request):
+        if FakePortal._key(request.url)[1] == JUNE:
+            portal.urls.append(str(request.url))
+            return httpx.Response(200, content=b"<bulk:bulk-export>truncated")
+        return original(request)
+
+    portal._handle = broken
+    report = _run(settings, portal, rubrics=("HR",), from_month=FROM)
+
+    assert portal.requested_months("HR") == [JUNE, JULY, AUGUST]
+    assert report.months == 2
+    assert JUNE not in [month for _, month in _progress(conn)]
+
+
+def test_a_database_failure_inside_a_month_is_not_reported_as_success(
+        conn, settings, monkeypatch):
+    """The per-month guard exists so one bad WINDOW does not cost the 300
+    months behind it. Catching Exception there also swallowed psycopg saying
+    the connection is gone: every remaining month then "failed" the same way,
+    the stage exited 0, and the nightly log said nothing worse than a few
+    ERROR lines. A DB fault is not a per-month problem -- let it out."""
+    real_connect = shab_list_stage.db.connect
+
+    class DeadOnMark:
+        """The real connection, except that stamping progress raises."""
+
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, params=None):
+            if sql is shab_list_stage._MARK:
+                raise psycopg.OperationalError(
+                    "server closed the connection unexpectedly")
+            return self._inner.execute(sql, params)
+
+        def cursor(self):
+            return self._inner.cursor()
+
+        def close(self):
+            self._inner.close()
+
+    monkeypatch.setattr(shab_list_stage.db, "connect",
+                        lambda s: DeadOnMark(real_connect(s)))
+
+    portal = FakePortal(THREE)
+    with pytest.raises(psycopg.OperationalError):
+        _run(settings, portal, rubrics=("HR",), from_month=AUGUST)
+
+
 # --- the URLs the stage builds ---------------------------------------------
 
 def test_the_stage_asks_for_published_rows_of_one_rubric_and_one_month(
@@ -663,6 +718,21 @@ def test_a_month_that_grows_between_the_probe_and_the_fetch_stays_undone(
 
     assert report.months == 0
     assert _progress(conn)[("HR", AUGUST)]["done_at"] is None
+
+
+def test_a_database_failure_inside_a_split_window_is_not_an_incomplete_month(
+        conn, settings, monkeypatch):
+    """Every modern month splits, so the halves run under
+    `asyncio.gather(return_exceptions=True)` -- which handed a psycopg failure
+    back as a value, logged it as a window that did not fit, and let the stage
+    finish. The month-level guard never even saw it."""
+    def dead(conn_, metas):
+        raise psycopg.OperationalError("server closed the connection unexpectedly")
+
+    monkeypatch.setattr(shab_list_stage, "_upsert", dead)
+    portal = DayPortal({dt.date(2026, 8, d): 3 for d in range(1, 32)})
+    with pytest.raises(psycopg.OperationalError):
+        _walk(settings, portal, size=4)
 
 
 def test_the_rate_limiter_spaces_requests_out(conn, settings):
