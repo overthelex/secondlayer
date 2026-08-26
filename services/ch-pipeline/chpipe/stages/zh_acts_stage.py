@@ -65,6 +65,7 @@ class ActsReport:
     editions_indexed: int = 0
     index_requests: int = 0
     capped_slices: list[str] = field(default_factory=list)
+    links_unparsed: list[str] = field(default_factory=list)
     pages_failed: int = 0
     pages_failed_samples: list[str] = field(default_factory=list)
     dates_underivable: int = 0
@@ -165,7 +166,7 @@ async def _walk_act(client: zhlex.ZhlexClient, conn, sr_number: str,
                     report: ActsReport) -> None:
     by_version = {s.version_no: s for s in stubs}
     pages: dict[str, zhlex.ActPage] = {}
-    for version_no in sorted(by_version, key=int):
+    for version_no in sorted(by_version, key=zhlex.version_key):
         stub = by_version[version_no]
         try:
             pages[version_no] = await client.act_page(stub.page_url)
@@ -184,7 +185,7 @@ async def _walk_act(client: zhlex.ZhlexClient, conn, sr_number: str,
         _sample(report.dates_underivable_samples, f"{sr_number}: {exc}")
         return
 
-    latest_no = max(pages, key=int)
+    latest_no = max(pages, key=zhlex.version_key)
     latest = pages[latest_no]
     current_stubs = [s for s in stubs if s.withdrawal_date is None]
     in_force = bool(current_stubs)
@@ -221,7 +222,7 @@ async def _walk_act(client: zhlex.ZhlexClient, conn, sr_number: str,
         "lexfind_tol_id": tol_id,
         "editions": editions_meta,
     }
-    first_no = min(pages, key=int)
+    first_no = min(pages, key=zhlex.version_key)
     with conn.cursor(row_factory=tuple_row) as cur:
         cur.execute(_UPSERT_ACT, {
             "work": work_uri(sr_number),
@@ -263,6 +264,7 @@ async def _run_async(settings: Settings, only: set[str] | None, transport, rate:
             stubs = await zhlex.walk_index(client, zhlex.FIRST_ENACTMENT, until, walk)
             report.index_requests = walk.requests
             report.capped_slices = walk.capped_slices
+            report.links_unparsed = walk.links_unparsed
             grouped: dict[str, dict[str, zhlex.IndexStub]] = defaultdict(dict)
             for stub in stubs:
                 grouped[stub.sr_number][stub.version_no] = stub
@@ -313,6 +315,10 @@ def main() -> ActsReport:
              result.editions_indexed, result.index_requests, result.pages_failed,
              result.dates_underivable, result.historie_mismatch, result.html_editions,
              result.pdf_editions, result.no_text, result.lexfind_matched, result.errors)
+    if result.links_unparsed:
+        log.warning("LINKS UNPARSED: %d index row(s) whose link is not an edition link were "
+                    "skipped. Sample: %s", len(result.links_unparsed),
+                    " || ".join(result.links_unparsed[:_SAMPLE_CAP]))
     if result.capped_slices:
         log.warning("CAPPED SLICES: %s -- rows past the 150 cap were not enumerated",
                     ", ".join(result.capped_slices))

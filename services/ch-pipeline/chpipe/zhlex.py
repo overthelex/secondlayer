@@ -76,7 +76,10 @@ class ZhlexParseError(ValueError):
 
 
 _DATE = re.compile(r"^\s*(\d{2})\.(\d{2})\.(\d{4})\s*$")
-_LINK = re.compile(r"erlass-([0-9_]+)-(\d{4}_\d{2}_\d{2})?-(\d{4}_\d{2}_\d{2})?-(\d{3})\.html$")
+# The Nachtrag number is three digits, occasionally with a letter (631.41
+# has 008 and 008b: a correction delivered between two numbered ones).
+_LINK = re.compile(r"erlass-([0-9_]+)-(\d{4}_\d{2}_\d{2})?-(\d{4}_\d{2}_\d{2})?-(\d{3}[a-z]?)\.html$")
+_VERSION_KEY = re.compile(r"^(\d+)([a-z]?)$")
 _LABEL_UNTIL = re.compile(r"in Kraft bis\s+(\d{2}\.\d{2}\.\d{4})")
 _WS = re.compile(r"\s+")
 
@@ -106,6 +109,9 @@ class IndexPage:
     number_of_results: int
     number_of_pages: int
     capped: bool
+    # Links the edition-link regex refused: counted by the walk and reported,
+    # never a reason to abandon the other ~5,100 rows.
+    unparsed: list[str] = field(default_factory=list)
 
 
 def index_url(enactment_from: datetime.date, enactment_to: datetime.date, page: int = 1,
@@ -129,11 +135,24 @@ def parse_version_link(href: str) -> tuple[str, str, str, str]:
             (m.group(3) or "").replace("_", "-"), m.group(4))
 
 
+def version_key(version_no: str) -> tuple[int, str]:
+    """Nachtrag order: '008' < '008b' < '009'."""
+    m = _VERSION_KEY.match(version_no)
+    if not m:
+        raise ZhlexParseError(f"not a Nachtrag number: {version_no!r}")
+    return int(m.group(1)), m.group(2)
+
+
 def parse_index_page(data: dict) -> IndexPage:
     stubs = []
+    unparsed = []
     for row in data.get("data") or []:
         link = row.get("link") or ""
-        sr, _, _, version = parse_version_link(link)
+        try:
+            sr, _, _, version = parse_version_link(link)
+        except ZhlexParseError:
+            unparsed.append(link)
+            continue
         stubs.append(IndexStub(
             sr_number=row.get("referenceNumber") or sr,
             title=_WS.sub(" ", row.get("enactmentTitle") or "").strip(),
@@ -143,7 +162,7 @@ def parse_index_page(data: dict) -> IndexPage:
             version_no=version))
     return IndexPage(stubs, int(data.get("numberOfResults") or 0),
                      int(data.get("numberOfResultPages") or 0),
-                     bool(data.get("moreSearchResultsThanAllowed")))
+                     bool(data.get("moreSearchResultsThanAllowed")), unparsed)
 
 
 # --- edition page ----------------------------------------------------------
@@ -285,7 +304,7 @@ def edition_dates(records: list[EditionRecord]
     the last day in force (410.1/059: 31.12.2007). An edition whose
     start cannot be derived raises: a guessed date on a point-in-time
     corpus is worse than a reported gap."""
-    ordered = sorted(records, key=lambda r: int(r.version_no))
+    ordered = sorted(records, key=lambda r: version_key(r.version_no))
     starts: list[datetime.date] = []
     for index, rec in enumerate(ordered):
         start = rec.publication_date
@@ -502,6 +521,7 @@ class WalkReport:
     # cap are unreachable through the index. Zero on the whole collection
     # (2026-08-27); a non-zero count names a day to look at by hand.
     capped_slices: list[str] = field(default_factory=list)
+    links_unparsed: list[str] = field(default_factory=list)
 
 
 async def walk_index(client: ZhlexClient, since: datetime.date, until: datetime.date,
@@ -525,8 +545,10 @@ async def walk_index(client: ZhlexClient, since: datetime.date, until: datetime.
         report.capped_slices.append(f"{since.isoformat()} fileNumber={file_number}")
     report.slices += 1
     stubs = list(first.stubs)
+    report.links_unparsed += first.unparsed
     for page in range(2, first.number_of_pages + 1):
         more = await client.index(since, until, page, file_number)
         report.requests += 1
         stubs += more.stubs
+        report.links_unparsed += more.unparsed
     return stubs

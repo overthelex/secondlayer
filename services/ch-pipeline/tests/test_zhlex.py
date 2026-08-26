@@ -36,11 +36,19 @@ def test_parse_index_page_yields_one_stub_per_edition():
     assert old.enactment_date == D(1869, 4, 18)
 
 
+def test_index_rows_with_unknown_links_are_reported_not_fatal():
+    page = zhlex.parse_index_page({"data": [{"link": "/de/x.html", "referenceNumber": "1"}],
+                                   "numberOfResults": 1, "numberOfResultPages": 1})
+    assert page.stubs == [] and page.unparsed == ["/de/x.html"]
+
+
 def test_version_link_parts():
     assert zhlex.parse_version_link(
         "/x/zhlex-ls/erlass-131_1-1926_06_06-1926_06_22-095.html") == ("131.1", "1926-06-06", "1926-06-22", "095")
     assert zhlex.parse_version_link("erlass-101-1869_04_18--039.html") == ("101", "1869-04-18", "", "039")
     assert zhlex.parse_version_link("erlass-414_410_5-2020_10_28-2021_01_01-111.html")[0] == "414.410.5"
+    assert zhlex.parse_version_link("erlass-631_41-1958_11_10--008b.html")[1:] == ("1958-11-10", "", "008b")
+    assert sorted(["009", "008b", "008", "000"], key=zhlex.version_key) == ["000", "008", "008b", "009"]
     with pytest.raises(zhlex.ZhlexParseError):
         zhlex.parse_version_link("/de/irgendwas.html")
 
@@ -116,6 +124,10 @@ def test_edition_dates_of_a_withdrawn_act_close_the_last_edition():
     assert rows == [("000", D(1991, 1, 1), D(2010, 6, 30)), ("069", D(2010, 7, 1), D(2017, 12, 31))]
     rows = zhlex.edition_dates([_rec("000", None, D(2007, 12, 31), D(1859, 12, 23), None)])
     assert rows == [("000", D(1859, 12, 23), D(2007, 12, 31))]
+    # 631.41: a lettered Nachtrag sorts between its neighbours
+    rows = zhlex.edition_dates([_rec("009", D(2001, 1, 1)), _rec("008b", D(2000, 7, 1), D(2001, 1, 1)),
+                                _rec("008", D(2000, 1, 1), D(2000, 7, 1))])
+    assert [r[0] for r in rows] == ["008", "008b", "009"] and rows[1][2] == D(2000, 12, 31)
 
 
 def test_edition_without_any_date_is_reported_not_guessed():
