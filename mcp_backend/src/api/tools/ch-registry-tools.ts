@@ -158,14 +158,18 @@ status: active (типово) / inactive / all. canton — двобуквени�
     try {
       const zefix = await this.searchZefix(rawQuery, uid, { canton, legal_form, status: String(status) }, lim, off);
 
-      if (zefix.length > 0) return this.wrapCompanyResults(zefix, lim, off, kind);
+      if (zefix.rows.length > 0) {
+        // Same shape wrapSearchResults expects everywhere else: the companion
+        // count query supplies the total, stamped onto the rows.
+        for (const row of zefix.rows) row._total_count = zefix.total;
+        return this.wrapCompanyResults(zefix.rows, lim, off, kind);
+      }
 
       // Empty at this offset can mean either "Zefix knows nothing about this" or "the
       // caller paginated past the last Zefix match". Only the first justifies falling
       // back to SHAB names — otherwise page 2 of a Zefix search would silently switch
-      // register mid-pagination.
-      const zefixHasAnyMatch = await this.zefixHasMatch(rawQuery, uid, { canton, legal_form, status: String(status) });
-      if (zefixHasAnyMatch) return this.wrapCompanyResults([], lim, off, kind);
+      // register mid-pagination. The count query answers that without a second probe.
+      if (zefix.total > 0) return this.wrapCompanyResults([], lim, off, kind);
 
       const shab = await this.searchShabNames(rawQuery, uid, { canton, legal_form }, lim, off);
       return this.wrapCompanyResults(shab, lim, off, kind);
@@ -231,65 +235,75 @@ status: active (типово) / inactive / all. canton — двобуквени�
     return { filters, nextIndex: pi };
   }
 
+  /**
+   * The page of Zefix matches plus the total number of matches.
+   *
+   * Two queries rather than one `count(*) OVER()`: the window function has to see every
+   * matching row, so it blocks the LIMIT from being pushed under the SHAB lateral and the
+   * lateral then runs once per WHERE match instead of once per returned row. Measured on
+   * 792K companies / 2.5M publications, query 'AG': 6.9 s as one query, 222 ms as a page
+   * CTE plus a companion count. The two run concurrently.
+   *
+   * The exact-name boost is bound as its own parameter. $1 is whatever buildMatch pushed
+   * — the regex-escaped token for a short query, the UID for a UID lookup — and comparing
+   * a name against either of those is never true.
+   */
   private async searchZefix(
     rawQuery: string,
     uid: string | null,
     opts: { canton?: unknown; legal_form?: unknown; status: string },
     lim: number,
     off: number
-  ): Promise<any[]> {
+  ): Promise<{ rows: any[]; total: number }> {
     const values: any[] = [];
     const match = this.buildMatch(rawQuery, uid, 'c.name', 'c.uid', values, 1);
     const { filters, nextIndex } = this.buildZefixFilters(uid, opts, values, match.nextIndex);
     let pi = nextIndex;
 
+    // Everything up to here is the WHERE clause; the count query binds exactly that.
+    const whereValues = values.slice();
+    const where = `${match.predicate}
+         ${filters.length ? 'AND ' + filters.join(' AND ') : ''}`;
+
+    const boostIdx = pi; values.push(rawQuery); pi++;
     const limIdx = pi; values.push(lim); pi++;
     const offIdx = pi; values.push(off); pi++;
 
-    const sql = `
-      SELECT c.uid, c.name, c.legal_form, c.legal_form_code, c.legal_seat, c.register_office,
-             c.status, c.canton, c.chid, c.ehraid,
-             left(coalesce(c.purpose, ''), ${PURPOSE_PREVIEW_CHARS}) AS purpose,
-             c.capital, c.capital_currency, c.address,
-             to_char(c.shab_pub_date, 'YYYY-MM-DD') AS shab_pub_date,
+    const pageSql = `
+      WITH page AS (
+        SELECT c.uid, c.name, c.legal_form, c.legal_form_code, c.legal_seat,
+               c.register_office, c.status, c.canton, c.chid, c.ehraid,
+               left(coalesce(c.purpose, ''), ${PURPOSE_PREVIEW_CHARS}) AS purpose,
+               c.capital, c.capital_currency, c.address,
+               to_char(c.shab_pub_date, 'YYYY-MM-DD') AS shab_pub_date
+          FROM ch_zefix_companies c
+         WHERE ${where}
+         ORDER BY (lower(c.name) = lower($${boostIdx})) DESC, c.name, c.uid
+         LIMIT $${limIdx} OFFSET $${offIdx}
+      )
+      SELECT page.*,
              coalesce(s.shab_count, 0) AS shab_count,
              s.last_shab_date,
              coalesce(s.bankruptcy, false) AS bankruptcy,
-             'zefix' AS source,
-             count(*) OVER() AS _total_count
-        FROM ch_zefix_companies c
+             'zefix' AS source
+        FROM page
         LEFT JOIN LATERAL (
           SELECT count(*)::int AS shab_count,
                  to_char(max(p.publication_date), 'YYYY-MM-DD') AS last_shab_date,
                  bool_or(p.rubric = 'KK') AS bankruptcy
             FROM ch_shab_publications p
-           WHERE p.company_uid = c.uid
+           WHERE p.company_uid = page.uid
         ) s ON true
-       WHERE ${match.predicate}
-         ${filters.length ? 'AND ' + filters.join(' AND ') : ''}
-       ORDER BY (lower(c.name) = lower($1)) DESC, c.name, c.uid
-       LIMIT $${limIdx} OFFSET $${offIdx}`;
+       ORDER BY (lower(page.name) = lower($${boostIdx})) DESC, page.name, page.uid`;
 
-    return (await this.db.query(sql, values)).rows;
-  }
+    const countSql = `SELECT count(*)::int AS total FROM ch_zefix_companies c WHERE ${where}`;
 
-  private async zefixHasMatch(
-    rawQuery: string,
-    uid: string | null,
-    opts: { canton?: unknown; legal_form?: unknown; status: string }
-  ): Promise<boolean> {
-    const values: any[] = [];
-    const match = this.buildMatch(rawQuery, uid, 'c.name', 'c.uid', values, 1);
-    const { filters } = this.buildZefixFilters(uid, opts, values, match.nextIndex);
+    const [page, count] = await Promise.all([
+      this.db.query(pageSql, values),
+      this.db.query(countSql, whereValues),
+    ]);
 
-    const sql = `
-      SELECT EXISTS (
-        SELECT 1 FROM ch_zefix_companies c
-         WHERE ${match.predicate}
-           ${filters.length ? 'AND ' + filters.join(' AND ') : ''}
-      ) AS has_match`;
-
-    return (await this.db.query(sql, values)).rows[0].has_match === true;
+    return { rows: page.rows, total: Number(count.rows[0].total) };
   }
 
   /**

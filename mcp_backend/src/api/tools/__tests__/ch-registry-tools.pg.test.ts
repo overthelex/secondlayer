@@ -327,6 +327,41 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(page2.has_more).toBe(false);
       expect(page1.results[0].uid).not.toBe(page2.results[0].uid);
     });
+
+    it('carries the SHAB aggregates on a later page, not only on the first', async () => {
+      // The aggregates come from a LATERAL that must run over the page, not
+      // over every WHERE match: `count(*) OVER()` in the same SELECT blocked
+      // the LIMIT from being pushed under the join and made the lateral run
+      // 792K times for a one-letter query (6.9 s, measured).
+      const page2 = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Muster', status: 'all', limit: 1, offset: 1,
+      }))!);
+
+      expect(page2.results).toHaveLength(1);
+      expect(page2.results[0].uid).toBe(UID_AG);
+      expect(page2.results[0].shab_count).toBe(3);
+      expect(page2.results[0].last_shab_date).toBe('2025-02-02');
+      expect(page2.results[0].bankruptcy).toBe(true);
+      expect(page2.total_count).toBe(2);
+      expect(page2.has_more).toBe(false);
+    });
+
+    it('sorts an exact name match first even when the query needs escaping', async () => {
+      // The boost compares the company name against the caller's query, so it
+      // has to be bound as its own parameter: $1 is the regex-escaped token
+      // for a short query ('B\.C') and the UID for a UID lookup, and against
+      // either of those `lower(name) = $1` is never true.
+      await client.query(
+        `INSERT INTO ch_zefix_companies (uid, name, legal_form, legal_seat, status, canton)
+         VALUES ('CHE-222.333.444', 'B.C', 'Aktiengesellschaft', 'Zug', 'active', 'ZG'),
+                ('CHE-333.444.555', 'A B.C Holding', 'Aktiengesellschaft', 'Zug', 'active', 'ZG')`
+      );
+
+      const body = parse((await tools.executeTool('ch_search_companies', { query: 'B.C' }))!);
+
+      // Alphabetically 'A B.C Holding' comes first; the exact match must not.
+      expect(body.results.map((r: any) => r.name)).toEqual(['B.C', 'A B.C Holding']);
+    });
   });
 
   // ─── ch_get_company ─────────────────────────────────────────────────
