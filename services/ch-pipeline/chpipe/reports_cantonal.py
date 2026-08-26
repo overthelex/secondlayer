@@ -72,8 +72,13 @@ SELECT
         AND EXISTS (SELECT 1 FROM theirs t WHERE t.sr_number = o.sr_number
                        AND t.date_applicability = o.date_applicability)) AS date_matches,
     (SELECT count(*) FROM ours o WHERE o.sr_number IN (SELECT sr_number FROM shared)
+        AND o.date_applicability <= current_date
         AND NOT EXISTS (SELECT 1 FROM theirs t WHERE t.sr_number = o.sr_number
-                           AND t.date_applicability = o.date_applicability)) AS date_mismatches
+                           AND t.date_applicability = o.date_applicability)) AS date_mismatches,
+    -- LexFind lists a version once it is in force; ours knows future ones
+    -- from the host's future_versions[] (BE 2026-08-26: 70 of 73 "mismatches").
+    (SELECT count(*) FROM ours o WHERE o.sr_number IN (SELECT sr_number FROM shared)
+        AND o.date_applicability > current_date) AS date_future
 """
 
 _QUALITY = """
@@ -142,7 +147,7 @@ def format_gate_f(rows: list[dict]) -> str:
             f"only_in_lexwork {r['only_in_lexwork_count']} {r['only_in_lexwork']}")
         out.append(
             f"    editions lexwork {r['versions_lexwork']} / lexfind {r['versions_lexfind']}; "
-            f"dates match {r['date_matches']} / mismatch {r['date_mismatches']}")
+            f"dates match {r['date_matches']} / mismatch {r['date_mismatches']} / future {r['date_future']}")
         out.append(
             f"    parsed {r['parsed']} failed {r['failed']} pending {r['pending']} "
             f"empty_articles {r['empty_articles']} short_text {r['short_text']} "

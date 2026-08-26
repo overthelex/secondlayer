@@ -53,7 +53,7 @@ def conn(settings):
         # BE: 101.1 on both sides (3 of our 4 editions match LexFind's dates),
         # 152.01 ours only, 999.9 LexFind only (abrogated there).
         a = _act(c, "BE", "101.1")
-        for d in ("2020-01-01", "2022-01-01", "2024-03-03", "2026-01-01"):
+        for d in ("2020-01-01", "2022-01-01", "2024-03-03", "2026-01-01", "2099-09-01"):
             _version(c, a, d)
             _version(c, a, d, lang="fr")
         _version(c, a, "2019-01-01", stage="failed", error="language 'de' not in payload (fr)")
@@ -89,15 +89,16 @@ def test_acts_are_compared_by_systematic_number_with_both_differences(conn):
 
 def test_editions_are_compared_by_date_on_shared_acts_in_the_first_language(conn):
     row = reports_cantonal.gate_f(conn, "BE")[0]
-    assert row["versions_lexwork"] == 7, "de rows of BE only: 4 + failed + short + 152.01's"
+    assert row["versions_lexwork"] == 8, "de rows of BE only: 5 + failed + short + 152.01's"
     assert row["versions_lexfind"] == 5
     assert row["date_matches"] == 3
     assert row["date_mismatches"] == 3, "2026-01-01, 2019 (failed) and 2018 are not in LexFind"
+    assert row["date_future"] == 1, "2099-09-01 is not a mismatch, LexFind lists in-force versions only"
 
 
 def test_quality_counters_and_failure_reasons(conn):
     row = reports_cantonal.gate_f(conn, "BE")[0]
-    assert row["parsed"] == 9 and row["failed"] == 1 and row["pending"] == 1
+    assert row["parsed"] == 11 and row["failed"] == 1 and row["pending"] == 1
     assert row["empty_articles"] == 1 and row["short_text"] == 1
     assert row["failed_by_reason"] == {"language 'de' not in payload (fr)": 1}
 
@@ -123,4 +124,4 @@ def test_the_stage_prints_one_block_per_canton(conn, settings, capsys):
     result = reports_cantonal_stage.run(settings, canton_code="BE")
     assert result.text.startswith("Gate F")
     assert "BE: acts lexwork 2 (in force 2) / lexfind 2 (active 1)" in result.text
-    assert "dates match 3 / mismatch 3" in result.text
+    assert "dates match 3 / mismatch 3 / future 1" in result.text
