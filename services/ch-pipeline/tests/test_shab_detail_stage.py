@@ -210,7 +210,10 @@ def test_the_claim_reads_the_index_instead_of_sorting(conn):
 
     enable_seqscan is off for this assertion only: the fixture table holds a
     handful of rows and the planner would seq-scan-and-sort them whatever the
-    index says, which tells us nothing about the 2.5M-row plan."""
+    index says, which tells us nothing about the 2.5M-row plan.
+
+    Asserted with a non-empty poison set, because that exclusion is part of
+    the claim: it must stay a filter on the ordered index read."""
     _seed(conn, "hr-old", rubric="HR", date="2020-01-02")
     _seed(conn, "kk-new", rubric="KK", date="2026-08-24")
     conn.execute("ANALYZE ch_shab_publications")
@@ -218,7 +221,7 @@ def test_the_claim_reads_the_index_instead_of_sorting(conn):
     try:
         plan = str(conn.execute(
             "EXPLAIN (FORMAT JSON) " + shab_detail_stage._CLAIM,
-            (shab_detail_stage.MAX_ATTEMPTS, 500)).fetchone())
+            (shab_detail_stage.MAX_ATTEMPTS, ["kk-new"], 500)).fetchone())
     finally:
         conn.execute("RESET enable_seqscan")
 
@@ -296,6 +299,44 @@ def test_a_row_that_failed_is_not_offered_to_the_same_run_again(conn, settings):
     assert sorted(portal.ids) == sorted([HR, HR03])
     assert _row(conn, HR)["detail_attempts"] == 1
     assert _row(conn, HR03)["detail_attempts"] == 1
+
+
+def test_a_run_keeps_claiming_past_a_whole_batch_of_failures(conn, settings):
+    """The poison set is a per-run skip list, and applying it AFTER the claim
+    capped the run at one batch: once it held BATCH_SIZE ids, every claim came
+    back holding nothing else and the run stopped. A night whose first 500 rows
+    all fail must still reach row 501, so the set is excluded IN the claim."""
+    conn.execute("""
+        INSERT INTO ch_shab_publications (shab_id, rubric, publication_date)
+        SELECT 'sick-' || g, 'HR', DATE '2026-08-25' - g
+          FROM generate_series(1, 600) AS g""")
+    # 500s, not 404s: a 404 retires the row on the spot, so it would never be
+    # offered again and the poison set would never be what stops the run.
+    portal = FakePortal(status={f"sick-{n}": 500 for n in range(1, 601)})
+
+    report = _run(settings, portal, retries=1)
+
+    assert report.claimed == 600
+    assert report.failed == 600
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_shab_publications WHERE detail_attempts = 0"
+    ).fetchone()["n"] == 0
+
+
+def test_the_poison_set_cannot_grow_without_bound(conn, settings, monkeypatch):
+    """It is a per-run set held in memory and spliced into every claim, so a
+    run against a dead endpoint must stop rather than accumulate 2.5M ids."""
+    monkeypatch.setattr(shab_detail_stage, "MAX_POISONED", 2)
+    for n in range(5):
+        _seed(conn, f"missing-{n}")
+
+    report = _run(settings, FakePortal(), batch_size=1, retries=1)
+
+    assert report.claimed == 3          # 1, 2, then the third crosses the cap
+    assert report.failed == 3
+    assert conn.execute(
+        "SELECT count(*) AS n FROM ch_shab_publications WHERE detail_attempts = 0"
+    ).fetchone()["n"] == 2
 
 
 def test_one_failing_row_does_not_cost_the_rest_of_the_batch(conn, settings):

@@ -72,6 +72,12 @@ BATCH_SIZE = 500
 # detail_attempts smallint and the claim predicate below.
 MAX_ATTEMPTS = 3
 
+# Ceiling on this run's poison set. The set is held in memory and sent with
+# every claim, so it is bounded on purpose; a run that has already failed on
+# this many publications is not working through bad rows, it is talking to a
+# source that is down, and stopping leaves tomorrow's attempts unspent.
+MAX_POISONED = 5000
+
 # Per-request retry budget inside one attempt, same reasoning as shab-list: a
 # 429 or a 503 from a gazette is a request to come back later.
 RETRIES = 3
@@ -97,10 +103,18 @@ class ShabDetailReport:
 # publication, so this is a row that arrived some other way -- is claimed
 # ahead of KK and parsed as HR. One misparsed publication is cheaper than
 # sorting 2.5M rows on every claim.
+#
+# The `<> ALL` is this run's poison set (see _run_async): rows that already
+# failed in THIS run are still claimable -- that is what lets tomorrow retry
+# them -- so they have to be excluded IN the claim. Filtering them out of the
+# result instead capped the run at one batch: once the set held BATCH_SIZE
+# ids, every claim came back holding nothing but poisoned rows. It stays a
+# filter on the ordered index read (asserted by the EXPLAIN test).
 _CLAIM = """
 SELECT shab_id, rubric
   FROM ch_shab_publications
  WHERE detail_fetched_at IS NULL AND detail_attempts < %s
+   AND shab_id <> ALL(%s::text[])
  ORDER BY rubric DESC, publication_date DESC
  LIMIT %s
    FOR UPDATE SKIP LOCKED
@@ -151,18 +165,21 @@ SELECT legal_form_code AS code, legal_form AS name
 """
 
 
-def claim(conn, limit: int) -> list[dict]:
+def claim(conn, limit: int, exclude=()) -> list[dict]:
     """Rows still owed a detail, most valuable first.
 
     'KK' > 'HR', so `rubric DESC` is "bankruptcies before the register" AND is
     an index-ordered read of idx_ch_shab_detail_queue. See _CLAIM.
+
+    `exclude` is the caller's poison set: ids this run has already tried and
+    must not be offered again, skipped by the query rather than by the caller.
 
     FOR UPDATE SKIP LOCKED reduces overlap between processes but is not a
     distributed lock under autocommit -- the row lock releases the moment the
     SELECT completes, same caveat as db.claim(). One process per stage is the
     supported model.
     """
-    return conn.execute(_CLAIM, (MAX_ATTEMPTS, limit)).fetchall()
+    return conn.execute(_CLAIM, (MAX_ATTEMPTS, list(exclude), limit)).fetchall()
 
 
 def legal_form_labels(conn) -> dict[str, str]:
@@ -302,7 +319,8 @@ async def _run_async(settings: Settings, limit: int | None,
         # leaves the row claimable (that is the point -- tomorrow retries it),
         # so the claim query keeps offering it and the run would spend its
         # whole budget re-fetching the same 500 failures. Same poison set as
-        # citations_stage, for the same reason.
+        # citations_stage, for the same reason -- and passed INTO the claim,
+        # so a batch that fails entirely does not end the run.
         poisoned: set[str] = set()
         async with Fetcher(concurrency=CONCURRENCY, retries=retries,
                            backoff=backoff, transport=transport) as fetcher:
@@ -310,14 +328,8 @@ async def _run_async(settings: Settings, limit: int | None,
                 size = batch_size if remaining is None else min(batch_size, remaining)
                 if size <= 0:
                     break
-                rows = claim(conn, size)
+                rows = claim(conn, size, poisoned)
                 if not rows:
-                    break
-                rows = [row for row in rows if row["shab_id"] not in poisoned]
-                if not rows:
-                    log.warning("shab-detail: the queue head is nothing but the "
-                                "%d publication(s) that failed this run; "
-                                "stopping", len(poisoned))
                     break
                 report.claimed += len(rows)
                 if remaining is not None:
@@ -328,6 +340,17 @@ async def _run_async(settings: Settings, limit: int | None,
                     labels, report, poisoned)
                 log.info("shab-detail: %d claimed, %d fetched, %d failed",
                          report.claimed, report.fetched, report.failed)
+
+                # The poison set is held in memory and spliced into every
+                # claim, so it cannot be allowed to grow to the size of the
+                # queue. Past the cap the endpoint is not having a bad
+                # minute, it is down.
+                if len(poisoned) > MAX_POISONED:
+                    log.error("shab-detail: %d publications failed in this run "
+                              "(cap %d); stopping -- this is a source failure, "
+                              "not a queue of bad rows",
+                              len(poisoned), MAX_POISONED)
+                    break
 
                 # Between batches, never inside one: a batch already claimed is
                 # always finished, so no row is left holding a lock or an
