@@ -458,7 +458,11 @@ jobs:
           # qdrant-general-local, которые обслуживают ПРОД.
           OTHERS=$($DC config --services | grep -vE '^(app-local|app-local-green|lexwebapp-local|lexwebapp-local-green)$' | tr '\n' ' ')
           echo "обновляю вне blue-green: $(echo $OTHERS | wc -w) сервисов"
-          $DC up -d $OTHERS
+          # --no-deps обязателен: nginx-local объявлен зависящим от app-local и
+          # lexwebapp-local, и без этого флага compose поднимет их как
+          # зависимости — то есть пересоздаст активный цвет. Так и вышло
+          # 26.08: 10 секунд 502 у пользователей ещё до переключения цвета.
+          $DC up -d --no-deps $OTHERS
 
           # После пересоздания сервисов выше их IP меняются, а nginx резолвит
           # имена апстримов один раз при старте — та самая причина 502 из
