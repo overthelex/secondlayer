@@ -94,16 +94,21 @@ def run(settings: Settings, canton_code: str | None = None,
                         report.failed += 1
                         continue
                     parsed = sil.parse_act(loaded["akn_xml"])
+                    # Reasons are fixed strings: Gate F groups failures on
+                    # their first 60 characters, and a count inside the
+                    # string would make every failure its own bucket.
                     if len(parsed.text) < MIN_TEXT_CHARS:
+                        log.warning("version %s: %d chars of text", row["version_id"], len(parsed.text))
                         db.fail_version(conn, row["version_id"],
-                                        f"short_text: {len(parsed.text)} chars", max_attempts=1)
+                                        f"short_text: under {MIN_TEXT_CHARS} chars", max_attempts=1)
                         report.short_text += 1
                         report.failed += 1
                         continue
                     if not parsed.articles:
+                        log.warning("version %s: %d chars of text, no Art. heading",
+                                    row["version_id"], len(parsed.text))
                         db.fail_version(conn, row["version_id"],
-                                        f"no_articles: {len(parsed.text)} chars of text, "
-                                        "no Art. heading", max_attempts=1)
+                                        "no_articles: prose without an Art. heading", max_attempts=1)
                         report.no_articles += 1
                         report.failed += 1
                         continue

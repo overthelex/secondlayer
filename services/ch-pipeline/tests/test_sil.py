@@ -162,6 +162,46 @@ def test_ne_sections_become_parents_and_an_abrogated_article_keeps_its_note(ne):
     assert "Section 8: Financement" in ne.text and "[12] Abrogé par" in ne.text
 
 
+def _ge_page(*headings_and_bodies):
+    body = "".join(f"<p class=article>{h}</p><p class=Texte>{b}</p>" for h, b in headings_and_bodies)
+    return f"<html><head><title>x</title></head><body><p class=TitreLoi>T</p>{body}</body></html>"
+
+
+def test_ge_old_treaties_number_their_articles_in_every_way_word_allows():
+    # Shapes measured on the live pages 2026-08-26: A 1 02 (1749) "Articles
+    # 1er ." then "2.", A 1 07 (1816) "Article I" / "Article II.", A 1 01
+    # (1815) "Art.e I.", plus the modern "Art. 7A" and "Art. 2 bis".
+    parsed = sil.parse_act(_ge_page(("Articles 1er .", "a"), ("2.", "b"), ("Article I", "c"),
+                                    ("Article II.", "d"), ("Art.e III.", "e"), ("Art. 7A Hymne", "f"),
+                                    ("Art. 2 bis", "g"), ("Dispositions finales", "h")))
+    assert [(a.article_number, a.marginal_note, a.text) for a in parsed.articles] == [
+        ("1", None, "a"), ("2", None, "b"), ("I", None, "c"), ("II", None, "d"), ("III", None, "e"),
+        ("7A", "Hymne", "f"), ("2bis", None, "g")]
+    assert "Dispositions finales" in parsed.text, "a p.article without a number is a structural line"
+
+
+def test_ge_numbered_list_items_in_p_article_stay_inside_their_article():
+    # A 5 05.03 (live 2026-08-26): "Art. 1 Arrondissements" is followed by
+    # "1. Cité-Rive" ... "17. Champel" in p.article, then "Art. 2".
+    parsed = sil.parse_act(_ge_page(("Art. 1 Arrondissements et périmètre", "Les arrondissements :"),
+                                    ("1. Cité-Rive", "rues a"), ("2. Pâquis", "rues b"),
+                                    ("Art. 2 Information des électeurs", "x"), ("Article unique", "y")))
+    assert [(a.article_number, a.marginal_note) for a in parsed.articles] == [
+        ("1", "Arrondissements et périmètre"), ("2", "Information des électeurs"), ("unique", None)]
+    assert parsed.articles[0].text == "Les arrondissements : 1. Cité-Rive rues a 2. Pâquis rues b"
+
+
+def test_ne_body_paragraphs_are_not_split_on_plural_or_bare_numbers():
+    page = ("<html><head><title>x</title></head><body><p class=xNom>T</p>"
+            "<p class=xNormal>Art. 3 Un texte.</p>"
+            "<p class=xNormal>Articles 27 à 30 sont réservés.</p>"
+            "<p class=xNormal>4. Une énumération, pas un article.</p>"
+            "<p class=xNormal>Article 5 Un autre.</p></body></html>")
+    parsed = sil.parse_act(page)
+    assert [a.article_number for a in parsed.articles] == ["3", "5"]
+    assert parsed.articles[0].text == "Un texte. Articles 27 à 30 sont réservés. 4. Une énumération, pas un article."
+
+
 def test_no_page_yields_no_articles_and_little_text():
     parsed = sil.parse_act("<html><head><title>x</title></head><body><p>Texte en vigueur</p></body></html>")
     assert parsed.articles == [] and len(parsed.text) < 200

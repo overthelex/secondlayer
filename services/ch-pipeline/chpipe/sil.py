@@ -76,12 +76,26 @@ _NUMBER_NE = re.compile(r"^(\d[\d.]*[a-z]?)\s+(.*)$", re.DOTALL)
 _NUMBER_GE = re.compile(r"^([A-Z]\s+\d+\s+\d+(?:\.\d+)?)\s+(.*)$", re.DOTALL)
 
 # "Art. 4", "Art. 7A", "Art. 13a", "Art. 2 bis", "Art.e I." (GE, 1815),
-# "Article premier", "§ 3". The lookahead refuses "Art. 4bisserie" and
-# "Articles 27 à 30" (a range heading, not an article).
+# "Article premier", "Article II." (GE A 1 07, 1816), "§ 3". The lookahead
+# refuses "Art. 4bisserie" and "Articles 27 à 30" (a range, not an
+# article). Used on NE body paragraphs, where a looser rule would turn a
+# cross-reference into an article.
+_NUMBER = r"(\d+(?:er)?(?:\s?(?:bis|ter|quater|quinquies|sexies|septies|octies)\b|[A-Za-z]\b)?|[IVXLC]+)"
 _ARTICLE_START = re.compile(
-    r"^(?:Article\s+premier|(?:Art\.?e?|§)\s*"
-    r"(\d+(?:\s?(?:bis|ter|quater|quinquies|sexies|septies|octies)\b|[A-Za-z]\b)?|[IVXLC]+)\.?)"
+    r"^(?:Article\s+(?:premier|unique)|(?:Article|Art\.?e?|§)\s*" + _NUMBER + r"\.?)"
     r"(?=\s|$|\[|\()")
+# GE's p.article headings only: the class already says "this is an
+# article", so the bare shapes of the old treaties count too -- "Articles
+# 1er ." then "2.", "3." (A 1 02, 1749). But Word's p.article is also
+# what GE uses for a numbered LIST inside an article ("1. Cité-Rive" ...
+# "17. Champel" under Art. 1 of A 5 05.03), so a bare number is an
+# article only while no "Art."-prefixed heading has been accepted since
+# the last bare or plural one (parse_act's bare_ok).
+_GE_HEADING_START = re.compile(
+    r"^(?:Article\s+(?:premier|unique)|(?:Articles?|Art\.?e?|§)?\s*" + _NUMBER + r"\s?\.?)"
+    r"(?=\s|$|\[|\()")
+_PREFIXED = re.compile(r"^(?:Articles?\b|Art\.?e?\s*\d|Art\.?e?\s*[IVXLC]|§)")
+_PLURAL = re.compile(r"^Articles\b")
 
 _MONTHS = {
     "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,
@@ -262,25 +276,29 @@ def _blocks(html: str) -> tuple[list[_Block], str | None]:
 _ROMAN = re.compile(r"^[IVXLC]+$")
 
 
-def _article_number(heading: str) -> str | None:
+def _article_number(heading: str, pattern: re.Pattern = _ARTICLE_START) -> str | None:
     if heading.lower().startswith("article premier"):
         return "1"
-    m = _ARTICLE_START.match(heading)
+    if heading.lower().startswith("article unique"):
+        return "unique"
+    m = pattern.match(heading)
     if not m or not m.group(1):
         return None
     raw = m.group(1).replace(" ", "")
     if _ROMAN.match(raw):
         return raw
+    if re.match(r"^\d+er$", raw):
+        raw = raw[:-2]
     return akn.normalise_number(raw)
 
 
-def _split_heading(text: str) -> tuple[str | None, str]:
+def _split_heading(text: str, pattern: re.Pattern = _ARTICLE_START) -> tuple[str | None, str]:
     """('4', 'Autorisation préalable') from 'Art. 4 Autorisation préalable';
     ('1', 'Le Département ...') from 'Article premier Le Département ...'."""
-    m = _ARTICLE_START.match(text)
+    m = pattern.match(text)
     if not m:
         return None, text
-    return _article_number(text), text[m.end():].strip(" .:")
+    return _article_number(text, pattern), text[m.end():].lstrip(" .:").rstrip()
 
 
 class _Builder:
@@ -384,6 +402,7 @@ def parse_act(html: str) -> ParsedAct:
     in_footer = False
     footer_key: str | None = None
     adoption_parts: list[str] = []
+    bare_ok = True      # GE: may a bare "N." p.article open an article?
 
     for blk in blocks:
         cls, text = blk.cls, blk.text
@@ -449,12 +468,17 @@ def parse_act(html: str) -> ParsedAct:
             b.marginal(text)
             continue
         if cls == _GE_HEADING:
-            number, marginal = _split_heading(text)
+            number, marginal = _split_heading(text, _GE_HEADING_START)
             if number is None:
                 # a p.article that is not an article ("Dispositions
                 # transitoires" as a heading): a structural line
                 b.structure(text)
                 continue
+            prefixed = bool(_PREFIXED.match(text))
+            if not prefixed and not bare_ok:
+                b.body(text, blk.refs)      # a numbered list item inside the article
+                continue
+            bare_ok = not prefixed or bool(_PLURAL.match(text))
             b.open(number, marginal or None, None, blk.refs)
             continue
         if cls in _NE_ARTICLE_CLASSES and _ARTICLE_START.match(text):

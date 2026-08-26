@@ -158,7 +158,7 @@ def format_gate_f(rows: list[dict]) -> str:
             f"only_in_lexfind {r['only_in_lexfind_count']} {r['only_in_lexfind']}; "
             f"only_in_lexwork {r['only_in_lexwork_count']} {r['only_in_lexwork']}")
         out.append(
-            f"    editions lexwork {r['versions_lexwork']} / lexfind {r['versions_lexfind']}; "
+            f"    editions {r.get('source', 'lexwork')} {r['versions_lexwork']} / lexfind {r['versions_lexfind']}; "
             f"dates match {r['date_matches']} / mismatch {r['date_mismatches']} / future {r['date_future']}")
         out.append(
             f"    parsed {r['parsed']} failed {r['failed']} pending {r['pending']} "
