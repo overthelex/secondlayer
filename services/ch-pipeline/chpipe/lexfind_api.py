@@ -22,9 +22,9 @@ from urllib.parse import urlencode
 from . import cantons
 from .http import Fetcher
 
-# LexFind's systematics endpoint takes the leaf ids as a repeated query
+# LexFind's systematics endpoint takes node ids as a repeated query
 # parameter; 50 per request keeps the URL well under any proxy's limit and
-# BE's 303 leaves in 7 requests.
+# BE's 425 nodes in 9 requests.
 LEAVES_PER_REQUEST = 50
 
 
@@ -44,16 +44,18 @@ class LexfindClient:
         return await self._fetcher.json(f"{self._base}/texts-of-law/{tol_id}/with-version-groups")
 
 
+def node_ids(tree: dict) -> list[int]:
+    """Every node id of the systematics tree, root entry ("") excluded.
+    Acts hang off INNER nodes as well as leaves (BE 2026-08-26: 23 acts on
+    the first 50 inner nodes; asking for leaves only found 1,009 of 1,129),
+    so the registry walk asks for every node's tols."""
+    return sorted(int(key) for key, node in tree.items() if key and isinstance(node, dict))
+
+
 def leaves(tree: dict) -> list[int]:
-    """Node ids with no children. The tree is a dict keyed by node id as a
-    string, with an unnamed root entry ("" -> {children}) that is skipped."""
-    out = []
-    for key, node in tree.items():
-        if not key or not isinstance(node, dict):
-            continue
-        if not node.get("children"):
-            out.append(int(key))
-    return sorted(out)
+    """Node ids with no children -- kept for reports; NOT the driving set."""
+    return sorted(int(key) for key, node in tree.items()
+                  if key and isinstance(node, dict) and not node.get("children"))
 
 
 def tols_of(tree: dict) -> list[dict]:

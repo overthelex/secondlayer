@@ -10,9 +10,10 @@ omits (BE: 712 listed against 1,129 in LexFind) -- cantonal_acts_stage
 reads this table for the canton's numbers. For the seven cantons without
 a Lexwork host it is, for now, all we hold.
 
-Walk per canton: the systematics tree once without tols to learn its leaf
-ids, then the same endpoint in chunks of 50 leaf ids to get the acts under
-each leaf, then with-version-groups per act. ~33K acts across 26 cantons
+Walk per canton: the systematics tree once without tols to learn its node
+ids, then the same endpoint in chunks of 50 node ids to get the acts under
+each node (inner nodes carry acts too, not only leaves), then
+with-version-groups per act. ~33K acts across 26 cantons
 at ~2-3 requests/s is a few hours; restartable and idempotent (every write
 is an upsert on lexfind_tol_id), so an interrupted run is simply rerun.
 """
@@ -94,16 +95,16 @@ async def _walk_canton(client: lexfind_api.LexfindClient, conn, canton: cantons.
                        report: RegistryReport, sem: asyncio.Semaphore) -> None:
     try:
         tree = await client.systematics(canton.lexfind_id)
-        leaf_ids = lexfind_api.leaves(tree)
+        ids = lexfind_api.node_ids(tree)
         tols: list[dict] = []
-        for start in range(0, len(leaf_ids), lexfind_api.LEAVES_PER_REQUEST):
-            chunk = leaf_ids[start:start + lexfind_api.LEAVES_PER_REQUEST]
+        for start in range(0, len(ids), lexfind_api.LEAVES_PER_REQUEST):
+            chunk = ids[start:start + lexfind_api.LEAVES_PER_REQUEST]
             tols.extend(lexfind_api.tols_of(await client.systematics(canton.lexfind_id, chunk)))
     except FetchError as exc:
         log.error("%s: LexFind systematics failed: %s", canton.code, exc)
         report.errors += 1
         return
-    log.info("%s: %d leaves, %d acts in LexFind", canton.code, len(leaf_ids), len(tols))
+    log.info("%s: %d nodes, %d acts in LexFind", canton.code, len(ids), len(tols))
 
     async def one(tol: dict) -> None:
         async with sem:

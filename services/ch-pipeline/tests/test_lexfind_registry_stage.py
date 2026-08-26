@@ -68,7 +68,8 @@ def _run(settings, server, **kw):
                                       transport=httpx.MockTransport(server), **kw)
 
 
-def test_leaves_and_tols_are_read_from_the_tree():
+def test_nodes_leaves_and_tols_are_read_from_the_tree():
+    assert lexfind_api.node_ids(TREE) == [633, 634, 635, 636]
     assert lexfind_api.leaves(TREE) == [635, 636]
     tols = lexfind_api.tols_of(TREE)
     assert N_TOLS == 13
@@ -97,8 +98,8 @@ def test_registers_every_act_under_every_leaf_with_its_versions(conn, settings):
     assert rows[1][:6] == (32335, "BE", "101.2", False, "101 Verfassung", 1)
     assert report.versions == 19 * (N_TOLS - 1) + 1
     systematics_calls = [c for c in server.calls if "/systematics" in c]
-    assert len(systematics_calls) == 2, "one call for the leaves, one chunk with both leaf ids"
-    assert "tols_for_systematics" in systematics_calls[1]
+    assert len(systematics_calls) == 2, "one call for the tree, one chunk with every node id"
+    assert systematics_calls[1].count("tols_for_systematics") == 4, "inner nodes 633/634 are asked too"
 
 
 def test_rerun_updates_in_place(conn, settings):
