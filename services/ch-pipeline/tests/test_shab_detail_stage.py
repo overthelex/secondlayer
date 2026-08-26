@@ -273,6 +273,23 @@ def test_a_missing_publication_is_retired_at_once(conn, settings):
     assert report.failed == 1
 
 
+def test_a_publication_the_gazette_reports_as_gone_is_retired_at_once(
+        conn, settings):
+    """410 Gone is the same fact as 404, stated more explicitly: the
+    publication was there and has been withdrawn. Retrying it twice more
+    burns two requests on a federal gazette to be told the same thing, and
+    then leaves the row claimable-looking until the attempt counter catches
+    up."""
+    _seed(conn, HR)
+    report = _run(settings, FakePortal(status={HR: 410}))
+
+    row = _row(conn, HR)
+    assert row["detail_attempts"] == shab_detail_stage.MAX_ATTEMPTS
+    assert row["detail_error"] == "not_found"
+    assert row["detail_fetched_at"] is None
+    assert report.failed == 1
+
+
 def test_a_body_that_does_not_parse_burns_an_attempt(conn, settings):
     _seed(conn, HR)
     report = _run(settings, FakePortal(bodies={HR: b"<html>maintenance</html>"}))
@@ -370,11 +387,31 @@ def test_the_budget_stops_the_loop_after_a_batch(conn, settings):
     assert report.fetched == 1
 
 
-def test_more_rows_than_one_batch_are_walked_in_batches(conn, settings):
+def test_more_rows_than_one_batch_are_walked_in_batches(conn, settings,
+                                                        monkeypatch):
+    """Three rows against a batch of two: what this test is here to rule out
+    is the whole queue being claimed in one go, and `claimed == 3` says
+    nothing about that -- it is the same number either way. Count the claims.
+
+    The batch size is what bounds how many publications are in flight and how
+    much a killed run leaves half-done, so "it claimed twice" is the
+    behaviour, not a detail of it."""
+    real_claim = shab_detail_stage.claim
+    claimed_per_call: list[int] = []
+
+    def counting_claim(conn_, limit, exclude=()):
+        rows = real_claim(conn_, limit, exclude)
+        claimed_per_call.append(len(rows))
+        return rows
+
+    monkeypatch.setattr(shab_detail_stage, "claim", counting_claim)
     _seed(conn, HR)
     _seed(conn, HR03)
     _seed(conn, KK, rubric="KK")
-    report = _run(settings, FakePortal(), batch_size=1)
+
+    report = _run(settings, FakePortal(), batch_size=2)
+
+    assert claimed_per_call == [2, 1, 0], "two full claims, then the drain"
     assert report.claimed == 3
     assert report.fetched == 3
 

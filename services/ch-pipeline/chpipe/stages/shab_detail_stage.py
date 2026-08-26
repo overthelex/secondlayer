@@ -253,14 +253,23 @@ def _row_params(row: dict, detail: dict, labels: dict[str, str]) -> dict:
     }
 
 
-def _permanent(exc: BaseException) -> bool:
-    """A 404 is a fact about the publication, not a hiccup.
+# The statuses that mean "this publication is not coming back", as opposed to
+# "not right now". 410 Gone is 404's more explicit sibling -- it says the
+# publication WAS here and has been withdrawn -- and the gazette answers it
+# for exactly the case this queue has to retire: a publication the list run
+# saw and that was pulled before the detail fetch reached it.
+_GONE = ("404 ", "410 ")
 
-    Fetcher raises FetchError("404 for {url}") for the statuses it refuses to
-    retry, and 404 is the only one of them this endpoint answers for a
-    publication that was withdrawn after the list run saw it.
+
+def _permanent(exc: BaseException) -> bool:
+    """A 404 or a 410 is a fact about the publication, not a hiccup.
+
+    Fetcher raises FetchError("{status} for {url}") for the statuses it
+    refuses to retry; these two are the ones that retire the row rather than
+    spending two more requests on a federal gazette to be told the same
+    thing.
     """
-    return isinstance(exc, FetchError) and str(exc).startswith("404 ")
+    return isinstance(exc, FetchError) and str(exc).startswith(_GONE)
 
 
 async def _fetch_one(fetcher: Fetcher, limiter: _RateLimiter,
