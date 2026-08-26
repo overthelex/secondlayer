@@ -1,4 +1,4 @@
-import type { Decision, Citation } from '../../../types/models/Message';
+import type { Decision, Citation, VaultDocument } from '../../../types/models/Message';
 import type { EvidenceResult, ToolResultData } from './types';
 import { formatLegislationText } from './format-legislation';
 
@@ -17,10 +17,23 @@ import { formatLegislationText } from './format-legislation';
 
 const CH_COURT_TOOLS = new Set(['ch_search_court_decisions', 'ch_get_court_decision']);
 const CH_LEGISLATION_TOOLS = new Set(['ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history']);
+const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
 const UNKNOWN_DATE_LABEL = 'Дата невідома (джерело)';
+const COMPANY_BODY_CHARS = 300;
+// Notes that the company has publications in SHAB rubric KK — debt collection and
+// bankruptcy. Deliberately NOT a verdict and deliberately not in the title: the rubric
+// covers the whole proceeding, KK07 (Widerruf) is a REVOCATION of a bankruptcy and KK09
+// its closure, so "has KK publications" is the fact and "is bankrupt" is a conclusion the
+// panel is not entitled to draw for the reader. The card's own rows say which it is.
+const SHAB_KK_NOTE = 'Є публікації SHAB KK (стягнення/банкрутство)';
+
+const CH_COMPANY_STATUS_LABELS: Record<string, string> = {
+  active: 'у реєстрі',
+  inactive: 'вилучена з реєстру',
+};
 
 const CH_CHANGE_TYPE_LABELS: Record<string, string> = {
   added: 'додано',
@@ -220,6 +233,144 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
   return { decisions: [], citations, documents: [] };
 }
 
+/**
+ * Zefix / SHAB company row → registry-style VaultDocument, the same shape registry.ts
+ * gives openreyestr_* entities so the evidence panel renders both identically.
+ *
+ * `title` is "Name (UID)"; a SHAB-only company (struck off the register, so no Zefix row
+ * and possibly no UID) keeps its name and is labelled by `source`. `subtitle` is the
+ * one-line identity — legal form · seat · canton · status — and `snippet` is what the
+ * panel actually renders, so it carries the subtitle, the SHAB counts, the KK note when
+ * there is one, and then the body.
+ */
+function companyToDocument(row: ToolResultData, body: string, hasKkPublications: boolean): VaultDocument {
+  const uid = row.uid ? String(row.uid) : '';
+  const name = row.name ? String(row.name) : 'Компанія';
+  const statusLabel = row.status ? (CH_COMPANY_STATUS_LABELS[String(row.status)] || String(row.status)) : '';
+  const subtitle = [
+    row.legal_form,
+    row.legal_seat,
+    row.canton,
+    statusLabel,
+    row.source === 'shab' ? 'лише SHAB (немає в Zefix)' : undefined,
+  ].filter(Boolean).map(String).join(' · ');
+
+  const shabLine = row.shab_count != null && Number(row.shab_count) > 0
+    ? `Публікацій SHAB: ${chCount(row.shab_count, row.shab_count_capped === true)}`
+      + `${row.last_shab_date ? ` (остання: ${row.last_shab_date})` : ''}`
+    : undefined;
+
+  return {
+    id: `ch-company-${uid || name}`,
+    title: `${name}${uid ? ` (${uid})` : ''}`,
+    type: 'other',
+    metadata: {
+      subtitle,
+      body,
+      snippet: [subtitle, shabLine, hasKkPublications ? SHAB_KK_NOTE : undefined, body]
+        .filter(Boolean).join(' \u2022 '),
+      uid: uid || undefined,
+      canton: row.canton ?? undefined,
+      status: row.status ?? undefined,
+      source: row.source ?? undefined,
+      bankruptcy: hasKkPublications,
+    },
+  };
+}
+
+/**
+ * A register-hit count, honest about the cap.
+ *
+ * ch_get_company returns at most 100 SHAB publications and 50 rows per register, so the
+ * length of a section is not the company's total — it is what the tool was willing to
+ * hand over. The tool says which sections it cut (`*_truncated`), and a cut count is
+ * labelled "показано N" so the panel never presents a page as a total.
+ */
+function chCount(count: unknown, truncated: boolean): string {
+  return truncated ? `показано ${count}` : String(count);
+}
+
+function chCompanyBody(row: ToolResultData): string {
+  if (row.purpose) return String(row.purpose).slice(0, COMPANY_BODY_CHARS);
+  return '';
+}
+
+/**
+ * ch_get_company card → one company document whose body falls back to the newest SHAB
+ * publication when Zefix records no purpose, plus the register-hit counts that make the
+ * card worth opening (FINMA / SECO / cantonal gazette).
+ */
+function chCompanyCardDocument(parsed: ToolResultData): VaultDocument {
+  const company = parsed.company || {};
+  const shab = Array.isArray(parsed.shab) ? parsed.shab : [];
+  const bankruptcies = Array.isArray(parsed.bankruptcies) ? parsed.bankruptcies : [];
+  const finma = Array.isArray(parsed.finma) ? parsed.finma : [];
+  const seco = Array.isArray(parsed.seco) ? parsed.seco : [];
+  const kantonsblatt = Array.isArray(parsed.kantonsblatt) ? parsed.kantonsblatt : [];
+
+  const newestShab = shab[0] || {};
+  const body = chCompanyBody(company)
+    || String(newestShab.content || newestShab.title || '').slice(0, COMPANY_BODY_CHARS);
+
+  const doc = companyToDocument(
+    {
+      ...company,
+      // The card's SHAB count is the length of a capped list, unlike ch_search_companies'
+      // shab_count, which is a real count(*) — hence the flag travelling with it.
+      shab_count: shab.length,
+      shab_count_capped: parsed.shab_truncated === true,
+      last_shab_date: newestShab.publication_date,
+    },
+    body,
+    bankruptcies.length > 0
+  );
+
+  const registerHits = [
+    bankruptcies.length > 0
+      ? `Публікації SHAB KK (стягнення/банкрутство): ${chCount(bankruptcies.length, parsed.bankruptcies_truncated === true)}`
+      : undefined,
+    finma.length > 0 ? `FINMA: ${chCount(finma.length, parsed.finma_truncated === true)}` : undefined,
+    seco.length > 0 ? `SECO (санкції): ${chCount(seco.length, parsed.seco_truncated === true)}` : undefined,
+    kantonsblatt.length > 0
+      ? `Кантональні відомості: ${chCount(kantonsblatt.length, parsed.kantonsblatt_truncated === true)}`
+      : undefined,
+  ].filter(Boolean).join(' \u2022 ');
+
+  return {
+    ...doc,
+    metadata: {
+      ...doc.metadata,
+      register_hits: registerHits || undefined,
+      finma_count: finma.length,
+      seco_count: seco.length,
+      kantonsblatt_count: kantonsblatt.length,
+      bankruptcy_count: bankruptcies.length,
+      // FINMA and SECO are matched by normalised name, not by UID — surface the note the
+      // backend returns so the panel never presents a heuristic hit as a certain one.
+      name_match_note: parsed.name_match_note ?? undefined,
+      snippet: [doc.metadata?.snippet, registerHits].filter(Boolean).join(' \u2022 '),
+    },
+  };
+}
+
+function extractChRegistryEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
+  const documents: VaultDocument[] = [];
+
+  if (toolName === 'ch_search_companies') {
+    const rows = Array.isArray(parsed.results) ? parsed.results : [];
+    for (const row of rows) {
+      documents.push(companyToDocument(row, chCompanyBody(row), row.bankruptcy === true));
+    }
+  } else if (toolName === 'ch_get_company') {
+    // Error payload: { error: 'not_found', uid }.
+    if (!parsed.error && parsed.company) {
+      documents.push(chCompanyCardDocument(parsed));
+    }
+  }
+
+  return { decisions: [], citations: [], documents };
+}
+
 export function extractChEvidence(toolName: string, data: ToolResultData): EvidenceResult {
   if (!data || typeof data !== 'object') {
     return { decisions: [], citations: [], documents: [] };
@@ -230,6 +381,9 @@ export function extractChEvidence(toolName: string, data: ToolResultData): Evide
   }
   if (CH_LEGISLATION_TOOLS.has(toolName)) {
     return extractChLegislationEvidence(toolName, data);
+  }
+  if (CH_REGISTRY_TOOLS.has(toolName)) {
+    return extractChRegistryEvidence(toolName, data);
   }
 
   return { decisions: [], citations: [], documents: [] };

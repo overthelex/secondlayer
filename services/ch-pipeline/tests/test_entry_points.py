@@ -317,6 +317,53 @@ def test_chpipe_cit_resolve_all_0_is_not_a_yes(monkeypatch, no_renice):
     assert seen["kwargs"]["resolve_all"] is False
 
 
+# --- the registries half ---
+# zefix is neither a decisions stage (no CHPIPE_SPIDER) nor a legislation one
+# (no CHPIPE_LANG), so it sits outside both parametrised lists above -- which
+# is exactly how a stage ends up with no entry-point test at all.
+
+from chpipe.stages import zefix_stage
+
+
+def test_zefix_has_a_reachable_main_that_renices_at_nice_io(monkeypatch, no_renice):
+    """A walk of 2,111 SPARQL queries on a box serving live traffic, the
+    same shape as acts/versions."""
+    monkeypatch.delenv("CHPIPE_ZEFIX_MUNICIPALITIES", raising=False)
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    zefix_stage.main()
+    assert no_renice == [throttle.NICE_IO]
+    assert seen["municipalities"] is None, "no selection means every municipality"
+
+
+def test_zefix_honours_chpipe_zefix_municipalities(monkeypatch, no_renice):
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    monkeypatch.setenv("CHPIPE_ZEFIX_MUNICIPALITIES", "371,700")
+    zefix_stage.main()
+    assert seen["municipalities"] == [371, 700]
+
+
+def test_an_empty_zefix_municipality_list_means_every_municipality(
+        monkeypatch, no_renice):
+    """run-stage.sh exports its variables unconditionally, so the nightly
+    run reaches main() with CHPIPE_ZEFIX_MUNICIPALITIES="" -- and reading an
+    empty selection as a selection is exactly the CHPIPE_SPIDER bug this
+    file exists to prevent. An empty walk would also mean the sweep never
+    runs, because a restricted run never sweeps."""
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    monkeypatch.setenv("CHPIPE_ZEFIX_MUNICIPALITIES", "")
+    zefix_stage.main()
+    assert seen["municipalities"] is None
+
+
 # --- run-stage.sh's own usage line ---
 # It read `index|fetch|extract|ocr|load` long after six more stages existed,
 # and its wrapper is the only way any of them is actually invoked on prod.
@@ -343,6 +390,7 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act",
+                "zefix", "shab-list", "shab-detail",
                 "lexfind-registry", "cantonal-acts", "cantonal-fetch",
                 "cantonal-parse", "reports-cantonal"}
     assert _accepted_stage_names() == expected
@@ -406,6 +454,22 @@ def _stub_resolve(monkeypatch, calls=None):
         lambda settings: delta_module.aliases_stage.AliasReport())
 
 
+def _stub_registries(monkeypatch, calls=None):
+    """run_registries is the third independent guarded step delta.main()
+    runs, alongside run_decisions/run_legislation -- stubbed out here for the
+    same reason _stub_resolve exists: a real call would open a connection
+    (zefix_stage.run) against the FAKE dsn no_env hands out and also reach
+    the network. These tests are about main()'s composition, not
+    run_registries' own behaviour (that has its own tests in
+    tests/test_delta.py)."""
+    def fake(settings):
+        if calls is not None:
+            calls.append(settings)
+        return delta_module.RegistriesReport()
+
+    monkeypatch.setattr(delta_module, "run_registries", fake)
+
+
 def test_delta_main_is_reachable(monkeypatch, no_renice):
     """no_env (autouse) already patches Settings.from_env for every test in
     this file, delta.main() included."""
@@ -413,6 +477,7 @@ def test_delta_main_is_reachable(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
     result = delta_module.main()
     assert isinstance(result, delta_module.DeltaReport)
@@ -423,6 +488,7 @@ def test_delta_main_renices_exactly_once_at_nice_io(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
     delta_module.main()
     assert no_renice == [throttle.NICE_IO], \
@@ -459,6 +525,7 @@ def test_a_failing_decisions_half_does_not_skip_the_legislation_half(
 
     monkeypatch.setattr(delta_module, "run_decisions", boom)
     monkeypatch.setattr(delta_module, "run_legislation", legislation)
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch, called)
 
     # Still raises: run-delta.sh's marker reports the exit status, and a
@@ -477,6 +544,7 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
 
     with caplog.at_level("INFO"):
@@ -486,7 +554,9 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
-                       "projected=0 cantonal(acts=0 versions=0 changes=0 "
+                       "projected=0 registries(zefix=0 shab_list=0 "
+                       "shab_detail=0) "
+                       "cantonal(acts=0 versions=0 changes=0 "
                        "projected=0 failed=none) "
                        "resolved(acts=0 editions=0 articles=0 "
                        "cases=0) failed=legislation"]
@@ -503,6 +573,7 @@ def test_citations_resolve_still_runs_once_when_a_half_failed(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_registries(monkeypatch)
     calls = []
     _stub_resolve(monkeypatch, calls)
 

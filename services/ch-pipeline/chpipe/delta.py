@@ -1,7 +1,8 @@
-"""Daily delta for both Swiss corpora, run once a night once the backfill is
-finished (spec section 10). Every WRITE happens inside a stage that already
-has its own real-Postgres tests (index_stage, fetch_stage, extract_stage,
-load_stage, acts_stage, versions_stage, fetch_xml_stage, parse_akn_stage) --
+"""Daily delta for the three Swiss corpora, run once a night once the
+backfill is finished (spec section 10). Every WRITE happens inside a stage
+that already has its own real-Postgres tests (index_stage, fetch_stage,
+extract_stage, load_stage, acts_stage, versions_stage, fetch_xml_stage,
+parse_akn_stage, zefix_stage, shab_list_stage, shab_detail_stage) --
 this module only decides which of those stages to call, and with what
 arguments. It does issue one read of its own, court_code_spider_map()'s
 `SELECT DISTINCT`, covered by its own real-Postgres tests below (round 1 of
@@ -77,7 +78,8 @@ from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
                      citations_stage, diff_stage, extract_stage, fetch_stage,
                      fetch_xml_stage, index_stage, load_stage,
                      parse_akn_stage, project_legacy_stage,
-                     provenance_stage, versions_stage)
+                     provenance_stage, shab_detail_stage, shab_list_stage,
+                     versions_stage, zefix_stage)
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +115,15 @@ class DeltaReport:
     cantonal_acts: int = 0
     cantonal_versions: int = 0
     cantonal_failed: list[str] = field(default_factory=list)
+
+
+@dataclass
+class RegistriesReport:
+    zefix: zefix_stage.ZefixReport = field(default_factory=zefix_stage.ZefixReport)
+    shab_list: shab_list_stage.ShabListReport = field(
+        default_factory=shab_list_stage.ShabListReport)
+    shab_detail: shab_detail_stage.ShabDetailReport = field(
+        default_factory=shab_detail_stage.ShabDetailReport)
 
 
 def snapshot_url(day: datetime.date) -> str:
@@ -565,6 +576,81 @@ def run_legislation(settings: Settings) -> DeltaReport:
     return report
 
 
+def run_registries(settings: Settings) -> RegistriesReport:
+    """The third corpus this job keeps fresh: zefix (the company register,
+    from LINDAS) and the two amtsblattportal.ch (SHAB) stages, which are its
+    own delta on their own queues rather than a snapshot comparison like
+    run_decisions or a re-run-the-whole-graph like run_legislation.
+
+    zefix_stage.run() is a full walk of every municipality partition, but it
+    is NOT a full re-fetch every night: `run()` resumes by run_date, so a
+    prior run today that already finished a partition is skipped, and the
+    common case -- one nightly run per run_date -- walks all ~2,100
+    partitions once, measured at roughly 10-20 minutes end to end. Called
+    with no `municipalities` filter, deliberately: that argument exists for
+    a targeted re-run (CHPIPE_ZEFIX_MUNICIPALITIES), not for the nightly
+    delta, which needs the whole register compared every night the same way
+    run_decisions needs the whole snapshot.
+
+    shab_list_stage.run(months=2) walks only the last two calendar months
+    rather than the ~26 years the backfill covers -- a SHAB publication is
+    never backdated, so anything older than the current and previous month
+    is not going to change, and re-listing it every night would cost 2.5M
+    rows of HTTP for zero new publications. Two months, not one, so a
+    publication that lands in the last days of a month is still covered by
+    the run that follows the month boundary.
+
+    shab_detail_stage.run(budget_seconds=settings.shab_budget_seconds) drains
+    the detail queue (rows shab_list wrote with no detail_fetched_at yet)
+    under a clock, not a row count -- 90 minutes by default
+    (CHPIPE_SHAB_BUDGET_SECONDS via Settings.shab_budget_seconds), because
+    the queue this stage claims from is shared with the standalone backfill
+    and can be arbitrarily large the first time this runs. The queue model
+    (detail_fetched_at IS NULL AND detail_attempts < 3, FOR UPDATE SKIP
+    LOCKED) is what makes stopping on a clock safe: nothing is left
+    half-claimed, and tomorrow's run picks the same query up where tonight's
+    left off.
+
+    Order matters for one reason not obvious from the calls alone: zefix
+    before shab-detail is what gives shab-detail's legal-form CODES a label
+    at all (shab_detail_stage.legal_form_labels() reads them from
+    ch_zefix_companies, populated by zefix -- see that function's own
+    docstring). Calling shab-detail before zefix has ever run does not fail,
+    it just leaves every legal_form holding a bare eCH-0097 code instead of
+    its German label, which is why zefix runs first here even though the two
+    stages write disjoint tables and neither depends on the other's rows to
+    make progress.
+
+    That ordering is a preference, not a dependency, which is why each of
+    the three gets its own guard: they write disjoint tables and share no
+    failure mode, so a LINDAS timeout used to cost the gazette a whole
+    night -- shab-list and shab-detail never ran, and the queue they drain
+    grew by another day's publications with nothing taking from it. Same
+    shape as main()'s guard over its own three halves: every stage gets its
+    turn, the failures are logged in full, and the FIRST one is re-raised
+    afterwards so run-delta.sh's marker line cannot report OK on a night
+    that lost a stage.
+    """
+    report = RegistriesReport()
+    failures: list[BaseException] = []
+    # The name is the RegistriesReport field the stage fills, so a stage that
+    # fails leaves that field at its zero report and the rest of the run is
+    # still described.
+    for name, call in (
+            ("zefix", lambda: zefix_stage.run(settings)),
+            ("shab_list", lambda: shab_list_stage.run(settings, months=2)),
+            ("shab_detail", lambda: shab_detail_stage.run(
+                settings, budget_seconds=settings.shab_budget_seconds))):
+        try:
+            setattr(report, name, call())
+        except Exception as exc:               # noqa: BLE001 -- see above
+            log.exception("registries: the %s stage failed", name)
+            failures.append(exc)
+    if failures:
+        raise failures[0]
+    return report
+
+
 # recent_changes pages carry the whole act record per entry (2.7 MB for 16
 # entries on BE); only systematic_number and change_date are read. A quiet
 # night is one page per canton; the cap is a backstop against a host that
@@ -686,8 +772,9 @@ def main() -> DeltaReport:
     for all of them. NICE_IO and NICE_CPU are both 10 (see throttle.py), and
     every stage this module touches (index/fetch/extract/load/citations on
     the decisions side, acts/versions/fetch-xml on the legislation side,
-    parse-akn, the one CPU stage in the mix, and citations-resolve after
-    both) resolves to one of those two values -- so a single renice(NICE_IO)
+    parse-akn, the one CPU stage in the mix, zefix/shab-list/shab-detail on
+    the registries side, and citations-resolve after all three) resolves to
+    one of those two values -- so a single renice(NICE_IO)
     here reproduces exactly what an unattended sequence of each stage's own
     main() would have set, without stacking os.nice()'s cumulative increment
     once per stage. wait_for_capacity
@@ -737,7 +824,39 @@ def main() -> DeltaReport:
             failures.append((name, exc))
             reports[name] = DeltaReport()
 
-    # citations_resolve_stage is a third, independent guarded step -- not
+    # run_registries is a third, independent guarded step, not folded into
+    # the loop above: it returns a RegistriesReport, not a DeltaReport, and
+    # zefix/SHAB share no table, queue or failure mode with either corpus
+    # above -- a LINDAS timeout or an amtsblattportal outage must cost the
+    # registries half only, exactly like decisions and legislation cost only
+    # themselves. Placed after both of them and before the alias
+    # seed/citations-resolve pair below: those two are about the CITATION
+    # graph over decisions and legislation, which run_registries neither
+    # feeds nor depends on, so its only ordering requirement is internal
+    # (zefix before shab-detail, inside run_registries itself) and it can
+    # run anywhere in the tail without changing what either resolve step
+    # sees.
+    registries_report = RegistriesReport()
+    try:
+        registries_report = run_registries(settings)
+        log.info("delta: registries zefix(upserted=%d inactivated=%d "
+                 "sweep_skipped=%s) "
+                 "shab_list(months=%d pages=%d upserted=%d) "
+                 "shab_detail(claimed=%d fetched=%d failed=%d)",
+                 registries_report.zefix.upserted,
+                 registries_report.zefix.inactivated,
+                 registries_report.zefix.sweep_skipped,
+                 registries_report.shab_list.months,
+                 registries_report.shab_list.pages,
+                 registries_report.shab_list.upserted,
+                 registries_report.shab_detail.claimed,
+                 registries_report.shab_detail.fetched,
+                 registries_report.shab_detail.failed)
+    except Exception as exc:                    # noqa: BLE001 -- see above
+        log.exception("delta: the registries half failed")
+        failures.append(("registries", exc))
+
+    # citations_resolve_stage is another independent guarded step -- not
     # folded into the loop above because it returns a ResolveReport, not a
     # DeltaReport, and because it belongs after BOTH halves regardless of
     # which one (if either) failed: ch_legislation_citations references acts
@@ -777,11 +896,15 @@ def main() -> DeltaReport:
     cantonal = reports["cantonal"]
     log.info("delta: spiders=%s new_documents=%d new_versions=%d "
              "new_changes=%d new_provenance=%d projected=%d "
+             "registries(zefix=%d shab_list=%d shab_detail=%d) "
              "cantonal(acts=%d versions=%d changes=%d projected=%d failed=%s) "
              "resolved(acts=%d editions=%d articles=%d cases=%d) failed=%s",
              decisions.spiders, decisions.new_documents,
              legislation.new_versions, legislation.new_changes,
              legislation.new_provenance, legislation.projected,
+             registries_report.zefix.upserted,
+             registries_report.shab_list.upserted,
+             registries_report.shab_detail.fetched,
              cantonal.cantonal_acts, cantonal.cantonal_versions, cantonal.new_changes,
              cantonal.projected, ",".join(cantonal.cantonal_failed) or "none",
              resolve_report.acts, resolve_report.editions,

@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<KK04:publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:KK04="https://shab.ch/shab/KK04-export" xsi:schemaLocation="https://shab.ch/shab/KK04-export https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK04-export.xsd">
+<meta>
+  <id>2a5d3c9d-e16f-49ca-b9e1-d3d8018c3854</id>
+  <rubric>KK</rubric>
+  <subRubric>KK04</subRubric>
+  <language>it</language>
+  <registrationOffice>
+    <id>bda9e79b-ac5b-11e8-8b65-0050569de354</id>
+    <displayName>Ufficio esecuzioni e fallimenti Moesa</displayName>
+    <street>Al Giardinètt</street>
+    <streetNumber>2</streetNumber>
+    <swissZipCode>6535</swissZipCode>
+    <town>Roveredo GR</town>
+    <containsPostOfficeBox>false</containsPostOfficeBox>
+  </registrationOffice>
+  <publicationNumber>KK04-0000059754</publicationNumber>
+  <publicationState>PUBLISHED</publicationState>
+  <publicationDate>2026-08-25</publicationDate>
+  <expirationDate>2031-08-25</expirationDate>
+  <primaryTenantCode>shab</primaryTenantCode>
+  <legalRemedy>Il creditore che intende contestare la graduatoria poiché il suo credito è stato, tutto o in parte, rigettato o non è stato collocato nel grado rivendicato, deve promuovere l’azione dinanzi al giudice del luogo del fallimento entro venti giorni dalla pubblicazione del deposito della graduatoria. Se egli contesta il credito o il grado di un altro creditore, l’azione deve essere promossa contro l’interessato. &lt;br />Pubblicazione secondo gli art. 221, 249 e 250 LEF.</legalRemedy>
+  <cantons>GR</cantons>
+  <secondaryTenants>
+    <tenantCode>kabti</tenantCode>
+    <publicationDate>2026-08-25</publicationDate>
+  </secondaryTenants>
+  <secondaryTenants>
+    <tenantCode>kabgr</tenantCode>
+    <publicationDate>2026-08-25</publicationDate>
+  </secondaryTenants>
+  <title>
+    <de>Kollokationsplan und Inventar CB Ponteggi SA in liquidazione</de>
+    <en>Collocation plan and inventory CB Ponteggi SA in liquidazione</en>
+    <it>Graduatoria e inventario CB Ponteggi SA in liquidazione</it>
+    <fr>Etat de collocation et inventaire CB Ponteggi SA in liquidazione</fr>
+  </title>
+</meta>
+<content>
+  <debtor>
+    <selectType>company</selectType>
+    <companies>
+      <noUID>false</noUID>
+      <company>
+        <name>CB Ponteggi SA in liquidazione</name>
+        <uid>CHE-457.983.142</uid>
+        <uidOrganisationId>457983142</uidOrganisationId>
+        <uidOrganisationIdCategorie>CHE</uidOrganisationIdCategorie>
+        <address>
+          <street>Via Lungomoesa</street>
+          <houseNumber>80</houseNumber>
+          <swissZipCode>6535</swissZipCode>
+          <town>Roveredo GR</town>
+        </address>
+        <canton>GR</canton>
+      </company>
+    </companies>
+  </debtor>
+  <typeOfCirculation>
+    <selectType>scheduleOfClaimsAndInventory</selectType>
+  </typeOfCirculation>
+  <claimOfCreditors>
+    <daysAfterPublication>20</daysAfterPublication>
+    <entryDeadline>2026-09-14</entryDeadline>
+  </claimOfCreditors>
+  <inventory>
+    <daysAfterPublication>10</daysAfterPublication>
+    <entryDeadline>2026-09-04</entryDeadline>
+  </inventory>
+  <registrationOfficeAndCirculationAuthority>Ufficio esecuzioni e fallimenti Moesa, Al Giardinètt 2, 6535 Roveredo GR</registrationOfficeAndCirculationAuthority>
+  <remarks>Si rende noto che a partire dal 25 agosto 2026 sono depositati presso lo scrivente Ufficio, dove i creditori potranno prenderne visione, la graduatoria e l’inventario. Le azioni di contestazione della graduatoria dovranno essere inoltrate all’autorità giudiziaria competente entro 20 giorni dalla data del deposito, altrimenti essa verrà considerata come riconosciuta.
+
+</remarks>
+</content>
+</KK04:publication>

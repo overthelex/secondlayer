@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<HR01:publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:HR01="https://shab.ch/shab/HR01-export" xsi:schemaLocation="https://shab.ch/shab/HR01-export https://amtsblattportal.ch/api/v1/schemas/shab/1.26/HR01-export.xsd">
+<meta>
+  <id>e34b9c34-4917-41fa-95e1-89ca86a9d69d</id>
+  <rubric>HR</rubric>
+  <subRubric>HR01</subRubric>
+  <language>de</language>
+  <registrationOffice>
+    <id>e15a629a-a08d-11e8-aa11-0050569d3c43</id>
+    <displayName>Bundesamt für Justiz (BJ), Eidgenössisches Amt für das Handelsregister</displayName>
+    <street>Bundesrain</street>
+    <streetNumber>20</streetNumber>
+    <swissZipCode>3003</swissZipCode>
+    <town>Bern</town>
+    <containsPostOfficeBox>false</containsPostOfficeBox>
+  </registrationOffice>
+  <publicationNumber>HR01-1006739231</publicationNumber>
+  <publicationState>PUBLISHED</publicationState>
+  <publicationDate>2026-08-25</publicationDate>
+  <primaryTenantCode>shab</primaryTenantCode>
+  <legalRemedy>Die aufgeführte Rechtseinheit wurde ins Handelsregister aufgenommen und ist rechtsfähig. &lt;br />Publikation nach HRegV Art. 9 und Art. 35.</legalRemedy>
+  <cantons>AG</cantons>
+  <title>
+    <de>Neueintragung Hikari Labs GmbH, Spreitenbach</de>
+    <en>New entries Hikari Labs GmbH, Spreitenbach</en>
+    <it>Nuove registrazioni Hikari Labs GmbH, Spreitenbach</it>
+    <fr>Nouvelles entrées Hikari Labs GmbH, Spreitenbach</fr>
+  </title>
+</meta>
+<content>
+  <testImport>false</testImport>
+  <journalNumber>11864</journalNumber>
+  <journalDate>2026-08-20</journalDate>
+  <publicationText>Hikari Labs GmbH, in Spreitenbach, CHE-344.059.939, Sandäckerstrasse 5a, 8957 Spreitenbach, Gesellschaft mit beschränkter Haftung (Neueintragung). Statutendatum: 10.08.2026. Zweck: Die Gesellschaft bezweckt die Erbringung von Beratungs-, Projektmanagement-, Engineering- und Entwicklungsdienstleistungen, insbesondere in den Bereichen Industrie, Medizintechnik, Life Sciences, Qualitätsmanagement, Kunststofftechnik und Digitalisierung. Sie entwickelt, konstruiert, betreibt, lizenziert und vertreibt technische Lösungen, Software, digitale Produkte sowie Anwendungen in den Bereichen künstliche Intelligenz und Automatisierung. Die Gesellschaft bezweckt ferner die Konzeption und Durchführung von Schulungen, Kursen, Workshops und weiteren Bildungsangeboten sowie die Erstellung, Vermarktung und Verbreitung von Medien- und Unterhaltungsinhalten. Sie kann physische und digitale Produkte entwickeln, herstellen, herstellen lassen, erwerben, vertreiben und damit Handel treiben. Die Gesellschaft kann Zweigniederlassungen und Tochtergesellschaften im In- und Ausland errichten und sich an anderen Unternehmen im In- und Ausland beteiligen sowie alle Geschäfte tätigen, die direkt oder indirekt mit ihrem Zweck in Zusammenhang stehen. Die Gesellschaft kann im in- und Ausland Grundeigentum erwerben, belasten, veräussern und verwalten. Sie kann auch Finanzierungen für eigene oder fremde Rechnung vornehmen sowie Garantien und Bürgschaften für Tochtergesellschaften und Dritte eingehen. Stammkapital: CHF 20'000.00. Publikationsorgan: SHAB. Mitteilungen an die Gesellschafter erfolgen per Brief oder E-Mail. Gemäss Erklärung bei der Gründung der Gesellschaft wird auf eine eingeschränkte Revision verzichtet. Eingetragene Personen: Gradonski, Michael, österreichischer Staatsangehöriger, in Spreitenbach, Gesellschafter und Geschäftsführer, mit Einzelunterschrift, mit 200 Stammanteilen zu je CHF 100.00.</publicationText>
+  <commonsNew>
+    <company>
+      <name>Hikari Labs GmbH</name>
+      <uid>CHE-344.059.939</uid>
+      <uidOrganisationId>344059939</uidOrganisationId>
+      <uidOrganisationIdCategorie>CHE</uidOrganisationIdCategorie>
+      <code13>CH40044593761</code13>
+      <seat>Spreitenbach</seat>
+      <legalForm>0107</legalForm>
+      <noAddress>false</noAddress>
+      <address>
+        <street>Sandäckerstrasse</street>
+        <houseNumber>5a</houseNumber>
+        <swissZipCode>8957</swissZipCode>
+        <town>Spreitenbach</town>
+      </address>
+    </company>
+    <purpose>Die Gesellschaft bezweckt die Erbringung von Beratungs-, Projektmanagement-, Engineering- und Entwicklungsdienstleistungen, insbesondere in den Bereichen Industrie, Medizintechnik, Life Sciences, Qualitätsmanagement, Kunststofftechnik und Digitalisierung. Sie entwickelt, konstruiert, betreibt, lizenziert und vertreibt technische Lösungen, Software, digitale Produkte sowie Anwendungen in den Bereichen künstliche Intelligenz und Automatisierung. Die Gesellschaft bezweckt ferner die Konzeption und Durchführung von Schulungen, Kursen, Workshops und weiteren Bildungsangeboten sowie die Erstellung, Vermarktung und Verbreitung von Medien- und Unterhaltungsinhalten. Sie kann physische und digitale Produkte entwickeln, herstellen, herstellen lassen, erwerben, vertreiben und damit Handel treiben. Die Gesellschaft kann Zweigniederlassungen und Tochtergesellschaften im In- und Ausland errichten und sich an anderen Unternehmen im In- und Ausland beteiligen sowie alle Geschäfte tätigen, die direkt oder indirekt mit ihrem Zweck in Zusammenhang stehen. Die Gesellschaft kann im in- und Ausland Grundeigentum erwerben, belasten, veräussern und verwalten. Sie kann auch Finanzierungen für eigene oder fremde Rechnung vornehmen sowie Garantien und Bürgschaften für Tochtergesellschaften und Dritte eingehen.</purpose>
+    <capital>
+      <nominal>20000.00</nominal>
+      <paid>20000.00</paid>
+    </capital>
+    <revision>
+      <optingOut>true</optingOut>
+    </revision>
+  </commonsNew>
+  <transaction>
+    <registration>true</registration>
+  </transaction>
+  <senderOffice>
+    <officeName>Handelsregisteramt des Kantons Aargau</officeName>
+  </senderOffice>
+</content>
+</HR01:publication>

@@ -1,0 +1,111 @@
+<bulk:bulk-export xmlns:bulk="https://shab.ch/bulk-export">
+  <total>86</total>
+  <pageRequest>
+    <page>0</page>
+    <size>3</size>
+  </pageRequest>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/cc9dd46c-49f8-497b-9feb-b9ab1c359f81/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK01-export.xsd">
+    <meta>
+      <id>cc9dd46c-49f8-497b-9feb-b9ab1c359f81</id>
+      <rubric>KK</rubric>
+      <subRubric>KK01</subRubric>
+      <language>fr</language>
+      <registrationOffice>
+        <id>fbbe7886-a446-11e8-99a2-0050569d3c43</id>
+        <displayName>Office des faillites de l'Etat Genève</displayName>
+        <street>Route de Chêne</street>
+        <streetNumber>54</streetNumber>
+        <swissZipCode>1211</swissZipCode>
+        <town>Genève 6</town>
+        <containsPostOfficeBox>true</containsPostOfficeBox>
+        <postOfficeBox/>
+      </registrationOffice>
+      <publicationNumber>KK01-0000068279</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <expirationDate>2031-08-03</expirationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Les débiteurs du failli sont rendus attentifs au fait qu'ils ne peuvent plus s'acquitter en mains du failli sous peine de devoir payer deux fois, et ceux qui détiennent des biens du failli, à quelque titre que ce soit, sont tenus de les mettre immédiatement à la disposition de l'office des faillites sous menace des peines prévues par la loi (art. 324, ch. 5, CP). La publication concernant le type, la procédure, le délai de production, etc. se fera à une date ultérieure. Publication selon l'art. 222 LP.</legalRemedy>
+      <cantons>GE</cantons>
+      <secondaryTenants>
+        <tenantCode>kabge</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Vorläufige Konkursanzeige MOBS CH SARL, EN LIQUIDATION</de>
+        <en>Provisional announcement of bankruptcy MOBS CH SARL, EN LIQUIDATION</en>
+        <it>Avviso provvisorio di apertura di fallimento MOBS CH SARL, EN LIQUIDATION</it>
+        <fr>Avis préalable d'ouverture de faillite MOBS CH SARL, EN LIQUIDATION</fr>
+      </title>
+    </meta>
+  </publication>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/26ac9d1d-8d6a-406e-b180-367bb4ae1c59/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK01-export.xsd">
+    <meta>
+      <id>26ac9d1d-8d6a-406e-b180-367bb4ae1c59</id>
+      <rubric>KK</rubric>
+      <subRubric>KK01</subRubric>
+      <language>de</language>
+      <registrationOffice>
+        <id>a29b131f-1bd5-11ee-8b8e-045056009000</id>
+        <displayName>Notariat, Grundbuchamt und Konkursamt Wetzikon</displayName>
+        <street>Bahnhofstrasse</street>
+        <streetNumber>156</streetNumber>
+        <swissZipCode>8620</swissZipCode>
+        <town>Wetzikon ZH</town>
+        <containsPostOfficeBox>false</containsPostOfficeBox>
+      </registrationOffice>
+      <publicationNumber>KK01-0000068280</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <expirationDate>2031-08-03</expirationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Schuldner des Konkursiten können ihre Schulden nicht mehr durch Zahlung an den Konkursiten begleichen; sie riskieren, zweimal bezahlen zu müssen. Ferner sind Personen, die Vermögensgegenstände des Konkursiten verwahren, unabhängig vom Rechtstitel der Verwahrung, bei Straffolge (Art. 324 Ziff. 5 StGB) verpflichtet, diese unverzüglich dem Konkursamt herauszugeben. Die Publikation betreffend Art, Verfahren, Eingabefrist usw. erfolgt später. &lt;br />Publikation nach Art. 222 SchKG.</legalRemedy>
+      <cantons>ZH</cantons>
+      <secondaryTenants>
+        <tenantCode>kabzh</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Vorläufige Konkursanzeige Max Anliker, ausgeschlagene Erbschaft</de>
+        <en>Provisional announcement of bankruptcy Max Anliker, refused estate</en>
+        <it>Avviso provvisorio di apertura di fallimento Max Anliker, eredità rifiutata od oberata</it>
+        <fr>Avis préalable d'ouverture de faillite Max Anliker, succession répudiée</fr>
+      </title>
+    </meta>
+  </publication>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/0c41e1fe-e9ae-4dc7-b89d-92ec03f46f29/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK01-export.xsd">
+    <meta>
+      <id>0c41e1fe-e9ae-4dc7-b89d-92ec03f46f29</id>
+      <rubric>KK</rubric>
+      <subRubric>KK01</subRubric>
+      <language>fr</language>
+      <registrationOffice>
+        <id>fbbe7886-a446-11e8-99a2-0050569d3c43</id>
+        <displayName>Office des faillites de l'Etat Genève</displayName>
+        <street>Route de Chêne</street>
+        <streetNumber>54</streetNumber>
+        <swissZipCode>1211</swissZipCode>
+        <town>Genève 6</town>
+        <containsPostOfficeBox>true</containsPostOfficeBox>
+        <postOfficeBox/>
+      </registrationOffice>
+      <publicationNumber>KK01-0000067882</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <expirationDate>2031-08-03</expirationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Les débiteurs du failli sont rendus attentifs au fait qu'ils ne peuvent plus s'acquitter en mains du failli sous peine de devoir payer deux fois, et ceux qui détiennent des biens du failli, à quelque titre que ce soit, sont tenus de les mettre immédiatement à la disposition de l'office des faillites sous menace des peines prévues par la loi (art. 324, ch. 5, CP). La publication concernant le type, la procédure, le délai de production, etc. se fera à une date ultérieure. Publication selon l'art. 222 LP.</legalRemedy>
+      <cantons>GE</cantons>
+      <secondaryTenants>
+        <tenantCode>kabge</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Vorläufige Konkursanzeige Compass Finance SA</de>
+        <en>Provisional announcement of bankruptcy Compass Finance SA</en>
+        <it>Avviso provvisorio di apertura di fallimento Compass Finance SA</it>
+        <fr>Avis préalable d'ouverture de faillite Compass Finance SA</fr>
+      </title>
+    </meta>
+  </publication>
+</bulk:bulk-export>

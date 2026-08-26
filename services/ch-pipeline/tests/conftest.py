@@ -101,3 +101,66 @@ def apply_migration_200(conn) -> None:
     """
     apply_migration_199(conn)
     conn.execute(MIGRATION_200.read_text())
+
+
+# --- migration 202 (ch_zefix_* / ch_shab_*) --------------------------------
+# Same problem, same shape: 202 ALTERs ch_zefix_companies and
+# ch_shab_publications, which migration 129 creates, and adding indexes to a
+# table that does not exist fails. The stand-ins below are the columns 202
+# touches plus the ones a stage actually writes; 129 also creates a dozen
+# unrelated tables (nl_insolvency, ch_finma_regulated, ...) that have nothing
+# to do with 202, so applying 129 verbatim here would be dead weight.
+#
+# tests/test_migration_202.py keeps its own copy on purpose: it DROPs both
+# tables first so it can assert on a database in a known state, while callers
+# of this helper only want the tables to exist.
+MIGRATION_202 = _REPO_ROOT / "mcp_backend/src/migrations/202_ch_registries.sql"
+
+_CH_ZEFIX_COMPANIES = """
+CREATE TABLE IF NOT EXISTS ch_zefix_companies (
+    uid              text PRIMARY KEY,
+    name             text NOT NULL,
+    legal_form       text,
+    legal_seat       text,
+    register_office  text,
+    status           text,
+    purpose          text,
+    capital          numeric,
+    capital_currency text,
+    address          text,
+    canton           text,
+    chid             text,
+    ehraid           integer,   -- migration 129's type; ehraid_from_iri() returns
+                                --  a string, so the upsert casts explicitly
+    shab_pub_date    date,
+    metadata_json    jsonb,
+    imported_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now()
+)
+"""
+
+_CH_SHAB_PUBLICATIONS = """
+CREATE TABLE IF NOT EXISTS ch_shab_publications (
+    id               serial PRIMARY KEY,
+    shab_id          text UNIQUE,
+    publication_date date,
+    publication_type text,
+    rubric           text,
+    sub_rubric       text,
+    company_uid      text,
+    company_name     text,
+    canton           text,
+    content          text,
+    metadata_json    jsonb,
+    imported_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now()
+)
+"""
+
+
+def apply_migration_202(conn) -> None:
+    """Stand up migration 129's two registry tables if they are absent, then
+    apply 202. Idempotent all the way down."""
+    conn.execute(_CH_ZEFIX_COMPANIES)
+    conn.execute(_CH_SHAB_PUBLICATIONS)
+    conn.execute(MIGRATION_202.read_text())

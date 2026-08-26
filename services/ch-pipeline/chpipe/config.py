@@ -51,6 +51,35 @@ def _load_ceiling(raw: str | None) -> float:
     return value
 
 
+def _budget_seconds(raw: str | None) -> float:
+    """The wall-clock ceiling the nightly shab-detail pass stops at.
+
+    Refused for the same values as _load_ceiling and for the same reason:
+    the stage stops on `time.monotonic() - started > budget`, and every
+    comparison against nan is False, so a budget of nan is no budget at all
+    -- silently, with the setting still printed in the log. `inf` is that
+    spelled honestly and is refused too, because "unbounded" is what the
+    standalone backfill under tmux is for (shab_detail_stage.budget_seconds()
+    reads "" that way); the nightly delta shares the box with live traffic.
+
+    A negative budget is refused rather than clamped: it is not a way to ask
+    for anything -- the loop checks the clock between batches, so it means
+    "one batch a night" while looking like a duration. 0 says that outright
+    and is allowed.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return 5400.0
+    value = float(text)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(
+            f"CHPIPE_SHAB_BUDGET_SECONDS must be a finite number of seconds, "
+            f"zero or more, got {raw!r}. nan and inf both disable the budget "
+            "silently (the stage stops on a comparison that is never true); "
+            "leave it unset for the 5400 s default.")
+    return value
+
+
 def _backoff(raw: str | None) -> tuple[int, ...]:
     """"1,5,30" -> (1, 5, 30). An empty value means no wait at all."""
     if raw is None:
@@ -80,6 +109,17 @@ class Settings:
     # re-tuning the extractor wants, since the alternative is re-downloading
     # ~160 GB from a volunteer-run mirror.
     keep_raw_pdf: bool = False
+    # The nightly delta's budget for shab-detail (chpipe/delta.py's
+    # run_registries): 90 minutes, so a 2.5M-row backlog fetched at
+    # CHPIPE_SHAB_RPS=10 (~70 hours end to end) never turns the nightly cron
+    # job into an unbounded run -- it takes its bite and stops, and tomorrow
+    # picks the queue up where tonight left it (the queue IS
+    # detail_fetched_at IS NULL, so there is nothing to resume explicitly).
+    # This is a SEPARATE reading of CHPIPE_SHAB_BUDGET_SECONDS from
+    # shab_detail_stage.budget_seconds(): that one treats "" as "no budget"
+    # for a supervised backfill run under tmux, this one defaults to 5400
+    # because the nightly delta must never run unbounded.
+    shab_budget_seconds: float = 5400.0
     # Per-host concurrency for the cantonal (Lexwork) stages. 19 cantonal
     # hosts are 19 small government servers; http_concurrency is the global
     # cap across all of them, this is the cap on any one of them.
@@ -101,5 +141,7 @@ class Settings:
             retry_backoff_minutes=_backoff(
                 os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
             keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
+            shab_budget_seconds=_budget_seconds(
+                os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS")),
             cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
         )
