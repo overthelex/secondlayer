@@ -321,7 +321,8 @@ def retry_failed(conn, stage: str | None = None, spider: str | None = None) -> i
 # ---------------------------------------------------------------------------
 
 _CLAIM_VERSION_COLUMNS = (
-    "version_id, act_id, lang, date_applicability, xml_url, attempts"
+    "version_id, act_id, lang, date_applicability, xml_url, attempts, "
+    "source, eli_consolidation_uri"
 )
 
 # Columns complete_version() is allowed to write through **fields. Reserved
@@ -337,9 +338,19 @@ _COMPLETE_VERSION_ALLOWED_COLUMNS = frozenset({
 
 
 def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3,
-                   backoff_minutes: tuple[int, ...] | None = RETRY_BACKOFF_MINUTES
-                   ) -> list[dict]:
+                   backoff_minutes: tuple[int, ...] | None = RETRY_BACKOFF_MINUTES,
+                   source: str = "fedlex",
+                   url_prefix: str | None = None) -> list[dict]:
     """The same queue discipline as claim(), against ch_act_version --
+    filtered by `source` (migration 201): the Akoma Ntoso parser and the
+    Lexwork parser share this table and this stage machine, and without
+    the filter each would claim the other's payloads, fail them three
+    times as "not Akoma Ntoso" / "not JSON" and retire real rows. The
+    default is the federal pipeline's so every existing caller keeps its
+    behaviour. `url_prefix` narrows further to rows whose xml_url starts
+    with it -- how the cantonal stages run one canton (one host) at a
+    time without a canton column on the version row.
+
     including the same backoff predicate, over the same RETRY_BACKOFF_MINUTES
     schedule: attempt 1 waits a minute, attempt 2 five, attempt 3 thirty; a
     row that has never failed (attempts = 0) or whose stage_updated_at is
@@ -348,8 +359,11 @@ def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3,
     time math rather than a re-queue timestamp, and why a row is never
     delayed until it has actually failed once."""
     sql = (f"SELECT {_CLAIM_VERSION_COLUMNS} FROM ch_act_version "
-           "WHERE stage = %s AND attempts < %s")
-    params: list = [stage, max_attempts]
+           "WHERE stage = %s AND attempts < %s AND source = %s")
+    params: list = [stage, max_attempts, source]
+    if url_prefix:
+        sql += " AND xml_url LIKE %s"
+        params.append(url_prefix.replace("%", "\\%").replace("_", "\\_") + "%")
     if backoff_minutes:
         sql += (" AND (attempts = 0 OR stage_updated_at IS NULL"
                 " OR stage_updated_at <= now() - make_interval("

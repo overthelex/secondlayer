@@ -193,7 +193,7 @@ def _content_root(payload: dict) -> dict:
 
 
 _BLOCK_TAGS = frozenset({"div", "p", "h1", "h2", "h3", "h4", "li", "tr", "table"})
-_LINE_BREAK = "\x00"
+_LINE_BREAK = "\ue000"   # private-use: lxml rejects NUL in text
 
 
 def block_lines(fragment: str | None) -> list[str]:

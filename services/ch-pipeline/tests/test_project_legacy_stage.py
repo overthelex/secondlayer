@@ -2,6 +2,7 @@ import os
 import pathlib
 import psycopg
 import pytest
+from conftest import reset_legislation_schema
 from chpipe.config import Settings
 from chpipe.stages import acts_stage, project_legacy_stage, versions_stage
 
@@ -29,21 +30,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("""
-            CREATE TABLE ch_legislation (
-                eli_uri text NOT NULL, lang text NOT NULL, sr_number text,
-                title text, short_title text, version_date date, in_force boolean,
-                date_entry_force date, date_end_validity date, akn_xml text,
-                full_text text, html_url text, pdf_url text, xml_url text,
-                source text DEFAULT 'fedlex', metadata_json jsonb,
-                imported_at timestamptz DEFAULT now(),
-                updated_at timestamptz DEFAULT now(),
-                PRIMARY KEY (eli_uri, lang))
-        """)
-        c.execute(M197.read_text())
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {
             "work": WORK, "srNotation": "220",
             "inForce": "https://fedlex.data.admin.ch/vocabulary/enforcement-status/0"})
@@ -284,3 +271,23 @@ def test_a_body_less_edition_is_findable_by_query_not_only_by_log(conn, settings
         "SELECT count(*) FROM ch_legislation "
         "WHERE (metadata_json ->> 'article_count')::int = 0").fetchone()[0]
     assert empty == 1
+
+
+def test_a_cantonal_act_projects_with_source_lexwork_and_its_jurisdiction(conn, settings):
+    act = conn.execute(
+        "INSERT INTO ch_act (eli_work_uri, sr_number, jurisdiction, title_de, enforcement_status) "
+        "VALUES ('https://bgs.zg.ch/app/de/texts_of_law/111.1', '111.1', 'ZG', 'Kantonsverfassung', 0) "
+        "RETURNING act_id").fetchone()[0]
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, source, "
+        "stage, akn_xml, full_text, article_count) "
+        "VALUES (%s, 'zg/111.1/v1', 'de', '2020-01-01', 'lexwork', 'parsed', '{}', 'text', 3)", (act,))
+    project_legacy_stage.run(settings)
+    row = conn.execute(
+        "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
+        "WHERE eli_uri = 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchone()
+    assert row == ("lexwork", "ZG")
+    federal = conn.execute(
+        "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
+        "WHERE eli_uri <> 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchall()
+    assert all(r == ("fedlex", "CH") for r in federal)

@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import citations_resolve_stage
 
-from conftest import apply_migration_199
+from conftest import MIGRATION_198, MIGRATION_201, apply_migration_199
 
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_citations_resolve_stage.py is 3 levels down from the repo root (matches
@@ -56,6 +56,8 @@ def conn(settings):
             )
         """)
         c.execute(MIGRATION_197.read_text())
+        c.execute(MIGRATION_198.read_text())
+        c.execute(MIGRATION_201.read_text())
         # 197 has just created the real ch_act_article, so the helper's
         # IF NOT EXISTS stand-in is a no-op here and only 199 is applied.
         apply_migration_199(c)
@@ -366,3 +368,16 @@ def test_editions_sharing_an_applicability_date_resolve_deterministically(
     second = _leg_rows(seeded)["ECLI:B"]
     assert second["version_id"] == first["version_id"]
     assert second["article_id"] == first["article_id"]
+
+
+def test_a_cantonal_act_with_a_federal_sr_number_is_not_a_resolution_target(seeded, settings):
+    """Migration 201: cantonal collections reuse numbers ("131.1", "220");
+    the alias table and the citation resolver are federal by construction."""
+    seeded.execute(
+        "INSERT INTO ch_act (act_id, eli_work_uri, sr_number, jurisdiction, enforcement_status, "
+        "date_entry_force) VALUES (9, 'https://www.belex.sites.be.ch/app/de/texts_of_law/220', "
+        "'220', 'BE', 0, '2020-01-01')")
+    citations_resolve_stage.run(settings)
+    leg = _leg_rows(seeded)
+    assert leg["ECLI:A"]["act_id"] == 1
+    assert leg["ECLI:B"]["act_id"] == 1
