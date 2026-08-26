@@ -1,4 +1,4 @@
-import type { Decision, Citation } from '../../../types/models/Message';
+import type { Decision, Citation, VaultDocument } from '../../../types/models/Message';
 import type { EvidenceResult, ToolResultData } from './types';
 import { formatLegislationText } from './format-legislation';
 
@@ -17,10 +17,20 @@ import { formatLegislationText } from './format-legislation';
 
 const CH_COURT_TOOLS = new Set(['ch_search_court_decisions', 'ch_get_court_decision']);
 const CH_LEGISLATION_TOOLS = new Set(['ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history']);
+const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
 const UNKNOWN_DATE_LABEL = 'Дата невідома (джерело)';
+const COMPANY_BODY_CHARS = 300;
+// Prefixes the title of a company with an open bankruptcy publication (SHAB rubric KK) —
+// the single fact a due-diligence reader must not have to scroll for.
+const BANKRUPTCY_FLAG = '[БАНКРУТСТВО] ';
+
+const CH_COMPANY_STATUS_LABELS: Record<string, string> = {
+  active: 'у реєстрі',
+  inactive: 'вилучена з реєстру',
+};
 
 const CH_CHANGE_TYPE_LABELS: Record<string, string> = {
   added: 'додано',
@@ -208,6 +218,118 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
   return { decisions: [], citations, documents: [] };
 }
 
+/**
+ * Zefix / SHAB company row → registry-style VaultDocument, the same shape registry.ts
+ * gives openreyestr_* entities so the evidence panel renders both identically.
+ *
+ * `title` is "Name (UID)"; a SHAB-only company (struck off the register, so no Zefix row
+ * and possibly no UID) keeps its name and is labelled by `source`. `subtitle` is the
+ * one-line identity — legal form · seat · canton · status — and `snippet` is what the
+ * panel actually renders, so it carries the subtitle followed by the body.
+ */
+function companyToDocument(row: ToolResultData, body: string, bankruptcy: boolean): VaultDocument {
+  const uid = row.uid ? String(row.uid) : '';
+  const name = row.name ? String(row.name) : 'Компанія';
+  const statusLabel = row.status ? (CH_COMPANY_STATUS_LABELS[String(row.status)] || String(row.status)) : '';
+  const subtitle = [
+    row.legal_form,
+    row.legal_seat,
+    row.canton,
+    statusLabel,
+    row.source === 'shab' ? 'лише SHAB (немає в Zefix)' : undefined,
+  ].filter(Boolean).map(String).join(' · ');
+
+  const shabLine = row.shab_count != null && Number(row.shab_count) > 0
+    ? `Публікацій SHAB: ${row.shab_count}${row.last_shab_date ? ` (остання: ${row.last_shab_date})` : ''}`
+    : undefined;
+
+  return {
+    id: `ch-company-${uid || name}`,
+    title: `${bankruptcy ? BANKRUPTCY_FLAG : ''}${name}${uid ? ` (${uid})` : ''}`,
+    type: 'other',
+    metadata: {
+      subtitle,
+      body,
+      snippet: [subtitle, shabLine, body].filter(Boolean).join(' \u2022 '),
+      uid: uid || undefined,
+      canton: row.canton ?? undefined,
+      status: row.status ?? undefined,
+      source: row.source ?? undefined,
+      bankruptcy,
+    },
+  };
+}
+
+function chCompanyBody(row: ToolResultData): string {
+  if (row.purpose) return String(row.purpose).slice(0, COMPANY_BODY_CHARS);
+  return '';
+}
+
+/**
+ * ch_get_company card → one company document whose body falls back to the newest SHAB
+ * publication when Zefix records no purpose, plus the register-hit counts that make the
+ * card worth opening (FINMA / SECO / cantonal gazette).
+ */
+function chCompanyCardDocument(parsed: ToolResultData): VaultDocument {
+  const company = parsed.company || {};
+  const shab = Array.isArray(parsed.shab) ? parsed.shab : [];
+  const bankruptcies = Array.isArray(parsed.bankruptcies) ? parsed.bankruptcies : [];
+  const finma = Array.isArray(parsed.finma) ? parsed.finma : [];
+  const seco = Array.isArray(parsed.seco) ? parsed.seco : [];
+  const kantonsblatt = Array.isArray(parsed.kantonsblatt) ? parsed.kantonsblatt : [];
+
+  const newestShab = shab[0] || {};
+  const body = chCompanyBody(company)
+    || String(newestShab.content || newestShab.title || '').slice(0, COMPANY_BODY_CHARS);
+
+  const doc = companyToDocument(
+    { ...company, shab_count: shab.length, last_shab_date: newestShab.publication_date },
+    body,
+    bankruptcies.length > 0
+  );
+
+  const registerHits = [
+    bankruptcies.length > 0 ? `Банкрутство (SHAB KK): ${bankruptcies.length}` : undefined,
+    finma.length > 0 ? `FINMA: ${finma.length}` : undefined,
+    seco.length > 0 ? `SECO (санкції): ${seco.length}` : undefined,
+    kantonsblatt.length > 0 ? `Кантональні відомості: ${kantonsblatt.length}` : undefined,
+  ].filter(Boolean).join(' \u2022 ');
+
+  return {
+    ...doc,
+    metadata: {
+      ...doc.metadata,
+      register_hits: registerHits || undefined,
+      finma_count: finma.length,
+      seco_count: seco.length,
+      kantonsblatt_count: kantonsblatt.length,
+      bankruptcy_count: bankruptcies.length,
+      // FINMA and SECO are matched by normalised name, not by UID — surface the note the
+      // backend returns so the panel never presents a heuristic hit as a certain one.
+      name_match_note: parsed.name_match_note ?? undefined,
+      snippet: [doc.metadata?.snippet, registerHits].filter(Boolean).join(' \u2022 '),
+    },
+  };
+}
+
+function extractChRegistryEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
+  const documents: VaultDocument[] = [];
+
+  if (toolName === 'ch_search_companies') {
+    const rows = Array.isArray(parsed.results) ? parsed.results : [];
+    for (const row of rows) {
+      documents.push(companyToDocument(row, chCompanyBody(row), row.bankruptcy === true));
+    }
+  } else if (toolName === 'ch_get_company') {
+    // Error payload: { error: 'not_found', uid }.
+    if (!parsed.error && parsed.company) {
+      documents.push(chCompanyCardDocument(parsed));
+    }
+  }
+
+  return { decisions: [], citations: [], documents };
+}
+
 export function extractChEvidence(toolName: string, data: ToolResultData): EvidenceResult {
   if (!data || typeof data !== 'object') {
     return { decisions: [], citations: [], documents: [] };
@@ -218,6 +340,9 @@ export function extractChEvidence(toolName: string, data: ToolResultData): Evide
   }
   if (CH_LEGISLATION_TOOLS.has(toolName)) {
     return extractChLegislationEvidence(toolName, data);
+  }
+  if (CH_REGISTRY_TOOLS.has(toolName)) {
+    return extractChRegistryEvidence(toolName, data);
   }
 
   return { decisions: [], citations: [], documents: [] };
