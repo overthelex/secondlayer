@@ -117,6 +117,13 @@ ON CONFLICT (run_date, municipality_id) DO UPDATE SET
 
 _DONE_TODAY = "SELECT municipality_id FROM ch_zefix_progress WHERE run_date = %s"
 
+# What run_date's walk has confirmed so far, across every invocation of it --
+# which is what the magnitude guard has to measure. A full walk is 2,111
+# municipalities, so it is normally several invocations, and the last one
+# sees only the municipalities it still had left.
+_PROGRESS_TODAY = ("SELECT municipality_id, companies FROM ch_zefix_progress "
+                   "WHERE run_date = %s")
+
 # seen_at IS NULL is included deliberately: it means a row this walk has
 # never confirmed -- migration 129's own importer wrote some, and a company
 # that has been gone since before this stage first ran would otherwise stay
@@ -312,7 +319,9 @@ def _sweep(conn, run_date: dt.date, todo: list[dict],
         A walk that confirmed less than SWEEP_MIN_SEEN_FRACTION of what is
         currently active is not a snapshot of the register, so it does not
         get to strike anything off; report.sweep_skipped says so and the
-        run's rows are written either way.
+        run's rows are written either way. What it measures is run_date's
+        progress rows summed, not this invocation's counter -- see the
+        comment at the guard.
 
     The cutoff is this run's own marker (see _run_marker), so it means
     exactly "not confirmed by run_date's walk" -- resumed invocations
@@ -320,23 +329,26 @@ def _sweep(conn, run_date: dt.date, todo: list[dict],
     """
     if municipalities is not None:
         return
-    done = {r["municipality_id"] for r in
-            conn.execute(_DONE_TODAY, (run_date,)).fetchall()}
+    progress = conn.execute(_PROGRESS_TODAY, (run_date,)).fetchall()
+    done = {r["municipality_id"] for r in progress}
     outstanding = [p["id"] for p in todo if p["id"] not in done]
     if outstanding:
         log.warning("zefix: %d municipalities did not finish, not sweeping "
                     "(first few: %s)", len(outstanding), outstanding[:10])
         return
 
+    # run_date's whole walk, not this invocation's share of it. A resumed
+    # run finishes the last few municipalities and would otherwise measure a
+    # handful of companies against the entire active register, decide the
+    # source is broken, and never sweep again after the first interruption.
+    seen = sum(r["companies"] or 0 for r in progress)
     active_before = conn.execute(_ACTIVE_COUNT).fetchone()["n"]
-    if (active_before > 0
-            and report.companies_seen < SWEEP_MIN_SEEN_FRACTION * active_before):
-        log.warning("zefix: the walk saw %d companies against %d currently "
+    if active_before > 0 and seen < SWEEP_MIN_SEEN_FRACTION * active_before:
+        log.warning("zefix: %s's walk saw %d companies against %d currently "
                     "active (under %.0f%%); NOT sweeping -- this looks like a "
                     "source failure, not %d companies leaving the register",
-                    report.companies_seen, active_before,
-                    SWEEP_MIN_SEEN_FRACTION * 100,
-                    active_before - report.companies_seen)
+                    run_date, seen, active_before,
+                    SWEEP_MIN_SEEN_FRACTION * 100, active_before - seen)
         report.sweep_skipped = True
         return
 

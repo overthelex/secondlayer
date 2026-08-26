@@ -94,8 +94,33 @@ def conn(settings):
 
 
 BIEL = "https://ld.admin.ch/municipality/371"
+# The second municipality in lindas_municipalities.csv that the org fixture
+# does not cover, so a test can give it organisations of its own and walk a
+# run across two partitions.
+ROMOOS = "https://ld.admin.ch/municipality/1007"
 TODAY = dt.date(2026, 8, 26)
 TOMORROW = dt.date(2026, 8, 27)
+
+
+def _synthetic_orgs(n: int, *, first: int = 800000001) -> list[dict]:
+    """n organisation rows in SparqlClient.select()'s shape.
+
+    The captured fixture is one municipality's four companies; a test about
+    walking TWO partitions needs a second set, and only the identity fields
+    matter for that -- the parsing of every other column is covered by the
+    tests that use the real capture.
+    """
+    return [{"org": f"https://register.ld.admin.ch/zefix/company/{2000000 + i}",
+             "legalName": f"Synthetic {i} AG",
+             "identifiers": f"https://register.ld.admin.ch/zefix/company/"
+                            f"{2000000 + i}/UID/CHE{first + i:09d}",
+             "locality": "Romoos", "region": "LU"}
+            for i in range(n)]
+
+
+def _synthetic_uid(i: int, *, first: int = 800000001) -> str:
+    digits = f"{first + i:09d}"
+    return f"CHE-{digits[:3]}.{digits[3:6]}.{digits[6:]}"
 
 
 @pytest.fixture
@@ -223,30 +248,60 @@ def test_a_company_missing_from_the_next_full_run_becomes_inactive(conn, setting
     assert len(companies) == 4, "an inactive company is kept, never deleted"
 
 
-def test_a_partial_run_never_inactivates_anything(conn, settings, client):
+def test_a_partial_run_never_inactivates_anything(conn, settings):
     """The sweep asserts something about the WHOLE active set, so it may
     only run once every partition has been walked for this run_date. A run
     restricted to one municipality has not looked at the other 2,110, and
     marking their companies inactive would report every company in
-    Switzerland as struck off."""
-    _run(settings, client)
+    Switzerland as struck off.
+
+    The company that proves it lives in a municipality the restricted run
+    never asks about: with every company inside the requested list, the
+    assertion holds whether the guard is there or not."""
+    client = FakeSparql(_csv("lindas_municipalities.csv"),
+                        {BIEL: _csv("lindas_orgs_371.csv"),
+                         ROMOOS: _synthetic_orgs(2)})
+    _run(settings, client)                          # a full walk: 4 + 2
+    outsider = _synthetic_uid(0)
+    before = _companies(conn)[outsider]
+    assert before["municipality_id"] == 1007
+
     report = _run(settings, client, run_date=TOMORROW, municipalities=[371])
+
     assert report.inactivated == 0
-    assert all(r["status"] == "active" for r in _companies(conn).values())
+    after = _companies(conn)[outsider]
+    assert after["status"] == "active"
+    assert after["seen_at"] == before["seen_at"], \
+        "the restricted run never looked at Romoos, so it may not restamp it"
 
 
 def test_a_resumed_run_does_not_inactivate_what_the_earlier_half_saw(conn,
-                                                                    settings,
-                                                                    client):
+                                                                     settings):
     """Two invocations, same run_date: the first walks Biel, the second
     resumes and finishes the rest. The companies the FIRST invocation wrote
     carry a seen_at from before the second one started, so a sweep keyed on
     "seen during this process" would strike off everything the resume was
-    supposed to preserve."""
+    supposed to preserve.
+
+    The second invocation walks a second municipality with six companies of
+    its own, which is what gets the run past the magnitude guard -- without
+    it the sweep is skipped and this test passes because nothing was swept
+    at all. The stale row is here for the same reason: it is what proves the
+    sweep ran."""
+    client = FakeSparql(_csv("lindas_municipalities.csv"),
+                        {BIEL: _csv("lindas_orgs_371.csv"),
+                         ROMOOS: _synthetic_orgs(6)})
+    _seed_active(conn, 1)                    # never confirmed by any walk
     _run(settings, client, municipalities=[371])
     report = _run(settings, client)          # resumes, skips 371, finishes
-    assert report.inactivated == 0
-    assert all(r["status"] == "active" for r in _companies(conn).values())
+
+    assert report.sweep_skipped is False, "the sweep has to actually run"
+    assert report.inactivated == 1
+    companies = _companies(conn)
+    assert companies["CHE-116.292.808"]["status"] == "active", \
+        "written by the first invocation, confirmed by this run_date's walk"
+    assert companies[_synthetic_uid(0)]["status"] == "active"
+    assert companies["CHE-900.000.001"]["status"] == "inactive"
 
 
 def _seed_active(conn, n: int) -> None:
@@ -280,6 +335,33 @@ def test_a_walk_that_saw_most_of_the_register_still_sweeps(conn, settings, clien
     assert report.sweep_skipped is False
     assert report.inactivated == 3
     assert sum(r["status"] == "inactive" for r in _companies(conn).values()) == 3
+
+
+def test_the_magnitude_guard_counts_the_whole_run_not_one_invocation(conn,
+                                                                     settings):
+    """A full walk is 2,111 municipalities and hours long, so it is normally
+    several invocations of the same run_date -- and the last one, resuming
+    with almost everything already done, walks a handful of municipalities
+    and sees a handful of companies. Measuring the guard against THAT
+    invocation's own counter made the resumed walk look like a source
+    failure every time, and the sweep never ran again after the first day
+    the backfill was interrupted.
+
+    Here: eight companies walked by the first invocation, two by the second.
+    The register the run confirmed is ten, not two."""
+    client = FakeSparql(_csv("lindas_municipalities.csv"),
+                        {BIEL: _synthetic_orgs(8),
+                         ROMOOS: _synthetic_orgs(2, first=810000001)})
+    _seed_active(conn, 1)                    # never confirmed by any walk
+    first = _run(settings, client, municipalities=[371])
+    assert first.companies_seen == 8
+
+    second = _run(settings, client)          # resumes, skips 371
+
+    assert second.companies_seen == 2, "this invocation really did see two"
+    assert second.sweep_skipped is False, "the run confirmed 10 of 11 active"
+    assert second.inactivated == 1
+    assert _companies(conn)["CHE-900.000.001"]["status"] == "inactive"
 
 
 def test_an_inactive_company_that_comes_back_is_active_again(conn, settings, client):
