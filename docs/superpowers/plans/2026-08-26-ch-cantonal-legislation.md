@@ -35,7 +35,7 @@
 **Interfaces:**
 - Produces: columns `ch_act.jurisdiction text NOT NULL DEFAULT 'CH'` (CHECK in `CANTONS ∪ {'CH'}`), `ch_act_version.source text NOT NULL DEFAULT 'fedlex'` (CHECK `IN ('fedlex','lexwork')`), table `ch_act_change_document(change_document_id bigserial PK, act_id bigint FK ch_act CASCADE, jurisdiction text NOT NULL, source_id bigint NOT NULL, number text, title text, date_publication date, date_decision date, pdf_url text, metadata_json jsonb, imported_at, updated_at, UNIQUE (jurisdiction, source_id, act_id))`, column `ch_article_provenance.change_document_id bigint NULL FK ch_act_change_document ON DELETE SET NULL`, table `ch_cantonal_registry(lexfind_tol_id bigint PK, canton text NOT NULL, systematic_number text, title text, is_active boolean, category text, original_url text, versions_json jsonb NOT NULL, version_count int NOT NULL, fetched_at timestamptz NOT NULL DEFAULT now())`, indexes `idx_ch_act_jur_sr (jurisdiction, sr_number) WHERE sr_number IS NOT NULL`, `idx_ch_act_version_source_stage (source, stage) WHERE stage <> 'parsed'`, `idx_ch_cantonal_registry_canton (canton, systematic_number)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # services/ch-pipeline/tests/test_migration_201.py
@@ -137,12 +137,12 @@ def test_registry_table_exists_with_its_index(conn):
     assert conn.execute("SELECT to_regclass('idx_ch_act_jur_sr') IS NOT NULL").fetchone()[0]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd services/ch-pipeline && CHPIPE_TEST_DSN=postgresql://postgres@127.0.0.1:55432/postgres .venv/bin/python -m pytest tests/test_migration_201.py -q`
 Expected: FAIL (FileNotFoundError on the migration file).
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```sql
 -- mcp_backend/src/migrations/201_ch_cantonal_legislation.sql
@@ -237,9 +237,9 @@ COMMENT ON COLUMN public.ch_act_version.source IS
     'fedlex: akn_xml holds Akoma Ntoso XML. lexwork: akn_xml holds the raw show_as_json payload of one version.';
 ```
 
-- [ ] **Step 4: Run the test, expect PASS**
+- [x] **Step 4: Run the test, expect PASS**
 
-- [ ] **Step 5: Add a shared helper to conftest.py**
+- [x] **Step 5: Add a shared helper to conftest.py**
 
 Append to `services/ch-pipeline/tests/conftest.py`:
 
@@ -276,7 +276,7 @@ def reset_legislation_schema(conn) -> None:
         conn.execute(m.read_text())
 ```
 
-- [ ] **Step 6: Run the whole suite with the DSN, expect no regressions, commit**
+- [x] **Step 6: Run the whole suite with the DSN, expect no regressions, commit**
 
 ```bash
 git add mcp_backend/src/migrations/201_ch_cantonal_legislation.sql services/ch-pipeline/tests/test_migration_201.py services/ch-pipeline/tests/conftest.py
@@ -294,7 +294,7 @@ git commit -m "feat(ch): migration 201: jurisdiction on acts, source on versions
 **Interfaces:**
 - Produces: `@dataclass(frozen=True) Canton(code: str, host: str, langs: tuple[str, ...], platform: str, lexfind_id: int)`; `LEXWORK: dict[str, Canton]` (19 entries); `ALL: dict[str, Canton]` (26 entries, the 7 bespoke ones with `platform='lexfind'` and `host=''`); `def api(canton: Canton, lang: str = 'de') -> str` returning `https://{host}/api/{lang}`; `def deep_link(canton, sysnr, version_id) -> str` returning `https://{host}/app/de/texts_of_law/{sysnr}/versions/{version_id}`; `def canonical_link(canton, sysnr) -> str`; `LEXFIND_API = "https://www.lexfind.ch/api/fe/de"`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_cantons.py
@@ -334,7 +334,7 @@ def test_bespoke_cantons_have_no_lexwork_host():
         assert cantons.ALL[code].host == ""
 ```
 
-- [ ] **Step 2: Run, expect ImportError. Step 3: implement**
+- [x] **Step 2: Run, expect ImportError. Step 3: implement**
 
 ```python
 # chpipe/cantons.py
@@ -415,7 +415,7 @@ def deep_link(canton: Canton, sysnr: str, version_id: int) -> str:
     return f"{canonical_link(canton, sysnr)}/versions/{version_id}"
 ```
 
-- [ ] **Step 4: Run, expect PASS. Step 5: Commit** `feat(ch): canton registry (19 Lexwork hosts, LexFind ids)`
+- [x] **Step 4: Run, expect PASS. Step 5: Commit** `feat(ch): canton registry (19 Lexwork hosts, LexFind ids)`
 
 ---
 
@@ -436,7 +436,7 @@ def deep_link(canton: Canton, sysnr: str, version_id: int) -> str:
   - `strip_html(fragment: str) -> str` (lxml.html text with `<strong>*</strong>` markers removed, `&nbsp;` to space, whitespace collapsed).
   - `article_number_of(number_html: str) -> str | None` ("Art.&nbsp;6" → "6", "§ 12a" → "12a").
 
-- [ ] **Step 1: Build the fixture**
+- [x] **Step 1: Build the fixture**
 
 ```bash
 cd services/ch-pipeline && python3 - <<'EOF'
@@ -453,7 +453,7 @@ EOF
 ```
 Confirm the file is under 300 KB and that `modification_table[0].html_content.de` still contains `history_info_3332706` (Art. 61 Abs. 2 geändert).
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/test_lexwork.py
@@ -578,7 +578,7 @@ def test_provenance_anchors_to_the_article_when_it_is_in_the_edition(payload):
     assert rows[0].container_articles is None
 ```
 
-- [ ] **Step 3: Run, expect ImportError. Step 4: Implement**
+- [x] **Step 3: Run, expect ImportError. Step 4: Implement**
 
 ```python
 # chpipe/lexwork.py
@@ -829,9 +829,9 @@ def provenance(payload: dict, lang: str, articles: list[akn.Article]) -> list[Pr
     return rows
 ```
 
-- [ ] **Step 5: Run tests; iterate until PASS (the fixture's exact strings decide the assertions; if `Art. 1` heading line differs, adjust the plain-text assertion to what the fixture really contains, never the other way round).**
+- [x] **Step 5: Run tests; iterate until PASS (the fixture's exact strings decide the assertions; if `Art. 1` heading line differs, adjust the plain-text assertion to what the fixture really contains, never the other way round).**
 
-- [ ] **Step 6: Commit** `feat(ch): Lexwork show_as_json parser: articles, plain text, modification-table provenance`
+- [x] **Step 6: Commit** `feat(ch): Lexwork show_as_json parser: articles, plain text, modification-table provenance`
 
 ---
 
@@ -845,7 +845,7 @@ def provenance(payload: dict, lang: str, articles: list[akn.Article]) -> list[Pr
 **Interfaces:**
 - Produces: `db.claim_versions(..., source: str = "fedlex")` adds `AND source = %s`; `_CLAIM_VERSION_COLUMNS` gains `source, eli_consolidation_uri`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # in tests/test_db_version_queue.py (fixture must apply 197+201: use conftest.reset_legislation_schema)
@@ -887,7 +887,7 @@ def test_a_cantonal_act_with_a_federal_sr_number_is_not_a_resolution_target(conn
 ```
 (Adapt column names for `ch_legislation_citations` to the real 199 shape when writing; read the existing test file's fixture first.)
 
-- [ ] **Step 2: Run, expect FAIL. Step 3: Implement**
+- [x] **Step 2: Run, expect FAIL. Step 3: Implement**
 
 In `db.py`:
 ```python
@@ -910,9 +910,9 @@ Docstring addition: "`source` is what keeps the Akoma Ntoso parser and the Lexwo
 `project_legacy_stage._PROJECT`: replace `'fedlex',` with `CASE WHEN a.jurisdiction = 'CH' THEN 'fedlex' ELSE 'lexwork' END,` and add `'jurisdiction', a.jurisdiction,` to `jsonb_build_object`; add `source = EXCLUDED.source` to the `ON CONFLICT` set list.
 `citations_resolve_stage.py:124`: `JOIN ch_act a ON a.sr_number = al.sr_number AND a.jurisdiction = 'CH'`.
 
-- [ ] **Step 4: Run the full DSN suite; fix any fixture that creates `ch_act_version` without 201 (tests that build their own tables must now also apply 201 or use `reset_legislation_schema`).**
+- [x] **Step 4: Run the full DSN suite; fix any fixture that creates `ch_act_version` without 201 (tests that build their own tables must now also apply 201 or use `reset_legislation_schema`).**
 
-- [ ] **Step 5: Commit** `feat(ch): version queue filtered by source; federal stages stay federal`
+- [x] **Step 5: Commit** `feat(ch): version queue filtered by source; federal stages stay federal`
 
 ---
 
@@ -929,7 +929,7 @@ Docstring addition: "`source` is what keeps the Akoma Ntoso parser and the Lexwo
 - `cantonal_acts_stage.run(settings, canton_code: str | None = None, only: set[str] | None = None) -> ActsReport` with `ActsReport(cantons: list[str], acts: int, versions: int, change_documents: int, not_on_host: int, dates_unparsed: int, hosts_failed: list[str], errors: int)`.
 - SQL produced: `_UPSERT_ACT` (on `eli_work_uri`, sets `jurisdiction`, `sr_number`, `abbreviation`, `title_<lang>` for each lang in `cantons.LEXWORK[code].langs` from the `/api/{lang}/texts_of_law/{sysnr}` title when `lang != 'de'` is available, `date_document = date_of_decision`, `date_entry_force = enactment`, `enforcement_status = 3 if abrogated else 0`, `metadata_json`), `_UPSERT_VERSION` (on `(eli_consolidation_uri, lang)`, `source='lexwork'`, `xml_url` = show_as_json URL, dates from `parse_version_dates`), `_UPSERT_CHANGE_DOCUMENT` (on `(jurisdiction, source_id, act_id)`).
 
-- [ ] **Step 1: Write the failing tests** (httpx `MockTransport` routing by URL path: `/api/de/status`, `/api/de/texts_of_law/lightweight_index`, `/api/de/change_documents/lightweight_index`, `/api/de/texts_of_law/101.1`, `/api/fr/texts_of_law/101.1`, `/api/de/texts_of_law/999.9` → 404)
+- [x] **Step 1: Write the failing tests** (httpx `MockTransport` routing by URL path: `/api/de/status`, `/api/de/texts_of_law/lightweight_index`, `/api/de/change_documents/lightweight_index`, `/api/de/texts_of_law/101.1`, `/api/fr/texts_of_law/101.1`, `/api/de/texts_of_law/999.9` → 404)
 
 ```python
 # tests/test_cantonal_acts_stage.py
@@ -979,7 +979,7 @@ def test_an_unparseable_version_date_is_counted_and_the_version_skipped(conn, se
     assert report.dates_unparsed == 1
 ```
 
-- [ ] **Step 2: Implement `lexwork_api.py`**
+- [x] **Step 2: Implement `lexwork_api.py`**
 
 ```python
 """Async client for the Lexwork REST API, one semaphore per host on top of
@@ -1037,13 +1037,13 @@ def show_as_json_url(canton, sysnr: str, version_id: int) -> str:
     return f"{cantons.api(canton)}/texts_of_law/{sysnr}/versions/{version_id}/show_as_json"
 ```
 
-- [ ] **Step 3: Implement the stage** (structure mirrors `versions_stage.py`: `run()` opens `db.connect`, runs `asyncio.run(_run_async(...))`; per canton: `status` (on FetchError → `hosts_failed`, continue), index + change-doc index + registry sysnrs → sorted set (∩ `only` if given); per sysnr `text_of_law` de (None → `not_on_host`), then for each extra lang in `canton.langs[1:]` `text_of_law(lang)` for the title only (FetchError → title stays NULL); upsert act; upsert change documents; for `current_version` + `old_versions` + `future_versions`: `parse_version_dates(version_dates_str)` (LexworkParseError → `dates_unparsed`, continue), upsert one `ch_act_version` per lang with `eli_consolidation_uri = cantons.deep_link(...)`, `xml_url = show_as_json_url(...)`, `source='lexwork'`. `run()` accepts `transport=None` and passes it to `Fetcher(concurrency=settings.http_concurrency, transport=transport)`. Per-act try/except counts `errors`. Log every 100 acts.)
+- [x] **Step 3: Implement the stage** (structure mirrors `versions_stage.py`: `run()` opens `db.connect`, runs `asyncio.run(_run_async(...))`; per canton: `status` (on FetchError → `hosts_failed`, continue), index + change-doc index + registry sysnrs → sorted set (∩ `only` if given); per sysnr `text_of_law` de (None → `not_on_host`), then for each extra lang in `canton.langs[1:]` `text_of_law(lang)` for the title only (FetchError → title stays NULL); upsert act; upsert change documents; for `current_version` + `old_versions` + `future_versions`: `parse_version_dates(version_dates_str)` (LexworkParseError → `dates_unparsed`, continue), upsert one `ch_act_version` per lang with `eli_consolidation_uri = cantons.deep_link(...)`, `xml_url = show_as_json_url(...)`, `source='lexwork'`. `run()` accepts `transport=None` and passes it to `Fetcher(concurrency=settings.http_concurrency, transport=transport)`. Per-act try/except counts `errors`. Log every 100 acts.)
 
 `_UPSERT_VERSION` must set `date_end_applicability = EXCLUDED.date_end_applicability` (NOT COALESCE): on Lexwork, the current version's end is genuinely absent and a former current version GAINS an end when superseded, so the newest observation always wins.
 
 `_UPSERT_ACT`'s `ON CONFLICT (eli_work_uri)` sets `jurisdiction`, `sr_number`, `abbreviation`, titles (COALESCE(EXCLUDED, existing) for titles so a failed fr fetch does not erase a title fetched earlier), `enforcement_status = EXCLUDED.enforcement_status`, `date_no_longer_in_force` (parse `abrogated_dates_str` if present with `_date_or_none`, else NULL), `metadata_json = EXCLUDED.metadata_json`.
 
-- [ ] **Step 4: Add `cantonal-acts` to `run-stage.sh`** in a new case arm:
+- [x] **Step 4: Add `cantonal-acts` to `run-stage.sh`** in a new case arm:
 ```bash
   cantonal-acts|cantonal-fetch|cantonal-parse|lexfind-registry)
     ARG="${POS:-${CHPIPE_CANTON:-}}"
@@ -1052,7 +1052,7 @@ def show_as_json_url(canton, sysnr: str, version_id: int) -> str:
 ```
 and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 
-- [ ] **Step 5: Run tests, commit** `feat(ch): cantonal-acts stage: Lexwork acts, versions and change documents`
+- [x] **Step 5: Run tests, commit** `feat(ch): cantonal-acts stage: Lexwork acts, versions and change documents`
 
 ---
 
@@ -1069,9 +1069,9 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - Batch cache: `dict[url, str]` per batch; sibling rows of the same `xml_url` reuse the payload (`cache_hits += 1`).
 - Writes `akn_xml=payload_text, fetched_at=now()` via `db.complete_version(..., "fetched", ...)`.
 
-- [ ] **Step 1: Tests**: `test_fetches_and_stores_the_payload`, `test_sibling_languages_share_one_download` (two rows, same URL, transport counter == 1, `cache_hits == 1`), `test_a_non_json_body_fails_the_row_with_a_reason`, `test_a_404_fails_the_row`, `test_only_lexwork_rows_are_claimed` (a `fedlex` discovered row stays untouched).
-- [ ] **Step 2: Implement** (copy `fetch_xml_stage._run_async` shape; `Fetcher.bytes(url)`).
-- [ ] **Step 3: Commit** `feat(ch): cantonal-fetch stage`
+- [x] **Step 1: Tests**: `test_fetches_and_stores_the_payload`, `test_sibling_languages_share_one_download` (two rows, same URL, transport counter == 1, `cache_hits == 1`), `test_a_non_json_body_fails_the_row_with_a_reason`, `test_a_404_fails_the_row`, `test_only_lexwork_rows_are_claimed` (a `fedlex` discovered row stays untouched).
+- [x] **Step 2: Implement** (copy `fetch_xml_stage._run_async` shape; `Fetcher.bytes(url)`).
+- [x] **Step 3: Commit** `feat(ch): cantonal-fetch stage`
 
 ---
 
@@ -1085,8 +1085,8 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - Per claimed row (`source="lexwork"`, stage `fetched`): `payload = json.loads(akn_xml)`; `lexwork.parse_edition(payload, lang)` (LexworkParseError "not in payload" → `fail_version` + `lang_not_in_payload`); `parse_akn_stage.store_articles(conn, version_id, articles)` (reused, unchanged); provenance: `lexwork.provenance(payload, lang, articles)` → resolve `change_document_source_id` to `change_document_id` via `SELECT change_document_id FROM ch_act_change_document WHERE act_id=%s AND source_id=%s`; write with `_INSERT_PROVENANCE` (same columns as `provenance_stage._INSERT` plus `change_document_id`) inside ONE transaction with a `DELETE FROM ch_article_provenance WHERE version_id=%s` first; then `db.complete_version(conn, version_id, "parsed", full_text=text)`.
 - `throttle.wait_for_capacity(settings.load_ceiling, "cantonal-parse")` before each claim.
 
-- [ ] **Step 1: Tests**: `test_parses_articles_full_text_and_provenance` (seed act BE + change document source_id 2001 + version with the fixture payload as akn_xml; expect `stage='parsed'`, article rows > 0, `ch_article_provenance` rows > 0 with at least one `change_document_id` NOT NULL, `full_text` non-empty), `test_a_language_missing_from_the_payload_fails_visibly` (row lang 'it' → `failed`, `last_error` contains "not in payload"), `test_reparse_replaces_articles_and_provenance`, `test_report_names_the_acts_that_moved`.
-- [ ] **Step 2: Implement. Step 3: Commit** `feat(ch): cantonal-parse stage: articles, text and source provenance from Lexwork`
+- [x] **Step 1: Tests**: `test_parses_articles_full_text_and_provenance` (seed act BE + change document source_id 2001 + version with the fixture payload as akn_xml; expect `stage='parsed'`, article rows > 0, `ch_article_provenance` rows > 0 with at least one `change_document_id` NOT NULL, `full_text` non-empty), `test_a_language_missing_from_the_payload_fails_visibly` (row lang 'it' → `failed`, `last_error` contains "not in payload"), `test_reparse_replaces_articles_and_provenance`, `test_report_names_the_acts_that_moved`.
+- [x] **Step 2: Implement. Step 3: Commit** `feat(ch): cantonal-parse stage: articles, text and source provenance from Lexwork`
 
 ---
 
@@ -1099,8 +1099,8 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - `lexfind_api.LexfindClient(fetcher)`: `async systematics(entity_id) -> dict` (fetches `entities/{id}/systematics?active_only=false` once to learn leaf ids, then again with every leaf id in `tols_for_systematics[]`, in chunks of 50 ids per request), `async with_version_groups(tol_id) -> dict`, `flatten_versions(groups: dict) -> list[dict]` (`families[][][]` → flat list).
 - `run(settings, canton_code=None, transport=None) -> RegistryReport(cantons, acts, versions, errors)`; upsert `ch_cantonal_registry` on `lexfind_tol_id` with `versions_json = flat versions`, `version_count = len(...)`, `original_url` from `dta_urls[0].original_url`.
 
-- [ ] Tests: `test_registers_every_act_under_every_leaf`, `test_version_count_is_derived_from_the_families`, `test_rerun_updates_in_place`.
-- [ ] Commit `feat(ch): lexfind-registry stage (26 cantons)`
+- [x] Tests: `test_registers_every_act_under_every_leaf`, `test_version_count_is_derived_from_the_families`, `test_rerun_updates_in_place`.
+- [x] Commit `feat(ch): lexfind-registry stage (26 cantons)`
 
 ---
 
@@ -1114,8 +1114,8 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - `gate_f(conn, canton: str | None = None) -> list[dict]` one dict per canton: `{canton, acts_lexwork, acts_lexfind, only_in_lexfind: [sysnr...≤12], only_in_lexwork: [...], versions_lexwork, versions_lexfind, date_matches, date_mismatches, parsed, failed_by_reason: {reason: n}, empty_articles, short_text, changes, provenance_rows, provenance_linked, change_documents_unlinked}`; `format_gate_f(rows) -> str`.
 - `date_matches`: for acts present on both sides (join on `(canton, systematic_number)`), count `ch_act_version` (lang = first canton lang) whose `date_applicability` equals some `version_active_since::date` in `versions_json`; mismatches = the rest. Both sides are independent sources, which is what makes it a gate.
 
-- [ ] Tests on a seeded scratch DB: `test_only_in_lists_are_symmetric_differences`, `test_date_match_counts_versions_present_in_lexfind`, `test_failed_by_reason_groups_last_error_prefixes`.
-- [ ] Commit `feat(ch): Gate F reconciliation report for cantonal legislation`
+- [x] Tests on a seeded scratch DB: `test_only_in_lists_are_symmetric_differences`, `test_date_match_counts_versions_present_in_lexfind`, `test_failed_by_reason_groups_last_error_prefixes`.
+- [x] Commit `feat(ch): Gate F reconciliation report for cantonal legislation`
 
 ---
 
@@ -1127,7 +1127,7 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 
 **Behaviour:** per Lexwork canton: page `recent_changes` (`entries[].change_date`, `text_of_law.systematic_number`; follow `next_batch` while the oldest `change_date` on the page ≥ stored `last_seen`); collect sysnrs; if no state for the canton, `only=None` (full walk). Then `cantonal_acts_stage.run(settings, code, only=sysnrs)`, `cantonal_fetch_stage.run(settings, code)`, `parsed = cantonal_parse_stage.run(settings, code)`, `diff_stage.run(settings, lang, act_id)` for `parsed.acts`, then `project_legacy_stage.run(settings)` once at the end. Save `last_seen = today` per canton only after that canton succeeded.
 
-- [ ] Tests → implement → commit `feat(ch): nightly cantonal delta driven by Lexwork recent_changes`
+- [x] Tests → implement → commit `feat(ch): nightly cantonal delta driven by Lexwork recent_changes`
 
 ---
 
@@ -1138,8 +1138,8 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - Modify: `lexwebapp/src/hooks/chat/evidence/ch.ts` (label `(SR ${sr})` becomes `(${jurisdiction === 'CH' || !jurisdiction ? 'SR' : jurisdiction} ${sr})`)
 - Test: `mcp_backend/src/api/tools/__tests__/ch-legislation-tools.test.ts` (create if absent; mock `db.query`, assert the SQL text includes `jurisdiction` and the default is `'CH'`; assert `canton: 'xx'` is rejected with a Ukrainian message)
 
-- [ ] Write the failing Jest test, implement, `cd mcp_backend && npx tsc --noEmit -p .` and `npx jest src/api/tools/__tests__/ch-legislation-tools.test.ts`, then `cd lexwebapp && npx tsc --noEmit`.
-- [ ] Commit `feat(ch): canton parameter on the CH legislation tools`
+- [x] Write the failing Jest test, implement, `cd mcp_backend && npx tsc --noEmit -p .` and `npx jest src/api/tools/__tests__/ch-legislation-tools.test.ts`, then `cd lexwebapp && npx tsc --noEmit`.
+- [x] Commit `feat(ch): canton parameter on the CH legislation tools`
 
 ---
 
@@ -1151,7 +1151,7 @@ and `main()` reads `CHPIPE_CANTON` (empty = all Lexwork cantons).
 - Verify: `tests/test_entry_points.py` picks up the five new stage modules (it globs `chpipe/stages/*_stage.py`; if it lists names explicitly, add them).
 - `tests/test_run_delta_sh.py` unchanged (run-delta.sh does not change).
 
-- [ ] Run the whole suite with DSN; run `bash -n run-stage.sh`; commit `docs(ch): cantonal legislation operator runbook`
+- [x] Run the whole suite with DSN; run `bash -n run-stage.sh`; commit `docs(ch): cantonal legislation operator runbook`
 
 ---
 
