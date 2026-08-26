@@ -19,7 +19,10 @@ SQL right here (spec section 7):
      to a change document, and change documents nothing links to.
 
 The date comparison uses the FIRST language of the canton (cantons.py)
-so bilingual cantons are not counted twice.
+so bilingual cantons are not counted twice. The rows compared are the
+canton's own source (cantons.py platform: 'lexwork' for the 19 hosts,
+'zhlex' for Zürich), so a canton that has none (platform 'lexfind') is
+not reported.
 """
 from __future__ import annotations
 
@@ -58,7 +61,7 @@ WITH ours AS (
     -- history anyway (FR 2026-08-26: 1,272 of 1,274 "mismatches" were those)
     SELECT a.sr_number, v.date_applicability
       FROM ch_act_version v JOIN ch_act a USING (act_id)
-     WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s
+     WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.lang = %(lang)s
        AND v.stage = 'parsed'
 ), theirs AS (
     SELECT r.systematic_number AS sr_number,
@@ -70,7 +73,7 @@ WITH ours AS (
 )
 SELECT
     (SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id)
-      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s) AS versions_lexwork,
+      WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.lang = %(lang)s) AS versions_lexwork,
     (SELECT coalesce(sum(version_count), 0) FROM ch_cantonal_registry WHERE canton = %(canton)s)
         AS versions_lexfind,
     (SELECT count(*) FROM ours o WHERE o.sr_number IN (SELECT sr_number FROM shared)
@@ -94,13 +97,13 @@ SELECT
     count(*) FILTER (WHERE v.stage = 'parsed' AND coalesce(v.article_count, 0) = 0) AS empty_articles,
     count(*) FILTER (WHERE v.stage = 'parsed' AND length(coalesce(v.full_text, '')) < 200) AS short_text
   FROM ch_act_version v JOIN ch_act a USING (act_id)
- WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork'
+ WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s
 """
 
 _FAILED_BY_REASON = """
 SELECT left(coalesce(v.last_error, '<none>'), 60) AS reason, count(*) AS n
   FROM ch_act_version v JOIN ch_act a USING (act_id)
- WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.stage = 'failed'
+ WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.stage = 'failed'
  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
 """
 
@@ -121,12 +124,14 @@ SELECT
 
 
 def gate_f(conn, canton: str | None = None) -> list[dict]:
-    selected = [canton.upper()] if canton else sorted(cantons.LEXWORK)
+    selected = [canton.upper()] if canton else sorted(
+        code for code, c in cantons.ALL.items() if c.platform != "lexfind")
     rows = []
     with conn.cursor(row_factory=dict_row) as cur:
         for code in selected:
             lang = cantons.ALL[code].langs[0] if cantons.ALL[code].langs else "de"
-            params = {"canton": code, "lang": lang, "sample": _SAMPLE}
+            params = {"canton": code, "lang": lang, "sample": _SAMPLE,
+                      "source": cantons.ALL[code].platform}
             cur.execute(_ACTS, params)
             row = {"canton": code, **cur.fetchone()}
             cur.execute(_VERSIONS, params)

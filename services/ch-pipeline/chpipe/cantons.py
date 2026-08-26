@@ -11,7 +11,9 @@ verified by the stage's first request (/status); a host that does not
 answer is reported and skipped, not fatal for the other eighteen.
 
 The seven cantons without a Lexwork host (ZH, VD, TI, NE, GE, JU, SZ) are
-registered from LexFind only; their text is phase 2.
+registered from LexFind; phase 2 reads their own portals, each with its
+own stage family and its own ch_act_version.source, named after the
+platform: ZH -> 'zhlex' (chpipe/zhlex.py, zh_acts/zh_fetch/zh_parse).
 """
 from __future__ import annotations
 
@@ -25,7 +27,8 @@ class Canton:
     code: str
     host: str
     langs: tuple[str, ...]
-    platform: str          # 'lexwork' | 'lexfind' (registry only)
+    platform: str          # 'lexwork' | 'zhlex' | 'lexfind' (registry only); also the
+                           # ch_act_version.source the canton's editions carry
     lexfind_id: int
 
 
@@ -63,7 +66,7 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lf("VD", 23),
     _lw("VS", "lex.vs.ch", ("de", "fr"), 24),
     _lw("ZG", "bgs.zg.ch", ("de",), 25),
-    _lf("ZH", 26),
+    Canton("ZH", "www.zh.ch", ("de",), "zhlex", 26),
 )}
 
 LEXWORK: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "lexwork"}

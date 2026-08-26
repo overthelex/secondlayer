@@ -32,10 +32,11 @@ def test_bilingual_cantons_list_their_languages():
 
 
 def test_bespoke_cantons_have_no_lexwork_host():
-    for code in ("ZH", "VD", "TI", "NE", "GE", "JU", "SZ"):
+    for code in ("VD", "TI", "NE", "GE", "JU", "SZ"):
         assert cantons.ALL[code].platform == "lexfind"
         assert cantons.ALL[code].host == ""
         assert code not in cantons.LEXWORK
+    assert cantons.ALL["ZH"].platform == "zhlex" and "ZH" not in cantons.LEXWORK
 
 
 def test_canton_selection_from_the_environment_value():

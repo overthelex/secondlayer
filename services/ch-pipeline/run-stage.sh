@@ -5,6 +5,7 @@
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal [canton]
+#                 ./run-stage.sh zh-acts|zh-fetch|zh-parse   (Zürich, no argument; CHPIPE_ZH_ONLY narrows zh-acts)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -69,7 +70,7 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
