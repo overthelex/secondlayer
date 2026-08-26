@@ -32,7 +32,7 @@ def test_bilingual_cantons_list_their_languages():
 
 
 def test_bespoke_cantons_have_no_lexwork_host():
-    for code in ("ZH", "VD", "TI", "NE", "GE", "JU", "SZ"):
+    for code in ("ZH", "VD", "NE", "GE", "JU", "SZ"):
         assert cantons.ALL[code].platform == "lexfind"
         assert cantons.ALL[code].host == ""
         assert code not in cantons.LEXWORK
@@ -44,3 +44,13 @@ def test_canton_selection_from_the_environment_value():
     assert cantons.lexwork_codes("be, gr") == ["BE", "GR"]
     with pytest.raises(ValueError):
         cantons.lexwork_codes("ZH")
+
+
+def test_ticino_has_its_own_platform_and_a_version_source():
+    ti = cantons.ALL["TI"]
+    assert ti.platform == "ti_rl" and ti.host == "www3.ti.ch" and ti.langs == ("it",)
+    assert "TI" not in cantons.LEXWORK
+    assert cantons.version_source("TI") == "ti_rl"
+    assert cantons.version_source("BE") == "lexwork"
+    assert cantons.version_source("ZH") is None
+    assert cantons.text_codes() == sorted(list(cantons.LEXWORK) + ["TI"])
