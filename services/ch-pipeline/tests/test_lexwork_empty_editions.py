@@ -47,7 +47,9 @@ WITH_ARTICLES = {
 }
 # Lexwork payloads that are not editions (a texts_of_law listing for
 # cantonal_acts_stage), so parse_edition() has nothing to say about them.
-NOT_EDITIONS = {"lexwork_be_tol_101_1"}
+# tol JSONs (an act's version list, not an edition): the relink track keeps
+# one per host it measured, see tests/test_cantonal_acts_stage.py
+NOT_EDITIONS = {p.stem for p in FIXTURES.glob("lexwork_*_tol_*.json")}
 
 
 def _load(stem: str) -> dict:
