@@ -110,14 +110,13 @@ payload, і рядок `ch_act_version` створюється лише для �
 ```sql
 ALTER TABLE ch_act ADD COLUMN IF NOT EXISTS jurisdiction text NOT NULL DEFAULT 'CH';
 -- CHECK: 'CH' або один з 26 кодів кантонів.
--- Унікальність акта тепер (jurisdiction, sr_number); idx_ch_act_sr лишається.
-CREATE UNIQUE INDEX IF NOT EXISTS ux_ch_act_jur_sr ON ch_act (jurisdiction, sr_number)
+-- Ідентичність акта лишається eli_work_uri (unique). sr_number НЕ унікальний навіть
+-- у федеральному корпусі: виміряно на lawrider_prod 2026-08-26: 17,293 актів, 9,054
+-- різних sr_number, 3,924 NULL, "916.361.1" зустрічається 36 разів (перевидання ордонансів
+-- під тим самим номером). Саме тому інструменти роблять ORDER BY in_force ... LIMIT 1.
+-- Тож ніякого UNIQUE (jurisdiction, sr_number); лише індекс для пошуку:
+CREATE INDEX IF NOT EXISTS idx_ch_act_jur_sr ON ch_act (jurisdiction, sr_number)
     WHERE sr_number IS NOT NULL;
--- ⚠ Перед створенням індексу: SELECT jurisdiction, sr_number, count(*) ... HAVING count(*)>1
--- на проді. Fedlex sr_number NOT NULL є унікальним? НЕ доведено (ELI work унікальний,
--- sr_number ні: 12 dual-status works). Тому індекс створюється лише якщо перевірка
--- порожня; інакше міграція зупиняється з повідомленням, а не мовчки пропускає.
--- Реалізація: DO-блок, що рахує дублікати і RAISE EXCEPTION.
 
 ALTER TABLE ch_act_version ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'fedlex';
 -- CHECK source IN ('fedlex','lexwork'). Фаза 2 додасть 'lexfind_pdf'.
