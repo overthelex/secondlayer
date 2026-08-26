@@ -83,6 +83,12 @@ END $$;
 -- Retired with the claim query it served. Every write to the column in its
 -- predicate had to re-insert the whole 19 GB table's row into every index
 -- on that table, this one and the 7.6 GB full-text GIN included.
+--
+-- It also ordered that claim (spider, doc_id). The new claim therefore
+-- orders by ch_citation_state's own primary key instead: keeping the old
+-- order without this index costs a hash join and an external sort over the
+-- whole backlog -- measured at 200k pending rows, 255 ms per 200-row claim
+-- against 0.8 ms for the index scan. See chpipe/db.claim_for_citations.
 DROP INDEX IF EXISTS idx_ch_court_cit_queue;
 
 COMMENT ON TABLE public.ch_citation_state IS

@@ -756,6 +756,19 @@ decision, keyed by `ecli`, with `extracted_at` (NULL = queued), `attempts`,
 `last_error` and `updated_at`, and one partial index
 (`WHERE extracted_at IS NULL`) that is the claim query's whole predicate.
 
+**The claim is ordered by `s.ecli`** — the state table's own primary key,
+and a performance choice rather than a priority one (the queue has no
+priority; the order only has to be stable, so a skipped row is not re-offered
+behind the whole backlog forever). The pre-200 claim ordered by
+`spider, doc_id`, which was cheap only because of the `(spider, doc_id)`
+partial index **on `ch_court_decisions`** that migration 200 drops with the
+flag it indexed. Keeping that order afterwards costs a hash join plus an
+external sort: measured on a 200k-row backlog, **255 ms** per 200-row claim,
+materialising `full_text` for every pending row just to sort them. Ordering
+by the state table's key is an index scan feeding a nested loop —
+**0.8 ms** for the same claim. If this query is ever edited again, keep the
+`ORDER BY` on `ch_citation_state`'s own key.
+
 It started life as a flag column on the decisions table itself
 (`citations_extracted_at`, migration 199) and that was a mistake, measured
 on prod 2026-08-25. `ch_court_decisions` is 19 GB with a 7.6 GB full-text
@@ -852,8 +865,9 @@ citations for a much larger number of invented ones:
   everything after it, is re-read as further articles.
 
 **`citations`** claims from `ch_citation_state` — rows with
-`extracted_at IS NULL` and attempts left, joined to `ch_court_decisions` for
-the text and the `stage = 'loaded'` predicate — runs `chpipe.citations` over
+`extracted_at IS NULL` and attempts left, in `ecli` order, joined to
+`ch_court_decisions` for the text and the `stage = 'loaded'` predicate (and
+for the optional per-spider filter) — runs `chpipe.citations` over
 each one's text in a thread pool, and writes the raw edges it finds —
 BGE/docket/ECLI case references into `ch_case_citations`, article references
 into `ch_legislation_citations` — then stamps `extracted_at` on the state

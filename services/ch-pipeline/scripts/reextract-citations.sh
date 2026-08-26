@@ -42,6 +42,17 @@
 set -euo pipefail
 
 SPIDER="${1:-}"
+# The spider name is interpolated into the reset statement's SQL literal
+# below (psql -c, not a bound parameter), so it is checked against the shape
+# a spider name actually has before it gets anywhere near the database. A
+# name is [A-Za-z0-9_]+ -- CH_BGer, ZG_Obergericht, GE_TAPI -- and anything
+# else is either a typo worth catching or a quote-breaking injection worth
+# refusing.
+if [ -n "$SPIDER" ] && ! printf '%s' "$SPIDER" | grep -Eq '^[A-Za-z0-9_]+$'; then
+  echo "refusing spider name '$SPIDER': expected ^[A-Za-z0-9_]+$" >&2
+  exit 2
+fi
+
 # `python3 -m chpipe...` needs services/ch-pipeline on the path, so run from
 # there whatever directory the operator invoked this from.
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

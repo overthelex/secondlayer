@@ -520,3 +520,43 @@ def test_a_run_never_writes_to_ch_court_decisions(conn, settings):
     # ... and it did do its work, on its own table.
     assert _state(conn, "ECLI:V")["extracted_at"] is not None
     assert _state(conn, "ECLI:W")["attempts"] == 1
+
+
+def test_the_claim_is_ordered_by_ecli_not_by_spider_and_doc_id(conn, settings):
+    """Measured by review on a 200k-row backlog: ORDER BY d.spider, d.doc_id
+    costs a hash join plus an external sort -- 255 ms per 200-row claim, and
+    it materialises full_text for EVERY pending row to sort them. The
+    (spider, doc_id) partial index that used to make that ordering cheap was
+    on ch_court_decisions and went with migration 200. ch_citation_state's
+    primary key is the ecli, so ordering by it is an index scan into a nested
+    loop: 0.8 ms for the same claim.
+
+    The order itself is arbitrary -- the queue has no priority, it only needs
+    to be stable so a claim that is skipped is not re-offered ahead of
+    everything else forever. This fixture's two rows sort in OPPOSITE
+    directions under the two orderings, so a limit of 1 tells them apart.
+    """
+    _row(conn, "ECLI:AA", "zzz", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="Z_last")
+    _row(conn, "ECLI:ZZ", "aaa", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="A_first")
+
+    rows = db.claim_for_citations(conn, 1)
+    assert [r["ecli"] for r in rows] == ["ECLI:AA"]
+
+    assert [r["ecli"] for r in db.claim_for_citations(conn, 10)] == \
+        ["ECLI:AA", "ECLI:ZZ"]
+
+
+def test_the_spider_filter_still_applies_under_the_ecli_order(conn, settings):
+    """The filter is on the JOINED table (d.spider) while the order is on the
+    state table -- the combination a planner change could quietly break."""
+    _row(conn, "ECLI:AA", "zzz", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="Z_last")
+    _row(conn, "ECLI:ZZ", "aaa", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="A_first")
+
+    assert [r["ecli"] for r in db.claim_for_citations(conn, 10, spider="A_first")] \
+        == ["ECLI:ZZ"]
+    assert [r["ecli"] for r in db.claim_for_citations(conn, 10, spider="Z_last")] \
+        == ["ECLI:AA"]
