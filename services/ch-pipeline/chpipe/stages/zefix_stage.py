@@ -74,6 +74,12 @@ ON CONFLICT (id) DO UPDATE SET
 # and shab_pub_date come from the SHAB stages, and a nightly zefix run must
 # not blank them. The columns this stage owns are overwritten outright --
 # a company that loses its address in the register should lose it here too.
+#
+# ehraid is cast explicitly: migration 129 declares it INTEGER and
+# zefix.ehraid_from_iri() returns the digits as a string, so without the cast
+# the insert depends on the server inferring the parameter's type from the
+# column -- which it does, but only when the column really is INTEGER. The
+# cast makes a fixture that got the type wrong fail here rather than in prod.
 _UPSERT_COMPANY = """
 INSERT INTO ch_zefix_companies (
     uid, name, legal_form, legal_form_code, legal_seat, status, purpose,
@@ -81,7 +87,8 @@ INSERT INTO ch_zefix_companies (
     metadata_json, updated_at)
 VALUES (
     %(uid)s, %(name)s, %(legal_form)s, %(legal_form_code)s, %(legal_seat)s,
-    %(status)s, %(purpose)s, %(address)s, %(canton)s, %(chid)s, %(ehraid)s,
+    %(status)s, %(purpose)s, %(address)s, %(canton)s, %(chid)s,
+    %(ehraid)s::integer,
     %(municipality_id)s, %(source_iri)s, %(seen_at)s, %(metadata)s, now())
 ON CONFLICT (uid) DO UPDATE SET
     name            = EXCLUDED.name,

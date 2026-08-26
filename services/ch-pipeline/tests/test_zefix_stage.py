@@ -130,7 +130,7 @@ def test_a_run_upserts_the_municipalitys_companies(conn, settings, client):
     assert biel["canton"] == "BE"
     assert biel["municipality_id"] == 371
     assert biel["chid"] == "CH03640492438"
-    assert biel["ehraid"] == "1001367"
+    assert biel["ehraid"] == 1001367      # integer, as migration 129 declares it
     assert biel["address"] == "Rue des Cygnes 54 c, 2503 Biel/Bienne"
     assert biel["status"] == "active"
     assert biel["seen_at"] is not None

@@ -77,7 +77,8 @@ CREATE TABLE IF NOT EXISTS ch_zefix_companies (
     address          text,
     canton           text,
     chid             text,
-    ehraid           text,
+    ehraid           integer,   -- migration 129's type; ehraid_from_iri() returns
+                                --  a string, so the upsert casts explicitly
     shab_pub_date    date,
     metadata_json    jsonb,
     imported_at      timestamptz NOT NULL DEFAULT now(),
