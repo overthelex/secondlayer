@@ -285,10 +285,9 @@ status: active (типово) / inactive / all. canton — двобуквени�
     const pageSql = `
       WITH page AS (
         SELECT c.uid, c.name, c.legal_form, c.legal_form_code, c.legal_seat,
-               c.register_office, c.status, c.canton, c.chid, c.ehraid,
+               c.status, c.canton, c.chid, c.ehraid,
                left(coalesce(c.purpose, ''), ${PURPOSE_PREVIEW_CHARS}) AS purpose,
-               c.capital, c.capital_currency, c.address,
-               to_char(c.shab_pub_date, 'YYYY-MM-DD') AS shab_pub_date
+               c.address
           FROM ch_zefix_companies c
          WHERE ${where}
          ORDER BY (lower(c.name) = lower($${boostIdx})) DESC, c.name, c.uid
@@ -381,10 +380,13 @@ status: active (типово) / inactive / all. canton — двобуквени�
 
     try {
       const company = (await this.db.query(
-        `SELECT uid, name, legal_form, legal_form_code, legal_seat, register_office, status,
-                purpose, capital, capital_currency, address, canton, chid, ehraid,
-                to_char(shab_pub_date, 'YYYY-MM-DD') AS shab_pub_date,
-                municipality_id, source_iri
+        // capital, capital_currency, register_office and shab_pub_date exist in migration
+        // 129's table but no stage writes them: LINDAS does not publish them and the SHAB
+        // stages write what they find into ch_shab_publications, not here. Selecting them
+        // returned four nulls that read as "this company has no share capital". The
+        // capital SHAB does state is surfaced per publication by getShab().
+        `SELECT uid, name, legal_form, legal_form_code, legal_seat, status,
+                purpose, address, canton, chid, ehraid, municipality_id, source_iri
            FROM ch_zefix_companies WHERE uid = $1`,
         [normalizedUid]
       )).rows[0];
@@ -421,11 +423,19 @@ status: active (типово) / inactive / all. canton — двобуквени�
     }
   }
 
+  /**
+   * The publications for one company. `capital` / `capital_currency` come out of
+   * metadata_json because ch_shab_publications has no column for them: shab-detail parses
+   * the amount the register states out of the publication and merges it into the jsonb.
+   * This is the only capital in the corpus — ch_zefix_companies.capital is never written.
+   */
   private async getShab(uid: string, rubric: string | null): Promise<any[]> {
     return (await this.db.query(
       `SELECT shab_id, to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
               publication_type, rubric, sub_rubric, publication_number, title, language,
               registration_office, legal_form, seat, canton, company_name,
+              metadata_json->>'capital' AS capital,
+              metadata_json->>'capital_currency' AS capital_currency,
               left(coalesce(content, ''), ${SHAB_CONTENT_CHARS}) AS content,
               (length(coalesce(content, '')) > ${SHAB_CONTENT_CHARS}) AS content_truncated
          FROM ch_shab_publications

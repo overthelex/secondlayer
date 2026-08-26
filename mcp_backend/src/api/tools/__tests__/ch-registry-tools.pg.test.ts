@@ -140,6 +140,14 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       [UID_AG, LONG_CONTENT]
     );
 
+    // What shab-detail writes into metadata_json: ch_shab_publications has no capital
+    // column, so the amounts the register states live in the jsonb.
+    await client.query(
+      `UPDATE ch_shab_publications
+          SET metadata_json = '{"capital": "100000.00", "capital_currency": "CHF"}'::jsonb
+        WHERE shab_id = 'SHAB-HR01'`
+    );
+
     // Two renderings of the same company (exact, and upper-cased with a comma before the
     // legal-form suffix) plus one unrelated bank that must never match.
     await client.query(
@@ -192,6 +200,10 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(row.shab_count).toBe(3);
       expect(row.last_shab_date).toBe('2025-02-02');
       expect(row.bankruptcy).toBe(true);
+      // Never written by any stage — see the company-card test.
+      expect(row).not.toHaveProperty('capital');
+      expect(row).not.toHaveProperty('register_office');
+      expect(row).not.toHaveProperty('shab_pub_date');
     });
 
     it('truncates purpose to 300 characters', async () => {
@@ -396,9 +408,12 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.company.legal_seat).toBe('Zürich');
       expect(body.company.canton).toBe('ZH');
       expect(body.company.status).toBe('active');
-      expect(body.company.capital).toBe('100000');
-      expect(body.company.capital_currency).toBe('CHF');
-      expect(body.company.shab_pub_date).toBe('2024-01-15');
+      // capital / capital_currency / register_office / shab_pub_date exist in migration
+      // 129's table but no stage writes them, so the card does not pretend to have them.
+      expect(body.company).not.toHaveProperty('capital');
+      expect(body.company).not.toHaveProperty('capital_currency');
+      expect(body.company).not.toHaveProperty('register_office');
+      expect(body.company).not.toHaveProperty('shab_pub_date');
 
       // SHAB: all three rows, newest first.
       expect(body.shab.map((p: any) => p.shab_id)).toEqual(['SHAB-KK01', 'SHAB-HR02', 'SHAB-HR01']);
@@ -436,6 +451,18 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
 
       const short = body.shab.find((p: any) => p.shab_id === 'SHAB-HR02');
       expect(short.content_truncated).toBe(false);
+    });
+
+    it('surfaces the capital SHAB states on the publication that states it', async () => {
+      // The only reachable capital in the corpus: shab-detail parses it out of the
+      // publication and merges it into metadata_json, which has no column of its own.
+      const body = parse((await tools.executeTool('ch_get_company', { uid: UID_AG }))!);
+      const first = body.shab.find((p: any) => p.shab_id === 'SHAB-HR01');
+      const later = body.shab.find((p: any) => p.shab_id === 'SHAB-HR02');
+
+      expect(first.capital).toBe('100000.00');
+      expect(first.capital_currency).toBe('CHF');
+      expect(later.capital).toBeNull();
     });
 
     it('accepts an undotted UID', async () => {
