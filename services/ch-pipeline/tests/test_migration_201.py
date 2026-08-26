@@ -111,5 +111,13 @@ def test_indexes(conn):
         assert "idx_ch_shab_name_trgm" not in shab_indexes
 
 
+def test_detail_queue_index_is_partial(conn):
+    row = conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_ch_shab_detail_queue'").fetchone()
+    assert row is not None
+    assert "WHERE (detail_fetched_at IS NULL)" in row["indexdef"]
+    assert "publication_date DESC" in row["indexdef"]
+
+
 def test_is_idempotent(conn):
     conn.execute(MIGRATION.read_text())      # must not raise

@@ -50,6 +50,9 @@ ALTER TABLE ch_shab_publications ADD COLUMN IF NOT EXISTS detail_fetched_at time
 ALTER TABLE ch_shab_publications ADD COLUMN IF NOT EXISTS detail_attempts smallint NOT NULL DEFAULT 0;
 ALTER TABLE ch_shab_publications ADD COLUMN IF NOT EXISTS detail_error text;
 
+-- idx_ch_shab_uid and idx_ch_shab_date already exist on any database that ran migration 129
+-- (there without the partial predicate); IF NOT EXISTS matches by name, so on prod these two are
+-- no-ops and the 129 definitions stay. They are here for databases created from this file alone.
 CREATE INDEX IF NOT EXISTS idx_ch_shab_uid ON ch_shab_publications (company_uid) WHERE company_uid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ch_shab_date ON ch_shab_publications (publication_date);
 CREATE INDEX IF NOT EXISTS idx_ch_shab_detail_queue ON ch_shab_publications (rubric, publication_date DESC) WHERE detail_fetched_at IS NULL;
