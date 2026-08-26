@@ -9,7 +9,14 @@ the SPA bundle and verified 2026-08-26:
         &tols_for_systematics[]={leaf}...    tree of nodes; `tols` filled for
                                              the leaf ids passed
   texts-of-law/{tol}/with-version-groups     the act with families[[[version]]]
-  /tolv/{version}/{lang}                     PDF (phase 2)
+  /tolv/{version}/{lang}                     the version's PDF (phase 2)
+
+The PDF route is derivable from ids alone: dtah_urls[].url is exactly
+"/tolv/{version_id}/{language}", and verified live 2026-08-26 on
+https://www.lexfind.ch/tolv/251719/de -> HTTP 200, Content-Type
+application/pdf, body starts with %PDF-1.4, no redirect, no browser
+User-Agent needed (identical answer with the pipeline UA and with none).
+/api/fe/de/tolv/... is a 404; the PDF lives on the site root, not the API.
 
 LexFind is the INDEPENDENT side of the cantonal reconciliation gate: what
 it lists is compared with what the Lexwork hosts serve. It is deliberately
@@ -26,6 +33,17 @@ from .http import Fetcher
 # parameter; 50 per request keeps the URL well under any proxy's limit and
 # BE's 425 nodes in 9 requests.
 LEAVES_PER_REQUEST = 50
+
+LEXFIND_SITE = "https://www.lexfind.ch"
+
+
+def pdf_url(version_id: int, lang: str) -> str:
+    """The PDF of one version in one language, on the site root. Kept as a
+    function of the ids rather than read back from versions_json so a
+    registry row written before pdf_urls existed still resolves: the
+    26,252 prod rows of 2026-08-26 hold only `languages`, and re-walking
+    them (~4 h at 2 req/s) is not a precondition of materialising them."""
+    return f"{LEXFIND_SITE}/tolv/{int(version_id)}/{lang}"
 
 
 class LexfindClient:
@@ -73,13 +91,21 @@ def tols_of(tree: dict) -> list[dict]:
 
 
 def flatten_versions(groups: dict) -> list[dict]:
-    """families[[[version]]] -> one flat list, document order, with the
-    bulky dtah_urls reduced to the languages they name."""
+    """families[[[version]]] -> one flat list, document order (newest
+    first: 8,488 of 8,488 acts of the 7 LexFind-only cantons on prod
+    2026-08-26 list their latest version at index 0), with the bulky
+    dtah_urls reduced to the languages they name and, per language, the
+    PDF URL they point at (`pdf_urls`). A dtah_urls entry without a url
+    falls back to the id-derived route, which is the same string."""
     out = []
     for family in groups.get("families") or []:
         for group in family:
             for version in group:
                 slim = {k: v for k, v in version.items() if k not in ("dtah_urls", "keywords")}
                 slim["languages"] = [d.get("language") for d in version.get("dtah_urls") or []]
+                slim["pdf_urls"] = {
+                    d["language"]: (LEXFIND_SITE + d["url"] if d.get("url", "").startswith("/")
+                                    else pdf_url(version["id"], d["language"]))
+                    for d in version.get("dtah_urls") or [] if d.get("language")}
                 out.append(slim)
     return out

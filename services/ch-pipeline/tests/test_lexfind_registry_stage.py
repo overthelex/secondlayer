@@ -86,6 +86,20 @@ def test_versions_are_flattened_in_document_order():
     assert "dtah_urls" not in versions[0]
 
 
+def test_pdf_url_is_kept_per_language_and_derivable_from_the_ids():
+    """dtah_urls[].url is "/tolv/{version}/{lang}" on the site root (verified
+    live 2026-08-26: %PDF-1.4, application/pdf, no UA check), so the two
+    spellings must agree -- a registry row written before pdf_urls existed
+    is materialised from the ids alone."""
+    versions = lexfind_api.flatten_versions(GROUPS)
+    assert versions[0]["pdf_urls"] == {"de": "https://www.lexfind.ch/tolv/251719/de"}
+    assert lexfind_api.pdf_url(251719, "de") == versions[0]["pdf_urls"]["de"]
+    assert all(v["pdf_urls"] == {l: lexfind_api.pdf_url(v["id"], l) for l in v["languages"]}
+               for v in versions)
+    stored = json.loads(json.dumps(versions[0]))          # what versions_json holds
+    assert stored["pdf_urls"]["de"].startswith("https://www.lexfind.ch/tolv/")
+
+
 def test_registers_every_act_under_every_leaf_with_its_versions(conn, settings):
     server = LexFind()
     report = _run(settings, server)
