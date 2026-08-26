@@ -342,7 +342,9 @@ def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
                 "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
-                "project-legacy", "provenance", "as-bbl", "basic-act"}
+                "project-legacy", "provenance", "as-bbl", "basic-act",
+                "lexfind-registry", "cantonal-acts", "cantonal-fetch",
+                "cantonal-parse", "reports-cantonal"}
     assert _accepted_stage_names() == expected
 
 
@@ -394,6 +396,11 @@ def _stub_resolve(monkeypatch, calls=None):
         return delta_module.citations_resolve_stage.ResolveReport()
 
     monkeypatch.setattr(delta_module.citations_resolve_stage, "run", fake)
+    # The cantonal step is a fourth guarded half; without a stub it would
+    # read cantonal-state.json under the default raw_dir and, given a
+    # baseline, page a real Lexwork host from inside the test suite.
+    monkeypatch.setattr(delta_module, "run_cantonal",
+                        lambda settings, transport=None: delta_module.DeltaReport())
     monkeypatch.setattr(
         delta_module.aliases_stage, "run",
         lambda settings: delta_module.aliases_stage.AliasReport())
@@ -479,7 +486,9 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
-                       "projected=0 resolved(acts=0 editions=0 articles=0 "
+                       "projected=0 cantonal(acts=0 versions=0 changes=0 "
+                       "projected=0 failed=none) "
+                       "resolved(acts=0 editions=0 articles=0 "
                        "cases=0) failed=legislation"]
 
 
