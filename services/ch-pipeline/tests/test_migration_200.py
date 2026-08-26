@@ -54,7 +54,9 @@ def _seed_decisions(conn):
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage) VALUES "
         "('ECLI:1','CH_BGer','1','loaded'), "
-        "('ECLI:2','CH_BGer','2','loaded'), "
+        # a second spider, so "the seed copies the spider" is measurable
+        # rather than true of any constant
+        "('ECLI:2','CH_BVGer','2','loaded'), "
         # not loaded: not part of the citation queue at all
         "('ECLI:3','CH_BGer','3','extracted')")
     # ECLI:1 has already been extracted under the old scheme; 199's column is
@@ -78,8 +80,8 @@ def test_creates_the_state_table(conn):
     apply_migration_200(conn)
     assert conn.execute(
         "SELECT to_regclass('ch_citation_state') IS NOT NULL AS ok").fetchone()["ok"]
-    assert {"ecli", "extracted_at", "attempts", "last_error", "updated_at"} \
-        == _cols(conn, "ch_citation_state")
+    assert {"ecli", "spider", "extracted_at", "attempts", "last_error",
+            "updated_at"} == _cols(conn, "ch_citation_state")
     # attempts and updated_at carry the defaults the stages rely on: nothing
     # ever inserts them explicitly.
     conn.execute("INSERT INTO ch_citation_state (ecli) VALUES ('ECLI:X')")
@@ -88,6 +90,52 @@ def test_creates_the_state_table(conn):
     assert row["attempts"] == 0
     assert row["extracted_at"] is None
     assert row["updated_at"] is not None
+
+
+def test_creates_the_per_spider_pending_index(conn):
+    """A per-spider claim (`./run-stage.sh citations CH_BGer`) filters on
+    s.spider and still orders by s.ecli. Without a (spider, ecli) partial
+    index that walks the whole pending backlog in ecli order discarding
+    every row belonging to another spider -- on a mixed backlog, nearly all
+    of them."""
+    apply_migration_200(conn)
+    assert "idx_ch_citation_state_pending_spider" in _indexes(
+        conn, "ch_citation_state")
+    definition = conn.execute(
+        "SELECT indexdef FROM pg_indexes WHERE indexname = "
+        "'idx_ch_citation_state_pending_spider'").fetchone()["indexdef"]
+    assert "extracted_at IS NULL" in definition
+    assert "spider, ecli" in definition.replace('"', "")
+
+
+def test_the_seed_copies_the_spider(conn):
+    """The spider is denormalised onto the state row so a per-spider claim
+    never has to reach into ch_court_decisions to find out which rows to
+    skip."""
+    _seed_decisions(conn)
+    apply_migration_200(conn)
+    rows = {r["ecli"]: r["spider"] for r in conn.execute(
+        "SELECT ecli, spider FROM ch_citation_state").fetchall()}
+    assert rows == {"ECLI:1": "CH_BGer", "ECLI:2": "CH_BVGer"}
+
+
+def test_the_backfill_fills_a_state_row_that_has_no_spider(conn):
+    """The column is added to a table that may already exist and already be
+    the live queue (an earlier application of this file created it without
+    the column), so the migration backfills every row still missing one --
+    and only those. A row whose spider is already set is left alone, and a
+    re-run does nothing at all."""
+    _seed_decisions(conn)
+    apply_migration_200(conn)
+    conn.execute("UPDATE ch_citation_state SET spider = NULL WHERE ecli = 'ECLI:1'")
+    conn.execute("UPDATE ch_citation_state SET spider = 'STALE' WHERE ecli = 'ECLI:2'")
+
+    conn.execute(MIGRATION_200.read_text())
+
+    rows = {r["ecli"]: r["spider"] for r in conn.execute(
+        "SELECT ecli, spider FROM ch_citation_state").fetchall()}
+    assert rows["ECLI:1"] == "CH_BGer", "a NULL spider is filled in"
+    assert rows["ECLI:2"] == "STALE", "a spider that is already set is not rewritten"
 
 
 def test_creates_the_pending_index(conn):

@@ -48,7 +48,14 @@ SPIDER="${1:-}"
 # name is [A-Za-z0-9_]+ -- CH_BGer, ZG_Obergericht, GE_TAPI -- and anything
 # else is either a typo worth catching or a quote-breaking injection worth
 # refusing.
-if [ -n "$SPIDER" ] && ! printf '%s' "$SPIDER" | grep -Eq '^[A-Za-z0-9_]+$'; then
+#
+# bash's own [[ =~ ]], NOT `grep -Eq`: grep validates per LINE, so
+# $'CH_BGer\nDROP TABLE ch_case_citations' has a line that matches and grep
+# reports success -- while the whole argument, newline and all, is what ends
+# up inside the SQL literal. In [[ =~ ]] the subject is the entire string:
+# `$` is its end and the character class cannot span a newline. Measured in
+# tests/test_reextract_citations_sh.py, which runs this script for real.
+if [ -n "$SPIDER" ] && ! [[ "$SPIDER" =~ ^[A-Za-z0-9_]+$ ]]; then
   echo "refusing spider name '$SPIDER': expected ^[A-Za-z0-9_]+$" >&2
   exit 2
 fi

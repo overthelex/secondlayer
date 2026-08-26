@@ -54,11 +54,34 @@ SET lock_timeout = '3s';
 
 CREATE TABLE IF NOT EXISTS public.ch_citation_state (
     ecli         text PRIMARY KEY,
+    spider       text,                   -- denormalised from ch_court_decisions
     extracted_at timestamptz,            -- NULL = queued for extraction
     attempts     smallint NOT NULL DEFAULT 0,
     last_error   text,
     updated_at   timestamptz NOT NULL DEFAULT now()
 );
+
+-- For a table this file created before the column existed. Cheap and
+-- unconditional: ch_citation_state is narrow and has no GIN, which is the
+-- whole reason the bookkeeping was moved here.
+ALTER TABLE public.ch_citation_state ADD COLUMN IF NOT EXISTS spider text;
+
+-- spider is denormalised onto the state row so a per-spider claim
+-- (./run-stage.sh citations CH_BGer) can filter on THIS table. Filtering on
+-- ch_court_decisions.spider instead means every pending row in the backlog
+-- is read and joined before it can be discarded -- on a mixed backlog,
+-- nearly all of them, for a claim of 200. Backfilled for rows that predate
+-- the column, and only those: guarded so a re-run of this file does not
+-- rewrite the queue.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.ch_citation_state WHERE spider IS NULL) THEN
+        UPDATE public.ch_citation_state s
+           SET spider = d.spider, updated_at = now()
+          FROM public.ch_court_decisions d
+         WHERE d.ecli = s.ecli AND s.spider IS NULL;
+    END IF;
+END $$;
 
 -- The claim query's whole predicate. Partial, so it holds only the backlog
 -- (a few thousand rows on an ordinary night) rather than an entry per
@@ -66,14 +89,22 @@ CREATE TABLE IF NOT EXISTS public.ch_citation_state (
 CREATE INDEX IF NOT EXISTS idx_ch_citation_state_pending
     ON public.ch_citation_state (ecli) WHERE extracted_at IS NULL;
 
+-- The same backlog, indexed for the per-spider claim: filter on spider,
+-- still ordered by ecli, so the leading column is the one the WHERE pins and
+-- the second is the one the ORDER BY reads. Without it a per-spider claim
+-- walks the whole pending backlog in ecli order discarding other spiders'
+-- rows.
+CREATE INDEX IF NOT EXISTS idx_ch_citation_state_pending_spider
+    ON public.ch_citation_state (spider, ecli) WHERE extracted_at IS NULL;
+
 -- Seed from the column this table replaces -- once, and only into an empty
 -- table. See the header: keeping the stamps is what stops the first delta
 -- after this migration from re-extracting the entire corpus.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM public.ch_citation_state) THEN
-        INSERT INTO public.ch_citation_state (ecli, extracted_at)
-        SELECT ecli, citations_extracted_at
+        INSERT INTO public.ch_citation_state (ecli, spider, extracted_at)
+        SELECT ecli, spider, citations_extracted_at
           FROM public.ch_court_decisions
          WHERE stage = 'loaded'
         ON CONFLICT (ecli) DO NOTHING;
@@ -99,6 +130,11 @@ COMMENT ON TABLE public.ch_citation_state IS
     'non-HOT row rewrite into every index (measured: a 1.22M-row reset took '
     '22+ minutes and grew the GIN by 0.6 GB in a day). Reset for a full '
     're-extraction: UPDATE ch_citation_state SET extracted_at = NULL.';
+COMMENT ON COLUMN public.ch_citation_state.spider IS
+    'Denormalised from ch_court_decisions so a per-spider claim filters on this '
+    'table (leading column of idx_ch_citation_state_pending_spider) instead of '
+    'joining and discarding the rest of the backlog. Written by every path that '
+    'creates or re-queues a state row.';
 COMMENT ON COLUMN public.ch_citation_state.attempts IS
     'Failed extraction attempts. The claim skips rows at or above '
     'CHPIPE_MAX_ATTEMPTS so one poison text cannot be re-read every night '

@@ -407,6 +407,9 @@ def test_a_row_that_reaches_loaded_is_enrolled_in_the_queue(conn, settings):
 
     state = _state(conn, "ECLI:Q")
     assert state is not None and state["extracted_at"] is None
+    # ... with the spider copied off the decision, so a per-spider claim
+    # never has to reach into ch_court_decisions to know what to skip.
+    assert state["spider"] == "CH_BGer"
     assert citations_stage.run(settings).decisions == 1
     assert _state(conn, "ECLI:Q")["extracted_at"] is not None
 
@@ -445,6 +448,7 @@ def test_new_text_re_queues_a_decision_and_clears_its_failed_attempts(conn, sett
     assert state["extracted_at"] is None
     assert state["attempts"] == 0
     assert state["last_error"] is None
+    assert state["spider"] == "CH_BGer"
 
 
 def test_a_decision_out_of_attempts_is_no_longer_claimed(conn, settings):
@@ -560,3 +564,48 @@ def test_the_spider_filter_still_applies_under_the_ecli_order(conn, settings):
         == ["ECLI:ZZ"]
     assert [r["ecli"] for r in db.claim_for_citations(conn, 10, spider="Z_last")] \
         == ["ECLI:AA"]
+
+
+def test_the_spider_filter_reads_the_state_row_not_the_decision(conn, settings):
+    """The predicate is s.spider, and it has to be: filtering on d.spider
+    means every pending row in the backlog is read and joined before it can
+    be discarded, which is what makes a per-spider claim scan the whole
+    mixed queue. s.spider is the leading column of
+    idx_ch_citation_state_pending_spider, so the claim seeks straight to
+    that spider's pending rows.
+
+    The two columns cannot disagree in the pipeline -- every writer copies
+    the spider off the decision row. They are forced apart here for one
+    reason: it is the only way to say WHICH of the two the claim reads.
+    """
+    _row(conn, "ECLI:AA", "aaa", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="A_first")
+    conn.execute(
+        "UPDATE ch_citation_state SET spider = 'Z_last' WHERE ecli = 'ECLI:AA'")
+
+    assert db.claim_for_citations(conn, 10, spider="A_first") == []
+    assert [r["ecli"] for r in db.claim_for_citations(conn, 10, spider="Z_last")] \
+        == ["ECLI:AA"]
+
+
+def test_a_per_spider_claim_returns_only_that_spiders_pending_rows(conn, settings):
+    """The ordinary case, over a mixed backlog: three spiders pending, one
+    asked for."""
+    _row(conn, "ECLI:1", "d1", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="CH_BGer")
+    _row(conn, "ECLI:2", "d2", "CH_BVGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="CH_BVGer")
+    _row(conn, "ECLI:3", "d3", "CH_BGer", date(2020, 1, 1), "art. 8 Cst.",
+         spider="CH_BGer")
+    _row(conn, "ECLI:4", "d4", "ZG_Obergericht", date(2020, 1, 1), "art. 8 Cst.",
+         spider="ZG_Obergericht")
+
+    claimed = db.claim_for_citations(conn, 10, spider="CH_BGer")
+    assert [r["ecli"] for r in claimed] == ["ECLI:1", "ECLI:3"]
+    assert {r["spider"] for r in claimed} == {"CH_BGer"}
+
+    # ... and the stage leaves the other spiders' rows queued.
+    citations_stage.run(settings, spider="CH_BGer")
+    still_pending = {r["ecli"] for r in conn.execute(
+        "SELECT ecli FROM ch_citation_state WHERE extracted_at IS NULL").fetchall()}
+    assert still_pending == {"ECLI:2", "ECLI:4"}

@@ -524,7 +524,14 @@ def claim_for_citations(conn, limit: int, spider: str | None = None,
            "AND d.stage = 'loaded'")
     params: list = [max_attempts]
     if spider:
-        sql += " AND d.spider = %s"
+        # s.spider, not d.spider: the two always agree (every writer copies
+        # it off the decision row), and the difference is which table the
+        # planner can use to eliminate rows. On the state table this is the
+        # leading column of idx_ch_citation_state_pending_spider and the
+        # claim seeks straight to that spider's pending rows; on the joined
+        # table every pending row in the backlog has to be read and joined
+        # before it can be discarded.
+        sql += " AND s.spider = %s"
         params.append(spider)
     sql += " ORDER BY s.ecli LIMIT %s FOR UPDATE OF s SKIP LOCKED"
     params.append(limit)
@@ -541,16 +548,22 @@ def enqueue_for_citations(conn, eclis: list[str]) -> None:
     which makes whatever edges it has stale. attempts/last_error are cleared
     with it, for the same reason complete() resets the stage retry budget:
     the attempts belong to the text that raised, and this is different text.
+
+    INSERT ... SELECT rather than a values list: the state row carries the
+    decision's spider (see claim_for_citations), and reading it off
+    ch_court_decisions in the same statement is what stops any caller from
+    having to know -- or pass -- it. A decision that does not exist inserts
+    nothing, which is the right answer for a queue row about it.
     """
     if not eclis:
         return
-    with conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO ch_citation_state (ecli, extracted_at) VALUES (%s, NULL) "
-            "ON CONFLICT (ecli) DO UPDATE SET extracted_at = NULL, attempts = 0, "
-            "last_error = NULL, updated_at = now()",
-            [(ecli,) for ecli in eclis],
-        )
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE ecli = ANY(%s) "
+        "ON CONFLICT (ecli) DO UPDATE SET extracted_at = NULL, attempts = 0, "
+        "last_error = NULL, spider = EXCLUDED.spider, updated_at = now()",
+        (eclis,),
+    )
 
 
 def _enqueue_for_citations_by_doc_id(conn, doc_id: str) -> None:
@@ -561,25 +574,26 @@ def _enqueue_for_citations_by_doc_id(conn, doc_id: str) -> None:
     and ocr run; INSERT ... SELECT does it in one.
     """
     conn.execute(
-        "INSERT INTO ch_citation_state (ecli, extracted_at) "
-        "SELECT ecli, NULL FROM ch_court_decisions WHERE doc_id = %s "
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE doc_id = %s "
         "ON CONFLICT (ecli) DO UPDATE SET extracted_at = NULL, attempts = 0, "
-        "last_error = NULL, updated_at = now()",
+        "last_error = NULL, spider = EXCLUDED.spider, updated_at = now()",
         (doc_id,),
     )
 
 
 def ensure_citation_state(conn, eclis: list[str]) -> None:
     """Make sure these decisions have a state row, without disturbing one
-    that already exists. The absent-only twin of enqueue_for_citations()."""
+    that already exists. The absent-only twin of enqueue_for_citations(),
+    and it takes the spider off the decision row the same way."""
     if not eclis:
         return
-    with conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO ch_citation_state (ecli, extracted_at) VALUES (%s, NULL) "
-            "ON CONFLICT (ecli) DO NOTHING",
-            [(ecli,) for ecli in eclis],
-        )
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE ecli = ANY(%s) "
+        "ON CONFLICT (ecli) DO NOTHING",
+        (eclis,),
+    )
 
 
 def ensure_citation_state_by_doc_id(conn, doc_id: str) -> None:
@@ -589,8 +603,8 @@ def ensure_citation_state_by_doc_id(conn, doc_id: str) -> None:
     decision the pipeline loads from now on) would have no state row at all,
     and the claim -- which drives off that table -- would never see it."""
     conn.execute(
-        "INSERT INTO ch_citation_state (ecli, extracted_at) "
-        "SELECT ecli, NULL FROM ch_court_decisions WHERE doc_id = %s "
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE doc_id = %s "
         "ON CONFLICT (ecli) DO NOTHING",
         (doc_id,),
     )

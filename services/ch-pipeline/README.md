@@ -752,9 +752,21 @@ resolved rows). Migration 199 is the schema: `ch_act_alias`,
 **The citation stages never write `ch_court_decisions`.** The bookkeeping —
 has this decision's text been scanned, when, how many times has it raised
 and with what error — lives in `ch_citation_state`: one narrow row per
-decision, keyed by `ecli`, with `extracted_at` (NULL = queued), `attempts`,
-`last_error` and `updated_at`, and one partial index
-(`WHERE extracted_at IS NULL`) that is the claim query's whole predicate.
+decision, keyed by `ecli`, with `spider`, `extracted_at` (NULL = queued),
+`attempts`, `last_error` and `updated_at`, and two partial indexes on
+`WHERE extracted_at IS NULL` — `(ecli)` for the corpus-wide claim and
+`(spider, ecli)` for the per-spider one — which between them are the claim
+query's whole predicate.
+
+**`spider` is denormalised onto the state row on purpose.** A per-spider
+claim (`./run-stage.sh citations CH_BGer`) filters on `s.spider`, not on
+`d.spider`: the two always agree — every writer copies it off the decision
+row — and the difference is which table the planner can use to eliminate
+rows. On the state table it is the leading column of
+`idx_ch_citation_state_pending_spider` and the claim seeks straight to that
+spider's pending rows; on the joined table every pending row in a mixed
+backlog has to be read and joined before it can be discarded, for a claim
+that wants 200.
 
 **The claim is ordered by `s.ecli`** — the state table's own primary key,
 and a performance choice rather than a priority one (the queue has no
@@ -865,9 +877,9 @@ citations for a much larger number of invented ones:
   everything after it, is re-read as further articles.
 
 **`citations`** claims from `ch_citation_state` — rows with
-`extracted_at IS NULL` and attempts left, in `ecli` order, joined to
-`ch_court_decisions` for the text and the `stage = 'loaded'` predicate (and
-for the optional per-spider filter) — runs `chpipe.citations` over
+`extracted_at IS NULL` and attempts left, in `ecli` order, filtered on
+`s.spider` when a spider is given, joined to `ch_court_decisions` for the
+text and the `stage = 'loaded'` predicate — runs `chpipe.citations` over
 each one's text in a thread pool, and writes the raw edges it finds —
 BGE/docket/ECLI case references into `ch_case_citations`, article references
 into `ch_legislation_citations` — then stamps `extracted_at` on the state
