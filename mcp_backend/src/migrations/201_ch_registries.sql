@@ -25,12 +25,23 @@ ALTER TABLE ch_zefix_companies ADD COLUMN IF NOT EXISTS legal_form_code text;
 ALTER TABLE ch_zefix_companies ADD COLUMN IF NOT EXISTS seen_at timestamptz;
 ALTER TABLE ch_zefix_companies ADD COLUMN IF NOT EXISTS source_iri text;
 
+-- `name` is nullable, and that is a measurement rather than a preference.
+-- Probed live on 2026-08-26: Zefix organisations reference 2,111 distinct
+-- municipality IRIs, but only 2,110 of them are a schema.ld:Municipality
+-- contained in a canton and therefore carry schema:name at all. The odd one
+-- out is <https://ld.admin.ch/municipality/700>, with 5 organisations. It
+-- has to be recorded (the zefix stage walks the municipalities the
+-- organisations actually reference, or those 5 companies are silently lost),
+-- and NOT NULL would leave only two ways to record it: refuse the row, or
+-- invent a name for a municipality LINDAS does not name. The ALTER below
+-- carries a database where this migration already ran under the old shape.
 CREATE TABLE IF NOT EXISTS ch_zefix_municipality (
     id      integer PRIMARY KEY,
-    name    text NOT NULL,
+    name    text,
     canton  text,
     iri     text NOT NULL
 );
+ALTER TABLE ch_zefix_municipality ALTER COLUMN name DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ch_zefix_progress (
     run_date        date NOT NULL,

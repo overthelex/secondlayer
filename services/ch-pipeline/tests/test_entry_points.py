@@ -317,6 +317,37 @@ def test_chpipe_cit_resolve_all_0_is_not_a_yes(monkeypatch, no_renice):
     assert seen["kwargs"]["resolve_all"] is False
 
 
+# --- the registries half ---
+# zefix is neither a decisions stage (no CHPIPE_SPIDER) nor a legislation one
+# (no CHPIPE_LANG), so it sits outside both parametrised lists above -- which
+# is exactly how a stage ends up with no entry-point test at all.
+
+from chpipe.stages import zefix_stage
+
+
+def test_zefix_has_a_reachable_main_that_renices_at_nice_io(monkeypatch, no_renice):
+    """A walk of 2,111 SPARQL queries on a box serving live traffic, the
+    same shape as acts/versions."""
+    monkeypatch.delenv("CHPIPE_ZEFIX_MUNICIPALITIES", raising=False)
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    zefix_stage.main()
+    assert no_renice == [throttle.NICE_IO]
+    assert seen["municipalities"] is None, "no selection means every municipality"
+
+
+def test_zefix_honours_chpipe_zefix_municipalities(monkeypatch, no_renice):
+    seen = {}
+    monkeypatch.setattr(
+        zefix_stage, "run",
+        lambda settings, **kw: seen.update(kw) or zefix_stage.ZefixReport())
+    monkeypatch.setenv("CHPIPE_ZEFIX_MUNICIPALITIES", "371,700")
+    zefix_stage.main()
+    assert seen["municipalities"] == [371, 700]
+
+
 # --- run-stage.sh's own usage line ---
 # It read `index|fetch|extract|ocr|load` long after six more stages existed,
 # and its wrapper is the only way any of them is actually invoked on prod.
@@ -342,7 +373,8 @@ def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
                 "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
-                "project-legacy", "provenance", "as-bbl", "basic-act"}
+                "project-legacy", "provenance", "as-bbl", "basic-act",
+                "zefix"}
     assert _accepted_stage_names() == expected
 
 

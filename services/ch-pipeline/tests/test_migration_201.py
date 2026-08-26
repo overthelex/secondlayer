@@ -121,3 +121,18 @@ def test_detail_queue_index_is_partial(conn):
 
 def test_is_idempotent(conn):
     conn.execute(MIGRATION.read_text())      # must not raise
+
+
+def test_a_municipality_may_have_no_name(conn):
+    """Probed live on 2026-08-26: organisations reference 2,111 municipality
+    IRIs and only 2,110 are a schema.ld:Municipality contained in a canton.
+    <https://ld.admin.ch/municipality/700> (Moutier, 5 organisations) is not,
+    so LINDAS publishes no schema:name for it. The zefix stage walks the
+    municipalities the ORGANISATIONS reference -- anything else loses those
+    five companies -- so the row has to be storable without inventing a name
+    for it."""
+    conn.execute(
+        "INSERT INTO ch_zefix_municipality (id, name, canton, iri) "
+        "VALUES (700, NULL, NULL, 'https://ld.admin.ch/municipality/700')")
+    assert conn.execute(
+        "SELECT name FROM ch_zefix_municipality WHERE id = 700").fetchone()[0] is None

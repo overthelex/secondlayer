@@ -4,6 +4,7 @@
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
+#   registries:   ./run-stage.sh zefix   (no argument)
 #
 # The optional second argument means different things to the two halves, so
 # it is dispatched explicitly rather than exported as both: for the decisions
@@ -47,7 +48,7 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
