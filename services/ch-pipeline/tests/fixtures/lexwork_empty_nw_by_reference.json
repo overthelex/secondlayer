@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 512,
+   "title": "Reglemente der Schweizerischen Konferenz der kantonalen Erziehungsdirektoren (EDK) über die Anerkennung von Diplomen",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.1900 (Beschlussdatum: 01.01.1900)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  311.51\n</h1>\n<h1 class='title'>\n  Reglemente der Schweizerischen Konferenz der kantonalen Erziehungsdirektoren (EDK) &uuml;ber die Anerkennung von Diplomen\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  vom 01.01.1900 (Stand 01.01.1900)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Die von der Schweizerischen Konferenz der kantonalen Erziehungsdirektoren (EDK) erlassenen Reglemente &uuml;ber die Anerkennung von Diplomen werden in der Gesetzessammlung des Kantons Nidwalden nicht im Volltext ver&ouml;ffentlicht.\n  </p>\n  <p>\n    Sie sind einsehbar unter: <a class=\"law_link\" href=\"http://www.edk.ch\" target=\"_blank\">http://www.edk.ch</a>&nbsp;&rarr; Dokumentation&nbsp;&rarr; Rechtstexte und Beschl&uuml;sse&nbsp;&rarr; Rechtssammlung\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_ags_source'>\n  -\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

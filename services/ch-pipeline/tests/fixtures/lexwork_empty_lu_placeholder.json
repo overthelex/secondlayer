@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 4271,
+   "title": "Beschluss über die Neuumschreibung der Rekrutierungskreise des Kantons Luzern",
+   "version_dates_str": "Version in Kraft von: 01.07.1952 bis: 30.09.2024 (Beschlussdatum: 19.06.1952)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  360\n</h1>\n<h1 class='title'>\n  Beschluss<br />\n  &uuml;ber die Neuumschreibung der Rekrutierungskreise des Kantons Luzern\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  vom 19.06.1952 (Stand 01.07.1952)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Dieser Beschluss ist &uuml;berholt, formell aber noch in Kraft.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_ags_source'>\n  -\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

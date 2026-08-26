@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 1075,
+   "title": "Regierungsratsbeschlüsse betreffend die Freiangelei",
+   "version_dates_str": "Version in Kraft von: 27.09.1997 bis: 31.12.2022 (Beschlussdatum: 23.09.1997)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h2 class='header_text'>\n  RRB Freiangelei\n</h2>\n<h1 class='systematic_number'>\n  923.111\n</h1>\n<h1 class='title'>\n  Regierungsratsbeschl&uuml;sse betreffend die Freiangelei\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  vom 15.08.1978 (Stand 27.09.1997)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Die Uferfischerei mit festem Zapfen und einfacher Angel ist an der Aach auf Gebiet der Gemeinden Romanshorn und Salmsach von der Br&uuml;cke Arbonerstrasse bis zur M&uuml;ndung ab sofort f&uuml;r jedermann frei.\n  </p>\n  <p>\n    (RRB vom 15. August 1978)\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Die Fischerei mit festem Zapfen und einfacher Angel ist im Badeweiher Pfyn (in unteren Widen) ab sofort f&uuml;r jedermann frei.\n  </p>\n  <p>\n    (RRB vom 3. Juli 1979)\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Die Freiangelei in den Chasper&auml;cker Weihern bei Erzenholz in Frauenfeld ist entlang der nordseitigen Strasse ab sofort f&uuml;r jedermann frei.\n  </p>\n  <p>\n    (RRB vom 23. September 1997)&nbsp;<strong>*</strong>\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  33/1978\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

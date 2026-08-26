@@ -263,7 +263,25 @@ def _require_lang(payload: dict, lang: str) -> None:
 def parse_edition(payload: dict, lang: str) -> tuple[list[akn.Article], str]:
     """Both products of one walk: the articles (same shape parse_akn_stage
     stores) and the plain text of the whole document, one block per line,
-    header and footer included -- the cantonal twin of akn.parse_edition."""
+    header and footer included -- the cantonal twin of akn.parse_edition.
+
+    An edition with NO article node is returned as ([], text), and stored
+    that way (article_count 0, full_text kept). Measured on prod 2026-08-26:
+    235 of 38,014 parsed lexwork editions are such, and in all 235 the
+    content tree is one childless `title` node -- the hosts publish these
+    documents (see empty_reason()) with their whole text in header/footer.
+    Re-fetching three of them live (BS x2, AG) gave byte-identical payloads,
+    so there is no article to find and nothing to retry. No pseudo-article
+    (number '' or the title) is fabricated for them, deliberately:
+      * akn.plain_text() records a body-less Fedlex act the same way, and
+        2,496 parsed Fedlex editions already sit at article_count 0;
+      * ch_get_act_article answers such an edition with article_not_found
+        and available_examples; a row numbered '' is unreachable by it;
+      * no search reads ch_act_article.text, so the row would make nothing
+        findable that full_text does not already carry;
+      * diff_articles keys on e_id, and a root-uid row would turn every
+        wording change of a repeal notice into a fabricated "modified".
+    """
     _require_lang(payload, lang)
     doc = _document(payload)
     articles: list[akn.Article] = []
@@ -301,6 +319,54 @@ def parse_edition(payload: dict, lang: str) -> tuple[list[akn.Article], str]:
     walk(_content_root(payload), None)
     lines.extend(block_lines(_lang(doc.get("footer"), lang)))
     return articles, "\n".join(line for line in lines if line)
+
+
+# Why an edition parsed to zero articles, measured on all 235 such prod
+# editions (2026-08-26; BS 147, BE 34, ZG 17, AG 12, UR 12, BL 5, GL 3,
+# NW 2, LU 1, OW 1, TG 1):
+#   annex_only              82  BS only: the act is a PDF in annex_documents
+#                               ("Für den Text des RRB ... siehe Anhang")
+#   published_by_reference  77  AG 12, BE 34, BL 2, NW 2, UR 12, ZG 15: the
+#                               collection publishes a pointer, not the text
+#   unstructured_text       73  BS 65, BL 3, GL 1, OW 1, TG 1, ZG 2: treaties,
+#                               Grossratsbeschlüsse, oaths, one-sentence acts
+#                               -- real text with no article structure
+#   placeholder              3  GL 2 "In Revision", LU 1 "überholt"
+EMPTY_REASONS = ("annex_only", "published_by_reference", "placeholder", "unstructured_text")
+
+# The by-reference vocabulary of six hosts. AG "wird durch Verweisung
+# publiziert" / "in der AGS und SAR nicht publiziert"; BE de "in der Form
+# eines (Sammel)verweises veröffentlicht", BE fr "sous la forme d'un renvoi";
+# BL "wird in der Gesetzessammlung nicht publiziert"; NW "nicht im Volltext
+# veröffentlicht" / "durch Verweis"; UR "durch Verweis veröffentlicht; er
+# wird nicht ins Rechtsbuch aufgenommen"; ZG "nur noch über die
+# interkantonale Publikationsplattform Intlex publiziert".
+_BY_REFERENCE = re.compile(
+    r"durch Verweis(?:ung)?\b|in der Form eines (?:Sammel)?verweises|sous la forme d[’']un renvoi"
+    r"|nicht im Volltext veröffentlicht|in der Gesetzessammlung nicht publiziert"
+    r"|nicht ins Rechtsbuch aufgenommen|Publikationsplattform Intlex|in der AGS und SAR nicht publiziert",
+    re.IGNORECASE)
+# GL "In Revision" (2), LU "Dieser Beschluss ist überholt, formell aber noch
+# in Kraft" (1): an entry with no text at all, not even a pointer.
+_PLACEHOLDER = re.compile(r"\bIn Revision\b|\büberholt\b", re.IGNORECASE)
+
+
+def empty_reason(payload: dict, lang: str, text: str) -> str:
+    """Why parse_edition() found no article: one of EMPTY_REASONS. Meant for
+    the stage's report, not for a column -- the edition is stored honestly
+    (0 articles, its text as full_text) whatever the reason.
+
+    The annex list is checked first and structurally: it is the one signal
+    that does not depend on a host's wording, and no by-reference edition
+    ships an annex (0 of 77). `text` is the full text parse_edition()
+    returned, so the header's notice and the footer's are both read."""
+    if _selected(payload).get("annex_documents"):
+        return "annex_only"
+    if _BY_REFERENCE.search(text):
+        return "published_by_reference"
+    if _PLACEHOLDER.search(text):
+        return "placeholder"
+    return "unstructured_text"
 
 
 def _action(text: str) -> str | None:
