@@ -3,6 +3,7 @@ tests/fixtures/lexwork_be_101_1_v3020.json is show_as_json of version 3020
 (in force 03.03.2024 to 31.12.2025) cut to the first title's first eight
 articles, with the whole modification table and history map kept."""
 import datetime
+import html
 import json
 import pathlib
 
@@ -49,9 +50,70 @@ def test_a_version_string_without_a_decision_date_still_parses():
 
 def test_unrecognised_date_string_raises_rather_than_defaulting():
     with pytest.raises(lexwork.LexworkParseError):
-        lexwork.parse_version_dates("Version en vigueur du 03.03.2024")
+        lexwork.parse_version_dates("Erstfassung vom 06.06.1993")
     with pytest.raises(lexwork.LexworkParseError):
         lexwork.parse_version_dates("")
+
+
+def test_a_correction_date_is_ignored_and_a_range_without_end_parses():
+    # GR 110.100, seen live 2026-08-26
+    d = lexwork.parse_version_dates(
+        "Version in Kraft von: 01.01.2017 (wurde formlos berichtigt am: 06.12.2016) "
+        "(Beschlussdatum: 23.09.2012)")
+    assert d == lexwork.VersionDates(datetime.date(2017, 1, 1), None, datetime.date(2012, 9, 23))
+
+
+def test_french_and_italian_version_strings_parse():
+    d = lexwork.parse_version_dates(
+        "Version en vigueur du 03.03.2024 au 31.12.2025 (Date de la décision: 03.03.2024)")
+    assert d == lexwork.VersionDates(datetime.date(2024, 3, 3), datetime.date(2025, 12, 31),
+                                     datetime.date(2024, 3, 3))
+    d = lexwork.parse_version_dates("Versione attuale in vigore dal: 01.01.2020 (Data della decisione: 02.02.2019)")
+    assert d.date_applicability == datetime.date(2020, 1, 1) and d.date_decision == datetime.date(2019, 2, 2)
+
+
+@pytest.mark.parametrize("headers", [
+    # FR fr (seen live): decision first, element, change type, effective, source
+    ("Adoption", "El&eacute;ment touch&eacute;", "Type de modification", "Entr&eacute;e en vigueur", "Source (ROF depuis 2002)"),
+    # FR de
+    ("Beschluss", "Ber&uuml;hrtes Element", "&Auml;nderungstyp", "Inkrafttreten", "Quelle (ASF seit 2002)"),
+    # GR rm / it, ZG de
+    ("Conclus", "Entrada en vigur", "Element", "Modificaziun", "Publicaziun en la CUL"),
+    ("Decisione", "Entrata in vigore", "Elemento", "Cambiamento", "Rimando AGS"),
+    ("Beschluss", "Inkrafttreten", "Element", "&Auml;nderung", "GS Fundstelle"),
+    # SG (seen live): by provision, then by decision date
+    ("Bestimmung", "&Auml;nderungstyp", "nGS-Fundstelle", "Erlassdatum", "Vollzugsbeginn"),
+    ("Erlassdatum", "Vollzugsbeginn", "Bestimmung", "&Auml;nderungstyp", "nGS-Fundstelle"),
+    # BL (seen live)
+    ("Beschlussdatum", "Inkraft seit", "Element", "Wirkung", "Publiziert mit"),
+    ("Element", "Beschlussdatum", "Inkraft seit", "Wirkung", "Publiziert mit"),
+])
+def test_modification_table_headers_of_every_host_language_are_recognised(payload, headers):
+    articles, _ = lexwork.parse_edition(payload, "de")
+    def role(header: str) -> str:
+        low = html.unescape(header).lower()
+        if any(w in low for w in ("adoption", "beschluss", "conclus", "decisione", "erlassdatum")):
+            return "d"
+        if any(w in low for w in ("vig", "inkraft", "vollzug")):
+            return "e"
+        if any(w in low for w in ("lement", "lément", "elemento", "bestimmung")):
+            return "x"
+        if any(w in low for w in ("wirkung", "nderung", "modific", "cambia")):
+            return "c"
+        return "s"
+    cells = {"d": "01.01.2000", "e": "01.02.2000", "x": "Art. 2", "c": "geändert", "s": "00-1"}
+    roles = [role(h) for h in headers]
+    ths = "".join(f"<th>{h}</th>" for h in headers)
+    tds = "".join(f"<td>{cells[r]}</td>" for r in roles)
+    sv = payload["text_of_law"]["selected_version"]
+    sv["json_content"]["modification_table"] = [{"uid": "mt-0", "type": "date", "html_content": {
+        "de": f"<table><tr>{ths}</tr><tr class='history_info_1'>{tds}</tr></table>"}}]
+    rows = lexwork.provenance(payload, "de", articles)
+    assert len(rows) == 1
+    assert rows[0].e_id == "t-0--t-1--a-2"
+    assert rows[0].source_act_date == datetime.date(2000, 1, 1)
+    assert rows[0].effective_date == datetime.date(2000, 2, 1)
+    assert rows[0].as_reference == "00-1"
 
 
 # --- the document tree ----------------------------------------------------
@@ -202,6 +264,51 @@ def test_provenance_reads_the_by_article_column_order_too(payload):
     assert rows[0].action == "inserted"
 
 
+def test_valais_french_version_strings_parse():
+    # VS 414.1, seen live 2026-08-26: apostrophe label, a correction date to ignore
+    d = lexwork.parse_version_dates(
+        "Version en vigueur depuis le: 01.01.2014 (modifié sans procédure formelle le:  12.08.2017) "
+        "(Date d'adoption: 22.03.2012)")
+    assert d == lexwork.VersionDates(datetime.date(2014, 1, 1), None, datetime.date(2012, 3, 22))
+    d = lexwork.parse_version_dates("Version actuelle en vigueur depuis: 01.01.2014 (Date d'adoption: 22.03.2012)")
+    assert d.date_applicability == datetime.date(2014, 1, 1)
+
+
+def test_romansh_and_italian_change_words_and_dashed_dates(payload):
+    articles, _ = lexwork.parse_edition(payload, "de")
+    sv = payload["text_of_law"]["selected_version"]
+    sv["json_content"]["modification_table"] = [{"uid": "mt-0", "type": "date", "html_content": {"de": (
+        "<table><tr><th>Conclus</th><th>Entrada en vigur</th><th>Element</th><th>Modificaziun</th>"
+        "<th>Publicaziun en la CUL</th></tr>"
+        "<tr class='history_info_1'><td>27-11-2022</td><td>01-01-2023</td><td>Art. 2</td><td>integraziun</td><td>-</td></tr>"
+        "<tr class='history_info_2'><td>27-11-2022</td><td>01-01-2023</td><td>Art. 3</td><td>aboliziun</td><td>-</td></tr>"
+        "<tr class='history_info_3'><td>27.11.2022</td><td>01.01.2023</td><td>Art. 4</td><td>introduzione</td><td>-</td></tr>"
+        "<tr class='history_info_4'><td>27.11.2022</td><td>01.01.2023</td><td>Art. 5</td><td>abrogazione</td><td>-</td></tr>"
+        "<tr class='history_info_5'><td>27.11.2022</td><td>01.01.2023</td><td>Art. 6</td><td>modifica</td><td>-</td></tr>"
+        "<tr class='history_info_6'><td>31.01.1894</td><td>28.07.1894</td><td>§ 38</td><td>unbekannt</td><td>GS 10, 287</td></tr>"
+        "</table>")}}]
+    rows = lexwork.provenance(payload, "de", articles)
+    assert [r.action for r in rows] == ["inserted", "repealed", "inserted", "repealed", "amended", None]
+    assert rows[0].source_act_date == datetime.date(2022, 11, 27)
+    assert rows[0].effective_date == datetime.date(2023, 1, 1)
+    assert rows[0].as_reference is None, "a bare dash is not a reference"
+    assert rows[5].as_reference == "GS 10, 287"
+
+
+def test_uri_writes_artikel_and_basel_writes_paragraphs(payload):
+    articles, _ = lexwork.parse_edition(payload, "de")
+    sv = payload["text_of_law"]["selected_version"]
+    sv["json_content"]["modification_table"] = [{"uid": "mt-0", "type": "date", "html_content": {"de": (
+        "<table><tr><th>Beschluss</th><th>Inkrafttreten</th><th>Element</th><th>Änderung</th><th>CRS Fundstelle</th></tr>"
+        "<tr class='history_info_1'><td>05.03.1989</td><td>05.03.1989</td><td>Artikel 2 Abs. 1</td><td>geändert</td><td>AB 23.12.1988</td></tr>"
+        "<tr class='history_info_2'><td>21.03.1988</td><td>01.11.1989</td><td>§ 3 Abs. 3</td><td>eingefügt</td><td>GS 30.92</td></tr>"
+        "<tr class='history_info_3'><td>21.03.1988</td><td>01.11.1989</td><td>Gliederungstitel 2.1.</td><td>geändert</td><td>33–106</td></tr>"
+        "</table>")}}]
+    rows = lexwork.provenance(payload, "de", articles)
+    assert [r.e_id for r in rows] == ["t-0--t-1--a-2", "t-0--t-1--a-3", "t-0"]
+    assert rows[2].anchor_level == "container"
+
+
 def test_a_french_table_uses_french_verbs(payload):
     articles, _ = lexwork.parse_edition(payload, "fr")
     sv = payload["text_of_law"]["selected_version"]
@@ -214,6 +321,18 @@ def test_a_french_table_uses_french_verbs(payload):
             "<td>Art. 3 al. 1</td><td>modifié</td><td>00-1</td></tr></table>")}}]
     rows = lexwork.provenance(payload, "fr", articles)
     assert rows[0].action == "amended" and rows[0].e_id == "t-0--t-1--a-3"
+
+
+def test_modification_table_status_names_the_three_cases(payload):
+    assert lexwork.modification_table_status(payload, "de") == "recognised"
+    sv = payload["text_of_law"]["selected_version"]
+    sv["json_content"]["modification_table"] = [{"uid": "mt-0", "type": "date", "html_content": {"de":
+        "<table><tr><th>Datum</th><th>Was</th><th>Wo</th></tr><tr class='history_info_1'>"
+        "<td>01.01.2000</td><td>x</td><td>y</td></tr></table>"}}]
+    assert lexwork.modification_table_status(payload, "de") == "unrecognised"
+    assert lexwork.provenance(payload, "de", []) == []
+    sv["json_content"]["modification_table"] = []
+    assert lexwork.modification_table_status(payload, "de") == "none"
 
 
 def test_no_modification_table_means_no_rows(payload):

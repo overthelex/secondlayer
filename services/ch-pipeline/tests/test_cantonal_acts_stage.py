@@ -82,7 +82,7 @@ class Host:
                 payload = _detail(sysnr, lang)
                 if self.bad_date and sysnr == "101.1":
                     payload["text_of_law"]["old_versions"][0]["version_dates_str"] = \
-                        "Version en vigueur du 03.03.2024"
+                        "Fassung ohne Datum"
                 return httpx.Response(200, json=payload)
         return httpx.Response(404, text=f"unmocked {path}")
 
@@ -174,7 +174,7 @@ def test_only_restricts_the_walk(conn, settings, host):
 def test_an_unparseable_version_date_is_counted_and_the_version_skipped(conn, settings):
     report = _run(settings, Host(bad_date=True))
     assert report.dates_unparsed == 1
-    assert "Version en vigueur" in report.dates_unparsed_samples[0]
+    assert "Fassung ohne Datum" in report.dates_unparsed_samples[0]
     assert report.versions == 16, "18 minus the skipped version in two languages"
     assert report.acts == 3, "the act itself and its other versions are still written"
 

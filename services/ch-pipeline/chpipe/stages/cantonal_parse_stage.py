@@ -43,6 +43,10 @@ class ParseReport:
     empty: int = 0
     failed: int = 0
     lang_not_in_payload: int = 0
+    # A modification table whose header vocabulary lexwork.py does not know:
+    # the version parsed fine but its amendment history was NOT read. Zero
+    # is the only acceptable steady state; each host has its own words.
+    tables_unrecognised: int = 0
     provenance_rows: int = 0
     provenance_linked: int = 0
     # (act_id, lang) of every edition promoted to 'parsed' -- what the
@@ -125,6 +129,10 @@ def run(settings: Settings, canton_code: str | None = None,
                                         settings.max_attempts)
                         report.failed += 1
                         continue
+                    if lexwork.modification_table_status(payload, row["lang"]) == "unrecognised":
+                        report.tables_unrecognised += 1
+                        log.warning("version %s: modification table header not recognised; "
+                                    "no provenance written", row["version_id"])
                     provenance = lexwork.provenance(payload, row["lang"], articles)
                     by_source_id = change_document_ids(conn, row["act_id"])
                     with conn.transaction():
@@ -152,10 +160,10 @@ def run(settings: Settings, canton_code: str | None = None,
             if remaining is not None:
                 remaining -= len(rows)
             log.info("cantonal parsed=%d articles=%d empty=%d failed=%d "
-                     "lang_not_in_payload=%d provenance=%d linked=%d",
+                     "lang_not_in_payload=%d tables_unrecognised=%d provenance=%d linked=%d",
                      report.parsed, report.articles, report.empty, report.failed,
-                     report.lang_not_in_payload, report.provenance_rows,
-                     report.provenance_linked)
+                     report.lang_not_in_payload, report.tables_unrecognised,
+                     report.provenance_rows, report.provenance_linked)
     finally:
         conn.close()
     return report
@@ -175,6 +183,10 @@ def main() -> ParseReport:
              "provenance=%d linked=%d", result.parsed, result.articles, result.empty,
              result.failed, result.lang_not_in_payload, result.provenance_rows,
              result.provenance_linked)
+    if result.tables_unrecognised:
+        log.warning("TABLES UNRECOGNISED: %d version(s) parsed without provenance because "
+                    "their modification table's headers are unknown to lexwork.py; look at "
+                    "the host's vocabulary", result.tables_unrecognised)
     if result.lang_not_in_payload:
         log.warning("LANG NOT IN PAYLOAD: %d row(s) failed because the version does not "
                     "exist in the language cantons.py expects; check the canton's langs",

@@ -35,29 +35,44 @@ from lxml import html as lxml_html
 from . import akn
 
 _WS = re.compile(r"\s+")
-_DATE = r"(\d{2})\.(\d{2})\.(\d{4})"
-_DECISION = (r"(?:\s*\((?:Beschlussdatum|Date de la décision|Date de décision|"
-             r"Data della decisione|Data da la decisiun)[^:]*:\s*" + _DATE + r"\))?")
-_CURRENT = re.compile(
-    r"^\s*(?:Aktuelle Version|Version actuelle|Versione attuale|Versiun actuala)"
-    r"[^\d]*?(?:seit|depuis le|depuis|dal|dals?)\s*:?\s*" + _DATE + _DECISION)
-_RANGE = re.compile(
-    r"^\s*(?:Version|Versione|Versiun)[^\d]*?(?:von|du|dal|dals?)\s*:?\s*" + _DATE
-    + r"\s*(?:bis|au|al|fin a)\s*:?\s*" + _DATE + _DECISION)
-_FUTURE = re.compile(
-    r"^\s*(?:Zukünftige Version|Version future|Versione futura|Versiun futura)"
-    r"[^\d]*?(?:ab|dès le|dès|dal|a partir dals?)\s*:?\s*" + _DATE + _DECISION)
+# dd.mm.yyyy everywhere except GR's Romansh table, which writes dd-mm-yyyy
+_DATE = r"(\d{2})[.\-/](\d{2})[.\-/](\d{4})"
+
+# Every labelled date in a Lexwork version string, in any of the four UI
+# languages. The strings are assembled from parts and vary more than a
+# fixed grammar admits ("Version in Kraft von: 01.01.2017 (wurde formlos
+# berichtigt am: 06.12.2016) (Beschlussdatum: 23.09.2012)" on GR has a
+# range start, no end, and two parenthesised dates), so the parser reads
+# label:date pairs and classifies the LABEL rather than matching the whole
+# sentence. Unknown labels (a correction date) are ignored; a string with no
+# start label raises.
+_LABELLED_DATE = re.compile(r"([A-Za-zÀ-ÿ' ]+?)\s*:?\s*" + _DATE)
+_START_LABELS = re.compile(
+    r"(?:\bvon|\bseit|\bab|\bdu|\bdepuis(?: le)?|\bdès(?: le)?|\bdal|\bdals?|\ba partir dals?)\s*$",
+    re.IGNORECASE)
+_END_LABELS = re.compile(r"(?:\bbis|\bau|\bal|\bfin a|\bjusqu'au)\s*$", re.IGNORECASE)
+_DECISION_LABELS = re.compile(
+    r"(?:beschlussdatum|date de (?:la )?décision|date d'adoption|data della decisione|"
+    r"data da la decisiun|data d'adopziun)\s*$",
+    re.IGNORECASE)
 
 # "Art. 61 Abs. 2" / "art. 12a al. 1" / "§ 7" -> the article's number
-_ELEMENT_ARTICLE = re.compile(r"(?:\bArt\.?|\bArticle|\bArticolo|\bArtitgel|§)\s*(\d+[a-zA-Z]*)")
+# "Art. 61 Abs. 2" / "Artikel 17 Abs. 1" (UR) / "art. 12a al. 1" / "§ 7" (BL, ZG) -> the article number
+_ELEMENT_ARTICLE = re.compile(r"(?:\bArtikel|\bArticle|\bArticolo|\bArtitgel|\bArt\.?|§)\s*(\d+[a-zA-Z]*)")
 
+# Change-cell vocabulary, measured on GR 110.100 (de/rm/it, 87 rows each,
+# 2026-08-26) and FR 10.1 (de/fr): de geändert/eingefügt/aufgehoben (+ "Titel
+# geändert"), fr modifié/introduit/abrogé, it modifica/introduzione/abrogazione,
+# rm midada/integraziun/aboliziun. "Erstfassung" / "unbekannt" (ZG) map to None.
 _ACTIONS = (
     ("inserted", re.compile(
-        r"\b(?:eingefügt|introduit[es]?|introdott[oaie]|inserì|integrà|integrada)\b", re.IGNORECASE)),
+        r"\b(?:eingefügt|introduit[es]?|introdott[oaie]|introduzione|inserì|integraziun|integrà|integrada)\b",
+        re.IGNORECASE)),
     ("repealed", re.compile(
-        r"\b(?:aufgehoben|abrogé[es]?|abrogat[oaie]|abolì|abolida)\b", re.IGNORECASE)),
+        r"\b(?:aufgehoben|abrogé[es]?|abrogat[oaie]|abrogazione|aboliziun|abolì|abolida)\b",
+        re.IGNORECASE)),
     ("amended", re.compile(
-        r"\b(?:geändert|modifié[es]?|modificat[oaie]|midà|midada)\b", re.IGNORECASE)),
+        r"\b(?:geändert|modifié[es]?|modifica|modificat[oaie]|midà|midada)\b", re.IGNORECASE)),
 )
 
 _HISTORY_ROW = re.compile(r"history_info_(\d+)")
@@ -66,11 +81,23 @@ _HISTORY_ROW = re.compile(r"history_info_(\d+)")
 # the "by decision" and "by article" tables (same rows, different column
 # order) read the same way.
 _HEADERS = (
-    ("decision", re.compile(r"beschluss|décision|decisione|decisiun", re.IGNORECASE)),
-    ("effective", re.compile(r"inkrafttreten|vigueur|vigore|vigur", re.IGNORECASE)),
-    ("element", re.compile(r"el[ée]ment|elemento", re.IGNORECASE)),
-    ("change", re.compile(r"änderung|modification|modifica|midada", re.IGNORECASE)),
-    ("source", re.compile(r"fundstelle|référence|riferimento|source|publikation|pubblicazione", re.IGNORECASE)),
+    # observed: BE/ZG "Beschluss", FR de "Beschluss" / fr "Adoption", GR rm "Conclus", it "Decisione",
+    # SG "Erlassdatum"
+    ("decision", re.compile(r"beschluss|erlassdatum|adoption|décision|decisione|conclus|decisiun",
+                            re.IGNORECASE)),
+    # "Inkrafttreten", "Vollzugsbeginn" (SG), "Entrée en vigueur", "Entrata in vigore", "Entrada en vigur"
+    # + BL "Inkraft seit"
+    ("effective", re.compile(r"inkraft|vollzugsbeginn|vigueur|vigore|vigur", re.IGNORECASE)),
+    # "Element", "Berührtes Element", "Bestimmung" (SG), "Elément touché", "Elemento"
+    ("element", re.compile(r"el[ée]ment|elemento|bestimmung|disposition|disposizione", re.IGNORECASE)),
+    # "Änderung", "Änderungstyp", "Type de modification", "Cambiamento", "Modificaziun"
+    # + BL "Wirkung"
+    ("change", re.compile(r"änderung|wirkung|modification|modifica|cambiamento|midada", re.IGNORECASE)),
+    # "BAG-Fundstelle", "GS Fundstelle", "nGS-Fundstelle", "Quelle (ASF seit 2002)", "Source (ROF)",
+    # "Rimando AGS", "Publicaziun en la CUL"
+    # + BL "Publiziert mit"
+    ("source", re.compile(r"fundstelle|quelle|source|référence|riferimento|rimando|fonte|"
+                          r"publikation|publiziert|publicaziun|pubblicazione", re.IGNORECASE)),
 )
 
 
@@ -115,17 +142,23 @@ def _opt(groups: tuple, start: int) -> datetime.date | None:
 
 
 def parse_version_dates(text: str) -> VersionDates:
-    """The three shapes Lexwork's UI writes: a closed range (an old version),
-    a current version ("seit"), a future one ("ab"). Anything else raises."""
-    m = _RANGE.match(text or "")
-    if m:
-        g = m.groups()
-        return VersionDates(_d(*g[0:3]), _d(*g[3:6]), _opt(g, 6))
-    m = _CURRENT.match(text or "") or _FUTURE.match(text or "")
-    if m:
-        g = m.groups()
-        return VersionDates(_d(*g[0:3]), None, _opt(g, 3))
-    raise LexworkParseError(f"unrecognised version date string: {text!r}")
+    """The dates a Lexwork version string carries: start ("von"/"seit"/"ab"
+    and the fr/it/rm equivalents), optional inclusive end ("bis"), optional
+    decision date. Anything without a start date raises."""
+    start = end = decision = None
+    for m in _LABELLED_DATE.finditer(text or ""):
+        label = m.group(1).strip()
+        date = _d(*m.groups()[1:4])
+        if _DECISION_LABELS.search(label):
+            decision = decision or date
+        elif _END_LABELS.search(label):
+            end = end or date
+        elif _START_LABELS.search(label):
+            start = start or date
+        # any other label (a correction date, "wurde formlos berichtigt am") is ignored
+    if start is None:
+        raise LexworkParseError(f"unrecognised version date string: {text!r}")
+    return VersionDates(start, end, decision)
 
 
 def _selected(payload: dict) -> dict:
@@ -301,6 +334,29 @@ def _column_roles(table) -> dict[str, int] | None:
     return None
 
 
+def modification_table_status(payload: dict, lang: str) -> str:
+    """'none' (the version ships no table), 'recognised' (its header row maps
+    to the four required columns), or 'unrecognised' (a table whose header
+    vocabulary this module does not know -- a host to look at, since
+    provenance() silently yields nothing for it). SG's "Bestimmung /
+    Erlassdatum / Vollzugsbeginn" was found exactly this way."""
+    sv = _selected(payload)
+    tables = sv.get("json_content", {}).get("modification_table") or []
+    fragment = None
+    for table in tables:
+        fragment = (_lang(table.get("html_content"), lang)
+                    or _lang(table.get("html_content"), "de"))
+        if fragment:
+            break
+    if not fragment:
+        return "none"
+    root = lxml_html.fragment_fromstring(fragment, create_parent="div")
+    for html_table in root.iter("table"):
+        if _column_roles(html_table):
+            return "recognised"
+    return "unrecognised"
+
+
 def provenance(payload: dict, lang: str,
                articles: list[akn.Article]) -> list[Provenance]:
     """Rows of the version's FIRST modification table (Lexwork ships the
@@ -341,6 +397,8 @@ def provenance(payload: dict, lang: str,
             element = cells[roles["element"]]
             change = cells[roles["change"]]
             source = cells[roles["source"]] if "source" in roles else ""
+            if source.strip("-\u2013\u2014 ") == "":     # GR writes "-" for "no reference"
+                source = ""
             m = _HISTORY_ROW.search(tr.get("class") or "")
             change_doc = None
             if m and m.group(1) in history:

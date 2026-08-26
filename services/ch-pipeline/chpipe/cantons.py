@@ -57,7 +57,7 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lw("SH", "rechtsbuch.sh.ch", ("de",), 17),
     _lw("SO", "bgs.so.ch", ("de",), 18),
     _lf("SZ", 19),
-    _lw("TG", "rechtsbuch.tg.ch", ("de",), 20),
+    _lw("TG", "www.rechtsbuch.tg.ch", ("de",), 20),   # bare rechtsbuch.tg.ch does not resolve
     _lf("TI", 21),
     _lw("UR", "rechtsbuch.ur.ch", ("de",), 22),
     _lf("VD", 23),
