@@ -514,12 +514,19 @@ describe('extractChEvidence', () => {
       expect(doc.metadata?.bankruptcy).toBe(false);
     });
 
-    it('flags a bankrupt company in the title', () => {
+    it('notes SHAB KK publications in the details, never as a verdict in the title', () => {
+      // Rubric KK is the debt-collection and bankruptcy rubric as a whole: KK07 is a
+      // REVOCATION of bankruptcy, KK09 a closure. "has KK publications" is a fact; "is
+      // bankrupt" is a conclusion the panel is not entitled to draw for the reader.
       const result = extractChEvidence('ch_search_companies', {
         results: [{ ...ZEFIX_ROW, bankruptcy: true }],
       });
-      expect(result.documents[0].title).toBe('[БАНКРУТСТВО] Muster Handels AG (CHE-123.456.789)');
-      expect(result.documents[0].metadata?.bankruptcy).toBe(true);
+
+      const doc = result.documents[0];
+      expect(doc.title).toBe('Muster Handels AG (CHE-123.456.789)');
+      expect(doc.title).not.toContain('БАНКРУТСТВО');
+      expect(doc.metadata?.snippet).toContain('SHAB KK');
+      expect(doc.metadata?.bankruptcy).toBe(true);
     });
 
     it('labels an inactive company in Ukrainian', () => {
@@ -587,7 +594,7 @@ describe('extractChEvidence', () => {
 
       expect(result.documents).toHaveLength(1);
       const doc = result.documents[0];
-      expect(doc.title).toBe('[БАНКРУТСТВО] Muster Handels AG (CHE-123.456.789)');
+      expect(doc.title).toBe('Muster Handels AG (CHE-123.456.789)');
       expect(doc.metadata?.subtitle).toBe('Aktiengesellschaft · Zürich · ZH · у реєстрі');
       expect(doc.metadata?.body).toBe('Handel mit Waren aller Art.');
       expect(doc.metadata?.finma_count).toBe(1);
@@ -595,6 +602,9 @@ describe('extractChEvidence', () => {
       expect(doc.metadata?.kantonsblatt_count).toBe(1);
       expect(doc.metadata?.bankruptcy_count).toBe(1);
       expect(doc.metadata?.register_hits).toContain('SECO (санкції): 1');
+      // Counted and named by rubric, not asserted as an outcome.
+      expect(doc.metadata?.register_hits).toContain('SHAB KK');
+      expect(doc.metadata?.register_hits).not.toContain('БАНКРУТСТВО');
       expect(doc.metadata?.snippet).toContain('FINMA: 1');
       expect(doc.metadata?.snippet).toContain('Публікацій SHAB: 2');
       // The heuristic-match caveat must survive into the panel, not be dropped.

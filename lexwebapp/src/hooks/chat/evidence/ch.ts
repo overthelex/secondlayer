@@ -23,9 +23,12 @@ const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
 const UNKNOWN_DATE_LABEL = 'Дата невідома (джерело)';
 const COMPANY_BODY_CHARS = 300;
-// Prefixes the title of a company with an open bankruptcy publication (SHAB rubric KK) —
-// the single fact a due-diligence reader must not have to scroll for.
-const BANKRUPTCY_FLAG = '[БАНКРУТСТВО] ';
+// Notes that the company has publications in SHAB rubric KK — debt collection and
+// bankruptcy. Deliberately NOT a verdict and deliberately not in the title: the rubric
+// covers the whole proceeding, KK07 (Widerruf) is a REVOCATION of a bankruptcy and KK09
+// its closure, so "has KK publications" is the fact and "is bankrupt" is a conclusion the
+// panel is not entitled to draw for the reader. The card's own rows say which it is.
+const SHAB_KK_NOTE = 'Є публікації SHAB KK (стягнення/банкрутство)';
 
 const CH_COMPANY_STATUS_LABELS: Record<string, string> = {
   active: 'у реєстрі',
@@ -225,9 +228,10 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
  * `title` is "Name (UID)"; a SHAB-only company (struck off the register, so no Zefix row
  * and possibly no UID) keeps its name and is labelled by `source`. `subtitle` is the
  * one-line identity — legal form · seat · canton · status — and `snippet` is what the
- * panel actually renders, so it carries the subtitle followed by the body.
+ * panel actually renders, so it carries the subtitle, the SHAB counts, the KK note when
+ * there is one, and then the body.
  */
-function companyToDocument(row: ToolResultData, body: string, bankruptcy: boolean): VaultDocument {
+function companyToDocument(row: ToolResultData, body: string, hasKkPublications: boolean): VaultDocument {
   const uid = row.uid ? String(row.uid) : '';
   const name = row.name ? String(row.name) : 'Компанія';
   const statusLabel = row.status ? (CH_COMPANY_STATUS_LABELS[String(row.status)] || String(row.status)) : '';
@@ -245,17 +249,18 @@ function companyToDocument(row: ToolResultData, body: string, bankruptcy: boolea
 
   return {
     id: `ch-company-${uid || name}`,
-    title: `${bankruptcy ? BANKRUPTCY_FLAG : ''}${name}${uid ? ` (${uid})` : ''}`,
+    title: `${name}${uid ? ` (${uid})` : ''}`,
     type: 'other',
     metadata: {
       subtitle,
       body,
-      snippet: [subtitle, shabLine, body].filter(Boolean).join(' \u2022 '),
+      snippet: [subtitle, shabLine, hasKkPublications ? SHAB_KK_NOTE : undefined, body]
+        .filter(Boolean).join(' \u2022 '),
       uid: uid || undefined,
       canton: row.canton ?? undefined,
       status: row.status ?? undefined,
       source: row.source ?? undefined,
-      bankruptcy,
+      bankruptcy: hasKkPublications,
     },
   };
 }
@@ -289,7 +294,7 @@ function chCompanyCardDocument(parsed: ToolResultData): VaultDocument {
   );
 
   const registerHits = [
-    bankruptcies.length > 0 ? `Банкрутство (SHAB KK): ${bankruptcies.length}` : undefined,
+    bankruptcies.length > 0 ? `Публікації SHAB KK (стягнення/банкрутство): ${bankruptcies.length}` : undefined,
     finma.length > 0 ? `FINMA: ${finma.length}` : undefined,
     seco.length > 0 ? `SECO (санкції): ${seco.length}` : undefined,
     kantonsblatt.length > 0 ? `Кантональні відомості: ${kantonsblatt.length}` : undefined,
