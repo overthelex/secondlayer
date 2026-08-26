@@ -1252,7 +1252,16 @@ Failure reasons worth knowing: `language 'x' not in payload` means
 reason, not a bug in the version); `dates_unparsed` in `cantonal-acts`
 means a version date string the parser has not seen (fix the regex, the
 version was skipped, never defaulted); `not_on_host` is a LexFind number
-the host answers 404 to.
+the host answers 404 to (BE: 288 old abrogated acts the host dropped, LexFind
+keeps them as PDFs); `pdf_only` in `cantonal-fetch` is a version the host
+holds only as a PDF (retired at once, reason in `last_error`); and
+`tables_unrecognised` in `cantonal-parse` is a modification table whose
+header vocabulary `lexwork.py` does not know yet: the edition parsed, its
+amendment history did not, add the host's words to `_HEADERS`.
+
+Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
+average payload, sibling languages share one download), parse ~1.6K rows/min,
+narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
 Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
 or their own portals; the registry already holds their acts and versions.
