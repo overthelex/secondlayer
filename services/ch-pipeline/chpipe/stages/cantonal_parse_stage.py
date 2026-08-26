@@ -41,6 +41,12 @@ class ParseReport:
     parsed: int = 0
     articles: int = 0
     empty: int = 0
+    # empty, split by lexwork.empty_reason(): annex_only / published_by_
+    # reference / placeholder / unstructured_text. 235 editions on prod sat
+    # at article_count 0 for two days as one opaque number before this was
+    # measured (LEXAI-2019); the split is what tells an operator whether a
+    # new zero is a host publishing pointers (fine) or a parser miss (not).
+    empty_by_reason: dict[str, int] = field(default_factory=dict)
     failed: int = 0
     lang_not_in_payload: int = 0
     # A modification table whose header vocabulary lexwork.py does not know:
@@ -88,6 +94,14 @@ def store_provenance(conn, version_id: int, rows: list[lexwork.Provenance],
                 row.effective_date, row.source_act_date, row.raw_note,
                 row.anchor_level, row.container_articles, change_document_id))
     return len(rows), linked
+
+
+def _reasons(report: ParseReport) -> str:
+    """' (annex_only=3 unstructured_text=1)' or '' -- the empty count's split,
+    for the log line."""
+    if not report.empty_by_reason:
+        return ""
+    return " (" + " ".join(f"{k}={v}" for k, v in sorted(report.empty_by_reason.items())) + ")"
 
 
 def run(settings: Settings, canton_code: str | None = None,
@@ -157,11 +171,15 @@ def run(settings: Settings, canton_code: str | None = None,
                 report.provenance_linked += linked
                 if not articles:
                     report.empty += 1
+                    reason = lexwork.empty_reason(payload, row["lang"], text)
+                    report.empty_by_reason[reason] = report.empty_by_reason.get(reason, 0) + 1
+                    log.info("version %s: no articles (%s)", row["version_id"], reason)
             if remaining is not None:
                 remaining -= len(rows)
-            log.info("cantonal parsed=%d articles=%d empty=%d failed=%d "
+            log.info("cantonal parsed=%d articles=%d empty=%d%s failed=%d "
                      "lang_not_in_payload=%d tables_unrecognised=%d provenance=%d linked=%d",
-                     report.parsed, report.articles, report.empty, report.failed,
+                     report.parsed, report.articles, report.empty,
+                     _reasons(report), report.failed,
                      report.lang_not_in_payload, report.tables_unrecognised,
                      report.provenance_rows, report.provenance_linked)
     finally:
@@ -179,10 +197,10 @@ def main() -> ParseReport:
     result = run(Settings.from_env(),
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
-    log.info("parsed=%d articles=%d empty=%d failed=%d lang_not_in_payload=%d "
+    log.info("parsed=%d articles=%d empty=%d%s failed=%d lang_not_in_payload=%d "
              "provenance=%d linked=%d", result.parsed, result.articles, result.empty,
-             result.failed, result.lang_not_in_payload, result.provenance_rows,
-             result.provenance_linked)
+             _reasons(result), result.failed, result.lang_not_in_payload,
+             result.provenance_rows, result.provenance_linked)
     if result.tables_unrecognised:
         log.warning("TABLES UNRECOGNISED: %d version(s) parsed without provenance because "
                     "their modification table's headers are unknown to lexwork.py; look at "
