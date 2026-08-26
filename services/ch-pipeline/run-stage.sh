@@ -5,13 +5,15 @@
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   registries:   ./run-stage.sh zefix   (no argument)
+#                 ./run-stage.sh shab-list [months]
 #
-# The optional second argument means different things to the two halves, so
-# it is dispatched explicitly rather than exported as both: for the decisions
+# The optional second argument means different things to each family, so it is
+# dispatched explicitly rather than exported as all three: for the decisions
 # stages -- `citations` included, same CHPIPE_SPIDER family -- it is a spider
-# name, for `diff` it is a language (CHPIPE_LANG, default de). `aliases` and
-# `citations-resolve` take no second argument at all, same as the legislation
-# stages below.
+# name, for `diff` it is a language (CHPIPE_LANG, default de), and for
+# `shab-list` it is a number of months to walk (CHPIPE_SHAB_MONTHS; unset
+# means the whole backfill). `aliases`, `citations-resolve` and `zefix` take no
+# second argument at all, same as the legislation stages below.
 set -euo pipefail
 
 STAGE="${1:?stage required}"
@@ -47,6 +49,14 @@ case "$STAGE" in
   diff|provenance)
     ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
+    ;;
+  shab-list)
+    # The registries' own family: the second argument is a number of months
+    # (delta mode), not a spider and not a language. Same fallback rule as the
+    # two families above -- a positional wins, and with none given
+    # CHPIPE_SHAB_MONTHS survives instead of being clobbered to "".
+    ARG="${POS:-${CHPIPE_SHAB_MONTHS:-}}"
+    export CHPIPE_SHAB_MONTHS="$ARG"
     ;;
   acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix)
     if [ -n "$POS" ]; then

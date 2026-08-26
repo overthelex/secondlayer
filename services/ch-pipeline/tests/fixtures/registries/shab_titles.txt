@@ -1,0 +1,80 @@
+# 70 real amtsblattportal.ch titles with the (company_name, seat) chpipe.shab.parse_title
+# must produce. Captured live 2026-08-26 with two requests:
+#   .../publications/xml?publicationStates=PUBLISHED&rubrics=HR
+#       &publicationDate.start=2026-08-01&publicationDate.end=2026-08-26
+#       &pageRequest.size=50&pageRequest.page=0     (total 18,764 -> 50 titles)
+#   ... the same with rubrics=KK and pageRequest.size=20   (total 3,963 -> 20 titles)
+# The title kept here is the one in the publication's OWN language, which is what
+# the stage stores; the expectations were checked by hand, line by line.
+# Columns, tab separated: rubric  sub_rubric  language  title  company_name  seat
+# An empty seat column means None: KK titles carry no seat at all.
+HR	HR02	de	Mutation Matterhorn Gotthard Verkehrs AG, Brig-Glis	Matterhorn Gotthard Verkehrs AG	Brig-Glis
+HR	HR02	de	Mutation Matterhorn Gotthard Infrastruktur AG, Brig-Glis	Matterhorn Gotthard Infrastruktur AG	Brig-Glis
+HR	HR02	fr	Mutation PMI Global Services Unit Sàrl, Lausanne	PMI Global Services Unit Sàrl	Lausanne
+HR	HR02	fr	Mutation SwissMeo SA, Neuchâtel, nouveau SwissMeo SA en liquidation	SwissMeo SA	Neuchâtel
+HR	HR02	fr	Mutation Cristal swiss tour Sàrl, Martigny, nouveau Saint-Gingolph	Cristal swiss tour Sàrl	Martigny
+HR	HR02	fr	Mutation Jerjen-Metal Sàrl, Sierre, nouveau Jerjen-Metal Sàrl en liquidation	Jerjen-Metal Sàrl	Sierre
+HR	HR02	fr	Mutation ABC des Philosophes Sàrl, Genève	ABC des Philosophes Sàrl	Genève
+HR	HR02	fr	Mutation Bauart Architectes et Urbanistes SA, Neuchâtel	Bauart Architectes et Urbanistes SA	Neuchâtel
+HR	HR02	fr	Mutation Horde SA, succursale de Sion, Sion	Horde SA, succursale de Sion	Sion
+HR	HR02	de	Mutation Venusstiftung, Murgenthal	Venusstiftung	Murgenthal
+HR	HR02	de	Mutation Tailorautomation GmbH, Au (SG), neu Tailorautomation AG, St. Margrethen	Tailorautomation GmbH	Au (SG)
+HR	HR02	de	Mutation KVA BidCo AG, St. Gallen	KVA BidCo AG	St. Gallen
+HR	HR02	de	Mutation Grisomed AG, Chur	Grisomed AG	Chur
+HR	HR02	de	Mutation Ring - Wohnungen Arosa AG, Arosa	Ring - Wohnungen Arosa AG	Arosa
+HR	HR02	de	Mutation Enderli AG, Uzwil	Enderli AG	Uzwil
+HR	HR02	de	Mutation Lifecare GmbH, Oberuzwil, neu Lifecare GmbH in Liquidation	Lifecare GmbH	Oberuzwil
+HR	HR02	de	Mutation HRS Human Resource Services WIRE Alpha GmbH, St. Gallen	HRS Human Resource Services WIRE Alpha GmbH	St. Gallen
+HR	HR02	it	Cambiamenti Y.N.X. CONSULTING SA, Silvaplana	Y.N.X. CONSULTING SA	Silvaplana
+HR	HR02	de	Mutation Coiffeur Wolhusen GmbH, Wolhusen, neu Weitsicht Group GmbH, Hünenberg	Coiffeur Wolhusen GmbH	Wolhusen
+HR	HR02	de	Mutation Euromarketing AG, Baar	Euromarketing AG	Baar
+HR	HR02	de	Mutation Lithium Argentina AG, Zug	Lithium Argentina AG	Zug
+HR	HR02	de	Mutation Festival Agency Holding AG, Hünenberg	Festival Agency Holding AG	Hünenberg
+HR	HR02	de	Mutation Panella Frischgebäck AG, Baar	Panella Frischgebäck AG	Baar
+HR	HR02	de	Mutation Elben AG, Steinhausen	Elben AG	Steinhausen
+HR	HR02	de	Mutation RBG Holding AG, Zug, neu Menzingen	RBG Holding AG	Zug
+HR	HR02	de	Mutation BaiAI AG in Liquidation, Baar	BaiAI AG in Liquidation	Baar
+HR	HR02	de	Mutation Stiftung für die Weiterbildung Zentralschweizer Internisten, Stans	Stiftung für die Weiterbildung Zentralschweizer Internisten	Stans
+HR	HR02	de	Mutation KK Sonnenschein Stiftung, Zürich	KK Sonnenschein Stiftung	Zürich
+HR	HR02	de	Mutation Kaiser Partner (Schweiz) AG, Zürich	Kaiser Partner (Schweiz) AG	Zürich
+HR	HR02	de	Mutation BESS Perlen AG, Root	BESS Perlen AG	Root
+HR	HR02	fr	Mutation Aura Vinea AG, Biel/Bienne	Aura Vinea AG	Biel/Bienne
+HR	HR02	de	Mutation AlpinAir Tandemflights GmbH, Leissigen	AlpinAir Tandemflights GmbH	Leissigen
+HR	HR02	de	Mutation lease it ag, Baden, neu Zürich	lease it ag	Baden
+HR	HR02	de	Mutation Raiffeisenbank Menznau-Wolhusen Genossenschaft, Menznau	Raiffeisenbank Menznau-Wolhusen Genossenschaft	Menznau
+HR	HR02	de	Mutation Hälg & Co. AG, Zweigniederlassung Ebikon, Ebikon	Hälg & Co. AG, Zweigniederlassung Ebikon	Ebikon
+HR	HR02	de	Mutation Helion maler Yilmaz, Wallisellen	Helion maler Yilmaz	Wallisellen
+HR	HR02	de	Mutation katena GmbH, Weiningen (ZH), neu Dällikon	katena GmbH	Weiningen (ZH)
+HR	HR02	de	Mutation Jucker Holding AG, Uster, neu Grünthal AG	Jucker Holding AG	Uster
+HR	HR02	de	Mutation Industriegarage AG, Winterthur	Industriegarage AG	Winterthur
+HR	HR02	de	Mutation Genossenschaft Frohsinn Eidberg, Winterthur	Genossenschaft Frohsinn Eidberg	Winterthur
+HR	HR02	de	Mutation Rivora Sammelstiftung, Winterthur	Rivora Sammelstiftung	Winterthur
+HR	HR02	de	Mutation Optimo Holding AG, Winterthur	Optimo Holding AG	Winterthur
+HR	HR02	de	Mutation Jansen PrimeSteps Foundation, Bern	Jansen PrimeSteps Foundation	Bern
+HR	HR02	de	Mutation IMA AG, Dübendorf	IMA AG	Dübendorf
+HR	HR02	de	Mutation Genossenschaft Quartierladen Pfaffhausen in Liquidation, Fällanden	Genossenschaft Quartierladen Pfaffhausen in Liquidation	Fällanden
+HR	HR03	fr	Annulation Nakanes Sàrl, en liquidation, Genève	Nakanes Sàrl, en liquidation	Genève
+HR	HR03	fr	Annulation JMA S.à r.l. en liquidation, Vevey	JMA S.à r.l. en liquidation	Vevey
+HR	HR03	fr	Annulation Neia SA, en liquidation, Genève	Neia SA, en liquidation	Genève
+HR	HR03	fr	Annulation Le Verdaine Sàrl, en liquidation, Genève	Le Verdaine Sàrl, en liquidation	Genève
+HR	HR03	de	Löschung Pllana GmbH in Liquidation, Oberentfelden	Pllana GmbH in Liquidation	Oberentfelden
+KK	KK04	de	Kollokationsplan und Inventar Christian Schwägli, ausgeschlagene Erbschaft	Christian Schwägli	
+KK	KK01	fr	Avis préalable d'ouverture de faillite Linda Louise Latte	Linda Louise Latte	
+KK	KK01	de	Vorläufige Konkursanzeige Verena Elsbeth Cantieni, ausgeschlagene Erbschaft	Verena Elsbeth Cantieni	
+KK	KK01	de	Vorläufige Konkursanzeige Patrick Jenni, ausgeschlagene Erbschaft	Patrick Jenni	
+KK	KK01	de	Vorläufige Konkursanzeige Esther Scheidegger (-Riesen), ausgeschlagene Erbschaft	Esther Scheidegger (-Riesen)	
+KK	KK01	de	Vorläufige Konkursanzeige Anita Küpfer	Anita Küpfer	
+KK	KK06	de	Schluss des Konkursverfahrens Rosmarie Mina Johner (-Waldvogel), ausgeschlagene Erbschaft	Rosmarie Mina Johner (-Waldvogel)	
+KK	KK04	de	Kollokationsplan SICS Swiss IC Solutions GmbH	SICS Swiss IC Solutions GmbH	
+KK	KK04	de	Kollokationsplan und Inventar Elisabeth Clara Vifian (-Dahlmann), ausgeschlagene Erbschaft	Elisabeth Clara Vifian (-Dahlmann)	
+KK	KK04	de	Kollokationsplan und Inventar Manuela Barbara Zwahlen-Gasser, ausgeschlagene Erbschaft	Manuela Barbara Zwahlen-Gasser	
+KK	KK04	de	Kollokationsplan und Inventar Eduard Schlup	Eduard Schlup	
+KK	KK04	de	Kollokationsplan Econom Treuhand AG	Econom Treuhand AG	
+KK	KK02	fr	Publication de faillite/appel aux créanciers SUSHITIME GENÈVE SA	SUSHITIME GENÈVE SA	
+KK	KK02	fr	Publication de faillite/appel aux créanciers CONNECTIK GROUP SA	CONNECTIK GROUP SA	
+KK	KK02	de	Konkurspublikation/Schuldenruf Payme Swiss AG	Payme Swiss AG	
+KK	KK04	de	Kollokationsplan und Inventar Johanna Schüpbach (-Wenger), ausgeschlagene Erbschaft	Johanna Schüpbach (-Wenger)	
+KK	KK04	de	Kollokationsplan und Inventar Panimgea GmbH	Panimgea GmbH	
+KK	KK03	de	Einstellung des Konkursverfahrens Mahalo Group GmbH	Mahalo Group GmbH	
+KK	KK03	de	Einstellung des Konkursverfahrens make me beautiful GmbH	make me beautiful GmbH	
+KK	KK06	de	Schluss des Konkursverfahrens René Zwahlen, ausgeschlagene Erbschaft	René Zwahlen	
