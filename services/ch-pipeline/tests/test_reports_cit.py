@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 
 from chpipe import reports_cit
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -34,19 +34,25 @@ def conn():
             )
         """)
         # ch_act_article (migration 197's table, which 199 indexes but does
-        # not create) and migration 199 itself -- see tests/conftest.py.
-        apply_migration_199(c)
+        # not create) and migrations 199 + 200 -- see tests/conftest.py.
+        # 200 is what creates ch_citation_state, which db.complete() writes
+        # to on every 'extracted' and 'loaded' transition.
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 
-def _decision(conn, ecli, stage, stamped):
+def _decision(conn, ecli, stage, stamped, attempts=0):
+    """A decision plus its citation-queue row (ch_citation_state, migration
+    200). The stamp lives on the queue row, not on the decision -- the
+    decisions table is never written by the citation stages."""
     conn.execute(
         "INSERT INTO ch_court_decisions (ecli, spider, stage) "
         "VALUES (%s, 'CH_BGer', %s)", (ecli, stage))
-    if stamped:
-        conn.execute(
-            "UPDATE ch_court_decisions SET citations_extracted_at = now() "
-            "WHERE ecli = %s", (ecli,))
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, extracted_at, attempts) "
+        "VALUES (%s, CASE WHEN %s THEN now() END, %s)",
+        (ecli, stamped, attempts))
 
 
 def _case_citation(conn, from_ecli, to_raw, cite_kind, resolved, match_method):
@@ -141,8 +147,23 @@ def test_top_cited_bge_ranks_by_count_and_excludes_other_kinds(seeded):
 
 def test_decisions_loaded_vs_stamped(seeded):
     result = reports_cit.summary(seeded)
-    # 3 rows at stage 'loaded' (ECLI:1/2/3); 2 of those are stamped.
-    assert result["decisions"] == {"loaded": 3, "stamped": 2}
+    # 3 rows at stage 'loaded' (ECLI:1/2/3); 2 of those are stamped, and
+    # none of them has ever failed an extraction.
+    assert result["decisions"] == {"loaded": 3, "stamped": 2,
+                                   "retried": 0, "max_attempts": 0}
+
+
+def test_decisions_reports_the_failed_extractions(conn):
+    """The backlog is not all the same: a decision that has raised is not
+    waiting its turn, it is being retried -- and once max_attempts reaches
+    CHPIPE_MAX_ATTEMPTS some of them have been retired from the queue
+    unstamped, which is the number an operator has to be able to see."""
+    _decision(conn, "ECLI:1", "loaded", stamped=True)
+    _decision(conn, "ECLI:2", "loaded", stamped=False, attempts=3)
+    _decision(conn, "ECLI:3", "loaded", stamped=False)
+
+    assert reports_cit.summary(conn)["decisions"] == {
+        "loaded": 3, "stamped": 1, "retried": 1, "max_attempts": 3}
 
 
 def test_an_empty_database_reports_none_not_zero_for_resolved_share(conn):
@@ -154,7 +175,8 @@ def test_an_empty_database_reports_none_not_zero_for_resolved_share(conn):
     assert result["legislation"]["resolved_share"] is None
     assert result["top_unresolved_abbr"] == []
     assert result["top_cited_bge"] == []
-    assert result["decisions"] == {"loaded": 0, "stamped": 0}
+    assert result["decisions"] == {"loaded": 0, "stamped": 0,
+                                   "retried": 0, "max_attempts": 0}
 
 
 def test_main_prints_the_summary_as_json(seeded, monkeypatch, capsys):

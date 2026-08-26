@@ -2,6 +2,13 @@
 
 The queue is a column, not a table: the work item and the destination row are
 the same row, so a claim can never drift from the data it describes.
+
+The citation stages are the one exception, and the exception is measured
+rather than stylistic: their bookkeeping lives in ch_citation_state
+(migration 200) because ch_court_decisions is 19 GB with a 7.6 GB full-text
+GIN, where a flag column inside an index predicate turns every stamp into a
+whole-row rewrite across every index on the table. See the "Citations queue"
+section below.
 """
 from __future__ import annotations
 
@@ -144,16 +151,6 @@ def complete(conn, doc_id: str, next_stage: str, **fields) -> None:
                    "failed_stage = NULL", "stage_updated_at = now()",
                    "updated_at = now()"]
     params: list = [next_stage]
-    if next_stage == "extracted":
-        # New text means the citation graph's extraction is stale: whatever
-        # ch_case_citations/ch_legislation_citations rows citations_stage
-        # wrote came from the OLD full_text, and citations_extracted_at
-        # being non-NULL would hide this row from claim_for_citations
-        # forever. Unconditional, not gated on a caller-supplied field --
-        # both extract_stage and ocr_stage reach 'extracted' through this
-        # same call, and a citation-graph concern has no business being
-        # something either has to remember to pass in.
-        assignments.append("citations_extracted_at = NULL")
     for column, value in fields.items():
         assignments.append(f"{column} = %s")
         params.append(value)
@@ -163,6 +160,31 @@ def complete(conn, doc_id: str, next_stage: str, **fields) -> None:
         params,
     )
     _require_one(cursor, doc_id, f"complete(-> {next_stage})")
+
+    # The citation queue lives in ch_citation_state (migration 200), NOT in a
+    # column of the row just updated -- see that migration's header for the
+    # measurement. Both writes below are separate statements against that
+    # narrow table rather than one more assignment in the UPDATE above, which
+    # is the entire point: ch_court_decisions carries a 7.6 GB full-text GIN,
+    # and a queue flag stored next to it cannot be updated without rewriting
+    # the row into every index on the table.
+    #
+    # Unconditional, not gated on a caller-supplied field -- extract_stage,
+    # ocr_stage and load_stage all reach their transitions through this same
+    # call, and a citation-graph concern has no business being something any
+    # of them has to remember to pass in.
+    if next_stage == "extracted":
+        # New text means this decision's extraction is stale: the
+        # ch_case_citations/ch_legislation_citations rows citations_stage
+        # wrote came from the OLD full_text. Re-queue it.
+        _enqueue_for_citations_by_doc_id(conn, doc_id)
+    elif next_stage == "loaded":
+        # First arrival at 'loaded' is what makes a decision claimable at
+        # all, so it needs a state row. Absent-only: a decision that has
+        # been through here before (a re-extraction that load promotes
+        # again) already has its row, queued by the 'extracted' branch
+        # above, and must not be re-queued a second time -- nor un-queued.
+        ensure_citation_state_by_doc_id(conn, doc_id)
 
 
 def fail(conn, doc_id: str, error: str, max_attempts: int) -> None:
@@ -440,39 +462,152 @@ def failed_by_stage_versions(conn) -> list[tuple[str | None, int]]:
 
 
 # ---------------------------------------------------------------------------
-# Citations queue: a flag column (citations_extracted_at) on the same
-# ch_court_decisions table, not a stage transition -- citations_stage does
-# not move a row off 'loaded', it only stamps it once its text has been
-# scanned successfully. There is deliberately no attempts/backoff predicate
-# here (unlike claim() above): a decision whose extraction raises is left
-# unstamped (see citations_stage.run(), which keeps its existing edges rather
-# than deleting them for a batch that produced no replacement), so it does
-# land back in this query on the next run -- one extraction attempt per run,
-# no backoff, and the run itself skips the ones it has already failed so a
-# poison text cannot stall the queue behind it.
+# Citations queue: ch_citation_state (migration 200), one narrow row per
+# decision, NOT a stage transition and NOT a column on ch_court_decisions.
+# citations_stage does not move a row off 'loaded'; it stamps
+# ch_citation_state.extracted_at once that decision's text has been scanned
+# successfully.
+#
+# Why the side table: ch_court_decisions is 19 GB with a 7.6 GB full-text
+# GIN, and the flag this replaces sat inside a partial index predicate on
+# it -- so every stamp and unstamp was a non-HOT row rewrite that re-inserted
+# the row into every index on the table. Measured on prod 2026-08-25: a bulk
+# unstamp of 1.22M rows ran 22+ minutes and the GIN grew 0.6 GB in a day.
+# The stages here now only ever READ ch_court_decisions.
+#
+# Failure policy: a decision whose extraction raises is not stamped; instead
+# fail_citations() spends one of its attempts and records last_error, and
+# the claim below refuses rows that have run out of attempts. That is a
+# change from the column-flag era, where there was no attempt counter at all
+# and a poison text was re-read (and re-logged) on every single run forever.
+# The in-run guard in citations_stage.run() still exists and is still
+# needed -- it is what stops ONE run from re-claiming the row it just failed
+# before the next run's claim can see the raised attempt count.
 # ---------------------------------------------------------------------------
 
-_CLAIM_CITATIONS_COLUMNS = "ecli, doc_id, spider, court_code, decision_date, docket_number, full_text"
+_CLAIM_CITATIONS_COLUMNS = ("s.ecli, d.doc_id, d.spider, d.court_code, "
+                            "d.decision_date, d.docket_number, d.full_text")
 
 
-def claim_for_citations(conn, limit: int, spider: str | None = None) -> list[dict]:
-    """Rows sitting at `loaded` that have not had citations extracted yet.
+def claim_for_citations(conn, limit: int, spider: str | None = None,
+                        max_attempts: int = 3) -> list[dict]:
+    """Decisions sitting at `loaded` whose text has not been scanned yet.
 
-    FOR UPDATE SKIP LOCKED, same caveat as claim(): not a distributed lock
-    under autocommit (the row lock releases the moment the SELECT
+    The queue is ch_citation_state; ch_court_decisions is joined for the
+    text and the stage/spider predicates only, and is never written here.
+
+    FOR UPDATE OF s -- the state row, not the decision: locking the 19 GB
+    table's row would serialise this stage against the pipeline stages that
+    actually write it. Same caveat as claim(): under autocommit this is not
+    a distributed lock (the row lock releases the moment the SELECT
     completes), so one process per stage is the supported model.
+
+    ORDER BY s.ecli, and that is a performance decision, not a priority one.
+    The queue has no priority; the order only has to be STABLE, so a row
+    that is skipped is not re-offered ahead of the whole backlog forever.
+    The obvious inherited choice, ORDER BY d.spider, d.doc_id, is the order
+    the pre-200 claim used -- but that was cheap only because of the
+    (spider, doc_id) partial index ON ch_court_decisions, which migration
+    200 drops along with the flag it indexed. Without it the planner has to
+    hash-join the two tables and sort the result: measured on a 200k-row
+    backlog, 255 ms per 200-row claim, materialising full_text for every
+    pending row just to sort them. s.ecli is ch_citation_state's primary
+    key, so ordering by it is an index scan feeding a nested loop that
+    touches only the rows actually returned -- 0.8 ms for the same claim.
+    Keep the ORDER BY on the state table's own key if this query is ever
+    edited again; the spider filter is a predicate on the joined table and
+    does not change that.
     """
-    sql = ("SELECT " + _CLAIM_CITATIONS_COLUMNS + " FROM ch_court_decisions "
-           "WHERE stage = 'loaded' AND citations_extracted_at IS NULL")
-    params: list = []
+    sql = ("SELECT " + _CLAIM_CITATIONS_COLUMNS + " FROM ch_citation_state s "
+           "JOIN ch_court_decisions d ON d.ecli = s.ecli "
+           "WHERE s.extracted_at IS NULL AND s.attempts < %s "
+           "AND d.stage = 'loaded'")
+    params: list = [max_attempts]
     if spider:
-        sql += " AND spider = %s"
+        # s.spider, not d.spider: the two always agree (every writer copies
+        # it off the decision row), and the difference is which table the
+        # planner can use to eliminate rows. On the state table this is the
+        # leading column of idx_ch_citation_state_pending_spider and the
+        # claim seeks straight to that spider's pending rows; on the joined
+        # table every pending row in the backlog has to be read and joined
+        # before it can be discarded.
+        sql += " AND s.spider = %s"
         params.append(spider)
-    sql += " ORDER BY spider, doc_id LIMIT %s FOR UPDATE SKIP LOCKED"
+    sql += " ORDER BY s.ecli LIMIT %s FOR UPDATE OF s SKIP LOCKED"
     params.append(limit)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, params)
         return cur.fetchall()
+
+
+def enqueue_for_citations(conn, eclis: list[str]) -> None:
+    """Queue these decisions for (re-)extraction: a state row with a NULL
+    extracted_at, whether or not one already existed.
+
+    Called when a decision is given NEW text (db.complete(-> 'extracted')),
+    which makes whatever edges it has stale. attempts/last_error are cleared
+    with it, for the same reason complete() resets the stage retry budget:
+    the attempts belong to the text that raised, and this is different text.
+
+    INSERT ... SELECT rather than a values list: the state row carries the
+    decision's spider (see claim_for_citations), and reading it off
+    ch_court_decisions in the same statement is what stops any caller from
+    having to know -- or pass -- it. A decision that does not exist inserts
+    nothing, which is the right answer for a queue row about it.
+    """
+    if not eclis:
+        return
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE ecli = ANY(%s) "
+        "ON CONFLICT (ecli) DO UPDATE SET extracted_at = NULL, attempts = 0, "
+        "last_error = NULL, spider = EXCLUDED.spider, updated_at = now()",
+        (eclis,),
+    )
+
+
+def _enqueue_for_citations_by_doc_id(conn, doc_id: str) -> None:
+    """enqueue_for_citations() for the decision with this doc_id.
+
+    complete() knows the doc_id, not the ecli, and reading the ecli back
+    first would be a second round-trip per completed row on every extract
+    and ocr run; INSERT ... SELECT does it in one.
+    """
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE doc_id = %s "
+        "ON CONFLICT (ecli) DO UPDATE SET extracted_at = NULL, attempts = 0, "
+        "last_error = NULL, spider = EXCLUDED.spider, updated_at = now()",
+        (doc_id,),
+    )
+
+
+def ensure_citation_state(conn, eclis: list[str]) -> None:
+    """Make sure these decisions have a state row, without disturbing one
+    that already exists. The absent-only twin of enqueue_for_citations(),
+    and it takes the spider off the decision row the same way."""
+    if not eclis:
+        return
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE ecli = ANY(%s) "
+        "ON CONFLICT (ecli) DO NOTHING",
+        (eclis,),
+    )
+
+
+def ensure_citation_state_by_doc_id(conn, doc_id: str) -> None:
+    """ensure_citation_state() for the decision with this doc_id -- the path
+    load_stage reaches through complete(-> 'loaded'). Without it a decision
+    that arrives at 'loaded' after migration 200's one-time seed (i.e. every
+    decision the pipeline loads from now on) would have no state row at all,
+    and the claim -- which drives off that table -- would never see it."""
+    conn.execute(
+        "INSERT INTO ch_citation_state (ecli, spider, extracted_at) "
+        "SELECT ecli, spider, NULL FROM ch_court_decisions WHERE doc_id = %s "
+        "ON CONFLICT (ecli) DO NOTHING",
+        (doc_id,),
+    )
 
 
 def delete_citations(conn, eclis: list[str]) -> None:
@@ -485,8 +620,9 @@ def delete_citations(conn, eclis: list[str]) -> None:
     whose replacement edges never arrive loses the ones it had.
 
     A decision only re-enters claim_for_citations() after complete(->
-    'extracted') cleared its citations_extracted_at, i.e. after it was given
-    new text. ON CONFLICT DO NOTHING in insert_citations() makes an edge the
+    'extracted') put its ch_citation_state row back to extracted_at IS NULL,
+    i.e. after it was given new text. ON CONFLICT DO NOTHING in
+    insert_citations() makes an edge the
     new text still contains collide harmlessly with the row already there --
     but an edge the new text no longer contains has nothing to collide with,
     and left alone it outlives the text it came from forever. Deleting the
@@ -540,14 +676,38 @@ def stamp_citations(conn, eclis: list[str]) -> None:
     citations_stage.run()) -- a row must never be stamped ahead of the edges
     it was supposed to produce, and a row whose extraction RAISED must not be
     stamped at all: stamping it would retire it from the queue forever with
-    whatever edges it happened to have."""
+    whatever edges it happened to have.
+
+    One narrow UPDATE against ch_citation_state -- ch_court_decisions is not
+    touched. last_error is cleared with the stamp: it describes an attempt
+    that has now been superseded by a successful one."""
     if not eclis:
         return
     conn.execute(
-        "UPDATE ch_court_decisions SET citations_extracted_at = now() "
-        "WHERE ecli = ANY(%s)",
+        "UPDATE ch_citation_state SET extracted_at = now(), last_error = NULL, "
+        "updated_at = now() WHERE ecli = ANY(%s)",
         (eclis,),
     )
+
+
+def fail_citations(conn, failures: list[tuple[str, str]]) -> None:
+    """Record a failed extraction: one attempt spent, the reason kept, no
+    stamp -- so the decision keeps the edges it already had and is offered
+    again until it runs out of attempts (claim_for_citations's max_attempts).
+
+    `failures` is (ecli, error). The attempt counter is the thing the old
+    column-flag queue had no room for: an unstamped failure came back on
+    every run forever, so one poison text was re-read and re-logged nightly
+    with no way to retire it short of an operator noticing the warning.
+    """
+    if not failures:
+        return
+    with conn.cursor() as cur:
+        cur.executemany(
+            "UPDATE ch_citation_state SET attempts = attempts + 1, "
+            "last_error = %s, updated_at = now() WHERE ecli = %s",
+            [(error[:2000], ecli) for ecli, error in failures],
+        )
 
 
 def retry_failed_versions(conn, stage: str | None = None,

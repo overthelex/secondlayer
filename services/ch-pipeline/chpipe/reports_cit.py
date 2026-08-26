@@ -139,16 +139,28 @@ def _decisions(cur) -> dict:
     """How much of the loaded corpus citations_stage has actually reached.
     `loaded` is ch_court_decisions.stage = 'loaded' (load_stage's terminal,
     verified-present state -- see load_stage.py's docstring); `stamped` is
-    citations_extracted_at IS NOT NULL, the flag citations_stage sets once a
-    decision's text has been scanned. The gap between the two is exactly
-    claim_for_citations()'s own backlog."""
+    ch_citation_state.extracted_at IS NOT NULL, the flag citations_stage sets
+    once a decision's text has been scanned (migration 200). `retried` is the
+    unstamped part of the gap whose extraction has already raised at least
+    once, and `max_attempts` is the highest attempt count in the table -- if
+    it has reached CHPIPE_MAX_ATTEMPTS, some decisions have been retired from
+    the queue unstamped and want looking at. The rest of the gap between
+    loaded and stamped is claim_for_citations()'s ordinary backlog.
+
+    Two queries, not one join: the counts come from two tables now, and
+    counting `loaded` through the join would silently drop any decision that
+    has no state row at all -- which is precisely the defect worth seeing."""
+    cur.execute("SELECT count(*) AS n FROM ch_court_decisions WHERE stage = 'loaded'")
+    loaded = cur.fetchone()["n"]
     cur.execute("""
-        SELECT count(*) FILTER (WHERE stage = 'loaded')               AS loaded,
-               count(*) FILTER (WHERE citations_extracted_at IS NOT NULL) AS stamped
-          FROM ch_court_decisions
+        SELECT count(*) FILTER (WHERE extracted_at IS NOT NULL)          AS stamped,
+               count(*) FILTER (WHERE extracted_at IS NULL AND attempts > 0) AS retried,
+               coalesce(max(attempts), 0)                                AS max_attempts
+          FROM ch_citation_state
     """)
     row = cur.fetchone()
-    return {"loaded": row["loaded"], "stamped": row["stamped"]}
+    return {"loaded": loaded, "stamped": row["stamped"],
+            "retried": row["retried"], "max_attempts": row["max_attempts"]}
 
 
 def summary(conn) -> dict:
