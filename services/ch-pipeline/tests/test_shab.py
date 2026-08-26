@@ -342,8 +342,8 @@ def test_the_uid_is_canonical_even_though_the_xml_gives_bare_digits():
 
 def test_only_text_written_as_a_uid_is_read_as_one():
     """The shape is checked against the RAW text, not against what is left
-    after the non-digits are stripped. A phone number strips down to eleven
-    digits and an over-long identifier to twelve, but a company_uid is the
+    after the non-digits are stripped. A phone number strips down to twelve
+    digits and so does an over-long identifier, but a company_uid is the
     key every publication joins to its company on, and a field this parser
     has misread must produce no key rather than a plausible one."""
     assert shab.canonical_uid("CHE-123.456.789 MWST") == "CHE-123.456.789"
