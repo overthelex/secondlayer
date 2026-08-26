@@ -424,40 +424,100 @@ jobs:
             || { echo "::error::core overlay failed — key files missing after copy"; exit 1; }
           echo "Оверлей на месте: $(find "$REPO/mcp_backend/src/services" -maxdepth 1 -name '*.ts' | wc -l) файлов в services"
 
-      - name: Deploy stack
+      - name: Deploy stack (blue-green)
         run: |
           set -euo pipefail
           cd "$HOME/SecondLayer/deployment"
           DC="docker compose -f docker-compose.local.yml --env-file .env.local"
+          COLORS=.active-colors-local
+          INC=nginx/includes/local-upstreams.conf
+
+          # Активный цвет: файл — подсказка, docker — истина.
+          CUR=$(grep '^app=' "$COLORS" 2>/dev/null | cut -d= -f2 || echo blue)
+          if docker inspect secondlayer-app-local-green --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+            CUR=green
+          elif docker inspect secondlayer-app-local --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+            CUR=blue
+          fi
+          [ "$CUR" = "green" ] && NEW=blue || NEW=green
+          echo "активен: $CUR, выкатываем: $NEW"
+
           if [ "${{ inputs.no_cache }}" = "true" ]; then
             $DC build --no-cache
           fi
-          # без --remove-orphans: рядом на этой же машине крутятся qdrant-edrsr-local
-          # и qdrant-general-local, которые обслуживают ПРОД
-          $DC up -d --build
-          # nginx резолвит upstream-имена (server app-local:3000) ОДИН раз при
-          # старте. После `up -d --build` app-контейнеры пересозданы с новыми
-          # IP, а nginx-local живёт со старыми -- и отдаёт 502 на весь
-          # local.legal.org.ua. Так и случилось 24.08 после мержа #2325:
-          # app healthy, nginx "Up 26 hours", публичный /health -> 502.
-          # Правило из CLAUDE.md, теперь в коде: force-recreate после
-          # любого изменения upstream'ов.
-          $DC up -d --force-recreate nginx-local
-          $DC ps
 
-      - name: Wait for backend health
-        run: |
-          set -euo pipefail
+          # Сервисы вне blue-green (базы, очереди, вспомогательные) — как раньше.
+          # Без --remove-orphans: рядом крутятся qdrant-edrsr-local и
+          # qdrant-general-local, которые обслуживают ПРОД.
+          $DC up -d --build
+
+          # После пересоздания сервисов выше их IP меняются, а nginx резолвит
+          # имена апстримов один раз при старте — та самая причина 502 из
+          # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
+          # если выкатка нового цвета сорвётся, старый останется доступен.
+          docker exec nginx-local nginx -s reload 2>/dev/null || true
+
+          # Новый цвет
+          if [ "$NEW" = "green" ]; then
+            # висяк от прошлой сорвавшейся выкатки не должен мешать
+            docker rm -f secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
+            $DC --profile green up -d --build app-local-green lexwebapp-local-green
+            BE=secondlayer-app-local-green; FE=lexwebapp-local-green
+          else
+            $DC up -d --build app-local lexwebapp-local
+            BE=secondlayer-app-local; FE=lexwebapp-local
+          fi
+
+          # Здоровье проверяем ДО переключения трафика: если новый цвет не
+          # поднялся, старый продолжает обслуживать пользователей.
+          ok=false
           for i in $(seq 1 30); do
-            if docker exec secondlayer-app-local wget -q -O /dev/null --timeout=5 http://127.0.0.1:3000/health 2>/dev/null; then
-              echo "✓ backend отвечает на :3000/health"
-              exit 0
+            if docker exec "$BE" wget -q -O /dev/null --timeout=5 http://127.0.0.1:3000/health 2>/dev/null \
+               && docker exec "$FE" wget -q -O /dev/null --timeout=5 http://127.0.0.1/ 2>/dev/null; then
+              ok=true; break
             fi
-            echo "  жду бэкенд... ($i/30)"
+            echo "  ждём $NEW... ($i/30)"
             sleep 10
           done
-          echo "::error::backend не поднялся за 5 минут"
-          docker logs --tail 80 secondlayer-app-local || true
+          if [ "$ok" != "true" ]; then
+            echo "::error::$NEW не поднялся — трафик НЕ переключён, работает $CUR"
+            docker logs --tail 60 "$BE" || true
+            exit 1
+          fi
+          echo "$NEW здоров"
+
+          # Переключение. `nginx -s reload` перечитывает конфиг и заново
+          # резолвит имена апстримов — именно эта однократность резолва дала
+          # 502 на весь local.legal.org.ua после мержа #2325 (app healthy,
+          # nginx "Up 26 hours", публичный /health -> 502). Раньше лечилось
+          # пересозданием nginx, теперь достаточно reload: соединения живы.
+          printf '# Активные апстримы — переписывает джоба деплоя, руками не править\n\nupstream local_mcp_backend {\n    server %s:3000;\n    keepalive 128;\n}\n\nupstream local_frontend {\n    server %s:80;\n    keepalive 32;\n}\n' "$BE" "$FE" > "$INC"
+          docker exec nginx-local nginx -t
+          docker exec nginx-local nginx -s reload
+          printf 'app=%s\n' "$NEW" > "$COLORS"
+          echo "трафик переключён на $NEW"
+
+          # Старый цвет гасим только теперь
+          if [ "$CUR" = "green" ]; then
+            docker stop secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
+          else
+            docker stop secondlayer-app-local lexwebapp-local >/dev/null 2>&1 || true
+          fi
+          echo "старый цвет ($CUR) остановлен"
+          $DC ps
+
+      - name: Verify through nginx
+        run: |
+          set -euo pipefail
+          # Проверяем не контейнер, а путь целиком — так же, как его видит пользователь
+          for i in $(seq 1 12); do
+            code=$(docker exec nginx-local wget -q -O /dev/null -S --header="Host: local.legal.org.ua" http://127.0.0.1/health 2>&1 | grep -oE "HTTP/1.[01] [0-9]+" | tail -1 | awk '{print $2}' || true)
+            if [ "$code" = "200" ]; then echo "nginx отдаёт /health: 200"; exit 0; fi
+            echo "  ждём nginx... ($i/12, последний код: ${code:-нет ответа})"
+            sleep 5
+          done
+          echo "::error::nginx не отдаёт /health после переключения цвета"
+          docker exec nginx-local cat /etc/nginx/includes/local-upstreams.conf || true
           exit 1
 
       - name: Summary

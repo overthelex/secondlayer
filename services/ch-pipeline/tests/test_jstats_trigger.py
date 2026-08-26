@@ -32,14 +32,14 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import extract_stage, load_stage
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 MIGRATION_156 = _REPO_ROOT / "mcp_backend/src/migrations/156_jurisdiction_fulltext_stats.sql"
-# db.complete() unconditionally clears citations_extracted_at on the
-# 'extracted' branch (migration 199's column) -- extract_stage.run() below
-# reaches it, so this fixture needs the column applied too.
+# db.complete() re-queues a row in ch_citation_state (migration 200) on the
+# 'extracted' branch -- extract_stage.run() below reaches it, so this
+# fixture needs that table applied too.
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -111,8 +111,11 @@ def conn():
         """)
         c.execute(MIGRATION_196.read_text())
         # ch_act_article (migration 197's table, which 199 indexes but does
-        # not create) and migration 199 itself -- see tests/conftest.py.
-        apply_migration_199(c)
+        # not create) and migrations 199 + 200 -- see tests/conftest.py.
+        # 200 is what creates ch_citation_state, which db.complete() writes
+        # to on every 'extracted' and 'loaded' transition.
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         _install_jstats(c)
         yield c
 

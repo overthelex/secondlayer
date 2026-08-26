@@ -22,6 +22,7 @@ import pathlib
 # every module here uses for its own migration paths.
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
+MIGRATION_200 = _REPO_ROOT / "mcp_backend/src/migrations/200_ch_citation_state.sql"
 
 _CH_ACT_ARTICLE = """
 CREATE TABLE IF NOT EXISTS ch_act_article (
@@ -87,3 +88,16 @@ def reset_legislation_schema(conn) -> None:
     conn.execute(_CH_LEGISLATION_135)
     for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201):
         conn.execute(migration.read_text())
+
+
+def apply_migration_200(conn) -> None:
+    """199 and then 200 -- the pair the citation stages actually run against.
+
+    200 does not stand alone: it seeds ch_citation_state from the column 199
+    adds to ch_court_decisions, and drops the index 199 creates. Applying it
+    on its own would fail on the missing column, so every caller wants both,
+    in order. Idempotent for the same reasons apply_migration_199() is, plus
+    200's own emptiness guard around the seed.
+    """
+    apply_migration_199(conn)
+    conn.execute(MIGRATION_200.read_text())

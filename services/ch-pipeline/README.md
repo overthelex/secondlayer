@@ -746,19 +746,87 @@ Three stages, run in this order, that turn `ch_court_decisions.full_text`
 into a graph of who cites what: `aliases` (act abbreviation → SR number),
 `citations` (raw edges, per decision), `citations-resolve` (raw edges →
 resolved rows). Migration 199 is the schema: `ch_act_alias`,
-`ch_case_citations`, `ch_legislation_citations`, plus
-`ch_court_decisions.citations_extracted_at`.
+`ch_case_citations`, `ch_legislation_citations`. Migration 200 adds
+`ch_citation_state`, the per-decision queue.
 
-**Apply migration 199 outside the 07:15 UTC delta window.** The migration
-runner applies a whole file as one implicit transaction, so the `ALTER TABLE
-ch_court_decisions ADD COLUMN citations_extracted_at` holds an ACCESS
-EXCLUSIVE lock on a 1.22M-row table until the file's last statement commits
-— and the two `ch_court_decisions` indexes after it are built while that
-lock is still held (tens of seconds on the production table, during which
-nothing else can read or write it). The file's first statement is
+**The citation stages never write `ch_court_decisions`.** The bookkeeping —
+has this decision's text been scanned, when, how many times has it raised
+and with what error — lives in `ch_citation_state`: one narrow row per
+decision, keyed by `ecli`, with `spider`, `extracted_at` (NULL = queued),
+`attempts`, `last_error` and `updated_at`, and two partial indexes on
+`WHERE extracted_at IS NULL` — `(ecli)` for the corpus-wide claim and
+`(spider, ecli)` for the per-spider one — which between them are the claim
+query's whole predicate.
+
+**`spider` is denormalised onto the state row on purpose.** A per-spider
+claim (`./run-stage.sh citations CH_BGer`) filters on `s.spider`, not on
+`d.spider`: the two always agree — every writer copies it off the decision
+row — and the difference is which table the planner can use to eliminate
+rows. On the state table it is the leading column of
+`idx_ch_citation_state_pending_spider` and the claim seeks straight to that
+spider's pending rows; on the joined table every pending row in a mixed
+backlog has to be read and joined before it can be discarded, for a claim
+that wants 200.
+
+**The claim is ordered by `s.ecli`** — the state table's own primary key,
+and a performance choice rather than a priority one (the queue has no
+priority; the order only has to be stable, so a skipped row is not re-offered
+behind the whole backlog forever). The pre-200 claim ordered by
+`spider, doc_id`, which was cheap only because of the `(spider, doc_id)`
+partial index **on `ch_court_decisions`** that migration 200 drops with the
+flag it indexed. Keeping that order afterwards costs a hash join plus an
+external sort: measured on a 200k-row backlog, **255 ms** per 200-row claim,
+materialising `full_text` for every pending row just to sort them. Ordering
+by the state table's key is an index scan feeding a nested loop —
+**0.8 ms** for the same claim. If this query is ever edited again, keep the
+`ORDER BY` on `ch_citation_state`'s own key.
+
+It started life as a flag column on the decisions table itself
+(`citations_extracted_at`, migration 199) and that was a mistake, measured
+on prod 2026-08-25. `ch_court_decisions` is 19 GB with a 7.6 GB full-text
+GIN, and the flag sat inside a partial index predicate — which means it
+could never be updated HOT, so **every stamp and every unstamp rewrote the
+whole row into every index on the table**, the GIN included. A bulk unstamp
+of 1.22M rows (the reset for a full re-extraction) ran 22+ minutes against
+the table the live product reads, and the GIN grew 0.6 GB in a day of that
+churn. On the side table the same reset is seconds and a stamp is one narrow
+HOT update. Migration 200 leaves the old column in place (it is the only
+surviving copy of the pre-migration stamps, and dropping a column on a 19 GB
+table takes an ACCESS EXCLUSIVE lock); nothing reads or writes it any more,
+and a later migration may drop it.
+
+**Apply migrations 199 and 200 outside the 07:15 UTC delta window.** The
+migration runner applies a whole file as one implicit transaction, so 199's
+`ALTER TABLE ch_court_decisions ADD COLUMN citations_extracted_at` holds an
+ACCESS EXCLUSIVE lock on a 1.22M-row table until the file's last statement
+commits — and the two `ch_court_decisions` indexes after it are built while
+that lock is still held (tens of seconds on the production table, during
+which nothing else can read or write it). 200 is far cheaper (it reads that
+table and drops one index on it) but shares the rule. Both files start with
 `SET lock_timeout = '3s'`, so if the table is already busy the migration
 fails fast and can be retried in a quiet window instead of queueing —
 and blocking everything that arrives behind it.
+
+**Migration 200 seeds `ch_citation_state` from the stamps already on
+`ch_court_decisions`**, once, and only into an empty table. Seeding NULLs
+instead would have queued the entire extracted corpus for a multi-hour
+re-extraction on the first nightly delta after the deploy. From then on a
+decision enters the queue when `load` promotes it
+(`db.complete(-> 'loaded')` ensures a state row) and re-enters it when
+`extract`/`ocr` give it new text (`db.complete(-> 'extracted')` sets
+`extracted_at` back to NULL and clears the attempt counter with it).
+
+**Re-extracting the whole corpus** is one narrow `UPDATE`:
+
+```sql
+UPDATE ch_citation_state SET extracted_at = NULL;   -- seconds, 1.22M rows
+```
+
+then `./run-stage.sh citations` (and `citations-resolve` after it). Nothing
+in that touches `ch_court_decisions`, which is the point — the same reset
+against the old flag column took 22+ minutes and bloated the full-text GIN.
+`services/ch-pipeline/scripts/reextract-citations.sh` is the versioned copy
+of the whole sequence (aliases → reset → citations → resolve-all → report).
 
 **`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
 writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
@@ -808,32 +876,43 @@ citations for a much larger number of invented ones:
   BGG" is unaffected. Failure mode: a genuine paragraph 13 or beyond, and
   everything after it, is re-read as further articles.
 
-**`citations`** claims decisions sitting at `loaded` with
-`citations_extracted_at IS NULL`, runs `chpipe.citations` over each one's
-text in a thread pool, and writes the raw edges it finds — BGE/docket/ECLI
-case references into `ch_case_citations`, article references into
-`ch_legislation_citations` — then stamps `citations_extracted_at`. This is
-extraction only: nothing here resolves a citation to the row it points at.
-A decision whose extraction raises is **not** stamped and **not** touched:
-it keeps whatever edges it already had and the next run tries again. The
-exception is logged with the decision's ecli and counted in `failed`. One
-bad text still must not park the queue, so the run remembers the eclis that
-raised and skips them in its later batches — a batch that is nothing but
-those ends the run with a warning naming the count. There is no attempt
-counter: a text that raises every night shows up in every night's log as
-`failed=N` plus that warning, which is the signal to go and look at it.
+**`citations`** claims from `ch_citation_state` — rows with
+`extracted_at IS NULL` and attempts left, in `ecli` order, filtered on
+`s.spider` when a spider is given, joined to `ch_court_decisions` for the
+text and the `stage = 'loaded'` predicate — runs `chpipe.citations` over
+each one's text in a thread pool, and writes the raw edges it finds —
+BGE/docket/ECLI case references into `ch_case_citations`, article references
+into `ch_legislation_citations` — then stamps `extracted_at` on the state
+row. This is extraction only: nothing here resolves a citation to the row it
+points at. A decision whose extraction raises is **not** stamped and its
+edges are **not** touched: it keeps whatever it already had, one of its
+`attempts` is spent, `ch_citation_state.last_error` records the reason, and
+the next run tries again — until `CHPIPE_MAX_ATTEMPTS` is reached, at which
+point the claim stops offering it. (That is `ch_citation_state.last_error`,
+this stage's own; `ch_court_decisions.last_error` belongs to the stage-column
+queue and is never written here.) The exception is logged with the
+decision's ecli and counted in `failed`. Within a single run the attempt
+counter is not enough — the claim keeps offering the row until the next
+run — so the run also remembers the eclis that raised and skips them in its
+later batches; a batch that is nothing but those ends the run with a warning
+naming the count. `python -m chpipe.reports_cit` shows `retried` and
+`max_attempts` alongside `loaded`/`stamped`: a `max_attempts` that has
+reached `CHPIPE_MAX_ATTEMPTS` means some decisions have been retired from
+the queue unstamped and want looking at.
 
 `CHPIPE_CIT_BATCH` (default 200) sets how many decisions are claimed per
 batch. The claim selects `full_text` for the whole batch at once, so it is
 this stage's memory knob — turn it down on a host where long decisions make
-a batch too heavy. The queue is a flag column, so a smaller batch costs
-nothing but extra round-trips.
+a batch too heavy. The queue is a flag on a narrow side table, so a smaller
+batch costs nothing but extra round-trips.
 
 **A decision that gets NEW text must be re-scanned, not left stamped
 against the OLD text.** `db.complete(conn, doc_id, 'extracted', ...)` — the
 statement both `extract_stage` and `ocr_stage` use to write `full_text` —
-unconditionally clears `citations_extracted_at` back to `NULL` whenever it
-moves a row to `'extracted'`. The next `load` puts the row back at `loaded`,
+unconditionally puts the decision's `ch_citation_state` row back to
+`extracted_at IS NULL` (and clears its `attempts`/`last_error`: those were
+spent on text the decision no longer has) whenever it moves a row to
+`'extracted'`. The next `load` puts the row back at `loaded`,
 and the next `citations` run picks it up again, over the new text, exactly
 like a decision that has never been scanned at all — and that run **deletes
 the decision's existing edges before inserting** the ones its current text
@@ -866,7 +945,11 @@ raw edges `citations` wrote:
    park a perfectly resolvable citation at the terminal `unresolved_abbr`.
 2. **edition** — `act_id` (+ `lang`, `from_date`) → `ch_act_version` →
    `version_id`. The parsed edition whose
-   `[date_applicability, date_end_applicability)` contains `from_date`, or —
+   `[date_applicability, date_end_applicability]` contains `from_date` —
+   **`date_end_applicability` is inclusive**, the last day the edition is in
+   force, not the first day it no longer is (verified on prod: 19,428
+   consecutive parsed editions of the same act+lang have
+   `next.date_applicability = prev.date_end_applicability + 1 day`) — or,
    when `from_date` is `NULL` — **the parsed edition with the greatest
    `date_applicability` not in the future** (`latest_edition`). Tries the
    citation's own language first and falls back to `de` only when nothing in
@@ -1111,9 +1194,10 @@ picked up by the same nightly run rather than needing a separate one.
 
 **The first nightly delta after deploying the citation graph would try to
 backfill the whole corpus.** `citations` claims every decision at `loaded`
-with `citations_extracted_at IS NULL` — which, on the night migration 199
-first lands, is all 1.22M of them, not just the handful tonight's spiders
-grew. That is a multi-hour CPU job, and the delta would run it unattended,
+whose `ch_citation_state.extracted_at` is NULL — which, on the night
+migration 199 first lands, is all 1.22M of them, not just the handful
+tonight's spiders grew. (Migration 200 does not repeat that: its seed copies
+the stamps that already exist rather than starting everything at NULL.) That is a multi-hour CPU job, and the delta would run it unattended,
 under `flock`, straight into the next morning. **Run the supervised backfill
 first** — `./run-stage.sh citations` (optionally per spider, and with
 `CHPIPE_LIMIT` to size the first batch), watched, until
@@ -1265,3 +1349,118 @@ narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
 Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
 or their own portals; the registry already holds their acts and versions.
+
+## Point-in-time benchmark (chpipe.bench)
+
+`chpipe/bench` is a separate package from the two pipelines above. It does
+not backfill or maintain any table — it reads `ch_act_change` and the
+`ch_act_version`/`ch_act_article` editions on either side of each change
+(both already built by the legislation half) and turns them into a
+benchmark: dated questions in German, French and Italian asking for the
+verbatim text of a specific article as it stood on a specific date, plus a
+deterministic scorer that tells a "grounded in the right edition" answer
+apart from a "grounded in the wrong edition" one. See
+`chpipe/bench/CARD.md` for the full dataset card — construction rules,
+every JSONL field, the scorer's thresholds and why they are set where they
+are, the licence, and known limits. This section is only the commands.
+
+First run results (build 2026-08-25, oracle 1.000, Haiku 4.5 0.000, Sonnet
+4.6 0.003) are in `chpipe/bench/RESULTS.md`.
+
+Not a `run-stage.sh` dispatch target — the benchmark is an occasional,
+hand-triggered export and evaluation run, not a nightly pipeline stage.
+Run each step from `services/ch-pipeline`.
+
+**1. Build the item files.**
+
+    python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
+
+Reads `ch_act_change` per language, applies the selection rules (modified
+rows only, both texts >= 200 normalised chars and not the same string once
+normalised, the act in force, the article number unambiguous within both
+editions, an abbreviation resolvable for that language, the two editions
+not overlapping in the days they claim to be in force, at least one
+discriminating unit — see CARD.md, "Construction"), samples down to the
+caps (50 changes per act, 5,000 items per language, seeded per language),
+and writes `bench-de.jsonl`, `bench-fr.jsonl`, `bench-it.jsonl` plus
+`build-report.json` (per-language counts and skip reasons) into `--out`.
+
+The "texts differ" rule is an inequality, not a similarity threshold: a
+ratio gate would drop the one-number amendment this benchmark is built to
+ask about. See CARD.md, "Construction".
+
+Each surviving change yields an `after` item dated on the change itself and
+a `before` item dated on the **old edition's last day in force** (its
+inclusive `date_end_applicability`) — not simply the change date minus one
+day, which can fall in a gap where Fedlex published no consolidation and no
+edition answers the question at all. A change whose old edition's end date
+reaches into the new edition's validity is dropped whole
+(`overlapping_editions`): on such a day two editions are in force at once
+and a covering lookup returns the newer one, so no date is left to ask
+about. Whichever half of a pair has the
+shorter, wholly-contained text as its gold is dropped (the `after` half of a
+deletion, the `before` half of an addition): there is no wording there that
+could tell a correct answer from a wrong one. Both rules are spelled out in
+CARD.md, "Construction".
+
+**2. Run the oracle.**
+
+    python -m chpipe.bench.run_oracle --items /data/ch-corpus/bench --out /data/ch-corpus/bench
+
+Answers every item straight from the database, the same way the product
+tool `ch_get_act_article` resolves an article, with no LLM involved, and
+scores each answer. Writes `results-oracle.jsonl`. This run must come back
+100% `grounded_correct` — anything less is a bug in the builder or the
+scorer, not a fact about the database, and should be treated as a blocker
+before running any LLM baseline against the same item files.
+
+**3. Run the Bedrock baselines.**
+
+    python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+Every Bedrock call costs money, so this is gated. Run without
+`CHPIPE_BENCH_CONFIRM=1` first: it prints a JSON cost estimate (priced from
+item lengths at roughly 4 characters per token against the module's price
+table) and exits 2 without calling Bedrock at all. Only once that estimate
+looks reasonable, re-run with the confirmation set:
+
+    CHPIPE_BENCH_CONFIRM=1 python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+Default models are the two inference-profile ids baked into `run_llm.py`
+(Haiku 4.5 and Sonnet 4.6, `eu-central-1`, re-verify both the ids and the
+per-token prices against `aws bedrock list-inference-profiles` before a
+real run — see the comments at the top of `run_llm.py`); pass
+`--models <id>,<id>,...` to override. Sampling is 300 items per language by
+default (`--sample-per-lang`), stratified by `kind` (`before`/`after`) and
+seeded the same way the builder's own sampling is. No retrieval: the model
+sees only the item's `question` field and the system prompt quoted in
+CARD.md, nothing from `gold`/`distractor`. Writes one
+`results-llm-{model}.jsonl` per model plus `llm-run-report.json` (the cost
+estimate alongside the actual per-model token counts and spend, with the
+combined spend in a top-level `actual_total_usd`).
+
+Interrupted runs resume: re-running with the same `--out` skips every item
+already answered, re-asks any item whose line records an error, and repairs
+a partial line left by a kill mid-write. Nothing already paid for is asked
+twice.
+
+**4. Report.**
+
+    python -m chpipe.bench.report --results /data/ch-corpus/bench/results-oracle.jsonl /data/ch-corpus/bench/results-llm-haiku-4-5.jsonl /data/ch-corpus/bench/results-llm-sonnet-4-6.jsonl --items /data/ch-corpus/bench --out /data/ch-corpus/bench/report.json
+
+Pass any number of `results-*.jsonl` files (oracle and/or one or more LLM
+runs) to compare them in a single table. Reduces every result line to
+per-(language, system, `kind`) counts — plus an `all` row per (language,
+system) — with label shares, mean coverages, an `errors` count, the
+correct-answer share split on `gold_is_current`, and the "point-in-time
+grounding score" (the share of `grounded_correct`); prints a Markdown table
+to stdout and writes the same summary as JSON to `--out`.
+
+Read the `gold_is_current = false` column, not the headline score: an item
+whose gold edition is still the current wording can be answered correctly
+by a system that recites today's text and never resolves the date at all.
+
+**Publication.** Building the benchmark, running the oracle and the
+baselines, and writing the report do not publish anything — no dataset
+upload, no scorer release. That is a separate, user-approved step; see
+`chpipe/bench/CARD.md` for what a publication would carry.

@@ -1,6 +1,193 @@
 # Local development environment for SecondLayer
 # Simplified setup for running on developer machines
 
+# Общее тело бэкенда для обоих цветов. Прод дублирует определение целиком,
+# здесь якорь — механика та же, но без 188 строк копипасты.
+x-app-local-base: &app_local_base
+  image: secondlayer-app:latest
+  command: ["node", "--max-old-space-size=2048", "dist/http-server.js"]
+  environment:
+    # Application
+    NODE_ENV: ${NODE_ENV:-development}
+    PORT: ${HTTP_PORT:-3000}
+    HTTP_PORT: ${HTTP_PORT:-3000}
+    HTTP_HOST: 0.0.0.0
+
+    # JWT for authentication
+    JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-in-production}
+
+    # Database
+    DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+    POSTGRES_HOST: postgres-local
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+    POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
+
+    # Vector DB
+    QDRANT_URL: ${QDRANT_URL:-http://qdrant-local:6333}
+    QDRANT_API_KEY: ${QDRANT_API_KEY:-local_qdrant_key}
+    # EDRSR vectors (51M points, 555 GB) live on the local host itself and are
+    # shared with prod, so the local stack reads them in place instead of
+    # keeping a second copy. SKIP_INIT defaults to true on purpose: the local
+    # backend must never create or alter collections in an instance prod serves.
+    QDRANT_EDRSR_URL: ${QDRANT_EDRSR_URL:-http://10.88.0.2:6343}
+    QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
+    QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
+    QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
+    NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
+    NEO4J_USER: ${NEO4J_USER:-neo4j}
+    NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
+
+    # Cache
+    REDIS_URL: redis://:${REDIS_PASSWORD:-local_redis_pass}@redis-local:6379
+    REDIS_HOST: redis-local
+    REDIS_PORT: 6379
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-local_redis_pass}
+
+    # AWS Bedrock Configuration
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    AWS_REGION: ${AWS_REGION:-eu-central-1}
+    BEDROCK_MODEL_QUICK: ${BEDROCK_MODEL_QUICK:-eu.anthropic.claude-haiku-4-5-20251001-v1:0}
+    BEDROCK_MODEL_STANDARD: ${BEDROCK_MODEL_STANDARD:-eu.anthropic.claude-sonnet-4-6}
+    BEDROCK_MODEL_DEEP: ${BEDROCK_MODEL_DEEP:-eu.anthropic.claude-sonnet-4-6}
+    BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-}
+    BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-}
+    BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-}
+
+    # Embeddings
+    VOYAGEAI_API_KEY: ${VOYAGEAI_API_KEY:-}
+    VOYAGEAI_API_KEY_2: ${VOYAGEAI_API_KEY_2:-}
+    VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
+    BGE_M3_URL: ${BGE_M3_URL:-http://tei-bge-m3:80}
+
+    # LLM Provider Strategy
+    LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-bedrock-first}
+
+    # No Anthropic/OpenAI — Bedrock only
+
+    # ZakonOnline API (deprecated, removal pending)
+    ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
+    ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
+
+    # Security (relaxed for local dev)
+    SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
+
+    # Unified Gateway Configuration
+    ENABLE_UNIFIED_GATEWAY: ${ENABLE_UNIFIED_GATEWAY:-true}
+    RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
+    RADA_API_KEY: ${RADA_API_KEY:-test-key-123}
+    OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL:-http://openreyestr-app-local:3004}
+    OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY:-test-key-123}
+    SNEAKYPIPER_API_URL: ${SNEAKYPIPER_API_URL:-}
+    SNEAKYPIPER_API_KEY: ${SNEAKYPIPER_API_KEY:-}
+    STAGE_BACKEND_URL: ${STAGE_BACKEND_URL:-https://stage.legal.org.ua}
+    STAGE_API_KEY: ${STAGE_API_KEY:-}
+
+    # WebAuthn / FIDO2
+    WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-local.legal.org.ua}
+    WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-SecondLayer Legal}
+    WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-https://local.legal.org.ua}
+
+    # OAuth (optional for local - can use API keys instead)
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://local.legal.org.ua/auth/google/callback}
+    FRONTEND_URL: ${FRONTEND_URL:-https://local.legal.org.ua}
+    ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://legal.org.ua,https://www.legal.org.ua,https://local.legal.org.ua,https://usa.legal.org.ua,https://uk.legal.org.ua,https://de.legal.org.ua,https://fr.legal.org.ua,https://nl.legal.org.ua,https://ee.legal.org.ua,https://eu.legal.org.ua,https://ua.legal.org.ua,http://localhost:5173,http://localhost:3000}
+
+    # MinIO (S3-compatible object storage)
+    MINIO_ENDPOINT: minio-local
+    MINIO_PORT: 9000
+    MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+    MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+    MINIO_USE_SSL: "false"
+    MINIO_PUBLIC_URL: https://local.legal.org.ua/s3
+
+    # Nextcloud (cloud file storage)
+    NEXTCLOUD_URL: http://nextcloud-local:80
+    NEXTCLOUD_USER: ${NEXTCLOUD_USER:-admin}
+    NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-admin}
+
+    # Upload temp directory
+    UPLOAD_TEMP_DIR: /app/data/uploads
+
+    # Vision/OCR credentials
+    VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
+    GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
+
+    # Prometheus (for admin metrics dashboard)
+    PROMETHEUS_URL: http://prometheus-local:9090
+
+    # Logging (verbose for development)
+    LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+    # Admin user for local development
+    ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-admin@legal.org.ua}
+    ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-admin123456}
+
+    # Terminal service (dedicated Debian container for admin shell)
+    TERMINAL_SERVICE_URL: ws://terminal-service-local:3010
+
+    # Payment gateways
+    MONOBANK_API_KEY: ${MONOBANK_API_KEY:-}
+    MONOBANK_REDIRECT_URL: ${MONOBANK_REDIRECT_URL:-}
+    PUBLIC_URL: ${PUBLIC_URL:-https://local.legal.org.ua}
+
+
+  depends_on:
+    migrate-local:
+      condition: service_completed_successfully
+    seed-admin-local:
+      condition: service_completed_successfully
+    seed-test-user-local:
+      condition: service_completed_successfully
+    qdrant-local:
+      condition: service_healthy
+    redis-local:
+      condition: service_healthy
+
+  volumes:
+    # NOTE: do NOT bind-mount host packages/shared/dist or mcp_backend/dist here.
+    # Dockerfile.mono-backend already compiles fresh dist into the image (and the
+    # local deploy runs `up -d --build`), so mounting host dist only re-introduced
+    # the stale-overwrite the Dockerfile warns about — and, because dist/ is
+    # gitignored, `git clean -ffdx` in CI checkout deletes it while this
+    # restart:unless-stopped container holds the mount, making the Docker daemon
+    # recreate the host dir root-owned and break the next tsc build (EACCES).
+    - ../mcp_backend/logs:/app/logs
+    - app_local_data:/app/data
+    # Vision API credentials for OCR
+    - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
+
+  healthcheck:
+    test:
+      [
+        "CMD",
+        "node",
+        "-e",
+        "require('http').get('http://127.0.0.1:3000/health/ready', r => { let d=''; r.on('data', c => d+=c); r.on('end', () => { if (r.statusCode !== 200) { process.stderr.write(d); process.exit(1); } process.exit(0); }); }).on('error', e => { process.stderr.write(e.message); process.exit(1); });",
+      ]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 40s
+
+  restart: unless-stopped
+
+  networks:
+    - secondlayer-local
+
+  deploy:
+    resources:
+      limits:
+        cpus: '2.0'
+        memory: 4G
+      reservations:
+        cpus: '0.5'
+        memory: 1G
+
 services:
   postgres-local:
     image: postgres:15-alpine
@@ -162,6 +349,37 @@ services:
         limits:
           memory: 26G
 
+  # Туннель Cloudflare для боевого домена. Живёт ЗДЕСЬ, а не на проде:
+  # существующий туннель local-legal терминируется на AWS-инстансе, и путь
+  # local.legal.org.ua зависит от него. Этот идёт Cloudflare → local.lex
+  # напрямую, поэтому прод для работы домена не нужен.
+  #
+  # Туннель legal-on-local, id 0e639b56-e3c0-4001-9712-67768e731b00.
+  # Маршруты (legal.org.ua и www → nginx-local:80) заданы на стороне
+  # Cloudflare — контейнеру нужен только токен.
+  cloudflared-legal:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-legal-local
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN_LEGAL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "cloudflared --version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    depends_on:
+      - nginx-local
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+
   redis-local:
     image: redis:7-alpine
     container_name: secondlayer-redis-local
@@ -290,193 +508,24 @@ services:
     networks:
       - secondlayer-local
 
+  # Синий — цвет по умолчанию, поднимается обычным `compose up`
   app-local:
-    image: secondlayer-app:latest
+    <<: *app_local_base
     container_name: secondlayer-app-local
-    command: ["node", "--max-old-space-size=2048", "dist/http-server.js"]
-    environment:
-      # Application
-      NODE_ENV: ${NODE_ENV:-development}
-      PORT: ${HTTP_PORT:-3000}
-      HTTP_PORT: ${HTTP_PORT:-3000}
-      HTTP_HOST: 0.0.0.0
-
-      # JWT for authentication
-      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-in-production}
-
-      # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
-      POSTGRES_HOST: postgres-local
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_local}
-
-      # Vector DB
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant-local:6333}
-      QDRANT_API_KEY: ${QDRANT_API_KEY:-local_qdrant_key}
-      # EDRSR vectors (51M points, 555 GB) live on the local host itself and are
-      # shared with prod, so the local stack reads them in place instead of
-      # keeping a second copy. SKIP_INIT defaults to true on purpose: the local
-      # backend must never create or alter collections in an instance prod serves.
-      QDRANT_EDRSR_URL: ${QDRANT_EDRSR_URL:-http://10.88.0.2:6343}
-      QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
-      QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
-      QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
-      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
-
-      # Cache
-      REDIS_URL: redis://:${REDIS_PASSWORD:-local_redis_pass}@redis-local:6379
-      REDIS_HOST: redis-local
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-local_redis_pass}
-
-      # AWS Bedrock Configuration
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION: ${AWS_REGION:-eu-central-1}
-      BEDROCK_MODEL_QUICK: ${BEDROCK_MODEL_QUICK:-eu.anthropic.claude-haiku-4-5-20251001-v1:0}
-      BEDROCK_MODEL_STANDARD: ${BEDROCK_MODEL_STANDARD:-eu.anthropic.claude-sonnet-4-6}
-      BEDROCK_MODEL_DEEP: ${BEDROCK_MODEL_DEEP:-eu.anthropic.claude-sonnet-4-6}
-      BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-}
-      BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-}
-      BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-}
-
-      # Embeddings
-      VOYAGEAI_API_KEY: ${VOYAGEAI_API_KEY:-}
-      VOYAGEAI_API_KEY_2: ${VOYAGEAI_API_KEY_2:-}
-      VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
-      BGE_M3_URL: ${BGE_M3_URL:-http://tei-bge-m3:80}
-
-      # LLM Provider Strategy
-      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-bedrock-first}
-
-      # No Anthropic/OpenAI — Bedrock only
-
-      # ZakonOnline API (deprecated, removal pending)
-      ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
-      ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
-
-      # Security (relaxed for local dev)
-      SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
-
-      # Unified Gateway Configuration
-      ENABLE_UNIFIED_GATEWAY: ${ENABLE_UNIFIED_GATEWAY:-true}
-      RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
-      RADA_API_KEY: ${RADA_API_KEY:-test-key-123}
-      OPENREYESTR_MCP_URL: ${OPENREYESTR_MCP_URL:-http://openreyestr-app-local:3004}
-      OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEY:-test-key-123}
-      SNEAKYPIPER_API_URL: ${SNEAKYPIPER_API_URL:-}
-      SNEAKYPIPER_API_KEY: ${SNEAKYPIPER_API_KEY:-}
-      STAGE_BACKEND_URL: ${STAGE_BACKEND_URL:-https://stage.legal.org.ua}
-      STAGE_API_KEY: ${STAGE_API_KEY:-}
-
-      # WebAuthn / FIDO2
-      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-local.legal.org.ua}
-      WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-SecondLayer Legal}
-      WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-https://local.legal.org.ua}
-
-      # OAuth (optional for local - can use API keys instead)
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://local.legal.org.ua/auth/google/callback}
-      FRONTEND_URL: ${FRONTEND_URL:-https://local.legal.org.ua}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://local.legal.org.ua,https://usa.legal.org.ua,https://uk.legal.org.ua,https://de.legal.org.ua,https://fr.legal.org.ua,https://nl.legal.org.ua,https://ee.legal.org.ua,https://eu.legal.org.ua,https://ua.legal.org.ua,http://localhost:5173,http://localhost:3000}
-
-      # MinIO (S3-compatible object storage)
-      MINIO_ENDPOINT: minio-local
-      MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_USE_SSL: "false"
-      MINIO_PUBLIC_URL: https://local.legal.org.ua/s3
-
-      # Nextcloud (cloud file storage)
-      NEXTCLOUD_URL: http://nextcloud-local:80
-      NEXTCLOUD_USER: ${NEXTCLOUD_USER:-admin}
-      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-admin}
-
-      # Upload temp directory
-      UPLOAD_TEMP_DIR: /app/data/uploads
-
-      # Vision/OCR credentials
-      VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials/vision-credentials.json
-
-      # Prometheus (for admin metrics dashboard)
-      PROMETHEUS_URL: http://prometheus-local:9090
-
-      # Logging (verbose for development)
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
-
-      # Admin user for local development
-      ADMIN_USER_EMAIL: ${ADMIN_USER_EMAIL:-admin@legal.org.ua}
-      ADMIN_USER_PASSWORD: ${ADMIN_USER_PASSWORD:-admin123456}
-
-      # Terminal service (dedicated Debian container for admin shell)
-      TERMINAL_SERVICE_URL: ws://terminal-service-local:3010
-
-      # Payment gateways
-      MONOBANK_API_KEY: ${MONOBANK_API_KEY:-}
-      MONOBANK_REDIRECT_URL: ${MONOBANK_REDIRECT_URL:-}
-      PUBLIC_URL: ${PUBLIC_URL:-https://local.legal.org.ua}
-
+    # Порт у каждого цвета свой. Одинаковый в якоре означал бы, что зелёный
+    # не поднимется, пока синий держит 3000 — на этом упала первая выкатка.
+    # nginx ходит по именам контейнеров, порты нужны только для отладки.
     ports:
-      - "127.0.0.1:3000:3000"  # Standard backend port
+      - "127.0.0.1:3000:3000"
 
-    depends_on:
-      migrate-local:
-        condition: service_completed_successfully
-      seed-admin-local:
-        condition: service_completed_successfully
-      seed-test-user-local:
-        condition: service_completed_successfully
-      qdrant-local:
-        condition: service_healthy
-      redis-local:
-        condition: service_healthy
-
-    volumes:
-      # NOTE: do NOT bind-mount host packages/shared/dist or mcp_backend/dist here.
-      # Dockerfile.mono-backend already compiles fresh dist into the image (and the
-      # local deploy runs `up -d --build`), so mounting host dist only re-introduced
-      # the stale-overwrite the Dockerfile warns about — and, because dist/ is
-      # gitignored, `git clean -ffdx` in CI checkout deletes it while this
-      # restart:unless-stopped container holds the mount, making the Docker daemon
-      # recreate the host dir root-owned and break the next tsc build (EACCES).
-      - ../mcp_backend/logs:/app/logs
-      - app_local_data:/app/data
-      # Vision API credentials for OCR
-      - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
-
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "require('http').get('http://127.0.0.1:3000/health/ready', r => { let d=''; r.on('data', c => d+=c); r.on('end', () => { if (r.statusCode !== 200) { process.stderr.write(d); process.exit(1); } process.exit(0); }); }).on('error', e => { process.stderr.write(e.message); process.exit(1); });",
-        ]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
-
-    restart: unless-stopped
-
-    networks:
-      - secondlayer-local
-
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4G
-        reservations:
-          cpus: '0.5'
-          memory: 1G
+  # Зелёный — поднимается через --profile green во время выкатки,
+  # nginx переключается на него только после проверки здоровья
+  app-local-green:
+    <<: *app_local_base
+    container_name: secondlayer-app-local-green
+    profiles: ["green"]
+    ports:
+      - "127.0.0.1:3001:3000"
 
   rada-migrate-local:
     build:
@@ -983,6 +1032,25 @@ services:
 
   # ===== Developer Platform =====
 
+  # Зелёный фронтенд: образ собирает синий, здесь только запуск другого
+  # экземпляра для бесшовной выкатки
+  lexwebapp-local-green:
+    image: lexwebapp-local:latest
+    container_name: lexwebapp-local-green
+    profiles: ["green"]
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Kiev
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+
   platform-local:
     build:
       context: ..
@@ -1017,6 +1085,9 @@ services:
       - "443:443"
     volumes:
       - ./nginx/local-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      # каталогом, а не файлом: при монтировании одиночного файла контейнер
+      # держится за inode и перезапись апстримов на хосте не увидит
+      - ./nginx/includes:/etc/nginx/includes:ro
       - ./nginx/certs:/etc/nginx/certs:ro
       - certbot_webroot:/var/www/certbot:ro
     depends_on:

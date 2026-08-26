@@ -144,7 +144,7 @@ SELECT count(*) AS resolved FROM updated WHERE act_id IS NOT NULL
 """
 
 # Step 2: act_id (+ lang, from_date) -> edition. Design rule 2 -- the parsed
-# edition whose [date_applicability, date_end_applicability) contains
+# edition whose [date_applicability, date_end_applicability] contains
 # from_date, or (from_date NULL) the parsed edition with the greatest
 # date_applicability not in the future. Tries the citation's own language
 # first and falls back to 'de' only when nothing in that language satisfies
@@ -159,6 +159,16 @@ SELECT count(*) AS resolved FROM updated WHERE act_id IS NOT NULL
 # found an edition (best.version_id IS NOT NULL) get updated: a row that
 # found no edition at all -- in any language -- stays at match_method =
 # 'act_only', not overwritten with something that looks resolved.
+#
+# date_end_applicability is INCLUSIVE -- it is the LAST DAY the edition is
+# in force, not the first day it no longer is. Verified on prod (2026-08-23):
+# 19,428 consecutive parsed editions of the same act+lang have
+# next.date_applicability = prev.date_end_applicability + 1 day (e.g. SR 220
+# de: 2021-01-01..2021-01-31, then 2021-02-01..2021-04-30, ...). A `<`
+# predicate here treats the last day as already outside the edition, so a
+# from_date that lands exactly on it matches neither this edition nor the
+# next (whose date_applicability is one day later) -- `no edition for date`
+# on what is in fact a perfectly ordinary, covered date.
 _RESOLVE_EDITIONS = """
 UPDATE ch_legislation_citations c
    SET version_id = best.version_id,
@@ -176,7 +186,7 @@ UPDATE ch_legislation_citations c
                 (c2.from_date IS NOT NULL
                    AND v.date_applicability <= c2.from_date
                    AND (v.date_end_applicability IS NULL
-                        OR c2.from_date < v.date_end_applicability))
+                        OR c2.from_date <= v.date_end_applicability))
              OR (c2.from_date IS NULL AND v.date_applicability <= CURRENT_DATE)
               )
         ORDER BY (v.lang = c2.lang) DESC, v.date_applicability DESC, v.version_id

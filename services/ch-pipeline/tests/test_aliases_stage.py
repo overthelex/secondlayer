@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import aliases_stage
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -55,8 +55,11 @@ def conn(settings):
                 enforcement_status int)
         """)
         # ch_act_article (migration 197's table, which 199 indexes but does
-        # not create) and migration 199 itself -- see tests/conftest.py.
-        apply_migration_199(c)
+        # not create) and migrations 199 + 200 -- see tests/conftest.py.
+        # 200 is what creates ch_citation_state, which db.complete() writes
+        # to on every 'extracted' and 'loaded' transition.
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 

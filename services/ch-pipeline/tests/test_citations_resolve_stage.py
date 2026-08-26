@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import citations_resolve_stage
 
-from conftest import MIGRATION_198, MIGRATION_201, apply_migration_199
+from conftest import MIGRATION_198, MIGRATION_201, apply_migration_200
 
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_citations_resolve_stage.py is 3 levels down from the repo root (matches
@@ -60,7 +60,8 @@ def conn(settings):
         c.execute(MIGRATION_201.read_text())
         # 197 has just created the real ch_act_article, so the helper's
         # IF NOT EXISTS stand-in is a no-op here and only 199 is applied.
-        apply_migration_199(c)
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 
@@ -123,7 +124,11 @@ def seeded(conn):
     _alias(conn, "OR", "de", "220")
     _alias(conn, "CO", "fr", "220")
 
-    _version(conn, 10, 1, "de", date(2015, 1, 1), date(2020, 1, 1))
+    # date_end_applicability is INCLUSIVE -- 10's last day in force is
+    # 2019-12-31, not 2020-01-01 (that is 20's first day). See
+    # citations_resolve_stage.py's _RESOLVE_EDITIONS comment for the prod
+    # evidence.
+    _version(conn, 10, 1, "de", date(2015, 1, 1), date(2019, 12, 31))
     _version(conn, 20, 1, "de", date(2020, 1, 1), None)
 
     # Top-level article 336 in both editions, plus a transitional-provision
@@ -344,6 +349,26 @@ def test_the_counters_count_resolutions_not_attempts(conn, settings):
     assert conn.execute(
         "SELECT count(*) AS n FROM ch_case_citations "
         "WHERE match_method = 'unresolved'").fetchone()["n"] == 1
+
+
+def test_edition_end_date_is_inclusive(seeded, settings):
+    """date_end_applicability is the LAST DAY an edition is in force, not
+    the first day it is not: a citation dated exactly on the boundary must
+    resolve to the edition that date_end_applicability names, not fall
+    through to no edition at all (the pre-fix `<` predicate) and not jump
+    ahead to the next edition either."""
+    _leg_citation(seeded, "ECLI:BOUND_OLD", "OR", "336", None, "de", date(2019, 12, 31))
+    _leg_citation(seeded, "ECLI:BOUND_NEW", "OR", "336", None, "de", date(2020, 1, 1))
+
+    citations_resolve_stage.run(settings)
+
+    leg = _leg_rows(seeded)
+    assert leg["ECLI:BOUND_OLD"]["version_id"] == 10, \
+        "2019-12-31 is the 2015 edition's last day in force -- inclusive"
+    assert leg["ECLI:BOUND_OLD"]["article_id"] == 1001
+    assert leg["ECLI:BOUND_NEW"]["version_id"] == 20, \
+        "2020-01-01 is the 2020 edition's first day"
+    assert leg["ECLI:BOUND_NEW"]["article_id"] == 2001
 
 
 def test_editions_sharing_an_applicability_date_resolve_deterministically(
