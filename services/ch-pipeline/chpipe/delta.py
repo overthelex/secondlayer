@@ -612,13 +612,35 @@ def run_registries(settings: Settings) -> RegistriesReport:
     its German label, which is why zefix runs first here even though the two
     stages write disjoint tables and neither depends on the other's rows to
     make progress.
+
+    That ordering is a preference, not a dependency, which is why each of
+    the three gets its own guard: they write disjoint tables and share no
+    failure mode, so a LINDAS timeout used to cost the gazette a whole
+    night -- shab-list and shab-detail never ran, and the queue they drain
+    grew by another day's publications with nothing taking from it. Same
+    shape as main()'s guard over its own three halves: every stage gets its
+    turn, the failures are logged in full, and the FIRST one is re-raised
+    afterwards so run-delta.sh's marker line cannot report OK on a night
+    that lost a stage.
     """
-    zefix_report = zefix_stage.run(settings)
-    shab_list_report = shab_list_stage.run(settings, months=2)
-    shab_detail_report = shab_detail_stage.run(
-        settings, budget_seconds=settings.shab_budget_seconds)
-    return RegistriesReport(zefix=zefix_report, shab_list=shab_list_report,
-                            shab_detail=shab_detail_report)
+    report = RegistriesReport()
+    failures: list[BaseException] = []
+    # The name is the RegistriesReport field the stage fills, so a stage that
+    # fails leaves that field at its zero report and the rest of the run is
+    # still described.
+    for name, call in (
+            ("zefix", lambda: zefix_stage.run(settings)),
+            ("shab_list", lambda: shab_list_stage.run(settings, months=2)),
+            ("shab_detail", lambda: shab_detail_stage.run(
+                settings, budget_seconds=settings.shab_budget_seconds))):
+        try:
+            setattr(report, name, call())
+        except Exception as exc:               # noqa: BLE001 -- see above
+            log.exception("registries: the %s stage failed", name)
+            failures.append(exc)
+    if failures:
+        raise failures[0]
+    return report
 
 
 def main() -> DeltaReport:

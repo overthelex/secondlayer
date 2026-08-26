@@ -1062,6 +1062,50 @@ def test_run_registries_composes_the_three_reports(tmp_path, monkeypatch):
     assert report.shab_detail.fetched == 3
 
 
+def test_run_registries_runs_the_other_stages_when_one_raises(tmp_path,
+                                                              monkeypatch):
+    """The three stages write disjoint tables and share no failure mode: a
+    LINDAS timeout is not a reason to skip a night of the gazette. Guarded
+    the same way main() guards its own three halves -- logged, the rest run,
+    the first failure re-raised so run-delta.sh cannot print OK."""
+    seen = _stub_registry_stages(monkeypatch)
+    boom = RuntimeError("LINDAS timed out")
+
+    def explode(settings, *args, **kwargs):
+        raise boom
+
+    monkeypatch.setattr(zefix_stage, "run", explode)
+
+    with pytest.raises(RuntimeError) as caught:
+        delta.run_registries(_settings(tmp_path))
+
+    assert caught.value is boom
+    assert seen["shab_list"] == [((), {"months": 2})]
+    assert len(seen["shab_detail"]) == 1
+
+
+def test_run_registries_raises_the_first_failure_not_the_last(tmp_path,
+                                                              monkeypatch):
+    """Same rule as main(): the others are logged in full above it, and the
+    traceback an operator reads points at the first real cause rather than
+    at whatever happened to fail last."""
+    _stub_registry_stages(monkeypatch)
+    first, second = RuntimeError("zefix"), RuntimeError("shab-list")
+
+    def explode(exc):
+        def run(settings, *args, **kwargs):
+            raise exc
+        return run
+
+    monkeypatch.setattr(zefix_stage, "run", explode(first))
+    monkeypatch.setattr(shab_list_stage, "run", explode(second))
+
+    with pytest.raises(RuntimeError) as caught:
+        delta.run_registries(_settings(tmp_path))
+
+    assert caught.value is first
+
+
 # --- citations_stage/citations_resolve_stage wired into the nightly delta ---
 
 def test_citations_runs_once_per_grown_spider(tmp_path, monkeypatch, conn):
