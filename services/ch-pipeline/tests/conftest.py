@@ -48,3 +48,42 @@ def apply_migration_199(conn) -> None:
     """
     conn.execute(_CH_ACT_ARTICLE)
     conn.execute(MIGRATION_199.read_text())
+
+
+# ---------------------------------------------------------------------------
+# Whole-schema reset for the legislation side (migration 135's stand-in, then
+# 197, 198 and 201). The cantonal stages read columns from all three, so a
+# test that builds only 197's tables would pass against a shape production
+# does not have -- the exact class of mismatch conftest's docstring above
+# describes for ch_act_article.
+# ---------------------------------------------------------------------------
+MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
+MIGRATION_198 = _REPO_ROOT / "mcp_backend/src/migrations/198_ch_as_bbl.sql"
+MIGRATION_201 = _REPO_ROOT / "mcp_backend/src/migrations/201_ch_cantonal_legislation.sql"
+
+_LEGISLATION_TABLES = (
+    "ch_cantonal_registry", "ch_article_provenance", "ch_act_change_document",
+    "ch_act_as_link", "ch_as_act", "ch_act_change", "ch_act_article",
+    "ch_act_version", "ch_act", "ch_legislation",
+)
+
+_CH_LEGISLATION_135 = """
+CREATE TABLE IF NOT EXISTS ch_legislation (
+    eli_uri text NOT NULL, lang text NOT NULL, sr_number text,
+    title text, short_title text, version_date date, in_force boolean,
+    date_entry_force date, date_end_validity date, akn_xml text,
+    full_text text, html_url text, pdf_url text, xml_url text,
+    source text DEFAULT 'fedlex', metadata_json jsonb,
+    imported_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(),
+    PRIMARY KEY (eli_uri, lang))
+"""
+
+
+def reset_legislation_schema(conn) -> None:
+    """Drop and re-create the whole CH legislation schema so a stage test
+    starts from the real shape, migration 201 included."""
+    for table in _LEGISLATION_TABLES:
+        conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+    conn.execute(_CH_LEGISLATION_135)
+    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201):
+        conn.execute(migration.read_text())
