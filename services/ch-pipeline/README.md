@@ -987,6 +987,10 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
   `ch_shab_publications`. Two rubrics, `KK` (debt collection / bankruptcy)
   and `HR` (commercial register), 2,509,068 publications backfilled
   (measured 2026-08-26: HR 2,293,215 + KK 215,853).
+  Prod needs `CREATE EXTENSION pg_trgm` (superuser) before the backfill:
+  migration 201 creates `idx_ch_shab_name_trgm` only if the extension is
+  already there, and without it `ch_search_companies`' SHAB-name fallback
+  scans all 2.5M publications.
 - **`shab-detail`** — turns each pointer into a record: the register's own
   company name, the UID that joins a publication to a `ch_zefix_companies`
   row, the legal form, the seat, the full publication text, fetched one XML

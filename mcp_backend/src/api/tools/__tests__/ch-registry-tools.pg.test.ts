@@ -275,6 +275,25 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.total_count).toBe(1);
     });
 
+    it('does not fall back to SHAB for a query too short to be indexable', async () => {
+      // The fallback matches company_name across 2.5M publications and has no index
+      // unless pg_trgm is installed, so a one- or two-character query is refused rather
+      // than served with a sequential scan.
+      await client.query(
+        `INSERT INTO ch_shab_publications
+           (shab_id, publication_date, rubric, sub_rubric, company_name, canton, language)
+         VALUES ('SHAB-HR06', '2021-03-03', 'HR', 'HR02', 'XY Trading AG', 'ZG', 'de'),
+                ('SHAB-HR07', '2021-04-04', 'HR', 'HR02', 'XYZ Trading AG', 'ZG', 'de')`
+      );
+
+      const short = parse((await tools.executeTool('ch_search_companies', { query: 'XY' }))!);
+      expect(short.results).toEqual([]);
+
+      const long = parse((await tools.executeTool('ch_search_companies', { query: 'XYZ' }))!);
+      expect(long.results.map((r: any) => r.name)).toEqual(['XYZ Trading AG']);
+      expect(long.results[0].source).toBe('shab');
+    });
+
     it('does not fall back to SHAB when Zefix already matched', async () => {
       const body = parse((await tools.executeTool('ch_search_companies', { query: 'Muster', status: 'all' }))!);
       expect(body.results.every((r: any) => r.source === 'zefix')).toBe(true);

@@ -36,6 +36,14 @@ const MAX_SHAB_ROWS = 100;
 const MAX_REGISTER_ROWS = 50;
 const STATUSES = ['active', 'inactive', 'all'];
 
+// Shortest query the SHAB-name fallback will serve. That fallback matches company_name
+// across 2.5M publications and has no index unless pg_trgm is installed (migration 201
+// creates idx_ch_shab_name_trgm only when the extension is present — CREATE EXTENSION
+// needs superuser, so prod must run it before the backfill). One or two characters match
+// a large fraction of the table and are worth nothing to the caller, so they are refused
+// rather than answered with a sequential scan.
+const SHAB_FALLBACK_MIN_CHARS = 3;
+
 // A UID is 'CHE' plus nine digits; the dots and the dash after CHE are cosmetic, so all
 // four renderings are accepted (CHE-123.456.789, CHE123456789, CHE-123456789,
 // CHE123.456.789) and normalised to the dotted form Zefix stores.
@@ -170,6 +178,11 @@ status: active (типово) / inactive / all. canton — двобуквени�
       // back to SHAB names — otherwise page 2 of a Zefix search would silently switch
       // register mid-pagination. The count query answers that without a second probe.
       if (zefix.total > 0) return this.wrapCompanyResults([], lim, off, kind);
+
+      // See SHAB_FALLBACK_MIN_CHARS: an unindexable query is not worth 2.5M rows.
+      if (!uid && rawQuery.length < SHAB_FALLBACK_MIN_CHARS) {
+        return this.wrapCompanyResults([], lim, off, kind);
+      }
 
       const shab = await this.searchShabNames(rawQuery, uid, { canton, legal_form }, lim, off);
       return this.wrapCompanyResults(shab, lim, off, kind);

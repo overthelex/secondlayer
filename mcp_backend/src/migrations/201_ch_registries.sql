@@ -90,6 +90,8 @@ CREATE INDEX IF NOT EXISTS idx_ch_shab_detail_queue ON ch_shab_publications (rub
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
         CREATE INDEX IF NOT EXISTS idx_ch_shab_name_trgm ON ch_shab_publications USING gin (company_name gin_trgm_ops);
+    ELSE
+        RAISE NOTICE 'migration 201: pg_trgm is not installed, so idx_ch_shab_name_trgm was NOT created. ch_search_companies'' SHAB-name fallback will scan ch_shab_publications (2.5M rows). Run CREATE EXTENSION pg_trgm as a superuser and re-run this migration.';
     END IF;
 END $$;
 
