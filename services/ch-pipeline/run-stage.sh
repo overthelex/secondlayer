@@ -4,7 +4,7 @@
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
-#   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal [canton]
+#   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -63,7 +63,7 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_SHAB_MONTHS:-}}"
     export CHPIPE_SHAB_MONTHS="$ARG"
     ;;
-  lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal)
+  lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal)
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
     ARG="${POS:-${CHPIPE_CANTON:-}}"

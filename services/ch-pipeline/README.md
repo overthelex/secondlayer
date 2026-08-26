@@ -1567,7 +1567,8 @@ Stages (`run-stage.sh <stage> [canton]`, `CHPIPE_CANTON` is the env twin):
 | `lexfind-registry [canton]` | all 26 cantons (or one): every act and its version list from lexfind.ch into `ch_cantonal_registry`. ~33K acts, hours at 2 req/s; idempotent |
 | `cantonal-acts [canton]` | Lexwork host(s): acts + versions (stage `discovered`, source `lexwork`) + change documents. Driving set = host index + change-document index + the registry's numbers for the canton (that is how abrogated acts get in). Comma-separated codes allowed |
 | `cantonal-fetch [canton]` | show_as_json payload per version into `akn_xml` (+ audit copy `raw/cantonal/{version_id}.json`). One canton or all; sibling languages share one download |
-| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document`) |
+| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document` through the host's history map, or through `change_refs` when the host ships none); fills `date_decision` on the documents the rows cite |
+| `cantonal-relink [canton]` | recompute `change_document_id` on already-parsed provenance rows from `raw_note` (no refetch): per act, per edition, one UPDATE per edition. Idempotent; already-linked rows are kept (`CHPIPE_RELINK_FORCE=1` recomputes them). Reports linked / already_linked / unlinked by reason. `CHPIPE_LIMIT` bounds editions |
 | `diff`, `project-legacy` | unchanged; `diff` walks cantonal acts too (`e_id` = Lexwork uid) |
 | `reports-cantonal [canton]` | Gate F: Lexwork corpus against the LexFind registry, quality counters, amendment counters |
 
@@ -1586,6 +1587,16 @@ cron:
 
     0 4 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh cantonal-acts
     0 5 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh lexfind-registry
+
+Relink (one-off, after this code ships; 2026-08-26 prod had 993,939 of
+1,501,980 cantonal provenance rows unlinked because seven hosts ship an
+empty history map): `./run-stage.sh cantonal-relink BL` first (85K rows,
+minutes), read the report's `by_reason`, then `cantonal-relink` for all
+cantons (~1.5M rows; one row read and at most one row written each; expect
+tens of minutes). Expected link rate on the 2% sample (`change_refs`
+docstring): OW 98%, ZG 85%, LU 80%, BL 56%, BS 33%, TG 0.4%, AR 0 (the
+host publishes no change documents at all: `change_documents/lightweight_index`
+is `{}`, checked 2026-08-26). Rerunning is a no-op.
 
 Env: `CHPIPE_CANTONAL_PER_HOST` (default 2) caps requests in flight per
 cantonal host; `CHPIPE_HTTP_CONCURRENCY` still caps the total.
