@@ -793,6 +793,29 @@ def test_no_proxy_is_configured_by_default(conn, settings, monkeypatch):
     assert seen["proxy"] is None
 
 
+# --- the second uplink -------------------------------------------------------
+#
+# amtsblattportal.ch caps requests at roughly 50/s per source IP. Binding to
+# the local server's second uplink is a second, independent per-IP quota.
+
+def test_the_configured_local_address_reaches_the_fetcher(conn, settings,
+                                                           monkeypatch):
+    seen = _fetcher_spy(monkeypatch, shab_list_stage)
+    bound = dataclasses.replace(settings, shab_local_address="203.0.113.7")
+
+    _run(bound, FakePortal(THREE), rubrics=("HR",), from_month=AUGUST)
+
+    assert seen["local_address"] == "203.0.113.7"
+
+
+def test_no_local_address_is_configured_by_default(conn, settings, monkeypatch):
+    seen = _fetcher_spy(monkeypatch, shab_list_stage)
+
+    _run(settings, FakePortal(THREE), rubrics=("HR",), from_month=AUGUST)
+
+    assert seen["local_address"] is None
+
+
 # --- CHPIPE_SHAB_CONCURRENCY -----------------------------------------------
 #
 # Through the SOCKS tunnel to prod, throughput is roughly concurrency / RTT

@@ -402,7 +402,8 @@ async def _run_async(settings: Settings, limit: int | None,
         # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
         async with Fetcher(concurrency=settings.shab_concurrency, retries=retries,
                            backoff=backoff, transport=transport,
-                           proxy=settings.shab_proxy) as fetcher:
+                           proxy=settings.shab_proxy,
+                           local_address=settings.shab_local_address) as fetcher:
             while True:
                 size = batch_size if remaining is None else min(batch_size, remaining)
                 if size <= 0:

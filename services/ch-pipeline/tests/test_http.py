@@ -163,3 +163,46 @@ async def test_trust_env_still_reads_the_environment(monkeypatch):
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
     async with Fetcher(concurrency=1) as f:
         assert list(_proxy_mounts(f)) == ["https://"]
+
+
+# --- local_address -----------------------------------------------------------
+#
+# amtsblattportal.ch caps requests at roughly 50/s per source IP. The local
+# server has a second uplink with its own public IPs, and binding the
+# client's local address to one of them routes through it -- a second per-IP
+# quota at the portal. httpx implements this as a transport option, not a
+# client kwarg, so a local_address builds its own AsyncHTTPTransport and
+# passes it as `transport=` -- which is why it only applies when the caller
+# did not already pass an explicit transport (the test suites' MockTransport
+# must win, or every stage test would try to open a real socket).
+
+def test_no_local_address_unless_one_is_asked_for():
+    f = Fetcher(concurrency=1)
+    # httpx's own default transport, unbound.
+    assert f._client._transport._pool._local_address is None
+
+
+def test_a_local_address_builds_a_bound_transport():
+    f = Fetcher(concurrency=1, local_address="127.0.0.1")
+    transport = f._client._transport
+    assert isinstance(transport, httpx.AsyncHTTPTransport)
+    # httpx 0.28: the bound source address lives on the connection pool.
+    assert transport._pool._local_address == "127.0.0.1"
+
+
+def test_an_explicit_transport_wins_over_local_address():
+    """The test suites pass transport=MockTransport(...); local_address must
+    not silently replace it and start opening real sockets."""
+    mock = httpx.MockTransport(lambda r: httpx.Response(200, text="x"))
+    f = Fetcher(concurrency=1, local_address="127.0.0.1", transport=mock)
+    assert f._client._transport is mock
+
+
+def test_local_address_and_proxy_cannot_be_combined():
+    """An explicit proxy= is a mount that takes precedence over transport=
+    (see the proxy tests above), so a local_address's bound transport would
+    silently do nothing if a proxy were also given -- refuse the combination
+    instead of building something that looks configured but is not."""
+    with pytest.raises(ValueError, match="local_address"):
+        Fetcher(concurrency=1, local_address="127.0.0.1",
+               proxy="socks5h://127.0.0.1:1080")
