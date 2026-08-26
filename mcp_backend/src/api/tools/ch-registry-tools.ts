@@ -8,7 +8,10 @@
  * Two identifiers exist and only one of them is reliable:
  *
  *  - `uid` (CHE-123.456.789) is the federal business identifier and a real key. Zefix,
- *    SHAB and Kantonsblatt all carry it, so anything joined on `uid` is exact.
+ *    SHAB and Kantonsblatt all carry it, so anything joined on `uid` is exact. A
+ *    Kantonsblatt row carries it only when the cantonal office published one; the
+ *    company card answers that section from the UID alone, so a cantonal publication
+ *    without one is a miss rather than a name guess (see getKantonsblatt).
  *  - The company NAME is all that FINMA and SECO publish — neither list carries a UID.
  *    Matching a Zefix company to those two is therefore a HEURISTIC, not a join: the
  *    name is lower-cased, the trailing legal-form suffix (AG / SA / GmbH / Sàrl / Sagl /
