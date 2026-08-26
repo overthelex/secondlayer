@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import citations_resolve_stage
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_citations_resolve_stage.py is 3 levels down from the repo root (matches
@@ -58,7 +58,8 @@ def conn(settings):
         c.execute(MIGRATION_197.read_text())
         # 197 has just created the real ch_act_article, so the helper's
         # IF NOT EXISTS stand-in is a no-op here and only 199 is applied.
-        apply_migration_199(c)
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 

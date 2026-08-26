@@ -20,6 +20,14 @@ stronger claim than "we called UPDATE", and it is the state the coverage
 gates count. Keeping it as its own resumable pass also means the final
 sweep over ~500,000 rows can be run, interrupted and re-run without
 touching the extraction work.
+
+'loaded' is also what enrols a decision in the citation queue. That queue is
+ch_citation_state (migration 200), a side table rather than a flag on
+ch_court_decisions -- so a decision has to be PUT there, and this stage's
+promotion is the moment it happens. db.complete(-> 'loaded') does it, in the
+absent-only form: nothing here has to remember to, and a decision coming
+round the loop a second time keeps the state row (and the stamp) it already
+had.
 """
 from __future__ import annotations
 
