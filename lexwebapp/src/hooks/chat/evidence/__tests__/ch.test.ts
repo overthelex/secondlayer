@@ -660,6 +660,63 @@ describe('extractChEvidence', () => {
     });
   });
 
+  describe('cantonal acts (jurisdiction != CH)', () => {
+    it('labels a cantonal search result with the canton code instead of SR', () => {
+      const data = {
+        results: [
+          {
+            act_id: 7,
+            sr_number: '131.1',
+            abbreviation: 'KV',
+            title: 'Verfassung des Kantons Zürich',
+            in_force: true,
+            jurisdiction: 'ZH',
+          },
+        ],
+        total_count: 1,
+        has_more: false,
+        limit: 20,
+        offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_legislation', data);
+      expect(result.citations[0].npaTitle).toBe('Verfassung des Kantons Zürich (ZH 131.1)');
+    });
+
+    it('keeps the SR label for an explicit federal jurisdiction', () => {
+      const data = {
+        results: [{ act_id: 1, sr_number: '220', title: 'Obligationenrecht', in_force: true, jurisdiction: 'CH' }],
+        total_count: 1,
+        has_more: false,
+        limit: 20,
+        offset: 0,
+      };
+
+      const result = extractChEvidence('ch_search_legislation', data);
+      expect(result.citations[0].npaTitle).toBe('Obligationenrecht (SR 220)');
+    });
+
+    it('labels a cantonal article and history with the canton code', () => {
+      const article = extractChEvidence('ch_get_act_article', {
+        sr_number: '131.1',
+        jurisdiction: 'ZH',
+        abbreviation: 'KV',
+        version: { version_id: 1, date_applicability: '2020-01-01', date_end_applicability: null },
+        article: { e_id: 'art_1', article_number: '1', text: 'Text' },
+      });
+      expect(article.citations[0].npaTitle).toBe('Art. 1 KV (ZH 131.1)');
+
+      const history = extractChEvidence('ch_get_act_history', {
+        sr_number: '131.1',
+        jurisdiction: 'BE',
+        editions: [{ date_applicability: '2020-01-01', date_end_applicability: null, article_count: 1 }],
+        changes: [],
+        provenance: [],
+      });
+      expect(history.citations[0].source).toBe('BE 131.1');
+    });
+  });
+
   describe('unrelated tools', () => {
     it('returns empty evidence for a non-CH tool name', () => {
       const result = extractChEvidence('search_court_decisions', { results: [{ ecli: 'x' }] });

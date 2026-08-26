@@ -16,7 +16,7 @@ from psycopg.rows import dict_row
 from chpipe.bench import build
 from chpipe.config import Settings
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
@@ -84,7 +84,8 @@ def conn(settings):
         # scratch DB that already has these tables (from an earlier test
         # module in the same session) is a no-op.
         c.execute(MIGRATION_197.read_text())
-        apply_migration_199(c)
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         # TRUNCATE rather than DROP: this file's fixtures own exactly these
         # five tables' contents, and CASCADE handles the FK order between
         # them (ch_act -> ch_act_version -> ch_act_article/ch_act_change)

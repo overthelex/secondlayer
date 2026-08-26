@@ -98,9 +98,21 @@ function extractChCourtEvidence(toolName: string, parsed: ToolResultData): Evide
   return { decisions, citations: [], documents: [] };
 }
 
+// Federal acts are cited by their SR number ("SR 220"); cantonal acts by the canton code
+// and the cantonal collection number ("ZH 131.1"). A row without jurisdiction predates
+// the cantonal corpus and is federal.
+function chCollectionPrefix(row: ToolResultData): string {
+  const jurisdiction = row.jurisdiction ? String(row.jurisdiction) : '';
+  return jurisdiction && jurisdiction !== 'CH' ? jurisdiction : 'SR';
+}
+
+function chActNumber(row: ToolResultData): string {
+  return `${chCollectionPrefix(row)} ${row.sr_number}`;
+}
+
 function chActTitle(act: ToolResultData): string {
   const title = act.title ? String(act.title) : '';
-  return act.sr_number ? [title, `(SR ${act.sr_number})`].filter(Boolean).join(' ') : title;
+  return act.sr_number ? [title, `(${chActNumber(act)})`].filter(Boolean).join(' ') : title;
 }
 
 function chActSearchCitation(row: ToolResultData): Citation {
@@ -132,7 +144,7 @@ function chArticleCitation(parsed: ToolResultData): Citation {
   const npaTitle = [
     article.article_number ? `Art. ${article.article_number}` : undefined,
     parsed.abbreviation ? String(parsed.abbreviation) : undefined,
-    parsed.sr_number ? `(SR ${parsed.sr_number})` : undefined,
+    parsed.sr_number ? `(${chActNumber(parsed)})` : undefined,
   ].filter(Boolean).join(' ');
   const editionInterval = version.date_applicability
     ? `${version.date_applicability} — ${version.date_end_applicability || 'донині'}`
@@ -150,8 +162,8 @@ function chArticleCitation(parsed: ToolResultData): Citation {
 
 function chActLabel(parsed: ToolResultData): string {
   return parsed.abbreviation
-    ? `${parsed.abbreviation} (SR ${parsed.sr_number})`
-    : `SR ${parsed.sr_number}`;
+    ? `${parsed.abbreviation} (${chActNumber(parsed)})`
+    : chActNumber(parsed);
 }
 
 function chHistoryCitation(parsed: ToolResultData, change: ToolResultData): Citation {

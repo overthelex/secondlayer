@@ -3,6 +3,7 @@ import os
 import pathlib
 import psycopg
 import pytest
+from conftest import reset_legislation_schema
 from chpipe import amendment_notes
 from chpipe.config import Settings
 from chpipe.stages import acts_stage, provenance_stage, versions_stage
@@ -56,14 +57,7 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_article_provenance", "ch_act_as_link", "ch_as_act",
-                  "ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
-        c.execute(M198.read_text())
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {"work": WORK, "srNotation": "220"})
         yield c
 

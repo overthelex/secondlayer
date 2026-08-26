@@ -3,7 +3,7 @@
  * Zefix (`ch_zefix_companies`), the federal gazette SHAB (`ch_shab_publications`), the
  * FINMA list of authorised institutions (`ch_finma_regulated`), the SECO sanctions list
  * (`ch_seco_sanctions`) and the cantonal gazettes (`ch_kantonsblatt_publications`).
- * See migrations 129, 132, 133 and 201.
+ * See migrations 129, 132, 133 and 202.
  *
  * Two identifiers exist and only one of them is reliable:
  *
@@ -57,7 +57,7 @@ function capped(cap: number, rows: any[]): Section {
 }
 
 // Shortest query the SHAB-name fallback will serve. That fallback matches company_name
-// across 2.5M publications and has no index unless pg_trgm is installed (migration 201
+// across 2.5M publications and has no index unless pg_trgm is installed (migration 202
 // creates idx_ch_shab_name_trgm only when the extension is present — CREATE EXTENSION
 // needs superuser, so prod must run it before the backfill). One or two characters match
 // a large fraction of the table and are worth nothing to the caller, so they are refused

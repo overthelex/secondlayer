@@ -8,6 +8,8 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import load_stage
 
+from conftest import apply_migration_200
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_load_stage.py is 3 levels down from the repo root (matches the
 # convention already used in tests/test_extract_stage.py).
@@ -40,6 +42,12 @@ def conn(settings):
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION.read_text())
+        # load_stage promotes a row with db.complete(-> 'loaded'), which
+        # ensures the row has a ch_citation_state entry (migration 200) --
+        # that is how a freshly loaded decision enters the citation queue at
+        # all, so the table has to exist here. See tests/conftest.py.
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 

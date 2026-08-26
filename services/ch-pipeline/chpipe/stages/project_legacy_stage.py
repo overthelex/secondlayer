@@ -114,7 +114,7 @@ SELECT a.eli_work_uri,
        v.akn_xml,
        v.full_text,
        v.xml_url,
-       'fedlex',
+       CASE WHEN a.jurisdiction = 'CH' THEN 'fedlex' ELSE 'lexwork' END,
        -- article_count is here so "this projected row is empty" is a
        -- queryable fact rather than a line in a run log somebody has to
        -- still have. A body-less Fedlex act is genuine data (see
@@ -124,6 +124,7 @@ SELECT a.eli_work_uri,
        -- exists to correct.
        jsonb_build_object('act_id', a.act_id, 'version_id', v.version_id,
                           'article_count', v.article_count,
+                          'jurisdiction', a.jurisdiction,
                           'projected_from', 'ch_act_version'),
        now()
   FROM ch_act a
@@ -140,6 +141,7 @@ ON CONFLICT (eli_uri, lang) DO UPDATE SET
     akn_xml           = EXCLUDED.akn_xml,
     full_text         = EXCLUDED.full_text,
     xml_url           = EXCLUDED.xml_url,
+    source            = EXCLUDED.source,
     metadata_json     = EXCLUDED.metadata_json,
     updated_at        = now()
 """

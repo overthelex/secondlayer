@@ -122,6 +122,7 @@ UPDATE ch_legislation_citations c
        SELECT a.sr_number, a.act_id
          FROM ch_act_alias al
          JOIN ch_act a ON a.sr_number = al.sr_number
+                      AND a.jurisdiction = 'CH'
         WHERE al.abbr = c2.abbr_raw
         ORDER BY
           (al.lang = c2.lang) DESC,

@@ -1,7 +1,11 @@
--- mcp_backend/src/migrations/201_ch_registries.sql
+-- mcp_backend/src/migrations/202_ch_registries.sql
 -- Swiss registries: Zefix municipality/progress tracking and SHAB gazette
 -- detail-fetch fields, extending migration 129's ch_zefix_companies and
 -- ch_shab_publications.
+--
+-- Renumbered from 201 to 202: cantonal legislation took 201 on main while
+-- this branch was in flight. Only the number changed; the statements below
+-- are the ones that were reviewed as 201, and they stay idempotent.
 --
 -- SET lock_timeout = '3s' is the first statement, same reasoning as
 -- migration 199: the ALTER TABLE statements below take an ACCESS EXCLUSIVE
@@ -91,7 +95,7 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
         CREATE INDEX IF NOT EXISTS idx_ch_shab_name_trgm ON ch_shab_publications USING gin (company_name gin_trgm_ops);
     ELSE
-        RAISE NOTICE 'migration 201: pg_trgm is not installed, so idx_ch_shab_name_trgm was NOT created. ch_search_companies'' SHAB-name fallback will scan ch_shab_publications (2.5M rows). Run CREATE EXTENSION pg_trgm as a superuser and re-run this migration.';
+        RAISE NOTICE 'migration 202: pg_trgm is not installed, so idx_ch_shab_name_trgm was NOT created. ch_search_companies'' SHAB-name fallback will scan ch_shab_publications (2.5M rows). Run CREATE EXTENSION pg_trgm as a superuser and re-run this migration.';
     END IF;
 END $$;
 

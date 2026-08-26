@@ -12,7 +12,7 @@ Three pipelines over one package:
   `project-legacy`. **[Jump to the legislation half](#the-legislation-half).**
 - **Registries** — the company register (Zefix, from LINDAS) and the
   Official Gazette of Commerce (SHAB), into `ch_zefix_companies` /
-  `ch_zefix_municipality` / `ch_shab_publications` (migration 201, extending
+  `ch_zefix_municipality` / `ch_shab_publications` (migration 202, extending
   migration 129). Stages `zefix`, `shab-list`,
   `shab-detail`. **[Jump to the registries half](#the-registries-half).**
 
@@ -751,19 +751,87 @@ Three stages, run in this order, that turn `ch_court_decisions.full_text`
 into a graph of who cites what: `aliases` (act abbreviation → SR number),
 `citations` (raw edges, per decision), `citations-resolve` (raw edges →
 resolved rows). Migration 199 is the schema: `ch_act_alias`,
-`ch_case_citations`, `ch_legislation_citations`, plus
-`ch_court_decisions.citations_extracted_at`.
+`ch_case_citations`, `ch_legislation_citations`. Migration 200 adds
+`ch_citation_state`, the per-decision queue.
 
-**Apply migration 199 outside the 07:15 UTC delta window.** The migration
-runner applies a whole file as one implicit transaction, so the `ALTER TABLE
-ch_court_decisions ADD COLUMN citations_extracted_at` holds an ACCESS
-EXCLUSIVE lock on a 1.22M-row table until the file's last statement commits
-— and the two `ch_court_decisions` indexes after it are built while that
-lock is still held (tens of seconds on the production table, during which
-nothing else can read or write it). The file's first statement is
+**The citation stages never write `ch_court_decisions`.** The bookkeeping —
+has this decision's text been scanned, when, how many times has it raised
+and with what error — lives in `ch_citation_state`: one narrow row per
+decision, keyed by `ecli`, with `spider`, `extracted_at` (NULL = queued),
+`attempts`, `last_error` and `updated_at`, and two partial indexes on
+`WHERE extracted_at IS NULL` — `(ecli)` for the corpus-wide claim and
+`(spider, ecli)` for the per-spider one — which between them are the claim
+query's whole predicate.
+
+**`spider` is denormalised onto the state row on purpose.** A per-spider
+claim (`./run-stage.sh citations CH_BGer`) filters on `s.spider`, not on
+`d.spider`: the two always agree — every writer copies it off the decision
+row — and the difference is which table the planner can use to eliminate
+rows. On the state table it is the leading column of
+`idx_ch_citation_state_pending_spider` and the claim seeks straight to that
+spider's pending rows; on the joined table every pending row in a mixed
+backlog has to be read and joined before it can be discarded, for a claim
+that wants 200.
+
+**The claim is ordered by `s.ecli`** — the state table's own primary key,
+and a performance choice rather than a priority one (the queue has no
+priority; the order only has to be stable, so a skipped row is not re-offered
+behind the whole backlog forever). The pre-200 claim ordered by
+`spider, doc_id`, which was cheap only because of the `(spider, doc_id)`
+partial index **on `ch_court_decisions`** that migration 200 drops with the
+flag it indexed. Keeping that order afterwards costs a hash join plus an
+external sort: measured on a 200k-row backlog, **255 ms** per 200-row claim,
+materialising `full_text` for every pending row just to sort them. Ordering
+by the state table's key is an index scan feeding a nested loop —
+**0.8 ms** for the same claim. If this query is ever edited again, keep the
+`ORDER BY` on `ch_citation_state`'s own key.
+
+It started life as a flag column on the decisions table itself
+(`citations_extracted_at`, migration 199) and that was a mistake, measured
+on prod 2026-08-25. `ch_court_decisions` is 19 GB with a 7.6 GB full-text
+GIN, and the flag sat inside a partial index predicate — which means it
+could never be updated HOT, so **every stamp and every unstamp rewrote the
+whole row into every index on the table**, the GIN included. A bulk unstamp
+of 1.22M rows (the reset for a full re-extraction) ran 22+ minutes against
+the table the live product reads, and the GIN grew 0.6 GB in a day of that
+churn. On the side table the same reset is seconds and a stamp is one narrow
+HOT update. Migration 200 leaves the old column in place (it is the only
+surviving copy of the pre-migration stamps, and dropping a column on a 19 GB
+table takes an ACCESS EXCLUSIVE lock); nothing reads or writes it any more,
+and a later migration may drop it.
+
+**Apply migrations 199 and 200 outside the 07:15 UTC delta window.** The
+migration runner applies a whole file as one implicit transaction, so 199's
+`ALTER TABLE ch_court_decisions ADD COLUMN citations_extracted_at` holds an
+ACCESS EXCLUSIVE lock on a 1.22M-row table until the file's last statement
+commits — and the two `ch_court_decisions` indexes after it are built while
+that lock is still held (tens of seconds on the production table, during
+which nothing else can read or write it). 200 is far cheaper (it reads that
+table and drops one index on it) but shares the rule. Both files start with
 `SET lock_timeout = '3s'`, so if the table is already busy the migration
 fails fast and can be retried in a quiet window instead of queueing —
 and blocking everything that arrives behind it.
+
+**Migration 200 seeds `ch_citation_state` from the stamps already on
+`ch_court_decisions`**, once, and only into an empty table. Seeding NULLs
+instead would have queued the entire extracted corpus for a multi-hour
+re-extraction on the first nightly delta after the deploy. From then on a
+decision enters the queue when `load` promotes it
+(`db.complete(-> 'loaded')` ensures a state row) and re-enters it when
+`extract`/`ocr` give it new text (`db.complete(-> 'extracted')` sets
+`extracted_at` back to NULL and clears the attempt counter with it).
+
+**Re-extracting the whole corpus** is one narrow `UPDATE`:
+
+```sql
+UPDATE ch_citation_state SET extracted_at = NULL;   -- seconds, 1.22M rows
+```
+
+then `./run-stage.sh citations` (and `citations-resolve` after it). Nothing
+in that touches `ch_court_decisions`, which is the point — the same reset
+against the old flag column took 22+ minutes and bloated the full-text GIN.
+`services/ch-pipeline/scripts/reextract-citations.sh` is the versioned copy
+of the whole sequence (aliases → reset → citations → resolve-all → report).
 
 **`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
 writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
@@ -813,32 +881,43 @@ citations for a much larger number of invented ones:
   BGG" is unaffected. Failure mode: a genuine paragraph 13 or beyond, and
   everything after it, is re-read as further articles.
 
-**`citations`** claims decisions sitting at `loaded` with
-`citations_extracted_at IS NULL`, runs `chpipe.citations` over each one's
-text in a thread pool, and writes the raw edges it finds — BGE/docket/ECLI
-case references into `ch_case_citations`, article references into
-`ch_legislation_citations` — then stamps `citations_extracted_at`. This is
-extraction only: nothing here resolves a citation to the row it points at.
-A decision whose extraction raises is **not** stamped and **not** touched:
-it keeps whatever edges it already had and the next run tries again. The
-exception is logged with the decision's ecli and counted in `failed`. One
-bad text still must not park the queue, so the run remembers the eclis that
-raised and skips them in its later batches — a batch that is nothing but
-those ends the run with a warning naming the count. There is no attempt
-counter: a text that raises every night shows up in every night's log as
-`failed=N` plus that warning, which is the signal to go and look at it.
+**`citations`** claims from `ch_citation_state` — rows with
+`extracted_at IS NULL` and attempts left, in `ecli` order, filtered on
+`s.spider` when a spider is given, joined to `ch_court_decisions` for the
+text and the `stage = 'loaded'` predicate — runs `chpipe.citations` over
+each one's text in a thread pool, and writes the raw edges it finds —
+BGE/docket/ECLI case references into `ch_case_citations`, article references
+into `ch_legislation_citations` — then stamps `extracted_at` on the state
+row. This is extraction only: nothing here resolves a citation to the row it
+points at. A decision whose extraction raises is **not** stamped and its
+edges are **not** touched: it keeps whatever it already had, one of its
+`attempts` is spent, `ch_citation_state.last_error` records the reason, and
+the next run tries again — until `CHPIPE_MAX_ATTEMPTS` is reached, at which
+point the claim stops offering it. (That is `ch_citation_state.last_error`,
+this stage's own; `ch_court_decisions.last_error` belongs to the stage-column
+queue and is never written here.) The exception is logged with the
+decision's ecli and counted in `failed`. Within a single run the attempt
+counter is not enough — the claim keeps offering the row until the next
+run — so the run also remembers the eclis that raised and skips them in its
+later batches; a batch that is nothing but those ends the run with a warning
+naming the count. `python -m chpipe.reports_cit` shows `retried` and
+`max_attempts` alongside `loaded`/`stamped`: a `max_attempts` that has
+reached `CHPIPE_MAX_ATTEMPTS` means some decisions have been retired from
+the queue unstamped and want looking at.
 
 `CHPIPE_CIT_BATCH` (default 200) sets how many decisions are claimed per
 batch. The claim selects `full_text` for the whole batch at once, so it is
 this stage's memory knob — turn it down on a host where long decisions make
-a batch too heavy. The queue is a flag column, so a smaller batch costs
-nothing but extra round-trips.
+a batch too heavy. The queue is a flag on a narrow side table, so a smaller
+batch costs nothing but extra round-trips.
 
 **A decision that gets NEW text must be re-scanned, not left stamped
 against the OLD text.** `db.complete(conn, doc_id, 'extracted', ...)` — the
 statement both `extract_stage` and `ocr_stage` use to write `full_text` —
-unconditionally clears `citations_extracted_at` back to `NULL` whenever it
-moves a row to `'extracted'`. The next `load` puts the row back at `loaded`,
+unconditionally puts the decision's `ch_citation_state` row back to
+`extracted_at IS NULL` (and clears its `attempts`/`last_error`: those were
+spent on text the decision no longer has) whenever it moves a row to
+`'extracted'`. The next `load` puts the row back at `loaded`,
 and the next `citations` run picks it up again, over the new text, exactly
 like a decision that has never been scanned at all — and that run **deletes
 the decision's existing edges before inserting** the ones its current text
@@ -964,7 +1043,7 @@ actually reached (`stamped` vs `loaded`). Run it as
 
 # The registries half
 
-Two Swiss company data sources, three stages, migration 201 (extending
+Two Swiss company data sources, three stages, migration 202 (extending
 migration 129's `ch_zefix_companies` / `ch_shab_publications`):
 
 - **`zefix`** — the live company register, from
@@ -988,7 +1067,7 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
   and `HR` (commercial register), 2,509,068 publications backfilled
   (measured 2026-08-26: HR 2,293,215 + KK 215,853).
   Prod needs `CREATE EXTENSION pg_trgm` (superuser) before the backfill:
-  migration 201 creates `idx_ch_shab_name_trgm` only if the extension is
+  migration 202 creates `idx_ch_shab_name_trgm` only if the extension is
   already there, and without it `ch_search_companies`' SHAB-name fallback
   scans all 2.5M publications.
 - **`shab-detail`** — turns each pointer into a record: the register's own
@@ -1286,9 +1365,10 @@ picked up by the same nightly run rather than needing a separate one.
 
 **The first nightly delta after deploying the citation graph would try to
 backfill the whole corpus.** `citations` claims every decision at `loaded`
-with `citations_extracted_at IS NULL` — which, on the night migration 199
-first lands, is all 1.22M of them, not just the handful tonight's spiders
-grew. That is a multi-hour CPU job, and the delta would run it unattended,
+whose `ch_citation_state.extracted_at` is NULL — which, on the night
+migration 199 first lands, is all 1.22M of them, not just the handful
+tonight's spiders grew. (Migration 200 does not repeat that: its seed copies
+the stamps that already exist rather than starting everything at NULL.) That is a multi-hour CPU job, and the delta would run it unattended,
 under `flock`, straight into the next morning. **Run the supervised backfill
 first** — `./run-stage.sh citations` (optionally per spider, and with
 `CHPIPE_LIMIT` to size the first batch), watched, until
@@ -1382,6 +1462,66 @@ running (`pgrep -fa run-delta.sh`; `pgrep -fa chpipe.delta` separately, since
 the `python3` child does not hold the lock fd and can keep running after the
 wrapper is gone) and kill the real process. Once nothing holds the fd, the
 lock releases itself.
+
+## Cantonal legislation (Lexwork, 19 cantons) and the LexFind registry
+
+Spec: `docs/superpowers/specs/2026-08-26-ch-cantonal-legislation-design.md`.
+Migration 201 adds `ch_act.jurisdiction` ('CH' or a canton code),
+`ch_act_version.source` ('fedlex' | 'lexwork'), `ch_act_change_document`
+(the canton's amending acts) and `ch_cantonal_registry` (LexFind's view of
+all 26 cantons). Cantonal acts live in the same tables as federal law, so
+`diff`, `project-legacy` and the point-in-time tools work unchanged; the
+MCP tools take an optional `canton`.
+
+Stages (`run-stage.sh <stage> [canton]`, `CHPIPE_CANTON` is the env twin):
+
+| stage | what it does |
+|---|---|
+| `lexfind-registry [canton]` | all 26 cantons (or one): every act and its version list from lexfind.ch into `ch_cantonal_registry`. ~33K acts, hours at 2 req/s; idempotent |
+| `cantonal-acts [canton]` | Lexwork host(s): acts + versions (stage `discovered`, source `lexwork`) + change documents. Driving set = host index + change-document index + the registry's numbers for the canton (that is how abrogated acts get in). Comma-separated codes allowed |
+| `cantonal-fetch [canton]` | show_as_json payload per version into `akn_xml` (+ audit copy `raw/cantonal/{version_id}.json`). One canton or all; sibling languages share one download |
+| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document`) |
+| `diff`, `project-legacy` | unchanged; `diff` walks cantonal acts too (`e_id` = Lexwork uid) |
+| `reports-cantonal [canton]` | Gate F: Lexwork corpus against the LexFind registry, quality counters, amendment counters |
+
+Backfill order, supervised (never let the first walk happen under the
+nightly flock): `lexfind-registry`, then `cantonal-acts BE` as a pilot,
+`cantonal-fetch BE`, `cantonal-parse BE`, `diff` (all langs of BE: de, fr),
+`reports-cantonal BE`, and read 20 articles against the site before the
+other 18 cantons. Then `project-legacy`. Only after Gate F is clean, seed
+the delta baseline: `raw/cantonal-state.json` is written by the first
+nightly run with today's date per canton and a warning (it walks nothing
+on that night); from the next night `run_cantonal` pages each host's
+`status/recent_changes` since the baseline and re-walks only the acts
+named there. A canton whose host fails keeps its baseline and is retried
+the next night. Weekly full re-walk (Sunday 04:00 UTC) alongside the OCR
+cron:
+
+    0 4 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh cantonal-acts
+    0 5 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh lexfind-registry
+
+Env: `CHPIPE_CANTONAL_PER_HOST` (default 2) caps requests in flight per
+cantonal host; `CHPIPE_HTTP_CONCURRENCY` still caps the total.
+`CHPIPE_LIMIT` bounds fetch/parse runs as for the federal stages.
+
+Failure reasons worth knowing: `language 'x' not in payload` means
+`cantons.py` expects a language the version does not have (a counted
+reason, not a bug in the version); `dates_unparsed` in `cantonal-acts`
+means a version date string the parser has not seen (fix the regex, the
+version was skipped, never defaulted); `not_on_host` is a LexFind number
+the host answers 404 to (BE: 288 old abrogated acts the host dropped, LexFind
+keeps them as PDFs); `pdf_only` in `cantonal-fetch` is a version the host
+holds only as a PDF (retired at once, reason in `last_error`); and
+`tables_unrecognised` in `cantonal-parse` is a modification table whose
+header vocabulary `lexwork.py` does not know yet: the edition parsed, its
+amendment history did not, add the host's words to `_HEADERS`.
+
+Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
+average payload, sibling languages share one download), parse ~1.6K rows/min,
+narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
+
+Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
+or their own portals; the registry already holds their acts and versions.
 
 ## Point-in-time benchmark (chpipe.bench)
 

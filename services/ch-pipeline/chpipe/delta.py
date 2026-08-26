@@ -110,6 +110,11 @@ class DeltaReport:
     new_changes: int = 0
     new_provenance: int = 0
     projected: int = 0
+    # The cantonal (Lexwork) step: acts re-walked and editions discovered
+    # tonight, and the cantons whose host did not answer.
+    cantonal_acts: int = 0
+    cantonal_versions: int = 0
+    cantonal_failed: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -167,11 +172,14 @@ def _today() -> datetime.date:
     return datetime.date.today()
 
 
-def _state_path(settings: Settings) -> pathlib.Path:
-    return settings.raw_dir / STATE_FILE
+CANTONAL_STATE_FILE = "cantonal-state.json"
 
 
-def _load_state(settings: Settings) -> dict:
+def _state_path(settings: Settings, name: str = STATE_FILE) -> pathlib.Path:
+    return settings.raw_dir / name
+
+
+def _load_state(settings: Settings, name: str = STATE_FILE) -> dict:
     """The stored baseline, or {} when there is not a usable one.
 
     An unreadable or unparseable file is treated as "no baseline" -- but
@@ -187,7 +195,7 @@ def _load_state(settings: Settings) -> dict:
         the SAFE direction -- an expensive night, not a lost document -- but
         an operator who is not told will read a full re-walk as a mystery.
     """
-    path = _state_path(settings)
+    path = _state_path(settings, name)
     if not path.exists():
         return {}
     try:
@@ -210,7 +218,7 @@ def _load_state(settings: Settings) -> dict:
     return state
 
 
-def _save_state(settings: Settings, snapshot: dict) -> None:
+def _save_state(settings: Settings, snapshot: dict, name: str = STATE_FILE) -> None:
     """Write the baseline atomically: temp file, then os.replace().
 
     A direct write_text() truncates the existing file first, so a kill
@@ -221,7 +229,7 @@ def _save_state(settings: Settings, snapshot: dict) -> None:
     new one, never a prefix of either. The temp file is created beside it for
     the same reason -- a rename across filesystems is not atomic.
     """
-    path = _state_path(settings)
+    path = _state_path(settings, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
@@ -643,6 +651,110 @@ def run_registries(settings: Settings) -> RegistriesReport:
     return report
 
 
+# recent_changes pages carry the whole act record per entry (2.7 MB for 16
+# entries on BE); only systematic_number and change_date are read. A quiet
+# night is one page per canton; the cap is a backstop against a host that
+# never reaches last_seen, not a budget.
+_RECENT_CHANGES_PAGE_CAP = 200
+
+
+async def changed_since(client, canton, last_seen: str) -> set[str]:
+    """Systematic numbers of the acts a Lexwork host reports as changed on
+    or after `last_seen` (ISO date), paging status/recent_changes newest
+    first until a page's oldest entry is older than that."""
+    changed: set[str] = set()
+    offset = 0
+    for _ in range(_RECENT_CHANGES_PAGE_CAP):
+        page = await client.recent_changes(canton, offset)
+        entries = page.get("entries") or []
+        if not entries:
+            break
+        oldest = None
+        for entry in entries:
+            date = (entry.get("change_date") or "")[:10]
+            sysnr = (entry.get("text_of_law") or {}).get("systematic_number")
+            if date >= last_seen and sysnr:
+                changed.add(sysnr)
+            if date and (oldest is None or date < oldest):
+                oldest = date
+        if oldest is None or oldest < last_seen or not page.get("next_batch"):
+            break
+        offset += len(entries)
+    else:
+        log.warning("%s: recent_changes did not reach %s within %d pages; the weekly "
+                    "full re-walk covers whatever this missed", canton.code, last_seen,
+                    _RECENT_CHANGES_PAGE_CAP)
+    return changed
+
+
+def _changed_since(settings: Settings, canton, last_seen: str, transport) -> set[str]:
+    from .http import Fetcher
+    from .lexwork_api import LexworkClient
+
+    async def go():
+        async with Fetcher(concurrency=settings.cantonal_per_host, transport=transport) as fetcher:
+            return await changed_since(LexworkClient(fetcher, settings.cantonal_per_host),
+                                       canton, last_seen)
+    return asyncio.run(go())
+
+
+def run_cantonal(settings: Settings, transport=None) -> DeltaReport:
+    """The cantonal (Lexwork) twin of run_legislation, per canton.
+
+    Narrowed by the host's own change log: status/recent_changes since the
+    canton's last successful run, then cantonal-acts for just those numbers,
+    then fetch, parse, diff for the acts that gained an edition, and one
+    projection at the end. A canton with NO baseline is not walked: a first
+    unattended walk is the whole corpus under the nightly flock, which the
+    README says to do supervised instead -- its baseline is set to today
+    with a warning, and the weekly full re-walk is what keeps it honest.
+    A canton whose host fails keeps its old baseline and is retried the
+    next night; the others are not held up by it.
+    """
+    from . import cantons
+    from .stages import cantonal_acts_stage, cantonal_fetch_stage, cantonal_parse_stage
+
+    report = DeltaReport()
+    state = _load_state(settings, CANTONAL_STATE_FILE)
+    today = _today().isoformat()
+    touched = False
+    for code in cantons.lexwork_codes(None):
+        canton = cantons.LEXWORK[code]
+        last_seen = state.get(code)
+        if not last_seen:
+            log.warning("%s: no cantonal baseline; NOT walking it unattended. Run the "
+                        "supervised backfill (README), then this step picks up changes "
+                        "from %s on.", code, today)
+            state[code] = today
+            continue
+        try:
+            changed = _changed_since(settings, canton, last_seen, transport)
+            if changed:
+                acts = cantonal_acts_stage.run(settings, code, only=changed, transport=transport)
+                if acts.hosts_failed:
+                    raise RuntimeError(f"{code}: host {canton.host} did not answer")
+                report.cantonal_acts += acts.acts
+                report.cantonal_versions += acts.versions
+                cantonal_fetch_stage.run(settings, code, transport=transport)
+                parsed = cantonal_parse_stage.run(settings, code)
+                touched = True
+                for act_id, lang in sorted(parsed.acts):
+                    report.new_changes += diff_stage.run(settings, lang=lang, act_id=act_id).changes
+            else:
+                log.info("%s: no changes since %s", code, last_seen)
+        except Exception:                           # noqa: BLE001 -- per canton
+            log.exception("delta: canton %s failed; baseline kept at %s", code, last_seen)
+            report.cantonal_failed.append(code)
+            continue
+        state[code] = today
+    # Projection only when something was parsed: on a quiet night (and on
+    # the baseline-setting first night) this step touches no database at all.
+    if touched:
+        report.projected = project_legacy_stage.run(settings)
+    _save_state(settings, state, CANTONAL_STATE_FILE)
+    return report
+
+
 def main() -> DeltaReport:
     """Entry point. A function, not an `if __name__` block -- see
     tests/test_entry_points.py's docstring for why this package standardised
@@ -703,7 +815,8 @@ def main() -> DeltaReport:
     reports: dict[str, DeltaReport] = {}
     failures: list[tuple[str, BaseException]] = []
     for name, half in (("decisions", run_decisions),
-                       ("legislation", run_legislation)):
+                       ("legislation", run_legislation),
+                       ("cantonal", run_cantonal)):
         try:
             reports[name] = half(settings)
         except Exception as exc:               # noqa: BLE001 -- see above
@@ -780,9 +893,11 @@ def main() -> DeltaReport:
         failures.append(("citations-resolve", exc))
 
     decisions, legislation = reports["decisions"], reports["legislation"]
+    cantonal = reports["cantonal"]
     log.info("delta: spiders=%s new_documents=%d new_versions=%d "
              "new_changes=%d new_provenance=%d projected=%d "
              "registries(zefix=%d shab_list=%d shab_detail=%d) "
+             "cantonal(acts=%d versions=%d changes=%d projected=%d failed=%s) "
              "resolved(acts=%d editions=%d articles=%d cases=%d) failed=%s",
              decisions.spiders, decisions.new_documents,
              legislation.new_versions, legislation.new_changes,
@@ -790,17 +905,24 @@ def main() -> DeltaReport:
              registries_report.zefix.upserted,
              registries_report.shab_list.upserted,
              registries_report.shab_detail.fetched,
+             cantonal.cantonal_acts, cantonal.cantonal_versions, cantonal.new_changes,
+             cantonal.projected, ",".join(cantonal.cantonal_failed) or "none",
              resolve_report.acts, resolve_report.editions,
              resolve_report.articles, resolve_report.cases,
              ",".join(name for name, _ in failures) or "none")
+    # A canton whose host failed is logged inside run_cantonal and retried
+    # tomorrow; it is not a failed half, so it does not fail the night.
     if failures:
         raise failures[0][1]
     return DeltaReport(spiders=decisions.spiders,
                        new_documents=decisions.new_documents,
                        new_versions=legislation.new_versions,
-                       new_changes=legislation.new_changes,
+                       new_changes=legislation.new_changes + cantonal.new_changes,
                        new_provenance=legislation.new_provenance,
-                       projected=legislation.projected)
+                       projected=legislation.projected + cantonal.projected,
+                       cantonal_acts=cantonal.cantonal_acts,
+                       cantonal_versions=cantonal.cantonal_versions,
+                       cantonal_failed=list(cantonal.cantonal_failed))
 
 
 if __name__ == "__main__":

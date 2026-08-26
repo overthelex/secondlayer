@@ -68,7 +68,7 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       '129_offshore_jurisdictions_data.sql',
       '132_ch_seco_sanctions.sql',
       '133_ch_kantonsblatt.sql',
-      '201_ch_registries.sql',
+      '202_ch_registries.sql',
     ]) {
       await client.query(readFileSync(join(migrations, file), 'utf-8'));
     }

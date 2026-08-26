@@ -104,8 +104,11 @@ def run(settings: Settings, lang: str = "de",
     report = ProvenanceReport()
     conn = db.connect(settings)
     try:
+        # source = 'fedlex': a Lexwork row's akn_xml is JSON, and its
+        # provenance is written by cantonal_parse_stage from the
+        # modification table, not from <authorialNote> footnotes.
         sql = ("SELECT version_id FROM ch_act_version "
-               "WHERE lang = %s AND stage = 'parsed'")
+               "WHERE lang = %s AND stage = 'parsed' AND source = 'fedlex'")
         params: list = [lang]
         if act_id is not None:
             sql += " AND act_id = %s"

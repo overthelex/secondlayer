@@ -5,15 +5,15 @@ import psycopg
 import pytest
 from chpipe import db
 
-from conftest import apply_migration_199
+from conftest import apply_migration_200
 
 # Derive repo root from this file's location: services/ch-pipeline/tests/test_db_queue.py
 # is 3 levels down from the repo root
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
-# db.complete() unconditionally clears citations_extracted_at on the
-# 'extracted' branch (migration 199's column) -- needed here too, since
-# this file exercises complete() directly with next_stage='extracted'.
+# db.complete() re-queues a row in ch_citation_state (migration 200) on the
+# 'extracted' branch and ensures a state row on the 'loaded' one -- needed
+# here too, since this file exercises complete() directly with both.
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set"
@@ -36,8 +36,11 @@ def conn():
         """)
         c.execute(MIGRATION.read_text())
         # ch_act_article (migration 197's table, which 199 indexes but does
-        # not create) and migration 199 itself -- see tests/conftest.py.
-        apply_migration_199(c)
+        # not create) and migrations 199 + 200 -- see tests/conftest.py.
+        # 200 is what creates ch_citation_state, which db.complete() writes
+        # to on every 'extracted' and 'loaded' transition.
+        c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        apply_migration_200(c)
         yield c
 
 

@@ -26,7 +26,7 @@ from psycopg.rows import dict_row
 from chpipe.config import Settings
 from chpipe.stages import shab_list_stage
 
-from conftest import apply_migration_201
+from conftest import apply_migration_202
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -155,7 +155,7 @@ def conn(settings):
                   "ch_shab_progress", "ch_shab_publications",
                   "ch_zefix_companies"):
             c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        apply_migration_201(c)
+        apply_migration_202(c)
         yield c
 
 

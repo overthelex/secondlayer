@@ -19,6 +19,7 @@ import pathlib
 
 import psycopg
 import pytest
+from conftest import reset_legislation_schema
 from chpipe import db
 from chpipe.stages import acts_stage, versions_stage
 
@@ -35,12 +36,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def conn():
     with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {"work": WORK, "srNotation": "220"})
         acts_stage.upsert_act(c, {"work": OTHER_WORK, "srNotation": "210"})
         yield c
@@ -172,3 +168,26 @@ def test_the_recovery_pair_reads_the_version_table_not_the_decisions_table(conn)
     _retire(conn, vid)
     assert db.retry_failed_versions(conn) == 1
     assert _row(conn, vid)[0] == "fetched"
+
+
+def test_claim_is_filtered_by_source_and_url_prefix(conn):
+    """Migration 201: the AKN parser and the Lexwork parser share this queue
+    and must never see each other's payloads."""
+    act = conn.execute("INSERT INTO ch_act (eli_work_uri, jurisdiction) VALUES ('be/101.1', 'BE') "
+                       "RETURNING act_id").fetchone()[0]
+    conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+                 "source, xml_url) VALUES (%s, 'be/101.1/v1', 'de', '2020-01-01', 'lexwork', "
+                 "'https://www.belex.sites.be.ch/api/de/texts_of_law/101.1/versions/1/show_as_json')", (act,))
+    conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+                 "source, xml_url) VALUES (%s, 'zg/101.1/v1', 'de', '2020-01-01', 'lexwork', "
+                 "'https://bgs.zg.ch/api/de/texts_of_law/101.1/versions/1/show_as_json')", (act,))
+    conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability) "
+                 "VALUES (%s, 'fedlex/x', 'de', '2020-01-01')", (act,))
+    fedlex = db.claim_versions(conn, "discovered", 10, backoff_minutes=())
+    assert [r["source"] for r in fedlex] == ["fedlex"]
+    assert fedlex[0]["eli_consolidation_uri"] == "fedlex/x"
+    lexwork = db.claim_versions(conn, "discovered", 10, backoff_minutes=(), source="lexwork")
+    assert sorted(r["eli_consolidation_uri"] for r in lexwork) == ["be/101.1/v1", "zg/101.1/v1"]
+    one_host = db.claim_versions(conn, "discovered", 10, backoff_minutes=(), source="lexwork",
+                                 url_prefix="https://bgs.zg.ch/")
+    assert [r["eli_consolidation_uri"] for r in one_host] == ["zg/101.1/v1"]

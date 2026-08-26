@@ -1,8 +1,16 @@
 /**
  * ChLegislationTools — search, point-in-time article lookup, and amendment history over
- * the Swiss federal legislation corpus (Fedlex: `ch_act`, `ch_act_version`,
- * `ch_act_article`, `ch_act_change`, `ch_article_provenance`; see migrations
- * 197_ch_legislation_corpus.sql and 198_ch_as_bbl.sql).
+ * the Swiss legislation corpus: federal (Fedlex) and cantonal (Lexwork, 19 cantons), in
+ * `ch_act`, `ch_act_version`, `ch_act_article`, `ch_act_change`, `ch_article_provenance`
+ * (see migrations 197_ch_legislation_corpus.sql, 198_ch_as_bbl.sql and
+ * 201_ch_cantonal_legislation.sql).
+ *
+ * `ch_act.jurisdiction` is 'CH' for federal acts or a two-letter canton code (ZH, BE,
+ * ...). Every tool takes an optional `canton` that defaults to 'CH', so callers that
+ * predate the cantonal corpus keep seeing federal acts only. `sr_number` is not unique
+ * even within one jurisdiction (an act can be re-issued under the same number), so the
+ * act lookups keep the `enforcement_status = 0 DESC ... LIMIT 1` preference. Aliases
+ * (`ch_act_alias`) are federal only and are never matched against cantonal acts.
  *
  * Only `stage = 'parsed'` versions are addressable editions — `discovered`/`fetched`/
  * `failed` versions have no reliable article text (same pipeline shape as
@@ -35,6 +43,46 @@ function escapeRegexLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const DEFAULT_JURISDICTION = 'CH';
+const CANTON_CODE_RE = /^[A-Z]{2}$/;
+const ALL_JURISDICTIONS = 'all';
+
+// Resolves the `canton` argument to the jurisdiction value bound in SQL. Absent means
+// federal ('CH'). 'all' (no jurisdiction filter) is only meaningful for search, where the
+// result rows carry their own jurisdiction; a single-act lookup has to name one.
+// Anything else must be a two-letter upper-case code. Returns a Ukrainian message when
+// the value is rejected so the caller can wrap it without running a query.
+function resolveCanton(
+  value: unknown,
+  allowAll: boolean
+): { jurisdiction: string } | { message: string } {
+  if (value === undefined || value === null) {
+    return { jurisdiction: DEFAULT_JURISDICTION };
+  }
+  const canton = String(value);
+  if (allowAll && canton === ALL_JURISDICTIONS) {
+    return { jurisdiction: ALL_JURISDICTIONS };
+  }
+  if (CANTON_CODE_RE.test(canton)) {
+    return { jurisdiction: canton };
+  }
+  return {
+    message: allowAll
+      ? "canton має бути 'CH', кодом кантону з двох великих літер (напр. ZH, BE) або 'all' (усі юрисдикції)."
+      : "canton має бути 'CH' або кодом кантону з двох великих літер (напр. ZH, BE).",
+  };
+}
+
+function cantonSchema(allowAll: boolean) {
+  return {
+    type: 'string',
+    default: DEFAULT_JURISDICTION,
+    description: allowAll
+      ? "Юрисдикція: 'CH' (федеральне, за замовчуванням), код кантону (ZH, BE, ...) або 'all' (усі юрисдикції)"
+      : "Юрисдикція: 'CH' (федеральне, за замовчуванням) або код кантону (ZH, BE, ...)",
+  };
+}
+
 export class ChLegislationTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -44,17 +92,19 @@ export class ChLegislationTools extends BaseToolHandler {
     return [
       {
         name: 'ch_search_legislation',
-        annotations: { title: 'Пошук законодавства Швейцарії (Fedlex)', readOnlyHint: true },
-        description: `Пошук актів швейцарського федерального законодавства (Fedlex) за номером SR, абревіатурою (напр. OR, ZGB, StGB) або назвою.
+        annotations: { title: 'Пошук законодавства Швейцарії (Fedlex та кантони)', readOnlyHint: true },
+        description: `Пошук актів швейцарського федерального (Fedlex) та кантонального (19 кантонів) законодавства за номером SR (або кантональним номером збірки), абревіатурою (напр. OR, ZGB, StGB) або назвою.
 
-Порядок збігів: точний sr_number → точна абревіатура (без урахування регістру) → назва (ILIKE) мовою lang.
+canton (типово 'CH') задає юрисдикцію: 'CH' для федеральних актів, код кантону (ZH, BE, ...) для кантональних, 'all' для пошуку в усіх юрисдикціях. Кожен результат містить поле jurisdiction.
+Порядок збігів: точний sr_number → точна абревіатура (без урахування регістру; абревіатури-синоніми лише для федеральних актів) → назва (ILIKE) мовою lang.
 in_force_only (типово true) — лише чинні акти (enforcement_status = 0).
 Результат включає editions_count і latest_edition_date — кількість і дату останньої машиночитаної (parsed) редакції мовою lang.
-Далі: ch_get_act_article для тексту статті на певну дату, ch_get_act_history для історії змін.`,
+Далі: ch_get_act_article для тексту статті на певну дату, ch_get_act_history для історії змін (передавайте той самий canton).`,
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Номер SR, абревіатура або фрагмент назви' },
+            canton: cantonSchema(true),
             lang: { type: 'string', enum: LANGS, default: 'de', description: 'Мова назви для пошуку і відображення' },
             in_force_only: { type: 'boolean', default: true, description: 'Лише чинні акти' },
             limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
@@ -66,9 +116,9 @@ in_force_only (типово true) — лише чинні акти (enforcement_
       {
         name: 'ch_get_act_article',
         annotations: { title: 'Стаття закону Швейцарії на певну дату', readOnlyHint: true },
-        description: `Текст статті швейцарського закону (Fedlex) станом на конкретну дату (point-in-time consolidation).
+        description: `Текст статті швейцарського закону, федерального (Fedlex) та кантонального (19 кантонів), станом на конкретну дату (point-in-time consolidation).
 
-Потрібні sr_number (напр. 220) та article (напр. 336 або 336a). as_of типово — сьогодні.
+Потрібні sr_number (напр. 220) та article (напр. 336 або 336a). canton (типово 'CH') задає юрисдикцію акта: 'CH' або код кантону (ZH, BE, ...); у відповіді є поле jurisdiction. as_of типово — сьогодні.
 Редакція чинна з date_applicability по date_end_applicability включно (відкрита, якщо end = NULL) — обирається та, для якої date_applicability <= as_of <= date_end_applicability.
 Якщо жодна редакція не покриває as_of — { error: 'no_edition_for_date', earliest_edition }.
 Якщо редакція є, але статті немає — { error: 'article_not_found', available_examples }.
@@ -77,6 +127,7 @@ article_number не унікальний в межах редакції (пер�
           type: 'object',
           properties: {
             sr_number: { type: 'string', description: 'Номер SR акта, напр. 220' },
+            canton: cantonSchema(false),
             article: { type: 'string', description: "Номер статті, напр. '336' або '336a'" },
             lang: { type: 'string', enum: LANGS, default: 'de', description: 'Мова редакції' },
             as_of: { type: 'string', description: 'Дата (YYYY-MM-DD), типово сьогодні' },
@@ -87,13 +138,15 @@ article_number не унікальний в межах редакції (пер�
       {
         name: 'ch_get_act_history',
         annotations: { title: 'Історія змін закону Швейцарії', readOnlyHint: true },
-        description: `Історія редакцій та змін швейцарського закону (Fedlex): усі машиночитані редакції (editions), обчислена по-статейна різниця між редакціями (changes, з ch_act_change) та походження поправок з приміток Akoma Ntoso (provenance — action, посилання AS/RO та BBl/FF, дата набуття чинності).
+        description: `Історія редакцій та змін швейцарського закону, федерального (Fedlex) та кантонального (19 кантонів): усі машиночитані редакції (editions), обчислена по-статейна різниця між редакціями (changes, з ch_act_change) та походження поправок з приміток Akoma Ntoso (provenance — action, посилання AS/RO та BBl/FF, дата набуття чинності).
 
+canton (типово 'CH') задає юрисдикцію акта: 'CH' або код кантону (ZH, BE, ...); у відповіді є поле jurisdiction.
 Якщо вказано article — changes і provenance фільтруються по цій статті (макс. 200 рядків кожен).`,
         inputSchema: {
           type: 'object',
           properties: {
             sr_number: { type: 'string', description: 'Номер SR акта, напр. 220' },
+            canton: cantonSchema(false),
             article: { type: 'string', description: "Номер статті для фільтрації, напр. '336a'" },
             lang: { type: 'string', enum: LANGS, default: 'de', description: 'Мова редакцій' },
           },
@@ -115,7 +168,7 @@ article_number не унікальний в межах редакції (пер�
   // ─── ch_search_legislation ─────────────────────────────────────────
 
   private async searchLegislation(args: Record<string, unknown>): Promise<ToolResult> {
-    const { query, lang = 'de', in_force_only = true, limit = 20, offset = 0 } = args as any;
+    const { query, canton, lang = 'de', in_force_only = true, limit = 20, offset = 0 } = args as any;
 
     if (!query || !String(query).trim()) {
       return this.wrapResponse('Вкажіть query — номер SR, абревіатуру або назву акта.');
@@ -123,6 +176,11 @@ article_number не унікальний в межах редакції (пер�
     if (!LANGS.includes(String(lang))) {
       return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
     }
+    const resolved = resolveCanton(canton, true);
+    if ('message' in resolved) {
+      return this.wrapResponse(resolved.message);
+    }
+    const jurisdiction = resolved.jurisdiction;
 
     const lim = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const off = Math.max(Number(offset) || 0, 0);
@@ -157,17 +215,21 @@ article_number не унікальний в межах редакції (пер�
         `SELECT to_regclass('public.ch_act_alias') IS NOT NULL AS alias_table_exists`
       )).rows[0].alias_table_exists === true;
 
+      // Aliases are curated for federal acts only: a cantonal act that happens to share an
+      // sr_number with a federal one must not inherit the federal abbreviation hit.
       const aliasJoin = aliasTableExists
         ? `LEFT JOIN LATERAL (
              SELECT bool_or(al.lang = $2) AS lang_hit
                FROM ch_act_alias al
               WHERE al.sr_number = a.sr_number AND lower(al.abbr) = lower($1)
+                AND a.jurisdiction = 'CH'
            ) alias_match ON true`
         : '';
       const aliasMatchCond = aliasTableExists ? 'OR alias_match.lang_hit IS NOT NULL' : '';
       const aliasTierCond = aliasTableExists ? 'WHEN alias_match.lang_hit IS NOT NULL THEN 1' : '';
       const aliasTieBreak = aliasTableExists ? 'COALESCE(alias_match.lang_hit, false) DESC,' : '';
 
+      const jurIdx = pi; values.push(jurisdiction); pi++;
       const limIdx = pi; values.push(lim); pi++;
       const offIdx = pi; values.push(off); pi++;
 
@@ -176,7 +238,7 @@ article_number не унікальний в межах редакції (пер�
                ${titleCol} AS title, title_de, title_fr, title_it,
                to_char(date_entry_force, 'YYYY-MM-DD') AS date_entry_force,
                to_char(date_no_longer_in_force, 'YYYY-MM-DD') AS date_no_longer_in_force,
-               in_force, eli_work_uri,
+               in_force, eli_work_uri, a.jurisdiction,
                (SELECT count(*)::int FROM ch_act_version v
                  WHERE v.act_id = a.act_id AND v.lang = $2 AND v.stage = 'parsed') AS editions_count,
                (SELECT to_char(max(v.date_applicability), 'YYYY-MM-DD') FROM ch_act_version v
@@ -185,6 +247,7 @@ article_number не унікальний в межах редакції (пер�
           FROM ch_act a
           ${aliasJoin}
          WHERE (sr_number = $1 OR lower(abbreviation) = lower($1) ${aliasMatchCond} OR ${titleMatchExpr})
+           AND ($${jurIdx} = 'all' OR a.jurisdiction = $${jurIdx})
            ${forceFilter}
          ORDER BY CASE WHEN sr_number = $1 THEN 0
                        WHEN lower(abbreviation) = lower($1) THEN 1
@@ -207,7 +270,7 @@ article_number не унікальний в межах редакції (пер�
   // ─── ch_get_act_article ─────────────────────────────────────────────
 
   private async getActArticle(args: Record<string, unknown>): Promise<ToolResult> {
-    const { sr_number, article, lang = 'de', as_of } = args as any;
+    const { sr_number, canton, article, lang = 'de', as_of } = args as any;
 
     if (!sr_number || !String(sr_number).trim()) {
       return this.wrapResponse('Вкажіть sr_number — номер SR акта.');
@@ -221,18 +284,23 @@ article_number не унікальний в межах редакції (пер�
     if (as_of && !isValidIsoDate(String(as_of))) {
       return this.wrapResponse('as_of має бути у форматі YYYY-MM-DD.');
     }
+    const resolved = resolveCanton(canton, false);
+    if ('message' in resolved) {
+      return this.wrapResponse(resolved.message);
+    }
+    const jurisdiction = resolved.jurisdiction;
 
     try {
       const act = (await this.db.query(
-        `SELECT act_id, sr_number, abbreviation, title_de, title_fr, title_it
-           FROM ch_act WHERE sr_number = $1
+        `SELECT act_id, sr_number, abbreviation, title_de, title_fr, title_it, jurisdiction
+           FROM ch_act WHERE jurisdiction = $2 AND sr_number = $1
           ORDER BY enforcement_status = 0 DESC, date_entry_force DESC NULLS LAST
           LIMIT 1`,
-        [String(sr_number)]
+        [String(sr_number), jurisdiction]
       )).rows[0];
 
       if (!act) {
-        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number) });
+        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number), jurisdiction });
       }
 
       let asOfDate: string;
@@ -319,11 +387,14 @@ article_number не унікальний в межах редакції (пер�
       if (isLatestEdition) {
         note = otherEditionsCount > 0
           ? `Це текст редакції, чинної станом на ${asOfDate}. Крім неї, для цього акта доступно ще ${otherEditionsCount} машиночитаних редакцій.`
-          : 'На Fedlex для цього акта доступна лише одна машиночитана редакція; попередні редакції існують лише у форматі PDF.';
+          : act.jurisdiction === 'CH'
+            ? 'На Fedlex для цього акта доступна лише одна машиночитана редакція; попередні редакції існують лише у форматі PDF.'
+            : 'У кантональному збірнику для цього акта доступна лише одна редакція.';
       }
 
       return this.wrapResponse({
         sr_number: act.sr_number,
+        jurisdiction: act.jurisdiction,
         abbreviation: act.abbreviation,
         title: act[`title_${lang}`],
         lang: String(lang),
@@ -353,7 +424,7 @@ article_number не унікальний в межах редакції (пер�
   // ─── ch_get_act_history ─────────────────────────────────────────────
 
   private async getActHistory(args: Record<string, unknown>): Promise<ToolResult> {
-    const { sr_number, article, lang = 'de' } = args as any;
+    const { sr_number, canton, article, lang = 'de' } = args as any;
 
     if (!sr_number || !String(sr_number).trim()) {
       return this.wrapResponse('Вкажіть sr_number — номер SR акта.');
@@ -361,17 +432,23 @@ article_number не унікальний в межах редакції (пер�
     if (!LANGS.includes(String(lang))) {
       return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
     }
+    const resolved = resolveCanton(canton, false);
+    if ('message' in resolved) {
+      return this.wrapResponse(resolved.message);
+    }
+    const jurisdiction = resolved.jurisdiction;
 
     try {
       const act = (await this.db.query(
-        `SELECT act_id, sr_number, abbreviation FROM ch_act WHERE sr_number = $1
+        `SELECT act_id, sr_number, abbreviation, jurisdiction
+           FROM ch_act WHERE jurisdiction = $2 AND sr_number = $1
           ORDER BY enforcement_status = 0 DESC, date_entry_force DESC NULLS LAST
           LIMIT 1`,
-        [String(sr_number)]
+        [String(sr_number), jurisdiction]
       )).rows[0];
 
       if (!act) {
-        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number) });
+        return this.wrapResponse({ error: 'not_found', entity: 'act', sr_number: String(sr_number), jurisdiction });
       }
 
       const articleFilter = article ? String(article) : null;
@@ -429,6 +506,7 @@ article_number не унікальний в межах редакції (пер�
 
       return this.wrapResponse({
         sr_number: act.sr_number,
+        jurisdiction: act.jurisdiction,
         abbreviation: act.abbreviation,
         editions,
         changes,

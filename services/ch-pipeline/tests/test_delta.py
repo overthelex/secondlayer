@@ -20,6 +20,7 @@ test_fetch_stage.py already use. Tests that never get past an empty `grown`
 set (nothing changed, or no snapshot found) still touch no database, since
 run_decisions only opens a connection once it has something to look up.
 """
+import asyncio
 import datetime
 import json
 import logging
@@ -1163,6 +1164,8 @@ def test_main_runs_citations_resolve_exactly_once_after_both_halves(
     newly discovered act at the terminal 'unresolved_abbr' until someone runs
     CHPIPE_CIT_RESOLVE_ALL by hand."""
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_decisions",
                         lambda settings, fetcher_factory=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_legislation",
@@ -1181,6 +1184,8 @@ def test_main_still_resolves_when_the_alias_seed_fails(tmp_path, monkeypatch):
     and re-raised at the end, but it does not cost that night its resolution
     pass over the edges already extracted."""
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_decisions",
                         lambda settings, fetcher_factory=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_legislation",
@@ -1210,6 +1215,8 @@ def test_main_still_runs_citations_resolve_once_when_a_half_fails(
     must not stop it running exactly once. The failure still propagates
     (main() re-raises after every half has had its turn)."""
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
 
     def boom(settings, fetcher_factory=None):
         raise RuntimeError("simulated decisions failure")
@@ -1238,6 +1245,8 @@ def test_main_still_runs_citations_resolve_once_when_registries_fails(
                         lambda settings, fetcher_factory=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
 
     def boom(settings):
         raise RuntimeError("simulated registries failure")
@@ -1250,3 +1259,136 @@ def test_main_still_runs_citations_resolve_once_when_registries_fails(
         delta.main()
 
     assert order == ["aliases", "resolve"]
+
+
+# --- run_cantonal: composition, monkeypatched at the stage boundary ---
+
+from chpipe.stages import (cantonal_acts_stage, cantonal_fetch_stage,   # noqa: E402
+                           cantonal_parse_stage, diff_stage, project_legacy_stage)
+from chpipe import cantons                                              # noqa: E402
+
+
+class _FakeLexwork:
+    """recent_changes pages, newest first, 2 entries per page."""
+
+    def __init__(self, entries):
+        self.entries = entries
+        self.calls = 0
+
+    async def recent_changes(self, canton, offset=0):
+        self.calls += 1
+        page = self.entries[offset:offset + 2]
+        nxt = f"?offset={offset + 2}" if offset + 2 < len(self.entries) else None
+        return {"entries": page, "next_batch": nxt}
+
+
+def _entry(date, sysnr):
+    return {"change_date": date, "change_type": "Neue Version",
+            "text_of_law": {"systematic_number": sysnr}}
+
+
+def test_changed_since_pages_until_the_baseline_and_collects_numbers():
+    client = _FakeLexwork([_entry("2026-08-25", "101.1"), _entry("2026-08-24", "152.01"),
+                           _entry("2026-08-20", "170.11"), _entry("2026-08-01", "999.9")])
+    changed = asyncio.run(delta.changed_since(client, cantons.LEXWORK["BE"], "2026-08-24"))
+    assert changed == {"101.1", "152.01"}
+    assert client.calls == 2, "the second page's oldest entry (08-20) is older than the baseline"
+
+
+def test_changed_since_on_an_empty_log_is_empty():
+    client = _FakeLexwork([])
+    assert asyncio.run(delta.changed_since(client, cantons.LEXWORK["BE"], "2026-08-24")) == set()
+
+
+def _stub_cantonal_stages(monkeypatch, changed_by_canton: dict, hosts_failed=()):
+    seen = {"acts": [], "fetch": [], "parse": [], "diff": [], "projected": 0}
+
+    def fake_changed(settings, canton, last_seen, transport):
+        return changed_by_canton.get(canton.code, set())
+
+    def fake_acts(settings, code, only=None, transport=None):
+        seen["acts"].append((code, only))
+        report = cantonal_acts_stage.ActsReport(cantons=[code], acts=len(only or []),
+                                                versions=2 * len(only or []))
+        if code in hosts_failed:
+            report.hosts_failed.append(code)
+        return report
+
+    def fake_fetch(settings, code, transport=None, **kw):
+        seen["fetch"].append(code)
+        return cantonal_fetch_stage.FetchReport(fetched=1)
+
+    def fake_parse(settings, code, **kw):
+        seen["parse"].append(code)
+        return cantonal_parse_stage.ParseReport(parsed=1, acts={(7, "de")})
+
+    def fake_diff(settings, lang="de", act_id=None):
+        seen["diff"].append((act_id, lang))
+        return diff_stage.DiffReport(changes=3)
+
+    def fake_project(settings, **kw):
+        seen["projected"] += 1
+        return 5
+
+    monkeypatch.setattr(delta, "_changed_since", fake_changed)
+    monkeypatch.setattr(cantonal_acts_stage, "run", fake_acts)
+    monkeypatch.setattr(cantonal_fetch_stage, "run", fake_fetch)
+    monkeypatch.setattr(cantonal_parse_stage, "run", fake_parse)
+    monkeypatch.setattr(diff_stage, "run", fake_diff)
+    monkeypatch.setattr(project_legacy_stage, "run", fake_project)
+    return seen
+
+
+def test_run_cantonal_only_rewalks_acts_named_by_recent_changes(tmp_path, monkeypatch):
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 26))
+    settings = _settings(tmp_path)
+    delta._save_state(settings, {code: "2026-08-25" for code in cantons.LEXWORK},
+                      delta.CANTONAL_STATE_FILE)
+    seen = _stub_cantonal_stages(monkeypatch, {"BE": {"101.1"}, "ZG": {"111.1", "112.1"}})
+
+    report = delta.run_cantonal(settings)
+
+    assert seen["acts"] == [("BE", {"101.1"}), ("ZG", {"111.1", "112.1"})]
+    assert seen["fetch"] == ["BE", "ZG"] and seen["parse"] == ["BE", "ZG"]
+    assert seen["diff"] == [(7, "de"), (7, "de")]
+    assert seen["projected"] == 1
+    assert report.cantonal_acts == 3 and report.cantonal_versions == 6
+    assert report.new_changes == 6 and report.projected == 5 and report.cantonal_failed == []
+    state = delta._load_state(settings, delta.CANTONAL_STATE_FILE)
+    assert set(state.values()) == {"2026-08-26"}
+
+
+def test_run_cantonal_without_a_baseline_sets_one_and_does_not_walk(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 26))
+    settings = _settings(tmp_path)
+    seen = _stub_cantonal_stages(monkeypatch, {"BE": {"101.1"}})
+    with caplog.at_level(logging.WARNING):
+        report = delta.run_cantonal(settings)
+    assert seen["acts"] == [] and report.cantonal_acts == 0
+    assert "no cantonal baseline" in caplog.text
+    state = delta._load_state(settings, delta.CANTONAL_STATE_FILE)
+    assert state == {code: "2026-08-26" for code in cantons.LEXWORK}
+
+
+def test_a_failing_canton_keeps_its_baseline_and_does_not_stop_the_others(tmp_path, monkeypatch):
+    monkeypatch.setattr(delta, "_today", lambda: datetime.date(2026, 8, 26))
+    settings = _settings(tmp_path)
+    delta._save_state(settings, {code: "2026-08-25" for code in cantons.LEXWORK},
+                      delta.CANTONAL_STATE_FILE)
+    seen = _stub_cantonal_stages(monkeypatch, {"BE": {"101.1"}, "ZG": {"111.1"}},
+                                 hosts_failed=("BE",))
+
+    report = delta.run_cantonal(settings)
+
+    assert report.cantonal_failed == ["BE"]
+    assert seen["fetch"] == ["ZG"], "BE's host failed before fetch; ZG still ran"
+    state = delta._load_state(settings, delta.CANTONAL_STATE_FILE)
+    assert state["BE"] == "2026-08-25" and state["ZG"] == "2026-08-26"
+
+
+def test_cantonal_state_lives_in_its_own_file(tmp_path):
+    settings = _settings(tmp_path)
+    delta._save_state(settings, {"ZH_HG": 12})
+    delta._save_state(settings, {"BE": "2026-08-25"}, delta.CANTONAL_STATE_FILE)
+    assert delta._load_state(settings) == {"ZH_HG": 12}
+    assert delta._load_state(settings, delta.CANTONAL_STATE_FILE) == {"BE": "2026-08-25"}

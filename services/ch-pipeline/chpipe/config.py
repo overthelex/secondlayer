@@ -120,6 +120,10 @@ class Settings:
     # for a supervised backfill run under tmux, this one defaults to 5400
     # because the nightly delta must never run unbounded.
     shab_budget_seconds: float = 5400.0
+    # Per-host concurrency for the cantonal (Lexwork) stages. 19 cantonal
+    # hosts are 19 small government servers; http_concurrency is the global
+    # cap across all of them, this is the cap on any one of them.
+    cantonal_per_host: int = 2
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -139,4 +143,5 @@ class Settings:
             keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
             shab_budget_seconds=_budget_seconds(
                 os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS")),
+            cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
         )

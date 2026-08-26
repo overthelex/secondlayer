@@ -68,7 +68,7 @@ log = logging.getLogger(__name__)
 # the four workers can keep busy, small enough that a killed run loses little.
 BATCH_SIZE = 500
 
-# Fetch attempts per row before it is retired. Matches migration 201's
+# Fetch attempts per row before it is retired. Matches migration 202's
 # detail_attempts smallint and the claim predicate below.
 MAX_ATTEMPTS = 3
 
