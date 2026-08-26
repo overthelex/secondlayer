@@ -101,7 +101,7 @@ export class ChRegistryTools extends BaseToolHandler {
         description: `Пошук швейцарських компаній у федеральному реєстрі Zefix за назвою або за UID (CHE-123.456.789).
 
 Запит, що виглядає як UID (CHE-123.456.789, CHE123456789), розпізнається автоматично і шукається точним збігом — фільтри status/canton/legal_form при цьому не застосовуються.
-status: active (типово) / inactive / all. canton — двобуквений код (ZH, GE, TI). legal_form — точна назва правової форми (Aktiengesellschaft, Société anonyme).
+status: active (типово) / inactive / all. canton — двобуквений код (ZH, GE, TI). legal_form — точна НІМЕЦЬКА назва правової форми, як її подає Zefix (Aktiengesellschaft, Gesellschaft mit beschränkter Haftung, Kollektivgesellschaft); французьких та італійських варіантів у реєстрі немає.
 Кожен результат містить shab_count (кількість публікацій у SHAB), last_shab_date і bankruptcy (true, якщо є публікація рубрики KK — оголошення про банкрутство).
 Якщо в Zefix збігів немає, пошук переходить на назви компаній із публікацій SHAB (компанії, вилучені з реєстру) — такі рядки позначені source: 'shab' і можуть не мати uid.
 Далі: ch_get_company для повної картки (реєстр, SHAB, FINMA, SECO, кантональні відомості).`,
@@ -110,7 +110,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
           properties: {
             query: { type: 'string', description: 'Назва компанії або UID (CHE-123.456.789)' },
             canton: { type: 'string', description: 'Двобуквений код кантону, напр. ZH, GE, TI' },
-            legal_form: { type: 'string', description: 'Правова форма, напр. Aktiengesellschaft, Société anonyme' },
+            legal_form: { type: 'string', description: 'Правова форма — німецька назва, як у Zefix, напр. Aktiengesellschaft, Gesellschaft mit beschränkter Haftung' },
             status: { type: 'string', enum: STATUSES, default: 'active', description: 'Стан компанії у реєстрі' },
             limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
             offset: { type: 'number', default: 0, description: 'Зсув для пагінації' },
