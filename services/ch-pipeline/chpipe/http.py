@@ -21,7 +21,8 @@ class FetchError(RuntimeError):
 
 class Fetcher:
     def __init__(self, concurrency: int, retries: int = 3, timeout: float = 60.0,
-                 backoff: float = 1.0, transport: httpx.BaseTransport | None = None):
+                 backoff: float = 1.0, transport: httpx.BaseTransport | None = None,
+                 proxy: str | None = None):
         # asyncio.Semaphore(0) is a valid semaphore that never grants: every
         # request would await forever, with no error, no log line and no
         # timeout -- a stage that looks alive and fetches nothing. And this
@@ -40,10 +41,23 @@ class Fetcher:
         self._sem = asyncio.Semaphore(concurrency)
         self._retries = retries
         self._backoff = backoff
+        # `proxy` is per-Fetcher rather than per-process because only the two
+        # SHAB stages need one: amtsblattportal.ch does not answer AWS IPs at
+        # all (the TCP connection hangs), while LINDAS, Fedlex and
+        # entscheidsuche are all reachable directly from the same box. Setting
+        # HTTPS_PROXY for the whole unit would push those three through a
+        # tunnel they do not need and lose them whenever it is down.
+        #
+        # trust_env is left at its default: HTTPS_PROXY in the environment
+        # still applies where it is set, and this argument only adds a mount
+        # on top. Note that httpx gives an explicit proxy an "all://" mount,
+        # which takes precedence over `transport` -- passing both is a way to
+        # bypass a MockTransport without noticing.
         self._client = httpx.AsyncClient(
             timeout=timeout,
             headers={"User-Agent": USER_AGENT},
             transport=transport,
+            proxy=proxy,
             follow_redirects=True,
             limits=httpx.Limits(max_connections=concurrency,
                                 max_keepalive_connections=concurrency),

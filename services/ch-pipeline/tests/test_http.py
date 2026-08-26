@@ -96,3 +96,70 @@ def test_the_refusal_says_zero_is_not_an_opt_out():
     treat 0 as off."""
     with pytest.raises(ValueError, match="no limit"):
         Fetcher(concurrency=0)
+
+
+# --- proxy -----------------------------------------------------------------
+#
+# amtsblattportal.ch does not answer AWS IPs at all, so the SHAB stages fetch
+# through a reverse SOCKS tunnel. Everything else stays direct, which is why
+# this is a Fetcher argument and not an env var read inside http.py.
+
+def _proxy_mounts(fetcher):
+    """The proxy transports httpx built for this client, keyed by pattern.
+
+    httpx 0.28 does not replace `_transport` for a proxy: it adds a mount
+    (an "all://" URLPattern for an explicit `proxy=`, one pattern per
+    variable for the env ones) and leaves `_transport` as the direct
+    transport. `_mounts` is therefore the thing to assert on -- and the
+    thing to remember when passing `transport=` and `proxy=` together,
+    because the mount wins over the transport.
+    """
+    return {pattern.pattern: transport
+            for pattern, transport in fetcher._client._mounts.items()
+            if transport is not None}
+
+
+_PROXY_ENV = ("ALL_PROXY", "HTTPS_PROXY", "HTTP_PROXY",
+              "all_proxy", "https_proxy", "http_proxy")
+
+
+@pytest.mark.asyncio
+async def test_no_proxy_unless_one_is_asked_for(monkeypatch):
+    for var in _PROXY_ENV:
+        monkeypatch.delenv(var, raising=False)
+    async with Fetcher(concurrency=1) as f:
+        assert _proxy_mounts(f) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_socks_proxy_is_mounted_for_every_url(monkeypatch):
+    for var in _PROXY_ENV:
+        monkeypatch.delenv(var, raising=False)
+    async with Fetcher(concurrency=1, proxy="socks5h://127.0.0.1:1080") as f:
+        mounts = _proxy_mounts(f)
+        assert list(mounts) == ["all://"]
+        url = mounts["all://"]._pool._proxy_url
+        assert (url.scheme, url.host, url.port) == (b"socks5h", b"127.0.0.1", 1080)
+
+
+@pytest.mark.asyncio
+async def test_a_proxy_of_none_is_the_same_as_not_passing_one(monkeypatch):
+    """settings.shab_proxy is None whenever the tunnel is not configured, and
+    the stages pass it through unconditionally."""
+    for var in _PROXY_ENV:
+        monkeypatch.delenv(var, raising=False)
+    async with Fetcher(concurrency=1, proxy=None) as f:
+        assert _proxy_mounts(f) == {}
+
+
+@pytest.mark.asyncio
+async def test_trust_env_still_reads_the_environment(monkeypatch):
+    """Unchanged behaviour, pinned: httpx's trust_env default is left alone,
+    so HTTPS_PROXY in the unit's environment still applies to every stage.
+    The explicit argument exists because that is exactly what we do NOT want
+    here -- only SHAB goes through the tunnel."""
+    for var in _PROXY_ENV:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
+    async with Fetcher(concurrency=1) as f:
+        assert list(_proxy_mounts(f)) == ["https://"]

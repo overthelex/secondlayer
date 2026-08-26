@@ -112,3 +112,41 @@ def test_a_shab_budget_of_zero_is_one_batch_a_night(monkeypatch):
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
     monkeypatch.setenv("CHPIPE_SHAB_BUDGET_SECONDS", "0")
     assert Settings.from_env().shab_budget_seconds == 0.0
+
+
+# --- CHPIPE_SHAB_PROXY -----------------------------------------------------
+#
+# amtsblattportal.ch does not answer AWS IPs at all (TCP hangs; LINDAS,
+# Fedlex and entscheidsuche are all fine from the same box), so the two SHAB
+# stages go out through a reverse SOCKS tunnel from the local server. Nothing
+# else in the pipeline is proxied.
+
+def test_the_shab_proxy_is_unset_by_default(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.delenv("CHPIPE_SHAB_PROXY", raising=False)
+    assert Settings.from_env().shab_proxy is None
+
+
+def test_the_shab_proxy_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_PROXY", "socks5h://127.0.0.1:1080")
+    assert Settings.from_env().shab_proxy == "socks5h://127.0.0.1:1080"
+
+
+@pytest.mark.parametrize("blank", ["", "  ", "\n"])
+def test_an_empty_shab_proxy_is_no_proxy(monkeypatch, blank):
+    """Same "" rule the rest of this file follows: an empty value in
+    ch-pipeline.env is the operator un-setting the tunnel, not a proxy URL
+    of "". httpx would raise on "" -- and it would raise inside the stage,
+    at 03:00, on a value that reads as absent in the file."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_PROXY", blank)
+    assert Settings.from_env().shab_proxy is None
+
+
+def test_the_shab_proxy_is_stripped(monkeypatch):
+    """A trailing space in an env file is invisible and httpx will not
+    forgive it."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_PROXY", "  socks5h://127.0.0.1:1080  ")
+    assert Settings.from_env().shab_proxy == "socks5h://127.0.0.1:1080"

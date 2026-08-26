@@ -331,8 +331,13 @@ async def _run_async(settings: Settings, limit: int | None,
         # citations_stage, for the same reason -- and passed INTO the claim,
         # so a batch that fails entirely does not end the run.
         poisoned: set[str] = set()
+        # proxy: amtsblattportal.ch does not answer AWS IPs at all -- the TCP
+        # connection hangs -- so on the cloud box this goes through a reverse
+        # SOCKS tunnel from the local server (CHPIPE_SHAB_PROXY). Only the two
+        # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
         async with Fetcher(concurrency=CONCURRENCY, retries=retries,
-                           backoff=backoff, transport=transport) as fetcher:
+                           backoff=backoff, transport=transport,
+                           proxy=settings.shab_proxy) as fetcher:
             while True:
                 size = batch_size if remaining is None else min(batch_size, remaining)
                 if size <= 0:
