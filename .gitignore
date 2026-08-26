@@ -172,3 +172,7 @@ rlhf-signals/
 
 # Opendata importer runtime state (resume checkpoints, temp data)
 services/opendata-importers/_data/
+
+# symlinks named node_modules (the trailing-slash patterns above match only directories)
+node_modules
+**/node_modules
