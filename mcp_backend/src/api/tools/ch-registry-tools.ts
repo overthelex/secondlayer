@@ -320,7 +320,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
       WITH page AS (
         SELECT c.uid, c.name, c.legal_form, c.legal_form_code, c.legal_seat,
                c.status, c.canton, c.chid, c.ehraid,
-               left(coalesce(c.purpose, ''), ${PURPOSE_PREVIEW_CHARS}) AS purpose,
+               left(c.purpose || '', ${PURPOSE_PREVIEW_CHARS}) AS purpose,
                c.address
           FROM ch_zefix_companies c
          WHERE ${where}
@@ -478,7 +478,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
               registration_office, legal_form, seat, canton, company_name,
               metadata_json->>'capital' AS capital,
               metadata_json->>'capital_currency' AS capital_currency,
-              left(coalesce(content, ''), ${SHAB_CONTENT_CHARS}) AS content,
+              left(content || '', ${SHAB_CONTENT_CHARS}) AS content,
               (length(coalesce(content, '')) > ${SHAB_CONTENT_CHARS}) AS content_truncated
          FROM ch_shab_publications
         WHERE company_uid = $1
@@ -534,7 +534,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
       `SELECT publication_uuid, publication_number,
               to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
               sub_rubric, cantons, title, company_uid,
-              left(coalesce(publication_text_de, publication_text_fr, publication_text_it, ''),
+              left(coalesce(publication_text_de, publication_text_fr, publication_text_it) || '',
                    ${SHAB_CONTENT_CHARS}) AS content
          FROM ch_kantonsblatt_publications
         WHERE company_uid = $1
