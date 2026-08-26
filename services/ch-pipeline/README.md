@@ -1029,6 +1029,15 @@ month finished or not (`fetched < total`, `done_at NULL` on a failure), so
 the backfill is killable and resumable at the month grain regardless of how
 many windows a given month took underneath.
 
+`done_at` — the column the skip list reads — is stamped only when a month is
+**complete *and* over**. The current month is still being published into, so
+a complete walk of it records its counters with `done_at NULL` and is walked
+again the next night; stamping it on the first night of the month would
+freeze it and the nightly delta would make zero requests until the month
+turned. The previous month is walked one last time after the boundary and
+frozen then, which is the window that catches a publication landing in the
+last hours of a month — and the reason the delta asks for two months.
+
 ## Backfill order on prod
 
 Run the three stages **in this order**, under `tmux` (see "Where it runs"

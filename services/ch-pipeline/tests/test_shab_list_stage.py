@@ -182,6 +182,11 @@ THREE = {("HR", AUGUST): _page(3, [
     _pub("bbb", number="1002"),
     _pub("ccc", number="1003", name="Grisomed AG", seat="Chur")])}
 
+# A month that is OVER at TODAY. AUGUST is the month TODAY falls in, so every
+# assertion about freezing has to be made about a month like this one.
+ONE_JULY = {("HR", JULY): _page(1, [
+    _pub("jul", date="2026-07-02", number="2001")])}
+
 
 # --- one window, one request -----------------------------------------------
 
@@ -239,7 +244,7 @@ def test_an_empty_month_costs_exactly_one_request(conn, settings):
     assert len(portal.urls) == 1
     assert report.months == 1
     assert report.publications == 0
-    assert _progress(conn)[("HR", AUGUST)]["done_at"] is not None
+    assert _progress(conn)[("HR", AUGUST)]["total"] == 0
 
 
 # --- upsert ----------------------------------------------------------------
@@ -284,8 +289,10 @@ def test_a_re_listed_row_keeps_what_shab_detail_wrote(conn, settings):
 
 
 def test_a_row_without_a_detail_yet_does_take_the_new_title_parse(conn, settings):
+    # No DELETE FROM ch_shab_progress: AUGUST is the current month, so the
+    # second run walks it again on its own -- which is the whole point of not
+    # stamping done_at until a month is over.
     _run(settings, FakePortal(THREE), rubrics=("HR",), from_month=AUGUST)
-    conn.execute("DELETE FROM ch_shab_progress")
     _run(settings, FakePortal({("HR", AUGUST): _page(1, [
         _pub("aaa", number="1001", name="Enderli AG", seat="Baden")])}),
         rubrics=("HR",), from_month=AUGUST)
@@ -298,16 +305,55 @@ def test_a_finished_month_records_its_total_and_what_it_fetched(conn, settings):
     _run(settings, FakePortal(THREE), rubrics=("HR",), from_month=AUGUST)
     row = _progress(conn)[("HR", AUGUST)]
     assert (row["total"], row["fetched"]) == (3, 3)
-    assert row["done_at"] is not None
+    # AUGUST is the month TODAY falls in: the counters are recorded, but the
+    # month is not frozen, because publications are still landing in it.
+    assert row["done_at"] is None
 
 
-def test_a_month_already_done_is_not_requested_again(conn, settings):
-    _run(settings, FakePortal(THREE), rubrics=("HR",), from_month=AUGUST)
-    portal = FakePortal(THREE)
-    report = _run(settings, portal, rubrics=("HR",), from_month=AUGUST)
-    assert portal.urls == []
-    assert report.months == 0
+def test_a_month_that_is_over_is_not_requested_again(conn, settings):
+    """done_at is what the skip list reads, and a month that is over cannot
+    gain another publication, so that is when it is stamped. This is what
+    makes the backfill killable and resumable at the month grain."""
+    _run(settings, FakePortal(ONE_JULY), rubrics=("HR",), from_month=JULY)
+    assert _progress(conn)[("HR", JULY)]["done_at"] is not None
+
+    portal = FakePortal(ONE_JULY)
+    report = _run(settings, portal, rubrics=("HR",), from_month=JULY)
+    # JULY is frozen; AUGUST, the current month, is walked again every time.
+    assert portal.requested_months("HR") == [AUGUST]
     assert report.pages == 0
+
+
+def test_the_current_month_is_walked_again_the_next_night(conn, settings):
+    """The nightly delta runs `months=2` against a month that is still being
+    published into. A done_at stamped on the first night would put the month
+    into the skip list and the delta would make zero requests -- and see zero
+    new publications -- for the rest of that month."""
+    night1 = FakePortal({("HR", AUGUST): _page(1, [_pub("aaa", number="1001")])})
+    _run(settings, night1, months=2, rubrics=("HR",), from_month=FROM)
+    assert sorted(_rows(conn)) == ["aaa"]
+
+    night2 = FakePortal({("HR", AUGUST): _page(2, [
+        _pub("aaa", number="1001"), _pub("bbb", number="1002")])})
+    report = _run(settings, night2, months=2, rubrics=("HR",), from_month=FROM)
+
+    assert night2.requested_months("HR") == [AUGUST]
+    assert report.pages == 1
+    assert sorted(_rows(conn)) == ["aaa", "bbb"]
+
+
+def test_the_previous_month_is_frozen_only_once_it_is_over(conn, settings):
+    """Walked on its own last day, JULY is still open and stays claimable;
+    walked once the boundary has passed, the same month is frozen. That is the
+    one extra walk `months=2` exists for: a publication backdated into last
+    month after the boundary still lands."""
+    _run(settings, FakePortal(ONE_JULY), rubrics=("HR",), from_month=JULY,
+         today=dt.date(2026, 7, 31))
+    assert _progress(conn)[("HR", JULY)]["done_at"] is None
+
+    _run(settings, FakePortal(ONE_JULY), rubrics=("HR",), from_month=JULY,
+         today=dt.date(2026, 8, 1))
+    assert _progress(conn)[("HR", JULY)]["done_at"] is not None
 
 
 def test_a_month_done_for_hr_is_still_walked_for_kk(conn, settings):
@@ -386,15 +432,16 @@ def test_a_failing_request_is_retried_before_the_month_is_given_up(conn, setting
 
 
 def test_an_undone_month_is_retried_by_the_next_run(conn, settings):
-    _run(settings, FakePortal(THREE, fail={("HR", AUGUST, SIZE)}),
-         rubrics=("HR",), from_month=AUGUST)
-    portal = FakePortal(THREE)
-    report = _run(settings, portal, rubrics=("HR",), from_month=AUGUST)
+    _run(settings, FakePortal(ONE_JULY, fail={("HR", JULY, SIZE)}),
+         rubrics=("HR",), from_month=JULY)
+    assert _progress(conn)[("HR", JULY)]["done_at"] is None
 
-    assert portal.requested_months("HR") == [AUGUST]
-    assert sorted(_rows(conn)) == ["aaa", "bbb", "ccc"]
-    assert _progress(conn)[("HR", AUGUST)]["done_at"] is not None
-    assert report.months == 1
+    portal = FakePortal(ONE_JULY)
+    _run(settings, portal, rubrics=("HR",), from_month=JULY)
+
+    assert JULY in portal.requested_months("HR")
+    assert sorted(_rows(conn)) == ["jul"]
+    assert _progress(conn)[("HR", JULY)]["done_at"] is not None
 
 
 def test_a_failed_month_does_not_stop_the_months_after_it(conn, settings):
@@ -545,7 +592,10 @@ def test_a_month_bigger_than_a_page_is_split_until_every_window_fits(
     assert report.months == 1
     row = _progress(conn)[("HR", AUGUST)]
     assert (row["total"], row["fetched"]) == (31, 31)
-    assert row["done_at"] is not None
+    # `today` here is inside AUGUST, so the month is complete but not frozen:
+    # report.months is what says the walk finished, done_at is what says the
+    # month can never gain another publication.
+    assert row["done_at"] is None
 
 
 def test_the_split_halves_the_window_rather_than_walking_days(conn, settings):

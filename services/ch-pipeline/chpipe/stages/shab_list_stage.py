@@ -29,9 +29,17 @@ this asks for one row and reads `<total>`. A month of 2000-era HR is one probe
 and one request; a month of modern HR is 31 probes and 16 requests.
 
 The unit of PROGRESS is still the month. Every month that finishes writes a
-ch_shab_progress row with done_at set, and a month that already has one is not
-requested again -- so the backfill can be killed and restarted, and the nightly
-delta is the same code with `months=2`.
+ch_shab_progress row, and a month whose row has done_at set is not requested
+again -- so the backfill can be killed and restarted, and the nightly delta is
+the same code with `months=2`.
+
+done_at is stamped only when the month is COMPLETE AND OVER. The current month
+is still being published into, so a complete walk of it records its counters
+with done_at NULL and is walked again tomorrow; stamping it on the first night
+of the month would put it in the skip list and the delta would make zero
+requests until the month turned. The previous month is walked one last time
+after the boundary and frozen then -- the window that catches a publication
+backdated into it, and the reason the delta asks for two months.
 
 A month that does NOT finish writes its progress row too, with done_at NULL and
 fetched < total. That is deliberate rather than writing nothing: the row records
@@ -333,8 +341,18 @@ async def _walk_window(fetcher: Fetcher, limiter: _RateLimiter, conn,
 
 async def _walk_month(fetcher: Fetcher, limiter: _RateLimiter, conn,
                       rubric: str, month: dt.date, size: int,
-                      report: ShabListReport) -> bool:
-    """One (rubric, month), recorded in ch_shab_progress either way."""
+                      report: ShabListReport, today: dt.date) -> bool:
+    """One (rubric, month), recorded in ch_shab_progress either way.
+
+    done_at is the skip list, so it is stamped only when the month can no
+    longer gain a publication -- complete AND over. A complete walk of the
+    CURRENT month writes its counters with done_at NULL, and the nightly
+    delta therefore walks it again tomorrow; stamping it on the first night
+    of the month froze it for the rest of the month and the delta made zero
+    requests. The month before the current one is walked once more after the
+    boundary (its done_at is still NULL) and frozen then, which is exactly
+    the backdated-publication window `months=2` exists for.
+    """
     start, end = shab.month_bounds(month)
     try:
         total, fetched, complete = await _walk_window(
@@ -345,12 +363,14 @@ async def _walk_month(fetcher: Fetcher, limiter: _RateLimiter, conn,
         log.warning("shab-list: %s %s: %s", rubric, month, exc)
         return False
 
+    frozen = complete and end < today
     conn.execute(_MARK, (rubric, month, total, fetched,
-                         dt.datetime.now(dt.timezone.utc) if complete else None))
+                         dt.datetime.now(dt.timezone.utc) if frozen else None))
     if complete:
         report.months += 1
-        log.info("shab-list: %s %s done, %d/%d publications",
-                 rubric, month, fetched, total)
+        log.info("shab-list: %s %s done, %d/%d publications%s", rubric, month,
+                 fetched, total, "" if frozen else " (month still open, will "
+                 "be walked again)")
     return complete
 
 
@@ -378,7 +398,7 @@ async def _run_async(settings: Settings, months: int | None, rubrics,
                 # One month that fails must not cost the 300 after it.
                 try:
                     await _walk_month(fetcher, limiter, conn, rubric, month,
-                                      size, report)
+                                      size, report, today)
                 except Exception as exc:                    # noqa: BLE001
                     log.error("shab-list: %s %s: %s", rubric, month, exc)
     finally:
