@@ -7,11 +7,17 @@ form, the seat, the whole publication text -- by fetching
 `/api/v1/publications/{id}/xml` once per row.
 
 Queue model: the queue IS the two detail columns. A row is offered while
-`detail_fetched_at IS NULL AND detail_attempts < 3`; a success stamps
-detail_fetched_at, a failure raises detail_attempts and writes detail_error,
-and the third failure retires the row without ever stamping it. There is no
-claimed state in between, so a killed run costs at most the batch it was
-holding, and the same query is the backfill's queue and the nightly delta's.
+`detail_fetched_at IS NULL AND detail_attempts < 3`; CLAIMING it raises
+detail_attempts, a success stamps detail_fetched_at, a failure writes
+detail_error, and the third claim that did not end in a stamp retires the
+row. detail_attempts therefore counts claims, not failures -- "claimed three
+times without success", which for an exhausted row is the same statement, and
+which costs a run killed mid-batch one attempt on the rows it was holding.
+That is the price of the counter also being the claim mark: the bump is
+committed at claim time, so a second worker -- or the nightly delta running
+beside the backfill -- cannot be handed the same head of the queue. See
+_CLAIM for the incident that made this necessary. The same query is the
+backfill's queue and the nightly delta's.
 
 Order: KK before HR, newest first. KK is 215,853 publications against HR's
 2,293,215 and it is the half that answers "is this counterparty bankrupt", so
@@ -74,8 +80,9 @@ log = logging.getLogger(__name__)
 # the four workers can keep busy, small enough that a killed run loses little.
 BATCH_SIZE = 500
 
-# Fetch attempts per row before it is retired. Matches migration 202's
-# detail_attempts smallint and the claim predicate below.
+# Claims per row before it is retired -- three claims that did not end in a
+# detail_fetched_at stamp. Matches migration 202's detail_attempts smallint
+# and the claim predicate below.
 MAX_ATTEMPTS = 3
 
 # Ceiling on this run's poison set. The set is held in memory and sent with
@@ -99,7 +106,7 @@ class ShabDetailReport:
     claimed: int = 0            # rows attempted (claimed, minus this run's poison)
     fetched: int = 0            # rows stamped detail_fetched_at
     failed: int = 0             # rows whose attempt raised
-    skipped_exhausted: int = 0  # rows out of attempts, measured before the run
+    skipped_exhausted: int = 0  # rows out of claims, measured before the run
 
 
 # No NULLS clause anywhere, deliberately: DESC defaults to NULLS FIRST and so
@@ -116,14 +123,31 @@ class ShabDetailReport:
 # result instead capped the run at one batch: once the set held BATCH_SIZE
 # ids, every claim came back holding nothing but poisoned rows. It stays a
 # filter on the ordered index read (asserted by the EXPLAIN test).
+#
+# The UPDATE around that read is what makes the claim exclusive. It used to be
+# the bare SELECT, and FOR UPDATE SKIP LOCKED does not hold anything on an
+# autocommit connection: the row locks are released the moment the SELECT
+# returns, and nothing on the row said "taken", so the next claimer read the
+# identical head of the queue. Measured on prod: two shab-detail workers
+# against the same database fetched the SAME publications -- every fetched row
+# still carrying detail_attempts = 0, 49 fetches/s between them against 33
+# rows/s of database progress. Bumping detail_attempts inside the claim
+# replaces a lock that does not outlive the statement with a committed,
+# visible mark, at no extra round trip. FOR UPDATE SKIP LOCKED stays, and now
+# does the job it is actually good at: keeping two concurrent claims from
+# blocking on each other over the same rows.
 _CLAIM = """
-SELECT shab_id, rubric
-  FROM ch_shab_publications
- WHERE detail_fetched_at IS NULL AND detail_attempts < %s
-   AND shab_id <> ALL(%s::text[])
- ORDER BY rubric DESC, publication_date DESC
- LIMIT %s
-   FOR UPDATE SKIP LOCKED
+UPDATE ch_shab_publications p
+   SET detail_attempts = p.detail_attempts + 1
+  FROM (SELECT shab_id
+          FROM ch_shab_publications
+         WHERE detail_fetched_at IS NULL AND detail_attempts < %s
+           AND shab_id <> ALL(%s::text[])
+         ORDER BY rubric DESC, publication_date DESC
+         LIMIT %s
+           FOR UPDATE SKIP LOCKED) c
+ WHERE p.shab_id = c.shab_id
+RETURNING p.shab_id, p.rubric
 """
 
 # coalesce, not assignment: the detail is the better source for every column
@@ -146,12 +170,16 @@ UPDATE ch_shab_publications SET
  WHERE shab_id = %(shab_id)s
 """
 
+# No increment here: the claim already spent this row's attempt, and counting
+# it twice would retire every row after two failures instead of three.
+#
 # greatest(): a permanent failure passes MAX_ATTEMPTS as the floor and retires
 # the row in one statement, without a second UPDATE and without ever lowering
-# an attempt count.
+# an attempt count. A transient failure passes 0, which leaves the counter at
+# whatever the claim set it to.
 _FAIL = """
 UPDATE ch_shab_publications SET
-    detail_attempts = greatest(detail_attempts + 1, %(floor)s),
+    detail_attempts = greatest(detail_attempts, %(floor)s),
     detail_error    = %(error)s,
     updated_at      = now()
  WHERE shab_id = %(shab_id)s
@@ -171,8 +199,19 @@ SELECT legal_form_code AS code, legal_form AS name
 """
 
 
+# The two attempt ceilings claim() passes to _CLAIM, in the order it tries
+# them. A bump only excludes a row from a later claim if the claim asks for
+# rows BELOW that bump: `detail_attempts < MAX_ATTEMPTS` on its own re-offers
+# everything a concurrent worker is holding, because 1 is still under 3. So
+# the first pass asks for rows nobody has claimed at all, and the retry pass
+# -- rows a previous claim raised but never stamped -- runs only once there is
+# no unclaimed work left.
+_UNCLAIMED = 1
+_RETRY = MAX_ATTEMPTS
+
+
 def claim(conn, limit: int, exclude=()) -> list[dict]:
-    """Rows still owed a detail, most valuable first.
+    """Rows still owed a detail, most valuable first, marked as claimed.
 
     'KK' > 'HR', so `rubric DESC` is "bankruptcies before the register" AND is
     an index-ordered read of idx_ch_shab_detail_queue. See _CLAIM.
@@ -180,12 +219,30 @@ def claim(conn, limit: int, exclude=()) -> list[dict]:
     `exclude` is the caller's poison set: ids this run has already tried and
     must not be offered again, skipped by the query rather than by the caller.
 
-    FOR UPDATE SKIP LOCKED reduces overlap between processes but is not a
-    distributed lock under autocommit -- the row lock releases the moment the
-    SELECT completes, same caveat as db.claim(). One process per stage is the
-    supported model.
+    Claiming BUMPS detail_attempts, in the same statement and therefore in the
+    same autocommit transaction, which is what makes the claim exclusive
+    between processes -- unlike db.claim(), whose FOR UPDATE SKIP LOCKED holds
+    nothing past the SELECT. Two workers, or a nightly delta beside a backfill,
+    can share this queue.
+
+    Unclaimed rows first, retries only when there are none: see _UNCLAIMED.
+    That is a second priority on top of KK-before-HR -- a KK row some earlier
+    claim failed on waits behind every HR row nobody has tried -- and it is
+    the half of the fix that the bump alone does not give. Two workers both
+    down in the retry pass CAN still be handed the same row; that pass is the
+    small tail of the queue and a row can only be re-handed until its third
+    claim, so the collision is bounded rather than the whole head of a 2.5M
+    backfill.
+
+    The order the rows come back in is the RETURNING clause's, which states
+    none. The priority is about WHICH rows a claim takes, not about their
+    order inside the batch -- every row of a batch is fetched anyway.
     """
-    return conn.execute(_CLAIM, (MAX_ATTEMPTS, list(exclude), limit)).fetchall()
+    for ceiling in (_UNCLAIMED, _RETRY):
+        rows = conn.execute(_CLAIM, (ceiling, list(exclude), limit)).fetchall()
+        if rows:
+            return rows
+    return []
 
 
 def legal_form_labels(conn) -> dict[str, str]:
@@ -330,12 +387,14 @@ async def _run_async(settings: Settings, limit: int | None,
         limiter = _RateLimiter(rps)
         started = time.monotonic()
         remaining = limit
-        # Publications that failed in THIS run. A failure raises attempts but
-        # leaves the row claimable (that is the point -- tomorrow retries it),
-        # so the claim query keeps offering it and the run would spend its
-        # whole budget re-fetching the same 500 failures. Same poison set as
-        # citations_stage, for the same reason -- and passed INTO the claim,
-        # so a batch that fails entirely does not end the run.
+        # Publications that failed in THIS run. A failure leaves the row
+        # claimable -- that is the point, tomorrow retries it -- and the claim
+        # falls back to exactly those rows once nothing is unclaimed, so
+        # without this the run would spend its whole budget re-fetching the
+        # same 500 failures and burn all three of each row's claims in one
+        # night. Same poison set as citations_stage, for the same reason --
+        # and passed INTO the claim, so a batch that fails entirely does not
+        # end the run.
         poisoned: set[str] = set()
         # proxy: amtsblattportal.ch does not answer AWS IPs at all -- the TCP
         # connection hangs -- so on the cloud box this goes through a reverse
@@ -372,9 +431,10 @@ async def _run_async(settings: Settings, limit: int | None,
                               len(poisoned), MAX_POISONED)
                     break
 
-                # Between batches, never inside one: a batch already claimed is
-                # always finished, so no row is left holding a lock or an
-                # attempt it did not spend.
+                # Between batches, never inside one: a batch already claimed
+                # is always finished, so no row is left carrying a claim that
+                # was never tried. (Killing the run mid-batch does cost those
+                # rows one claim -- see the module docstring's queue model.)
                 if budget is not None and time.monotonic() - started >= budget:
                     log.info("shab-detail: %.0f s budget spent, stopping", budget)
                     break

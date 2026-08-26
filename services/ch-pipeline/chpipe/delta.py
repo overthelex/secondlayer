@@ -605,11 +605,15 @@ def run_registries(settings: Settings) -> RegistriesReport:
     under a clock, not a row count -- 90 minutes by default
     (CHPIPE_SHAB_BUDGET_SECONDS via Settings.shab_budget_seconds), because
     the queue this stage claims from is shared with the standalone backfill
-    and can be arbitrarily large the first time this runs. The queue model
-    (detail_fetched_at IS NULL AND detail_attempts < 3, FOR UPDATE SKIP
-    LOCKED) is what makes stopping on a clock safe: nothing is left
-    half-claimed, and tomorrow's run picks the same query up where tonight's
-    left off.
+    and can be arbitrarily large the first time this runs. Sharing it is safe
+    because the claim MARKS what it takes -- one statement that both reads the
+    queue head and raises detail_attempts on it, so a claim is committed and
+    visible the moment it is made rather than held as a row lock that an
+    autocommit connection drops at once. That is also what makes stopping on a
+    clock safe: the budget is checked between batches, so nothing is left
+    claimed but untried, and tomorrow's run picks the same query up where
+    tonight's left off. detail_attempts therefore counts claims rather than
+    failures -- see shab_detail_stage's module docstring.
 
     Order matters for one reason not obvious from the calls alone: zefix
     before shab-detail is what gives shab-detail's legal-form CODES a label
