@@ -49,8 +49,17 @@ _BY_HOST = {c.host: c for c in cantons.LEXWORK.values()}
 class FetchReport:
     fetched: int = 0
     failed: int = 0
+    # A version the host holds only as a PDF (structured_document_id null,
+    # no document tree): BE 436.811 v780 (2004) was the first. Retired at
+    # once with reason 'pdf_only', not retried -- the same source ceiling
+    # Fedlex has for its older editions, recorded rather than hidden.
+    pdf_only: int = 0
     bytes_written: int = 0
     cache_hits: int = 0
+
+
+class PdfOnly(FetchError):
+    pass
 
 
 def payload_path(settings: Settings, version_id: int):
@@ -58,16 +67,26 @@ def payload_path(settings: Settings, version_id: int):
 
 
 def validate(payload: bytes) -> str | None:
-    """The payload as text if it is a Lexwork version document, else None."""
+    """The payload as text if it is a Lexwork version document, else None.
+    Raises PdfOnly for a well-formed version record that has no structured
+    document (the host serves that version as a PDF only)."""
     try:
         data = json.loads(payload)
     except ValueError:
         return None
     try:
-        root = data["text_of_law"]["selected_version"]["json_content"]["document"]["content"]
+        selected = data["text_of_law"]["selected_version"]
     except (KeyError, TypeError):
         return None
+    if not isinstance(selected, dict):
+        return None
+    try:
+        root = selected["json_content"]["document"]["content"]
+    except (KeyError, TypeError):
+        root = None
     if not isinstance(root, dict) or not root.get("uid"):
+        if selected.get("structured_document_id") is None and selected.get("pdf_link_tol"):
+            raise PdfOnly("pdf_only: version has no structured document, PDF only")
         return None
     return payload.decode("utf-8")
 
@@ -131,6 +150,12 @@ async def _fetch_batch(client: LexworkClient, conn, rows: list[dict],
                 return
             try:
                 text = await download(url)
+            except PdfOnly as exc:
+                # max_attempts=1: retire the row now; retrying a PDF-only
+                # version tomorrow does not make the host publish a tree.
+                db.fail_version(conn, row["version_id"], str(exc), max_attempts=1)
+                report.pdf_only += 1
+                return
             except FetchError as exc:
                 log.warning("version %s: fetch failed: %s", row["version_id"], exc)
                 db.fail_version(conn, row["version_id"], str(exc), settings.max_attempts)
@@ -178,8 +203,8 @@ async def _run_async(settings: Settings, canton_code: str | None,
                 await _fetch_batch(client, conn, rows, settings, report)
                 if remaining is not None:
                     remaining -= len(rows)
-                log.info("cantonal fetched=%d failed=%d cache_hits=%d",
-                         report.fetched, report.failed, report.cache_hits)
+                log.info("cantonal fetched=%d failed=%d pdf_only=%d cache_hits=%d",
+                         report.fetched, report.failed, report.pdf_only, report.cache_hits)
     finally:
         conn.close()
     return report
@@ -199,8 +224,8 @@ def main() -> FetchReport:
     result = run(Settings.from_env(),
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
-    log.info("fetched=%d failed=%d bytes=%d cache_hits=%d", result.fetched,
-             result.failed, result.bytes_written, result.cache_hits)
+    log.info("fetched=%d failed=%d pdf_only=%d bytes=%d cache_hits=%d", result.fetched,
+             result.failed, result.pdf_only, result.bytes_written, result.cache_hits)
     return result
 
 

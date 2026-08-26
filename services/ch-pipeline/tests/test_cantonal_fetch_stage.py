@@ -91,6 +91,19 @@ def test_a_non_json_body_fails_the_row_with_a_reason(conn, settings):
     assert stage == "discovered" and "not a Lexwork show_as_json payload" in error
 
 
+def test_a_pdf_only_version_is_retired_at_once_with_its_reason(conn, settings):
+    vid = _row(conn)
+    body = json.dumps({"text_of_law": {"selected_version": {
+        "id": 780, "structured_document_id": None,
+        "pdf_link_tol": "https://www.belex.sites.be.ch/api/de/versions/780/pdf_file",
+        "json_content": {"document": {"header": {}, "content": None}}}}}).encode()
+    report = _run(settings, Host(body=body))
+    assert report.pdf_only == 1 and report.failed == 0 and report.fetched == 0
+    stage, error, failed_stage = conn.execute(
+        "SELECT stage, last_error, failed_stage FROM ch_act_version WHERE version_id=%s", (vid,)).fetchone()
+    assert stage == "failed" and failed_stage == "discovered" and error.startswith("pdf_only")
+
+
 def test_json_without_a_document_tree_fails_the_row(conn, settings):
     _row(conn)
     report = _run(settings, Host(body=b'{"text_of_law": {"selected_version": {}}}'))
