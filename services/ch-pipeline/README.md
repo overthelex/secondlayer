@@ -1086,7 +1086,83 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
 | `CHPIPE_SHAB_MONTHS` | `shab-list` | walk only the last N months (delta mode); unset = every month back to `CHPIPE_SHAB_FROM` (backfill mode) |
 | `CHPIPE_SHAB_BUDGET_SECONDS` | `shab-detail` | stop after N seconds, checked between batches; `""` (unset) means no budget — the shape `shab-detail`'s own `main()` reads via `budget_seconds()`. The **nightly delta** reads a *different* source for the same name: `Settings.shab_budget_seconds`, populated from the same env var but defaulting to `5400` (90 minutes) rather than "no budget" — the cron job must never run unbounded even if the var is unset |
 | `CHPIPE_LIMIT` | `shab-detail` (and the decisions/legislation claiming stages) | stop after N rows — a smoke run |
+| `CHPIPE_SHAB_PROXY` | `shab-list`, `shab-detail` | proxy URL for amtsblattportal.ch only, e.g. `socks5h://127.0.0.1:1080`; `""` or unset = fetch directly. Required on any cloud box — see **amtsblattportal blocks cloud IPs** below. Deliberately *not* `HTTPS_PROXY`: zefix's LINDAS traffic must stay direct |
 | `CHPIPE_ZEFIX_MUNICIPALITIES` | `zefix` | comma-separated municipality ids, for a targeted re-run; unset = every partition. Only a full unfiltered run triggers the inactivation sweep |
+
+## amtsblattportal blocks cloud IPs
+
+**amtsblattportal.ch does not answer AWS IPs at all.** Not a 403, not a
+challenge page — the TCP connection hangs until it times out, so a
+`shab-list` or `shab-detail` run on the AWS box looks like a stalled network
+rather than a refusal. Measured on prod 2026-08-26 from the same host on the
+same afternoon: LINDAS, Fedlex and entscheidsuche all answered normally,
+amtsblattportal.ch answered nothing. Only these two stages are affected;
+every other source in this pipeline is reachable directly.
+
+The fix in operation is a **reverse SOCKS tunnel from the local server**,
+which is on a Swiss consumer uplink the portal does answer. Run this **on the
+local server**, not on the cloud box (`-R` means "open the listener at the
+far end"):
+
+    ssh -R 127.0.0.1:1080 prod
+
+That leaves a SOCKS5 proxy listening on the cloud box's own loopback, with
+the traffic emerging from the local server. Then, in `ch-pipeline.env`:
+
+    CHPIPE_SHAB_PROXY=socks5h://127.0.0.1:1080
+
+`socks5h`, not `socks5`: the `h` makes the *proxy* resolve the hostname, so
+DNS for amtsblattportal.ch also comes from the Swiss side. `127.0.0.1` is
+correct and must not be widened — the listener is bound to loopback so the
+tunnel is not an open proxy to anyone who can reach the box.
+
+`socksio` must be installed in the venv (it is in `requirements.txt`).
+Without it httpx raises `ImportError` the moment a `socks5h://` URL reaches
+`AsyncClient` — at Fetcher construction inside the stage, not at start-up.
+
+**The nightly delta needs the tunnel to be persistent.** A plain
+`ssh -R` dies with the terminal that started it, and with it every SHAB fetch
+from 07:15 UTC onward — silently, as a stage that hangs on its rate limiter
+rather than one that errors. Note also that today's crontab line sources no
+env file, so `CHPIPE_SHAB_PROXY` has to reach cron explicitly: a `CHPIPE_SHAB_PROXY=...`
+assignment line in the crontab next to `CRON_TZ=`, or a wrapper that sources
+`ch-pipeline.env` before `run-delta.sh`.
+
+Either `autossh` or a systemd unit **on the local server** keeps the tunnel
+up. Documented, not created — installing it is an operator decision about a
+machine this repo does not deploy to:
+
+    # /etc/systemd/system/shab-tunnel.service  (on the LOCAL server)
+    [Unit]
+    Description=Reverse SOCKS tunnel to prod for amtsblattportal.ch
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    User=<the user whose ~/.ssh has the prod key>
+    ExecStart=/usr/bin/ssh -N -T \
+        -o ExitOnForwardFailure=yes \
+        -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -R 127.0.0.1:1080 prod
+    Restart=always
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+
+`ExitOnForwardFailure=yes` is the load-bearing option: without it, an ssh
+that connects but *fails* to open the forward (port 1080 already held by a
+stale session) stays up and reports success, and systemd never restarts it —
+so the unit is green while the delta fetches nothing. `-N -T` because this
+session carries no command and needs no tty. Prod's sshd also needs
+`ClientAliveInterval` short enough, or a tunnel idle between nightly runs is
+reaped by the far end and only `Restart=always` notices.
+
+Nothing enforces any of this in code: with the tunnel down, `CHPIPE_SHAB_PROXY`
+still points at a dead loopback port and the stages fail their fetches the
+ordinary way — retries, then `detail_attempts`. Check the delta log for a
+`shab-list`/`shab-detail` step that claims rows and fetches none before
+suspecting the portal itself.
 
 ## The lossy-paging rule
 
