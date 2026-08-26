@@ -6,6 +6,7 @@
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
 #                 ./run-stage.sh lexfind-versions [canton]   (CHPIPE_LEXFIND_SCOPE=all|gaps from the env)
+#   SIL (GE, NE): ./run-stage.sh sil-acts|sil-fetch|sil-parse [canton]
 #   ticino:       ./run-stage.sh ti-acts|ti-fetch|ti-parse   (no argument; one canton, one host)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
@@ -65,9 +66,10 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_SHAB_MONTHS:-}}"
     export CHPIPE_SHAB_MONTHS="$ARG"
     ;;
-  lexfind-registry|lexfind-versions|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal)
+  lexfind-registry|lexfind-versions|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal|sil-acts|sil-fetch|sil-parse)
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
+    # The sil-* stages accept GE, NE or nothing (both).
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
     ;;

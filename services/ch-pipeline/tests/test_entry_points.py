@@ -393,7 +393,7 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "zefix", "shab-list", "shab-detail",
                 "lexfind-registry", "lexfind-versions", "cantonal-acts",
                 "cantonal-fetch", "cantonal-parse", "cantonal-relink", "reports-cantonal",
-                "ti-acts", "ti-fetch", "ti-parse"}
+                "sil-acts", "sil-fetch", "sil-parse", "ti-acts", "ti-fetch", "ti-parse"}
     assert _accepted_stage_names() == expected
 
 
