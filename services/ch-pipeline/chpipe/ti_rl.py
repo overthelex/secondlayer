@@ -253,6 +253,22 @@ def _footnotes(content) -> dict[int, str]:
     return out
 
 
+def _entry_force(lines: list[str]) -> datetime.date | None:
+    """The date after 'Entrata in vigore'. Either one line ("Entrata in
+    vigore: 1° gennaio 1998.", the constitution's fixture of 2026-08-26) or a
+    bold heading with the date in the next paragraph (the same page served
+    2026-08-27). 5 of the 15 smoke pages carry one in either form; the rest
+    say it inside an article ("entra in vigore il ...") and get None. A
+    heading with no date at all is skipped, not taken as None."""
+    for index, line in enumerate(lines):
+        if not re.match(r"Entrata in vigore\b", line, re.I):
+            continue
+        found = parse_date(line) or (parse_date(lines[index + 1]) if index + 1 < len(lines) else None)
+        if found:
+            return found
+    return None
+
+
 def parse_act(page: str) -> tuple[list[akn.Article], str, dict]:
     """Articles (the shape parse_akn_stage.store_articles writes), the plain
     text one line per paragraph with the footnotes appended, and meta:
@@ -334,8 +350,7 @@ def parse_act(page: str) -> tuple[list[akn.Article], str, dict]:
         "date_document": next((d for d in (parse_date(line) for line in header) if d), None),
         "date_status": next((parse_date(m.group(1)) for line in header
                              for m in [re.search(r"\(stato\s+([^)]+)\)", line, re.I)] if m), None),
-        "date_entry_force": next((parse_date(line) for line in lines
-                                  if re.match(r"Entrata in vigore\b", line, re.I)), None),
+        "date_entry_force": _entry_force(lines),
         "footnotes": len(footnotes),
     }
     return articles, "\n".join(line for line in lines if line), meta

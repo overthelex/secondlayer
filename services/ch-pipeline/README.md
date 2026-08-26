@@ -1607,8 +1607,45 @@ Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
 average payload, sibling languages share one download), parse ~1.6K rows/min,
 narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
-Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
-or their own portals; the registry already holds their acts and versions.
+Phase 2: text for the seven cantons without a Lexwork host from their own
+portals; the registry already holds their acts and versions. TI is below;
+ZH, VD, NE, GE, JU, SZ are not built.
+
+### Ticino (TI)
+
+Source: the Raccolta delle leggi on `www3.ti.ch/CAN/RLeggi` (module
+`chpipe/ti_rl.py`; migration 203 allows `source = 'ti_rl'`). One list page
+(`elenco-atti`, the acts in force: 623 on 2026-08-26, the same count LexFind
+has active for TI) and one flat Word-HTML page per act
+(`legge-piatta/num/{id}`), always the current consolidated text -- there is
+no version history on the portal, so each act is exactly one open edition
+(lang `it`, `eli_consolidation_uri = ti_rl:num/{id}`, `date_applicability` =
+LexFind's current `version_active_since`, the run date for an act LexFind
+does not know). Acts are joined to `ch_cantonal_registry` by the portal id
+in LexFind's `original_url` (622 of 623) and by systematic number otherwise.
+Italian only.
+
+| stage | what it does |
+|---|---|
+| `ti-acts` | the list -> `ch_act` (jurisdiction TI, `title_it`, `in_force` from LexFind) + one `discovered` edition per act. One request; idempotent, a rerun creates no second row and reopens an edition only when LexFind's date moved |
+| `ti-fetch` | the flat page into `akn_xml` (+ audit copy `raw/ti_rl/{version_id}.html`), one request a second, sequential. The portal answers an unknown id with HTTP 200 and "L'atto normativo cercato non è presente!" -- that body fails the row with that reason (`not_present` in the report) |
+| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason |
+| `reports-cantonal TI` | Gate F on `source = 'ti_rl'` (it filters by `cantons.version_source`) |
+
+Backfill order on prod, supervised: `lexfind-registry TI` (if the registry is
+older than a week), `ti-acts` (seconds), `ti-fetch` (~12 minutes for 623
+pages at one a second; the constitution took 10.7 s to render on the first
+probe), `ti-parse` (under a minute), `diff` is a no-op with one edition per
+act, `reports-cantonal TI`. Read 10 articles against the site before
+`project-legacy`. Measured on the 2026-08-26 smoke (15 acts, test DB): 15
+of 15 parsed, 686 articles (7 to 139 per act; the constitution 103), 0
+failures, Gate F dates match 15 / mismatch 0.
+
+Known limits: no amendment provenance (the footnotes name the amending
+act and its BU page but there is no change-document index to link to; they
+are kept as the article's notes); annexes after the last article stay in
+that article's text; the 398 TI acts LexFind holds as abrogated are not on
+the portal and stay registry-only.
 
 ## Point-in-time benchmark (chpipe.bench)
 

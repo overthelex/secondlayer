@@ -165,3 +165,13 @@ def test_italian_dates():
     assert ti_rl.parse_date("(del 18 aprile 1996)") == datetime.date(1996, 4, 18)
     assert ti_rl.parse_date("in vigore dal 5.2.2002") == datetime.date(2002, 2, 5)
     assert ti_rl.parse_date("Legge sui colori") is None
+
+
+def test_entry_into_force_may_sit_in_the_paragraph_after_its_heading():
+    page = CONSTITUTION.replace("Entrata in vigore: 1° gennaio 1998.",
+                                "Entrata in vigore</span></p><p><span>1° gennaio 1998.")
+    assert "Entrata in vigore</span></p>" in page
+    assert ti_rl.parse_act(page)[2]["date_entry_force"] == datetime.date(1998, 1, 1)
+    # a heading alone (a transitional article's title) yields nothing
+    page = CONSTITUTION.replace("Entrata in vigore: 1° gennaio 1998.", "Entrata in vigore")
+    assert ti_rl.parse_act(page)[2]["date_entry_force"] is None
