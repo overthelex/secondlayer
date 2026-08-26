@@ -431,6 +431,22 @@ def _stub_resolve(monkeypatch, calls=None):
         lambda settings: delta_module.aliases_stage.AliasReport())
 
 
+def _stub_registries(monkeypatch, calls=None):
+    """run_registries is the third independent guarded step delta.main()
+    runs, alongside run_decisions/run_legislation -- stubbed out here for the
+    same reason _stub_resolve exists: a real call would open a connection
+    (zefix_stage.run) against the FAKE dsn no_env hands out and also reach
+    the network. These tests are about main()'s composition, not
+    run_registries' own behaviour (that has its own tests in
+    tests/test_delta.py)."""
+    def fake(settings):
+        if calls is not None:
+            calls.append(settings)
+        return delta_module.RegistriesReport()
+
+    monkeypatch.setattr(delta_module, "run_registries", fake)
+
+
 def test_delta_main_is_reachable(monkeypatch, no_renice):
     """no_env (autouse) already patches Settings.from_env for every test in
     this file, delta.main() included."""
@@ -438,6 +454,7 @@ def test_delta_main_is_reachable(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
     result = delta_module.main()
     assert isinstance(result, delta_module.DeltaReport)
@@ -448,6 +465,7 @@ def test_delta_main_renices_exactly_once_at_nice_io(monkeypatch, no_renice):
                         lambda settings, **kw: delta_module.DeltaReport())
     monkeypatch.setattr(delta_module, "run_legislation",
                         lambda settings: delta_module.DeltaReport())
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
     delta_module.main()
     assert no_renice == [throttle.NICE_IO], \
@@ -484,6 +502,7 @@ def test_a_failing_decisions_half_does_not_skip_the_legislation_half(
 
     monkeypatch.setattr(delta_module, "run_decisions", boom)
     monkeypatch.setattr(delta_module, "run_legislation", legislation)
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch, called)
 
     # Still raises: run-delta.sh's marker reports the exit status, and a
@@ -502,6 +521,7 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_registries(monkeypatch)
     _stub_resolve(monkeypatch)
 
     with caplog.at_level("INFO"):
@@ -511,8 +531,9 @@ def test_a_failing_legislation_half_still_reports_the_decisions_half(
                if r.getMessage().startswith("delta: spiders=")]
     assert summary == ["delta: spiders=['CH_BGer'] new_documents=9 "
                        "new_versions=0 new_changes=0 new_provenance=0 "
-                       "projected=0 resolved(acts=0 editions=0 articles=0 "
-                       "cases=0) failed=legislation"]
+                       "projected=0 registries(zefix=0 shab_list=0 "
+                       "shab_detail=0) resolved(acts=0 editions=0 "
+                       "articles=0 cases=0) failed=legislation"]
 
 
 def test_citations_resolve_still_runs_once_when_a_half_failed(
@@ -526,6 +547,7 @@ def test_citations_resolve_still_runs_once_when_a_half_failed(
     monkeypatch.setattr(
         delta_module, "run_legislation",
         lambda settings: (_ for _ in ()).throw(RuntimeError("fedlex 503")))
+    _stub_registries(monkeypatch)
     calls = []
     _stub_resolve(monkeypatch, calls)
 

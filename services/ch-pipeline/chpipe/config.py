@@ -80,6 +80,17 @@ class Settings:
     # re-tuning the extractor wants, since the alternative is re-downloading
     # ~160 GB from a volunteer-run mirror.
     keep_raw_pdf: bool = False
+    # The nightly delta's budget for shab-detail (chpipe/delta.py's
+    # run_registries): 90 minutes, so a 2.5M-row backlog fetched at
+    # CHPIPE_SHAB_RPS=10 (~70 hours end to end) never turns the nightly cron
+    # job into an unbounded run -- it takes its bite and stops, and tomorrow
+    # picks the queue up where tonight left it (the queue IS
+    # detail_fetched_at IS NULL, so there is nothing to resume explicitly).
+    # This is a SEPARATE reading of CHPIPE_SHAB_BUDGET_SECONDS from
+    # shab_detail_stage.budget_seconds(): that one treats "" as "no budget"
+    # for a supervised backfill run under tmux, this one defaults to 5400
+    # because the nightly delta must never run unbounded.
+    shab_budget_seconds: float = 5400.0
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -97,4 +108,6 @@ class Settings:
             retry_backoff_minutes=_backoff(
                 os.environ.get("CHPIPE_RETRY_BACKOFF_MINUTES")),
             keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
+            shab_budget_seconds=float(
+                os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS", "").strip() or 5400),
         )

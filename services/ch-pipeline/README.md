@@ -1,6 +1,6 @@
 # CH pipeline
 
-Two pipelines over one package:
+Three pipelines over one package:
 
 - **Decisions** — backfills Swiss court decisions from entscheidsuche.ch into
   `ch_court_decisions` (migration 196). Stages `index`, `fetch`, `extract`,
@@ -10,6 +10,11 @@ Two pipelines over one package:
   (migration 197), and projects it back into the old flat `ch_legislation`.
   Stages `acts`, `versions`, `fetch-xml`, `parse-akn`, `diff`,
   `project-legacy`. **[Jump to the legislation half](#the-legislation-half).**
+- **Registries** — the company register (Zefix, from LINDAS) and the
+  Official Gazette of Commerce (SHAB), into `ch_zefix_companies` /
+  `ch_zefix_municipality` / `ch_shab_publications` (migration 201, extending
+  migration 129). Stages `zefix`, `shab-list`,
+  `shab-detail`. **[Jump to the registries half](#the-registries-half).**
 
 Design: `docs/superpowers/specs/2026-08-23-ch-corpus-pipeline-design.md`.
 
@@ -957,9 +962,149 @@ actually reached (`stamped` vs `loaded`). Run it as
 `python -m chpipe.reports_cit` (reads `CHPIPE_DSN`, prints JSON) or call
 `reports_cit.summary(conn)` directly.
 
+# The registries half
+
+Two Swiss company data sources, three stages, migration 201 (extending
+migration 129's `ch_zefix_companies` / `ch_shab_publications`):
+
+- **`zefix`** — the live company register, from
+  [LINDAS](https://lindas.admin.ch) (the Confederation's linked-data
+  endpoint). Fills `ch_zefix_companies` and `ch_zefix_municipality`, walking
+  the 2,111 municipality partitions the source is organised by. Resumable
+  by `run_date`: `ch_zefix_progress` gets one row per finished partition per
+  day, and a partition that already has one is skipped, so a killed run
+  picks up where it stopped the same day and starts fresh the next.
+  Companies no longer in the active Zefix set are not deleted — a SHAB
+  publication may still reference one — they are marked `status='inactive'`
+  once every partition for the day has reported in.
+- **`shab-list`** — publication *pointers* (id, date, rubric, a title-parsed
+  company name) from the [Swiss Official Gazette of Commerce
+  (SHAB)](https://amtsblattportal.ch) bulk export, into
+  `ch_shab_publications`. Two rubrics, `KK` (debt collection / bankruptcy)
+  and `HR` (commercial register), 2,509,068 publications backfilled
+  (measured 2026-08-26: HR 2,293,215 + KK 215,853).
+- **`shab-detail`** — turns each pointer into a record: the register's own
+  company name, the UID that joins a publication to a `ch_zefix_companies`
+  row, the legal form, the seat, the full publication text, fetched one XML
+  per row from `/api/v1/publications/{id}/xml`. The queue *is* the two
+  detail columns — `detail_fetched_at IS NULL AND detail_attempts < 3` — so
+  there is no separate claimed state to leak on a killed run.
+
+## Env vars
+
+| var | stage(s) | meaning |
+|-----|----------|---------|
+| `CHPIPE_SHAB_FROM` | `shab-list` | first month to walk, `"YYYY-MM"` (default `2000-01`) — the backfill's starting point, irrelevant once every month before it has a `done_at` progress row |
+| `CHPIPE_SHAB_RPS` | `shab-list`, `shab-detail` | requests/second ceiling against amtsblattportal.ch (default `10`) — one rate limiter shared by both stages, since they hit the same host |
+| `CHPIPE_SHAB_MONTHS` | `shab-list` | walk only the last N months (delta mode); unset = every month back to `CHPIPE_SHAB_FROM` (backfill mode) |
+| `CHPIPE_SHAB_BUDGET_SECONDS` | `shab-detail` | stop after N seconds, checked between batches; `""` (unset) means no budget — the shape `shab-detail`'s own `main()` reads via `budget_seconds()`. The **nightly delta** reads a *different* source for the same name: `Settings.shab_budget_seconds`, populated from the same env var but defaulting to `5400` (90 minutes) rather than "no budget" — the cron job must never run unbounded even if the var is unset |
+| `CHPIPE_LIMIT` | `shab-detail` (and the decisions/legislation claiming stages) | stop after N rows — a smoke run |
+| `CHPIPE_ZEFIX_MUNICIPALITIES` | `zefix` | comma-separated municipality ids, for a targeted re-run; unset = every partition. Only a full unfiltered run triggers the inactivation sweep |
+
+## The lossy-paging rule
+
+`shab-list` never asks amtsblattportal.ch for an offset. Two measurements
+(live, 2026-08-26, HR rubric) say why:
+
+- **The offset cap.** `page * size >= 10000` is refused outright — August
+  2026 alone holds 18,764 HR publications, so a single month cannot be
+  paged even in principle once it is recent enough.
+- **Paging is lossy well before that cap.** The two-day window
+  2026-08-03..04 reports `total=2048`; walking it as four pages of 500
+  returned 2,000 publications of which only 1,927 were distinct — 3.6% of
+  the window silently missing, because the result set is not ordered
+  stably across requests. A row that shifts across a page boundary between
+  two requests is served twice or not at all. `pageRequest.sortOrders`
+  does not help: the endpoint answers 200 to a sort on a field that does
+  not exist and reproduces the identical duplication.
+- **Unpaged is exact.** The same-sized single-day window 2026-08-03 alone
+  (`total=1,095`) returns all 1,095 distinct publications in one request.
+
+So the unit of fetching is a date window **halved until it fits in a single
+page** — the probe that decides this asks for one row and reads `<total>`.
+A month of 2000-era HR is one probe and one request; a month of modern HR
+is 31 probes and 16 requests. The unit of *progress* stays the month:
+`ch_shab_progress` gets one row per `(rubric, month)`, written whether the
+month finished or not (`fetched < total`, `done_at NULL` on a failure), so
+the backfill is killable and resumable at the month grain regardless of how
+many windows a given month took underneath.
+
+## Backfill order on prod
+
+Run the three stages **in this order**, under `tmux` (see "Where it runs"
+above for why — hours-long unattended network walks must survive a
+disconnect):
+
+1. **`./run-stage.sh zefix`** — first, always. Its own walk is
+   ~2,100 SPARQL queries and finishes in minutes to low tens of minutes, but
+   the real reason it goes first is `shab-detail`: `shab-detail` resolves a
+   publication's `legal_form` *code* to a German *label* by reading the
+   eCH-0097 map `zefix` wrote into `ch_zefix_companies`
+   (`legal_form_labels()` in `shab_detail_stage.py`). Run `shab-detail`
+   before `zefix` has ever populated that table and nothing fails — every
+   `legal_form` just holds a bare code (`"0107"`) instead of its label
+   (`"Aktiengesellschaft"`) — a silent quality loss with no error to notice
+   it by, not a crash. See the caveat below for the accepted follow-up cost.
+2. **`./run-stage.sh shab-list`** (no month argument — the unset default
+   walks everything from `CHPIPE_SHAB_FROM`, i.e. the whole 2000-present
+   backfill). 2.5M publication pointers; restartable at the month grain
+   (above), so a `tmux` session that gets killed loses at most the month it
+   was mid-window on.
+3. **`./run-stage.sh shab-detail`** last, once `shab-list` has actually
+   produced rows to detail. KK before HR and newest-first within a rubric
+   are baked into the claim query's `ORDER BY`, not a stage argument — KK is
+   a twelfth of HR's volume and it is the half that answers "is this
+   counterparty bankrupt", so a run stopped partway through has still
+   delivered the more valuable rubric. At `CHPIPE_SHAB_RPS`'s default of 10
+   requests/second, 2.5M rows is roughly 70 hours end to end — run it
+   without `CHPIPE_SHAB_BUDGET_SECONDS` set (or explicitly unset it) for the
+   backfill; the nightly delta is what supplies a budget, not this
+   invocation.
+
+**Legal-form code resolution caveat.** Running `shab-detail` before `zefix`
+has completed at least once does not corrupt anything and does not need a
+special recovery step — `legal_form` labels are read fresh from
+`ch_zefix_companies` on every `shab-detail` call (not cached, not stamped
+onto the row as final), so once `zefix` has run, the **next** `shab-detail`
+pass over the same rows fills in the labels retroactively via its normal
+`coalesce()` update. The cost of getting the order wrong is only a
+temporary quality gap, not permanent data loss — but there is no reason to
+pay even that on a fresh backfill, hence the order above.
+
+## Delta behaviour
+
+`chpipe.delta.run_registries()` is the nightly counterpart to the backfill
+above, wired into `chpipe.delta.main()` as a third independent guarded step
+(see "Priority" and the guard-shape discussion under **Deltas** below for
+what "guarded" means here — a LINDAS timeout or an amtsblattportal outage
+costs the registries half only, exactly like a bad night on decisions or
+legislation costs only that corpus).
+
+- **`zefix`** runs with no municipality filter — the whole register,
+  every night, the same reasoning as `run_decisions` needing the whole
+  snapshot. It is not a full re-fetch in cost, though: `run()` resumes by
+  `run_date`, so this is one full walk per calendar day, measured at
+  roughly 10-20 minutes.
+- **`shab-list`** runs with `months=2`, not the full backfill range. A SHAB
+  publication is never backdated, so only the current and previous
+  calendar month can hold anything new; two months rather than one covers
+  a publication landing in the last days of a month before the boundary
+  rolls over.
+- **`shab-detail`** runs with `budget_seconds=settings.shab_budget_seconds`
+  — 90 minutes by default (`CHPIPE_SHAB_BUDGET_SECONDS`, default `5400`) —
+  because the detail queue it claims from is shared with the standalone
+  backfill and can be arbitrarily large the first time this runs on a given
+  night. It stops on the clock, not a row count; nothing is left
+  half-claimed (the queue model is `FOR UPDATE SKIP LOCKED`, no separate
+  claimed state), so tomorrow's run resumes the same query where tonight's
+  left off.
+
+Same ordering rule as the backfill applies inside `run_registries()`: zefix
+runs before shab-detail, for the identical legal-form-label reason.
+
 ## Deltas
 
-Once the backfill for both halves is done, `run-delta.sh` is what keeps them
+Once the backfill for all three halves is done, `run-delta.sh` is what keeps them
 from rotting. It runs nightly at **07:15 UTC** from cron on prod — after
 entscheidsuche's own scrapes (their `Snapshots` file is generated at 06:00
 UTC; the `Status` files show spider runs finishing around 23:57 UTC) and
@@ -1093,6 +1238,15 @@ fails the gate accumulate at `ocr_pending` and are cleared by a supervised
 unattended cron job must never be the thing that decides to spend CPU on
 that queue.
 
+**Registries.** `chpipe.delta.run_registries()` — see "Delta behaviour"
+under [The registries half](#the-registries-half) above for what each of
+the three stages runs with (`zefix` unfiltered, `shab-list months=2`,
+`shab-detail budget_seconds=settings.shab_budget_seconds`) and why. Its own
+independent guard, same shape as decisions/legislation: a LINDAS timeout or
+an amtsblattportal outage is logged, added to `failures`, and does not skip
+the alias seed or citations-resolve below — zefix/SHAB feed no table either
+of those reads.
+
 **Citation graph.** `citations` runs once per grown spider, right after that
 spider's `load` (twice if extract's second lap ran too — see above), so a
 decision's citation graph is only ever as many nights stale as its text is.
@@ -1176,6 +1330,8 @@ supervised one-off invocation can get away without:
     grep 'resolve to no spider' /data/ch-corpus/logs/delta.log | tail -5
     psql -c "SELECT stage, count(*) FROM ch_court_decisions GROUP BY 1"
     psql -c "SELECT stage, count(*) FROM ch_act_version GROUP BY 1"
+    psql -c "SELECT count(*), count(*) FILTER (WHERE detail_fetched_at IS NOT NULL)
+             FROM ch_shab_publications"
     python -m chpipe.reports_cit   # citation graph totals and resolution shares
 
 **Recovering from a night that did not work:** the delta is restartable and

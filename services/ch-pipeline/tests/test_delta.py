@@ -35,7 +35,8 @@ from chpipe.stages import (acts_stage, aliases_stage, citations_resolve_stage,
                            citations_stage, diff_stage, extract_stage,
                            fetch_stage, fetch_xml_stage, index_stage,
                            load_stage, parse_akn_stage, project_legacy_stage,
-                           provenance_stage, versions_stage)
+                           provenance_stage, shab_detail_stage,
+                           shab_list_stage, versions_stage, zefix_stage)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
@@ -987,6 +988,80 @@ def test_a_card_requeued_during_the_delta_gets_a_second_lap_the_same_night(
     assert seen["citations"].count("CH_BGer") == 1
 
 
+# --- run_registries: the third corpus, stubbed at the stage boundary ---
+
+def _stub_registry_stages(monkeypatch):
+    """zefix_stage.run / shab_list_stage.run / shab_detail_stage.run,
+    stubbed the same way _stub_decision_stages stubs the decisions stages --
+    record every call's args/kwargs so a test can assert not just that each
+    ran, but with what."""
+    seen = {"zefix": [], "shab_list": [], "shab_detail": []}
+
+    def fake_zefix(settings, *args, **kwargs):
+        seen["zefix"].append((args, kwargs))
+        return zefix_stage.ZefixReport(upserted=1)
+
+    def fake_shab_list(settings, *args, **kwargs):
+        seen["shab_list"].append((args, kwargs))
+        return shab_list_stage.ShabListReport(upserted=2)
+
+    def fake_shab_detail(settings, *args, **kwargs):
+        seen["shab_detail"].append((args, kwargs))
+        return shab_detail_stage.ShabDetailReport(fetched=3)
+
+    monkeypatch.setattr(zefix_stage, "run", fake_zefix)
+    monkeypatch.setattr(shab_list_stage, "run", fake_shab_list)
+    monkeypatch.setattr(shab_detail_stage, "run", fake_shab_detail)
+    return seen
+
+
+def test_run_registries_calls_zefix_with_no_filter(tmp_path, monkeypatch):
+    """The nightly delta walks the whole register every night, the same way
+    run_decisions needs the whole snapshot -- CHPIPE_ZEFIX_MUNICIPALITIES is
+    for a targeted re-run, not this path."""
+    seen = _stub_registry_stages(monkeypatch)
+
+    delta.run_registries(_settings(tmp_path))
+
+    assert seen["zefix"] == [((), {})]
+
+
+def test_run_registries_calls_shab_list_with_two_months(tmp_path, monkeypatch):
+    """A SHAB publication is never backdated, so only the current and
+    previous month can possibly hold something new -- see run_registries'
+    own docstring for why two, not one."""
+    seen = _stub_registry_stages(monkeypatch)
+
+    delta.run_registries(_settings(tmp_path))
+
+    assert seen["shab_list"] == [((), {"months": 2})]
+
+
+def test_run_registries_calls_shab_detail_with_the_settings_budget(
+        tmp_path, monkeypatch):
+    """budget_seconds threads through from Settings.shab_budget_seconds, not
+    a hard-coded constant -- CHPIPE_SHAB_BUDGET_SECONDS has to actually
+    reach the call for an operator's override to mean anything."""
+    seen = _stub_registry_stages(monkeypatch)
+    settings = Settings(dsn="unused", raw_dir=tmp_path, http_concurrency=1,
+                        cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
+                        max_attempts=3, shab_budget_seconds=1234.0)
+
+    delta.run_registries(settings)
+
+    assert seen["shab_detail"] == [((), {"budget_seconds": 1234.0})]
+
+
+def test_run_registries_composes_the_three_reports(tmp_path, monkeypatch):
+    _stub_registry_stages(monkeypatch)
+
+    report = delta.run_registries(_settings(tmp_path))
+
+    assert report.zefix.upserted == 1
+    assert report.shab_list.upserted == 2
+    assert report.shab_detail.fetched == 3
+
+
 # --- citations_stage/citations_resolve_stage wired into the nightly delta ---
 
 def test_citations_runs_once_per_grown_spider(tmp_path, monkeypatch, conn):
@@ -1002,6 +1077,20 @@ def test_citations_runs_once_per_grown_spider(tmp_path, monkeypatch, conn):
     delta.run_decisions(_settings(tmp_path), fetcher_factory=lambda: fetcher)
 
     assert seen["citations"] == ["ZH_Obergericht"]
+
+
+def _stub_registries(monkeypatch, order=None):
+    """run_registries is the third independent guarded step main() runs,
+    alongside run_decisions/run_legislation -- stubbed here for the same
+    reason: a real call would open a database connection (zefix_stage.run)
+    and reach the network, and these tests are about main()'s composition,
+    not run_registries' own behaviour (see the stage-boundary tests above)."""
+    def fake(settings):
+        if order is not None:
+            order.append("registries")
+        return delta.RegistriesReport()
+
+    monkeypatch.setattr(delta, "run_registries", fake)
 
 
 def _stub_alias_and_resolve(monkeypatch, order: list):
@@ -1035,6 +1124,7 @@ def test_main_runs_citations_resolve_exactly_once_after_both_halves(
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
     order = []
+    _stub_registries(monkeypatch)
     _stub_alias_and_resolve(monkeypatch, order)
 
     delta.main()
@@ -1051,6 +1141,7 @@ def test_main_still_resolves_when_the_alias_seed_fails(tmp_path, monkeypatch):
                         lambda settings, fetcher_factory=None: delta.DeltaReport())
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
+    _stub_registries(monkeypatch)
 
     def boom(settings):
         raise RuntimeError("simulated alias failure")
@@ -1083,9 +1174,35 @@ def test_main_still_runs_citations_resolve_once_when_a_half_fails(
     monkeypatch.setattr(delta, "run_legislation",
                         lambda settings: delta.DeltaReport())
     order = []
+    _stub_registries(monkeypatch)
     _stub_alias_and_resolve(monkeypatch, order)
 
     with pytest.raises(RuntimeError, match="simulated decisions failure"):
+        delta.main()
+
+    assert order == ["aliases", "resolve"]
+
+
+def test_main_still_runs_citations_resolve_once_when_registries_fails(
+        tmp_path, monkeypatch):
+    """The registries half is independent of the citation graph -- zefix and
+    SHAB feed no table citations-resolve reads -- so a failure there must
+    not skip the alias seed or the resolve pass, and the failure itself must
+    still propagate once everything else has had its turn."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_decisions",
+                        lambda settings, fetcher_factory=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+
+    def boom(settings):
+        raise RuntimeError("simulated registries failure")
+
+    monkeypatch.setattr(delta, "run_registries", boom)
+    order = []
+    _stub_alias_and_resolve(monkeypatch, order)
+
+    with pytest.raises(RuntimeError, match="simulated registries failure"):
         delta.main()
 
     assert order == ["aliases", "resolve"]
