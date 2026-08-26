@@ -446,10 +446,19 @@ jobs:
             $DC build --no-cache
           fi
 
-          # Сервисы вне blue-green (базы, очереди, вспомогательные) — как раньше.
+          # Сначала собираем образы — сборка ничего не трогает в работающем.
+          $DC build
+
+          # Обновляем ВСЁ, КРОМЕ цветных сервисов. Это ключевой момент: обычный
+          # `up -d` пересоздал бы и активный цвет, а значит уронил бы сайт на
+          # время пересоздания — ровно то, ради чего затевался blue-green.
+          # Список считаем динамически, чтобы новый сервис не пришлось
+          # вписывать сюда руками.
           # Без --remove-orphans: рядом крутятся qdrant-edrsr-local и
           # qdrant-general-local, которые обслуживают ПРОД.
-          $DC up -d --build
+          OTHERS=$($DC config --services | grep -vE '^(app-local|app-local-green|lexwebapp-local|lexwebapp-local-green)$' | tr '\n' ' ')
+          echo "обновляю вне blue-green: $(echo $OTHERS | wc -w) сервисов"
+          $DC up -d $OTHERS
 
           # После пересоздания сервисов выше их IP меняются, а nginx резолвит
           # имена апстримов один раз при старте — та самая причина 502 из
@@ -461,10 +470,11 @@ jobs:
           if [ "$NEW" = "green" ]; then
             # висяк от прошлой сорвавшейся выкатки не должен мешать
             docker rm -f secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
-            $DC --profile green up -d --build app-local-green lexwebapp-local-green
+            $DC --profile green up -d app-local-green lexwebapp-local-green
             BE=secondlayer-app-local-green; FE=lexwebapp-local-green
           else
-            $DC up -d --build app-local lexwebapp-local
+            docker rm -f secondlayer-app-local lexwebapp-local >/dev/null 2>&1 || true
+            $DC up -d app-local lexwebapp-local
             BE=secondlayer-app-local; FE=lexwebapp-local
           fi
 
