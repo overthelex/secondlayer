@@ -54,8 +54,9 @@ def test_version_source_follows_the_platform():
     assert cantons.version_source("BE") == "lexwork"
     assert cantons.version_source("GE") == "sil"
     assert cantons.version_source("ZH") is None
-    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE"])
-    assert len(cantons.text_cantons()) == 21
+    assert cantons.version_source("TI") == "ti_rl"
+    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI"])
+    assert len(cantons.text_cantons()) == 22
 
 
 def test_canton_selection_from_the_environment_value():
