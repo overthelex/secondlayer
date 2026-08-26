@@ -263,6 +263,55 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.results.map((r: any) => r.uid)).toEqual([UID_AG]);
     });
 
+    it('filters by legal_form as a case-insensitive prefix of the stored label', async () => {
+      // The labels are read from the LINDAS graph and some are composite: the eCH-0097
+      // 0107 label is stored as 'Gesellschaft mit beschränkter Haftung GMBH / SARL'. An
+      // equality filter on the German name a caller would actually type matched nothing.
+      await client.query(
+        `INSERT INTO ch_zefix_companies (uid, name, legal_form, legal_form_code, legal_seat, status, canton)
+         VALUES ('CHE-777.888.999', 'Komposit Handels GmbH',
+                 'Gesellschaft mit beschränkter Haftung GMBH / SARL', '0107', 'Zug', 'active', 'ZG')`
+      );
+
+      const exact = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Komposit', legal_form: 'Gesellschaft mit beschränkter Haftung',
+      }))!);
+      expect(exact.results.map((r: any) => r.uid)).toEqual(['CHE-777.888.999']);
+
+      const lower = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Komposit', legal_form: 'gesellschaft mit beschränkter haftung',
+      }))!);
+      expect(lower.results.map((r: any) => r.uid)).toEqual(['CHE-777.888.999']);
+    });
+
+    it('treats % and _ in legal_form as literal characters', async () => {
+      // The filter is an ILIKE, so a caller-supplied wildcard must not turn into one.
+      const body = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Muster', status: 'all', legal_form: 'Aktien%',
+      }))!);
+      expect(body.results).toEqual([]);
+
+      const underscore = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Muster', status: 'all', legal_form: 'Aktiengesellschaf_',
+      }))!);
+      expect(underscore.results).toEqual([]);
+    });
+
+    it('filters the SHAB fallback by legal_form the same way', async () => {
+      await client.query(
+        `INSERT INTO ch_shab_publications
+           (shab_id, publication_date, rubric, sub_rubric, company_name, canton, language, legal_form)
+         VALUES ('SHAB-HR08', '2021-05-05', 'HR', 'HR02', 'Ausgeloeschte GmbH', 'ZG', 'de',
+                 'Gesellschaft mit beschränkter Haftung GMBH / SARL')`
+      );
+
+      const body = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Ausgeloeschte', legal_form: 'Gesellschaft mit beschränkter Haftung',
+      }))!);
+      expect(body.results.map((r: any) => r.name)).toEqual(['Ausgeloeschte GmbH']);
+      expect(body.results[0].source).toBe('shab');
+    });
+
     it('matches a short query on a word boundary, not as a bare substring', async () => {
       // 'AG' is a word of "Muster Handels AG" but only a substring inside "Ragusa Trading
       // GmbH"; the word-bounded match must return the AG and nothing else.

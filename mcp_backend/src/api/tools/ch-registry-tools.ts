@@ -88,6 +88,18 @@ function escapeRegexLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Turns a caller-supplied value into an ILIKE prefix pattern: the LIKE metacharacters
+ * (`%`, `_`) and the escape character itself are escaped, so they match literally, and a
+ * single trailing `%` is appended. Used for legal_form — the labels are read from the
+ * LINDAS graph and some are composite ('Gesellschaft mit beschränkter Haftung GMBH /
+ * SARL' is the eCH-0097 0107 label), so an equality filter on the German name a caller
+ * would actually type matched nothing at all.
+ */
+function likePrefix(value: string): string {
+  return `${value.replace(/[\\%_]/g, '\\$&')}%`;
+}
+
 export class ChRegistryTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -101,7 +113,7 @@ export class ChRegistryTools extends BaseToolHandler {
         description: `Пошук швейцарських компаній у федеральному реєстрі Zefix за назвою або за UID (CHE-123.456.789).
 
 Запит, що виглядає як UID (CHE-123.456.789, CHE123456789), розпізнається автоматично і шукається точним збігом — фільтри status/canton/legal_form при цьому не застосовуються.
-status: active (типово) / inactive / all. canton — двобуквений код (ZH, GE, TI). legal_form — точна НІМЕЦЬКА назва правової форми, як її подає Zefix (Aktiengesellschaft, Gesellschaft mit beschränkter Haftung, Kollektivgesellschaft); французьких та італійських варіантів у реєстрі немає.
+status: active (типово) / inactive / all. canton — двобуквений код (ZH, GE, TI). legal_form — НІМЕЦЬКА назва правової форми, як її подає Zefix; збіг за ПРЕФІКСОМ, без урахування регістру (напр. Gesellschaft mit beschränkter Haftung — знайде і складений напис «Gesellschaft mit beschränkter Haftung GMBH / SARL»); французьких та італійських варіантів у реєстрі немає.
 Кожен результат містить shab_count (кількість публікацій у SHAB), last_shab_date і bankruptcy (true, якщо є публікація рубрики KK — оголошення про банкрутство).
 Якщо в Zefix збігів немає, пошук переходить на назви компаній із публікацій SHAB (компанії, вилучені з реєстру) — такі рядки позначені source: 'shab' і можуть не мати uid.
 Далі: ch_get_company для повної картки (реєстр, SHAB, FINMA, SECO, кантональні відомості).`,
@@ -110,7 +122,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
           properties: {
             query: { type: 'string', description: 'Назва компанії або UID (CHE-123.456.789)' },
             canton: { type: 'string', description: 'Двобуквений код кантону, напр. ZH, GE, TI' },
-            legal_form: { type: 'string', description: 'Правова форма — німецька назва, як у Zefix, напр. Aktiengesellschaft, Gesellschaft mit beschränkter Haftung' },
+            legal_form: { type: 'string', description: 'Правова форма — німецька назва, як у Zefix; збіг за префіксом, без урахування регістру, напр. Aktiengesellschaft, Gesellschaft mit beschränkter Haftung' },
             status: { type: 'string', enum: STATUSES, default: 'active', description: 'Стан компанії у реєстрі' },
             limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
             offset: { type: 'number', default: 0, description: 'Зсув для пагінації' },
@@ -243,7 +255,8 @@ status: active (типово) / inactive / all. canton — двобуквени�
       filters.push(`c.canton = upper($${pi})`); values.push(String(opts.canton)); pi++;
     }
     if (opts.legal_form) {
-      filters.push(`lower(c.legal_form) = lower($${pi})`); values.push(String(opts.legal_form)); pi++;
+      // Prefix, case-insensitive — see likePrefix().
+      filters.push(`c.legal_form ILIKE $${pi}`); values.push(likePrefix(String(opts.legal_form))); pi++;
     }
     return { filters, nextIndex: pi };
   }
@@ -336,7 +349,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
 
     const filters: string[] = ['p.company_name IS NOT NULL'];
     if (opts.canton) { filters.push(`p.canton = upper($${pi})`); values.push(String(opts.canton)); pi++; }
-    if (opts.legal_form) { filters.push(`lower(p.legal_form) = lower($${pi})`); values.push(String(opts.legal_form)); pi++; }
+    if (opts.legal_form) { filters.push(`p.legal_form ILIKE $${pi}`); values.push(likePrefix(String(opts.legal_form))); pi++; }
 
     const limIdx = pi; values.push(lim); pi++;
     const offIdx = pi; values.push(off); pi++;
