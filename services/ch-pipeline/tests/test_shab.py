@@ -351,6 +351,9 @@ def test_only_text_written_as_a_uid_is_read_as_one():
     assert shab.canonical_uid("Tel. 044 123 45 67 89") is None
     assert shab.canonical_uid("CHE-123.456.789.012") is None
     assert shab.canonical_uid("Konkursamt, 8001 Zürich, 044 123 45 67") is None
+    # Exactly nine stray digits: the case the digit-count rule got wrong.
+    assert shab.canonical_uid("Bern 1234 567 89") is None
+    assert shab.canonical_uid("Postfach 123456789 Bern") is None
 
 
 def test_an_hr_detail_carries_the_purpose_and_the_capital():
