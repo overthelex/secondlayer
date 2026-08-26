@@ -135,8 +135,6 @@ x-app-local-base: &app_local_base
     MONOBANK_REDIRECT_URL: ${MONOBANK_REDIRECT_URL:-}
     PUBLIC_URL: ${PUBLIC_URL:-https://local.legal.org.ua}
 
-  ports:
-    - "127.0.0.1:3000:3000"  # Standard backend port
 
   depends_on:
     migrate-local:
@@ -514,6 +512,11 @@ services:
   app-local:
     <<: *app_local_base
     container_name: secondlayer-app-local
+    # Порт у каждого цвета свой. Одинаковый в якоре означал бы, что зелёный
+    # не поднимется, пока синий держит 3000 — на этом упала первая выкатка.
+    # nginx ходит по именам контейнеров, порты нужны только для отладки.
+    ports:
+      - "127.0.0.1:3000:3000"
 
   # Зелёный — поднимается через --profile green во время выкатки,
   # nginx переключается на него только после проверки здоровья
@@ -521,6 +524,8 @@ services:
     <<: *app_local_base
     container_name: secondlayer-app-local-green
     profiles: ["green"]
+    ports:
+      - "127.0.0.1:3001:3000"
 
   rada-migrate-local:
     build:

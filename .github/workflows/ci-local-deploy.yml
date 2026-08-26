@@ -451,8 +451,16 @@ jobs:
           # qdrant-general-local, которые обслуживают ПРОД.
           $DC up -d --build
 
+          # После пересоздания сервисов выше их IP меняются, а nginx резолвит
+          # имена апстримов один раз при старте — та самая причина 502 из
+          # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
+          # если выкатка нового цвета сорвётся, старый останется доступен.
+          docker exec nginx-local nginx -s reload 2>/dev/null || true
+
           # Новый цвет
           if [ "$NEW" = "green" ]; then
+            # висяк от прошлой сорвавшейся выкатки не должен мешать
+            docker rm -f secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
             $DC --profile green up -d --build app-local-green lexwebapp-local-green
             BE=secondlayer-app-local-green; FE=lexwebapp-local-green
           else
