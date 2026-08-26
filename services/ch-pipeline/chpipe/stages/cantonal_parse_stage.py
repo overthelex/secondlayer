@@ -12,8 +12,18 @@ Per claimed row (stage 'fetched', source 'lexwork'):
      inside the same transaction shape, that the federal side uses.
   3. lexwork.provenance() -> ch_article_provenance rows, each linked to its
      ch_act_change_document through history_information_map -> Lexwork
-     change_documents[].id -> (act_id, source_id). Full replacement per
+     change_documents[].id -> (act_id, source_id) when the host fills the
+     map, and through change_refs (the source cell against the document's
+     number or publication date) when it does not -- seven hosts ship an
+     empty map on every edition (see change_refs). Full replacement per
      edition, like provenance_stage.store().
+  3b. The documents just linked get date_decision from the rows that cite
+     them: the change-document record has no decision date of its own
+     (date_of_decision_string is "????" on every host; only BE and FR put
+     it in the title), the modification table's "Beschluss" column is the
+     same date, and on the 2026-08-26 sample every document's linked rows
+     agreed on one date (1,152 of 1,152). A document whose rows disagree
+     is left alone.
   4. complete_version(-> 'parsed', full_text=...).
 
 Steps 2 and 3 are one transaction with the stage move outside it, exactly
@@ -29,7 +39,7 @@ from dataclasses import dataclass, field
 
 from psycopg.rows import tuple_row
 
-from .. import db, lexwork, throttle
+from .. import change_refs, db, lexwork, throttle
 from ..config import Settings
 from . import cantonal_fetch_stage, parse_akn_stage
 
@@ -49,6 +59,10 @@ class ParseReport:
     tables_unrecognised: int = 0
     provenance_rows: int = 0
     provenance_linked: int = 0
+    # The share of provenance_linked that came from change_refs rather
+    # than the host's history map.
+    provenance_matched: int = 0
+    decision_dates_filled: int = 0
     # (act_id, lang) of every edition promoted to 'parsed' -- what the
     # nightly delta narrows diff and project-legacy on, same as
     # parse_akn_stage.ParseReport.acts.
@@ -61,33 +75,89 @@ _INSERT_PROVENANCE = (
     "container_articles, change_document_id) "
     "VALUES (%s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s)")
 
-_CHANGE_DOCUMENT_IDS = ("SELECT source_id, change_document_id FROM ch_act_change_document "
-                        "WHERE act_id = %s")
+_CHANGE_DOCUMENTS = ("SELECT change_document_id, source_id, number, date_publication "
+                     "FROM ch_act_change_document WHERE act_id = %s ORDER BY change_document_id")
+_JURISDICTION = "SELECT jurisdiction FROM ch_act WHERE act_id = %s"
+
+# date_decision from the rows that cite the document, when they all say the
+# same date. Scoped to a set of versions so both the parse stage (the one
+# edition it just wrote) and the relink stage (an act's editions) can use it.
+_BACKFILL_DECISION_DATES = """
+UPDATE ch_act_change_document d
+   SET date_decision = s.date_decision, updated_at = now()
+  FROM (SELECT change_document_id, min(source_act_date) AS date_decision
+          FROM ch_article_provenance
+         WHERE version_id = ANY(%s) AND change_document_id IS NOT NULL
+               AND source_act_date IS NOT NULL
+         GROUP BY change_document_id
+        HAVING count(DISTINCT source_act_date) = 1) s
+ WHERE d.change_document_id = s.change_document_id AND d.date_decision IS NULL
+"""
+
+
+@dataclass(frozen=True)
+class ActContext:
+    jurisdiction: str
+    by_source_id: dict[int, int]
+    candidates: list[change_refs.Candidate]
+
+
+def act_context(conn, act_id: int) -> ActContext:
+    with conn.cursor(row_factory=tuple_row) as cur:
+        cur.execute(_JURISDICTION, (act_id,))
+        row = cur.fetchone()
+        jurisdiction = row[0] if row else ""
+        cur.execute(_CHANGE_DOCUMENTS, (act_id,))
+        docs = cur.fetchall()
+    return ActContext(
+        jurisdiction or "",
+        {r[1]: r[0] for r in docs},
+        [change_refs.Candidate(r[0], r[2], r[3]) for r in docs])
 
 
 def change_document_ids(conn, act_id: int) -> dict[int, int]:
-    with conn.cursor(row_factory=tuple_row) as cur:
-        cur.execute(_CHANGE_DOCUMENT_IDS, (act_id,))
-        return {r[0]: r[1] for r in cur.fetchall()}
+    return act_context(conn, act_id).by_source_id
+
+
+def link(row: lexwork.Provenance, context: ActContext) -> tuple[int | None, str]:
+    """(change_document_id, how): 'history' through the host's map,
+    else change_refs' reason."""
+    if row.change_document_source_id is not None:
+        found = context.by_source_id.get(row.change_document_source_id)
+        if found is not None:
+            return found, "history"
+    match = change_refs.match_change_document(
+        context.jurisdiction, change_refs.references_of(row.raw_note),
+        row.source_act_date, row.effective_date, context.candidates)
+    return match.change_document_id, match.reason
 
 
 def store_provenance(conn, version_id: int, rows: list[lexwork.Provenance],
-                     by_source_id: dict[int, int]) -> tuple[int, int]:
-    """Replace this version's provenance rows. Returns (rows, linked)."""
-    linked = 0
+                     context: ActContext) -> tuple[int, int, int]:
+    """Replace this version's provenance rows. Returns (rows, linked,
+    matched) where matched is the part of linked change_refs decided."""
+    linked = matched = 0
     conn.execute("DELETE FROM ch_article_provenance WHERE version_id = %s", (version_id,))
     with conn.cursor() as cur:
         for row in rows:
-            change_document_id = None
-            if row.change_document_source_id is not None:
-                change_document_id = by_source_id.get(row.change_document_source_id)
-                if change_document_id is not None:
-                    linked += 1
+            change_document_id, how = link(row, context)
+            if change_document_id is not None:
+                linked += 1
+                matched += how != "history"
             cur.execute(_INSERT_PROVENANCE, (
                 version_id, row.e_id, row.action, row.as_reference,
                 row.effective_date, row.source_act_date, row.raw_note,
                 row.anchor_level, row.container_articles, change_document_id))
-    return len(rows), linked
+    return len(rows), linked, matched
+
+
+def backfill_decision_dates(conn, version_ids: list[int]) -> int:
+    """Fill ch_act_change_document.date_decision from the provenance rows
+    of these versions (see step 3b in the module docstring). Returns the
+    number of documents filled."""
+    if not version_ids:
+        return 0
+    return conn.execute(_BACKFILL_DECISION_DATES, (list(version_ids),)).rowcount
 
 
 def run(settings: Settings, canton_code: str | None = None,
@@ -134,11 +204,12 @@ def run(settings: Settings, canton_code: str | None = None,
                         log.warning("version %s: modification table header not recognised; "
                                     "no provenance written", row["version_id"])
                     provenance = lexwork.provenance(payload, row["lang"], articles)
-                    by_source_id = change_document_ids(conn, row["act_id"])
+                    context = act_context(conn, row["act_id"])
                     with conn.transaction():
                         parse_akn_stage.store_articles(conn, row["version_id"], articles)
-                        rows_written, linked = store_provenance(
-                            conn, row["version_id"], provenance, by_source_id)
+                        rows_written, linked, matched = store_provenance(
+                            conn, row["version_id"], provenance, context)
+                        filled = backfill_decision_dates(conn, [row["version_id"]])
                     db.complete_version(conn, row["version_id"], "parsed", full_text=text)
                 except Exception as exc:                        # noqa: BLE001
                     log.error("version %s: %s", row["version_id"], exc)
@@ -155,15 +226,19 @@ def run(settings: Settings, canton_code: str | None = None,
                 report.articles += len(articles)
                 report.provenance_rows += rows_written
                 report.provenance_linked += linked
+                report.provenance_matched += matched
+                report.decision_dates_filled += filled
                 if not articles:
                     report.empty += 1
             if remaining is not None:
                 remaining -= len(rows)
             log.info("cantonal parsed=%d articles=%d empty=%d failed=%d "
-                     "lang_not_in_payload=%d tables_unrecognised=%d provenance=%d linked=%d",
+                     "lang_not_in_payload=%d tables_unrecognised=%d provenance=%d linked=%d "
+                     "(matched=%d) decision_dates_filled=%d",
                      report.parsed, report.articles, report.empty, report.failed,
                      report.lang_not_in_payload, report.tables_unrecognised,
-                     report.provenance_rows, report.provenance_linked)
+                     report.provenance_rows, report.provenance_linked,
+                     report.provenance_matched, report.decision_dates_filled)
     finally:
         conn.close()
     return report
@@ -180,9 +255,10 @@ def main() -> ParseReport:
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
     log.info("parsed=%d articles=%d empty=%d failed=%d lang_not_in_payload=%d "
-             "provenance=%d linked=%d", result.parsed, result.articles, result.empty,
+             "provenance=%d linked=%d (matched=%d) decision_dates_filled=%d",
+             result.parsed, result.articles, result.empty,
              result.failed, result.lang_not_in_payload, result.provenance_rows,
-             result.provenance_linked)
+             result.provenance_linked, result.provenance_matched, result.decision_dates_filled)
     if result.tables_unrecognised:
         log.warning("TABLES UNRECOGNISED: %d version(s) parsed without provenance because "
                     "their modification table's headers are unknown to lexwork.py; look at "

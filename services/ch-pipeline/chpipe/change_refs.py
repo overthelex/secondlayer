@@ -47,6 +47,17 @@ without a date. Wider windows (120, 200, 365 days) only lose coverage; the
 (87.9% to 96.7%). A number that names a document the host did not attach
 to the act is left unmatched, not windowed: the window would pick a
 neighbour and call it the source.
+
+What this module links, on that sample (linked / unlinked rows, the
+largest remaining reason): OW 543 / 556 (97.7%; 12 numbers the host did
+not attach to the act), ZG 900 / 1,064 (84.6%; 82 legacy rows with two
+documents in the window), LU 1,034 / 1,292 (80.0%; 180 page-style rows
+with two in the window), BL 937 / 1,664 (56.3%; 680 pre-2014 volume.page
+rows, no document exists), BS 430 / 1,300 (33.1%; 688 rows without a
+reference and no document in the window, pre-2014), TG 4 / 929 (0.4%;
+the host's 101 documents start in 2024), AR 0 / 439 (no documents). All
+seven: 3,848 of 7,244 (53.1%), so roughly 528K of the 994K unlinked rows
+on prod.
 """
 from __future__ import annotations
 

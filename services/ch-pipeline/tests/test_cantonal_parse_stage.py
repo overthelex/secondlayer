@@ -1,5 +1,6 @@
 """cantonal_parse_stage on the real (trimmed) BE constitution payload,
 real Postgres."""
+import datetime
 import json
 import os
 import pathlib
@@ -128,3 +129,50 @@ def test_fedlex_rows_are_not_claimed(conn, settings):
                  "'<akomaNtoso/>')")
     report = cantonal_parse_stage.run(settings)
     assert report.parsed == 0 and report.failed == 0
+
+
+def _bl_payload(conn):
+    """The BE fixture re-hosted as a BL act: the history map emptied, the
+    modification table replaced by three real BL rows (prod raw_note
+    strings, 2026-08-26), and the act's documents numbered the way
+    bl.clex.ch numbers them."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number) "
+                 "VALUES (2, 'https://bl.clex.ch/app/de/texts_of_law/100', 'BL', '100')")
+    for source_id, number, pub in ((501, "2017.026", "2017-05-30"), (502, "2018.040", "2018-06-12"),
+                                   (503, "2018.041", "2018-06-12")):
+        conn.execute("INSERT INTO ch_act_change_document (act_id, jurisdiction, source_id, number, "
+                     "date_publication) VALUES (2, 'BL', %s, %s, %s)", (source_id, number, pub))
+    payload = json.loads(PAYLOAD)
+    sv = payload["text_of_law"]["selected_version"]
+    sv["history_information_map"] = {}
+    sv["json_content"]["modification_table"] = [{"html_content": {"de": (
+        "<table><tr><th>Beschluss</th><th>Inkraft seit</th><th>Element</th><th>Wirkung</th>"
+        "<th>Publiziert mit</th></tr>"
+        "<tr><td>21.03.2017</td><td>01.07.2017</td><td>Art. 2</td><td>geändert</td><td>GS 2017.026</td></tr>"
+        "<tr><td>05.06.2018</td><td>01.01.2019</td><td>Art. 3</td><td>eingefügt</td><td>GS 2018.040</td></tr>"
+        "<tr><td>18.05.2000</td><td>01.01.2001</td><td>Art. 4</td><td>geändert</td><td>GS 33.1335</td></tr>"
+        "</table>")}}]
+    return conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+        "xml_url, source, stage, akn_xml) VALUES (2, 'bl/100/1/de', 'de', '2019-01-01', "
+        "'https://bl.clex.ch/api/de/texts_of_law/100/versions/1/show_as_json', 'lexwork', "
+        "'fetched', %s) RETURNING version_id", (json.dumps(payload),)).fetchone()[0]
+
+
+def test_an_empty_history_map_links_through_the_reference_and_fills_date_decision(conn, settings):
+    vid = _bl_payload(conn)
+    report = cantonal_parse_stage.run(settings, canton_code="BL")
+    assert report.parsed == 1 and report.provenance_rows == 3
+    assert report.provenance_linked == 2 == report.provenance_matched
+    linked = conn.execute(
+        "SELECT p.raw_note, d.number FROM ch_article_provenance p "
+        "LEFT JOIN ch_act_change_document d USING (change_document_id) "
+        "WHERE p.version_id=%s ORDER BY p.provenance_id", (vid,)).fetchall()
+    assert [n for _, n in linked] == ["2017.026", "2018.040", None]
+    # the two documents got the decision date of the row that cites them;
+    # the third (never cited) stays NULL
+    dates = dict(conn.execute(
+        "SELECT number, date_decision FROM ch_act_change_document WHERE act_id=2").fetchall())
+    assert dates == {"2017.026": datetime.date(2017, 3, 21), "2018.040": datetime.date(2018, 6, 5),
+                     "2018.041": None}
+    assert report.decision_dates_filled == 2
