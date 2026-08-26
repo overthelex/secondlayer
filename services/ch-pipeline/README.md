@@ -1643,8 +1643,13 @@ What to expect, from the registry of 2026-08-26:
   listed next to the version it corrects, 12,562 same-day groups across
   the 7) counts rows that get `date_end = date_applicability - 1` and are
   never served for any as-of date, the same rule `cantonal-acts` applies
-  to GR. `versions_unparseable_date` and `versions_no_pdf` should be 0 (they
-  were on every one of the 67,710).
+  to GR; SZ smoke 2026-08-27: 1,450 of 3,238 rows, so expect the pdf-text
+  stage to download roughly a third more PDFs than editions that can ever
+  be served. `versions_unparseable_date` and `versions_no_pdf` should be 0
+  (they were on every one of the 67,710). An abrogated or "removed"
+  (renumbered) act's last edition ends on `version_inactive_since` /
+  `info_badge_date` minus one, so a not-in-force act has no open edition
+  (SZ: 0 of 161 after the run).
 * scope `gaps`, the 19 Lexwork cantons: ~3,4K acts LexFind holds that the
   hosts answer 404 to (3,407 registry rows with no `ch_act` on 2026-08-26,
   all abrogated except 2 in FR; ~8.9K versions) plus ~17,1K versions on
