@@ -22,7 +22,7 @@ class FetchError(RuntimeError):
 class Fetcher:
     def __init__(self, concurrency: int, retries: int = 3, timeout: float = 60.0,
                  backoff: float = 1.0, transport: httpx.BaseTransport | None = None,
-                 proxy: str | None = None):
+                 proxy: str | None = None, local_address: str | None = None):
         # asyncio.Semaphore(0) is a valid semaphore that never grants: every
         # request would await forever, with no error, no log line and no
         # timeout -- a stage that looks alive and fetches nothing. And this
@@ -38,6 +38,35 @@ class Fetcher:
                 "0 does not mean 'no limit' here -- it builds a semaphore that "
                 "never grants, so every request hangs forever. Unlike "
                 "CHPIPE_LOAD_CEILING, this setting has no opt-out value.")
+        # local_address binds the client's outbound socket to a specific
+        # source IP -- amtsblattportal.ch caps requests at roughly 50/s per
+        # source IP, and the local server's second uplink has its own public
+        # IPs, so binding to one of them is a second, independent per-IP
+        # quota at the portal. httpx has no client-level kwarg for this: the
+        # bind lives on the transport (AsyncHTTPTransport(local_address=...)),
+        # so building one here and handing it to AsyncClient as `transport=`
+        # is the only way in. That only happens when the caller did not
+        # already pass a `transport` -- an explicit one (every test suite's
+        # MockTransport) must win, exactly as `proxy` documents below for its
+        # own precedence, or local_address would silently open real sockets
+        # under a mocked test.
+        #
+        # It also cannot be combined with `proxy`: an explicit proxy mounts
+        # at "all://" and httpx routes every request through that mount
+        # rather than the client's `_transport` (see the proxy tests), so a
+        # local_address's bound transport would sit unused -- configured and
+        # silently doing nothing. Refused here rather than left to look like
+        # it works.
+        if local_address is not None and proxy is not None:
+            raise ValueError(
+                "Fetcher local_address and proxy cannot be combined: an "
+                "explicit proxy= mounts at \"all://\" and httpx routes every "
+                "request through that mount instead of the client's "
+                "transport, so local_address's bound AsyncHTTPTransport "
+                "would never be used.")
+        if local_address is not None and transport is None:
+            transport = httpx.AsyncHTTPTransport(local_address=local_address,
+                                                 retries=0)
         self._sem = asyncio.Semaphore(concurrency)
         self._retries = retries
         self._backoff = backoff

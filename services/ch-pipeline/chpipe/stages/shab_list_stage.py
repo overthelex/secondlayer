@@ -425,7 +425,8 @@ async def _run_async(settings: Settings, months: int | None, rubrics,
         # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
         async with Fetcher(concurrency=settings.shab_concurrency, retries=retries,
                            backoff=backoff, transport=transport,
-                           proxy=settings.shab_proxy) as fetcher:
+                           proxy=settings.shab_proxy,
+                           local_address=settings.shab_local_address) as fetcher:
             for rubric, month in todo:
                 # One month that fails must not cost the 300 after it.
                 try:

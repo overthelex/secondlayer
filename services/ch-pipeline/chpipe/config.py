@@ -102,6 +102,22 @@ def _proxy(raw: str | None) -> str | None:
     return (raw or "").strip() or None
 
 
+def _local_address(raw: str | None) -> str | None:
+    """The source IP the SHAB stages bind their Fetcher's socket to, or None.
+
+    amtsblattportal.ch caps requests at roughly 50/s per source IP. The local
+    server has a second uplink with its own public IPs, and binding to one
+    of them is a second, independent per-IP quota at the portal -- on top of
+    raising CHPIPE_SHAB_CONCURRENCY / CHPIPE_SHAB_RPS, not instead of it.
+
+    Same "" rule as _proxy: an empty value in ch-pipeline.env is the operator
+    turning the bind off, not an address of "". httpx would raise deep inside
+    AsyncHTTPTransport on a value that reads as absent in the file. Stripped
+    for the same reason -- a trailing space in an env file is invisible.
+    """
+    return (raw or "").strip() or None
+
+
 def _shab_concurrency(raw: str | None) -> int:
     """In-flight SHAB requests, i.e. the Fetcher's `concurrency=`.
 
@@ -192,6 +208,12 @@ class Settings:
     # through the SOCKS tunnel to prod and has to be raised together with
     # CHPIPE_SHAB_RPS.
     shab_concurrency: int = 4
+    # Source IP the two SHAB stages bind their Fetcher to -- see
+    # _local_address() for why a second uplink is a second per-IP quota at
+    # amtsblattportal.ch. None (the default) is an unbound socket, which is
+    # what every box without a second uplink wants. Mutually exclusive with
+    # shab_proxy: Fetcher raises ValueError if both are set.
+    shab_local_address: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -215,4 +237,6 @@ class Settings:
             cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
             shab_concurrency=_shab_concurrency(
                 os.environ.get("CHPIPE_SHAB_CONCURRENCY")),
+            shab_local_address=_local_address(
+                os.environ.get("CHPIPE_SHAB_LOCAL_ADDRESS")),
         )

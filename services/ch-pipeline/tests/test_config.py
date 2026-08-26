@@ -200,3 +200,36 @@ def test_the_shab_concurrency_boundaries_are_accepted(monkeypatch):
     assert Settings.from_env().shab_concurrency == 1
     monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", "32")
     assert Settings.from_env().shab_concurrency == 32
+
+
+# --- CHPIPE_SHAB_LOCAL_ADDRESS ----------------------------------------------
+#
+# amtsblattportal.ch caps requests at roughly 50/s per source IP. The local
+# server has a second uplink with its own public IPs, and binding the
+# Fetcher's local address to one of them routes through it -- a second
+# per-IP quota at the portal, on top of CHPIPE_SHAB_RPS. Same "" rule as the
+# rest of this module: unset or blank is "no bind", not an address of "".
+
+def test_the_shab_local_address_is_unset_by_default(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.delenv("CHPIPE_SHAB_LOCAL_ADDRESS", raising=False)
+    assert Settings.from_env().shab_local_address is None
+
+
+def test_the_shab_local_address_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_LOCAL_ADDRESS", "203.0.113.7")
+    assert Settings.from_env().shab_local_address == "203.0.113.7"
+
+
+@pytest.mark.parametrize("blank", ["", "  ", "\n"])
+def test_an_empty_shab_local_address_is_no_bind(monkeypatch, blank):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_LOCAL_ADDRESS", blank)
+    assert Settings.from_env().shab_local_address is None
+
+
+def test_the_shab_local_address_is_stripped(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_LOCAL_ADDRESS", "  203.0.113.7  ")
+    assert Settings.from_env().shab_local_address == "203.0.113.7"
