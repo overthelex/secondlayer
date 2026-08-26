@@ -398,8 +398,10 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.seco.map((r: any) => Number(r.ssid))).toEqual([900001]);
       expect(body.seco[0].programme).toBe('Ukraine');
 
-      // Kantonsblatt: matched by uid AND by normalised title, never the GE publication.
-      expect(body.kantonsblatt.map((r: any) => r.publication_number).sort()).toEqual(['KB-1', 'KB-2']);
+      // Kantonsblatt: the UID is a key and the title is a heuristic, so a company the
+      // cantonal office published a UID for is answered from the UID alone — KB-2, which
+      // only matches on the normalised title, is not mixed into an exact answer.
+      expect(body.kantonsblatt.map((r: any) => r.publication_number)).toEqual(['KB-1']);
 
       expect(body.normalized_name).toBe('muster handels');
       expect(body.name_match_note).toMatch(/[Ѐ-ӿ]/);
@@ -438,6 +440,22 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.seco.map((r: any) => Number(r.ssid))).toEqual([900002]);
       expect(body.kantonsblatt.map((r: any) => r.publication_number)).toEqual(['KB-3']);
       expect(body.finma).toEqual([]);
+    });
+
+    it('falls back to the normalised Kantonsblatt title when no row carries the UID', async () => {
+      // `WHERE company_uid = $1 OR <normalised title> = $2` cannot use idx_ch_kb_uid and
+      // scanned the whole table; the uid query runs first and the title query only when
+      // it comes back empty.
+      await client.query(
+        `INSERT INTO ch_kantonsblatt_publications
+           (publication_uuid, publication_number, publication_date, sub_rubric, cantons,
+            title, publication_text_de, company_uid)
+         VALUES ('44444444-4444-4444-4444-444444444444', 'KB-4', '2024-05-20', 'HR02',
+                 ARRAY['GE'], 'ALTE MUSTER, GmbH', 'Kantonale Publikation ohne UID.', NULL)`
+      );
+
+      const body = parse((await tools.executeTool('ch_get_company', { uid: UID_INACTIVE }))!);
+      expect(body.kantonsblatt.map((r: any) => r.publication_number)).toEqual(['KB-4']);
     });
 
     it('returns not_found for an unknown UID', async () => {

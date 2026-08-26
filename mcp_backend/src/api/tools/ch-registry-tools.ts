@@ -454,13 +454,23 @@ status: active (типово) / inactive / all. canton — двобуквени�
 
   /**
    * Kantonsblatt rows carry the UID when the cantonal office published one, and otherwise
-   * only a `title` that is the company name for HR publications — hence uid OR normalised
-   * title. An empty normalised name degrades to the uid-only match rather than matching
-   * every untitled row.
+   * only a `title` that is the company name for HR publications.
+   *
+   * Two queries, not one `WHERE company_uid = $1 OR <normalised title> = $2`: the OR
+   * cannot use idx_ch_kb_uid, so every card scanned the whole table. The UID is a key and
+   * the title is a heuristic, so the UID query goes first and the title query runs only
+   * when it comes back empty — a company whose cantonal publications carry its UID is
+   * answered exactly, and one whose publications carry no UID still gets the heuristic.
+   * An empty normalised name degrades to the uid query alone rather than matching every
+   * untitled row.
    */
   private async getKantonsblatt(uid: string, normalizedName: string): Promise<any[]> {
-    const nameCond = normalizedName ? `OR ${normalizedNameSql('title')} = $2` : '';
-    const values = normalizedName ? [uid, normalizedName] : [uid];
+    const byUid = await this.kantonsblattRows('company_uid = $1', [uid]);
+    if (byUid.length > 0 || !normalizedName) return byUid;
+    return this.kantonsblattRows(`${normalizedNameSql('title')} = $1`, [normalizedName]);
+  }
+
+  private async kantonsblattRows(predicate: string, values: any[]): Promise<any[]> {
     return (await this.db.query(
       `SELECT publication_uuid, publication_number,
               to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
@@ -468,7 +478,7 @@ status: active (типово) / inactive / all. canton — двобуквени�
               left(coalesce(publication_text_de, publication_text_fr, publication_text_it, ''),
                    ${SHAB_CONTENT_CHARS}) AS content
          FROM ch_kantonsblatt_publications
-        WHERE company_uid = $1 ${nameCond}
+        WHERE ${predicate}
         ORDER BY publication_date DESC NULLS LAST, publication_number
         LIMIT ${MAX_REGISTER_ROWS}`,
       values
