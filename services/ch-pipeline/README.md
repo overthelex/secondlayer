@@ -1607,8 +1607,64 @@ Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
 average payload, sibling languages share one download), parse ~1.6K rows/min,
 narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
-Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
-or their own portals; the registry already holds their acts and versions.
+### LexFind editions (phase 2)
+
+LexFind serves every version it lists as a PDF on the site root:
+`https://www.lexfind.ch/tolv/{version_id}/{lang}` (verified 2026-08-26:
+HTTP 200, `application/pdf`, body `%PDF-1.4`, no redirect, no browser
+User-Agent needed; `dtah_urls[].url` in with-version-groups is exactly that
+path, and `/api/fe/de/tolv/...` is a 404). Since the URL is a function of
+the ids, `lexfind-versions` derives it (`lexfind_api.pdf_url`) and a
+registry walked before `versions_json` kept `pdf_urls` per language is
+materialised as is: **re-running `lexfind-registry` is not a precondition**
+(it is idempotent and refreshes `pdf_urls`, ~26K acts at 2 req/s is ~4 h,
+so do it in the weekly slot, not before the first materialisation).
+
+| stage | what it does |
+|---|---|
+| `lexfind-versions [canton]` | registry -> `ch_act` / `ch_act_version` (source `lexfind`, stage `discovered`, `xml_url` = the PDF). No network. `CHPIPE_LEXFIND_SCOPE=all\|gaps`; unset follows the platform: `all` for ZH VD TI NE GE JU SZ, `gaps` for the 19 Lexwork cantons |
+| pdf-text (separate stage) | claims `source IN ('lexfind','lexwork_pdf')` at `discovered`, downloads `xml_url` as a PDF, extracts the text |
+
+Order on prod: `lexfind-versions ZH,VD,TI,NE,GE,JU,SZ` (scope all), then
+`lexfind-versions` for the 19 Lexwork cantons (scope gaps, only after
+`cantonal-acts` has walked them: the gap logic reads the host's editions
+that exist), then the pdf-text stage, then `reports-cantonal` (Gate F prints
+`from lexfind: acts N, editions M` per canton). Rerunning is safe: acts and
+versions are upserted on `lexfind:{tol_id}` / `lexfind:{version_id}/{lang}`,
+stage is never touched, the log reports `versions_updated` instead of
+`versions_inserted`.
+
+What to expect, from the registry of 2026-08-26:
+
+* scope `all`, the 7 cantons: 8,488 acts and 67,710 versions, one language
+  each (ZH 1,378 / 5,098; VD 1,311 / 20,139; TI 1,022 / 10,119; NE 1,703 /
+  8,658; GE 1,314 / 16,455; JU 1,169 / 4,003; SZ 591 / 3,238). Every
+  version is written; `versions_same_day_shadow` (a "formless" correction
+  listed next to the version it corrects, 12,562 same-day groups across
+  the 7) counts rows that get `date_end = date_applicability - 1` and are
+  never served for any as-of date, the same rule `cantonal-acts` applies
+  to GR. `versions_unparseable_date` and `versions_no_pdf` should be 0 (they
+  were on every one of the 67,710).
+* scope `gaps`, the 19 Lexwork cantons: ~3,4K acts LexFind holds that the
+  hosts answer 404 to (3,407 registry rows with no `ch_act` on 2026-08-26,
+  all abrogated except 2 in FR; ~8.9K versions) plus ~17,1K versions on
+  shared acts dated before the host's earliest edition minus 7 days
+  (17,059 measured). `versions_skipped_existing` (within +-7 days of an
+  edition of another source; 123 measured) and `versions_skipped_in_history`
+  (inside or after the host's history) are the versions deliberately not
+  written. A lexfind version that precedes the host's first edition ends
+  the day before it, so "exactly one open edition per act and language"
+  keeps holding.
+
+Act matching: a registry act is its own `ch_act` (`eli_work_uri
+lexfind:{tol_id}`) or, for a Lexwork canton, the host's act with the same
+`(jurisdiction, sr_number)`. Numbers are reused inside a canton (BE 322.1:
+an abrogated act and the active one the host serves), so a shared number is
+matched on in-force status and the other tol gets its own act; a matched
+host act is never rewritten (`cantonal-acts` owns its metadata).
+
+Not covered: ZH/GE/NE/TI have their own portals with structured text
+(zhlex, SIL, RLeggi) for current editions; LexFind's PDFs are the history.
 
 ## Point-in-time benchmark (chpipe.bench)
 

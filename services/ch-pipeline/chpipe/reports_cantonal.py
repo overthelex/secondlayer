@@ -48,7 +48,15 @@ SELECT
     ARRAY(SELECT sr_number FROM ours EXCEPT SELECT sr_number FROM theirs ORDER BY 1 LIMIT %(sample)s)
         AS only_in_lexwork,
     (SELECT count(*) FROM (SELECT sr_number FROM ours EXCEPT SELECT sr_number FROM theirs) d)
-        AS only_in_lexwork_count
+        AS only_in_lexwork_count,
+    -- Phase 2: acts and editions materialised FROM the registry
+    -- (lexfind_versions_stage). They sit in the same tables, so without
+    -- this split "acts lexwork" would count LexFind's own acts against
+    -- LexFind and the comparison above would read as agreement it is not.
+    (SELECT count(*) FROM ch_act WHERE jurisdiction = %(canton)s
+        AND metadata_json ->> 'platform' = 'lexfind') AS acts_from_lexfind,
+    (SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id)
+      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexfind') AS editions_from_lexfind
 """
 
 _VERSIONS = """
@@ -149,7 +157,8 @@ def format_gate_f(rows: list[dict]) -> str:
             f"{r['canton']}: acts lexwork {r['acts_lexwork']} (in force {r['in_force_lexwork']}) / "
             f"lexfind {r['acts_lexfind']} (active {r['active_lexfind']}); "
             f"only_in_lexfind {r['only_in_lexfind_count']} {r['only_in_lexfind']}; "
-            f"only_in_lexwork {r['only_in_lexwork_count']} {r['only_in_lexwork']}")
+            f"only_in_lexwork {r['only_in_lexwork_count']} {r['only_in_lexwork']}; "
+            f"from lexfind: acts {r['acts_from_lexfind']}, editions {r['editions_from_lexfind']}")
         out.append(
             f"    editions lexwork {r['versions_lexwork']} / lexfind {r['versions_lexfind']}; "
             f"dates match {r['date_matches']} / mismatch {r['date_mismatches']} / future {r['date_future']}")
