@@ -52,7 +52,7 @@ _START_LABELS = re.compile(
     re.IGNORECASE)
 _END_LABELS = re.compile(r"(?:\bbis|\bau|\bal|\bfin a|\bjusqu'au)\s*$", re.IGNORECASE)
 _DECISION_LABELS = re.compile(
-    r"(?:beschlussdatum|date de (?:la )?décision|date d'adoption|data della decisione|"
+    r"(?:beschlussdatum|erlassdatum|date de (?:la )?décision|date d'adoption|data della decisione|"
     r"data da la decisiun|data d'adopziun)\s*$",
     re.IGNORECASE)
 

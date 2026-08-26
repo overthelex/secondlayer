@@ -63,6 +63,15 @@ def test_a_correction_date_is_ignored_and_a_range_without_end_parses():
     assert d == lexwork.VersionDates(datetime.date(2017, 1, 1), None, datetime.date(2012, 9, 23))
 
 
+def test_st_gallen_writes_fassung_in_vollzug_and_erlassdatum():
+    d = lexwork.parse_version_dates(
+        "Fassung in Vollzug von: 27.10.2009 bis: 31.12.2013 (Erlassdatum: 27.10.2009)")
+    assert d == lexwork.VersionDates(datetime.date(2009, 10, 27), datetime.date(2013, 12, 31),
+                                     datetime.date(2009, 10, 27))
+    d = lexwork.parse_version_dates("Aktuelle Fassung in Vollzug seit: 01.01.2014 (Erlassdatum: 19.05.2015)")
+    assert d.date_applicability == datetime.date(2014, 1, 1) and d.date_end_applicability is None
+
+
 def test_french_and_italian_version_strings_parse():
     d = lexwork.parse_version_dates(
         "Version en vigueur du 03.03.2024 au 31.12.2025 (Date de la décision: 03.03.2024)")
