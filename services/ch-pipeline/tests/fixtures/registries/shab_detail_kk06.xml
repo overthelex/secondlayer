@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<KK06:publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:KK06="https://shab.ch/shab/KK06-export" xsi:schemaLocation="https://shab.ch/shab/KK06-export https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK06-export.xsd">
+<meta>
+  <id>4ac28e55-3c08-4908-a337-6cb4c5cb2b59</id>
+  <rubric>KK</rubric>
+  <subRubric>KK06</subRubric>
+  <language>de</language>
+  <registrationOffice>
+    <id>3ef49908-8e5d-11e8-a1ea-0050569de354</id>
+    <displayName>Notariat, Grundbuch- und Konkursamt Küssnacht</displayName>
+    <street>Seemattweg</street>
+    <streetNumber>6</streetNumber>
+    <swissZipCode>6403</swissZipCode>
+    <town>Küssnacht am Rigi</town>
+    <containsPostOfficeBox>false</containsPostOfficeBox>
+  </registrationOffice>
+  <publicationNumber>KK06-0000051296</publicationNumber>
+  <publicationState>PUBLISHED</publicationState>
+  <publicationDate>2026-08-25</publicationDate>
+  <expirationDate>2031-08-25</expirationDate>
+  <primaryTenantCode>shab</primaryTenantCode>
+  <legalRemedy>Publikation nach Art. 268 Abs. 4 SchKG.</legalRemedy>
+  <cantons>SZ</cantons>
+  <secondaryTenants>
+    <tenantCode>kabsz</tenantCode>
+    <publicationDate>2026-08-25</publicationDate>
+  </secondaryTenants>
+  <title>
+    <de>Schluss des Konkursverfahrens Hannelore Monika Hohensee geb. Hahn, ausgeschlagene Erbschaft</de>
+    <en>Closing of bankruptcy proceedings Hannelore Monika Hohensee geb. Hahn, refused estate</en>
+    <it>Chiusura della procedura di fallimento Hannelore Monika Hohensee geb. Hahn, eredità rifiutata</it>
+    <fr>Clôture de faillite Hannelore Monika Hohensee geb. Hahn, succession répudiée</fr>
+  </title>
+</meta>
+<content>
+  <debtor>
+    <selectType>person</selectType>
+    <person>
+      <prename>Hannelore Monika</prename>
+      <name>Hohensee geb. Hahn</name>
+      <countryOfOrigin>
+        <name>
+          <de>Deutschland</de>
+          <fr>Allemagne</fr>
+          <it>Germania</it>
+          <en>Germany</en>
+        </name>
+        <isoCode>DE</isoCode>
+      </countryOfOrigin>
+      <dateOfBirth>1953-09-03</dateOfBirth>
+      <dateOfDeath>2025-10-17</dateOfDeath>
+      <residence>
+        <selectType>switzerland</selectType>
+      </residence>
+      <addressSwitzerland>
+        <street>Alters- und Pflegezentrum Au AG, Aazopfweg</street>
+        <houseNumber>17</houseNumber>
+        <swissZipCode>6422</swissZipCode>
+        <town>Steinen</town>
+      </addressSwitzerland>
+    </person>
+  </debtor>
+  <addition>refusedLegacy</addition>
+  <proceedingEndDate>2026-08-21</proceedingEndDate>
+  <registrationOffice>Konkursamt Küssnacht und Gersau
+Seemattweg 6
+6403 Küssnacht am Rigi
+Telefon: 041 854 02 43
+Mail: konkursamt@kuessnacht.ch</registrationOffice>
+</content>
+</KK06:publication>

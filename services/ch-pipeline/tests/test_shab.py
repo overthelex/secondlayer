@@ -1,10 +1,11 @@
-"""chpipe.shab: the amtsblattportal.ch list-page parser and the title parser.
+"""chpipe.shab: the amtsblattportal.ch list and detail parsers.
 
-Pure, no database and no network. The three fixtures under
+Pure, no database and no network. The eight fixtures under
 tests/fixtures/registries/ were captured live on 2026-08-26 (see
 tests/fixtures/registries/shab_titles.txt for the exact requests).
 """
 import datetime as dt
+import decimal
 import pathlib
 
 import pytest
@@ -301,3 +302,166 @@ def test_month_bounds_cover_the_whole_month_including_december():
         dt.date(2024, 2, 1), dt.date(2024, 2, 29))
     assert shab.month_bounds(dt.date(2026, 12, 1)) == (
         dt.date(2026, 12, 1), dt.date(2026, 12, 31))
+
+
+# --- parse_detail ----------------------------------------------------------
+#
+# Five more fixtures, all captured live on 2026-08-25/26 from
+# /api/v1/publications/{id}/xml. They are the five shapes the detail endpoint
+# actually serves, and each one is here because it is the ONLY source of a
+# path the parser has to walk:
+#
+#   shab_detail_hr.xml    HR01 e34b9c34 -- <commonsNew>, purpose, capital,
+#                         journalNumber/Date, <transaction><registration>
+#   shab_detail_hr03.xml  HR03 b6a8b11f -- <commonsActual> and NO commonsNew
+#                         (a deletion has no new state), plus <lastFosc>
+#   shab_detail_kk.xml    KK01 c4ebb597 -- a company debtor with a UID
+#   shab_detail_kk04.xml  KK04 2a5d3c9d -- typeOfCirculation, remarks,
+#                         registrationOfficeAndCirculationAuthority
+#   shab_detail_kk06.xml  KK06 4ac28e55 -- a PERSON debtor, which carries no
+#                         UID at all
+
+def test_an_hr_detail_carries_the_registered_company():
+    detail = shab.parse_detail(_fixture("shab_detail_hr.xml"), "HR")
+    assert detail["company_uid"] == "CHE-344.059.939"
+    assert detail["company_name"] == "Hikari Labs GmbH"
+    assert detail["seat"] == "Spreitenbach"
+    assert detail["legal_form"] == "0107"
+
+
+def test_the_uid_is_canonical_even_though_the_xml_gives_bare_digits():
+    """<uidOrganisationId>344059939</uidOrganisationId> is what the schema
+    guarantees; <uid> is a rendering of it that not every publication has."""
+    assert shab.canonical_uid("344059939") == "CHE-344.059.939"
+    assert shab.canonical_uid("CHE-344.059.939") == "CHE-344.059.939"
+    assert shab.canonical_uid("") is None
+    assert shab.canonical_uid(None) is None
+    assert shab.canonical_uid("34405993") is None      # eight digits
+
+
+def test_an_hr_detail_carries_the_purpose_and_the_capital():
+    detail = shab.parse_detail(_fixture("shab_detail_hr.xml"), "HR")
+    assert detail["purpose"].startswith("Die Gesellschaft bezweckt die Erbringung")
+    assert detail["capital"] == decimal.Decimal("20000.00")
+    # None of the 2026-08 captures state a currency. CHF is what the
+    # publication TEXT says; the capital block does not, so it is not invented.
+    assert detail["capital_currency"] is None
+
+
+def test_capital_survives_the_gazettes_thousands_apostrophe():
+    assert shab.parse_capital("100000") == decimal.Decimal("100000")
+    assert shab.parse_capital("100'000.00") == decimal.Decimal("100000.00")
+    assert shab.parse_capital("100’000.00") == decimal.Decimal("100000.00")
+    assert shab.parse_capital("") is None
+    assert shab.parse_capital("keine Angabe") is None
+
+
+def test_an_hr_detail_carries_the_publication_text_as_content():
+    detail = shab.parse_detail(_fixture("shab_detail_hr.xml"), "HR")
+    assert detail["content"].startswith(
+        "Hikari Labs GmbH, in Spreitenbach, CHE-344.059.939")
+    assert "Stammkapital: CHF 20'000.00" in detail["content"]
+
+
+def test_an_hr_detail_carries_the_journal_entry_and_the_transaction():
+    extra = shab.parse_detail(_fixture("shab_detail_hr.xml"), "HR")["extra"]
+    assert extra["journal_number"] == "11864"
+    assert extra["journal_date"] == "2026-08-20"
+    assert extra["transaction"] == "registration"
+    # The meta block's registrationOffice for every HR publication is the
+    # federal BJ; the cantonal register that actually made the entry is here.
+    assert extra["sender_office"] == "Handelsregisteramt des Kantons Aargau"
+
+
+def test_a_deletion_is_read_from_the_state_it_deletes():
+    """HR03 has no <commonsNew> -- there is no new state -- so the company
+    block has to come from <commonsActual> or a deletion carries no company
+    at all."""
+    detail = shab.parse_detail(_fixture("shab_detail_hr03.xml"), "HR")
+    assert detail["company_uid"] == "CHE-369.297.923"
+    assert detail["company_name"] == "SRH Consulting Sàrl, en liquidation"
+    assert detail["seat"] == "Genève"
+    assert detail["extra"]["transaction"] == "delete"
+    assert detail["extra"]["last_fosc_date"] == "2026-06-11"
+    assert detail["extra"]["last_fosc_number"] == "110"
+    assert detail["extra"]["last_fosc_sequence"] == "1006674642"
+
+
+def test_a_bankruptcy_detail_carries_the_debtor_company():
+    detail = shab.parse_detail(_fixture("shab_detail_kk.xml"), "KK")
+    assert detail["company_uid"] == "CHE-278.850.327"
+    assert detail["company_name"] == "SM Regio Print GmbH"
+    assert detail["extra"]["debtor_type"] == "company"
+    # A KK publication states no legal seat: the company block carries a
+    # postal address and a canton, and neither is a seat.
+    assert detail["seat"] is None
+
+
+def test_a_bankruptcy_detail_carries_the_circulation_fields():
+    detail = shab.parse_detail(_fixture("shab_detail_kk04.xml"), "KK")
+    extra = detail["extra"]
+    assert extra["type_of_circulation"] == "scheduleOfClaimsAndInventory"
+    assert extra["remarks"].startswith("Si rende noto che a partire dal")
+    assert extra["circulation_authority"] == (
+        "Ufficio esecuzioni e fallimenti Moesa, Al Giardinètt 2, "
+        "6535 Roveredo GR")
+    # A KK publication has no publicationText; its prose is the remarks.
+    assert detail["content"].startswith("Si rende noto che")
+
+
+def test_a_person_debtor_has_a_name_and_no_uid():
+    """Roughly half of KK is a natural person. <noUID> is absent because the
+    whole <companies> block is -- the debtor is a <person>."""
+    detail = shab.parse_detail(_fixture("shab_detail_kk06.xml"), "KK")
+    assert detail["company_uid"] is None
+    assert detail["company_name"] == "Hannelore Monika Hohensee geb. Hahn"
+    assert detail["extra"]["debtor_type"] == "person"
+    assert detail["extra"]["date_of_birth"] == "1953-09-03"
+    assert detail["extra"]["circulation_authority"].startswith(
+        "Konkursamt Küssnacht und Gersau")
+
+
+def test_a_company_debtor_declared_without_a_uid_gets_none():
+    """<noUID>true</noUID> with no <uid> child: an office that could not
+    identify the debtor's UID. Storing anything but NULL would be an
+    invented identifier."""
+    xml = ("<KK01:publication xmlns:KK01='https://shab.ch/shab/KK01-export'>"
+           "<meta><id>x</id></meta><content><debtor>"
+           "<selectType>company</selectType><companies><noUID>true</noUID>"
+           "<company><name>Ohne UID GmbH</name></company>"
+           "</companies></debtor></content></KK01:publication>").encode()
+    detail = shab.parse_detail(xml, "KK")
+    assert detail["company_uid"] is None
+    assert detail["company_name"] == "Ohne UID GmbH"
+    assert detail["extra"]["no_uid"] is True
+
+
+def test_content_is_plain_text_with_the_markup_stripped():
+    """KK10 publishes its body as escaped HTML inside <publication>; HR's
+    publicationText carries <br /> too. content is searched and rendered, so
+    it is stored as text."""
+    xml = ("<KK10:publication xmlns:KK10='https://shab.ch/shab/KK10-export'>"
+           "<meta><id>x</id></meta><content><debtor>"
+           "<selectType>company</selectType></debtor>"
+           "<publication>&lt;p>Mit Urteil vom 19.08.2026 hat das "
+           "Obergericht&lt;br/>&lt;/p>&lt;p>Konkursamt "
+           "Dietikon&lt;br/>&lt;/p></publication>"
+           "</content></KK10:publication>").encode()
+    assert shab.parse_detail(xml, "KK")["content"] == (
+        "Mit Urteil vom 19.08.2026 hat das Obergericht Konkursamt Dietikon")
+
+
+def test_a_detail_without_a_content_block_is_a_parse_failure():
+    """Every one of the eight publications probed on 2026-08-26 had one. A
+    body without it is not a publication this parser understands, and
+    stamping it as fetched would record emptiness as a fact."""
+    xml = (b"<HR01:publication xmlns:HR01='https://shab.ch/shab/HR01-export'>"
+           b"<meta><id>x</id></meta></HR01:publication>")
+    with pytest.raises(ValueError):
+        shab.parse_detail(xml, "HR")
+
+
+def test_the_detail_url_is_the_publications_xml_endpoint():
+    assert shab.detail_url("b6a8b11f-3274-4638-863d-769e928c3bd0") == (
+        "https://amtsblattportal.ch/api/v1/publications/"
+        "b6a8b11f-3274-4638-863d-769e928c3bd0/xml")

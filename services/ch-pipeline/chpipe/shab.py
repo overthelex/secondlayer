@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import calendar
 import datetime as dt
+import html
 import re
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 from xml.etree import ElementTree as ET
 
@@ -350,3 +352,253 @@ def parse_title(title: str | None, lang: str | None = None,
         name, _, seat = text.rpartition(",")
         return name.strip() or None, seat.strip() or None
     return text or None, None
+
+
+# --- the detail endpoint ---------------------------------------------------
+#
+# GET https://amtsblattportal.ch/api/v1/publications/{id}/xml, no
+# authentication, probed live on 2026-08-25/26 over eight publications across
+# both rubrics. The body is `<{SUBRUBRIC}:publication>` carrying the SAME
+# `<meta>` block the list page served, plus one `<content>` block whose shape
+# is decided by the sub-rubric. What the captures actually held:
+#
+# HR (fixtures shab_detail_hr.xml = HR01, shab_detail_hr03.xml = HR03):
+#     content/publicationText          the whole entry as prose
+#     content/commonsNew               the state AFTER the event (HR01, HR02)
+#     content/commonsActual            the state BEFORE it (HR02, HR03)
+#         company/name, /uid, /uidOrganisationId, /seat, /legalForm, /address
+#         purpose, capital/nominal, capital/paid
+#     content/journalNumber, /journalDate
+#     content/lastFosc/lastFoscDate, /lastFoscNumber, /lastFoscSequence
+#     content/transaction/{registration|update|delete}
+#     content/senderOffice/officeName
+#
+#   commonsNew is preferred and commonsActual is the fallback, in that order,
+#   because they are not alternatives: an HR02 that renames a company carries
+#   BOTH ("Avenso Schweiz GmbH" actual, "Lumas Galerien GmbH" new), and the
+#   publication is the announcement of the new state. An HR03 deletion has no
+#   new state at all and only commonsActual -- reading commonsNew alone would
+#   leave every deletion in the corpus without a company.
+#
+#   legalForm is an eCH-0097 CODE ("0107"), not a label. Kept as the code:
+#   ch_zefix_companies.legal_form_code holds the same codes from LINDAS, and
+#   the detail stage resolves the label through that table rather than through
+#   a hand-written map (see chpipe/zefix.py's docstring for the two labels a
+#   hand-written map got wrong).
+#
+# KK (fixtures shab_detail_kk.xml = KK01, _kk04 = KK04, _kk06 = KK06):
+#     content/debtor/selectType        "company" or "person"
+#     content/debtor/companies/noUID   the office's own "no UID known" flag
+#     content/debtor/companies/company/{name,uid,uidOrganisationId,legalForm}
+#     content/debtor/person/{prename,name,dateOfBirth,dateOfDeath}
+#     content/typeOfCirculation/selectType
+#     content/remarks                  free text, often the only prose
+#     content/registrationOfficeAndCirculationAuthority | /registrationOffice
+#     content/publication              KK10 only: the body, as escaped HTML
+#
+#   A KK publication states NO SEAT: the debtor block carries a postal address
+#   and a canton, and neither is a legal seat. seat stays None rather than
+#   being filled with a town the register never called a seat.
+#
+# `legalRemedy` is in `<meta>` on the detail too, and is skipped for the same
+# reason as in the list: it is a dozen distinct paragraphs of boilerplate
+# repeated over 2.5M publications.
+
+DETAIL_ENDPOINT = "https://amtsblattportal.ch/api/v1/publications/{id}/xml"
+
+# Markup inside a text node. HR's publicationText and KK10's <publication> both
+# carry ESCAPED HTML (`&lt;br />`), which the XML parser hands back as literal
+# tags in the text.
+_MARKUP = re.compile(r"<[^>]*>")
+
+_NON_DIGITS = re.compile(r"\D")
+
+# The thousands separator the gazette writes as an apostrophe, both ways, plus
+# the space and the non-breaking space. Removed before Decimal() sees the text.
+_CAPITAL_NOISE = str.maketrans({"'": "", "’": "", "ʼ": "",
+                                " ": "", " ": ""})
+
+
+def detail_url(shab_id: str) -> str:
+    return DETAIL_ENDPOINT.format(id=shab_id)
+
+
+def canonical_uid(raw: str | None) -> str | None:
+    """"344059939" or "CHE-344.059.939" -> "CHE-344.059.939".
+
+    One canonical form, because the same company arrives as bare digits from
+    `uidOrganisationId` and as a rendered UID from `uid`, and
+    ch_zefix_companies.uid is the rendered form -- two spellings would mean a
+    publication that never joins to its company.
+
+    Anything that is not exactly nine digits is None rather than a guess: the
+    UID is a checksummed nine-digit number, and a shorter one is not a UID
+    with a typo, it is a field this parser has misread.
+    """
+    digits = _NON_DIGITS.sub("", raw or "")
+    if len(digits) != 9:
+        return None
+    return f"CHE-{digits[:3]}.{digits[3:6]}.{digits[6:]}"
+
+
+def parse_capital(raw: str | None) -> Decimal | None:
+    """"100'000.00" -> Decimal("100000.00"). Non-numeric text is None.
+
+    Decimal rather than float: this is money, it is written to a numeric
+    column, and 20000.00 is a value a user reads back.
+    """
+    text = (raw or "").strip().translate(_CAPITAL_NOISE)
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except InvalidOperation:
+        return None
+
+
+def plain_text(raw: str | None) -> str | None:
+    """A publication body as text: markup stripped, whitespace normalised."""
+    text = html.unescape(_MARKUP.sub(" ", raw or ""))
+    return " ".join(text.split()) or None
+
+
+def _first_child_tag(parent) -> str | None:
+    """The name of the first child, which is how <transaction> states its kind.
+
+    `parent is None`, not `not parent`: an element with no children is FALSY
+    (and ElementTree warns about the test), so the short form would read an
+    empty <transaction/> the same way as a missing one -- harmless here, and
+    a trap the moment the value is used for anything but a label."""
+    if parent is None:
+        return None
+    for child in parent:
+        return _tag(child)
+    return None
+
+
+def _company_fields(company) -> dict:
+    """name/uid/legalForm/seat off a `<company>` block, HR or KK."""
+    if company is None:
+        return {}
+    return {
+        "company_name": _text(_child(company, "name")) or None,
+        "company_uid": canonical_uid(_text(_child(company, "uidOrganisationId"))
+                                     or _text(_child(company, "uid"))),
+        "legal_form": _text(_child(company, "legalForm")) or None,
+        "seat": _text(_child(company, "seat")) or None,
+    }
+
+
+def _parse_hr_detail(content) -> dict:
+    # `is None`, not `or`: an element with no children is falsy, so `or` would
+    # silently fall through to commonsActual on an empty <commonsNew/> and
+    # report the state BEFORE the event as the state after it.
+    commons = _child(content, "commonsNew")
+    if commons is None:
+        commons = _child(content, "commonsActual")
+    detail = _company_fields(_child(commons, "company")
+                             if commons is not None else None)
+    capital = _child(commons, "capital") if commons is not None else None
+    detail.update({
+        "purpose": plain_text(_text(_child(commons, "purpose")))
+                   if commons is not None else None,
+        "capital": parse_capital(_text(_child(capital, "nominal")))
+                   if capital is not None else None,
+        # Unobserved in the 2026-08 captures -- the capital block states a
+        # number and no unit. Read when present, never assumed to be CHF.
+        "capital_currency": (_text(_child(capital, "currency")) or None)
+                            if capital is not None else None,
+        "content": plain_text(_text(_child(content, "publicationText"))),
+    })
+
+    last_fosc = _child(content, "lastFosc")
+    sender = _child(content, "senderOffice")
+    transaction = _child(content, "transaction")
+    detail["extra"] = {
+        "journal_number": _text(_child(content, "journalNumber")) or None,
+        "journal_date": _text(_child(content, "journalDate")) or None,
+        "transaction": _first_child_tag(transaction),
+        "sender_office": _text(_child(sender, "officeName")) or None
+                         if sender is not None else None,
+        "last_fosc_date": _text(_child(last_fosc, "lastFoscDate")) or None
+                          if last_fosc is not None else None,
+        "last_fosc_number": _text(_child(last_fosc, "lastFoscNumber")) or None
+                            if last_fosc is not None else None,
+        "last_fosc_sequence": _text(_child(last_fosc, "lastFoscSequence")) or None
+                              if last_fosc is not None else None,
+    }
+    return detail
+
+
+def _parse_kk_detail(content) -> dict:
+    debtor = _child(content, "debtor")
+    companies = _child(debtor, "companies") if debtor is not None else None
+    person = _child(debtor, "person") if debtor is not None else None
+
+    detail = _company_fields(_child(companies, "company")
+                             if companies is not None else None)
+    no_uid = _text(_child(companies, "noUID")).lower() if companies is not None else ""
+    if no_uid == "true":
+        # The office says it does not know the debtor's UID. Whatever else the
+        # block holds, there is no identifier to store.
+        detail["company_uid"] = None
+    if person is not None:
+        detail["company_name"] = " ".join(
+            part for part in (_text(_child(person, "prename")),
+                              _text(_child(person, "name"))) if part) or None
+
+    circulation = _child(content, "typeOfCirculation")
+    remarks = plain_text(_text(_child(content, "remarks")))
+    # KK10 is the one sub-rubric with a body of its own; every other one's
+    # prose is the remarks, and content is what a search reads.
+    detail["content"] = (plain_text(_text(_child(content, "publication")))
+                         or remarks)
+    detail.update({"purpose": None, "capital": None, "capital_currency": None})
+    detail["extra"] = {
+        "debtor_type": _text(_child(debtor, "selectType")) or None
+                       if debtor is not None else None,
+        "no_uid": True if no_uid == "true" else (False if no_uid else None),
+        "type_of_circulation": _text(_child(circulation, "selectType")) or None
+                               if circulation is not None else None,
+        "remarks": remarks,
+        # Two spellings of the same fact -- where a creditor files and who is
+        # handling the estate. KK04/KK05 use the long name, the rest the short.
+        "circulation_authority": plain_text(
+            _text(_child(content, "registrationOfficeAndCirculationAuthority"))
+            or _text(_child(content, "registrationOffice"))),
+        # The only thing that distinguishes two debtors of the same name.
+        "date_of_birth": _text(_child(person, "dateOfBirth")) or None
+                         if person is not None else None,
+    }
+    return detail
+
+
+def parse_detail(xml_bytes: bytes, rubric: str | None = None) -> dict:
+    """One publication's detail XML -> the columns and the metadata it fills.
+
+    `rubric` picks the content shape: "KK" reads a debtor, anything else reads
+    a Handelsregister entry. It is a parameter rather than something read off
+    the body because the queue row already knows it and a body whose meta and
+    whose content disagree is a body this parser should not be guessing about.
+
+    Keys always present: company_uid, company_name, legal_form, seat, purpose,
+    capital, capital_currency, content, extra. `extra` holds only the keys the
+    rubric actually provides, with None for a field the schema has but this
+    publication left empty -- the detail stage drops the Nones before merging.
+
+    Raises ValueError when there is no `<content>` block. All eight
+    publications probed on 2026-08-26 had one; a body without it is not a
+    publication this parser understands, and stamping the row as fetched would
+    record emptiness as a fact about the company.
+    """
+    root = ET.fromstring(xml_bytes)
+    content = _child(root, "content")
+    if content is None:
+        raise ValueError("publication has no <content> block")
+    detail = (_parse_kk_detail(content) if rubric == "KK"
+              else _parse_hr_detail(content))
+    detail.setdefault("company_uid", None)
+    detail.setdefault("company_name", None)
+    detail.setdefault("legal_form", None)
+    detail.setdefault("seat", None)
+    return detail

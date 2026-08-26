@@ -374,7 +374,7 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "aliases", "citations", "citations-resolve",
                 "acts", "versions", "fetch-xml", "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act",
-                "zefix", "shab-list"}
+                "zefix", "shab-list", "shab-detail"}
     assert _accepted_stage_names() == expected
 
 

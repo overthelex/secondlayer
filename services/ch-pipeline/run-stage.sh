@@ -4,7 +4,7 @@
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
-#   registries:   ./run-stage.sh zefix   (no argument)
+#   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
 # The optional second argument means different things to each family, so it is
@@ -12,8 +12,10 @@
 # stages -- `citations` included, same CHPIPE_SPIDER family -- it is a spider
 # name, for `diff` it is a language (CHPIPE_LANG, default de), and for
 # `shab-list` it is a number of months to walk (CHPIPE_SHAB_MONTHS; unset
-# means the whole backfill). `aliases`, `citations-resolve` and `zefix` take no
-# second argument at all, same as the legislation stages below.
+# means the whole backfill). `aliases`, `citations-resolve`, `zefix` and
+# `shab-detail` take no second argument at all, same as the legislation stages
+# below -- shab-detail is bounded by CHPIPE_LIMIT and CHPIPE_SHAB_BUDGET_SECONDS
+# from the environment, which is how the nightly delta stops on the clock.
 set -euo pipefail
 
 STAGE="${1:?stage required}"
@@ -58,7 +60,7 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_SHAB_MONTHS:-}}"
     export CHPIPE_SHAB_MONTHS="$ARG"
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

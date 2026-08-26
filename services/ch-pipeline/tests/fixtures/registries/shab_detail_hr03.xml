@@ -1,0 +1,72 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<HR03:publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:HR03="https://shab.ch/shab/HR03-export" xsi:schemaLocation="https://shab.ch/shab/HR03-export https://amtsblattportal.ch/api/v1/schemas/shab/1.26/HR03-export.xsd">
+<meta>
+  <id>b6a8b11f-3274-4638-863d-769e928c3bd0</id>
+  <rubric>HR</rubric>
+  <subRubric>HR03</subRubric>
+  <language>fr</language>
+  <registrationOffice>
+    <id>e15a629a-a08d-11e8-aa11-0050569d3c43</id>
+    <displayName>Bundesamt für Justiz (BJ), Eidgenössisches Amt für das Handelsregister</displayName>
+    <street>Bundesrain</street>
+    <streetNumber>20</streetNumber>
+    <swissZipCode>3003</swissZipCode>
+    <town>Bern</town>
+    <containsPostOfficeBox>false</containsPostOfficeBox>
+  </registrationOffice>
+  <publicationNumber>HR03-1006739625</publicationNumber>
+  <publicationState>PUBLISHED</publicationState>
+  <publicationDate>2026-08-25</publicationDate>
+  <primaryTenantCode>shab</primaryTenantCode>
+  <cantons>GE</cantons>
+  <title>
+    <de>Löschung SRH Consulting Sàrl, en liquidation, Genève</de>
+    <en>Deletion SRH Consulting Sàrl, en liquidation, Genève</en>
+    <it>Cancellazione SRH Consulting Sàrl, en liquidation, Genève</it>
+    <fr>Annulation SRH Consulting Sàrl, en liquidation, Genève</fr>
+  </title>
+</meta>
+<content>
+  <testImport>false</testImport>
+  <journalNumber>20824</journalNumber>
+  <journalDate>2026-08-20</journalDate>
+  <publicationText>SRH Consulting Sàrl, en liquidation, à Genève, CHE-369.297.923 (FOSC du 11.06.2026, p. 0/1006674642). La procédure de faillite ayant été clôturée par jugement du 13.08.2026, la société est radiée d'office.</publicationText>
+  <commonsActual>
+    <company>
+      <name>SRH Consulting Sàrl, en liquidation</name>
+      <uid>CHE-369.297.923</uid>
+      <uidOrganisationId>369297923</uidOrganisationId>
+      <uidOrganisationIdCategorie>CHE</uidOrganisationIdCategorie>
+      <code13>CH55011654207</code13>
+      <seat>Genève</seat>
+      <legalForm>0107</legalForm>
+      <noAddress>false</noAddress>
+      <address>
+        <street>Rue de la Servette</street>
+        <houseNumber>69</houseNumber>
+        <swissZipCode>1202</swissZipCode>
+        <town>Genève</town>
+      </address>
+    </company>
+    <purpose>le courtage, en particulier dans le domaine des assurances ainsi que le conseil en matière juridique et immobilière;- l'exploitation d'une entreprise générale de construction, la gestion, la location, l'entretien et la mise en valeur d'immeubles ainsi que toutes activités, en particulier l'achat, la vente et la promotion, liées au domaine de l'immobilier à affectation purement commerciale. Elle peut créer des succursales en Suisse et à l'étranger, participer à d'autres entreprises en Suisse et à l'étranger, acquérir des entreprises visant un but identique ou analogue, ou fusionner avec de telles entreprises, exercer toute activité commerciale et financière ainsi que faire toutes opérations et conclure tous contrats propres à développer son but ou s'y rapportant directement ou indirectement.</purpose>
+    <capital>
+      <nominal>20000.00</nominal>
+      <paid>20000.00</paid>
+    </capital>
+    <checkOptingOut>false</checkOptingOut>
+  </commonsActual>
+  <lastFosc>
+    <lastFoscDate>2026-06-11</lastFoscDate>
+    <lastFoscNumber>110</lastFoscNumber>
+    <lastFoscSequence>1006674642</lastFoscSequence>
+  </lastFosc>
+  <transaction>
+    <delete>
+      <deletionDate>2026-08-20</deletionDate>
+    </delete>
+  </transaction>
+  <senderOffice>
+    <officeName>Registre du commerce du Canton de Genève</officeName>
+  </senderOffice>
+</content>
+</HR03:publication>
