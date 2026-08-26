@@ -58,6 +58,8 @@ export const TOOL_LABELS: Record<string, string> = {
   ch_search_legislation: 'Пошук законодавства Швейцарії (SR)',
   ch_get_act_article: 'Стаття акта Швейцарії на дату',
   ch_get_act_history: 'Історія змін акта Швейцарії',
+  ch_search_companies: 'Пошук компаній Швейцарії (Zefix)',
+  ch_get_company: 'Компанія Швейцарії: реєстр, SHAB, FINMA, SECO',
 };
 
 export function getToolLabel(toolName: string): string {
