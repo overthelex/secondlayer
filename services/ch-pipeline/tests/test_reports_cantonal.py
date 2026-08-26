@@ -110,11 +110,11 @@ def test_amendment_counters(conn):
     assert row["change_documents"] == 2 and row["change_documents_unlinked"] == 1
 
 
-def test_all_lexwork_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
+def test_all_text_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
     rows = reports_cantonal.gate_f(conn)
     assert [r["canton"] for r in rows] == sorted(
         c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GL", "GR", "LU", "NW", "OW",
-                    "SG", "SH", "SO", "TG", "UR", "VS", "ZG"))
+                    "SG", "SH", "SO", "TG", "TI", "UR", "VS", "ZG"))
     zg = next(r for r in rows if r["canton"] == "ZG")
     assert zg["acts_lexwork"] == 0 and zg["acts_lexfind"] == 1
     assert zg["only_in_lexfind"] == ["111.1"] and zg["versions_lexfind"] == 1
@@ -125,3 +125,18 @@ def test_the_stage_prints_one_block_per_canton(conn, settings, capsys):
     assert result.text.startswith("Gate F")
     assert "BE: acts lexwork 2 (in force 2) / lexfind 2 (active 1)" in result.text
     assert "dates match 3 / mismatch 2 / future 1" in result.text
+
+
+def test_ticino_editions_are_counted_by_their_own_source(conn):
+    """TI rows carry source 'ti_rl' and lang 'it'; a 'lexwork' filter would
+    report the canton as empty while its acts are parsed."""
+    a = _act(conn, "TI", "101.000")
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+        "source, stage, full_text, article_count) VALUES (%s, 'ti_rl:num/1', 'it', '2023-01-01', "
+        "'ti_rl', 'parsed', %s, 96)", (a, "x" * 500))
+    _registry(conn, 9, "TI", "101.000", ["01.01.2023"])
+    row = reports_cantonal.gate_f(conn, "TI")[0]
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 1
+    assert row["versions_lexwork"] == 1 and row["parsed"] == 1
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 0

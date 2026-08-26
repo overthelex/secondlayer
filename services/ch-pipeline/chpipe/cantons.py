@@ -11,7 +11,9 @@ verified by the stage's first request (/status); a host that does not
 answer is reported and skipped, not fatal for the other eighteen.
 
 The seven cantons without a Lexwork host (ZH, VD, TI, NE, GE, JU, SZ) are
-registered from LexFind only; their text is phase 2.
+registered from LexFind only; their text is phase 2. TI is the first of
+them with a text platform: 'ti_rl', the Raccolta delle leggi on www3.ti.ch
+(chpipe/ti_rl.py), Italian only, one open edition per act.
 """
 from __future__ import annotations
 
@@ -25,7 +27,7 @@ class Canton:
     code: str
     host: str
     langs: tuple[str, ...]
-    platform: str          # 'lexwork' | 'lexfind' (registry only)
+    platform: str          # 'lexwork' | 'ti_rl' | 'lexfind' (registry only)
     lexfind_id: int
 
 
@@ -58,7 +60,7 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lw("SO", "bgs.so.ch", ("de",), 18),
     _lf("SZ", 19),
     _lw("TG", "www.rechtsbuch.tg.ch", ("de",), 20),   # bare rechtsbuch.tg.ch does not resolve
-    _lf("TI", 21),
+    Canton("TI", "www3.ti.ch", ("it",), "ti_rl", 21),
     _lw("UR", "rechtsbuch.ur.ch", ("de",), 22),
     _lf("VD", 23),
     _lw("VS", "lex.vs.ch", ("de", "fr"), 24),
@@ -67,6 +69,21 @@ ALL: dict[str, Canton] = {c.code: c for c in (
 )}
 
 LEXWORK: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "lexwork"}
+
+# The ch_act_version.source (migration 203) each text platform's stages
+# write. A platform absent here has no text pipeline: registry only.
+SOURCE_BY_PLATFORM: dict[str, str] = {"lexwork": "lexwork", "ti_rl": "ti_rl"}
+
+
+def version_source(code: str) -> str | None:
+    """The ch_act_version.source the canton's text stages write, or None
+    for a registry-only canton -- what Gate F filters editions on."""
+    return SOURCE_BY_PLATFORM.get(ALL[code].platform)
+
+
+def text_codes() -> list[str]:
+    """Every canton with a text pipeline: Gate F's default list."""
+    return sorted(code for code, c in ALL.items() if c.platform in SOURCE_BY_PLATFORM)
 
 
 def api(canton: Canton, lang: str = "de") -> str:

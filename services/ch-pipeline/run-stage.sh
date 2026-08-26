@@ -6,6 +6,7 @@
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
 #                 ./run-stage.sh lexfind-versions [canton]   (CHPIPE_LEXFIND_SCOPE=all|gaps from the env)
+#   ticino:       ./run-stage.sh ti-acts|ti-fetch|ti-parse   (no argument; one canton, one host)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -69,6 +70,15 @@ case "$STAGE" in
     # for every canton the stage knows. Same env-survives rule as the others.
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
+    ;;
+  ti-acts|ti-fetch|ti-parse)
+    # Ticino's own text platform (chpipe/ti_rl.py): TI only, so no canton
+    # argument; ti-fetch and ti-parse are bounded by CHPIPE_LIMIT like the
+    # other queue stages.
+    if [ -n "$POS" ]; then
+      echo "$STAGE takes no second argument (got '$ARG')" >&2
+      exit 2
+    fi
     ;;
   acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail)
     if [ -n "$POS" ]; then
