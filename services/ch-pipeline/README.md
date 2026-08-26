@@ -866,7 +866,11 @@ raw edges `citations` wrote:
    park a perfectly resolvable citation at the terminal `unresolved_abbr`.
 2. **edition** — `act_id` (+ `lang`, `from_date`) → `ch_act_version` →
    `version_id`. The parsed edition whose
-   `[date_applicability, date_end_applicability)` contains `from_date`, or —
+   `[date_applicability, date_end_applicability]` contains `from_date` —
+   **`date_end_applicability` is inclusive**, the last day the edition is in
+   force, not the first day it no longer is (verified on prod: 19,428
+   consecutive parsed editions of the same act+lang have
+   `next.date_applicability = prev.date_end_applicability + 1 day`) — or,
    when `from_date` is `NULL` — **the parsed edition with the greatest
    `date_applicability` not in the future** (`latest_edition`). Tries the
    citation's own language first and falls back to `de` only when nothing in
@@ -1205,3 +1209,118 @@ running (`pgrep -fa run-delta.sh`; `pgrep -fa chpipe.delta` separately, since
 the `python3` child does not hold the lock fd and can keep running after the
 wrapper is gone) and kill the real process. Once nothing holds the fd, the
 lock releases itself.
+
+## Point-in-time benchmark (chpipe.bench)
+
+`chpipe/bench` is a separate package from the two pipelines above. It does
+not backfill or maintain any table — it reads `ch_act_change` and the
+`ch_act_version`/`ch_act_article` editions on either side of each change
+(both already built by the legislation half) and turns them into a
+benchmark: dated questions in German, French and Italian asking for the
+verbatim text of a specific article as it stood on a specific date, plus a
+deterministic scorer that tells a "grounded in the right edition" answer
+apart from a "grounded in the wrong edition" one. See
+`chpipe/bench/CARD.md` for the full dataset card — construction rules,
+every JSONL field, the scorer's thresholds and why they are set where they
+are, the licence, and known limits. This section is only the commands.
+
+First run results (build 2026-08-25, oracle 1.000, Haiku 4.5 0.000, Sonnet
+4.6 0.003) are in `chpipe/bench/RESULTS.md`.
+
+Not a `run-stage.sh` dispatch target — the benchmark is an occasional,
+hand-triggered export and evaluation run, not a nightly pipeline stage.
+Run each step from `services/ch-pipeline`.
+
+**1. Build the item files.**
+
+    python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
+
+Reads `ch_act_change` per language, applies the selection rules (modified
+rows only, both texts >= 200 normalised chars and not the same string once
+normalised, the act in force, the article number unambiguous within both
+editions, an abbreviation resolvable for that language, the two editions
+not overlapping in the days they claim to be in force, at least one
+discriminating unit — see CARD.md, "Construction"), samples down to the
+caps (50 changes per act, 5,000 items per language, seeded per language),
+and writes `bench-de.jsonl`, `bench-fr.jsonl`, `bench-it.jsonl` plus
+`build-report.json` (per-language counts and skip reasons) into `--out`.
+
+The "texts differ" rule is an inequality, not a similarity threshold: a
+ratio gate would drop the one-number amendment this benchmark is built to
+ask about. See CARD.md, "Construction".
+
+Each surviving change yields an `after` item dated on the change itself and
+a `before` item dated on the **old edition's last day in force** (its
+inclusive `date_end_applicability`) — not simply the change date minus one
+day, which can fall in a gap where Fedlex published no consolidation and no
+edition answers the question at all. A change whose old edition's end date
+reaches into the new edition's validity is dropped whole
+(`overlapping_editions`): on such a day two editions are in force at once
+and a covering lookup returns the newer one, so no date is left to ask
+about. Whichever half of a pair has the
+shorter, wholly-contained text as its gold is dropped (the `after` half of a
+deletion, the `before` half of an addition): there is no wording there that
+could tell a correct answer from a wrong one. Both rules are spelled out in
+CARD.md, "Construction".
+
+**2. Run the oracle.**
+
+    python -m chpipe.bench.run_oracle --items /data/ch-corpus/bench --out /data/ch-corpus/bench
+
+Answers every item straight from the database, the same way the product
+tool `ch_get_act_article` resolves an article, with no LLM involved, and
+scores each answer. Writes `results-oracle.jsonl`. This run must come back
+100% `grounded_correct` — anything less is a bug in the builder or the
+scorer, not a fact about the database, and should be treated as a blocker
+before running any LLM baseline against the same item files.
+
+**3. Run the Bedrock baselines.**
+
+    python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+Every Bedrock call costs money, so this is gated. Run without
+`CHPIPE_BENCH_CONFIRM=1` first: it prints a JSON cost estimate (priced from
+item lengths at roughly 4 characters per token against the module's price
+table) and exits 2 without calling Bedrock at all. Only once that estimate
+looks reasonable, re-run with the confirmation set:
+
+    CHPIPE_BENCH_CONFIRM=1 python -m chpipe.bench.run_llm --items /data/ch-corpus/bench --out /data/ch-corpus/bench --sample-per-lang 300
+
+Default models are the two inference-profile ids baked into `run_llm.py`
+(Haiku 4.5 and Sonnet 4.6, `eu-central-1`, re-verify both the ids and the
+per-token prices against `aws bedrock list-inference-profiles` before a
+real run — see the comments at the top of `run_llm.py`); pass
+`--models <id>,<id>,...` to override. Sampling is 300 items per language by
+default (`--sample-per-lang`), stratified by `kind` (`before`/`after`) and
+seeded the same way the builder's own sampling is. No retrieval: the model
+sees only the item's `question` field and the system prompt quoted in
+CARD.md, nothing from `gold`/`distractor`. Writes one
+`results-llm-{model}.jsonl` per model plus `llm-run-report.json` (the cost
+estimate alongside the actual per-model token counts and spend, with the
+combined spend in a top-level `actual_total_usd`).
+
+Interrupted runs resume: re-running with the same `--out` skips every item
+already answered, re-asks any item whose line records an error, and repairs
+a partial line left by a kill mid-write. Nothing already paid for is asked
+twice.
+
+**4. Report.**
+
+    python -m chpipe.bench.report --results /data/ch-corpus/bench/results-oracle.jsonl /data/ch-corpus/bench/results-llm-haiku-4-5.jsonl /data/ch-corpus/bench/results-llm-sonnet-4-6.jsonl --items /data/ch-corpus/bench --out /data/ch-corpus/bench/report.json
+
+Pass any number of `results-*.jsonl` files (oracle and/or one or more LLM
+runs) to compare them in a single table. Reduces every result line to
+per-(language, system, `kind`) counts — plus an `all` row per (language,
+system) — with label shares, mean coverages, an `errors` count, the
+correct-answer share split on `gold_is_current`, and the "point-in-time
+grounding score" (the share of `grounded_correct`); prints a Markdown table
+to stdout and writes the same summary as JSON to `--out`.
+
+Read the `gold_is_current = false` column, not the headline score: an item
+whose gold edition is still the current wording can be answered correctly
+by a system that recites today's text and never resolves the date at all.
+
+**Publication.** Building the benchmark, running the oracle and the
+baselines, and writing the report do not publish anything — no dataset
+upload, no scorer release. That is a separate, user-approved step; see
+`chpipe/bench/CARD.md` for what a publication would carry.
