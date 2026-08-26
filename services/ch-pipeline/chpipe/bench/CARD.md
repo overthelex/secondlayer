@@ -421,22 +421,22 @@ headline `score`, as the point-in-time grounding number.
 
 ## Results
 
-First build and run: 2026-08-25. Full numbers, per-language and per-`kind`
-tables, the year distribution of `as_of` dates, the runner settings, actual
-spend, and a qualitative read of the model answers are all in
-[`RESULTS.md`](./RESULTS.md). Headline numbers:
+Current build and run: 2026-08-25 23:24 UTC, commit `28618f7d` (v2 --
+item ids include the source act's `act_id`, parsed editions only, adds the
+`no_article_number` skip). A first run on the previous build (v1, item ids
+without `act_id`, 2026-08-25 19:56 UTC) gave identical headline numbers.
+Full numbers, per-language and per-`kind` tables (now including mean gold
+and mean distractor coverage), the year distribution of `as_of` dates, the
+runner settings, actual spend for both runs, and a qualitative read of the
+model answers are all in [`RESULTS.md`](./RESULTS.md). Headline numbers:
 
 - **Oracle**: 1.000 (`grounded_correct`) in German, French and Italian, the
   builder and the scorer agree with each other.
 - **Haiku 4.5** (`eu.anthropic.claude-haiku-4-5-20251001-v1:0`, no
   retrieval): 0.000 in all three languages.
 - **Sonnet 4.6** (`eu.anthropic.claude-sonnet-4-6`, no retrieval): 0.003 in
-  German (1 correct, 1 wrong-version out of 300), 0.000 in French and
+  German (0.007 on `after` items, 0.000 on `before`), 0.000 in French and
   Italian.
-
-Restricting to items with `as_of` on or before 2024-12-31 (658 items per
-model, dropping every future-dated item) does not change the result: Haiku
-4.5 still scores 0 correct, Sonnet 4.6 still scores 1 correct.
 
 Without point-in-time retrieval, a general-purpose model's verbatim recall
 of the specific dated edition is effectively zero. CH-PiT is measuring
@@ -445,13 +445,13 @@ how good the underlying language model is.
 
 ### Dates
 
-The `as_of` year distribution in the first build includes 199 items in
-2027, 11 in 2028 and 10 in 2029, all after the 2026-08-25 build date. These
-are not placeholder or malformed dates: they are editions Fedlex has
-already published with a future in-force date (an amendment enacted now
-that takes effect on a later date), and CH-PiT asks about the edition valid
-on the date it takes effect, which can be after the date the benchmark was
-built. See `RESULTS.md` for the full year-by-year table.
+The `as_of` year distribution in the current build includes 191 items in
+2027, 13 in 2028 and 11 in 2029, all after the 2026-08-25 23:24 UTC build
+date. These are not placeholder or malformed dates: they are editions
+Fedlex has already published with a future in-force date (an amendment
+enacted now that takes effect on a later date), and CH-PiT asks about the
+edition valid on the date it takes effect, which can be after the date the
+benchmark was built. See `RESULTS.md` for the full year-by-year table.
 
 ## Known limits
 
