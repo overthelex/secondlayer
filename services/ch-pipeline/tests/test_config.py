@@ -150,3 +150,53 @@ def test_the_shab_proxy_is_stripped(monkeypatch):
     monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
     monkeypatch.setenv("CHPIPE_SHAB_PROXY", "  socks5h://127.0.0.1:1080  ")
     assert Settings.from_env().shab_proxy == "socks5h://127.0.0.1:1080"
+
+
+# --- CHPIPE_SHAB_CONCURRENCY ------------------------------------------------
+#
+# Through the reverse SOCKS tunnel to prod (~0.4-0.7 s RTT per hop),
+# throughput is roughly concurrency / RTT regardless of CHPIPE_SHAB_RPS -- the
+# old fixed CONCURRENCY = 4 capped a run at ~5 req/s no matter how high RPS
+# was set, turning a 2.5M-row shab-detail backfill into a multi-day run.
+
+def test_the_shab_concurrency_defaults_to_four(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.delenv("CHPIPE_SHAB_CONCURRENCY", raising=False)
+    assert Settings.from_env().shab_concurrency == 4
+
+
+@pytest.mark.parametrize("blank", ["", "  ", "\n"])
+def test_an_empty_shab_concurrency_is_the_default(monkeypatch, blank):
+    """Same "" rule as the rest of this module: run-stage.sh exports its
+    variables unconditionally, so an empty value must read as unset, not as
+    a concurrency of zero."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", blank)
+    assert Settings.from_env().shab_concurrency == 4
+
+
+def test_the_shab_concurrency_can_be_raised(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", "8")
+    assert Settings.from_env().shab_concurrency == 8
+
+
+@pytest.mark.parametrize("bad", ["0", "-1", "abc", "64", "4.5"])
+def test_an_out_of_range_or_non_integer_shab_concurrency_is_refused(
+        monkeypatch, bad):
+    """0 or negative is not concurrency, it is the stage doing nothing while
+    looking configured; 64 in flight against a federal gazette is not a
+    raised ceiling, it is a typo a nightly cron job should refuse to start
+    on rather than hammer amtsblattportal.ch with."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", bad)
+    with pytest.raises(ValueError, match="CHPIPE_SHAB_CONCURRENCY"):
+        Settings.from_env()
+
+
+def test_the_shab_concurrency_boundaries_are_accepted(monkeypatch):
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", "1")
+    assert Settings.from_env().shab_concurrency == 1
+    monkeypatch.setenv("CHPIPE_SHAB_CONCURRENCY", "32")
+    assert Settings.from_env().shab_concurrency == 32

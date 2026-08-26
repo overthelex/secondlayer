@@ -47,14 +47,19 @@ what the failed attempt saw, it is visible in a query, and because the skip list
 is `done_at IS NOT NULL` the next run picks the month up again regardless. The
 windows that did land are kept -- every row is re-upserted on the retry anyway.
 
-Politeness: `Fetcher` caps in-flight requests at four, and a rate limiter caps
-the whole stage at CHPIPE_SHAB_RPS (default 10) requests per second, so a retry
-storm cannot turn into a hammering of a federal gazette.
+Politeness: `Fetcher` caps in-flight requests at CHPIPE_SHAB_CONCURRENCY
+(default 4), and a rate limiter caps the whole stage at CHPIPE_SHAB_RPS
+(default 10) requests per second, so a retry storm cannot turn into a
+hammering of a federal gazette.
 
 Env:
-    CHPIPE_SHAB_FROM    first month, "YYYY-MM" (default 2000-01)
-    CHPIPE_SHAB_MONTHS  walk only the last N months (delta); unset = all
-    CHPIPE_SHAB_RPS     requests per second ceiling (default 10)
+    CHPIPE_SHAB_FROM         first month, "YYYY-MM" (default 2000-01)
+    CHPIPE_SHAB_MONTHS       walk only the last N months (delta); unset = all
+    CHPIPE_SHAB_RPS          requests per second ceiling (default 10)
+    CHPIPE_SHAB_CONCURRENCY  in-flight requests (default 4) -- through the
+                             SOCKS tunnel to prod, throughput is roughly this
+                             divided by round-trip time regardless of RPS, so
+                             raise it together with CHPIPE_SHAB_RPS
 """
 from __future__ import annotations
 
@@ -75,7 +80,12 @@ from ..http import FetchError, Fetcher
 
 log = logging.getLogger(__name__)
 
-# In-flight requests. The endpoint is a federal gazette, not a CDN.
+# In-flight requests. The endpoint is a federal gazette, not a CDN. This is
+# only the fallback default -- the stages actually pass settings.shab_concurrency
+# (CHPIPE_SHAB_CONCURRENCY, see chpipe/config.py), which defaults to the same
+# 4 but can be raised for a run that goes through the SOCKS tunnel to prod,
+# where throughput is roughly concurrency / RTT regardless of the rate
+# limiter.
 CONCURRENCY = 4
 
 # Per-request retry budget. Longer than the Fetcher's default 1.0 s base: a
@@ -413,7 +423,7 @@ async def _run_async(settings: Settings, months: int | None, rubrics,
         # connection hangs -- so on the cloud box this goes through a reverse
         # SOCKS tunnel from the local server (CHPIPE_SHAB_PROXY). Only the two
         # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
-        async with Fetcher(concurrency=CONCURRENCY, retries=retries,
+        async with Fetcher(concurrency=settings.shab_concurrency, retries=retries,
                            backoff=backoff, transport=transport,
                            proxy=settings.shab_proxy) as fetcher:
             for rubric, month in todo:
