@@ -525,7 +525,7 @@ services:
     container_name: secondlayer-app-local-green
     profiles: ["green"]
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:3110:3000"   # 3001 занят rada-mcp, 3100 тоже занят
 
   rada-migrate-local:
     build:
