@@ -256,9 +256,16 @@ def upsert_versions(conn, canton: cantons.Canton, act_id: int, tol: dict,
         end = dates.date_end_applicability
         is_open = version["id"] == current_id or version["id"] in future_ids
         if end is None and not is_open and index + 1 < len(parsed):
+            # The first later-dated version closes this one. Versions that
+            # start the SAME day (GR 502.100: three on 2011-01-01, formless
+            # corrections replacing one another) are not successors in time;
+            # the one replaced the same day was never in force for a whole
+            # day and gets end = start - 1, which no as_of date can match.
             successor = parsed[index + 1][1].date_applicability
             if successor > dates.date_applicability:
                 end = successor - datetime.timedelta(days=1)
+            else:
+                end = dates.date_applicability - datetime.timedelta(days=1)
         for lang in canton.langs:
             conn.execute(_UPSERT_VERSION, {
                 "act_id": act_id,
