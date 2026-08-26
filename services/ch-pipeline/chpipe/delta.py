@@ -704,11 +704,13 @@ def main() -> DeltaReport:
     registries_report = RegistriesReport()
     try:
         registries_report = run_registries(settings)
-        log.info("delta: registries zefix(upserted=%d inactivated=%d) "
+        log.info("delta: registries zefix(upserted=%d inactivated=%d "
+                 "sweep_skipped=%s) "
                  "shab_list(months=%d pages=%d upserted=%d) "
                  "shab_detail(claimed=%d fetched=%d failed=%d)",
                  registries_report.zefix.upserted,
                  registries_report.zefix.inactivated,
+                 registries_report.zefix.sweep_skipped,
                  registries_report.shab_list.months,
                  registries_report.shab_list.pages,
                  registries_report.shab_list.upserted,

@@ -56,6 +56,9 @@ class ZefixReport:
     # An organisation whose rows carry no UID cannot be keyed and is not
     # written. Silence would make that indistinguishable from success.
     skipped: int = 0
+    # True when the magnitude guard refused the inactivation sweep -- see
+    # _sweep(). Not an error: the walk's rows are written either way.
+    sweep_skipped: bool = False
 
 
 _UPSERT_MUNICIPALITY = """
@@ -266,7 +269,7 @@ def run(settings: Settings, run_date: dt.date | None = None,
                 log.info("zefix: %d municipalities, %d companies",
                          report.municipalities, report.companies_seen)
 
-        report.inactivated = _sweep(conn, run_date, todo, municipalities)
+        _sweep(conn, run_date, todo, municipalities, report)
     finally:
         conn.close()
         if owned:
@@ -274,11 +277,21 @@ def run(settings: Settings, run_date: dt.date | None = None,
     return report
 
 
+# The fraction of the currently-active set a walk must have confirmed before
+# it is allowed to assert anything about the rest of it. LINDAS answering 200
+# with an empty result set is indistinguishable, to the sweep, from "every
+# company in Switzerland has been struck off" -- and the sweep would write
+# that to all 792K rows. A genuine day's churn is in the hundreds.
+SWEEP_MIN_SEEN_FRACTION = 0.5
+
+_ACTIVE_COUNT = "SELECT count(*) AS n FROM ch_zefix_companies WHERE status = 'active'"
+
+
 def _sweep(conn, run_date: dt.date, todo: list[dict],
-           municipalities: list[int] | None) -> int:
+           municipalities: list[int] | None, report: ZefixReport) -> None:
     """Mark the companies this run_date's complete walk did not see.
 
-    Two guards, both load-bearing:
+    Three guards, all load-bearing:
 
       * A run restricted to a municipality list has looked at a fraction of
         the register, so it never sweeps. Without this, `zefix 371` would
@@ -286,23 +299,43 @@ def _sweep(conn, run_date: dt.date, todo: list[dict],
       * Even an unrestricted run sweeps only once every partition has a
         progress row for run_date, so a run that died half way through, or
         one whose last municipality raised, leaves the table alone.
+      * A MAGNITUDE guard: every partition can report in and still describe
+        a fraction of the register, because "no organisations here" and "the
+        endpoint answered 200 with nothing" look identical from the outside.
+        A walk that confirmed less than SWEEP_MIN_SEEN_FRACTION of what is
+        currently active is not a snapshot of the register, so it does not
+        get to strike anything off; report.sweep_skipped says so and the
+        run's rows are written either way.
 
     The cutoff is this run's own marker (see _run_marker), so it means
     exactly "not confirmed by run_date's walk" -- resumed invocations
     included.
     """
     if municipalities is not None:
-        return 0
+        return
     done = {r["municipality_id"] for r in
             conn.execute(_DONE_TODAY, (run_date,)).fetchall()}
     outstanding = [p["id"] for p in todo if p["id"] not in done]
     if outstanding:
         log.warning("zefix: %d municipalities did not finish, not sweeping "
                     "(first few: %s)", len(outstanding), outstanding[:10])
-        return 0
+        return
+
+    active_before = conn.execute(_ACTIVE_COUNT).fetchone()["n"]
+    if (active_before > 0
+            and report.companies_seen < SWEEP_MIN_SEEN_FRACTION * active_before):
+        log.warning("zefix: the walk saw %d companies against %d currently "
+                    "active (under %.0f%%); NOT sweeping -- this looks like a "
+                    "source failure, not %d companies leaving the register",
+                    report.companies_seen, active_before,
+                    SWEEP_MIN_SEEN_FRACTION * 100,
+                    active_before - report.companies_seen)
+        report.sweep_skipped = True
+        return
+
     with conn.cursor() as cur:
         cur.execute(_INACTIVATE, (_run_marker(run_date),))
-        return cur.rowcount
+        report.inactivated = cur.rowcount
 
 
 def _municipalities_from_env() -> list[int] | None:
@@ -333,9 +366,9 @@ def main() -> ZefixReport:
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env(), municipalities=_municipalities_from_env())
     log.info("zefix municipalities=%d companies_seen=%d upserted=%d "
-             "inactivated=%d skipped=%d", result.municipalities,
-             result.companies_seen, result.upserted, result.inactivated,
-             result.skipped)
+             "inactivated=%d skipped=%d sweep_skipped=%s",
+             result.municipalities, result.companies_seen, result.upserted,
+             result.inactivated, result.skipped, result.sweep_skipped)
     return result
 
 

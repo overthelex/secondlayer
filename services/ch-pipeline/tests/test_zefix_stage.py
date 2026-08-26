@@ -249,6 +249,39 @@ def test_a_resumed_run_does_not_inactivate_what_the_earlier_half_saw(conn,
     assert all(r["status"] == "active" for r in _companies(conn).values())
 
 
+def _seed_active(conn, n: int) -> None:
+    """n companies the walk will not see, all 'active' and never confirmed."""
+    conn.execute("""
+        INSERT INTO ch_zefix_companies (uid, name, status)
+        SELECT format('CHE-900.000.%%s', to_char(g, 'FM000')), 'Stale AG', 'active'
+          FROM generate_series(1, %s) AS g""", (n,))
+
+
+def test_a_walk_that_saw_a_fraction_of_the_register_does_not_sweep(conn, settings,
+                                                                   client):
+    """An empty-but-200 answer from LINDAS is indistinguishable from "every
+    company in Switzerland has been struck off", and the sweep would write
+    that to all 792K rows. A walk that confirms less than half of what is
+    currently active is not a register snapshot, it is a broken source."""
+    _seed_active(conn, 10)
+    report = _run(settings, client)          # the fixture municipality: 4 companies
+
+    assert report.sweep_skipped is True
+    assert report.inactivated == 0
+    assert all(r["status"] == "active" for r in _companies(conn).values())
+
+
+def test_a_walk_that_saw_most_of_the_register_still_sweeps(conn, settings, client):
+    """The guard is a magnitude check, not a ban: a normal run, where a
+    handful of companies have left the register, sweeps as before."""
+    _seed_active(conn, 3)
+    report = _run(settings, client)          # 4 seen against 7 active
+
+    assert report.sweep_skipped is False
+    assert report.inactivated == 3
+    assert sum(r["status"] == "inactive" for r in _companies(conn).values()) == 3
+
+
 def test_an_inactive_company_that_comes_back_is_active_again(conn, settings, client):
     _run(settings, client)
     survivors = FakeSparql(

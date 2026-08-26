@@ -976,7 +976,11 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
   picks up where it stopped the same day and starts fresh the next.
   Companies no longer in the active Zefix set are not deleted — a SHAB
   publication may still reference one — they are marked `status='inactive'`
-  once every partition for the day has reported in.
+  once every partition for the day has reported in. That sweep also has a
+  magnitude guard: a walk that confirmed less than half of what is currently
+  active is treated as a source failure rather than as 400,000 companies
+  leaving the register, and strikes nothing off (`sweep_skipped` in the
+  report, plus a `WARNING` carrying both numbers).
 - **`shab-list`** — publication *pointers* (id, date, rubric, a title-parsed
   company name) from the [Swiss Official Gazette of Commerce
   (SHAB)](https://amtsblattportal.ch) bulk export, into
