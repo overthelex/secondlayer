@@ -8,6 +8,7 @@ No live HTTP: every request goes through an httpx.MockTransport serving the
 captured fixtures by publication id, so the real Fetcher, the real URL builder
 and the real parser are all under test and only the socket is fake.
 """
+import dataclasses
 import datetime as dt
 import os
 import pathlib
@@ -460,3 +461,51 @@ def test_an_unset_limit_and_budget_mean_no_limit_and_no_budget(
     shab_detail_stage.main()
     assert seen["limit"] is None
     assert seen["budget_seconds"] is None
+
+
+# --- the SOCKS tunnel ------------------------------------------------------
+#
+# amtsblattportal.ch does not answer AWS IPs at all: the TCP connection hangs,
+# from the same box on which LINDAS, Fedlex and entscheidsuche are all fine.
+# The two SHAB stages therefore go out through a reverse SOCKS tunnel from the
+# local server; zefix (LINDAS) and every other stage stay direct, so the proxy
+# has to be wired per stage rather than into Fetcher or into the environment.
+
+def _fetcher_spy(monkeypatch):
+    """Record the Fetcher kwargs, then build a real Fetcher without the proxy.
+
+    The proxy is dropped deliberately: httpx mounts an explicit `proxy=` at
+    "all://", which takes precedence over the `transport=` this suite uses,
+    so a Fetcher built with both would leave the MockTransport unused and
+    open a real socket to a tunnel that does not exist here.
+    """
+    seen = {}
+    real = shab_detail_stage.Fetcher
+
+    def spy(**kwargs):
+        seen.update(kwargs)
+        return real(**{k: v for k, v in kwargs.items() if k != "proxy"})
+
+    monkeypatch.setattr(shab_detail_stage, "Fetcher", spy)
+    return seen
+
+
+def test_the_configured_proxy_reaches_the_fetcher(conn, settings, monkeypatch):
+    _seed(conn, HR)
+    seen = _fetcher_spy(monkeypatch)
+    proxied = dataclasses.replace(settings, shab_proxy="socks5h://127.0.0.1:1080")
+
+    _run(proxied, FakePortal())
+
+    assert seen["proxy"] == "socks5h://127.0.0.1:1080"
+
+
+def test_no_proxy_is_configured_by_default(conn, settings, monkeypatch):
+    """An unconfigured tunnel must not become a mount: passing None through is
+    how the stage stays direct on a box that can reach the portal."""
+    _seed(conn, HR)
+    seen = _fetcher_spy(monkeypatch)
+
+    _run(settings, FakePortal())
+
+    assert seen["proxy"] is None

@@ -80,6 +80,28 @@ def _budget_seconds(raw: str | None) -> float:
     return value
 
 
+def _proxy(raw: str | None) -> str | None:
+    """The proxy URL the SHAB stages fetch through, or None for a direct fetch.
+
+    amtsblattportal.ch does not answer AWS IPs at all -- the TCP connection
+    hangs, from the same box on which LINDAS, Fedlex and entscheidsuche are
+    all fine -- so the two SHAB stages go out through a reverse SOCKS tunnel
+    opened from the local server. Nothing else in the pipeline is proxied,
+    which is why this is a setting the stages pass to their own Fetcher and
+    not HTTPS_PROXY in the unit's environment: that would push zefix's LINDAS
+    traffic through the same tunnel for no reason and lose it whenever the
+    tunnel is down.
+
+    "" is read as unset, the same rule _budget_seconds applies: an empty
+    value in ch-pipeline.env is an operator turning the tunnel off, and
+    handing "" to httpx raises somewhere inside the stage, mid-delta, on
+    a line that reads as absent in the file. Stripped for the same class of
+    reason -- a trailing space in an env file is invisible and httpx will
+    not forgive it.
+    """
+    return (raw or "").strip() or None
+
+
 def _backoff(raw: str | None) -> tuple[int, ...]:
     """"1,5,30" -> (1, 5, 30). An empty value means no wait at all."""
     if raw is None:
@@ -120,6 +142,11 @@ class Settings:
     # for a supervised backfill run under tmux, this one defaults to 5400
     # because the nightly delta must never run unbounded.
     shab_budget_seconds: float = 5400.0
+    # The proxy URL the two SHAB stages fetch through -- see _proxy() for why
+    # amtsblattportal.ch needs one and why nothing else here does. None (the
+    # default) is a direct fetch, which is what the local server itself and
+    # every developer box wants.
+    shab_proxy: str | None = None
     # Per-host concurrency for the cantonal (Lexwork) stages. 19 cantonal
     # hosts are 19 small government servers; http_concurrency is the global
     # cap across all of them, this is the cap on any one of them.
@@ -143,5 +170,6 @@ class Settings:
             keep_raw_pdf=os.environ.get("CHPIPE_KEEP_RAW_PDF", "") not in ("", "0"),
             shab_budget_seconds=_budget_seconds(
                 os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS")),
+            shab_proxy=_proxy(os.environ.get("CHPIPE_SHAB_PROXY")),
             cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
         )

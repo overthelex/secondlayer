@@ -409,8 +409,13 @@ async def _run_async(settings: Settings, months: int | None, rubrics,
         log.info("shab-list: %d (rubric, month) units to walk", len(todo))
 
         limiter = _RateLimiter(rps)
+        # proxy: amtsblattportal.ch does not answer AWS IPs at all -- the TCP
+        # connection hangs -- so on the cloud box this goes through a reverse
+        # SOCKS tunnel from the local server (CHPIPE_SHAB_PROXY). Only the two
+        # SHAB stages; zefix's LINDAS traffic and everything else stay direct.
         async with Fetcher(concurrency=CONCURRENCY, retries=retries,
-                           backoff=backoff, transport=transport) as fetcher:
+                           backoff=backoff, transport=transport,
+                           proxy=settings.shab_proxy) as fetcher:
             for rubric, month in todo:
                 # One month that fails must not cost the 300 after it.
                 try:

@@ -1,4 +1,9 @@
 httpx>=0.27,<0.29
+# httpx does not speak SOCKS on its own: a socks5h:// proxy URL raises
+# ImportError at AsyncClient construction without this. Needed because
+# amtsblattportal.ch does not answer AWS IPs, so the SHAB stages fetch
+# through a reverse SOCKS tunnel (CHPIPE_SHAB_PROXY).
+socksio>=1.0
 psycopg[binary]>=3.1,<4
 lxml>=5.2,<6
 # chpipe.bench.run_llm imports boto3 lazily (the cost-estimate path needs no
