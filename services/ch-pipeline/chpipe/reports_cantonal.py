@@ -19,7 +19,13 @@ SQL right here (spec section 7):
      to a change document, and change documents nothing links to.
 
 The date comparison uses the FIRST language of the canton (cantons.py)
-so bilingual cantons are not counted twice.
+so bilingual cantons are not counted twice. The version source filter
+comes from the canton's platform (cantons.version_source: 'lexwork' for
+the 19 Lexwork cantons, 'sil' for GE and NE), and the default canton list
+is every canton with a text pipeline. For SIL the date comparison is
+weaker than for Lexwork: sil_acts_stage takes date_applicability FROM
+LexFind, so a match there says the registry was consulted, not that two
+systems agree; acts and the quality counters are still independent.
 """
 from __future__ import annotations
 
@@ -58,7 +64,7 @@ WITH ours AS (
     -- history anyway (FR 2026-08-26: 1,272 of 1,274 "mismatches" were those)
     SELECT a.sr_number, v.date_applicability
       FROM ch_act_version v JOIN ch_act a USING (act_id)
-     WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s
+     WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.lang = %(lang)s
        AND v.stage = 'parsed'
 ), theirs AS (
     SELECT r.systematic_number AS sr_number,
@@ -70,7 +76,7 @@ WITH ours AS (
 )
 SELECT
     (SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id)
-      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.lang = %(lang)s) AS versions_lexwork,
+      WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.lang = %(lang)s) AS versions_lexwork,
     (SELECT coalesce(sum(version_count), 0) FROM ch_cantonal_registry WHERE canton = %(canton)s)
         AS versions_lexfind,
     (SELECT count(*) FROM ours o WHERE o.sr_number IN (SELECT sr_number FROM shared)
@@ -94,13 +100,13 @@ SELECT
     count(*) FILTER (WHERE v.stage = 'parsed' AND coalesce(v.article_count, 0) = 0) AS empty_articles,
     count(*) FILTER (WHERE v.stage = 'parsed' AND length(coalesce(v.full_text, '')) < 200) AS short_text
   FROM ch_act_version v JOIN ch_act a USING (act_id)
- WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork'
+ WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s
 """
 
 _FAILED_BY_REASON = """
 SELECT left(coalesce(v.last_error, '<none>'), 60) AS reason, count(*) AS n
   FROM ch_act_version v JOIN ch_act a USING (act_id)
- WHERE a.jurisdiction = %(canton)s AND v.source = 'lexwork' AND v.stage = 'failed'
+ WHERE a.jurisdiction = %(canton)s AND v.source = %(source)s AND v.stage = 'failed'
  GROUP BY 1 ORDER BY 2 DESC LIMIT 10
 """
 
@@ -121,14 +127,15 @@ SELECT
 
 
 def gate_f(conn, canton: str | None = None) -> list[dict]:
-    selected = [canton.upper()] if canton else sorted(cantons.LEXWORK)
+    selected = [canton.upper()] if canton else cantons.text_cantons()
     rows = []
     with conn.cursor(row_factory=dict_row) as cur:
         for code in selected:
             lang = cantons.ALL[code].langs[0] if cantons.ALL[code].langs else "de"
-            params = {"canton": code, "lang": lang, "sample": _SAMPLE}
+            source = cantons.version_source(code) or "lexwork"
+            params = {"canton": code, "lang": lang, "sample": _SAMPLE, "source": source}
             cur.execute(_ACTS, params)
-            row = {"canton": code, **cur.fetchone()}
+            row = {"canton": code, "source": source, **cur.fetchone()}
             cur.execute(_VERSIONS, params)
             row.update(cur.fetchone())
             cur.execute(_QUALITY, params)
@@ -146,7 +153,7 @@ def format_gate_f(rows: list[dict]) -> str:
            "parsed editions by date_applicability = version_active_since on shared acts)"]
     for r in rows:
         out.append(
-            f"{r['canton']}: acts lexwork {r['acts_lexwork']} (in force {r['in_force_lexwork']}) / "
+            f"{r['canton']}: acts {r.get('source', 'lexwork')} {r['acts_lexwork']} (in force {r['in_force_lexwork']}) / "
             f"lexfind {r['acts_lexfind']} (active {r['active_lexfind']}); "
             f"only_in_lexfind {r['only_in_lexfind_count']} {r['only_in_lexfind']}; "
             f"only_in_lexwork {r['only_in_lexwork_count']} {r['only_in_lexwork']}")

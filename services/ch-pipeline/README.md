@@ -1607,8 +1607,54 @@ Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
 average payload, sibling languages share one download), parse ~1.6K rows/min,
 narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
-Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
-or their own portals; the registry already holds their acts and versions.
+Phase 2: text for the seven cantons without a Lexwork host, source by
+source (migration 203 widens `ch_act_version.source`). Built so far: GE
+and NE below. ZH, VD, TI, JU, SZ are still registry only.
+
+## SIL cantons (GE, NE)
+
+Geneva (rsGE, silgeneve.ch) and Neuchâtel (RSN, rsn.ne.ch) publish their
+collections on the SIL platform as static Word-generated HTML, windows-1252,
+one `content.htm` table of contents per canton and one `htm/{file}.htm`
+page per act, consolidated text in force only (no version history). The
+TOC lists exactly LexFind's active acts (2026-08-26: GE 863 / 863, NE
+825 / 825), so the abrogated acts LexFind holds for the two cantons (451
+GE, 878 NE) have no text here. Parser: `chpipe/sil.py` (GE splits
+articles on `p.article`, NE on the `Art. N` prefix of `p.xNormal`; footnote
+references are stripped from the text and stored as `notes`).
+
+Stages (`run-stage.sh <stage> [GE|NE]`, both cantons when omitted; the
+rows share the `ch_act_version` queue under `source = 'sil'`):
+
+| stage | what it does |
+|---|---|
+| `sil-acts [canton]` | one TOC request per canton: `ch_act` (in force, `title_fr`, `metadata_json.platform = 'sil'`) and exactly one open `ch_act_version` per act (`lang fr`, stage `discovered`, `xml_url` = the page). `date_applicability` = `version_active_since` of LexFind's current version for the number (`sil_date_source: lexfind` in the act's metadata) or today (`run`). Idempotent: an act with an open sil version keeps it |
+| `sil-fetch [canton]` | the page, decoded from its declared charset, into `akn_xml` (+ bytes under `raw/sil/{version_id}.htm`); 0.5 s between requests, `CHPIPE_CANTONAL_PER_HOST` in flight. A 404 retires the row at once with the URL in `last_error` |
+| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). No provenance rows (SIL has no structured modification table) |
+| `reports-cantonal GE` / `NE` | Gate F, source filter from the canton's platform; GE and NE are in the default list |
+
+Backfill on prod, supervised, in this order (measured on the live smoke
+2026-08-26, see the numbers in the PR): `lexfind-registry` must already
+hold GE and NE (it does since 2026-08-26); then
+
+    ./run-stage.sh sil-acts            # 2 requests, ~1.7K acts, seconds
+    ./run-stage.sh sil-fetch GE        # 863 pages at 2 req/s: ~8 min
+    ./run-stage.sh sil-fetch NE        # 825 pages: ~7 min
+    ./run-stage.sh sil-parse           # ~1.7K pages, under a minute
+    ./run-stage.sh reports-cantonal GE
+    ./run-stage.sh reports-cantonal NE
+    CHPIPE_LANG=fr ./run-stage.sh diff # optional: one edition per act, so
+                                       # nothing to diff until a re-edition
+
+Re-editions: `sil-acts` never closes a version. When a page changes (its
+`Etat au` date moves), the follow-up is a rule that closes the open version
+the day before and discovers a new one; until then a re-fetch of a
+`parsed` row needs `retry_failed_versions` or a manual `stage = 'discovered'`.
+Failure reasons worth knowing: `no_articles` is an act written without
+`Art.` headings (a treaty in numbered paragraphs, a tariff table) --
+listed in Gate F, the text is not lost (it is in `akn_xml`), but there are
+no article rows; `404: act page gone` is a TOC entry the host does not
+serve, compare against the TOC of the day.
 
 ## Point-in-time benchmark (chpipe.bench)
 

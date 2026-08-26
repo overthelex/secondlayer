@@ -30,12 +30,12 @@ def _act(conn, code, sysnr, in_force=True):
 
 
 def _version(conn, act_id, date, stage="parsed", lang="de", text="x" * 500, count=3,
-             error=None):
+             error=None, source="lexwork"):
     return conn.execute(
         "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
         "source, stage, full_text, article_count, last_error) "
-        "VALUES (%s, %s, %s, %s, 'lexwork', %s, %s, %s, %s) RETURNING version_id",
-        (act_id, f"{act_id}/{date}/{lang}", lang, date, stage, text, count, error)).fetchone()[0]
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING version_id",
+        (act_id, f"{act_id}/{date}/{lang}", lang, date, source, stage, text, count, error)).fetchone()[0]
 
 
 def _registry(conn, tol_id, code, sysnr, dates, active=True):
@@ -76,6 +76,15 @@ def conn(settings):
                   "VALUES (%s, 'a-1', 'x', %s), (%s, 'a-2', 'y', NULL)", (vs[3][0], linked, vs[3][0]))
         # ZG: nothing loaded, one registry entry
         _registry(c, 3, "ZG", "111.1", ["01.01.2010"])
+        # GE (SIL): one parsed sil edition dated from LexFind, one retired
+        # without articles, one lexwork-sourced stray that must NOT count
+        g = _act(c, "GE", "A 1 01")
+        _version(c, g, "2013-06-01", lang="fr", source="sil")
+        _version(c, g, "2013-06-02", lang="fr", source="sil", stage="failed",
+                 error="no_articles: 812 chars of text, no Art. heading")
+        _version(c, g, "2013-06-03", lang="fr", source="lexwork")
+        _registry(c, 4, "GE", "A 1 01", ["19.05.1815", "01.06.2013"])
+        _registry(c, 5, "GE", "A 1 02", ["01.01.1900"], active=False)
         yield c
 
 
@@ -110,11 +119,11 @@ def test_amendment_counters(conn):
     assert row["change_documents"] == 2 and row["change_documents_unlinked"] == 1
 
 
-def test_all_lexwork_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
+def test_all_text_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
     rows = reports_cantonal.gate_f(conn)
     assert [r["canton"] for r in rows] == sorted(
-        c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GL", "GR", "LU", "NW", "OW",
-                    "SG", "SH", "SO", "TG", "UR", "VS", "ZG"))
+        c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GE", "GL", "GR", "LU", "NE", "NW",
+                    "OW", "SG", "SH", "SO", "TG", "UR", "VS", "ZG"))
     zg = next(r for r in rows if r["canton"] == "ZG")
     assert zg["acts_lexwork"] == 0 and zg["acts_lexfind"] == 1
     assert zg["only_in_lexfind"] == ["111.1"] and zg["versions_lexfind"] == 1
@@ -125,3 +134,15 @@ def test_the_stage_prints_one_block_per_canton(conn, settings, capsys):
     assert result.text.startswith("Gate F")
     assert "BE: acts lexwork 2 (in force 2) / lexfind 2 (active 1)" in result.text
     assert "dates match 3 / mismatch 2 / future 1" in result.text
+
+
+def test_a_sil_canton_is_filtered_on_its_own_source(conn):
+    row = reports_cantonal.gate_f(conn, "GE")[0]
+    assert row["source"] == "sil"
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 2 and row["only_in_lexfind"] == ["A 1 02"]
+    assert row["versions_lexwork"] == 2, "the lexwork-sourced stray is not a GE sil edition"
+    assert row["versions_lexfind"] == 3
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 0
+    assert row["parsed"] == 1 and row["failed"] == 1 and row["pending"] == 0
+    assert row["failed_by_reason"] == {"no_articles: 812 chars of text, no Art. heading": 1}
+    assert "GE: acts sil 1 (in force 1) / lexfind 2 (active 1)" in reports_cantonal.format_gate_f([row])
