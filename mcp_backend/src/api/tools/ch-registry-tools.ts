@@ -36,6 +36,23 @@ const MAX_SHAB_ROWS = 100;
 const MAX_REGISTER_ROWS = 50;
 const STATUSES = ['active', 'inactive', 'all'];
 
+/**
+ * One capped register section of a company card: the rows, and whether the register held
+ * more than the cap.
+ *
+ * The queries ask for `cap + 1` and this drops the extra row, rather than comparing
+ * `rows.length === cap` — that comparison calls a register holding exactly 50 rows
+ * truncated — and rather than a companion `count(*)`, which is a second pass over the
+ * same rows to learn one boolean.
+ */
+interface Section { rows: any[]; truncated: boolean }
+
+const EMPTY_SECTION: Section = { rows: [], truncated: false };
+
+function capped(cap: number, rows: any[]): Section {
+  return { rows: rows.slice(0, cap), truncated: rows.length > cap };
+}
+
 // Shortest query the SHAB-name fallback will serve. That fallback matches company_name
 // across 2.5M publications and has no index unless pg_trgm is installed (migration 201
 // creates idx_ch_shab_name_trgm only when the extension is present — CREATE EXTENSION
@@ -179,17 +196,18 @@ status: active (типово) / inactive / all. canton — двобуквени�
       const zefix = await this.searchZefix(rawQuery, uid, { canton, legal_form, status: String(status) }, lim, off);
 
       if (zefix.rows.length > 0) {
-        // Same shape wrapSearchResults expects everywhere else: the companion
-        // count query supplies the total, stamped onto the rows.
-        for (const row of zefix.rows) row._total_count = zefix.total;
-        return this.wrapCompanyResults(zefix.rows, lim, off, kind);
+        return this.wrapCompanyResults(zefix.rows, lim, off, kind, zefix.total);
       }
 
       // Empty at this offset can mean either "Zefix knows nothing about this" or "the
       // caller paginated past the last Zefix match". Only the first justifies falling
       // back to SHAB names — otherwise page 2 of a Zefix search would silently switch
       // register mid-pagination. The count query answers that without a second probe.
-      if (zefix.total > 0) return this.wrapCompanyResults([], lim, off, kind);
+      //
+      // The total is passed explicitly because the page is empty: reading it off the
+      // rows told a caller who had paged one step too far that the search had found
+      // nothing at all, which is exactly the opposite of what this branch knows.
+      if (zefix.total > 0) return this.wrapCompanyResults([], lim, off, kind, zefix.total);
 
       // See SHAB_FALLBACK_MIN_CHARS: an unindexable query is not worth 2.5M rows.
       if (!uid && rawQuery.length < SHAB_FALLBACK_MIN_CHARS) {
@@ -415,20 +433,27 @@ status: active (типово) / inactive / all. canton — двобуквени�
         this.getShab(normalizedUid, 'KK'),
         this.getFinma(normalizedName),
         this.getSeco(normalizedName),
-        this.getKantonsblatt(normalizedUid, normalizedName),
+        this.getKantonsblatt(normalizedUid),
       ]);
 
       return this.wrapResponse({
         company,
-        shab,
-        shab_truncated: shab.length === MAX_SHAB_ROWS,
-        bankruptcies,
-        finma,
-        seco,
-        kantonsblatt,
+        // Every section is capped, and every cap has its own flag: a reader that sees 50
+        // FINMA rows has no way to tell "fifty authorisations" from "the first fifty of
+        // however many", and the panel presented the first as the second.
+        shab: shab.rows,
+        shab_truncated: shab.truncated,
+        bankruptcies: bankruptcies.rows,
+        bankruptcies_truncated: bankruptcies.truncated,
+        finma: finma.rows,
+        finma_truncated: finma.truncated,
+        seco: seco.rows,
+        seco_truncated: seco.truncated,
+        kantonsblatt: kantonsblatt.rows,
+        kantonsblatt_truncated: kantonsblatt.truncated,
         normalized_name: normalizedName,
         name_match_note:
-          'FINMA, SECO та кантональні відомості не публікують UID — збіг знайдено евристично за нормалізованою назвою (normalized_name). Однойменні компанії можуть дати хибний збіг, а інакше записана назва — бути пропущеною.',
+          'FINMA та SECO не публікують UID — збіг знайдено евристично за нормалізованою назвою (normalized_name): однойменні компанії можуть дати хибний збіг, а інакше записана назва — бути пропущеною. Кантональні відомості (Kantonsblatt) зіставлені точно за UID, тому публікації цієї компанії без UID сюди не потрапляють.',
       });
     } catch (error: any) {
       logger.error('ch_get_company error', { error: error.message });
@@ -442,8 +467,9 @@ status: active (типово) / inactive / all. canton — двобуквени�
    * the amount the register states out of the publication and merges it into the jsonb.
    * This is the only capital in the corpus — ch_zefix_companies.capital is never written.
    */
-  private async getShab(uid: string, rubric: string | null): Promise<any[]> {
-    return (await this.db.query(
+  private async getShab(uid: string, rubric: string | null): Promise<Section> {
+    const cap = rubric === null ? MAX_SHAB_ROWS : MAX_REGISTER_ROWS;
+    return capped(cap, (await this.db.query(
       `SELECT shab_id, to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
               publication_type, rubric, sub_rubric, publication_number, title, language,
               registration_office, legal_form, seat, canton, company_name,
@@ -455,27 +481,27 @@ status: active (типово) / inactive / all. canton — двобуквени�
         WHERE company_uid = $1
           AND ($2::text IS NULL OR rubric = $2)
         ORDER BY publication_date DESC NULLS LAST, shab_id DESC
-        LIMIT ${rubric === null ? MAX_SHAB_ROWS : MAX_REGISTER_ROWS}`,
+        LIMIT ${cap + 1}`,
       [uid, rubric]
-    )).rows;
+    )).rows);
   }
 
-  private async getFinma(normalizedName: string): Promise<any[]> {
-    if (!normalizedName) return [];
-    return (await this.db.query(
+  private async getFinma(normalizedName: string): Promise<Section> {
+    if (!normalizedName) return EMPTY_SECTION;
+    return capped(MAX_REGISTER_ROWS, (await this.db.query(
       `SELECT entity_name, authorization_type, authorization_number, status, city, canton,
               country, to_char(effective_date, 'YYYY-MM-DD') AS effective_date
          FROM ch_finma_regulated
         WHERE ${normalizedNameSql('entity_name')} = $1
         ORDER BY entity_name, authorization_type
-        LIMIT ${MAX_REGISTER_ROWS}`,
+        LIMIT ${MAX_REGISTER_ROWS + 1}`,
       [normalizedName]
-    )).rows;
+    )).rows);
   }
 
-  private async getSeco(normalizedName: string): Promise<any[]> {
-    if (!normalizedName) return [];
-    return (await this.db.query(
+  private async getSeco(normalizedName: string): Promise<Section> {
+    if (!normalizedName) return EMPTY_SECTION;
+    return capped(MAX_REGISTER_ROWS, (await this.db.query(
       `SELECT ssid, target_type, primary_name, programme, origin, legal_basis,
               to_char(listed_at, 'YYYY-MM-DD') AS listed_at,
               to_char(delisted_at, 'YYYY-MM-DD') AS delisted_at,
@@ -483,50 +509,54 @@ status: active (типово) / inactive / all. canton — двобуквени�
          FROM ch_seco_sanctions
         WHERE ${normalizedNameSql('primary_name')} = $1
         ORDER BY delisted_at IS NOT NULL, listed_at DESC NULLS LAST, ssid
-        LIMIT ${MAX_REGISTER_ROWS}`,
+        LIMIT ${MAX_REGISTER_ROWS + 1}`,
       [normalizedName]
-    )).rows;
+    )).rows);
   }
 
   /**
    * Kantonsblatt rows carry the UID when the cantonal office published one, and otherwise
    * only a `title` that is the company name for HR publications.
    *
-   * Two queries, not one `WHERE company_uid = $1 OR <normalised title> = $2`: the OR
-   * cannot use idx_ch_kb_uid, so every card scanned the whole table. The UID is a key and
-   * the title is a heuristic, so the UID query goes first and the title query runs only
-   * when it comes back empty — a company whose cantonal publications carry its UID is
-   * answered exactly, and one whose publications carry no UID still gets the heuristic.
-   * An empty normalised name degrades to the uid query alone rather than matching every
-   * untitled row.
+   * By UID, and only by UID. The title half was `WHERE <normalised title> = $1` — a
+   * normalising expression, so idx_ch_kb_uid cannot serve it and no index can, and it
+   * ran on every card for a company whose cantonal publications carry no UID. What it
+   * bought was a name heuristic; what it cost was a sequential scan of 2.18M rows per
+   * card. The UID rows are the authoritative ones, and name_match_note now says
+   * Kantonsblatt is matched exactly, so a UID-less publication is a miss rather than a
+   * silently heuristic hit.
    */
-  private async getKantonsblatt(uid: string, normalizedName: string): Promise<any[]> {
-    const byUid = await this.kantonsblattRows('company_uid = $1', [uid]);
-    if (byUid.length > 0 || !normalizedName) return byUid;
-    return this.kantonsblattRows(`${normalizedNameSql('title')} = $1`, [normalizedName]);
-  }
-
-  private async kantonsblattRows(predicate: string, values: any[]): Promise<any[]> {
-    return (await this.db.query(
+  private async getKantonsblatt(uid: string): Promise<Section> {
+    return capped(MAX_REGISTER_ROWS, (await this.db.query(
       `SELECT publication_uuid, publication_number,
               to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
               sub_rubric, cantons, title, company_uid,
               left(coalesce(publication_text_de, publication_text_fr, publication_text_it, ''),
                    ${SHAB_CONTENT_CHARS}) AS content
          FROM ch_kantonsblatt_publications
-        WHERE ${predicate}
+        WHERE company_uid = $1
         ORDER BY publication_date DESC NULLS LAST, publication_number
-        LIMIT ${MAX_REGISTER_ROWS}`,
-      values
-    )).rows;
+        LIMIT ${MAX_REGISTER_ROWS + 1}`,
+      [uid]
+    )).rows);
   }
 
   /**
    * wrapSearchResults with extra top-level fields (query_kind / normalized_uid) merged in,
    * so a caller can tell a UID lookup from a name search without re-parsing its own query.
    */
-  private wrapCompanyResults(rows: any[], limit: number, offset: number, extra: Record<string, unknown>): ToolResult {
-    const totalCount = rows.length > 0 ? Number(rows[0]._total_count ?? rows.length) : 0;
+  private wrapCompanyResults(
+    rows: any[],
+    limit: number,
+    offset: number,
+    extra: Record<string, unknown>,
+    total?: number
+  ): ToolResult {
+    // `total` when the caller knows it independently of the rows (the Zefix page, which
+    // has a companion count query); the row stamp otherwise (the SHAB fallback, whose
+    // count(*) OVER() rides along on the page). Reading it off an EMPTY page is the one
+    // case that cannot work, and that is the case the explicit argument exists for.
+    const totalCount = total ?? (rows.length > 0 ? Number(rows[0]._total_count ?? rows.length) : 0);
     const cleaned = rows.map(({ _total_count, ...rest }: any) => rest);
     return this.wrapResponse({
       results: cleaned,

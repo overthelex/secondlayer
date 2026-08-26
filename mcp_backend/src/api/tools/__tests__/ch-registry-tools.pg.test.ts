@@ -373,6 +373,19 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.results).toEqual([]);
     });
 
+    it('keeps the real total on a page past the last row', async () => {
+      // The total came off the rows, so an empty page reported total_count 0 — a caller
+      // who had paged one step too far was told the search had matched nothing at all,
+      // which is the opposite of what this branch knows.
+      const body = parse((await tools.executeTool('ch_search_companies', {
+        query: 'Muster', status: 'all', offset: 50,
+      }))!);
+
+      expect(body.results).toEqual([]);
+      expect(body.total_count).toBe(2);
+      expect(body.has_more).toBe(false);
+    });
+
     it('returns nothing at all for a query no register matches', async () => {
       const body = parse((await tools.executeTool('ch_search_companies', { query: 'Nichtvorhanden' }))!);
       expect(body.results).toEqual([]);
@@ -529,7 +542,7 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.kantonsblatt).toEqual([]);
     });
 
-    it('matches SECO and Kantonsblatt for a company with a French legal-form suffix', async () => {
+    it('matches SECO by the normalised name and Kantonsblatt by the UID', async () => {
       const body = parse((await tools.executeTool('ch_get_company', { uid: UID_GE }))!);
       expect(body.normalized_name).toBe('genève services');
       expect(body.seco.map((r: any) => Number(r.ssid))).toEqual([900002]);
@@ -537,10 +550,11 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       expect(body.finma).toEqual([]);
     });
 
-    it('falls back to the normalised Kantonsblatt title when no row carries the UID', async () => {
-      // `WHERE company_uid = $1 OR <normalised title> = $2` cannot use idx_ch_kb_uid and
-      // scanned the whole table; the uid query runs first and the title query only when
-      // it comes back empty.
+    it('does not answer Kantonsblatt from a title when no row carries the UID', async () => {
+      // Matching the title means normalising it, which no index can serve — a sequential
+      // scan of 2.18M rows on every card whose company has no UID-bearing cantonal
+      // publication, which is most of them. The UID rows are the authoritative ones and
+      // name_match_note says so; a UID-less publication is a miss, not a quiet guess.
       await client.query(
         `INSERT INTO ch_kantonsblatt_publications
            (publication_uuid, publication_number, publication_date, sub_rubric, cantons,
@@ -550,7 +564,52 @@ describeIfPg('ChRegistryTools (real PostgreSQL)', () => {
       );
 
       const body = parse((await tools.executeTool('ch_get_company', { uid: UID_INACTIVE }))!);
-      expect(body.kantonsblatt.map((r: any) => r.publication_number)).toEqual(['KB-4']);
+      expect(body.kantonsblatt).toEqual([]);
+      expect(body.name_match_note).toContain('UID');
+    });
+
+    it('reports every register section as complete when none of them is capped', async () => {
+      const body = parse((await tools.executeTool('ch_get_company', { uid: UID_AG }))!);
+
+      expect(body.shab_truncated).toBe(false);
+      expect(body.bankruptcies_truncated).toBe(false);
+      expect(body.finma_truncated).toBe(false);
+      expect(body.seco_truncated).toBe(false);
+      expect(body.kantonsblatt_truncated).toBe(false);
+    });
+
+    it('caps a long register section and says the register held more', async () => {
+      // A section at exactly its cap is indistinguishable from a section that was cut,
+      // and the evidence panel presented both as the company's total. 51 cantonal
+      // publications against a cap of 50, and 101 SHAB rows against a cap of 100: the
+      // card returns the cap and flags it.
+      await client.query(
+        `INSERT INTO ch_kantonsblatt_publications
+           (publication_uuid, publication_number, publication_date, sub_rubric, cantons,
+            title, publication_text_de, company_uid)
+         SELECT gen_random_uuid(), 'KB-BULK-' || g, '2023-01-01', 'HR01', ARRAY['ZH'],
+                'Muster Handels AG', 'Kantonale Publikation.', $1
+           FROM generate_series(1, 51) AS g`,
+        [UID_AG]
+      );
+      await client.query(
+        `INSERT INTO ch_shab_publications
+           (shab_id, publication_date, publication_type, rubric, sub_rubric, company_uid,
+            company_name, canton, content, language)
+         SELECT 'SHAB-BULK-' || g, '2023-01-01', 'Mutation', 'HR', 'HR02', $1,
+                'Muster Handels AG', 'ZH', 'Mutation.', 'de'
+           FROM generate_series(1, 101) AS g`,
+        [UID_AG]
+      );
+
+      const body = parse((await tools.executeTool('ch_get_company', { uid: UID_AG }))!);
+
+      expect(body.kantonsblatt).toHaveLength(50);
+      expect(body.kantonsblatt_truncated).toBe(true);
+      expect(body.shab).toHaveLength(100);
+      expect(body.shab_truncated).toBe(true);
+      // The bankruptcy section is untouched by either bulk insert.
+      expect(body.bankruptcies_truncated).toBe(false);
     });
 
     it('returns not_found for an unknown UID', async () => {
