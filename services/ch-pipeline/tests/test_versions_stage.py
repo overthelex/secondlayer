@@ -431,6 +431,9 @@ def test_run_second_pass_discovers_pdf_only_editions(conn, settings, monkeypatch
     assert report.discovered == 0
     assert report.pdf_discovered == 1
     assert report.pdf_skipped_has_xml == 0
+    # pdf-a editions are editions -- by_lang must count them too, not just
+    # the xml pass's rows.
+    assert report.by_lang == {"de": 1}
     row = conn.execute(
         "SELECT source FROM ch_act_version WHERE eli_consolidation_uri = %s",
         (pdf_row["consolidation"],)).fetchone()

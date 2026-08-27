@@ -334,6 +334,7 @@ def run(settings: Settings,
                 continue
 
             report.pdf_discovered += 1
+            report.by_lang[lang] = report.by_lang.get(lang, 0) + 1
             if report.pdf_discovered % 5000 == 0:
                 log.info("versions(pdf) discovered=%d skipped_has_xml=%d",
                           report.pdf_discovered, report.pdf_skipped_has_xml)
