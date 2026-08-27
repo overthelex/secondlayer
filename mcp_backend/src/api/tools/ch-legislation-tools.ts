@@ -35,6 +35,18 @@ import { isValidIsoDate } from './ch-date-utils.js';
 
 const LANGS = ['de', 'fr', 'it'];
 
+// Copied verbatim from ch-court-tools.ts:38 — CH_BGer/CH_BGE carry the source's
+// three-language header {de,fr,it} verbatim in `languages` regardless of the decision's
+// real language; the real language sits in metadata_json->>'Sprache' for those spiders.
+// Cantonal spiders have no Sprache key, so the fallback to languages[1] covers them.
+const LANG_EXPR = `COALESCE(CASE WHEN lower(btrim(metadata_json->>'Sprache')) IN ('de','fr','it') THEN lower(btrim(metadata_json->>'Sprache')) END, languages[1])`;
+
+// `decision_date = '2021-01-01'` is a source placeholder for an unknown date, not a real
+// one (see ch-court-tools.ts). ch_get_decision_legislation still reports it (unlike
+// ch_get_court_decision, which nulls it) but flags it via date_unreliable/date_note so a
+// caller can override it with as_of.
+const PLACEHOLDER_DECISION_DATE = '2021-01-01';
+
 // Escapes POSIX/ARE regex metacharacters in a caller-supplied token before it is
 // embedded in a Postgres `~*` pattern (used for the word-bounded short-query title
 // match below) — the token itself is still sent as a bound parameter, this only makes
@@ -176,6 +188,26 @@ offset/max_chars керують посторінковим читанням до
           required: ['as_of'],
         },
       },
+      {
+        name: 'ch_get_decision_legislation',
+        annotations: { title: 'Законодавство, цитоване судовим рішенням Швейцарії', readOnlyHint: true },
+        description: `Всі акти, цитовані судовим рішенням Швейцарії (ECLI), кожен — у редакції, чинній на дату рішення.
+
+Потрібен ecli. as_of дозволяє перевизначити ефективну дату замість дати рішення (decision_date). limit (типово 20, максимум 50) обмежує кількість актів у відповіді, відсортованих за кількістю цитувань (citations_count).
+Деякі рішення мають ненадійну дату — плейсхолдер джерела decision_date=2021-01-01 замість справжньої дати: у такому разі date_unreliable=true і додається пояснення date_note; передайте as_of, щоб уточнити дату.
+Для кожного акта: title/abbreviation/jurisdiction, citations_count, articles_cited (до 15, з articles_truncated) та edition — редакція, чинна на ефективну дату. retrieval_status: 'edition_at_date' (редакція покриває дату), 'nearest_earlier_edition'/'nearest_later_edition' (найближча в часі машиночитана редакція, коли точної немає) або 'no_text' (жодної машиночитаної редакції з текстом немає).
+Нерозпізнані цитування (переважно кантональне законодавство поза корпусом) підсумовуються в unresolved.top_abbrs.
+Далі: ch_get_act_text за act_id для повного тексту конкретного акта на цю дату.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ecli: { type: 'string', description: 'ECLI судового рішення' },
+            as_of: { type: 'string', description: 'Дата (YYYY-MM-DD) замість дати рішення' },
+            limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. актів у відповіді' },
+          },
+          required: ['ecli'],
+        },
+      },
     ];
   }
 
@@ -185,6 +217,7 @@ offset/max_chars керують посторінковим читанням до
       case 'ch_get_act_article': return this.getActArticle(args);
       case 'ch_get_act_history': return this.getActHistory(args);
       case 'ch_get_act_text': return this.getActText(args);
+      case 'ch_get_decision_legislation': return this.getDecisionLegislation(args);
       default: return null;
     }
   }
@@ -721,6 +754,193 @@ offset/max_chars керують посторінковим читанням до
     } catch (error: any) {
       logger.error('ch_get_act_text error', { error: error.message });
       return this.wrapError(`Помилка отримання тексту акта Швейцарії: ${error.message}`);
+    }
+  }
+
+  // ─── ch_get_decision_legislation ─────────────────────────────────────
+
+  private async getDecisionLegislation(args: Record<string, unknown>): Promise<ToolResult> {
+    const { ecli, as_of, limit = 20 } = args as any;
+
+    if (!ecli || !String(ecli).trim()) {
+      return this.wrapResponse('Вкажіть ecli — ідентифікатор судового рішення.');
+    }
+    if (as_of && !isValidIsoDate(String(as_of))) {
+      return this.wrapResponse('as_of має бути у форматі YYYY-MM-DD.');
+    }
+
+    const lim = Math.min(Math.max(Number(limit) || 20, 1), 50);
+
+    try {
+      const decision = (await this.db.query(
+        `SELECT ecli, to_char(decision_date, 'YYYY-MM-DD') AS decision_date, ${LANG_EXPR} AS lang
+           FROM ch_court_decisions WHERE ecli = $1 AND stage = 'loaded'`,
+        [String(ecli)]
+      )).rows[0];
+
+      if (!decision) {
+        // Same not_found/not_loaded distinction as ch_get_court_decision: a row that
+        // exists but is still in the pipeline is not the same as no such decision.
+        const stageRow = (await this.db.query(
+          `SELECT ecli, stage FROM ch_court_decisions WHERE ecli = $1`,
+          [String(ecli)]
+        )).rows[0];
+
+        if (stageRow) {
+          return this.wrapResponse({
+            error: 'not_loaded',
+            ecli: stageRow.ecli,
+            stage: stageRow.stage,
+            message: `Це рішення ще не опрацьоване (стадія: ${stageRow.stage}) і поки не має надійного тексту.`,
+          });
+        }
+
+        return this.wrapResponse({ error: 'not_found', ecli: String(ecli) });
+      }
+
+      const effectiveDate = as_of ? String(as_of) : decision.decision_date;
+      const dateUnreliable = decision.decision_date === PLACEHOLDER_DECISION_DATE && !as_of;
+      const decisionLang = LANGS.includes(decision.lang) ? decision.lang : 'de';
+      const titleCol = `title_${decisionLang}`;
+
+      // Cited acts, grouped, most-cited first. total_cited_acts is a window count taken
+      // before LIMIT (same pattern as the OVER() total_count used elsewhere in this
+      // file/ch-court-tools.ts), so it reflects every distinct resolved act, not just the
+      // page returned.
+      //
+      // Per act: the LATERAL below reproduces ch_get_act_text's exact two-tier edition
+      // pick verbatim — tier 0 is an edition that actually covers effective_date (with
+      // usable text), tier 1 is the nearest edition in time when none does — combined via
+      // UNION ALL and resolved with ORDER BY retrieval_tier LIMIT 1 so the LATERAL itself
+      // decides tier 0 vs tier 1 without a second round trip to Node.
+      const citedRows = (await this.db.query(
+        `WITH cited AS (
+           SELECT act_id, count(*)::int AS citations_count,
+                  array_agg(DISTINCT article ORDER BY article) FILTER (WHERE article <> '') AS articles_all,
+                  count(*) OVER()::int AS total_cited_acts
+             FROM ch_legislation_citations
+            WHERE from_ecli = $1 AND act_id IS NOT NULL
+            GROUP BY act_id
+            ORDER BY citations_count DESC
+            LIMIT $2
+         )
+         SELECT c.act_id, c.citations_count, c.articles_all, c.total_cited_acts,
+                a.sr_number, a.${titleCol} AS title, a.abbreviation, a.jurisdiction,
+                ed.version_id, ed.lang AS edition_lang, ed.source,
+                ed.date_applicability, ed.date_end_applicability, ed.retrieval_tier
+           FROM cited c
+           JOIN ch_act a ON a.act_id = c.act_id
+           LEFT JOIN LATERAL (
+             (SELECT v.version_id, v.lang, v.source,
+                     to_char(v.date_applicability, 'YYYY-MM-DD') AS date_applicability,
+                     to_char(v.date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability,
+                     0 AS retrieval_tier
+                FROM ch_act_version v
+               WHERE v.act_id = c.act_id AND v.stage = 'parsed'
+                 AND v.date_applicability <= $3::date
+                 AND ($3::date <= v.date_end_applicability OR v.date_end_applicability IS NULL)
+                 AND (v.full_text IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM ch_act_article aa WHERE aa.version_id = v.version_id))
+               ORDER BY (v.lang = $4) DESC, (v.lang = 'de') DESC, v.date_applicability DESC
+               LIMIT 1)
+             UNION ALL
+             (SELECT v.version_id, v.lang, v.source,
+                     to_char(v.date_applicability, 'YYYY-MM-DD') AS date_applicability,
+                     to_char(v.date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability,
+                     1 AS retrieval_tier
+                FROM ch_act_version v
+               WHERE v.act_id = c.act_id AND v.stage = 'parsed'
+                 AND (v.full_text IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM ch_act_article aa WHERE aa.version_id = v.version_id))
+               ORDER BY (v.lang = $4) DESC, (v.lang = 'de') DESC,
+                        (v.date_applicability <= $3::date) DESC,
+                        CASE WHEN v.date_applicability <= $3::date
+                             THEN $3::date - v.date_applicability
+                             ELSE v.date_applicability - $3::date END ASC
+               LIMIT 1)
+             ORDER BY retrieval_tier ASC
+             LIMIT 1
+           ) ed ON true
+          ORDER BY c.citations_count DESC`,
+        [String(ecli), lim, effectiveDate, decisionLang]
+      )).rows;
+
+      const totalCitedActs = citedRows.length > 0 ? Number(citedRows[0].total_cited_acts) : 0;
+      const actsTruncated = totalCitedActs > citedRows.length;
+
+      const acts = citedRows.map((r: any) => {
+        const articlesAll: string[] = r.articles_all ?? [];
+        const articlesCited = articlesAll.slice(0, 15);
+        const articlesTruncated = articlesAll.length > 15;
+
+        let retrievalStatus: 'edition_at_date' | 'nearest_earlier_edition' | 'nearest_later_edition' | 'no_text';
+        let edition: { date_applicability: string; date_end_applicability: string | null; source: string } | null = null;
+
+        if (r.version_id == null) {
+          retrievalStatus = 'no_text';
+        } else {
+          edition = {
+            date_applicability: r.date_applicability,
+            date_end_applicability: r.date_end_applicability,
+            source: r.source,
+          };
+          retrievalStatus = Number(r.retrieval_tier) === 0
+            ? 'edition_at_date'
+            : (r.date_applicability <= effectiveDate ? 'nearest_earlier_edition' : 'nearest_later_edition');
+        }
+
+        return {
+          act_id: Number(r.act_id),
+          sr_number: r.sr_number,
+          title: r.title,
+          abbreviation: r.abbreviation,
+          jurisdiction: r.jurisdiction,
+          citations_count: Number(r.citations_count),
+          articles_cited: articlesCited,
+          articles_truncated: articlesTruncated,
+          edition,
+          retrieval_status: retrievalStatus,
+          next: { tool: 'ch_get_act_text', act_id: Number(r.act_id), as_of: effectiveDate, lang: decisionLang },
+        };
+      });
+
+      // Unresolved tail: citations whose abbreviation never resolved to an act (mostly
+      // cantonal legislation outside this corpus) — the honest remainder, not silently
+      // dropped.
+      const unresolvedTotal = (await this.db.query(
+        `SELECT count(*)::int AS n FROM ch_legislation_citations WHERE from_ecli = $1 AND act_id IS NULL`,
+        [String(ecli)]
+      )).rows[0];
+      const unresolvedTop = (await this.db.query(
+        `SELECT abbr_raw, count(*)::int AS n
+           FROM ch_legislation_citations
+          WHERE from_ecli = $1 AND act_id IS NULL
+          GROUP BY abbr_raw
+          ORDER BY n DESC, abbr_raw
+          LIMIT 5`,
+        [String(ecli)]
+      )).rows;
+
+      return this.wrapResponse({
+        ecli: decision.ecli,
+        decision_date: decision.decision_date,
+        effective_date: effectiveDate,
+        date_unreliable: dateUnreliable,
+        ...(dateUnreliable
+          ? { date_note: 'Дата рішення — плейсхолдер джерела (2021-01-01), а не справжня дата. Передайте as_of, щоб уточнити редакцію.' }
+          : {}),
+        lang: decisionLang,
+        acts,
+        total_cited_acts: totalCitedActs,
+        acts_truncated: actsTruncated,
+        unresolved: {
+          count: Number(unresolvedTotal?.n ?? 0),
+          top_abbrs: unresolvedTop.map((r: any) => ({ abbr: r.abbr_raw, count: Number(r.n) })),
+        },
+      });
+    } catch (error: any) {
+      logger.error('ch_get_decision_legislation error', { error: error.message });
+      return this.wrapError(`Помилка отримання законодавства до рішення Швейцарії: ${error.message}`);
     }
   }
 }

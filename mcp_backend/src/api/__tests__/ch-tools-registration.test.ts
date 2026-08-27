@@ -27,6 +27,7 @@ const CH_TOOL_NAMES = [
   'ch_get_act_article',
   'ch_get_act_history',
   'ch_get_act_text',
+  'ch_get_decision_legislation',
   'ch_search_companies',
   'ch_get_company',
 ];
@@ -89,11 +90,11 @@ describe('CH tool surface registration', () => {
       expect(doc).not.toMatch(/Société|Sàrl|Sagl|società|anonima/i);
     });
 
-    it('ChLegislationTools exposes exactly its four tools with Ukrainian descriptions', () => {
+    it('ChLegislationTools exposes exactly its five tools with Ukrainian descriptions', () => {
       const tool = new ChLegislationTools(stubDb);
       const defs = tool.getToolDefinitions();
       expect(defs.map(d => d.name).sort()).toEqual(
-        ['ch_get_act_article', 'ch_get_act_history', 'ch_get_act_text', 'ch_search_legislation'].sort()
+        ['ch_get_act_article', 'ch_get_act_history', 'ch_get_act_text', 'ch_get_decision_legislation', 'ch_search_legislation'].sort()
       );
       for (const def of defs) {
         expect(def.description).toBeTruthy();

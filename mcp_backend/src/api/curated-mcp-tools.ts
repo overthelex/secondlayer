@@ -38,6 +38,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   'ch_get_act_article',
   'ch_get_act_history',
   'ch_get_act_text',
+  'ch_get_decision_legislation',
   // Швейцарія (CH) — реєстри компаній: Zefix + SHAB + FINMA + SECO + кантональні відомості.
   'ch_search_companies',
   'ch_get_company',

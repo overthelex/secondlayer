@@ -70,10 +70,14 @@ describe('ChLegislationTools canton parameter', () => {
       const defs = tools.getToolDefinitions();
       expect(defs.map((d) => d.name)).toEqual([
         'ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history', 'ch_get_act_text',
+        'ch_get_decision_legislation',
       ]);
-      // ch_get_act_text has no canton argument: unlike the other three, it always
-      // resolves sr_number against the federal jurisdiction (see its own describe block).
-      const cantonAware = defs.filter((d) => d.name !== 'ch_get_act_text');
+      // ch_get_act_text and ch_get_decision_legislation have no canton argument: unlike
+      // the other three, ch_get_act_text always resolves sr_number against the federal
+      // jurisdiction (see its own describe block), and ch_get_decision_legislation
+      // resolves acts by act_id off the citation graph, which already carries whatever
+      // jurisdiction the cited act belongs to.
+      const cantonAware = defs.filter((d) => d.name !== 'ch_get_act_text' && d.name !== 'ch_get_decision_legislation');
       for (const def of cantonAware) {
         expect(def.inputSchema.properties.canton).toBeDefined();
         expect(def.inputSchema.required).not.toContain('canton');
@@ -490,6 +494,100 @@ describe('ChLegislationTools canton parameter', () => {
 
       expect(query).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ error: 'not_found', entity: 'act', sr_number: '999999', jurisdiction: 'CH' });
+    });
+  });
+
+  describe('ch_get_decision_legislation', () => {
+    it('rejects when ecli is missing, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = text(await tools.executeTool('ch_get_decision_legislation', {}) as any);
+
+      expect(query).not.toHaveBeenCalled();
+      expect(result).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects a malformed as_of with a Ukrainian message, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = text(await tools.executeTool('ch_get_decision_legislation', {
+        ecli: 'ECLI:CH:BGER:2020:1A.1.2020', as_of: '2025-13-01',
+      }) as any);
+
+      expect(query).not.toHaveBeenCalled();
+      expect(result).toMatch(/YYYY-MM-DD/);
+      expect(result).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('reports not_found when no decision row exists at all', async () => {
+      const { db, query } = makeDb([{ rows: [] }, { rows: [] }]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_decision_legislation', {
+        ecli: 'ECLI:CH:BGER:2020:1A.1.2020',
+      }) as any);
+
+      expect(query).toHaveBeenCalledTimes(2);
+      expect(result).toEqual({ error: 'not_found', ecli: 'ECLI:CH:BGER:2020:1A.1.2020' });
+    });
+
+    it('reports not_loaded (like ch_get_court_decision) when the decision exists but is not yet loaded', async () => {
+      const { db } = makeDb([
+        { rows: [] },
+        { rows: [{ ecli: 'ECLI:CH:BGER:2020:1A.1.2020', stage: 'indexed' }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_decision_legislation', {
+        ecli: 'ECLI:CH:BGER:2020:1A.1.2020',
+      }) as any);
+
+      expect(result.error).toBe('not_loaded');
+      expect(result.stage).toBe('indexed');
+    });
+
+    it('clamps limit to the 1..50 range and binds it as the second cited-acts query parameter', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ ecli: 'ECLI:X', decision_date: '2020-01-01', lang: 'de' }] },
+        { rows: [] },
+        { rows: [{ n: 0 }] },
+        { rows: [] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      await tools.executeTool('ch_get_decision_legislation', { ecli: 'ECLI:X', limit: 999 });
+
+      expect(calls[1].params?.[1]).toBe(50);
+    });
+
+    it('flags date_unreliable for the source placeholder decision_date and clears it when as_of overrides', async () => {
+      const { db: db1 } = makeDb([
+        { rows: [{ ecli: 'ECLI:X', decision_date: '2021-01-01', lang: 'de' }] },
+        { rows: [] },
+        { rows: [{ n: 0 }] },
+        { rows: [] },
+      ]);
+      const tools1 = new ChLegislationTools(db1);
+      const result1 = parse(await tools1.executeTool('ch_get_decision_legislation', { ecli: 'ECLI:X' }) as any);
+      expect(result1.date_unreliable).toBe(true);
+      expect(result1.date_note).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+      expect(result1.effective_date).toBe('2021-01-01');
+
+      const { db: db2 } = makeDb([
+        { rows: [{ ecli: 'ECLI:X', decision_date: '2021-01-01', lang: 'de' }] },
+        { rows: [] },
+        { rows: [{ n: 0 }] },
+        { rows: [] },
+      ]);
+      const tools2 = new ChLegislationTools(db2);
+      const result2 = parse(await tools2.executeTool('ch_get_decision_legislation', {
+        ecli: 'ECLI:X', as_of: '2019-06-01',
+      }) as any);
+      expect(result2.date_unreliable).toBe(false);
+      expect(result2.date_note).toBeUndefined();
+      expect(result2.effective_date).toBe('2019-06-01');
     });
   });
 });
