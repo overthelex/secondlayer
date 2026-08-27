@@ -155,10 +155,19 @@ def test_webrt_art_numbering_and_interleaved_footnotes():
     articles, text = zhlex.parse_webrt(payload, "text/html; charset=ISO-8859-1")
     assert [a.article_number for a in articles] == ["1", "2", "3", "4", "5"]
     assert articles[0].e_id == "art_1"
+    assert articles[0].marginal_note == "I. Staatsbürgerliche Grundsätze", "the nearest heading only"
     assert articles[2].text.endswith("so ist der Angeklagte freizusprechen.")
     assert any("Gewährleistet durch BB vom 22. Juli 1869" in n for n in articles[4].notes)
     assert "Todesstrafe" in articles[4].text and "OS 14, 549" not in articles[4].text
     assert text.startswith("Verfassung\ndes eidgenössischen Standes Zürich\n(vom 18.April 1869)\nDas Volk")
+
+
+def test_webrt_strips_a_marker_glued_to_a_heading():
+    payload = ('<html><body><font color="#0000FF">Gesundheitsdirektion FN17</font><br>'
+               '<font size="4">§ 8. In den Geschäftskreis FN18 fallen:</font></body></html>').encode("utf-8")
+    articles, _ = zhlex.parse_webrt(payload, "text/html; charset=utf-8")
+    assert articles[0].marginal_note == "Gesundheitsdirektion"
+    assert articles[0].text == "§ 8. In den Geschäftskreis fallen:"
 
 
 def test_webrt_rejects_a_page_without_law_text():

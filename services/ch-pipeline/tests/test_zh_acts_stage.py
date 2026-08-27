@@ -75,11 +75,13 @@ def _page(nr, enactment, entry, version, publication, withdrawal, title, kinds):
 
 
 class Site:
-    def __init__(self, fail_pages: set[str] = frozenset(), cap: int = CAP):
+    def __init__(self, fail_pages: set[str] = frozenset(), cap: int = CAP,
+                 hide_from_index: set[str] = frozenset()):
         self.calls: list[str] = []
         self.index_calls: list[dict] = []
         self.fail_pages = set(fail_pages)
         self.cap = cap
+        self.hide_from_index = set(hide_from_index)
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -89,7 +91,7 @@ class Site:
             self.index_calls.append(q)
             assert q.get("includeRepealedEnactments") == "true"
             since, until = (D.fromisoformat(s) for s in q["enactmentDate"].split("_"))
-            rows = [e for e in EDITIONS if since <= e[1] <= until]
+            rows = [e for e in EDITIONS if since <= e[1] <= until and e[3] not in self.hide_from_index]
             capped = len(rows) > self.cap
             rows = rows[:self.cap] if capped else rows
             page = int(q.get("page", "1"))
@@ -227,3 +229,15 @@ def test_a_single_day_still_over_the_cap_falls_back_to_chapters_and_is_reported(
     assert any("fileNumber" in q for q in site.index_calls)
     assert report.capped_slices and all("fileNumber=" in s for s in report.capped_slices)
     assert report.acts == 2, "the rows under the cap are still materialised"
+
+
+def test_an_edition_the_index_skipped_is_fetched_from_the_historie(conn, settings):
+    """zh.ch pages on an unstable sort: two full walks on 2026-08-27 gave
+    7,055 and 6,740 rows for 6,765 distinct pages."""
+    site = Site(hide_from_index={"121"})
+    report = _run(settings, site)
+    assert report.editions_indexed == 7 and report.historie_added == 1 and report.versions == 8
+    assert report.historie_mismatch == 0
+    rows = _versions(conn, "101")
+    assert [r[0] for r in rows] == [f"zhlex:101/{n}" for n in ("000", "039", "051", "121", "125", "129")]
+    assert rows[3][1:3] == (D(2023, 4, 1), D(2024, 6, 30))

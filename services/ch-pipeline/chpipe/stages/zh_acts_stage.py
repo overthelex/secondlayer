@@ -25,9 +25,12 @@ is still right -- and a rerun picks it up; an act whose dates cannot be
 derived at all is skipped and counted (dates_underivable), never
 guessed.
 
-Cross-checks kept as counters: the Historie list on the current
-edition's page against the index's editions for the act
-(historie_mismatch), and the LexFind registry number for
+Cross-checks: the Historie list on the newest edition page fetched
+against the index's editions for the act -- an edition the index missed
+(its pagination is not stable, see _walk_act) is fetched from the
+Historie (historie_added); an index row the Historie does not know is
+counted (historie_mismatch, 410.1/054 and /058 on 2026-08-27: index rows
+whose pages answer 404) -- and the LexFind registry number for
 metadata_json.lexfind_tol_id.
 
 Restartable and idempotent, not resumable: every write is an upsert and
@@ -72,6 +75,9 @@ class ActsReport:
     dates_underivable_samples: list[str] = field(default_factory=list)
     historie_mismatch: int = 0
     historie_mismatch_samples: list[str] = field(default_factory=list)
+    # Editions the index did not list but the act's Historie did (see
+    # _walk_act): fetched and materialised like the others.
+    historie_added: int = 0
     html_editions: int = 0
     pdf_editions: int = 0
     no_text: int = 0
@@ -175,6 +181,23 @@ async def _walk_act(client: zhlex.ZhlexClient, conn, sr_number: str,
             _sample(report.pages_failed_samples, f"{sr_number}/{version_no}: {exc}")
     if not pages:
         return
+    # The index pages on an unstable sort: on 2026-08-27 two full walks
+    # returned 7,055 and 6,740 rows for 6,765 distinct pages, i.e. a row
+    # can appear on two pages while another falls between them. The
+    # Historie on the newest page fetched is the act's own complete list,
+    # so any edition it names that the index did not is fetched too.
+    latest_seen = pages[max(pages, key=zhlex.version_key)]
+    for edition in latest_seen.versions:
+        if edition.version_no in pages or edition.version_no in by_version:
+            continue
+        by_version[edition.version_no] = zhlex.IndexStub(
+            sr_number, edition.label, None, edition.in_force_until, edition.page_url, edition.version_no)
+        try:
+            pages[edition.version_no] = await client.act_page(edition.page_url)
+            report.historie_added += 1
+        except (FetchError, zhlex.ZhlexParseError) as exc:
+            report.pages_failed += 1
+            _sample(report.pages_failed_samples, f"{sr_number}/{edition.version_no}: {exc}")
     records = [zhlex.EditionRecord(no, p.publication_date, p.withdrawal_date,
                                    p.enactment_date, p.entry_into_force)
                for no, p in pages.items()]
@@ -187,8 +210,7 @@ async def _walk_act(client: zhlex.ZhlexClient, conn, sr_number: str,
 
     latest_no = max(pages, key=zhlex.version_key)
     latest = pages[latest_no]
-    current_stubs = [s for s in stubs if s.withdrawal_date is None]
-    in_force = bool(current_stubs)
+    in_force = any(s.withdrawal_date is None for s in by_version.values())
     listed = {v.version_no for v in latest.versions}
     indexed = set(by_version)
     if listed and listed != indexed:
@@ -310,10 +332,10 @@ def main() -> ActsReport:
     only = {s.strip() for s in only_env.split(",") if s.strip()} if only_env else None
     result = run(Settings.from_env(), only=only)
     log.info("acts=%d versions=%d editions_indexed=%d index_requests=%d pages_failed=%d "
-             "dates_underivable=%d historie_mismatch=%d html=%d pdf=%d no_text=%d "
+             "dates_underivable=%d historie_mismatch=%d historie_added=%d html=%d pdf=%d no_text=%d "
              "lexfind_matched=%d errors=%d", result.acts, result.versions,
              result.editions_indexed, result.index_requests, result.pages_failed,
-             result.dates_underivable, result.historie_mismatch, result.html_editions,
+             result.dates_underivable, result.historie_mismatch, result.historie_added, result.html_editions,
              result.pdf_editions, result.no_text, result.lexfind_matched, result.errors)
     if result.links_unparsed:
         log.warning("LINKS UNPARSED: %d index row(s) whose link is not an edition link were "

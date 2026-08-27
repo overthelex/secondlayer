@@ -337,6 +337,10 @@ def edition_dates(records: list[EditionRecord]
 
 _ARTICLE_START = re.compile(r"^(§|Art\.)\s*(\d+)\s*([a-z]{1,4}(?![a-zäöü]))?\.?(?=\s|$)")
 _FOOTNOTE_MARK = re.compile(r"^\s*FN\s*\d+\s*$")
+# The same marker glued to a heading or a sentence in one font run
+# ("Gesundheitsdirektion FN17", 172.11/022). "FN" followed by digits does
+# not occur in Zürich law text otherwise.
+_INLINE_MARK = re.compile(r"\s*\bFN\s*\d+\b")
 _FOOTNOTE_LINE = re.compile(r"^\s*FN\s*\d+\b")
 _SEPARATOR = re.compile(r"^\s*_{3,}\s*$")
 _BREAK_TAGS = {"p", "br", "ul", "li", "div", "table", "tr", "h1", "h2", "h3", "hr", "form"}
@@ -386,16 +390,20 @@ def _line_text(segments) -> str:
 
 
 def _body_text(segments) -> str:
-    """The line without its inline footnote markers (' FN2' in blue)."""
-    return _WS.sub(" ", "".join(seg for seg, blue, _ in segments
-                                if not (blue and _FOOTNOTE_MARK.match(seg))).replace("\xa0", " ")).strip()
+    """The line without its inline footnote markers (' FN2' in blue, or
+    glued to the run)."""
+    text = "".join(seg for seg, blue, _ in segments if not (blue and _FOOTNOTE_MARK.match(seg)))
+    return _WS.sub(" ", _INLINE_MARK.sub("", text).replace("\xa0", " ")).strip()
 
 
 def parse_webrt(payload: bytes, content_type: str | None = None
                 ) -> tuple[list[akn.Article], str]:
     """Domino rendering -> (articles, full text). An article starts at a
-    line beginning '§ 7.' / '§ 12 a.' / 'Art. 3.'; blue lines before it
-    are its marginal note (the collection's section headings); the
+    line beginning '§ 7.' / '§ 12 a.' / 'Art. 3.'; the blue (or bold)
+    line right before it is its marginal note -- the loose-leaf pages
+    print the margin title as a blue line above the paragraph, and the
+    section headings above THAT are structure, not the article's name
+    (211.1/012 § 1 sits under four of them); the
     footnote block a page ends with (a line of underscores, then blue
     'OS 33, 339 ...' and 'FN1 ...' lines) is kept out of the article text
     and attached as notes to the article in progress, the way akn.Article
@@ -450,7 +458,7 @@ def parse_webrt(payload: bytes, content_type: str | None = None
                 e_id = f"{e_id}-{len(articles)}"
             seen.add(e_id)
             current = {"e_id": e_id, "number": number, "text": [body_line], "notes": [],
-                       "heading": " ".join(pending_heading) or None}
+                       "heading": pending_heading[-1] if pending_heading else None}
             pending_heading = []
             full.append(body_line)
             continue
