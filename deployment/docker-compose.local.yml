@@ -103,7 +103,7 @@ x-app-local-base: &app_local_base
     MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
     MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     MINIO_USE_SSL: "false"
-    MINIO_PUBLIC_URL: https://local.legal.org.ua/s3
+    MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://local.legal.org.ua/s3}
 
     # Nextcloud (cloud file storage)
     NEXTCLOUD_URL: http://nextcloud-local:80
