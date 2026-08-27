@@ -8,6 +8,7 @@ import os
 import pathlib
 import psycopg
 import pytest
+from chpipe import fedlex_queries as fq
 from chpipe.stages import acts_stage, versions_stage
 from chpipe.config import Settings
 
@@ -66,31 +67,47 @@ class _FakeSparqlClient:
     without ever touching the live Fedlex endpoint. batched() records the
     driving set it was handed -- which is the thing under test, since the
     walk is now driven by ch_act rather than by an offset -- and replays the
-    rows it was built with."""
+    rows it was built with.
 
-    def __init__(self, rows):
+    run() now issues two passes over the same driving set, fq.VERSIONS then
+    fq.VERSIONS_PDF (see versions_stage.run()) -- batched() dispatches on
+    `query_template is fq.VERSIONS_PDF` so the two passes can be fed
+    different rows (`rows` for the xml pass, `pdf_rows` for the pdf pass,
+    empty by default so every pre-existing single-pass test keeps its old
+    behaviour unchanged). `batches` reflects only the most recent call, not
+    an accumulation across both passes -- both passes are driven by the
+    identical works list and batch_size, so for every existing assertion
+    that inspects `.batches` after run() this is indistinguishable from
+    what the xml-only pass alone produced."""
+
+    def __init__(self, rows, pdf_rows=None):
         self._rows = rows
+        self._pdf_rows = pdf_rows if pdf_rows is not None else []
         self.closed = False
         self.batches: list[list[str]] = []
 
     def batched(self, query_template, uris, batch_size=20):
+        batches: list[list[str]] = []
         batch: list[str] = []
         for uri in uris:
             batch.append(uri)
             if len(batch) >= batch_size:
-                self.batches.append(batch)
+                batches.append(batch)
                 batch = []
         if batch:
-            self.batches.append(batch)
-        if self.batches:
-            yield from self._rows
+            batches.append(batch)
+        self.batches = batches
+        if not batches:
+            return
+        rows = self._pdf_rows if query_template is fq.VERSIONS_PDF else self._rows
+        yield from rows
 
     def close(self):
         self.closed = True
 
 
-def _run_with_rows(monkeypatch, settings, rows, capture=None):
-    fake = _FakeSparqlClient(rows)
+def _run_with_rows(monkeypatch, settings, rows, capture=None, pdf_rows=None):
+    fake = _FakeSparqlClient(rows, pdf_rows=pdf_rows)
     if capture is not None:
         capture.append(fake)
     monkeypatch.setattr(versions_stage, "SparqlClient", lambda endpoint: fake)
@@ -308,3 +325,113 @@ def test_work_uris_returns_the_driving_set_in_a_stable_order(conn):
     uris = versions_stage.work_uris(conn)
     assert uris == sorted(uris)
     assert "https://fedlex.data.admin.ch/eli/cc/a/1" in uris
+
+
+# --- pdf-a discovery: upsert_pdf_version() -- source='fedlex_pdf' ONLY
+# where no XML edition already covers the same (consolidation, lang) ---
+
+def _pdf_row(date="2026-01-01", lang="DEU", end=None, work=WORK):
+    """Same shape VERSIONS_PDF returns -- identical fields to _row(), just a
+    pdf-a fileUrl so a test reading xml_url back can tell the two apart."""
+    row = _row(date=date, lang=lang, end=end, work=work)
+    row["fileUrl"] = ("https://fedlex.data.admin.ch/filestore/fedlex.data.admin.ch/"
+                      f"eli/cc/27/317_321_377/{date.replace('-', '')}/de/pdf-a/x.pdf")
+    return row
+
+
+def test_pdf_row_is_skipped_when_an_xml_row_already_covers_the_edition(conn):
+    """The whole point of the ordering: an edition available in both formats
+    must land as XML, never as pdf-a -- and the existing XML row must be
+    completely untouched by the pdf pass."""
+    versions_stage.upsert_version(conn, _row())
+    outcome = versions_stage.upsert_pdf_version(conn, _pdf_row())
+    assert outcome == "skipped_has_xml"
+    row = conn.execute(
+        "SELECT source, xml_url FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (_row()["consolidation"],)).fetchone()
+    assert row[0] == "fedlex"
+    assert row[1].endswith(".xml")
+    assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 1
+
+
+def test_new_pdf_row_is_inserted_as_fedlex_pdf_discovered(conn):
+    pdf_row = _pdf_row()
+    outcome = versions_stage.upsert_pdf_version(conn, pdf_row)
+    assert outcome == "upserted"
+    row = conn.execute(
+        "SELECT source, stage, xml_url FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (pdf_row["consolidation"],)).fetchone()
+    assert row[0] == "fedlex_pdf"
+    assert row[1] == "discovered"
+    assert row[2] == pdf_row["fileUrl"]
+
+
+def test_rewalk_of_a_pdf_row_updates_dates_with_coalesce_semantics(conn):
+    pdf_row = _pdf_row(date="2020-01-01")
+    assert versions_stage.upsert_pdf_version(conn, pdf_row) == "upserted"
+    pdf_row_with_end = _pdf_row(date="2020-01-01", end="2022-12-31")
+    outcome = versions_stage.upsert_pdf_version(conn, pdf_row_with_end)
+    assert outcome == "upserted"
+    end = conn.execute(
+        "SELECT date_end_applicability FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (pdf_row["consolidation"],)).fetchone()[0]
+    assert str(end) == "2022-12-31"
+
+
+def test_pdf_row_whose_work_was_never_discovered_is_orphaned(conn):
+    pdf_row = _pdf_row(work="https://fedlex.data.admin.ch/eli/cc/never/seen")
+    assert versions_stage.upsert_pdf_version(conn, pdf_row) == "orphaned"
+    assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 0
+
+
+def test_migration_204_lets_a_fedlex_pdf_row_pass_the_source_check(conn):
+    """conftest's reset_legislation_schema now applies 204: the widened
+    CHECK constraint must accept source='fedlex_pdf' directly, not just
+    through upsert_pdf_version()'s own SQL."""
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+        "date_applicability, xml_url, source) "
+        "SELECT act_id, 'https://x/pdf-check', 'de', '2020-01-01', "
+        "'https://x/pdf-check.pdf', 'fedlex_pdf' FROM ch_act WHERE eli_work_uri = %s",
+        (WORK,))
+    assert conn.execute(
+        "SELECT source FROM ch_act_version WHERE eli_consolidation_uri = "
+        "'https://x/pdf-check'").fetchone()[0] == "fedlex_pdf"
+
+
+# --- run(): the pdf pass, after the xml pass, over the same works ---
+
+def test_run_second_pass_discovers_pdf_only_editions(conn, settings, monkeypatch):
+    """No XML edition for this consolidation (the xml query returns
+    nothing), one pdf-a edition -- run()'s pdf pass must land it as
+    source='fedlex_pdf'."""
+    pdf_row = _pdf_row()
+    report = _run_with_rows(monkeypatch, settings, rows=[], pdf_rows=[pdf_row])
+    assert report.discovered == 0
+    assert report.pdf_discovered == 1
+    assert report.pdf_skipped_has_xml == 0
+    row = conn.execute(
+        "SELECT source FROM ch_act_version WHERE eli_consolidation_uri = %s",
+        (pdf_row["consolidation"],)).fetchone()
+    assert row[0] == "fedlex_pdf"
+
+
+def test_run_pdf_pass_skips_editions_the_xml_pass_already_covered(conn, settings,
+                                                                   monkeypatch):
+    """The order-of-passes contract this task exists for: a consolidation
+    with both an XML and a pdf-a manifestation must land as XML only. The
+    fake SPARQL client feeds run() the same consolidation from both queries
+    -- the xml pass runs first (discovering it), so the pdf pass must find
+    an XML row already there and skip."""
+    row = _row()
+    pdf_row = _pdf_row()
+    report = _run_with_rows(monkeypatch, settings, rows=[row], pdf_rows=[pdf_row])
+    assert report.discovered == 1
+    assert report.pdf_discovered == 0
+    assert report.pdf_skipped_has_xml == 1
+    stored = conn.execute(
+        "SELECT source, count(*) FROM ch_act_version GROUP BY source").fetchall()
+    assert stored == [("fedlex", 1)]
