@@ -538,6 +538,11 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     return DeltaReport(spiders=spiders, new_documents=index_report.inserted)
 
 
+# One night's ceiling for the fedlex-pdf-text drain -- see the comment at its
+# call site in run_legislation().
+_FEDLEX_PDF_TEXT_NIGHTLY_CAP = 2000
+
+
 def run_legislation(settings: Settings) -> DeltaReport:
     acts_stage.run(settings)
     versions = versions_stage.run(settings)
@@ -553,7 +558,11 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # drains nightly instead of rotting. Its return value is discarded the
     # same way fetch_xml_stage's is above -- this stage's own progress
     # logging is what a night's run is read from, not a DeltaReport field.
-    fedlex_pdf_text_stage.run(settings)
+    # Capped: the supervised backfill owns the bulk of the PDF-era queue
+    # (~50K rows right after deploy, hours of downloads); a nightly delta
+    # only drains stragglers. A capped night leaves the rest claimable for
+    # the next one -- nothing is lost, only deferred.
+    fedlex_pdf_text_stage.run(settings, limit=_FEDLEX_PDF_TEXT_NIGHTLY_CAP)
     parsed = parse_akn_stage.run(settings)
 
     # Parsing is not where a new edition becomes readable. `diff` is what

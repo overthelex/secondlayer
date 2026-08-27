@@ -624,6 +624,45 @@ def test_run_legislation_new_versions_counts_pdf_era_discoveries_too(
     assert report.new_versions == 10
 
 
+# --- F3 review fix: an uncapped nightly drain can turn into a multi-hour
+# backfill. fedlex_pdf_text_stage.run() already supports a per-run `limit`
+# (see test_fedlex_pdf_text_stage.py's test_limit_bounds_the_run); the delta
+# was calling it with none, so a night after deploy facing ~50K queued rows
+# would drain the whole queue instead of the few stragglers a nightly delta
+# is meant to pick up.
+
+def test_run_legislation_caps_the_fedlex_pdf_text_drain(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(acts_stage, "run",
+                        lambda settings: calls.append("acts") or acts_stage.ActsReport())
+    monkeypatch.setattr(
+        versions_stage, "run",
+        lambda settings: calls.append("versions") or
+        versions_stage.VersionsReport(discovered=1))
+    monkeypatch.setattr(
+        fetch_xml_stage, "run",
+        lambda settings, limit=None: calls.append("fetch-xml") or
+        fetch_xml_stage.FetchXmlReport())
+    seen_limits = []
+
+    def fake_fedlex_pdf_text(settings, limit=None, transport=None):
+        calls.append("fedlex-pdf-text")
+        seen_limits.append(limit)
+        return fedlex_pdf_text_stage.FedlexPdfTextReport()
+
+    monkeypatch.setattr(fedlex_pdf_text_stage, "run", fake_fedlex_pdf_text)
+    monkeypatch.setattr(
+        parse_akn_stage, "run",
+        lambda settings, limit=None: calls.append("parse-akn") or
+        parse_akn_stage.ParseReport())
+    _stub_legislation_tail(monkeypatch, calls)
+
+    delta.run_legislation(_settings(tmp_path))
+
+    assert seen_limits == [delta._FEDLEX_PDF_TEXT_NIGHTLY_CAP]
+    assert delta._FEDLEX_PDF_TEXT_NIGHTLY_CAP == 2000
+
+
 # --- N1: parsing an edition is not what makes it readable ---------------
 
 def _stub_legislation_tail(monkeypatch, calls):
