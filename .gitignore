@@ -176,3 +176,10 @@ services/opendata-importers/_data/
 # symlinks named node_modules (the trailing-slash patterns above match only directories)
 node_modules
 **/node_modules
+
+# Состояние blue-green на машине: файлы переписывает джоба деплоя под текущий
+# цвет. В git им делать нечего — `git reset --hard` в начале выкатки вернул бы
+# в них чужой цвет, а пересозданный следом nginx не стартует на
+# нерезолвящемся апстриме. Ровно так 27.08.2026 боевой домен лежал 79 секунд.
+deployment/.active-colors-local
+deployment/nginx/includes/local-upstreams.conf

@@ -524,6 +524,17 @@ jobs:
           [ "$CUR" = "green" ] && NEW=blue || NEW=green
           echo "активен: $CUR, выкатываем: $NEW"
 
+          # Апстримы приводим к ТЕКУЩЕМУ цвету до того, как что-либо коснётся
+          # nginx. Файл не в git (см. .gitignore) именно потому, что раньше он
+          # там был: `git reset --hard` возвращал в него цвет времён коммита,
+          # и nginx, пересозданный следом, падал в цикле — `host not found in
+          # upstream`. 27.08.2026 это стоило 79 секунд простоя боевого домена.
+          # На чистой машине файла может не быть вовсе, поэтому пишем всегда.
+          if [ "$CUR" = "green" ]; then CUR_BE=secondlayer-app-local-green; CUR_FE=lexwebapp-local-green
+          else CUR_BE=secondlayer-app-local; CUR_FE=lexwebapp-local; fi
+          printf '# Активные апстримы — переписывает джоба деплоя, руками не править\n\nupstream local_mcp_backend {\n    server %s:3000;\n    keepalive 128;\n}\n\nupstream local_frontend {\n    server %s:80;\n    keepalive 32;\n}\n' "$CUR_BE" "$CUR_FE" > "$INC"
+          echo "апстримы указывают на работающий цвет: $CUR_BE / $CUR_FE"
+
           if [ "${{ inputs.no_cache }}" = "true" ]; then
             $DC build --no-cache
           fi
@@ -546,30 +557,29 @@ jobs:
           # 26.08: 10 секунд 502 у пользователей ещё до переключения цвета.
           $DC up -d --no-deps $OTHERS
 
-          # Конфиг nginx примонтирован ОДИНОЧНЫМ файлом, а docker привязывает
-          # такой mount к inode. `git reset --hard` выше пишет новый файл и
-          # переименовывает его — inode меняется, и контейнер продолжает
-          # видеть СТАРЫЙ конфиг. `nginx -s reload` при этом отрабатывает
-          # успешно и не меняет ничего: он перечитывает тот же старый файл.
-          # Поэтому сверяем inode и пересоздаём nginx только когда конфиг
-          # действительно разъехался — на каждом деплое пересоздавать нельзя,
-          # это секунды простоя.
-          HOST_INO=$(stat -c %i nginx/local-docker.conf)
-          CTR_INO=$(docker exec nginx-local stat -c %i /etc/nginx/conf.d/default.conf 2>/dev/null || echo нет)
-          if [ "$HOST_INO" != "$CTR_INO" ]; then
-            echo "конфиг nginx разъехался с контейнером (inode $CTR_INO против $HOST_INO) — пересоздаю nginx"
+          # Конфиг монтируется КАТАЛОГОМ (см. compose), поэтому правка из git
+          # видна контейнеру сразу и пересоздавать nginx не нужно: reload
+          # достаточно. Пересоздание здесь стоило бы секунд простоя на каждом
+          # деплое, трогающем конфиг.
+          #
+          # После пересоздания сервисов выше их IP меняются, а nginx резолвит
+          # имена апстримов один раз при старте — та самая причина 502 из
+          # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
+          # если выкатка нового цвета сорвётся, старый останется доступен.
+          # Сверяем содержимое, а не inode: с каталогом они и так совпадают,
+          # а расхождение содержимого поймает любой будущий возврат к файловому
+          # монтированию. md5 вместо diff — не нужен stdin в контейнер.
+          HOST_MD5=$(md5sum nginx/conf.d/local-docker.conf | cut -d' ' -f1)
+          CTR_MD5=$(docker exec nginx-local md5sum /etc/nginx/conf.d/local-docker.conf 2>/dev/null | cut -d' ' -f1 || echo нет)
+          if [ "$HOST_MD5" != "$CTR_MD5" ]; then
+            echo "::warning::контейнер видит не тот конфиг, что лежит на машине — пересоздаю nginx"
             $DC up -d --no-deps --force-recreate nginx-local
             for i in $(seq 1 12); do
               docker exec nginx-local nginx -t >/dev/null 2>&1 && break
               echo "  ждём nginx... ($i/12)"; sleep 5
             done
-          else
-            # После пересоздания сервисов выше их IP меняются, а nginx резолвит
-            # имена апстримов один раз при старте — та самая причина 502 из
-            # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
-            # если выкатка нового цвета сорвётся, старый останется доступен.
-            docker exec nginx-local nginx -s reload 2>/dev/null || true
           fi
+          docker exec nginx-local nginx -t && docker exec nginx-local nginx -s reload 2>/dev/null || true
 
           # Новый цвет
           if [ "$NEW" = "green" ]; then
@@ -642,7 +652,7 @@ jobs:
             else
               echo "::error::сертификат, отдаваемый на имя $HOST, его не покрывает — снаружи это Cloudflare 526"
               echo "SAN: ${SAN:-<не получен>}"
-              grep -n 'ssl_certificate ' "$HOME/SecondLayer/deployment/nginx/local-docker.conf" | head -4
+              grep -n 'ssl_certificate ' "$HOME/SecondLayer/deployment/nginx/conf.d/local-docker.conf" | head -4
               exit 1
             fi
           else
