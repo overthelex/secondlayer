@@ -47,6 +47,9 @@ const LANG_EXPR = `COALESCE(CASE WHEN lower(btrim(metadata_json->>'Sprache')) IN
 // caller can override it with as_of.
 const PLACEHOLDER_DECISION_DATE = '2021-01-01';
 
+// ch_get_decision_legislation caps the distinct article numbers it echoes per cited act.
+const MAX_CITED_ARTICLES = 15;
+
 // Escapes POSIX/ARE regex metacharacters in a caller-supplied token before it is
 // embedded in a Postgres `~*` pattern (used for the word-bounded short-query title
 // match below) — the token itself is still sent as a bound parameter, this only makes
@@ -798,6 +801,18 @@ offset/max_chars керують посторінковим читанням до
         return this.wrapResponse({ error: 'not_found', ecli: String(ecli) });
       }
 
+      // decision_date can be genuinely NULL (source never carried one, distinct from the
+      // '2021-01-01' placeholder handled below) — every downstream date comparison and the
+      // next.as_of hint would silently degrade (ch_get_act_text itself rejects a null
+      // as_of), so refuse explicitly instead of guessing a date.
+      if (decision.decision_date == null && !as_of) {
+        return this.wrapResponse({
+          error: 'no_decision_date',
+          ecli: decision.ecli,
+          message: 'Дата рішення невідома. Передайте as_of (YYYY-MM-DD), щоб отримати редакції актів на конкретну дату.',
+        });
+      }
+
       const effectiveDate = as_of ? String(as_of) : decision.decision_date;
       const dateUnreliable = decision.decision_date === PLACEHOLDER_DECISION_DATE && !as_of;
       const decisionLang = LANGS.includes(decision.lang) ? decision.lang : 'de';
@@ -821,11 +836,16 @@ offset/max_chars керують посторінковим читанням до
              FROM ch_legislation_citations
             WHERE from_ecli = $1 AND act_id IS NOT NULL
             GROUP BY act_id
-            ORDER BY citations_count DESC
+            -- act_id tiebreak: without it, "which N acts of many equal-count ties come
+            -- back" is planner-dependent (no ORDER BY guarantee on ties). Deterministic
+            -- and stable across repeated calls, here and in the outer ORDER BY below.
+            ORDER BY citations_count DESC, act_id
             LIMIT $2
          )
          SELECT c.act_id, c.citations_count, c.articles_all, c.total_cited_acts,
-                a.sr_number, a.${titleCol} AS title, a.abbreviation, a.jurisdiction,
+                a.sr_number,
+                COALESCE(a.${titleCol}, a.title_de, a.title_fr, a.title_it) AS title,
+                a.abbreviation, a.jurisdiction,
                 ed.version_id, ed.lang AS edition_lang, ed.source,
                 ed.date_applicability, ed.date_end_applicability, ed.retrieval_tier
            FROM cited c
@@ -861,7 +881,7 @@ offset/max_chars керують посторінковим читанням до
              ORDER BY retrieval_tier ASC
              LIMIT 1
            ) ed ON true
-          ORDER BY c.citations_count DESC`,
+          ORDER BY c.citations_count DESC, c.act_id`,
         [String(ecli), lim, effectiveDate, decisionLang]
       )).rows;
 
@@ -870,11 +890,11 @@ offset/max_chars керують посторінковим читанням до
 
       const acts = citedRows.map((r: any) => {
         const articlesAll: string[] = r.articles_all ?? [];
-        const articlesCited = articlesAll.slice(0, 15);
-        const articlesTruncated = articlesAll.length > 15;
+        const articlesCited = articlesAll.slice(0, MAX_CITED_ARTICLES);
+        const articlesTruncated = articlesAll.length > MAX_CITED_ARTICLES;
 
         let retrievalStatus: 'edition_at_date' | 'nearest_earlier_edition' | 'nearest_later_edition' | 'no_text';
-        let edition: { date_applicability: string; date_end_applicability: string | null; source: string } | null = null;
+        let edition: { date_applicability: string; date_end_applicability: string | null; source: string; lang: string } | null = null;
 
         if (r.version_id == null) {
           retrievalStatus = 'no_text';
@@ -883,6 +903,10 @@ offset/max_chars керують посторінковим читанням до
             date_applicability: r.date_applicability,
             date_end_applicability: r.date_end_applicability,
             source: r.source,
+            // The served edition's own language — can differ from the decision's lang
+            // (top-level `lang`) the same way ch_get_act_text's own `edition`/`lang` can
+            // diverge from `requested_lang`.
+            lang: r.edition_lang,
           };
           retrievalStatus = Number(r.retrieval_tier) === 0
             ? 'edition_at_date'

@@ -1146,5 +1146,162 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(result!.content[0].text).toMatch(/YYYY-MM-DD/);
       expect(result!.content[0].text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
     });
+
+    it('returns a deterministic, stable page when more acts than limit tie on citations_count', async () => {
+      const ECLI_TIE = 'ECLI:CH:BGER:2026:1A.5.2026';
+      await client.query(`DELETE FROM ch_court_decisions WHERE ecli = $1`, [ECLI_TIE]);
+      await client.query(
+        `INSERT INTO ch_court_decisions
+           (ecli, spider, court_code, court_name, decision_date, languages, metadata_json, stage)
+         VALUES ($1, 'CH_BGer_TEST', 'BGer', 'Bundesgericht', '2018-06-15', ARRAY['de'], '{}'::jsonb, 'loaded')`,
+        [ECLI_TIE]
+      );
+
+      // Three acts, each cited exactly once (a tie on citations_count) — inserted in a
+      // known act_id order so the tiebreak's direction is observable.
+      const tieActIds: number[] = [];
+      for (const sr of ['TIE.1', 'TIE.2', 'TIE.3']) {
+        const act = await client.query(
+          `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+           VALUES ($1, $1, 'TIE', 'Tie act', '2000-01-01', 0)
+           RETURNING act_id`,
+          [sr]
+        );
+        tieActIds.push(Number(act.rows[0].act_id));
+      }
+      for (let i = 0; i < tieActIds.length; i++) {
+        await client.query(
+          `INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, act_id, resolved, match_method)
+           VALUES ($1, 'TIE', $2, $3, true, 'act_only')`,
+          [ECLI_TIE, String(i + 1), tieActIds[i]]
+        );
+      }
+
+      const first = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_TIE, limit: 2 }))!);
+      const second = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_TIE, limit: 2 }))!);
+
+      expect(first.total_cited_acts).toBe(3);
+      expect(first.acts).toHaveLength(2);
+      // Deterministic tiebreak (act_id ascending): the two lowest act_ids, in order.
+      expect(first.acts.map((a: any) => a.act_id)).toEqual([tieActIds[0], tieActIds[1]]);
+      // Stable across repeated calls, not planner-dependent.
+      expect(second.acts.map((a: any) => a.act_id)).toEqual([tieActIds[0], tieActIds[1]]);
+    });
+
+    it('refuses with no_decision_date when decision_date is NULL and no as_of override is given', async () => {
+      const ECLI_NO_DATE = 'ECLI:CH:BGER:2026:1A.6.2026';
+      await client.query(`DELETE FROM ch_court_decisions WHERE ecli = $1`, [ECLI_NO_DATE]);
+      await client.query(
+        `INSERT INTO ch_court_decisions
+           (ecli, spider, court_code, court_name, decision_date, languages, metadata_json, stage)
+         VALUES ($1, 'CH_BGer_TEST', 'BGer', 'Bundesgericht', NULL, ARRAY['de'], '{}'::jsonb, 'loaded')`,
+        [ECLI_NO_DATE]
+      );
+
+      const withoutAsOf = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_NO_DATE }))!);
+      expect(withoutAsOf).toEqual({
+        error: 'no_decision_date',
+        ecli: ECLI_NO_DATE,
+        message: expect.stringMatching(/[а-яіїєґА-ЯІЇЄҐ]/),
+      });
+
+      const withAsOf = parse((await tools.executeTool('ch_get_decision_legislation', {
+        ecli: ECLI_NO_DATE, as_of: '2018-06-15',
+      }))!);
+      expect(withAsOf.error).toBeUndefined();
+      expect(withAsOf.effective_date).toBe('2018-06-15');
+    });
+
+    it('falls back to title_de when the decision language has no title of its own', async () => {
+      const ECLI_FR = 'ECLI:CH:BGER:2026:1A.7.2026';
+      await client.query(`DELETE FROM ch_court_decisions WHERE ecli = $1`, [ECLI_FR]);
+      await client.query(
+        `INSERT INTO ch_court_decisions
+           (ecli, spider, court_code, court_name, decision_date, languages, metadata_json, stage)
+         VALUES ($1, 'CH_BGer_TEST', 'BGer', 'Bundesgericht', '2018-06-15', ARRAY['fr'], '{}'::jsonb, 'loaded')`,
+        [ECLI_FR]
+      );
+      // title_fr / title_it left NULL on purpose.
+      const deOnly = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/de-only-title', 'DEONLY', 'DOT', 'Nur Deutscher Titel', '2000-01-01', 0)
+         RETURNING act_id`
+      );
+      const deOnlyActId = Number(deOnly.rows[0].act_id);
+      await client.query(
+        `INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, act_id, resolved, match_method)
+         VALUES ($1, 'DOT', '1', $2, true, 'act_only')`,
+        [ECLI_FR, deOnlyActId]
+      );
+
+      const result = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_FR }))!);
+      expect(result.lang).toBe('fr');
+      expect(result.acts[0].title).toBe('Nur Deutscher Titel');
+    });
+
+    it('reports nearest_earlier_edition for an act whose only edition ended before the effective date', async () => {
+      const ECLI_PAST_ONLY = 'ECLI:CH:BGER:2026:1A.8.2026';
+      await client.query(`DELETE FROM ch_court_decisions WHERE ecli = $1`, [ECLI_PAST_ONLY]);
+      await client.query(
+        `INSERT INTO ch_court_decisions
+           (ecli, spider, court_code, court_name, decision_date, languages, metadata_json, stage)
+         VALUES ($1, 'CH_BGer_TEST', 'BGer', 'Bundesgericht', '2018-06-15', ARRAY['de'], '{}'::jsonb, 'loaded')`,
+        [ECLI_PAST_ONLY]
+      );
+      const pastAct = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/past-only', 'PASTONLY', 'PST', 'Altes Gesetz', '2000-01-01', 3)
+         RETURNING act_id`
+      );
+      const pastActId = Number(pastAct.rows[0].act_id);
+      await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, full_text)
+         VALUES ($1, 'eli/cc/past-only/de/2000', 'de', '2000-01-01', '2005-12-31', 'parsed', 'fedlex_pdf', 'Alter Text.')`,
+        [pastActId]
+      );
+      await client.query(
+        `INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, act_id, resolved, match_method)
+         VALUES ($1, 'PST', '1', $2, true, 'act_only')`,
+        [ECLI_PAST_ONLY, pastActId]
+      );
+
+      const result = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_PAST_ONLY }))!);
+      const act = result.acts.find((a: any) => a.act_id === pastActId);
+      expect(act.retrieval_status).toBe('nearest_earlier_edition');
+      expect(act.edition.date_applicability).toBe('2000-01-01');
+      expect(act.edition.lang).toBe('de');
+    });
+
+    it('reports no_text (edition: null) for an act whose only parsed edition has neither full_text nor articles', async () => {
+      const ECLI_NO_TEXT = 'ECLI:CH:BGER:2026:1A.9.2026';
+      await client.query(`DELETE FROM ch_court_decisions WHERE ecli = $1`, [ECLI_NO_TEXT]);
+      await client.query(
+        `INSERT INTO ch_court_decisions
+           (ecli, spider, court_code, court_name, decision_date, languages, metadata_json, stage)
+         VALUES ($1, 'CH_BGer_TEST', 'BGer', 'Bundesgericht', '2018-06-15', ARRAY['de'], '{}'::jsonb, 'loaded')`,
+        [ECLI_NO_TEXT]
+      );
+      const bareAct = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/no-text', 'NOTEXT', 'NTX', 'Kein Text', '2000-01-01', 0)
+         RETURNING act_id`
+      );
+      const bareActId = Number(bareAct.rows[0].act_id);
+      await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source)
+         VALUES ($1, 'eli/cc/no-text/de/2000', 'de', '2000-01-01', NULL, 'parsed', 'fedlex_pdf')`,
+        [bareActId]
+      );
+      await client.query(
+        `INSERT INTO ch_legislation_citations (from_ecli, abbr_raw, article, act_id, resolved, match_method)
+         VALUES ($1, 'NTX', '1', $2, true, 'act_only')`,
+        [ECLI_NO_TEXT, bareActId]
+      );
+
+      const result = parse((await tools.executeTool('ch_get_decision_legislation', { ecli: ECLI_NO_TEXT }))!);
+      const act = result.acts.find((a: any) => a.act_id === bareActId);
+      expect(act.retrieval_status).toBe('no_text');
+      expect(act.edition).toBeNull();
+    });
   });
 });
