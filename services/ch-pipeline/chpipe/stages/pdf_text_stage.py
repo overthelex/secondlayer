@@ -66,6 +66,13 @@ from . import cantonal_fetch_stage, parse_akn_stage
 log = logging.getLogger(__name__)
 
 SOURCES = ("lexwork_pdf", "lexfind")
+# Zürich's PDF editions (zh_acts_stage: source 'zhlex', xml_url on notes.zh.ch)
+# share this path, but only on request: `CHPIPE_SOURCE=zhlex` claims the
+# OpenAttachment rows alone, so the HTML editions zh-fetch owns (WebRT/) and
+# the 541 editions without a text link are never claimed here. The default
+# run (CHPIPE_SOURCE unset) stays on the two PDF-only sources.
+ZHLEX_SOURCE = "zhlex"
+ZHLEX_PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/OpenAttachment"
 # BE 661.11 (the tax law, 129 pages) is 844 KB; the BE constitution with
 # annexes ~1 MB. Anything past this is not an edition.
 MAX_PDF_BYTES = 60_000_000
@@ -138,10 +145,21 @@ def sources_from_env(raw: str | None) -> tuple[str, ...]:
     if not raw:
         return SOURCES
     picked = tuple(s.strip() for s in raw.split(",") if s.strip())
-    unknown = [s for s in picked if s not in SOURCES]
+    allowed = SOURCES + (ZHLEX_SOURCE,)
+    unknown = [s for s in picked if s not in allowed]
     if unknown:
-        raise ValueError(f"CHPIPE_SOURCE must be one of {', '.join(SOURCES)}; got {raw!r}")
+        raise ValueError(f"CHPIPE_SOURCE must be one of {', '.join(allowed)}; got {raw!r}")
+    if ZHLEX_SOURCE in picked and len(picked) > 1:
+        raise ValueError("CHPIPE_SOURCE=zhlex runs alone: its rows are selected by URL prefix")
     return picked
+
+
+def claim_prefix(sources: tuple[str, ...], canton_code: str | None) -> str | None:
+    """The xml_url prefix the claim is narrowed to: a canton's host for the
+    Lexwork sources, the notes.zh.ch attachment path for zhlex."""
+    if sources == (ZHLEX_SOURCE,):
+        return ZHLEX_PDF_PREFIX
+    return cantonal_fetch_stage.url_prefix(canton_code)
 
 
 async def _process(row: dict, conn, fetcher: Fetcher, pacer: HostPacer, cpu: asyncio.Semaphore,
@@ -261,7 +279,7 @@ def resplit(settings: Settings, canton_code: str | None = None,
 async def _run_async(settings: Settings, canton_code: str | None, sources: tuple[str, ...],
                      limit: int | None, transport) -> PdfTextReport:
     report = PdfTextReport()
-    prefix = cantonal_fetch_stage.url_prefix(canton_code)
+    prefix = claim_prefix(sources, canton_code)
     conn = db.connect(settings)
     remaining = limit
     try:

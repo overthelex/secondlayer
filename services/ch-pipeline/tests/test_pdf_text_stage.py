@@ -137,6 +137,11 @@ def test_source_can_be_narrowed(conn, settings):
     assert report.parsed == 1 and _state(conn, b)[0] == "parsed"
     assert pdf_text_stage.sources_from_env("lexfind") == ("lexfind",)
     assert pdf_text_stage.sources_from_env("") == ("lexwork_pdf", "lexfind")
+    assert pdf_text_stage.sources_from_env("zhlex") == ("zhlex",)
+    assert pdf_text_stage.claim_prefix(("zhlex",), None) == pdf_text_stage.ZHLEX_PDF_PREFIX
+    assert pdf_text_stage.claim_prefix(("lexfind",), None) is None
+    with pytest.raises(ValueError):
+        pdf_text_stage.sources_from_env("zhlex,lexfind")
     with pytest.raises(ValueError):
         pdf_text_stage.sources_from_env("lexwork")
 
