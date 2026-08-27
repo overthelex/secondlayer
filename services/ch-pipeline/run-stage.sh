@@ -68,8 +68,9 @@ case "$STAGE" in
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
     # pdf-text and lexwork-pdf-requeue take one canton or none; pdf-text also
-    # reads CHPIPE_SOURCE (lexwork_pdf|lexfind) and lexwork-pdf-requeue
-    # CHPIPE_CURRENT_ONLY=1 from the environment.
+    # reads CHPIPE_SOURCE (lexwork_pdf|lexfind) and CHPIPE_RESPLIT=1 (re-split
+    # the article-less parsed rows from akn_xml, no download), and
+    # lexwork-pdf-requeue CHPIPE_CURRENT_ONLY=1, from the environment.
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
     ;;

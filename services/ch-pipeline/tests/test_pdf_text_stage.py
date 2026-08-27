@@ -218,3 +218,27 @@ def test_host_pacer_spaces_request_starts():
     assert min(gaps) >= 0.045                      # 1/20 s, minus timer slack
     with pytest.raises(ValueError):
         pdf_text_stage.HostPacer(per_host=0, rps=2.0)
+
+
+def test_resplit_rewrites_article_less_rows_from_the_stored_text(conn, settings):
+    zg = (FIXTURES / "pdftext_zg_centered_par.txt").read_text()
+    plain = "Kantonsratsbeschluss\n\nbeschliesst:\n\n1. Der Kanton tritt bei.\n2. Der Regierungsrat vollzieht.\n"
+    a = _row(conn)
+    b = _row(conn, url=LEXFIND_URL, source="lexfind")
+    c = _row(conn, url="https://bgs.zg.ch/api/de/versions/7/pdf_file")
+    untouched = _row(conn, url="https://bgs.zg.ch/api/de/versions/8/pdf_file")
+    for vid, raw, count in ((a, zg, 0), (b, plain, 0), (c, zg, 0), (untouched, zg, 4)):
+        conn.execute("UPDATE ch_act_version SET stage='parsed', akn_xml=%s, article_count=%s, "
+                     "full_text='old' WHERE version_id=%s", (raw, count, vid))
+    report = pdf_text_stage.resplit(settings)
+    assert (report.resplit, report.recovered, report.articles) == (3, 2, 4)
+    assert _state(conn, a)[2] == 2 and _state(conn, c)[2] == 2
+    assert _state(conn, b)[2] == 0 and _state(conn, b)[3] == 3          # still 'old'
+    assert _state(conn, untouched)[2] == 4
+    assert conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (a,)).fetchone()[0].startswith("Kantonsratsbeschluss betreffend den Beitritt")
+    numbers = [r[0] for r in conn.execute(
+        "SELECT article_number FROM ch_act_article WHERE version_id=%s ORDER BY ordinal", (a,))]
+    assert numbers == ["1", "2"]
+    # narrowed to one canton, nothing left to recover there
+    assert pdf_text_stage.resplit(settings, canton_code="ZG").recovered == 0
