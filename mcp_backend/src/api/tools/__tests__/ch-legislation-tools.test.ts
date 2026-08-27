@@ -68,12 +68,21 @@ describe('ChLegislationTools canton parameter', () => {
     it('every tool exposes an optional canton argument and mentions cantonal legislation', () => {
       const tools = new ChLegislationTools({ query: jest.fn() });
       const defs = tools.getToolDefinitions();
-      expect(defs.map((d) => d.name)).toEqual(['ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history']);
-      for (const def of defs) {
+      expect(defs.map((d) => d.name)).toEqual([
+        'ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history', 'ch_get_act_text',
+      ]);
+      // ch_get_act_text has no canton argument: unlike the other three, it always
+      // resolves sr_number against the federal jurisdiction (see its own describe block).
+      const cantonAware = defs.filter((d) => d.name !== 'ch_get_act_text');
+      for (const def of cantonAware) {
         expect(def.inputSchema.properties.canton).toBeDefined();
         expect(def.inputSchema.required).not.toContain('canton');
         expect(def.description).toContain('кантонального');
       }
+
+      const actText = defs.find((d) => d.name === 'ch_get_act_text')!;
+      expect(actText.inputSchema.properties.canton).toBeUndefined();
+      expect(actText.description).toContain('Обов\'язково рівно один з act_id або sr_number');
     });
   });
 
@@ -259,6 +268,175 @@ describe('ChLegislationTools canton parameter', () => {
       expect(query).not.toHaveBeenCalled();
       expect(text(result)).toMatch(/canton/);
       expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+  });
+
+  describe('ch_get_act_text', () => {
+    it('rejects when neither act_id nor sr_number is given, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = await tools.executeTool('ch_get_act_text', { as_of: '2020-01-01' }) as any;
+
+      expect(query).not.toHaveBeenCalled();
+      expect(text(result)).toMatch(/act_id/);
+      expect(text(result)).toMatch(/sr_number/);
+      expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+
+    it('rejects when both act_id and sr_number are given, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = await tools.executeTool('ch_get_act_text', {
+        act_id: 1, sr_number: '220', as_of: '2020-01-01',
+      }) as any;
+
+      expect(query).not.toHaveBeenCalled();
+      expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+
+    it('rejects a missing as_of, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: '220' }) as any;
+
+      expect(query).not.toHaveBeenCalled();
+      expect(text(result)).toMatch(/as_of/);
+      expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+
+    it('rejects a calendar-invalid as_of with a YYYY-MM-DD format error, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2025-13-01' }) as any;
+
+      expect(query).not.toHaveBeenCalled();
+      expect(text(result)).toMatch(/YYYY-MM-DD/);
+      expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+
+    it('rejects an unsupported lang, before any query runs', async () => {
+      const { db, query } = makeDb([]);
+      const tools = new ChLegislationTools(db);
+
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: '220', as_of: '2020-01-01', lang: 'en',
+      }) as any;
+
+      expect(query).not.toHaveBeenCalled();
+      expect(text(result)).toMatch(/lang/);
+      expect(text(result)).toMatch(/[Ѐ-ӿ]/);
+    });
+
+    it('resolves sr_number scoped to the federal jurisdiction, ordered like the other ch_* tools', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
+        { rows: [{ text_slice: 'Text', total: 4 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2020-01-01' }) as any);
+
+      expect(calls[0].sql).toMatch(/jurisdiction = 'CH'/);
+      expect(calls[0].sql).toMatch(/sr_number = \$1/);
+      expect(calls[0].sql).toMatch(/ORDER BY in_force DESC/);
+      expect(calls[0].params).toEqual(['220']);
+      expect(result.act_id).toBe(1);
+      expect(result.sr_number).toBe('220');
+      expect(result.lang).toBe('de');
+      expect(result.requested_lang).toBe('de');
+      expect(result.retrieval_status).toBe('edition_at_date');
+      expect(result.text).toBe('Text');
+      expect(result.text_total_chars).toBe(4);
+    });
+
+    it('resolves act_id directly by act_id = $1, not by sr_number', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ act_id: '42', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex_pdf', date_applicability: '1990-01-01', date_end_applicability: '1999-12-31' }] },
+        { rows: [{ text_slice: 'Text', total: 4 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { act_id: 42, as_of: '1995-01-01' }) as any);
+
+      expect(calls[0].sql).toMatch(/WHERE act_id = \$1/);
+      expect(calls[0].sql).not.toMatch(/WHERE jurisdiction = 'CH' AND sr_number/);
+      expect(calls[0].params).toEqual([42]);
+      expect(result.act_id).toBe(42);
+      expect(result.edition.source).toBe('fedlex_pdf');
+    });
+
+    it('clamps a negative offset to 0 and binds it as the second slicing parameter', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
+        { rows: [{ text_slice: 'Text', total: 4 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', {
+        sr_number: '220', as_of: '2020-01-01', offset: -50,
+      }) as any);
+
+      expect(calls[2].params).toEqual(['v-1', 0, 50000]);
+      expect(result.text_offset).toBe(0);
+    });
+
+    it('caps max_chars at 200000 rather than erroring', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
+        { rows: [{ text_slice: 'Text', total: 4 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2020-01-01', max_chars: 999999 });
+
+      expect(calls[2].params).toEqual(['v-1', 0, 200000]);
+    });
+
+    it('falls back to the earliest edition and reports nearest_later_edition when no edition covers as_of', async () => {
+      const { db, calls } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [] },
+        { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2015-01-01', date_end_applicability: '2019-12-31' }] },
+        { rows: [{ text_slice: 'Old text', total: 8 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2000-01-01' }) as any);
+
+      expect(calls[2].sql).toMatch(/ORDER BY \(v\.lang = \$2\) DESC, \(v\.lang = 'de'\) DESC, v\.date_applicability ASC/);
+      expect(result.retrieval_status).toBe('nearest_later_edition');
+      expect(result.edition.date_applicability).toBe('2015-01-01');
+    });
+
+    it('reports no_edition_for_date when the act has no parsed edition with usable text at all', async () => {
+      const { db } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [] },
+        { rows: [] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2020-01-01' }) as any);
+
+      expect(result).toEqual({ error: 'no_edition_for_date', act_id: 1, earliest_edition: null });
+    });
+
+    it('reports no_edition_for_date for an act that does not resolve at all', async () => {
+      const { db, query } = makeDb([{ rows: [] }]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { act_id: 999, as_of: '2020-01-01' }) as any);
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ error: 'no_edition_for_date', act_id: 999, earliest_edition: null });
     });
   });
 });

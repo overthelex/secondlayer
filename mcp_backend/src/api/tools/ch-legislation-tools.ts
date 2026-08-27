@@ -153,6 +153,29 @@ canton (типово 'CH') задає юрисдикцію акта: 'CH' або
           required: ['sr_number'],
         },
       },
+      {
+        name: 'ch_get_act_text',
+        annotations: { title: 'Повний текст акта Швейцарії на певну дату', readOnlyHint: true },
+        description: `Повний текст швейцарського акта в редакції, чинній на задану дату.
+
+Обов'язково рівно один з act_id або sr_number (для sr_number резолвиться федеральний акт, чинний пріоритетно, як і в інших ch_* інструментах). as_of — обов'язкова дата (YYYY-MM-DD).
+Джерело тексту різне для різних редакцій: для новіших (XML, Fedlex) текст збирається зі статей (ch_act_article); для давніх, доступних лише як PDF ("pdf-era"), текст зберігається цілком у full_text. Поле edition.source показує, яке джерело обслужило запит.
+Якщо жодна редакція не покриває as_of — обирається найдавніша машиночитана редакція акта, а retrieval_status='nearest_later_edition' (замість 'edition_at_date'). Якщо машиночитаних редакцій немає взагалі — { error: 'no_edition_for_date', earliest_edition: null }.
+lang (типово 'de') — бажана мова; якщо редакції цією мовою немає, обслуговується німецька (lang у відповіді показує фактичну мову, requested_lang — запитану).
+offset/max_chars керують посторінковим читанням довгого тексту (max_chars типово 50000, максимум 200000); truncated=true, якщо текст не вміщено повністю.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            act_id: { type: 'number', description: 'Внутрішній ідентифікатор акта (альтернатива sr_number)' },
+            sr_number: { type: 'string', description: 'Номер SR акта, напр. 220 (альтернатива act_id)' },
+            as_of: { type: 'string', description: 'Дата (YYYY-MM-DD), станом на яку потрібна редакція' },
+            lang: { type: 'string', enum: LANGS, default: 'de', description: 'Бажана мова редакції' },
+            offset: { type: 'number', default: 0, description: 'Зсув у символах для посторінкового читання' },
+            max_chars: { type: 'number', default: 50000, maximum: 200000, description: 'Макс. символів у відповіді (макс. 200000)' },
+          },
+          required: ['as_of'],
+        },
+      },
     ];
   }
 
@@ -161,6 +184,7 @@ canton (типово 'CH') задає юрисдикцію акта: 'CH' або
       case 'ch_search_legislation': return this.searchLegislation(args);
       case 'ch_get_act_article': return this.getActArticle(args);
       case 'ch_get_act_history': return this.getActHistory(args);
+      case 'ch_get_act_text': return this.getActText(args);
       default: return null;
     }
   }
@@ -517,6 +541,148 @@ canton (типово 'CH') задає юрисдикцію акта: 'CH' або
     } catch (error: any) {
       logger.error('ch_get_act_history error', { error: error.message });
       return this.wrapError(`Помилка отримання історії закону Швейцарії: ${error.message}`);
+    }
+  }
+
+  // ─── ch_get_act_text ─────────────────────────────────────────────────
+
+  private async getActText(args: Record<string, unknown>): Promise<ToolResult> {
+    const { act_id, sr_number, as_of, lang = 'de', offset = 0, max_chars = 50000 } = args as any;
+
+    const hasActId = act_id !== undefined && act_id !== null && String(act_id).trim() !== '';
+    const hasSrNumber = sr_number !== undefined && sr_number !== null && String(sr_number).trim() !== '';
+    if (hasActId === hasSrNumber) {
+      return this.wrapResponse('Вкажіть рівно один з параметрів: act_id або sr_number.');
+    }
+    if (!as_of || !String(as_of).trim()) {
+      return this.wrapResponse('Вкажіть as_of — дату у форматі YYYY-MM-DD.');
+    }
+    if (!isValidIsoDate(String(as_of))) {
+      return this.wrapResponse('as_of має бути у форматі YYYY-MM-DD.');
+    }
+    if (!LANGS.includes(String(lang))) {
+      return this.wrapResponse(`lang має бути одним з: ${LANGS.join(', ')}.`);
+    }
+
+    const asOfDate = String(as_of);
+    const requestedLang = String(lang);
+    const off = Math.max(Number(offset) || 0, 0);
+    const maxChars = Math.min(Math.max(Number(max_chars) || 50000, 1), 200000);
+
+    try {
+      // act_id resolves directly; sr_number resolves like the other ch_* tools (the
+      // in-force act wins, then the most recently entered-into-force one), scoped to the
+      // federal jurisdiction — this tool has no `canton` parameter, unlike
+      // ch_get_act_article/ch_get_act_history.
+      const act = hasActId
+        ? (await this.db.query(
+            `SELECT act_id, sr_number, title_de, title_fr, title_it
+               FROM ch_act WHERE act_id = $1`,
+            [Number(act_id)]
+          )).rows[0]
+        : (await this.db.query(
+            `SELECT act_id, sr_number, title_de, title_fr, title_it
+               FROM ch_act WHERE jurisdiction = 'CH' AND sr_number = $1
+              ORDER BY in_force DESC, date_entry_force DESC NULLS LAST
+              LIMIT 1`,
+            [String(sr_number)]
+          )).rows[0];
+
+      if (!act) {
+        return this.wrapResponse({
+          error: 'no_edition_for_date',
+          act_id: hasActId ? Number(act_id) : null,
+          earliest_edition: null,
+        });
+      }
+
+      // Edition pick: the best edition (across all langs) that covers as_of AND actually
+      // has text to serve — either full_text (pdf-era) or ch_act_article rows (xml-era).
+      // date_end_applicability is the LAST DAY the edition is in force (inclusive), same
+      // predicate as ch_get_act_article.
+      let edition = (await this.db.query(
+        `SELECT version_id, lang, source,
+                to_char(date_applicability, 'YYYY-MM-DD') AS date_applicability,
+                to_char(date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability
+           FROM ch_act_version v
+          WHERE v.act_id = $1 AND v.stage = 'parsed'
+            AND v.date_applicability <= $2::date
+            AND ($2::date <= v.date_end_applicability OR v.date_end_applicability IS NULL)
+            AND (v.full_text IS NOT NULL OR EXISTS (
+                   SELECT 1 FROM ch_act_article aa WHERE aa.version_id = v.version_id))
+          ORDER BY (v.lang = $3) DESC, (v.lang = 'de') DESC, v.date_applicability DESC
+          LIMIT 1`,
+        [act.act_id, asOfDate, requestedLang]
+      )).rows[0];
+
+      let retrievalStatus: 'edition_at_date' | 'nearest_later_edition' = 'edition_at_date';
+
+      if (!edition) {
+        // No edition covers as_of with usable text — fall back to the earliest parsed
+        // edition of the act with usable text, same lang preference, earliest first.
+        edition = (await this.db.query(
+          `SELECT version_id, lang, source,
+                  to_char(date_applicability, 'YYYY-MM-DD') AS date_applicability,
+                  to_char(date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability
+             FROM ch_act_version v
+            WHERE v.act_id = $1 AND v.stage = 'parsed'
+              AND (v.full_text IS NOT NULL OR EXISTS (
+                     SELECT 1 FROM ch_act_article aa WHERE aa.version_id = v.version_id))
+            ORDER BY (v.lang = $2) DESC, (v.lang = 'de') DESC, v.date_applicability ASC
+            LIMIT 1`,
+          [act.act_id, requestedLang]
+        )).rows[0];
+
+        if (!edition) {
+          return this.wrapResponse({
+            error: 'no_edition_for_date',
+            act_id: Number(act.act_id),
+            earliest_edition: null,
+          });
+        }
+        retrievalStatus = 'nearest_later_edition';
+      }
+
+      // Slice in SQL — never ship the whole full_text (or the whole assembled-from-articles
+      // text) into Node. `|| ''` guards the PG15/Alpine multibyte substr/left bug.
+      const sliceRow = (await this.db.query(
+        `SELECT substr(src || '', $2 + 1, $3) AS text_slice,
+                length(src || '') AS total
+           FROM (
+             SELECT COALESCE(
+                      v.full_text,
+                      (SELECT string_agg(aa.text, E'\n\n' ORDER BY aa.ordinal)
+                         FROM ch_act_article aa WHERE aa.version_id = v.version_id)
+                    ) AS src
+               FROM ch_act_version v WHERE v.version_id = $1
+           ) t`,
+        [edition.version_id, off, maxChars]
+      )).rows[0];
+
+      const textSlice: string = sliceRow.text_slice ?? '';
+      const totalChars = Number(sliceRow.total ?? 0);
+
+      return this.wrapResponse({
+        act_id: Number(act.act_id),
+        sr_number: act.sr_number,
+        title: act[`title_${edition.lang}`],
+        lang: edition.lang,
+        requested_lang: requestedLang,
+        as_of: asOfDate,
+        retrieval_status: retrievalStatus,
+        edition: {
+          date_applicability: edition.date_applicability,
+          date_end_applicability: edition.date_end_applicability,
+          source: edition.source,
+        },
+        text: textSlice,
+        text_offset: off,
+        text_total_chars: totalChars,
+        truncated: off + textSlice.length < totalChars,
+      });
+    } catch (error: any) {
+      logger.error('ch_get_act_text error', { error: error.message });
+      return this.wrapError(`Помилка отримання тексту акта Швейцарії: ${error.message}`);
     }
   }
 }

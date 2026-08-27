@@ -31,12 +31,13 @@ export const V2_TOOL_NAMES = new Set<string>([
   'search_npa',
   'get_npa_act',
   // Швейцарія (CH) — судові рішення (entscheidsuche.ch) та федеральне законодавство
-  // (Fedlex): пошук, точковий у часі текст статті, історія змін акта.
+  // (Fedlex): пошук, точковий у часі текст статті або повного акта, історія змін акта.
   'ch_search_court_decisions',
   'ch_get_court_decision',
   'ch_search_legislation',
   'ch_get_act_article',
   'ch_get_act_history',
+  'ch_get_act_text',
   // Швейцарія (CH) — реєстри компаній: Zefix + SHAB + FINMA + SECO + кантональні відомості.
   'ch_search_companies',
   'ch_get_company',

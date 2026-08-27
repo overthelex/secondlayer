@@ -64,6 +64,7 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       '197_ch_legislation_corpus.sql',
       '198_ch_as_bbl.sql',
       '201_ch_cantonal_legislation.sql',
+      '204_ch_fedlex_pdf.sql',
     ]) {
       await client.query(readFileSync(join(migrations, file), 'utf-8'));
     }
@@ -677,6 +678,167 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(zh.results.map((r: any) => r.jurisdiction)).toEqual(['ZH']);
       const all = parse((await tools.executeTool('ch_search_legislation', { query: '220', canton: 'all' }))!);
       expect(all.results.map((r: any) => r.jurisdiction).sort()).toEqual(['CH', 'ZH']);
+    });
+  });
+
+  describe('ch_get_act_text', () => {
+    const SR_TXT = '999.1';
+    const PDF_FULL_TEXT = 'ABCDEFGHIJ'.repeat(20); // 200 chars, deterministic for slicing math.
+    let actTextId: string;
+    let versionXml: string;
+    let versionPdf: string;
+
+    beforeEach(async () => {
+      const act = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, title_fr, title_it, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/txt-act', $1, 'TXT', 'Textgesetz', 'Loi sur le texte', 'Legge sul testo', '2015-01-01', 0)
+         RETURNING act_id`,
+        [SR_TXT]
+      );
+      actTextId = act.rows[0].act_id;
+
+      // xml-era edition: ch_act_article rows, no full_text — text must be built by
+      // aggregating articles in `ordinal` order, never by sorting article_number strings.
+      const xml = await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, article_count)
+         VALUES ($1, 'eli/cc/txt-act/de/2015-01-01', 'de', '2015-01-01', '2019-12-31', 'parsed', 'fedlex', 2)
+         RETURNING version_id`,
+        [actTextId]
+      );
+      versionXml = xml.rows[0].version_id;
+      await client.query(
+        `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+         VALUES ($1, 'art_1', '1', 'Erster Titel', 'Erster Absatz.', 1)`,
+        [versionXml]
+      );
+      await client.query(
+        `INSERT INTO ch_act_article (version_id, e_id, article_number, marginal_note, text, ordinal)
+         VALUES ($1, 'art_2', '2', 'Zweiter Titel', 'Zweiter Absatz.', 2)`,
+        [versionXml]
+      );
+
+      // PDF-era edition: full_text set, no article_count / ch_act_article rows.
+      const pdf = await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, full_text)
+         VALUES ($1, 'eli/cc/txt-act/de/2020-01-01', 'de', '2020-01-01', NULL, 'parsed', 'fedlex_pdf', $2)
+         RETURNING version_id`,
+        [actTextId, PDF_FULL_TEXT]
+      );
+      versionPdf = pdf.rows[0].version_id;
+    });
+
+    it('builds the text from ch_act_article rows (xml-era, no full_text), ordered by ordinal', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT, as_of: '2016-06-01' });
+      const body = parse(result!);
+
+      expect(body.retrieval_status).toBe('edition_at_date');
+      expect(body.edition.date_applicability).toBe('2015-01-01');
+      expect(body.edition.date_end_applicability).toBe('2019-12-31');
+      expect(body.edition.source).toBe('fedlex');
+      expect(body.text).toContain('Erster Absatz.');
+      expect(body.text.indexOf('Erster Absatz.')).toBeLessThan(body.text.indexOf('Zweiter Absatz.'));
+    });
+
+    it('serves the pdf-era full_text sliced by offset/max_chars, with a truncated flag', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', offset: 0, max_chars: 50,
+      });
+      const body = parse(result!);
+
+      expect(body.retrieval_status).toBe('edition_at_date');
+      expect(body.edition.source).toBe('fedlex_pdf');
+      expect(body.text).toBe(PDF_FULL_TEXT.slice(0, 50));
+      expect(body.text_offset).toBe(0);
+      expect(body.text_total_chars).toBe(200);
+      expect(body.truncated).toBe(true);
+    });
+
+    it('reports truncated false when the slice reaches the end of the text', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', offset: 190, max_chars: 50,
+      });
+      const body = parse(result!);
+
+      expect(body.text).toBe(PDF_FULL_TEXT.slice(190));
+      expect(body.text.length).toBe(10);
+      expect(body.text_total_chars).toBe(200);
+      expect(body.truncated).toBe(false);
+    });
+
+    it('falls back to the earliest edition with retrieval_status nearest_later_edition when as_of predates every edition', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT, as_of: '2000-01-01' });
+      const body = parse(result!);
+
+      expect(body.retrieval_status).toBe('nearest_later_edition');
+      expect(body.edition.date_applicability).toBe('2015-01-01');
+      expect(body.text).toContain('Erster Absatz.');
+    });
+
+    it('falls back to the de edition and reports it when fr is requested but no fr edition exists', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', lang: 'fr',
+      });
+      const body = parse(result!);
+
+      expect(body.lang).toBe('de');
+      expect(body.requested_lang).toBe('fr');
+      expect(body.retrieval_status).toBe('edition_at_date');
+    });
+
+    it('reports no_edition_for_date for an unknown act', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { act_id: 999999999, as_of: '2021-01-01' });
+      const body = parse(result!);
+
+      expect(body.error).toBe('no_edition_for_date');
+      expect(body.earliest_edition).toBeNull();
+    });
+
+    it('rejects when neither act_id nor sr_number is given', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { as_of: '2021-01-01' });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects when both act_id and sr_number are given', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { act_id: actTextId, sr_number: SR_TXT, as_of: '2021-01-01' });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects a missing as_of with a Ukrainian message', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('rejects a malformed as_of with a Ukrainian message', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT, as_of: '2025-13-01' });
+      const text = result!.content[0].text;
+
+      expect(text).toMatch(/YYYY-MM-DD/);
+      expect(text).toMatch(/[а-яіїєґА-ЯІЇЄҐ]/);
+    });
+
+    it('resolves by act_id directly', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { act_id: Number(actTextId), as_of: '2021-01-01' });
+      const body = parse(result!);
+
+      expect(body.act_id).toBe(Number(actTextId));
+      expect(body.sr_number).toBe(SR_TXT);
+      expect(body.edition.source).toBe('fedlex_pdf');
+    });
+
+    it('caps max_chars at 200000 rather than erroring', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', max_chars: 999999,
+      });
+      const body = parse(result!);
+
+      expect(body.text).toBe(PDF_FULL_TEXT);
+      expect(body.truncated).toBe(false);
     });
   });
 });
