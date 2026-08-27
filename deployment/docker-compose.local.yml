@@ -1088,7 +1088,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/local-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      # Каталогом, а НЕ файлом: docker привязывает файловый bind-mount к inode,
+      # и `git reset --hard` в деплое подсовывает новый inode — контейнер
+      # продолжает видеть старый конфиг, а `nginx -s reload` рапортует успех.
+      # С каталогом правка видна сразу и пересоздавать nginx не нужно.
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
       # каталогом, а не файлом: при монтировании одиночного файла контейнер
       # держится за inode и перезапись апстримов на хосте не увидит
       - ./nginx/includes:/etc/nginx/includes:ro
