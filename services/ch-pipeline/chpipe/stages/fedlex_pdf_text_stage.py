@@ -73,12 +73,16 @@ MAX_PDF_BYTES = 80_000_000
 class FedlexPdfTextReport:
     claimed: int = 0
     parsed: int = 0
-    # A row that reached fail_version() for ANY reason -- a fetch failure,
-    # pdf_too_large, or an exception this stage did not otherwise expect.
-    # `empty` and `low_quality` below are NOT a subset of this count; they
-    # are the same fail_version() call, bucketed by reason instead, the same
-    # split cantonal_fetch_stage.FetchReport draws between `failed` and
-    # `pdf_only`.
+    # Every row that reached fail_version(), for ANY reason -- a fetch
+    # failure, pdf_too_large, an empty text layer, a below-threshold quality
+    # score, or an exception this stage did not otherwise expect. `empty`
+    # and `low_quality` below are SUBSETS of this count, not siblings of it:
+    # both branches increment `failed` and then their own more specific
+    # counter (see _process_one), so failed == the total and
+    # empty + low_quality == the two reasons this stage can distinguish out
+    # of that total. This is NOT the same shape as cantonal_fetch_stage's
+    # `pdf_only`, which is disjoint from its `failed` (a pdf-only version is
+    # counted only as pdf_only, never also as failed).
     failed: int = 0
     empty: int = 0
     low_quality: int = 0
@@ -206,7 +210,7 @@ def main() -> FedlexPdfTextReport:
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
-    log.info("parsed=%d failed=%d empty=%d low_quality=%d bytes=%d",
+    log.info("parsed=%d failed=%d (of which empty=%d low_quality=%d) bytes=%d",
              result.parsed, result.failed, result.empty, result.low_quality,
              result.bytes_downloaded)
     return result
