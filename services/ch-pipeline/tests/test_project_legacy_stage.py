@@ -287,6 +287,19 @@ def test_a_cantonal_act_projects_with_source_lexwork_and_its_jurisdiction(conn, 
         "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
         "WHERE eli_uri = 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchone()
     assert row == ("lexwork", "ZG")
+    ge = conn.execute(
+        "INSERT INTO ch_act (eli_work_uri, sr_number, jurisdiction, title_fr, enforcement_status) "
+        "VALUES ('https://silgeneve.ch/legis/program/books/rsg/htm/rsg_a2_00.htm', 'A 2 00', 'GE', "
+        "'Constitution', 0) RETURNING act_id").fetchone()[0]
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, source, "
+        "stage, akn_xml, full_text, article_count) "
+        "VALUES (%s, 'sil:GE/A 2 00/2024-01-01', 'fr', '2024-01-01', 'sil', 'parsed', '', 'texte', 5)", (ge,))
+    project_legacy_stage.run(settings)
+    assert conn.execute(
+        "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
+        "WHERE eli_uri = 'https://silgeneve.ch/legis/program/books/rsg/htm/rsg_a2_00.htm'"
+    ).fetchone() == ("sil", "GE"), "a phase-2 source keeps its own name in the projection"
     federal = conn.execute(
         "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
         "WHERE eli_uri <> 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchall()

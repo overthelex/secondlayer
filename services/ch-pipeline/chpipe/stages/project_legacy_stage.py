@@ -114,7 +114,8 @@ SELECT a.eli_work_uri,
        v.akn_xml,
        v.full_text,
        v.xml_url,
-       CASE WHEN a.jurisdiction = 'CH' THEN 'fedlex' ELSE 'lexwork' END,
+       -- the edition's own source (migration 203): fedlex, lexwork, sil, ti_rl, ...
+       v.source,
        -- article_count is here so "this projected row is empty" is a
        -- queryable fact rather than a line in a run log somebody has to
        -- still have. A body-less Fedlex act is genuine data (see
