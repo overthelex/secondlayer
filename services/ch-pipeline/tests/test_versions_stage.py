@@ -6,6 +6,7 @@ Run against a throwaway database, never against prod:
 """
 import os
 import pathlib
+import re
 import psycopg
 import pytest
 from chpipe import fedlex_queries as fq
@@ -411,6 +412,73 @@ def test_pdf_row_whose_work_was_never_discovered_is_orphaned(conn):
     pdf_row = _pdf_row(work="https://fedlex.data.admin.ch/eli/cc/never/seen")
     assert versions_stage.upsert_pdf_version(conn, pdf_row) == "orphaned"
     assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 0
+
+
+def test_pdf_skip_does_not_consume_the_version_id_sequence(conn):
+    """_UPSERT_PDF_VERSION carries two independent guards against ever
+    touching an XML row: the INSERT's NOT EXISTS clause (nothing to insert
+    when an XML row already covers this edition) and the ON CONFLICT ...
+    WHERE ch_act_version.source = 'fedlex_pdf' arm (nothing to update if a
+    conflict happens anyway). Mutation testing found they mask each other --
+    with either removed alone, every other test in this file still passes,
+    because in every scenario they reach the same external
+    'skipped_has_xml' answer. This test is discriminating for the NOT
+    EXISTS guard specifically: if it were gone, the INSERT ... SELECT would
+    still attempt to produce a row for the skipped edition and hit the
+    unique index as a genuine conflict -- and Postgres burns a bigserial
+    value for every row a SELECT feeding an INSERT produces, even one that
+    goes through ON CONFLICT instead of landing. A correctly-guarded skip
+    must leave the sequence exactly where it was; verified by hand against
+    a NOT-EXISTS-stripped copy of the SQL that this exact assertion catches
+    the gap (fresh_id lands one higher than expected)."""
+    versions_stage.upsert_version(conn, _row())               # the xml row
+    seq_before = conn.execute(
+        "SELECT last_value FROM ch_act_version_version_id_seq").fetchone()[0]
+    outcome = versions_stage.upsert_pdf_version(conn, _pdf_row())
+    assert outcome == "skipped_has_xml"
+    fresh_id = versions_stage.upsert_version(conn, _row(date="2019-01-01"))
+    assert fresh_id == seq_before + 1, (
+        "the pdf skip must not have advanced ch_act_version_version_id_seq "
+        "-- a gap here means the NOT EXISTS guard let an insert attempt "
+        "through that only the ON CONFLICT WHERE arm caught")
+
+
+_NOT_EXISTS_CLAUSE = re.compile(
+    r"\n\s*AND NOT EXISTS \(SELECT 1 FROM ch_act_version v\n"
+    r"\s*WHERE v\.eli_consolidation_uri = %\(consolidation\)s\n"
+    r"\s*AND v\.lang = %\(lang\)s AND v\.source <> 'fedlex_pdf'\)\n")
+
+
+def test_pdf_conflict_arm_alone_protects_an_existing_xml_row(conn):
+    """Discriminating for the OTHER guard, the ON CONFLICT ... WHERE
+    ch_act_version.source = 'fedlex_pdf' arm: simulates the race window
+    where the NOT EXISTS snapshot missed a concurrent XML-row commit, by
+    executing a doctored copy of _UPSERT_PDF_VERSION with the NOT EXISTS
+    clause stripped out (string surgery on a copy of the constant, never
+    the production SQL) so the INSERT always attempts a row regardless of
+    what already exists -- against a database that already holds an XML
+    row for this (consolidation, lang). If the ON CONFLICT WHERE arm were
+    removed, this conflicting write would clobber the XML row with pdf
+    data; with it, the XML row must come out exactly as it went in."""
+    versions_stage.upsert_version(conn, _row())               # the xml row
+    doctored_sql, n = _NOT_EXISTS_CLAUSE.subn("\n", versions_stage._UPSERT_PDF_VERSION)
+    assert n == 1, "the NOT EXISTS clause must still look like this in production"
+    pdf_row = _pdf_row()
+    params = {
+        "work": pdf_row["work"],
+        "consolidation": pdf_row["consolidation"],
+        "lang": "de",
+        "date_app": pdf_row["dateApplicability"][:10],
+        "date_end": None,
+        "file_url": pdf_row["fileUrl"],
+    }
+    conn.execute(doctored_sql, params)
+    row = conn.execute(
+        "SELECT source, xml_url FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (pdf_row["consolidation"],)).fetchone()
+    assert row[0] == "fedlex"
+    assert row[1].endswith(".xml")
 
 
 def test_migration_204_lets_a_fedlex_pdf_row_pass_the_source_check(conn):
