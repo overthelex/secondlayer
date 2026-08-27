@@ -54,6 +54,12 @@ log = logging.getLogger(__name__)
 BATCH_SIZE = 50
 PROGRESS_EVERY = 200
 
+# Downloaded pdf-a bytes go next to the raw corpus, not the system temp
+# directory -- same reasoning as ocr_stage.OCR_TMP_DIRNAME: tempfile's
+# default is /tmp, which on prod is the root filesystem, while raw_dir sits
+# on the volume actually sized for this workload.
+PDF_TMP_DIRNAME = ".fedlex-pdf-text-tmp"
+
 # 80 MB: comfortably above any real Fedlex pdf-a edition (the largest control
 # acts run a few MB even as XML) and small enough that a run cannot be made
 # to hold an unbounded file in memory by one bad URL. Checked after the
@@ -80,7 +86,7 @@ class FedlexPdfTextReport:
 
 
 async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
-                        report: FedlexPdfTextReport) -> None:
+                        report: FedlexPdfTextReport, tmp_dir: Path) -> None:
     version_id = row["version_id"]
     try:
         if not row["xml_url"]:
@@ -107,7 +113,7 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
         # one of them 'failed: pdftotext not installed' would burn the whole
         # queue's attempts budget on a deployment problem, not a document
         # problem.
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", dir=str(tmp_dir)) as tmp:
             tmp.write(payload)
             tmp.flush()
             text = from_pdf(Path(tmp.name))
@@ -150,6 +156,8 @@ async def _run_async(settings: Settings, limit: int | None,
     conn = db.connect(settings)
     remaining = limit
     processed = 0
+    tmp_dir = settings.raw_dir / PDF_TMP_DIRNAME
+    tmp_dir.mkdir(parents=True, exist_ok=True)
     try:
         async with Fetcher(concurrency=settings.http_concurrency,
                            transport=transport) as fetcher:
@@ -167,7 +175,7 @@ async def _run_async(settings: Settings, limit: int | None,
                 report.claimed += len(rows)
 
                 for row in rows:
-                    await _process_one(fetcher, conn, row, settings, report)
+                    await _process_one(fetcher, conn, row, settings, report, tmp_dir)
                     processed += 1
                     if processed % PROGRESS_EVERY == 0:
                         log.info("fedlex-pdf-text progress: claimed=%d parsed=%d "
