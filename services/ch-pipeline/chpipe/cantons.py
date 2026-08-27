@@ -11,7 +11,11 @@ verified by the stage's first request (/status); a host that does not
 answer is reported and skipped, not fatal for the other eighteen.
 
 The seven cantons without a Lexwork host (ZH, VD, TI, NE, GE, JU, SZ) are
-registered from LexFind only; their text is phase 2.
+registered from LexFind only; their text is phase 2. Phase 2 sources so far:
+'sil' (GE, NE: Word-generated HTML on the SIL platform, see chpipe/sil.py),
+'ti_rl' (TI: the Raccolta delle leggi on www3.ti.ch, chpipe/ti_rl.py) and
+'zhlex' (ZH: zh.ch index + notes.zh.ch text, chpipe/zhlex.py); the source a
+canton's editions carry is named after its platform (TEXT_SOURCE).
 """
 from __future__ import annotations
 
@@ -25,7 +29,7 @@ class Canton:
     code: str
     host: str
     langs: tuple[str, ...]
-    platform: str          # 'lexwork' | 'lexfind' (registry only)
+    platform: str          # 'lexwork' | 'sil' | 'ti_rl' | 'zhlex' | 'lexfind' (registry only)
     lexfind_id: int
 
 
@@ -37,6 +41,10 @@ def _lf(code: str, lexfind_id: int) -> Canton:
     return Canton(code, "", (), "lexfind", lexfind_id)
 
 
+def _sil(code: str, host: str, lexfind_id: int) -> Canton:
+    return Canton(code, host, ("fr",), "sil", lexfind_id)
+
+
 ALL: dict[str, Canton] = {c.code: c for c in (
     _lw("AG", "gesetzessammlungen.ag.ch", ("de",), 1),
     _lw("AI", "ai.clex.ch", ("de",), 2),
@@ -45,12 +53,12 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lw("BL", "bl.clex.ch", ("de",), 5),
     _lw("BS", "www.gesetzessammlung.bs.ch", ("de",), 6),
     _lw("FR", "bdlf.fr.ch", ("de", "fr"), 7),
-    _lf("GE", 8),
+    _sil("GE", "silgeneve.ch", 8),
     _lw("GL", "gesetze.gl.ch", ("de",), 9),
     _lw("GR", "www.gr-lex.gr.ch", ("de", "it", "rm"), 10),
     _lf("JU", 11),
     _lw("LU", "srl.lu.ch", ("de",), 12),
-    _lf("NE", 13),
+    _sil("NE", "rsn.ne.ch", 13),
     _lw("NW", "gesetze.nw.ch", ("de",), 14),
     _lw("OW", "gdb.ow.ch", ("de",), 15),
     _lw("SG", "www.gesetzessammlung.sg.ch", ("de",), 16),
@@ -58,15 +66,33 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lw("SO", "bgs.so.ch", ("de",), 18),
     _lf("SZ", 19),
     _lw("TG", "www.rechtsbuch.tg.ch", ("de",), 20),   # bare rechtsbuch.tg.ch does not resolve
-    _lf("TI", 21),
+    Canton("TI", "www3.ti.ch", ("it",), "ti_rl", 21),
     _lw("UR", "rechtsbuch.ur.ch", ("de",), 22),
     _lf("VD", 23),
     _lw("VS", "lex.vs.ch", ("de", "fr"), 24),
     _lw("ZG", "bgs.zg.ch", ("de",), 25),
-    _lf("ZH", 26),
+    Canton("ZH", "www.zh.ch", ("de",), "zhlex", 26),
 )}
 
 LEXWORK: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "lexwork"}
+SIL: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "sil"}
+
+# platform -> the ch_act_version.source its text stages write (migration
+# 203's vocabulary). A platform with no entry has no text pipeline yet, so
+# Gate F leaves the canton out rather than reporting zero parsed editions
+# as a defect.
+TEXT_SOURCE: dict[str, str] = {"lexwork": "lexwork", "sil": "sil", "ti_rl": "ti_rl", "zhlex": "zhlex"}
+
+
+def version_source(code: str) -> str | None:
+    """Canton code -> ch_act_version.source of its editions, None when the
+    canton has no text pipeline (registry only)."""
+    return TEXT_SOURCE.get(ALL[code].platform)
+
+
+def text_cantons() -> list[str]:
+    """Every canton that has a text pipeline, sorted -- Gate F's default."""
+    return sorted(code for code in ALL if version_source(code))
 
 
 def api(canton: Canton, lang: str = "de") -> str:
@@ -87,14 +113,23 @@ def show_as_json_url(canton: Canton, sysnr: str, version_id: int) -> str:
     return f"{api(canton)}/texts_of_law/{sysnr}/versions/{version_id}/show_as_json"
 
 
+def _codes(selection: str | None, pool: dict[str, Canton], label: str) -> list[str]:
+    if not selection:
+        return sorted(pool)
+    codes = [s.strip().upper() for s in selection.split(",") if s.strip()]
+    unknown = [c for c in codes if c not in pool]
+    if unknown:
+        raise ValueError(f"not a {label} canton: {', '.join(unknown)} "
+                         f"({label} cantons: {', '.join(sorted(pool))})")
+    return codes
+
+
 def lexwork_codes(selection: str | None) -> list[str]:
     """CHPIPE_CANTON -> the cantons to run. Empty means every Lexwork canton;
     a code that is not a Lexwork canton is a hard error, not a silent skip."""
-    if not selection:
-        return sorted(LEXWORK)
-    codes = [s.strip().upper() for s in selection.split(",") if s.strip()]
-    unknown = [c for c in codes if c not in LEXWORK]
-    if unknown:
-        raise ValueError(f"not a Lexwork canton: {', '.join(unknown)} "
-                         f"(Lexwork cantons: {', '.join(sorted(LEXWORK))})")
-    return codes
+    return _codes(selection, LEXWORK, "Lexwork")
+
+
+def sil_codes(selection: str | None) -> list[str]:
+    """The SIL twin of lexwork_codes: empty means GE and NE."""
+    return _codes(selection, SIL, "SIL")

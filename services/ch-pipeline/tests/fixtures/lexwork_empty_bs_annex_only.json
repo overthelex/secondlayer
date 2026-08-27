@@ -1,0 +1,53 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 4390,
+   "title": "Regierungsratsbeschluss betreffend die Spitalliste des Kantons Basel-Stadt (somatische Akutmedizin, Rehabilitation, Psychiatrie)",
+   "version_dates_str": "Version in Kraft seit: 01.01.2017 bis: 31.12.2017 (Beschlussdatum: 24.01.2016)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [
+    {
+     "id": 3268,
+     "title": "RRB betreffend die Spitalliste des Kantons Basel-Stadt (somatische Akutmedizin, Rehabilitation, Psychiatrie)",
+     "number": "330.500_Anhang",
+     "url": "https://www.gesetzessammlung.bs.ch/api/de/versions/4390/annexes",
+     "abrogated": false
+    }
+   ],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h2 class='header_text'>\n  Spitalliste Basel-Stadt: RRB\n</h2>\n<h1 class='systematic_number'>\n  330.500\n</h1>\n<h1 class='title'>\n  Regierungsratsbeschluss betreffend die Spitalliste des Kantons Basel-Stadt (somatische Akutmedizin, Rehabilitation, Psychiatrie)\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 25. November 2014 (Stand 1. Januar 2017)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    F&uuml;r den Text des RRB und die Spitalliste siehe Anhang.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  KB 31.12.2014\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

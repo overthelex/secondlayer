@@ -61,6 +61,7 @@ def apply_migration_199(conn) -> None:
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
 MIGRATION_198 = _REPO_ROOT / "mcp_backend/src/migrations/198_ch_as_bbl.sql"
 MIGRATION_201 = _REPO_ROOT / "mcp_backend/src/migrations/201_ch_cantonal_legislation.sql"
+MIGRATION_203 = _REPO_ROOT / "mcp_backend/src/migrations/203_ch_cantonal_sources.sql"
 
 _LEGISLATION_TABLES = (
     "ch_cantonal_registry", "ch_article_provenance", "ch_act_change_document",
@@ -86,7 +87,7 @@ def reset_legislation_schema(conn) -> None:
     for table in _LEGISLATION_TABLES:
         conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     conn.execute(_CH_LEGISLATION_135)
-    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201):
+    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201, MIGRATION_203):
         conn.execute(migration.read_text())
 
 

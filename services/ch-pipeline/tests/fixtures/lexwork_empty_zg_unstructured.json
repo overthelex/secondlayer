@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 602,
+   "title": "Gesetz über Strassen und Wege (Anhang 2: Verzeichnis der Radstrecken gemäss § 5 GSW)",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.2012 (Beschlussdatum: 30.06.2011)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  751.14-A2\n</h1>\n<h1 class='title'>\n  Gesetz<br />\n  &uuml;ber Strassen und Wege (Anhang 2: Verzeichnis der Radstrecken gem&auml;ss &sect; 5 GSW)\n</h1>\n<h2 class='abbreviation'>\n  (GSW)\n</h2>\n<div class='enactment'>\n  Vom 30. Mai 1996 (Stand 1. Januar 2012)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'></div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'>\n  <p>\n    Als Verzeichnis gelten die im kantonalen Richtplan<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_1080_2_1\" href=\"#structured_documentegress_sign_off_remarks_fn_1080_2_1_c\" id=\"structured_documentegress_sign_off_remarks_fn_1080_2_1\">[1]</a> bezeichneten Radstrecken.\n  </p>\n</div>\n<div class='egress_ags_source'>\n  GS 25, 319\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

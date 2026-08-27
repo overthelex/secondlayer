@@ -203,6 +203,11 @@ class Settings:
     # hosts are 19 small government servers; http_concurrency is the global
     # cap across all of them, this is the cap on any one of them.
     cantonal_per_host: int = 2
+    # Requests per second per cantonal host for the PDF text stage: the
+    # hosts' own ceiling as agreed for this pipeline (2 req/s), enforced by
+    # spacing request starts, not just by the in-flight cap above -- a
+    # 200 KB PDF answers in ~100 ms, so per_host=2 alone would be ~20/s.
+    pdf_rps: float = 2.0
     # In-flight requests the two SHAB stages hand their Fetcher. See
     # _shab_concurrency() for why 4 (fine on a direct connection) stalls
     # through the SOCKS tunnel to prod and has to be raised together with
@@ -235,6 +240,7 @@ class Settings:
                 os.environ.get("CHPIPE_SHAB_BUDGET_SECONDS")),
             shab_proxy=_proxy(os.environ.get("CHPIPE_SHAB_PROXY")),
             cantonal_per_host=int(os.environ.get("CHPIPE_CANTONAL_PER_HOST", "2")),
+            pdf_rps=float(os.environ.get("CHPIPE_PDF_RPS", "2")),
             shab_concurrency=_shab_concurrency(
                 os.environ.get("CHPIPE_SHAB_CONCURRENCY")),
             shab_local_address=_local_address(

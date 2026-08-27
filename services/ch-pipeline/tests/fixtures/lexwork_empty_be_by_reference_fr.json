@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 408,
+   "title": "Prüfungsreglement für den Erwerb des Diploms in Erziehungsberatung-Schulpsychologie",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.07.2007 (Beschlussdatum: 27.03.2007)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 3,
+      "iso639_1_code": "fr",
+      "iso639_2_code": "fra",
+      "name_native": "Français",
+      "priority": 2,
+      "position": 2,
+      "name": "Französisch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "fr": "<h1 class='systematic_number'>\n  431.511\n</h1>\n<h1 class='title'>\n  R&egrave;glement<br />\n  des examens aboutissant &agrave; l'obtention du dipl&ocirc;me de conseiller ou de conseill&egrave;re d'&eacute;ducation-psychologue scolaire\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  du 27.03.2007 (&eacute;tat au 01.07.2007)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Conform&eacute;ment &agrave; l&rsquo;article 5 de la loi sur les publications officielles, le pr&eacute;sent acte l&eacute;gislatif est publi&eacute; dans le Recueil officiel des lois bernoises sous la forme d&rsquo;un renvoi.\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Il peut &ecirc;tre obtenu &agrave; l&rsquo;adresse suivante:\n  </p>\n  <p>\n    Service psychologique pour enfants et adolescents Berne\n  </p>\n  <p>\n    Effingerstrasse 12\n  </p>\n  <p>\n    3011 Berne\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "fr": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  07-43\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "fr": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

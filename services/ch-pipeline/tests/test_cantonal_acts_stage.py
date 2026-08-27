@@ -271,3 +271,44 @@ def test_a_missing_french_title_does_not_fail_the_act(conn, settings):
 def test_an_unknown_canton_code_is_a_hard_error(settings):
     with pytest.raises(ValueError):
         cantonal_acts_stage.run(settings, canton_code="ZH")
+
+
+# --- change documents as the other hosts serve them ------------------------
+#
+# One real, trimmed texts_of_law record per host touched on 2026-08-26 (a
+# fixture from one host proves nothing about another).
+
+def _tol(name):
+    return json.loads((FIXTURES / f"lexwork_{name}.json").read_text())["text_of_law"]
+
+
+@pytest.mark.parametrize("canton, name, expected", [
+    ("AR", "ar_tol_111_3", []),                        # the host publishes no change documents
+    ("TG", "tg_tol_110", []),                          # 101 documents on the whole host, none for 110
+    ("LU", "lu_tol_1", [("2013-94", datetime.date(2013, 12, 14)),
+                        ("2007-30", datetime.date(2007, 7, 14))]),
+    ("ZG", "zg_tol_1021_001", [("2018/003", datetime.date(2018, 1, 19))]),
+])
+def test_change_documents_of_each_host_upsert_with_number_and_publication_date(
+        conn, canton, name, expected):
+    from chpipe import cantons
+    tol = _tol(name)
+    act_id = cantonal_acts_stage.upsert_act(conn, cantons.ALL[canton], tol, {"de": tol["title"]})
+    written = cantonal_acts_stage.upsert_change_documents(
+        conn, cantons.ALL[canton], act_id, tol["change_documents"])
+    rows = conn.execute("SELECT number, date_publication, date_decision FROM ch_act_change_document "
+                        "WHERE act_id=%s ORDER BY change_document_id", (act_id,)).fetchall()
+    assert written == len(expected)
+    assert [(n, p) for n, p, _ in rows] == expected
+    assert all(d is None for _, _, d in rows), "no host but BE/FR carries a decision date"
+
+
+def test_a_rewalk_keeps_a_backfilled_decision_date(conn):
+    from chpipe import cantons
+    tol = _tol("zg_tol_1021_001")
+    act_id = cantonal_acts_stage.upsert_act(conn, cantons.ALL["ZG"], tol, {"de": tol["title"]})
+    cantonal_acts_stage.upsert_change_documents(conn, cantons.ALL["ZG"], act_id, tol["change_documents"])
+    conn.execute("UPDATE ch_act_change_document SET date_decision='2017-12-14' WHERE act_id=%s", (act_id,))
+    cantonal_acts_stage.upsert_change_documents(conn, cantons.ALL["ZG"], act_id, tol["change_documents"])
+    assert conn.execute("SELECT date_decision FROM ch_act_change_document WHERE act_id=%s",
+                        (act_id,)).fetchone()[0] == datetime.date(2017, 12, 14)

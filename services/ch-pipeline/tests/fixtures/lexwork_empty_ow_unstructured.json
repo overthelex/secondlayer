@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 775,
+   "title": "Regierungsratsbeschluss über den Eid der Forstbeamten und Forstangestellten",
+   "version_dates_str": "Version in Kraft von: 23.04.1878 bis: 31.05.2016 (Beschlussdatum: 23.04.1878)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  930.611\n</h1>\n<h1 class='title'>\n  Regierungsratsbeschluss<br />\n  &uuml;ber den Eid der Forstbeamten und Forstangestellten\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  vom 23.04.1878 (Stand 23.04.1878)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    <strong>Eid der Forstbeamten und Forstangestellten</strong>\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Die Forstbeamten und Forstangestellten des Kantons und der Gemeinden sollen schw&ouml;ren, beziehungsweise durch das Treuegel&uuml;bde geloben: ihrem Berufe mit Ernst und Gewissenhaftigkeit nachzukommen, innerhalb ihrem Pflichtenkreise die Wohlfahrt des Landes und der Gemeinde nach Kr&auml;ften zu f&ouml;rdern, keine Gaben noch Versprechungen, weder mittelbar noch unmittelbar, anzunehmen, kein Ansehen der Person zu beobachten und &uuml;berhaupt des Landes und der Gemeinden getreue Beamte und Bedienstete zu sein.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  OGS 1899, 7\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

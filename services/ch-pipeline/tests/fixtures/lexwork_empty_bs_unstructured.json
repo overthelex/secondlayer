@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 2874,
+   "title": "Beschluss des Regierungsrates betreffend die Bezeichnung der bei Vernachlässigung von Unterstützungspflichten antragsberechtigten Behörden und Stellen",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 03.02.1991 (Beschlussdatum: 29.01.1991)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h2 class='header_text'>\n  Vernachl&auml;ssigung von Unterst&uuml;tzungspflichten: RRB | Schweiz. Strafgesetzbuch: Erg&auml;nzende Erlasse\n</h2>\n<h1 class='systematic_number'>\n  251.700\n</h1>\n<h1 class='title'>\n  Beschluss des Regierungsrates betreffend die Bezeichnung der bei Vernachl&auml;ssigung von Unterst&uuml;tzungspflichten antragsberechtigten Beh&ouml;rden und Stellen\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 29. Januar 1991 (Stand 3. Februar 1991)\n</div>\n<div class='ingress_author'>\n  Der Regierungsrat des Kantons Basel-Stadt,\n</div>\n<div class='ingress_foundation'>\n  <p>\n    gest&uuml;tzt auf Art. 19 des kantonalen Gesetzes &uuml;ber die Einf&uuml;hrung des Schweizerischen Strafgesetzbuches vom 30. Oktober 1941<a class=\"footnote\" name=\"structured_documentingress_foundation_fn_4956_2_1\" href=\"#structured_documentingress_foundation_fn_4956_2_1_c\" id=\"structured_documentingress_foundation_fn_4956_2_1\">[1]</a>,\n  </p>\n</div>\n<div class='ingress_action'>\n  beschliesst:\n</div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'>\n  <p>\n    Antragsberechtigte Beh&ouml;rden und Stellen im Sinne von Art. 217 Abs. 2 des Schweizerischen Strafgesetzbuches sind im Kanton Basel-Stadt:\n  </p>\n  <p>\n    das F&uuml;rsorgeamt der Stadt Basel<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_4956_2_2\" href=\"#structured_documentegress_sign_off_remarks_fn_4956_2_2_c\" id=\"structured_documentegress_sign_off_remarks_fn_4956_2_2\">[2]</a>,\n  </p>\n  <p>\n    die Vormundschaftsbeh&ouml;rde<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_4956_2_3\" href=\"#structured_documentegress_sign_off_remarks_fn_4956_2_3_c\" id=\"structured_documentegress_sign_off_remarks_fn_4956_2_3\">[3]</a>,\n  </p>\n  <p>\n    das B&uuml;rgerliche Waisenhaus,\n  </p>\n  <p>\n    die F&uuml;rsorgekommissionen der Landgemeinden Riehen und Bettingen<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_4956_2_4\" href=\"#structured_documentegress_sign_off_remarks_fn_4956_2_4_c\" id=\"structured_documentegress_sign_off_remarks_fn_4956_2_4\">[4]</a>,\n  </p>\n  <p>\n    der Basler Frauenverein am Heuberg<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_4956_2_5\" href=\"#structured_documentegress_sign_off_remarks_fn_4956_2_5_c\" id=\"structured_documentegress_sign_off_remarks_fn_4956_2_5\">[5]</a>.\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Dieser Beschluss ist zu publizieren; er wird sofort wirksam.<a class=\"footnote\" name=\"structured_documentegress_sign_off_remarks_fn_4956_2_6\" href=\"#structured_documentegress_sign_off_remarks_fn_4956_2_6_c\" id=\"structured_documentegress_sign_off_remarks_fn_4956_2_6\">[6]</a>\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Der Beschluss des Regierungsrates betreffend die Bezeichnung der bei Vernachl&auml;ssigung von Unterst&uuml;tzungspflichten antragsberechtigten Beh&ouml;rden vom 31. Juli 1984 wird aufgehoben.\n  </p>\n</div>\n<div class='egress_ags_source'>\n  KB 02.02.1991\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

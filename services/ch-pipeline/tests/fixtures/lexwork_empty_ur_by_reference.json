@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 569,
+   "title": "Zentralschweizer Fachhochschul-Verordnung",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.2023 (Beschlussdatum: 22.12.2022)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  10.2917\n</h1>\n<h1 class='title'>\n  Zentralschweizer Fachhochschul-Verordnung\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 14.12.2012 (Stand 01.01.2023)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Gest&uuml;tzt auf Artikel&nbsp;9 Publikationsgesetz (PUG, RB&nbsp;<a class=\"law_link\" href=\"https://rechtsbuch.ur.ch/data/3.1310/de\" target=\"_blank\">3.1310</a>) in Verbindung mit Artikel&nbsp;2 Publikationsreglement (RB&nbsp;<a class=\"law_link\" href=\"https://rechtsbuch.ur.ch/data/3.1311/de\" target=\"_blank\">3.1311</a>) wird dieser Erlass durch Verweis ver&ouml;ffentlicht; er wird nicht ins Rechtsbuch aufgenommen. Der Erlass kann unter der Adresse <a class=\"law_link\" href=\"https://www.hslu.ch\" target=\"_blank\">www.hslu.ch</a> und dort in der &laquo;Suche&raquo; mit dem Begriff &laquo;Fachhochschul-Vereinbarung&raquo; eingesehen werden.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_ags_source'>\n  (LU) G 2012 406\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}
