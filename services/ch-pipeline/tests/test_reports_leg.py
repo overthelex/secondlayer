@@ -57,6 +57,39 @@ def test_gate_e_counts_editions_articles_and_changes(conn):
     assert row["changes"] == 2
 
 
+# --- CQ-8 (fedlex-pdf-text task, folded in from Task 1's review): a parsed
+# fedlex_pdf row must not inflate gate_e's `editions` count.
+#
+# `editions` is compared against fedlex_editions -- Fedlex's own count of the
+# act's XML manifestations (cross_check_fedlex/coverage_line) -- so it has to
+# stay an XML-source count on this side too. Once fedlex_pdf_text_stage
+# starts moving pdf-a rows to stage='parsed', an unfiltered count would grow
+# past what Fedlex's XML side could ever match, and gate_e would report a
+# false mismatch on every control act with pre-XML editions (which is most
+# of them -- see versions_stage's module docstring).
+def test_gate_e_editions_excludes_parsed_pdf_rows(conn):
+    acts_stage.upsert_act(conn, {"work": WORK, "srNotation": "220"})
+    vid = versions_stage.upsert_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/2026-01-01",
+        "dateApplicability": "2026-01-01", "lang": L + "DEU",
+        "fileUrl": "https://x/x.xml"})
+    conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=3 "
+                 "WHERE version_id=%s", (vid,))
+    before = reports_leg.gate_e(conn, ["220"])[0]["editions"]
+
+    status = versions_stage.upsert_pdf_version(conn, {
+        "work": WORK, "consolidation": f"{WORK}/1995-01-01",
+        "dateApplicability": "1995-01-01", "lang": L + "DEU",
+        "fileUrl": "https://x/1995.pdf"})
+    assert status == "upserted"
+    conn.execute("UPDATE ch_act_version SET stage='parsed', "
+                 "full_text='some pdf-a text' "
+                 "WHERE eli_consolidation_uri=%s", (f"{WORK}/1995-01-01",))
+
+    after = reports_leg.gate_e(conn, ["220"])[0]
+    assert after["editions"] == before == 1
+
+
 # A missing control act on a partially-seeded scratch database is a routine
 # outcome, not a corpus finding -- the note must say so plainly rather than
 # reading like "this act is missing from the corpus".

@@ -83,6 +83,14 @@ def gate_e(conn, sr_numbers: list[str] | None = None,
 
     The edition count is reported as `editions` (not `editions_de`) for the
     same reason -- the key must not name a language the caller can change.
+
+    `editions` counts source='fedlex' rows only -- an XML-manifestation
+    count, to stay comparable with fedlex_editions (cross_check_fedlex's own
+    network count of the act's XML manifestations). A pdf-a edition
+    fedlex_pdf_text_stage has parsed (source='fedlex_pdf') is real corpus
+    coverage but is deliberately not counted here; see the SQL comment below
+    for why mixing the two sources into one number breaks the comparison
+    this count exists for.
     """
     out: list[dict] = []
     for sr in (sr_numbers or CONTROL_ACTS):
@@ -97,9 +105,22 @@ def gate_e(conn, sr_numbers: list[str] | None = None,
             continue
 
         with conn.cursor(row_factory=dict_row) as cur:
+            # source = 'fedlex': this count is compared against
+            # fedlex_editions (cross_check_fedlex/coverage_line), which is
+            # Fedlex's own count of the act's XML manifestations -- so the
+            # local side has to stay an XML-source count too, or the two
+            # numbers are not measuring the same thing. Without this filter,
+            # fedlex_pdf_text_stage moving a pre-XML pdf-a edition to
+            # stage='parsed' inflates `editions` past anything the XML-only
+            # Fedlex query could ever match, and gate_e reports a false
+            # mismatch on every control act with pre-XML history -- which is
+            # most of them (see versions_stage's module docstring on why
+            # pdf-a exists at all). A pdf-a row is real corpus coverage, just
+            # not the XML-comparable kind this particular count reports.
             cur.execute(
                 "SELECT count(*) AS n FROM ch_act_version "
-                "WHERE act_id = %s AND lang = %s AND stage = 'parsed'",
+                "WHERE act_id = %s AND lang = %s AND stage = 'parsed' "
+                "AND source = 'fedlex'",
                 (act["act_id"], lang))
             editions = cur.fetchone()["n"]
 
