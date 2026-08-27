@@ -214,3 +214,36 @@ def test_pdftoolmissing_aborts_the_run_loudly_instead_of_failing_the_row(
         "SELECT stage, attempts FROM ch_act_version WHERE version_id=%s",
         (vid,)).fetchone()
     assert stage == "discovered" and attempts == 0
+
+
+def test_a_low_quality_text_layer_fails_with_its_score_in_last_error(
+        conn, settings, monkeypatch):
+    """CQ-5: the quality-gate branch had no test of its own -- everything
+    covering it went through the empty_text_layer path instead, which never
+    reaches text_quality.score() at all. Ten repeats of one short token is
+    non-empty (so it clears the `if not text` guard) but far too short to
+    clear MIN_TOKENS, so text_quality.score() returns 0.0 regardless of
+    ACCEPT_THRESHOLD's exact value -- the same shape monkeypatching from_pdf
+    uses in the PdfToolMissing test above, applied to a text-quality outcome
+    instead of a crash."""
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+
+    vid = _row(conn)
+    bad_text = "lorem " * 10
+    quality = text_quality.score(bad_text, ["de"])
+    assert quality < text_quality.ACCEPT_THRESHOLD
+
+    monkeypatch.setattr(mod, "from_pdf", lambda path: bad_text)
+    report = _run(settings, Host())
+
+    assert report.failed == 1 and report.low_quality == 1 and report.parsed == 0
+    stage, attempts, last_error, full_text = conn.execute(
+        "SELECT stage, attempts, last_error, full_text "
+        "FROM ch_act_version WHERE version_id=%s", (vid,)).fetchone()
+    assert last_error == f"quality {quality:.2f}"
+    assert full_text is None
+    # Still claimable -- one failed attempt out of max_attempts=3, the same
+    # "not yet retired" shape the 404 test asserts for a fetch failure.
+    assert stage == "discovered" and attempts == 1
+    assert len(db.claim_versions(conn, "discovered", 10, backoff_minutes=(),
+                                 source="fedlex_pdf")) == 1
