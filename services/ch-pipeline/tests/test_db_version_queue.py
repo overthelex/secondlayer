@@ -191,3 +191,20 @@ def test_claim_is_filtered_by_source_and_url_prefix(conn):
     one_host = db.claim_versions(conn, "discovered", 10, backoff_minutes=(), source="lexwork",
                                  url_prefix="https://bgs.zg.ch/")
     assert [r["eli_consolidation_uri"] for r in one_host] == ["zg/101.1/v1"]
+
+
+def test_claim_accepts_a_tuple_of_sources(conn):
+    """Migration 203: the PDF text stage claims 'lexwork_pdf' and 'lexfind'
+    rows in one walk, never 'lexwork' or 'fedlex' ones."""
+    act = conn.execute("INSERT INTO ch_act (eli_work_uri, jurisdiction) VALUES ('be/101.2', 'BE') "
+                       "RETURNING act_id").fetchone()[0]
+    for uri, source in (("be/101.2/v1", "lexwork_pdf"), ("lf/101.2/v1", "lexfind"),
+                        ("be/101.2/v2", "lexwork"), ("fedlex/y", "fedlex")):
+        conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+                     "date_applicability, source, xml_url) VALUES (%s, %s, 'de', '2020-01-01', %s, 'https://x/')",
+                     (act, uri, source))
+    rows = db.claim_versions(conn, "discovered", 10, backoff_minutes=(),
+                             source=("lexwork_pdf", "lexfind"))
+    assert sorted(r["source"] for r in rows) == ["lexfind", "lexwork_pdf"]
+    only = db.claim_versions(conn, "discovered", 10, backoff_minutes=(), source="lexfind")
+    assert [r["eli_consolidation_uri"] for r in only] == ["lf/101.2/v1"]

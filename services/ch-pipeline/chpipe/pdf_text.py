@@ -62,7 +62,8 @@ _HEADING = re.compile(
     r"\s?\*?(?:\s+(?!(?:Abs|Absatz|Absätze|al|alinéa|cpv|capoverso|Ziff|Ziffer|Bst|Buchstabe|"
     r"lit|let|lettre|para|Satz|und|et|e|bis|ff)\b\.?\s)(\S.*))?$")
 # A page's last non-blank line, only digits: the page number.
-_PAGE_NUMBER = re.compile(r"^\d{1,3}$")
+# "3", or "-3-" / "- 3 -" on the pre-2015 conversions (VS 101.1 of 2008)
+_PAGE_NUMBER = re.compile(r"^(?:\d{1,3}|-\s?\d{1,3}\s?-)$")
 # A superscript paragraph number on a line of its own ("1", "2bis").
 _PARAGRAPH_MARK = re.compile(r"^(\d{1,2}(?:bis|ter|quater|quinquies)?)\s*\*?$")
 # A footnote's first line at the foot of a page: "1)  BSG 2013/014", "3)".
@@ -252,6 +253,8 @@ def clean_pages(raw: str) -> list[list[str]]:
                     return True
         if _LU_REFERENCE.match(key):
             return True
+        if key.startswith("-") and _PAGE_NUMBER.match(key):
+            return True     # "-2-" at the top of a page (VS 2008 conversions)
         return bool(_SYSNR.match(key) and "." in key)
 
     cleaned: list[list[str]] = []
@@ -503,6 +506,8 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
 
     last_number = 0
     for index, block in enumerate(blocks):
+        if not block.lines:
+            continue        # a marginal title consumed by the heading before it
         heading = _HEADING.match(block.lines[0])
         if heading and _in_order(heading.group(1), last_number):
             close()
@@ -519,6 +524,21 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
                 marginal_lines.append(block.lines[body_start])
                 body_start += 1
             marginal = _tidy(_join(marginal_lines))
+            following = blocks[index + 1] if index + 1 < len(blocks) else None
+            if (not marginal and len(block.lines) == 1 and following is not None
+                    and following.gap == 1 and following.lines
+                    and (len(following.lines) == 1
+                         or _PARAGRAPH_MARK.match(following.lines[1].strip()))
+                    and len(following.lines[0]) < 80
+                    and not following.lines[0].startswith(" ")
+                    and not _PARAGRAPH_MARK.match(following.lines[0].strip())
+                    and not _CONTINUATION.match(following.lines[0])
+                    and not _HEADING.match(following.lines[0])
+                    and _section_of(following) is None):
+                # the 2000-era BE conversions put the marginal title on a
+                # line of its own under a blank ("Art. 1", "", "Gegenstand")
+                marginal = _tidy(following.lines[0])
+                following.lines = following.lines[1:]
             current = {"number": number, "marginal": marginal,
                        "e_id": sections.e_id(number), "parent": sections.parent,
                        "paragraphs": _paragraphs(block.lines[body_start:])}
