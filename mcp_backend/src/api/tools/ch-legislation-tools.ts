@@ -99,7 +99,7 @@ canton (типово 'CH') задає юрисдикцію: 'CH' для феде
 Порядок збігів: точний sr_number → точна абревіатура (без урахування регістру; абревіатури-синоніми лише для федеральних актів) → назва (ILIKE) мовою lang.
 in_force_only (типово true) — лише чинні акти (enforcement_status = 0).
 Результат включає editions_count і latest_edition_date — кількість і дату останньої машиночитаної (parsed) редакції мовою lang.
-Далі: ch_get_act_article для тексту статті на певну дату, ch_get_act_history для історії змін (передавайте той самий canton).`,
+Далі: ch_get_act_article для тексту статті на певну дату, ch_get_act_history для історії змін (передавайте той самий canton), ch_get_act_text для повного тексту акта на дату.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -158,9 +158,9 @@ canton (типово 'CH') задає юрисдикцію акта: 'CH' або
         annotations: { title: 'Повний текст акта Швейцарії на певну дату', readOnlyHint: true },
         description: `Повний текст швейцарського акта в редакції, чинній на задану дату.
 
-Обов'язково рівно один з act_id або sr_number (для sr_number резолвиться федеральний акт, чинний пріоритетно, як і в інших ch_* інструментах). as_of — обов'язкова дата (YYYY-MM-DD).
-Джерело тексту різне для різних редакцій: для новіших (XML, Fedlex) текст збирається зі статей (ch_act_article); для давніх, доступних лише як PDF ("pdf-era"), текст зберігається цілком у full_text. Поле edition.source показує, яке джерело обслужило запит.
-Якщо жодна редакція не покриває as_of — обирається найдавніша машиночитана редакція акта, а retrieval_status='nearest_later_edition' (замість 'edition_at_date'). Якщо машиночитаних редакцій немає взагалі — { error: 'no_edition_for_date', earliest_edition: null }.
+Обов'язково рівно один з act_id або sr_number (для sr_number резолвиться федеральний акт, чинний пріоритетно, як і в інших ch_* інструментах — canton тут не підтримується, для кантональних актів використовуйте act_id). as_of — обов'язкова дата (YYYY-MM-DD). У відповіді є поле jurisdiction.
+Джерело тексту різне для різних редакцій: для новіших (XML, Fedlex) текст збирається зі статей (ch_act_article, з позначками "Art. N" і заголовками); для давніх, доступних лише як PDF ("pdf-era"), текст зберігається цілком у full_text. Поле edition.source показує, яке джерело обслужило запит.
+Якщо жодна редакція не покриває as_of — обирається НАЙБЛИЖЧА в часі машиночитана редакція акта (не обов'язково найдавніша: Fedlex публікує не всі редакції, тож пропуски між редакціями — очікувана ситуація, як і запит на дату після скасування акта): retrieval_status='nearest_earlier_edition', якщо обрана редакція починається на as_of або раніше, інакше 'nearest_later_edition' (замість 'edition_at_date'). Якщо машиночитаних редакцій немає взагалі — { error: 'no_edition_for_date', earliest_edition: null }. Якщо акт не знайдено — { error: 'not_found', entity: 'act', ... }.
 lang (типово 'de') — бажана мова; якщо редакції цією мовою немає, обслуговується німецька (lang у відповіді показує фактичну мову, requested_lang — запитану).
 offset/max_chars керують посторінковим читанням довгого тексту (max_chars типово 50000, максимум 200000); truncated=true, якщо текст не вміщено повністю.`,
         inputSchema: {
@@ -589,10 +589,14 @@ offset/max_chars керують посторінковим читанням до
           )).rows[0];
 
       if (!act) {
+        // Echo what failed, like the sibling ch_* tools' not_found shape (ch_get_act_article,
+        // ch_get_act_history) — distinct from 'no_edition_for_date', which means the act
+        // exists but has no usable machine-readable edition.
         return this.wrapResponse({
-          error: 'no_edition_for_date',
-          act_id: hasActId ? Number(act_id) : null,
-          earliest_edition: null,
+          error: 'not_found',
+          entity: 'act',
+          ...(hasActId ? { act_id: Number(act_id) } : { sr_number: String(sr_number) }),
+          jurisdiction: 'CH',
         });
       }
 
@@ -615,11 +619,16 @@ offset/max_chars керують посторінковим читанням до
         [act.act_id, asOfDate, requestedLang]
       )).rows[0];
 
-      let retrievalStatus: 'edition_at_date' | 'nearest_later_edition' = 'edition_at_date';
+      let retrievalStatus: 'edition_at_date' | 'nearest_earlier_edition' | 'nearest_later_edition' = 'edition_at_date';
 
       if (!edition) {
-        // No edition covers as_of with usable text — fall back to the earliest parsed
-        // edition of the act with usable text, same lang preference, earliest first.
+        // No edition covers as_of with usable text — Fedlex is missing roughly 15% of
+        // editions, so as_of landing in a genuine coverage gap between two editions is the
+        // expected case (as is a repealed act queried after its last edition), not just
+        // "before the earliest one". Fall back to the NEAREST edition in time (by start
+        // date), not the earliest: prefer an edition that already started by as_of (ties
+        // broken by the smaller distance), and only reach into the future when nothing
+        // started by as_of yet.
         edition = (await this.db.query(
           `SELECT version_id, lang, source,
                   to_char(date_applicability, 'YYYY-MM-DD') AS date_applicability,
@@ -628,9 +637,13 @@ offset/max_chars керують посторінковим читанням до
             WHERE v.act_id = $1 AND v.stage = 'parsed'
               AND (v.full_text IS NOT NULL OR EXISTS (
                      SELECT 1 FROM ch_act_article aa WHERE aa.version_id = v.version_id))
-            ORDER BY (v.lang = $2) DESC, (v.lang = 'de') DESC, v.date_applicability ASC
+            ORDER BY (v.lang = $3) DESC, (v.lang = 'de') DESC,
+                     (v.date_applicability <= $2::date) DESC,
+                     CASE WHEN v.date_applicability <= $2::date
+                          THEN $2::date - v.date_applicability
+                          ELSE v.date_applicability - $2::date END ASC
             LIMIT 1`,
-          [act.act_id, requestedLang]
+          [act.act_id, asOfDate, requestedLang]
         )).rows[0];
 
         if (!edition) {
@@ -640,18 +653,29 @@ offset/max_chars керують посторінковим читанням до
             earliest_edition: null,
           });
         }
-        retrievalStatus = 'nearest_later_edition';
+        // Label from the served row, not from which branch ran: at-or-before as_of reads as
+        // "nearest earlier", strictly after as_of (e.g. as_of predates every edition) reads
+        // as "nearest later". ISO YYYY-MM-DD strings compare lexicographically = chronologically.
+        retrievalStatus = edition.date_applicability <= asOfDate ? 'nearest_earlier_edition' : 'nearest_later_edition';
       }
 
       // Slice in SQL — never ship the whole full_text (or the whole assembled-from-articles
-      // text) into Node. `|| ''` guards the PG15/Alpine multibyte substr/left bug.
+      // text) into Node. `|| ''` guards the PG15/Alpine multibyte substr/left bug. The
+      // xml-era assembly keeps "Art. <number>" and the marginal note ahead of each article's
+      // text so the assembled string reads like the act, not a bag of paragraphs. '\n' here
+      // is already a real newline by the time this JS template literal reaches Postgres, so
+      // no E'' escape prefix is needed.
       const sliceRow = (await this.db.query(
         `SELECT substr(src || '', $2 + 1, $3) AS text_slice,
                 length(src || '') AS total
            FROM (
              SELECT COALESCE(
                       v.full_text,
-                      (SELECT string_agg(aa.text, E'\n\n' ORDER BY aa.ordinal)
+                      (SELECT string_agg(
+                                coalesce('Art. ' || aa.article_number || '\n', '') ||
+                                coalesce(aa.marginal_note || '\n', '') ||
+                                aa.text,
+                                '\n\n' ORDER BY aa.ordinal)
                          FROM ch_act_article aa WHERE aa.version_id = v.version_id)
                     ) AS src
                FROM ch_act_version v WHERE v.version_id = $1
@@ -665,6 +689,9 @@ offset/max_chars керують посторінковим читанням до
       return this.wrapResponse({
         act_id: Number(act.act_id),
         sr_number: act.sr_number,
+        // This tool is federal-only (no `canton` parameter — see ch_get_act_article for
+        // cantonal lookups), so the served act is always jurisdiction 'CH'.
+        jurisdiction: 'CH',
         title: act[`title_${edition.lang}`],
         lang: edition.lang,
         requested_lang: requestedLang,
@@ -678,7 +705,10 @@ offset/max_chars керують посторінковим читанням до
         text: textSlice,
         text_offset: off,
         text_total_chars: totalChars,
-        truncated: off + textSlice.length < totalChars,
+        // PG-side numbers only: off/maxChars are the SQL-bound slicing params, totalChars
+        // is PG's length(); never mix in textSlice.length (JS UTF-16 code units), which can
+        // disagree with PG's character count for non-BMP text.
+        truncated: off + maxChars < totalChars,
       });
     } catch (error: any) {
       logger.error('ch_get_act_text error', { error: error.message });

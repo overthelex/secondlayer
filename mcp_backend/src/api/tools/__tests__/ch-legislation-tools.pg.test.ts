@@ -727,7 +727,7 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       versionPdf = pdf.rows[0].version_id;
     });
 
-    it('builds the text from ch_act_article rows (xml-era, no full_text), ordered by ordinal', async () => {
+    it('builds the text from ch_act_article rows (xml-era, no full_text), ordered by ordinal and keeping article markers', async () => {
       const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT, as_of: '2016-06-01' });
       const body = parse(result!);
 
@@ -735,7 +735,16 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.edition.date_applicability).toBe('2015-01-01');
       expect(body.edition.date_end_applicability).toBe('2019-12-31');
       expect(body.edition.source).toBe('fedlex');
+      expect(body.jurisdiction).toBe('CH');
+      // Article structure (number + marginal note) must survive the assembly, not just
+      // the bare text — otherwise a full-text read of an xml-era act is unreadable.
+      expect(body.text).toContain('Art. 1');
+      expect(body.text).toContain('Erster Titel');
       expect(body.text).toContain('Erster Absatz.');
+      expect(body.text).toContain('Art. 2');
+      expect(body.text).toContain('Zweiter Titel');
+      expect(body.text).toContain('Zweiter Absatz.');
+      expect(body.text.indexOf('Art. 1')).toBeLessThan(body.text.indexOf('Art. 2'));
       expect(body.text.indexOf('Erster Absatz.')).toBeLessThan(body.text.indexOf('Zweiter Absatz.'));
     });
 
@@ -765,6 +774,28 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.truncated).toBe(false);
     });
 
+    it('reports truncated false when max_chars exactly reaches the end of the text', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', offset: 0, max_chars: 200,
+      });
+      const body = parse(result!);
+
+      expect(body.text).toBe(PDF_FULL_TEXT);
+      expect(body.text_total_chars).toBe(200);
+      expect(body.truncated).toBe(false);
+    });
+
+    it('reports truncated true when max_chars falls one short of the end of the text', async () => {
+      const result = await tools.executeTool('ch_get_act_text', {
+        sr_number: SR_TXT, as_of: '2021-01-01', offset: 0, max_chars: 199,
+      });
+      const body = parse(result!);
+
+      expect(body.text).toBe(PDF_FULL_TEXT.slice(0, 199));
+      expect(body.text_total_chars).toBe(200);
+      expect(body.truncated).toBe(true);
+    });
+
     it('falls back to the earliest edition with retrieval_status nearest_later_edition when as_of predates every edition', async () => {
       const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_TXT, as_of: '2000-01-01' });
       const body = parse(result!);
@@ -785,12 +816,32 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.retrieval_status).toBe('edition_at_date');
     });
 
-    it('reports no_edition_for_date for an unknown act', async () => {
+    it('reports not_found (like the sibling ch_* tools) for an unknown act_id', async () => {
       const result = await tools.executeTool('ch_get_act_text', { act_id: 999999999, as_of: '2021-01-01' });
       const body = parse(result!);
 
-      expect(body.error).toBe('no_edition_for_date');
-      expect(body.earliest_edition).toBeNull();
+      expect(body).toEqual({ error: 'not_found', entity: 'act', act_id: 999999999, jurisdiction: 'CH' });
+    });
+
+    it('reports not_found (like the sibling ch_* tools) for an unknown sr_number', async () => {
+      const result = await tools.executeTool('ch_get_act_text', { sr_number: '999999', as_of: '2021-01-01' });
+      const body = parse(result!);
+
+      expect(body).toEqual({ error: 'not_found', entity: 'act', sr_number: '999999', jurisdiction: 'CH' });
+    });
+
+    it('reports no_edition_for_date when the act exists but has no parsed edition with usable text', async () => {
+      const bare = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('eli/cc/bare-act', '999.3', 'BARE', 'Kein Text', '2015-01-01', 0)
+         RETURNING act_id`
+      );
+      const bareActId = Number(bare.rows[0].act_id);
+
+      const result = await tools.executeTool('ch_get_act_text', { act_id: bareActId, as_of: '2021-01-01' });
+      const body = parse(result!);
+
+      expect(body).toEqual({ error: 'no_edition_for_date', act_id: bareActId, earliest_edition: null });
     });
 
     it('rejects when neither act_id nor sr_number is given', async () => {
@@ -839,6 +890,64 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
 
       expect(body.text).toBe(PDF_FULL_TEXT);
       expect(body.truncated).toBe(false);
+    });
+
+    describe('fallback ordering for coverage gaps and repealed acts', () => {
+      // Fedlex is missing roughly 15% of editions, so as_of landing in a gap between two
+      // machine-readable editions is the expected case, not a rare edge case — the earliest
+      // edition of the act is very often the wrong answer for it (see F1 in code review).
+      // Three non-overlapping editions with gaps between them: 1995-1999, 2003-2007, 2012-2015.
+      const SR_GAP = '999.4';
+      let actGapId: number;
+
+      beforeEach(async () => {
+        const act = await client.query(
+          `INSERT INTO ch_act (eli_work_uri, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+           VALUES ('eli/cc/gap-act', $1, 'GAP', 'Luckengesetz', '1995-01-01', 3)
+           RETURNING act_id`,
+          [SR_GAP]
+        );
+        actGapId = Number(act.rows[0].act_id);
+
+        for (const [start, end, text] of [
+          ['1995-01-01', '1999-12-31', 'Text 1995'],
+          ['2003-01-01', '2007-12-31', 'Text 2003'],
+          ['2012-01-01', '2015-12-31', 'Text 2012'],
+        ]) {
+          await client.query(
+            `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, full_text)
+             VALUES ($1, $2, 'de', $3, $4, 'parsed', 'fedlex_pdf', $5)`,
+            [actGapId, `eli/cc/gap-act/de/${start}`, start, end, text]
+          );
+        }
+      });
+
+      it('serves the nearer earlier edition (2003), not the earliest one, for a date in the gap between editions', async () => {
+        const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_GAP, as_of: '2009-06-01' });
+        const body = parse(result!);
+
+        expect(body.retrieval_status).toBe('nearest_earlier_edition');
+        expect(body.edition.date_applicability).toBe('2003-01-01');
+        expect(body.text).toBe('Text 2003');
+      });
+
+      it('serves the last edition (2012) as nearest_earlier_edition for a repealed act queried after its last edition', async () => {
+        const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_GAP, as_of: '2020-01-01' });
+        const body = parse(result!);
+
+        expect(body.retrieval_status).toBe('nearest_earlier_edition');
+        expect(body.edition.date_applicability).toBe('2012-01-01');
+        expect(body.text).toBe('Text 2012');
+      });
+
+      it('serves the earliest edition (1995) as nearest_later_edition for a date before every edition', async () => {
+        const result = await tools.executeTool('ch_get_act_text', { sr_number: SR_GAP, as_of: '1990-01-01' });
+        const body = parse(result!);
+
+        expect(body.retrieval_status).toBe('nearest_later_edition');
+        expect(body.edition.date_applicability).toBe('1995-01-01');
+        expect(body.text).toBe('Text 1995');
+      });
     });
   });
 });

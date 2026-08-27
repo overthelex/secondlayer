@@ -83,6 +83,15 @@ describe('ChLegislationTools canton parameter', () => {
       const actText = defs.find((d) => d.name === 'ch_get_act_text')!;
       expect(actText.inputSchema.properties.canton).toBeUndefined();
       expect(actText.description).toContain('Обов\'язково рівно один з act_id або sr_number');
+      expect(actText.description).toContain('для кантональних актів використовуйте act_id');
+      expect(actText.description).toContain('nearest_earlier_edition');
+      expect(actText.description).toContain('nearest_later_edition');
+    });
+
+    it('ch_search_legislation chains to ch_get_act_text in its "Далі:" line', () => {
+      const tools = new ChLegislationTools({ query: jest.fn() });
+      const search = tools.getToolDefinitions().find((d) => d.name === 'ch_search_legislation')!;
+      expect(search.description).toContain('ch_get_act_text');
     });
   });
 
@@ -352,6 +361,7 @@ describe('ChLegislationTools canton parameter', () => {
       expect(result.retrieval_status).toBe('edition_at_date');
       expect(result.text).toBe('Text');
       expect(result.text_total_chars).toBe(4);
+      expect(result.jurisdiction).toBe('CH');
     });
 
     it('resolves act_id directly by act_id = $1, not by sr_number', async () => {
@@ -369,6 +379,7 @@ describe('ChLegislationTools canton parameter', () => {
       expect(calls[0].params).toEqual([42]);
       expect(result.act_id).toBe(42);
       expect(result.edition.source).toBe('fedlex_pdf');
+      expect(result.jurisdiction).toBe('CH');
     });
 
     it('clamps a negative offset to 0 and binds it as the second slicing parameter', async () => {
@@ -400,7 +411,7 @@ describe('ChLegislationTools canton parameter', () => {
       expect(calls[2].params).toEqual(['v-1', 0, 200000]);
     });
 
-    it('falls back to the earliest edition and reports nearest_later_edition when no edition covers as_of', async () => {
+    it('falls back to the NEAREST edition (by ORDER BY distance, not earliest) when no edition covers as_of', async () => {
       const { db, calls } = makeDb([
         { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [] },
@@ -411,9 +422,28 @@ describe('ChLegislationTools canton parameter', () => {
 
       const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2000-01-01' }) as any);
 
-      expect(calls[2].sql).toMatch(/ORDER BY \(v\.lang = \$2\) DESC, \(v\.lang = 'de'\) DESC, v\.date_applicability ASC/);
+      expect(calls[2].sql).toMatch(
+        /ORDER BY \(v\.lang = \$3\) DESC, \(v\.lang = 'de'\) DESC,\s*\(v\.date_applicability <= \$2::date\) DESC,\s*CASE WHEN v\.date_applicability <= \$2::date/
+      );
+      expect(calls[2].params).toEqual(['1', '2000-01-01', 'de']);
+      // Served edition (2015) starts AFTER as_of (2000) -> nearest_later_edition.
       expect(result.retrieval_status).toBe('nearest_later_edition');
       expect(result.edition.date_applicability).toBe('2015-01-01');
+    });
+
+    it('labels the served fallback row nearest_earlier_edition when its date_applicability is at or before as_of', async () => {
+      const { db } = makeDb([
+        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [] },
+        { rows: [{ version_id: 'v-2', lang: 'de', source: 'fedlex_pdf', date_applicability: '2003-01-01', date_end_applicability: '2007-12-31' }] },
+        { rows: [{ text_slice: 'Text 2003', total: 9 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '220', as_of: '2009-06-01' }) as any);
+
+      expect(result.retrieval_status).toBe('nearest_earlier_edition');
+      expect(result.edition.date_applicability).toBe('2003-01-01');
     });
 
     it('reports no_edition_for_date when the act has no parsed edition with usable text at all', async () => {
@@ -429,14 +459,24 @@ describe('ChLegislationTools canton parameter', () => {
       expect(result).toEqual({ error: 'no_edition_for_date', act_id: 1, earliest_edition: null });
     });
 
-    it('reports no_edition_for_date for an act that does not resolve at all', async () => {
+    it('reports not_found (like the sibling ch_* tools), not no_edition_for_date, for an act_id that does not resolve at all', async () => {
       const { db, query } = makeDb([{ rows: [] }]);
       const tools = new ChLegislationTools(db);
 
       const result = parse(await tools.executeTool('ch_get_act_text', { act_id: 999, as_of: '2020-01-01' }) as any);
 
       expect(query).toHaveBeenCalledTimes(1);
-      expect(result).toEqual({ error: 'no_edition_for_date', act_id: 999, earliest_edition: null });
+      expect(result).toEqual({ error: 'not_found', entity: 'act', act_id: 999, jurisdiction: 'CH' });
+    });
+
+    it('reports not_found for an sr_number that does not resolve at all', async () => {
+      const { db, query } = makeDb([{ rows: [] }]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { sr_number: '999999', as_of: '2020-01-01' }) as any);
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ error: 'not_found', entity: 'act', sr_number: '999999', jurisdiction: 'CH' });
     });
   });
 });
