@@ -21,12 +21,13 @@ SQL right here (spec section 7):
 The date comparison uses the FIRST language of the canton (cantons.py)
 so bilingual cantons are not counted twice. The version source filter
 comes from the canton's platform (cantons.version_source: 'lexwork' for
-the 19 Lexwork cantons, 'sil' for GE and NE, 'ti_rl' for TI), and the
-default canton list is every canton with a text pipeline
-(cantons.text_cantons). For SIL and TI the date comparison is weaker than
-for Lexwork: their acts stages take date_applicability FROM LexFind, so a
-match there says the registry was consulted, not that two systems agree;
-acts and the quality counters are still independent.
+the 19 Lexwork cantons, 'sil' for GE and NE, 'ti_rl' for TI, 'zhlex' for
+ZH), and the default canton list is every canton with a text pipeline
+(cantons.text_cantons); a registry-only canton is not reported. For SIL
+and TI the date comparison is weaker than for Lexwork: their acts stages
+take date_applicability FROM LexFind, so a match there says the registry
+was consulted, not that two systems agree; acts and the quality counters
+are still independent.
 """
 from __future__ import annotations
 

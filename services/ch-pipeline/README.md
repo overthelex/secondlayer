@@ -1843,6 +1843,71 @@ or an error; retried within the attempt budget), `text too short`,
 `pdftotext: ...` (poppler refused the file), `shadow_edition`. Retry with
 `db.retry_failed_versions()` as for the other legislation stages.
 
+Phase 2: text for the seven cantons without a Lexwork host from their own
+portals, each with its own stage family and `ch_act_version.source`
+(migration 203); the registry already holds their acts and versions.
+Zürich is below.
+
+### Zürich (ZH-Lex)
+
+Source: `www.zh.ch` (AEM) in front of a Lotus Domino database on
+`www.notes.zh.ch`. `chpipe/zhlex.py` holds the parsers, `cantons.py`
+marks ZH as platform `zhlex`, which is also the `source` its editions
+carry. Everything was read out of the site's SPA bundle
+(`main.06e084f.min.js`, `FlexData.constructUrl`) and measured 2026-08-27.
+
+| stage | what it does |
+|---|---|
+| `zh-acts` | enumerate every edition through the index JSON, fetch every edition page, upsert `ch_act` (jurisdiction `ZH`, `eli_work_uri` = `http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr={nr}`) and one `ch_act_version` per edition (`zhlex:{nr}/{version}`, lang `de`, source `zhlex`, stage `discovered`, `xml_url` = the edition's text link). `CHPIPE_ZH_ONLY=101,131.1` narrows to numbers |
+| `zh-fetch` | Domino HTML rendering (`xml_url` under `https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/`) into `akn_xml`, decoded at fetch time (the pages declare ISO-8859-1), audit copy `raw/zhlex/{version_id}.html`. PDF editions (`OpenAttachment?...file=...pdf`) are never claimed here; the shared PDF path takes them by the same prefix rule |
+| `zh-parse` | `§`- / `Art.`-numbered articles (`e_id` `par_7` / `art_7`), section headings as marginal notes, page footnotes as `notes`, `full_text` |
+| `reports-cantonal ZH` | Gate F on source `zhlex` |
+
+The index (`.../lawcollectionsearch_312548694.zhweb-zhlex-ls.zhweb-cache.json`)
+answers the search form's field names: without parameters it lists in-force
+acts 15 per page and caps at 150 rows (`moreSearchResultsThanAllowed`);
+`fileNumber=1..14` (systematic chapters) sums to exactly 944 in-force acts,
+LexFind's active count. With `includeRepealedEnactments=true` every row is
+an EDITION (101 alone is 26 rows), so `zh-acts` bisects
+`enactmentDate=YYYY-MM-DD_YYYY-MM-DD` (the form's range, ISO with an
+underscore) until no slice is capped, chapters as the second axis for a
+single day; ~5,100 rows in ~400 requests. A short `referenceNumber` answers
+204, so numbers cannot slice.
+
+Editions of one Ordnungsnummer form one Nachtrag series across
+re-enactments (101: 000..039 the 1869 constitution, 051..129 the 2005 one;
+131.6: 000/069/099 the 1990 act, 111 the 2020 act), so the act is keyed on
+the number and a point-in-time lookup resolves to the text in force then.
+The edition page carries no text: a description list (Erlassdatum,
+Inkraftsetzungsdatum, Aufhebungsdatum, Publikationsdatum), the Historie, and
+the text link. Dates: start = Publikationsdatum (what LexFind lists as
+`version_active_since`); the loose-leaf editions before 2006 have none and
+start the day after their predecessor's Aufhebungsdatum (a quarter's last
+day: 30.09.1995, 31.12.1995 ...); the first edition falls back to
+Inkraftsetzungsdatum, then Erlassdatum. End = the successor's start minus
+one day (same-day replacement, 101/125, ends before it starts, the corpus
+rule); the last edition of a withdrawn act ends the day before a
+first-of-month Aufhebungsdatum (the repeal's effective day) or on any other
+value (the last day in force). An act whose dates cannot be derived is
+counted (`dates_underivable`) and skipped, never guessed.
+
+Backfill order, supervised, all three at 2 req/s to zh.ch and notes.zh.ch
+together (the client paces the whole process): `lexfind-registry ZH`,
+`zh-acts` (~400 index requests + ~5,100 edition pages: about 45 minutes),
+`zh-fetch` (the HTML editions: the loose-leaf ones before ~2005, a few
+minutes per thousand), `zh-parse`, `diff` (de), `reports-cantonal ZH`. Weekly
+re-walk alongside the cantonal cron:
+
+    0 6 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-acts
+
+Counters worth knowing: `capped_slices` (a day+chapter slice still over
+150 rows: rows past the cap were not enumerated, zero on the whole
+collection), `pages_failed` (an edition page that did not answer: the
+edition was dropped from the pass and its neighbours dated from their own
+pages; rerun with `CHPIPE_ZH_ONLY`), `historie_mismatch` (the current
+page's Historie lists other editions than the index), `no_provisions` in
+`zh-fetch` (a Domino page without a single § or Art., retired at once).
+
 ## Point-in-time benchmark (chpipe.bench)
 
 `chpipe/bench` is a separate package from the two pipelines above. It does

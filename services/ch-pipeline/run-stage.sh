@@ -9,6 +9,7 @@
 #                 ./run-stage.sh lexwork-pdf-requeue|pdf-text [canton]   (PDF editions; see README "PDF editions")
 #   SIL (GE, NE): ./run-stage.sh sil-acts|sil-fetch|sil-parse [canton]
 #   ticino:       ./run-stage.sh ti-acts|ti-fetch|ti-parse   (no argument; one canton, one host)
+#   zurich:       ./run-stage.sh zh-acts|zh-fetch|zh-parse   (no argument; CHPIPE_ZH_ONLY narrows zh-acts)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -86,7 +87,7 @@ case "$STAGE" in
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail)
+  acts|versions|fetch-xml|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

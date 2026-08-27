@@ -12,9 +12,10 @@ answer is reported and skipped, not fatal for the other eighteen.
 
 The seven cantons without a Lexwork host (ZH, VD, TI, NE, GE, JU, SZ) are
 registered from LexFind only; their text is phase 2. Phase 2 sources so far:
-'sil' (GE, NE: Word-generated HTML on the SIL platform, see chpipe/sil.py)
-and 'ti_rl' (TI: the Raccolta delle leggi on www3.ti.ch, chpipe/ti_rl.py),
-each Italian/French only, one open edition per act.
+'sil' (GE, NE: Word-generated HTML on the SIL platform, see chpipe/sil.py),
+'ti_rl' (TI: the Raccolta delle leggi on www3.ti.ch, chpipe/ti_rl.py) and
+'zhlex' (ZH: zh.ch index + notes.zh.ch text, chpipe/zhlex.py); the source a
+canton's editions carry is named after its platform (TEXT_SOURCE).
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ class Canton:
     code: str
     host: str
     langs: tuple[str, ...]
-    platform: str          # 'lexwork' | 'sil' | 'ti_rl' | 'lexfind' (registry only)
+    platform: str          # 'lexwork' | 'sil' | 'ti_rl' | 'zhlex' | 'lexfind' (registry only)
     lexfind_id: int
 
 
@@ -70,7 +71,7 @@ ALL: dict[str, Canton] = {c.code: c for c in (
     _lf("VD", 23),
     _lw("VS", "lex.vs.ch", ("de", "fr"), 24),
     _lw("ZG", "bgs.zg.ch", ("de",), 25),
-    _lf("ZH", 26),
+    Canton("ZH", "www.zh.ch", ("de",), "zhlex", 26),
 )}
 
 LEXWORK: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "lexwork"}
@@ -80,7 +81,7 @@ SIL: dict[str, Canton] = {k: v for k, v in ALL.items() if v.platform == "sil"}
 # 203's vocabulary). A platform with no entry has no text pipeline yet, so
 # Gate F leaves the canton out rather than reporting zero parsed editions
 # as a defect.
-TEXT_SOURCE: dict[str, str] = {"lexwork": "lexwork", "sil": "sil", "ti_rl": "ti_rl"}
+TEXT_SOURCE: dict[str, str] = {"lexwork": "lexwork", "sil": "sil", "ti_rl": "ti_rl", "zhlex": "zhlex"}
 
 
 def version_source(code: str) -> str | None:

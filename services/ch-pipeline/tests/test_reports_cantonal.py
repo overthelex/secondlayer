@@ -123,7 +123,7 @@ def test_all_text_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
     rows = reports_cantonal.gate_f(conn)
     assert [r["canton"] for r in rows] == sorted(
         c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GE", "GL", "GR", "LU", "NE", "NW",
-                    "OW", "SG", "SH", "SO", "TG", "TI", "UR", "VS", "ZG"))
+                    "OW", "SG", "SH", "SO", "TG", "TI", "UR", "VS", "ZG", "ZH"))
     zg = next(r for r in rows if r["canton"] == "ZG")
     assert zg["acts_lexwork"] == 0 and zg["acts_lexfind"] == 1
     assert zg["only_in_lexfind"] == ["111.1"] and zg["versions_lexfind"] == 1
@@ -162,3 +162,25 @@ def test_a_sil_canton_is_filtered_on_its_own_source(conn):
     assert row["failed_by_reason"] == {"no_articles: prose without an Art. heading": 1}
     text = reports_cantonal.format_gate_f([row])
     assert "GE: acts sil 1 (in force 1) / lexfind 2 (active 1)" in text and "editions sil 2 / lexfind 3" in text
+
+
+def test_zurich_is_compared_on_its_own_source(conn):
+    """ZH editions carry source 'zhlex'; a lexwork row under ZH would be
+    another pipeline's mistake and must not count."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number, enforcement_status) "
+                 "VALUES (50, 'http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr=101', 'ZH', '101', 0)")
+    conn.execute("INSERT INTO ch_cantonal_registry (lexfind_tol_id, canton, systematic_number, is_active, "
+                 "versions_json, version_count) VALUES (21736, 'ZH', '101', true, "
+                 "'[{\"version_active_since\": \"01.07.2024\"}, {\"version_active_since\": \"01.04.2023\"}]', 2)")
+    for uri, start, source, stage in (("zhlex:101/129", "2024-07-01", "zhlex", "parsed"),
+                                      ("zhlex:101/121", "2023-04-01", "zhlex", "discovered"),
+                                      ("zhlex:101/000", "1869-04-18", "zhlex", "parsed"),
+                                      ("lexwork:oops", "2024-07-01", "lexwork", "parsed")):
+        conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+                     "xml_url, source, stage, article_count, full_text) VALUES (50, %s, 'de', %s, 'x', %s, %s, 5, "
+                     "repeat('x', 300))", (uri, start, source, stage))
+    row = reports_cantonal.gate_f(conn, "ZH")[0]
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 1
+    assert row["versions_lexwork"] == 3 and row["versions_lexfind"] == 2
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 1, "1869 predates LexFind's history"
+    assert row["parsed"] == 2 and row["pending"] == 1
