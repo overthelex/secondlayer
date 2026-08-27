@@ -882,6 +882,26 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.edition.source).toBe('fedlex_pdf');
     });
 
+    it('reports the real jurisdiction (ZH), not a hardcoded CH, for a cantonal act served via act_id', async () => {
+      const zh = await client.query(
+        `INSERT INTO ch_act (eli_work_uri, jurisdiction, sr_number, abbreviation, title_de, date_entry_force, enforcement_status)
+         VALUES ('https://www.zh.ch/zhlex/999.5', 'ZH', '999.5', 'ZHTXT', 'Zuercher Textgesetz', '2020-01-01', 0)
+         RETURNING act_id`
+      );
+      const zhActId = Number(zh.rows[0].act_id);
+      await client.query(
+        `INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, full_text)
+         VALUES ($1, 'https://www.zh.ch/zhlex/999.5/v1', 'de', '2020-01-01', NULL, 'parsed', 'lexwork', 'Kantonaler Volltext.')`,
+        [zhActId]
+      );
+
+      const result = await tools.executeTool('ch_get_act_text', { act_id: zhActId, as_of: '2021-01-01' });
+      const body = parse(result!);
+
+      expect(body.jurisdiction).toBe('ZH');
+      expect(body.text).toBe('Kantonaler Volltext.');
+    });
+
     it('caps max_chars at 200000 rather than erroring', async () => {
       const result = await tools.executeTool('ch_get_act_text', {
         sr_number: SR_TXT, as_of: '2021-01-01', max_chars: 999999,

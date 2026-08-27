@@ -342,7 +342,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('resolves sr_number scoped to the federal jurisdiction, ordered like the other ch_* tools', async () => {
       const { db, calls } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
         { rows: [{ text_slice: 'Text', total: 4 }] },
       ]);
@@ -366,7 +366,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('resolves act_id directly by act_id = $1, not by sr_number', async () => {
       const { db, calls } = makeDb([
-        { rows: [{ act_id: '42', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '42', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex_pdf', date_applicability: '1990-01-01', date_end_applicability: '1999-12-31' }] },
         { rows: [{ text_slice: 'Text', total: 4 }] },
       ]);
@@ -382,9 +382,22 @@ describe('ChLegislationTools canton parameter', () => {
       expect(result.jurisdiction).toBe('CH');
     });
 
+    it('echoes the real jurisdiction (ZH) for a cantonal act resolved via act_id, not a hardcoded CH', async () => {
+      const { db } = makeDb([
+        { rows: [{ act_id: '7', sr_number: '131.1', jurisdiction: 'ZH', title_de: 'Zuercher Erlass', title_fr: null, title_it: null }] },
+        { rows: [{ version_id: 'v-zh', lang: 'de', source: 'lexwork', date_applicability: '2020-01-01', date_end_applicability: null }] },
+        { rows: [{ text_slice: 'Kantonaler Text', total: 15 }] },
+      ]);
+      const tools = new ChLegislationTools(db);
+
+      const result = parse(await tools.executeTool('ch_get_act_text', { act_id: 7, as_of: '2021-01-01' }) as any);
+
+      expect(result.jurisdiction).toBe('ZH');
+    });
+
     it('clamps a negative offset to 0 and binds it as the second slicing parameter', async () => {
       const { db, calls } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
         { rows: [{ text_slice: 'Text', total: 4 }] },
       ]);
@@ -400,7 +413,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('caps max_chars at 200000 rather than erroring', async () => {
       const { db, calls } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2020-01-01', date_end_applicability: null }] },
         { rows: [{ text_slice: 'Text', total: 4 }] },
       ]);
@@ -413,7 +426,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('falls back to the NEAREST edition (by ORDER BY distance, not earliest) when no edition covers as_of', async () => {
       const { db, calls } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [] },
         { rows: [{ version_id: 'v-1', lang: 'de', source: 'fedlex', date_applicability: '2015-01-01', date_end_applicability: '2019-12-31' }] },
         { rows: [{ text_slice: 'Old text', total: 8 }] },
@@ -433,7 +446,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('labels the served fallback row nearest_earlier_edition when its date_applicability is at or before as_of', async () => {
       const { db } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [] },
         { rows: [{ version_id: 'v-2', lang: 'de', source: 'fedlex_pdf', date_applicability: '2003-01-01', date_end_applicability: '2007-12-31' }] },
         { rows: [{ text_slice: 'Text 2003', total: 9 }] },
@@ -448,7 +461,7 @@ describe('ChLegislationTools canton parameter', () => {
 
     it('reports no_edition_for_date when the act has no parsed edition with usable text at all', async () => {
       const { db } = makeDb([
-        { rows: [{ act_id: '1', sr_number: '220', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
+        { rows: [{ act_id: '1', sr_number: '220', jurisdiction: 'CH', title_de: 'Obligationenrecht', title_fr: null, title_it: null }] },
         { rows: [] },
         { rows: [] },
       ]);

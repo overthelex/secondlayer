@@ -570,18 +570,20 @@ offset/max_chars керують посторінковим читанням до
     const maxChars = Math.min(Math.max(Number(max_chars) || 50000, 1), 200000);
 
     try {
-      // act_id resolves directly; sr_number resolves like the other ch_* tools (the
-      // in-force act wins, then the most recently entered-into-force one), scoped to the
-      // federal jurisdiction — this tool has no `canton` parameter, unlike
-      // ch_get_act_article/ch_get_act_history.
+      // act_id resolves directly and can land on ANY jurisdiction (federal or cantonal) —
+      // this tool has no `canton` parameter, unlike ch_get_act_article/ch_get_act_history,
+      // so sr_number resolution is scoped to the federal jurisdiction only (the in-force
+      // act wins, then the most recently entered-into-force one); a cantonal act must be
+      // looked up by act_id instead. Either way, jurisdiction is SELECTed and echoed back
+      // from the real row — never assumed to be 'CH'.
       const act = hasActId
         ? (await this.db.query(
-            `SELECT act_id, sr_number, title_de, title_fr, title_it
+            `SELECT act_id, sr_number, jurisdiction, title_de, title_fr, title_it
                FROM ch_act WHERE act_id = $1`,
             [Number(act_id)]
           )).rows[0]
         : (await this.db.query(
-            `SELECT act_id, sr_number, title_de, title_fr, title_it
+            `SELECT act_id, sr_number, jurisdiction, title_de, title_fr, title_it
                FROM ch_act WHERE jurisdiction = 'CH' AND sr_number = $1
               ORDER BY in_force DESC, date_entry_force DESC NULLS LAST
               LIMIT 1`,
@@ -592,6 +594,11 @@ offset/max_chars керують посторінковим читанням до
         // Echo what failed, like the sibling ch_* tools' not_found shape (ch_get_act_article,
         // ch_get_act_history) — distinct from 'no_edition_for_date', which means the act
         // exists but has no usable machine-readable edition.
+        // No real row to read jurisdiction off here: the sr_number path already scoped
+        // its search to 'CH' (so that literal is accurate, not assumed), and the act_id
+        // path has no other jurisdiction to fall back to when the id does not resolve —
+        // this tool defaults to federal, cantonal acts being reached explicitly by an
+        // act_id the caller already knows is cantonal.
         return this.wrapResponse({
           error: 'not_found',
           entity: 'act',
@@ -689,9 +696,10 @@ offset/max_chars керують посторінковим читанням до
       return this.wrapResponse({
         act_id: Number(act.act_id),
         sr_number: act.sr_number,
-        // This tool is federal-only (no `canton` parameter — see ch_get_act_article for
-        // cantonal lookups), so the served act is always jurisdiction 'CH'.
-        jurisdiction: 'CH',
+        // The real jurisdiction of the resolved act — 'CH' for federal, a canton code
+        // (ZH, BE, ...) for cantonal acts reached via act_id. NOT hardcoded: a cantonal
+        // act served via act_id must not come back mislabelled 'CH'.
+        jurisdiction: act.jurisdiction,
         title: act[`title_${edition.lang}`],
         lang: edition.lang,
         requested_lang: requestedLang,
