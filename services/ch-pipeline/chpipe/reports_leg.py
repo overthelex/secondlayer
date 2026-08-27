@@ -124,9 +124,16 @@ def gate_e(conn, sr_numbers: list[str] | None = None,
                 (act["act_id"], lang))
             editions = cur.fetchone()["n"]
 
+            # source = 'fedlex', same reason as `editions` above: a parsed
+            # fedlex_pdf row's article_count is NULL by construction (no
+            # article split in fedlex_pdf_text_stage), so an unfiltered
+            # ORDER BY date_applicability DESC LIMIT 1 could pick a pdf-a
+            # row dated later than every XML edition and report
+            # articles_latest=NULL for an act whose true latest XML edition
+            # does have articles.
             cur.execute(
                 "SELECT article_count FROM ch_act_version WHERE act_id = %s "
-                "AND lang = %s AND stage = 'parsed' "
+                "AND lang = %s AND stage = 'parsed' AND source = 'fedlex' "
                 "ORDER BY date_applicability DESC LIMIT 1",
                 (act["act_id"], lang))
             latest = cur.fetchone()
