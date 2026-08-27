@@ -50,7 +50,7 @@ import datetime
 import re
 import time
 from dataclasses import dataclass, field
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlsplit, urlencode
 
 from lxml import html as lxml_html
 
@@ -69,6 +69,22 @@ FIRST_ENACTMENT = datetime.date(1800, 1, 1)
 
 WEBRT_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/"
 PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/OpenAttachment"
+# OpenAttachment answers 200 text/html with a JS redirect; the WebView/$File
+# form it points at serves the PDF directly (verified 2026-08-27: 200,
+# application/pdf, no UA or cookie needed), so that is what gets stored.
+DIRECT_PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/"
+
+
+def pdf_direct_url(url: str) -> str:
+    """The OpenAttachment link rewritten to the WebView/$File form the JS
+    redirect targets; any other URL is returned as is."""
+    if not url.startswith(PDF_PREFIX):
+        return url
+    query = parse_qs(urlsplit(url).query)
+    docid, file = query.get("docid", [None])[0], query.get("file", [None])[0]
+    if not docid or not file:
+        return url
+    return f"{DIRECT_PDF_PREFIX}{docid}/$File/{file}"
 
 
 class ZhlexParseError(ValueError):
@@ -247,8 +263,8 @@ def parse_act_page(payload: bytes | str, content_type: str | None = None) -> Act
     pdf_url = html_url = None
     for a in root.iter("a"):
         href = a.get("href") or ""
-        if href.startswith(PDF_PREFIX) and pdf_url is None:
-            pdf_url = href
+        if href.startswith((PDF_PREFIX, DIRECT_PDF_PREFIX)) and pdf_url is None:
+            pdf_url = pdf_direct_url(href)
         elif href.startswith(WEBRT_PREFIX) and html_url is None:
             html_url = href
     if selected is None:

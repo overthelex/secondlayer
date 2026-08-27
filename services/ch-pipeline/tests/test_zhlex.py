@@ -59,8 +59,9 @@ def test_parse_current_edition_page():
     assert page.version_no == "129"
     assert page.enactment_date == D(2005, 2, 27) and page.entry_into_force == D(2006, 1, 1)
     assert page.publication_date == D(2024, 7, 1) and page.withdrawal_date is None
-    assert page.pdf_url == ("https://www.notes.zh.ch/appl/zhlex_r.nsf/OpenAttachment?Open"
-                            "&docid=29614D695A87DA0DC1258C67004880D5&file=101_27.2.05_129.pdf")
+    assert page.pdf_url == ("https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/"
+                            "29614D695A87DA0DC1258C67004880D5/$File/101_27.2.05_129.pdf"), \
+        "OpenAttachment is a JS redirect page; the WebView form serves the PDF"
     assert page.html_url is None
     assert page.act_url == "http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr=101"
     # the Historie list, trimmed to 6 entries in the fixture: newest first
@@ -76,7 +77,7 @@ def test_parse_old_edition_page_with_html_and_pdf_and_no_publication_date():
     assert page.enactment_date == D(1869, 4, 18) and page.entry_into_force is None
     assert page.publication_date is None and page.withdrawal_date == D(2006, 1, 1)
     assert page.html_url == "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/C1256C610039641BC12568DA00191153"
-    assert page.pdf_url.endswith("file=101_18.4.69_39.pdf")
+    assert page.pdf_url.endswith("/$File/101_18.4.69_39.pdf")
 
 
 def test_text_url_prefers_the_html_rendering():

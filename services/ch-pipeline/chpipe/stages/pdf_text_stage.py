@@ -72,7 +72,7 @@ SOURCES = ("lexwork_pdf", "lexfind")
 # the 541 editions without a text link are never claimed here. The default
 # run (CHPIPE_SOURCE unset) stays on the two PDF-only sources.
 ZHLEX_SOURCE = "zhlex"
-ZHLEX_PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/OpenAttachment"
+ZHLEX_PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/"
 # BE 661.11 (the tax law, 129 pages) is 844 KB; the BE constitution with
 # annexes ~1 MB. Anything past this is not an edition.
 MAX_PDF_BYTES = 60_000_000

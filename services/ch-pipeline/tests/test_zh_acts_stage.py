@@ -174,7 +174,7 @@ def test_enumerates_the_index_under_the_cap_and_materialises_acts_and_editions(c
         (D(2024, 7, 1), None),
     ]
     assert rows[0][3].startswith(zhlex.WEBRT_PREFIX) and rows[1][3].startswith(zhlex.WEBRT_PREFIX)
-    assert rows[5][3].startswith(zhlex.PDF_PREFIX)
+    assert rows[5][3].startswith(zhlex.DIRECT_PDF_PREFIX), "stored URL is the direct WebView form, not the JS-redirect OpenAttachment"
     assert {r[4:] for r in rows} == {("zhlex", "discovered", "de")}
     assert conn.execute("SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id) "
                         "WHERE a.sr_number='101' AND v.date_end_applicability IS NULL").fetchone()[0] == 1
