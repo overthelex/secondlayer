@@ -1769,6 +1769,80 @@ listed in Gate F, the text is not lost (it is in `akn_xml`), but there are
 no article rows; `404: act page gone` is a TOC entry the host does not
 serve, compare against the TOC of the day.
 
+## PDF editions (Lexwork PDF-only versions, LexFind PDFs)
+
+Two kinds of edition have no HTML: a Lexwork host's version without a
+structured document (`pdf_only` in `cantonal-fetch`: 18,777 rows on
+2026-08-26, 670 in-force acts whose CURRENT edition is one; LEXAI-2010),
+and the editions only lexfind.ch holds (the seven cantons without a host,
+and editions older than a host's history; ~55K PDFs, LEXAI-2016/2017).
+Both go through one stage, `pdf-text` (`chpipe/stages/pdf_text_stage.py`),
+which claims `ch_act_version` rows with `source IN ('lexwork_pdf',
+'lexfind')` at stage `discovered`, downloads `xml_url` (a PDF URL), keeps
+the file under `raw/pdf/{version_id}.pdf`, runs `chpipe/pdf_text.py`
+(pdftotext -layout, then the split) and stores the raw pdftotext output in
+`akn_xml`, the articles in `ch_act_article` and `full_text` -- stage
+`parsed`, like the HTML path. `pdf_text.split_text(akn_xml)` re-splits an
+edition offline, so a better splitter never needs the PDF again.
+
+The extractor was gated before it was trusted (`scripts/pdf_gate.py`, the
+numbers are in its docstring): 60 editions from 9 hosts in de/fr/it/rm
+that exist BOTH as HTML and as the host's PDF, compared article by article
+-- 60/60 with the same article count, per-article text ratio median 1.000
+(p25 1.000, 927 articles), Lexwork uid reproduced for 100% of them, so
+`diff` can key a PDF edition against an HTML one of the same act. Known
+shapes below 0.9: tables inside a provision (pdftotext emits rows, the
+HTML walks cells) and pre-2015 conversions with older layouts (VS 101.1 of
+2008 loses two of 103 article headings). Article-less acts (a coat of
+arms, an accession decision: 3 of 20 PDF-only editions sampled) are stored
+with `article_count = 0` and counted as `empty`, as `cantonal-parse` does;
+under 200 characters of text is retired as `text too short`.
+
+Install on prod (once): `pdftotext` is poppler-utils, already on the box
+(22.02) for the decisions corpus; the venv needs nothing new
+(`~/ch-pipeline-venv` has httpx, lxml, psycopg). Check with
+`which pdftotext && ~/ch-pipeline-venv/bin/python -c "import chpipe.pdf_text"`.
+
+Order, supervised (tmux, never under the nightly flock):
+
+    # 1. the 670 in-force acts first: one tol request per act, no PDFs yet
+    CHPIPE_CURRENT_ONLY=1 ./run-stage.sh lexwork-pdf-requeue          # or one canton: ... FR
+    # 2. their PDFs
+    ./run-stage.sh pdf-text                                            # CHPIPE_SOURCE=lexwork_pdf to leave LexFind rows alone
+    # 3. read 20 of them against the host, then the rest of the host backlog
+    ./run-stage.sh lexwork-pdf-requeue
+    ./run-stage.sh pdf-text
+    # 4. LexFind (the rows lexfind-registry materialised as source 'lexfind')
+    CHPIPE_SOURCE=lexfind ./run-stage.sh pdf-text
+
+`lexwork-pdf-requeue` fetches each act's tol record once (cache per act)
+and, per PDF-only row, sets `source = 'lexwork_pdf'`, `stage =
+'discovered'`, `xml_url = https://{host}/api/{lang}/versions/{id}/pdf_file`
+-- the one URL shape every host uses (read off 60 parsed versions on 9
+hosts, confirmed 20/20 live on PDF-only rows across 7 hosts; the tol record
+itself lists versions WITHOUT a pdf link). A version the host has since
+given a structured document goes back to the HTML path instead
+(`requeued_html`); a version the host no longer lists stays failed
+(`pdf_only: version not listed by host`). `pdf-text` retires LexFind's
+"shadow" rows (same-day replaced editions, `date_end_applicability` one
+day before `date_applicability`, ~12.5K) with `last_error =
+'shadow_edition'` before its first claim, so they are never downloaded.
+
+Rate: `CHPIPE_PDF_RPS` (default 2) request starts per second per host,
+`CHPIPE_CANTONAL_PER_HOST` (default 2) in flight per host, pdftotext
+bounded by `CHPIPE_CPU_WORKERS`. Expected runtime: the 18,777 host PDFs
+are spread over 18 hosts, and FR (6,172) and GR (4,980) bound the run at
+2 req/s: ~52 minutes for FR, ~42 for GR, the other hosts finish inside
+that -- about an hour end to end for LEXAI-2010, a few minutes for the
+in-force subset (178 FR + 150 GR rows). The ~55K LexFind PDFs are one host
+(lexfind.ch) at 2 req/s: ~7.6 hours. Sizes: 100-850 KB per PDF, ~5 GB on
+disk for LexFind, ~4 GB for the hosts.
+
+Failure reasons: `not a PDF (...)` (the host answered HTML -- a login page
+or an error; retried within the attempt budget), `text too short`,
+`pdftotext: ...` (poppler refused the file), `shadow_edition`. Retry with
+`db.retry_failed_versions()` as for the other legislation stages.
+
 ## Point-in-time benchmark (chpipe.bench)
 
 `chpipe/bench` is a separate package from the two pipelines above. It does
