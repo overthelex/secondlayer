@@ -74,17 +74,20 @@ class _FakeSparqlClient:
     `query_template is fq.VERSIONS_PDF` so the two passes can be fed
     different rows (`rows` for the xml pass, `pdf_rows` for the pdf pass,
     empty by default so every pre-existing single-pass test keeps its old
-    behaviour unchanged). `batches` reflects only the most recent call, not
-    an accumulation across both passes -- both passes are driven by the
-    identical works list and batch_size, so for every existing assertion
-    that inspects `.batches` after run() this is indistinguishable from
-    what the xml-only pass alone produced."""
+    behaviour unchanged). Every call is recorded separately in `self.calls`
+    (query_template, batches) -- collapsing both calls into one shared
+    `self.batches` used to mean an xml-pass assertion silently started
+    reading the pdf pass's batching instead (they happen to come out
+    structurally identical, since both passes are driven by the same works
+    list and batch_size, but that is an accident of these tests' inputs, not
+    something the fake should rely on). `xml_batches`/`pdf_batches` name the
+    call each assertion actually means."""
 
     def __init__(self, rows, pdf_rows=None):
         self._rows = rows
         self._pdf_rows = pdf_rows if pdf_rows is not None else []
         self.closed = False
-        self.batches: list[list[str]] = []
+        self.calls: list[tuple[str, list[list[str]]]] = []
 
     def batched(self, query_template, uris, batch_size=20):
         batches: list[list[str]] = []
@@ -96,11 +99,25 @@ class _FakeSparqlClient:
                 batch = []
         if batch:
             batches.append(batch)
-        self.batches = batches
+        self.calls.append((query_template, batches))
         if not batches:
             return
         rows = self._pdf_rows if query_template is fq.VERSIONS_PDF else self._rows
         yield from rows
+
+    def _batches_for(self, query_template) -> list[list[str]]:
+        for template, batches in self.calls:
+            if template is query_template:
+                return batches
+        return []
+
+    @property
+    def xml_batches(self) -> list[list[str]]:
+        return self._batches_for(fq.VERSIONS)
+
+    @property
+    def pdf_batches(self) -> list[list[str]]:
+        return self._batches_for(fq.VERSIONS_PDF)
 
     def close(self):
         self.closed = True
@@ -249,12 +266,12 @@ def test_run_is_driven_by_the_works_in_ch_act(conn, settings, monkeypatch):
     _run_with_rows(monkeypatch, settings, [], capture=seen)
     fake = seen[0]
 
-    driven = [u for b in fake.batches for u in b]
+    driven = [u for b in fake.xml_batches for u in b]
     stored = [r[0] for r in conn.execute(
         "SELECT eli_work_uri FROM ch_act ORDER BY eli_work_uri").fetchall()]
     assert driven == stored, "every discovered work must drive the walk, in order"
-    assert len(fake.batches) == 3, "46 works in batches of 20 is three batches"
-    assert [len(b) for b in fake.batches] == [20, 20, 6]
+    assert len(fake.xml_batches) == 3, "46 works in batches of 20 is three batches"
+    assert [len(b) for b in fake.xml_batches] == [20, 20, 6]
 
 
 def test_run_uses_the_measured_batch_size_by_default(conn, settings, monkeypatch):
@@ -268,7 +285,7 @@ def test_run_uses_the_measured_batch_size_by_default(conn, settings, monkeypatch
         acts_stage.upsert_act(conn, {"work": f"https://fedlex.data.admin.ch/eli/cc/y/{i:03d}"})
     seen: list = []
     _run_with_rows(monkeypatch, settings, [], capture=seen)
-    assert [len(b) for b in seen[0].batches] == [fq.WORK_BATCH_SIZE, 6]
+    assert [len(b) for b in seen[0].xml_batches] == [fq.WORK_BATCH_SIZE, 6]
 
 
 def test_run_asks_fedlex_nothing_when_ch_act_is_empty(conn, settings, monkeypatch):
@@ -277,7 +294,8 @@ def test_run_asks_fedlex_nothing_when_ch_act_is_empty(conn, settings, monkeypatc
     conn.execute("DELETE FROM ch_act")
     seen: list = []
     report = _run_with_rows(monkeypatch, settings, [_row()], capture=seen)
-    assert seen[0].batches == []
+    assert seen[0].xml_batches == []
+    assert seen[0].pdf_batches == []
     assert report.discovered == 0
 
 
@@ -314,7 +332,7 @@ def test_the_walk_restarts_from_the_beginning_rather_than_resuming(conn, setting
     _run_with_rows(monkeypatch, settings, [], capture=first)
     second: list = []
     _run_with_rows(monkeypatch, settings, [], capture=second)
-    assert first[0].batches == second[0].batches, \
+    assert first[0].xml_batches == second[0].xml_batches, \
         "a re-run must redo the whole pass, not resume past what it already walked"
 
 
