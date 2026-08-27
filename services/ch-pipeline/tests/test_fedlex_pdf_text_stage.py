@@ -193,6 +193,24 @@ def test_limit_bounds_the_run(conn, settings):
     assert report.claimed == 2 and report.parsed == 2
 
 
+def test_limit_spans_batches_and_stops_exactly_at_the_cap(
+        conn, settings, monkeypatch):
+    # The nightly delta relies on the multi-batch path (cap 2000 >> BATCH_SIZE
+    # is the production shape only in reverse): with BATCH_SIZE forced below
+    # the cap, `remaining` must carry across claim rounds and stop the run at
+    # exactly the cap, leaving the rest claimable.
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    monkeypatch.setattr(mod, "BATCH_SIZE", 2)
+    for i in range(5):
+        _row(conn, consolidation=f"{URL}#{i}", url=URL)
+    report = _run(settings, Host(), limit=3)
+    assert report.claimed == 3 and report.parsed == 3
+    left = conn.execute(
+        "SELECT count(*) FROM ch_act_version WHERE stage = 'discovered'"
+    ).fetchone()[0]
+    assert left == 2
+
+
 def test_pdftoolmissing_aborts_the_run_loudly_instead_of_failing_the_row(
         conn, settings, monkeypatch):
     from chpipe.stages import fedlex_pdf_text_stage as mod

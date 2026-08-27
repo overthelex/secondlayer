@@ -411,6 +411,29 @@ describeIfPg('ChLegislationTools (real PostgreSQL)', () => {
       expect(body.available_examples).toEqual(['336']);
     });
 
+    it('names the missing article split distinctly when the served edition is a pdf-era full text', async () => {
+      // A pdf-era edition (full_text, no ch_act_article rows) covering an
+      // earlier window: asking for an article inside that window must NOT
+      // read as "no such article in the law".
+      await client.query(
+        `INSERT INTO ch_act_version
+           (act_id, eli_consolidation_uri, lang, date_applicability, date_end_applicability, stage, source, full_text)
+         VALUES ($1, 'eli/cc/27/317_321_377/de/2005-01-01', 'de', '2005-01-01', '2014-12-31', 'parsed', 'fedlex_pdf', 'Art. 336 Alte Fassung...')`,
+        [actId]
+      );
+      const result = await tools.executeTool('ch_get_act_article', {
+        sr_number: '220',
+        article: '336',
+        as_of: '2010-06-01',
+      });
+      const body = parse(result!);
+
+      expect(body.error).toBe('edition_has_no_article_split');
+      expect(body.edition.source).toBe('fedlex_pdf');
+      expect(body.edition.date_applicability).toBe('2005-01-01');
+      expect(body.message).toMatch(/ch_get_act_text/);
+    });
+
     it('reports no_edition_for_date for as_of 2010-01-01, before any machine-readable edition', async () => {
       const result = await tools.executeTool('ch_get_act_article', {
         sr_number: '220',

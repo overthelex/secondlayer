@@ -73,8 +73,12 @@ log = logging.getLogger(__name__)
 # share this single definition of "latest" rather than each restating it.
 #
 # The ORDER BY carries a second key ahead of recency:
-# (source = 'fedlex_pdf') ASC puts every non-pdf parsed row (false) before
-# every fedlex_pdf row (true) for the same (act_id, lang), so DISTINCT ON
+# (source IN ('fedlex_pdf', 'lexwork_pdf')) ASC puts every structured parsed
+# row (false) before every pdf-text row (true) for the same (act_id, lang) --
+# lexwork_pdf included pre-emptively: nothing writes it on this branch, but the
+# cantonal phase-2 branch does, and without the demotion the same eviction
+# would silently return for cantonal acts the day both branches are merged --
+# so DISTINCT ON
 # picks a pdf-a row only when NO xml/cantonal parsed row exists for that
 # act+lang at all. Within each of those two groups, date_applicability DESC
 # still picks the latest edition -- unchanged recency semantics, just
@@ -89,7 +93,7 @@ _LATEST_PARSED_VERSION = """
     SELECT DISTINCT ON (act_id, lang) *
       FROM ch_act_version
      WHERE stage = 'parsed'
-     ORDER BY act_id, lang, (source = 'fedlex_pdf') ASC, date_applicability DESC
+     ORDER BY act_id, lang, (source IN ('fedlex_pdf', 'lexwork_pdf')) ASC, date_applicability DESC
 """
 
 # The editions this run will project, oldest version_id first. Read as a

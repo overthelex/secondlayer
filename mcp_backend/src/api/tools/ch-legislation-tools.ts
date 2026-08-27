@@ -174,7 +174,7 @@ canton (типово 'CH') задає юрисдикцію акта: 'CH' або
         description: `Повний текст швейцарського акта в редакції, чинній на задану дату.
 
 Обов'язково рівно один з act_id або sr_number (для sr_number резолвиться федеральний акт, чинний пріоритетно, як і в інших ch_* інструментах — canton тут не підтримується, для кантональних актів використовуйте act_id). as_of — обов'язкова дата (YYYY-MM-DD). У відповіді є поле jurisdiction.
-Текст подається зі збереженого повного тексту редакції; якщо його немає, він збирається зі статей (ch_act_article, з позначками "Art. N" і заголовками). Поле edition.source показує, яке джерело обслужило запит.
+Текст подається зі збереженого повного тексту редакції; якщо його немає, він збирається зі статей (ch_act_article, з позначками "Art. N" і заголовками). Поле edition.source показує походження редакції (fedlex — XML Fedlex, fedlex_pdf — історична PDF-консолідація, lexwork та інші — кантональні джерела).
 Якщо жодна редакція не покриває as_of — обирається НАЙБЛИЖЧА в часі машиночитана редакція акта (не обов'язково найдавніша: Fedlex публікує не всі редакції, тож пропуски між редакціями — очікувана ситуація, як і запит на дату після скасування акта): retrieval_status='nearest_earlier_edition', якщо обрана редакція починається на as_of або раніше, інакше 'nearest_later_edition' (замість 'edition_at_date'). Якщо машиночитаних редакцій немає взагалі — { error: 'no_edition_for_date', earliest_edition: null }. Якщо акт не знайдено — { error: 'not_found', entity: 'act', ... }.
 lang (типово 'de') — бажана мова; якщо редакції цією мовою немає, обслуговується німецька (lang у відповіді показує фактичну мову, requested_lang — запитану).
 offset/max_chars керують посторінковим читанням довгого тексту (max_chars типово 50000, максимум 200000); truncated=true, якщо текст не вміщено повністю.`,
@@ -371,7 +371,7 @@ offset/max_chars керують посторінковим читанням до
       }
 
       const edition = (await this.db.query(
-        `SELECT version_id, eli_consolidation_uri,
+        `SELECT version_id, eli_consolidation_uri, source,
                 to_char(date_applicability, 'YYYY-MM-DD') AS date_applicability,
                 to_char(date_end_applicability, 'YYYY-MM-DD') AS date_end_applicability
            FROM ch_act_version
@@ -425,6 +425,22 @@ offset/max_chars керують посторінковим читанням до
           [edition.version_id]
         )).rows.map((r: any) => r.article_number);
 
+        if (examples.length === 0) {
+          // The edition exists but was never split into articles — the PDF-era
+          // consolidations carry only full_text. Naming that distinctly keeps the
+          // caller from reading "article_not_found" as "no such article in the law";
+          // the article is in the law, only the split is missing.
+          return this.wrapResponse({
+            error: 'edition_has_no_article_split',
+            edition: {
+              date_applicability: edition.date_applicability,
+              date_end_applicability: edition.date_end_applicability,
+              source: edition.source,
+            },
+            message:
+              'Ця редакція не має поділу на статті (лише повний текст). Використайте ch_get_act_text з тим самим act_id та as_of.',
+          });
+        }
         return this.wrapResponse({
           error: 'article_not_found',
           available_examples: examples,
@@ -644,7 +660,7 @@ offset/max_chars керують посторінковим читанням до
       }
 
       // Edition pick: the best edition (across all langs) that covers as_of AND actually
-      // has text to serve — either full_text (pdf-era) or ch_act_article rows (xml-era).
+      // has text to serve — a stored full_text or ch_act_article rows.
       // date_end_applicability is the LAST DAY the edition is in force (inclusive), same
       // predicate as ch_get_act_article.
       let edition = (await this.db.query(
