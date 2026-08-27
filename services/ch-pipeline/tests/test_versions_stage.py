@@ -11,10 +11,11 @@ import pytest
 from chpipe.stages import acts_stage, versions_stage
 from chpipe.config import Settings
 
+from conftest import reset_legislation_schema
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/test_versions_stage.py
 # is 3 levels down from the repo root
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
-M197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
 
 L = "http://publications.europa.eu/resource/authority/language/"
 WORK = "https://fedlex.data.admin.ch/eli/cc/27/317_321_377"
@@ -26,12 +27,11 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def conn():
     with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
+        # reset_legislation_schema (conftest.py) applies 197, 198, 201 and
+        # 204 -- the source column and its widened CHECK (fedlex_pdf
+        # included) live in 201/204, and the pdf-a discovery tests below
+        # need both.
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {"work": WORK, "srNotation": "220"})
         yield c
 
