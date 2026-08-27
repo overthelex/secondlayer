@@ -624,6 +624,31 @@ jobs:
       - name: Verify through nginx
         run: |
           set -euo pipefail
+
+          # TLS проверяем ОТДЕЛЬНО и по имени публичного домена. 27.08.2026
+          # деплой вернул конфиг из git, где путь к сертификату остался от
+          # local-имён: nginx поднялся, /health отдавал 200, а снаружи
+          # Cloudflare 79 секунд отвечал 526, потому что сертификат не покрывал
+          # legal.org.ua. Проверка ниже смотрела на 127.0.0.1 по http и этого
+          # не видела — отказ был виден только тому, кто ходит с проверкой цепочки.
+          PUB=$({ grep -E '^PUBLIC_URL=' "$HOME/SecondLayer/deployment/.env.local" || true; } | tail -1 | cut -d= -f2-)
+          HOST=$(printf '%s' "$PUB" | sed -E 's#^https?://##; s#/.*##')
+          if [ -n "$HOST" ]; then
+            SAN=$(echo | openssl s_client -servername "$HOST" -connect 127.0.0.1:443 2>/dev/null \
+                  | openssl x509 -noout -ext subjectAltName 2>/dev/null || true)
+            PARENT=$(printf '%s' "$HOST" | cut -d. -f2-)
+            if printf '%s' "$SAN" | grep -qF "DNS:$HOST" || printf '%s' "$SAN" | grep -qF "DNS:*.$PARENT"; then
+              echo "сертификат покрывает $HOST"
+            else
+              echo "::error::сертификат, отдаваемый на имя $HOST, его не покрывает — снаружи это Cloudflare 526"
+              echo "SAN: ${SAN:-<не получен>}"
+              grep -n 'ssl_certificate ' "$HOME/SecondLayer/deployment/nginx/local-docker.conf" | head -4
+              exit 1
+            fi
+          else
+            echo "::warning::PUBLIC_URL пуст — проверку сертификата пропускаю"
+          fi
+
           # Проверяем не контейнер, а путь целиком — так же, как его видит пользователь
           for i in $(seq 1 12); do
             code=$(docker exec nginx-local wget -q -O /dev/null -S --header="Host: local.legal.org.ua" http://127.0.0.1/health 2>&1 | grep -oE "HTTP/1.[01] [0-9]+" | tail -1 | awk '{print $2}' || true)
