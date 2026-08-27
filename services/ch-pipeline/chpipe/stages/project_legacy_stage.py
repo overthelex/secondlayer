@@ -71,11 +71,25 @@ log = logging.getLogger(__name__)
 # latest date_applicability" completely and correctly, so it is the only
 # mechanism kept here -- both _PROJECT and the two report queries below
 # share this single definition of "latest" rather than each restating it.
+#
+# The ORDER BY carries a second key ahead of recency:
+# (source = 'fedlex_pdf') ASC puts every non-pdf parsed row (false) before
+# every fedlex_pdf row (true) for the same (act_id, lang), so DISTINCT ON
+# picks a pdf-a row only when NO xml/cantonal parsed row exists for that
+# act+lang at all. Within each of those two groups, date_applicability DESC
+# still picks the latest edition -- unchanged recency semantics, just
+# scoped to whichever source group actually has a real XML/cantonal
+# edition. Without this, a pdf-a edition that merely post-dates every XML
+# edition of the same act won outright, and _PROJECT's ON CONFLICT then
+# overwrote ch_legislation's real akn_xml/article_count with NULL. For an
+# act with ONLY pdf-a editions (typically repealed pre-2021 acts that
+# previously projected nothing at all), the pdf row still wins -- a pure
+# gain, and akn_xml NULL there is honest, not a regression.
 _LATEST_PARSED_VERSION = """
     SELECT DISTINCT ON (act_id, lang) *
       FROM ch_act_version
      WHERE stage = 'parsed'
-     ORDER BY act_id, lang, date_applicability DESC
+     ORDER BY act_id, lang, (source = 'fedlex_pdf') ASC, date_applicability DESC
 """
 
 # The editions this run will project, oldest version_id first. Read as a

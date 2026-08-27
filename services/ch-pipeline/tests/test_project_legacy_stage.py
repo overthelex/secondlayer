@@ -291,3 +291,49 @@ def test_a_cantonal_act_projects_with_source_lexwork_and_its_jurisdiction(conn, 
         "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
         "WHERE eli_uri <> 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchall()
     assert all(r == ("fedlex", "CH") for r in federal)
+
+
+# --- F2 review fix: a pdf-a edition must not evict a real XML edition ---
+# _LATEST_PARSED_VERSION picked DISTINCT ON (act_id, lang) purely by
+# date_applicability, with no source preference. A pdf-a edition
+# (source='fedlex_pdf') that post-dates every XML edition of the same act
+# therefore won, and _PROJECT's ON CONFLICT overwrote ch_legislation's real
+# akn_xml/article_count with NULL. The fix: prefer the latest non-pdf parsed
+# row when the act+lang has one; fall back to the latest pdf row only when
+# every parsed row for that act+lang is pdf-a.
+
+def _pdf_edition(conn, date, text, lang="de"):
+    """A parsed fedlex_pdf edition -- no akn_xml, no article_count (PDF-era
+    prose has no e_id structure to split on), same shape
+    fedlex_pdf_text_stage.complete_version() leaves behind."""
+    act_id = conn.execute(
+        "SELECT act_id FROM ch_act WHERE eli_work_uri = %s", (WORK,)).fetchone()[0]
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, "
+        "date_applicability, source, stage, full_text) "
+        "VALUES (%s, %s, %s, %s, 'fedlex_pdf', 'parsed', %s)",
+        (act_id, f"{WORK}/{date}/pdf", lang, date, text))
+
+
+def test_a_newer_pdf_edition_does_not_evict_the_xml_edition(conn, settings):
+    vid = _edition(conn, "2020-01-01", "alte Fassung")
+    conn.execute("UPDATE ch_act_version SET akn_xml='<akomaNtoso/>', article_count=5 "
+                "WHERE version_id=%s", (vid,))
+    _pdf_edition(conn, "2026-01-01", "neue pdf Fassung")
+
+    assert project_legacy_stage.run(settings) == 1
+    row = conn.execute(
+        "SELECT full_text, akn_xml, (metadata_json->>'article_count')::int "
+        "FROM ch_legislation WHERE lang='de'").fetchone()
+    assert row == ("alte Fassung", "<akomaNtoso/>", 5)
+
+
+def test_an_act_with_only_pdf_editions_projects_with_akn_xml_null(conn, settings):
+    """A pure gain: this act previously projected nothing at all (no parsed
+    row existed for it). akn_xml NULL here is honest, not a regression."""
+    _pdf_edition(conn, "2026-01-01", "pdf only Fassung")
+
+    assert project_legacy_stage.run(settings) == 1
+    row = conn.execute(
+        "SELECT full_text, akn_xml FROM ch_legislation WHERE lang='de'").fetchone()
+    assert row == ("pdf only Fassung", None)
