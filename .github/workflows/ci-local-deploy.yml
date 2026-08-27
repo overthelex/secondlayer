@@ -398,6 +398,80 @@ jobs:
           fi
           echo "Переменных в .env.local: $(grep -cE '^[A-Z_]+=' "$ENV_FILE")"
 
+          # Значение переменной — ПОСЛЕДНЕЕ её определение: так читает docker compose.
+          # Файл переживал несколько переездов, ключи в нём дублируются, и
+          # смотреть на первое вхождение — верный способ обмануть самого себя.
+          # `|| true` внутри: при set -e и pipefail ненайденная переменная иначе
+          # роняет шаг на первом же присваивании, и до остальных проверок дело
+          # не доходит — проверка молчит ровно там, где должна ругаться.
+          val() { { grep -E "^$1=" "$ENV_FILE" || true; } | tail -1 | cut -d= -f2- ; }
+          cnt() { { grep -cE "^$1=" "$ENV_FILE" || true; } | tail -1 ; }
+
+          fail=0
+          bad() { echo "::error::$*"; fail=1; }
+
+          PUBLIC_URL=$(val PUBLIC_URL)
+          [ -n "$PUBLIC_URL" ] || bad "PUBLIC_URL не задан — не с чем сверять остальные адреса"
+          echo "Публичный адрес стенда: ${PUBLIC_URL:-<пусто>}"
+
+          # 1. Адреса. Всё, что уходит наружу (редирект OAuth, ссылки в письмах,
+          # ссылка на пополнение, публичные URL файлов), должно вести на тот же
+          # домен, на котором стенд реально отвечает. 27.08.2026 боевой домен
+          # переехал на этот хост, а FRONTEND_URL и GOOGLE_CALLBACK_URL остались
+          # на local.legal.org.ua — вход через Google уводил на чужой адрес.
+          if [ -n "$PUBLIC_URL" ]; then
+            for v in FRONTEND_URL GOOGLE_CALLBACK_URL MINIO_PUBLIC_URL; do
+              cur=$(val "$v")
+              if [ -z "$cur" ]; then
+                echo "::warning::$v не задан — возьмётся значение по умолчанию из compose"
+              elif [ "${cur#$PUBLIC_URL}" = "$cur" ]; then
+                bad "$v=$cur не начинается с PUBLIC_URL=$PUBLIC_URL"
+              fi
+            done
+
+            # 2. CORS. Бэкенд отдаёт заголовки только для перечисленных здесь
+            # источников; nginx их больше не дублирует. Домена нет в списке —
+            # браузер не увидит X-Total-Count и прочие exposed-заголовки.
+            ORIGINS=$(val ALLOWED_ORIGINS)
+            case ",$ORIGINS," in
+              *",$PUBLIC_URL,"*) : ;;
+              *) bad "ALLOWED_ORIGINS не содержит $PUBLIC_URL (сейчас: ${ORIGINS:-<пусто>})" ;;
+            esac
+          fi
+
+          # 3. Ключи межсервисных вызовов. Сервис принимает список *_API_KEYS,
+          # бэкенд стучится одиночным *_API_KEY. Разошлись — сервис отвечает
+          # 401, а чат молча теряет его инструменты: ровно так 27.08.2026
+          # пропали все 12 инструментов openreyestr, и заметно это было только
+          # по строчке "not registered in ToolRegistry" в логах.
+          for svc in OPENREYESTR RADA; do
+            one=$(val "${svc}_API_KEY"); many=$(val "${svc}_API_KEYS")
+            [ -n "$one" ] && [ -n "$many" ] || continue
+            case ",$many," in
+              *",$one,"*) echo "${svc}: ключ бэкенда есть в списке принимаемых" ;;
+              *) bad "${svc}_API_KEY не входит в ${svc}_API_KEYS — сервис ответит 401 и его инструменты выпадут из чата" ;;
+            esac
+          done
+
+          # 4. Режим. В development бэкенд отдаёт клиенту текст внутренней
+          # ошибки и пускает любой localhost-источник. На публичном домене это
+          # утечка, поэтому здесь только production.
+          NODE_ENV=$(val NODE_ENV)
+          case "$PUBLIC_URL" in
+            *localhost*|*local.legal.org.ua*) : ;;
+            *) [ "$NODE_ENV" = "production" ] || bad "NODE_ENV=${NODE_ENV:-<пусто>} на публичном домене $PUBLIC_URL — нужен production" ;;
+          esac
+
+          # Дубли сами по себе не ошибка (файл так устроен), но именно из-за них
+          # правка «в нужной строке» может не подействовать — печатаем явно.
+          for v in PUBLIC_URL FRONTEND_URL ALLOWED_ORIGINS NODE_ENV GOOGLE_CALLBACK_URL MINIO_PUBLIC_URL OPENREYESTR_API_KEY OPENREYESTR_API_KEYS; do
+            n=$(cnt "$v")
+            [ "${n:-0}" -gt 1 ] && echo "::warning::$v определён $n раз — действует последний"
+          done
+
+          [ "$fail" = "0" ] || { echo "::error::.env.local рассогласован — деплой остановлен до правки файла на машине"; exit 1; }
+          echo "Проверка .env.local пройдена"
+
       - name: Guard against unreadable paths in the checkout
         run: |
           set -euo pipefail
@@ -472,11 +546,30 @@ jobs:
           # 26.08: 10 секунд 502 у пользователей ещё до переключения цвета.
           $DC up -d --no-deps $OTHERS
 
-          # После пересоздания сервисов выше их IP меняются, а nginx резолвит
-          # имена апстримов один раз при старте — та самая причина 502 из
-          # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
-          # если выкатка нового цвета сорвётся, старый останется доступен.
-          docker exec nginx-local nginx -s reload 2>/dev/null || true
+          # Конфиг nginx примонтирован ОДИНОЧНЫМ файлом, а docker привязывает
+          # такой mount к inode. `git reset --hard` выше пишет новый файл и
+          # переименовывает его — inode меняется, и контейнер продолжает
+          # видеть СТАРЫЙ конфиг. `nginx -s reload` при этом отрабатывает
+          # успешно и не меняет ничего: он перечитывает тот же старый файл.
+          # Поэтому сверяем inode и пересоздаём nginx только когда конфиг
+          # действительно разъехался — на каждом деплое пересоздавать нельзя,
+          # это секунды простоя.
+          HOST_INO=$(stat -c %i nginx/local-docker.conf)
+          CTR_INO=$(docker exec nginx-local stat -c %i /etc/nginx/conf.d/default.conf 2>/dev/null || echo нет)
+          if [ "$HOST_INO" != "$CTR_INO" ]; then
+            echo "конфиг nginx разъехался с контейнером (inode $CTR_INO против $HOST_INO) — пересоздаю nginx"
+            $DC up -d --no-deps --force-recreate nginx-local
+            for i in $(seq 1 12); do
+              docker exec nginx-local nginx -t >/dev/null 2>&1 && break
+              echo "  ждём nginx... ($i/12)"; sleep 5
+            done
+          else
+            # После пересоздания сервисов выше их IP меняются, а nginx резолвит
+            # имена апстримов один раз при старте — та самая причина 502 из
+            # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
+            # если выкатка нового цвета сорвётся, старый останется доступен.
+            docker exec nginx-local nginx -s reload 2>/dev/null || true
+          fi
 
           # Новый цвет
           if [ "$NEW" = "green" ]; then
