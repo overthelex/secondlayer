@@ -193,6 +193,63 @@ def test_new_versions_start_at_stage_discovered(conn):
         == "discovered"
 
 
+def test_xml_upsert_reclaims_a_row_the_pdf_pass_had_already_parsed(conn):
+    """CQ-2: an edition first discovered as pdf-a (source='fedlex_pdf',
+    walked through fedlex-pdf-text to stage='parsed' with pdf full_text) can
+    later gain a real XML manifestation -- Fedlex publishes XML for older
+    acts over time. Before this fix, upsert_version() never touched
+    `source`, so the row would flip xml_url to the XML file while staying
+    source='fedlex_pdf' and stage='parsed': Task 2's pdf-text stage would
+    then never re-claim it (it filters source='fedlex_pdf' AND
+    stage='discovered'), and nothing would ever parse the XML or replace
+    the stale pdf full_text. The xml upsert must reclaim the row: flip
+    source to 'fedlex', reset it to stage='discovered' so the XML pipeline
+    picks it up, and clear full_text/article_count so the stale pdf text
+    can never be served as if it were the (unparsed) xml edition."""
+    pdf_row = _pdf_row()
+    versions_stage.upsert_pdf_version(conn, pdf_row)
+    conn.execute(
+        "UPDATE ch_act_version SET stage = 'parsed', full_text = 'old pdf text', "
+        "article_count = NULL WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (pdf_row["consolidation"],))
+
+    xml_row = _row(date="2026-01-01")
+    versions_stage.upsert_version(conn, xml_row)
+
+    row = conn.execute(
+        "SELECT source, stage, full_text, xml_url FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (xml_row["consolidation"],)).fetchone()
+    assert row[0] == "fedlex"
+    assert row[1] == "discovered"
+    assert row[2] is None
+    assert row[3] == xml_row["fileUrl"]
+
+
+def test_xml_upsert_of_an_existing_xml_row_leaves_its_stage_and_text_alone(conn):
+    """The reclaim CASE must fire only when the existing row's source is
+    'fedlex_pdf' -- a re-walk of an already-XML row (the ordinary case this
+    stage exists for) must not reset a row parse_akn_stage has already
+    finished."""
+    xml_row = _row(date="2026-01-01")
+    versions_stage.upsert_version(conn, xml_row)
+    conn.execute(
+        "UPDATE ch_act_version SET stage = 'parsed', full_text = 'real xml text', "
+        "article_count = 12 WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (xml_row["consolidation"],))
+
+    versions_stage.upsert_version(conn, xml_row)
+
+    row = conn.execute(
+        "SELECT source, stage, full_text, article_count FROM ch_act_version "
+        "WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (xml_row["consolidation"],)).fetchone()
+    assert row[0] == "fedlex"
+    assert row[1] == "parsed"
+    assert row[2] == "real xml text"
+    assert row[3] == 12
+
+
 # --- run(): loud orphan / skipped-language reporting, and the per-item guard ---
 
 def test_run_counts_discovered_and_fills_by_lang(conn, settings, monkeypatch):

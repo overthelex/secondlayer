@@ -119,18 +119,48 @@ def _sample(bucket: list[str], value: str) -> None:
         bucket.append(value)
 
 
+# source='fedlex' on the INSERT branch is redundant with migration 201's
+# column DEFAULT, but naming it here (rather than relying on the default)
+# is what keeps the ON CONFLICT arm below honest about what it is
+# reclaiming FROM.
+#
+# The ON CONFLICT arm resets stage/full_text/article_count with a CASE
+# gated on the EXISTING row's source, not the new one -- an edition first
+# discovered as pdf-a (source='fedlex_pdf') and already walked through
+# fedlex-pdf-text to stage='parsed' with pdf full_text can later gain a
+# real XML manifestation. Before this CASE existed, this upsert flipped
+# xml_url to the XML file while leaving source='fedlex_pdf' and
+# stage='parsed' untouched: db.claim_versions()'s source='fedlex_pdf' AND
+# stage='discovered' filter would then never re-claim the row, so nothing
+# would ever fetch or parse the XML, and the stale pdf full_text would go
+# on being served as if it were that (silently unparsed) xml edition. The
+# fix is a reclaim, not just a source flip: stage goes back to
+# 'discovered' so the ordinary XML pipeline (fetch_xml_stage,
+# parse_akn_stage) walks the row from the top, and full_text/article_count
+# are cleared so no stale pdf-derived text can be read back before the XML
+# pipeline has re-populated them. A re-walk of an already-XML row (source
+# already 'fedlex' -- the ordinary case this stage exists for) must NOT
+# reset a row parse_akn_stage has already finished, which is exactly what
+# gating the CASE on the existing row's source guarantees.
 _UPSERT_VERSION = """
 INSERT INTO ch_act_version
     (act_id, eli_consolidation_uri, lang, date_applicability,
-     date_end_applicability, xml_url, stage, updated_at)
+     date_end_applicability, xml_url, stage, source, updated_at)
 SELECT a.act_id, %(consolidation)s, %(lang)s, %(date_app)s, %(date_end)s,
-       %(xml_url)s, 'discovered', now()
+       %(xml_url)s, 'discovered', 'fedlex', now()
   FROM ch_act a WHERE a.eli_work_uri = %(work)s
 ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
     date_applicability     = EXCLUDED.date_applicability,
     date_end_applicability = COALESCE(EXCLUDED.date_end_applicability,
                                       ch_act_version.date_end_applicability),
     xml_url                = COALESCE(EXCLUDED.xml_url, ch_act_version.xml_url),
+    source                 = 'fedlex',
+    stage                  = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN 'discovered' ELSE ch_act_version.stage END,
+    full_text              = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN NULL ELSE ch_act_version.full_text END,
+    article_count          = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN NULL ELSE ch_act_version.article_count END,
     updated_at             = now()
 RETURNING version_id
 """
