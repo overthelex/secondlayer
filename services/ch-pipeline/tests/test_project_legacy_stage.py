@@ -302,5 +302,5 @@ def test_a_cantonal_act_projects_with_source_lexwork_and_its_jurisdiction(conn, 
     ).fetchone() == ("sil", "GE"), "a phase-2 source keeps its own name in the projection"
     federal = conn.execute(
         "SELECT source, metadata_json->>'jurisdiction' FROM ch_legislation "
-        "WHERE eli_uri <> 'https://bgs.zg.ch/app/de/texts_of_law/111.1'").fetchall()
+        "WHERE eli_uri NOT LIKE 'https://bgs.zg.ch/%' AND eli_uri NOT LIKE 'https://silgeneve.ch/%'").fetchall()
     assert all(r == ("fedlex", "CH") for r in federal)
