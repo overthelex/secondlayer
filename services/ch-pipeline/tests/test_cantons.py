@@ -54,10 +54,11 @@ def test_sil_cantons_have_a_host_and_french_only():
 def test_version_source_follows_the_platform():
     assert cantons.version_source("BE") == "lexwork"
     assert cantons.version_source("GE") == "sil"
-    assert cantons.version_source("ZH") is None
+    assert cantons.version_source("ZH") == "zhlex"
+    assert cantons.version_source("VD") is None
     assert cantons.version_source("TI") == "ti_rl"
-    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI"])
-    assert len(cantons.text_cantons()) == 22
+    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI", "ZH"])
+    assert len(cantons.text_cantons()) == 23
 
 
 def test_canton_selection_from_the_environment_value():
@@ -74,5 +75,6 @@ def test_ticino_has_its_own_platform_and_a_version_source():
     assert "TI" not in cantons.LEXWORK
     assert cantons.version_source("TI") == "ti_rl"
     assert cantons.version_source("BE") == "lexwork"
-    assert cantons.version_source("ZH") is None
-    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI"])
+    assert cantons.version_source("ZH") == "zhlex"
+    assert cantons.version_source("VD") is None
+    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI", "ZH"])
