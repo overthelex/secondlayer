@@ -57,10 +57,35 @@ _WS = re.compile(r"\s+")
 # the number may carry the platform's amendment star, the marginal title
 # (when present) sits two or more spaces to the right. \s? not \s*: "Art.12"
 # does not occur, and "§3" only inside the modification table.
+_NOT_A_MARGINAL = (r"(?!(?:Abs|Absatz|Absätze|al|alinéa|cpv|capoverso|Ziff|Ziffer|Bst|Buchstabe|"
+                   r"lit|let|lettre|para|Satz|und|et|e|bis|ff)\b\.?\s)")
+# "Art. 1. Ziele" -- the number carries a dot on SO's concordats and
+# foundation deeds of the 1960s-90s (38 of 389 article-less editions on
+# 2026-08-27); "\.?" before the marginal admits it. Not "Art. 1.1": the
+# dot must be followed by a space or the line end.
 _HEADING = re.compile(
     r"^(?:Art\.|Artikel|Article|Articolo|Artitgel|§)\s?([A-Z]?\d+[a-zA-Z]*(?:-\d+[a-zA-Z]*)?)"
-    r"\s?\*?(?:\s+(?!(?:Abs|Absatz|Absätze|al|alinéa|cpv|capoverso|Ziff|Ziffer|Bst|Buchstabe|"
-    r"lit|let|lettre|para|Satz|und|et|e|bis|ff)\b\.?\s)(\S.*))?$")
+    r"\.?(?=[\s*]|$)\s?\*?(?:\s+" + _NOT_A_MARGINAL + r"(\S.*))?$")
+# A heading centred on its own indented line ("§1", "Art. 2", "Art. 1
+# Geltungsbereich" 20 spaces in): ZG's and AI's accession decrees and SG's
+# older layout. Column 0 is not required here, so the rest of the line has
+# to look like a marginal, not a citation's continuation ("Art. 45 Abs. 4
+# KV kann daher ...", "Artikel 4 Absatz 5 der Verordnung", "Art. 24 FV92
+# . . . ." in a table of contents).
+_CENTRED_HEADING = re.compile(
+    r"^\s{2,}(?:Art\.|Artikel|Article|Articolo|§)\s?([A-Z]?\d+[a-zA-Z]*)\.?(?=[\s*]|$)\s?\*?"
+    r"(?:\s{2,}" + _NOT_A_MARGINAL +
+    r"(?!(?:der|die|das|des|dem|den|du|de|la|le|les|della|del|dell|dal|KV|VV)\b)([^\d\s][^.]{0,70}))?\s*$")
+# A marginal title in a left column, the article on the same line:
+# "Gegenstand        § 1.   Die Gebühren, welche ..." (AR 88258, the
+# ATIOZ fee regulation). The text after the number is the provision's
+# first line, not the marginal; a paragraph number may open it inline.
+_LEFT_COLUMN_HEADING = re.compile(
+    r"^([^\s\d§][^§]{0,50}?)\s{2,}(?:§|Art\.)\s?(\d+[a-zA-Z]*)\.?\s+(\S.*)$")
+_INLINE_PARAGRAPH = re.compile(r"^(\d{1,2})\s+(?=[A-ZÄÖÜ])")
+# In the left-column layout a marginal that wraps puts its second word at
+# column 0 of the next body line: "Allgemeine" / "Bestimmungen     sichts-".
+_LEFT_COLUMN_CONTINUATION = re.compile(r"^([^\s\d§][^\s]{0,30}(?: [^\s\d]{1,30}){0,3})\s{3,}(\S.*)$")
 # A page's last non-blank line, only digits: the page number.
 # "3", or "-3-" / "- 3 -" on the pre-2015 conversions (VS 101.1 of 2008)
 _PAGE_NUMBER = re.compile(r"^(?:\d{1,3}|-\s?\d{1,3}\s?-)$")
@@ -87,7 +112,7 @@ _TABLE_TITLE = re.compile(
     r"Tabella da las modificaziuns)(?:\s*[-–]|\s+(?:par|nach|secondo|tenor)\b)", re.IGNORECASE)
 # Systematic number on its own line ("110.200", "152", "10.1.11") -- the
 # page header on page 1, and the right-hand half of the header elsewhere.
-_SYSNR = re.compile(r"^(?:Nr\.\s*)?\d{1,4}(?:\.\d+)*[a-z]?$")
+_SYSNR = re.compile(r"^(?:Nr\.\s*)?\d{1,4}(?:\.\d+)*[a-z]?(?:-[A-Z]\d*)?$")   # ZG "811.15-A1"
 _LEADING_PAGE_NUMBER = re.compile(r"^\d{1,3}\s{2,}")
 # LU prints the act's publication reference at the foot of every page:
 # "G 2015 174", "G V 437 | Z I 159".
@@ -308,7 +333,9 @@ def _blocks(pages: list[list[str]]) -> list[_Block]:
                     gap = 0
                 gap += 1 if current is None else 0
                 continue
-            if current and _HEADING.match(line) and _line_ends_block(current[-1]):
+            if current and _line_ends_block(current[-1]) and (
+                    _HEADING.match(line) or _CENTRED_HEADING.match(line)
+                    or _LEFT_COLUMN_HEADING.match(line)):
                 # BE prints a section heading, a repealed "Art. 6 * ..." and
                 # the next article on adjacent lines with no blank between
                 out.append(_Block(current, gap))
@@ -359,10 +386,13 @@ def _tidy(text: str) -> str:
     return _WS.sub(" ", text).strip()
 
 
-def _paragraphs(lines: list[str]) -> list[str]:
+def _paragraphs(lines: list[str], inline_marks: bool = False) -> list[str]:
     """A prose block -> its paragraphs: a new one starts at each superscript
     number line, which is prefixed to the text that follows it the way the
-    HTML text carries "1 Der Verlauf ..."."""
+    HTML text carries "1 Der Verlauf ...". In the left-column layout the
+    number sits inline ("    2 Bei der Gebührenerhebung ...") and opens a
+    paragraph too; that reading is switched on only for that layout, since
+    "20 Prozent" can start a wrapped line anywhere else."""
     paragraphs: list[list[str]] = []
     pending_mark: str | None = None
     for line in lines:
@@ -371,6 +401,8 @@ def _paragraphs(lines: list[str]) -> list[str]:
             pending_mark = m.group(1)
             paragraphs.append([])
             continue
+        if inline_marks and _INLINE_PARAGRAPH.match(line.strip()):
+            paragraphs.append([])
         if not paragraphs:
             paragraphs.append([])
         if pending_mark is not None:
@@ -505,21 +537,57 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
         current = None
 
     last_number = 0
+    left_column = False
     for index, block in enumerate(blocks):
         if not block.lines:
             continue        # a marginal title consumed by the heading before it
-        heading = _HEADING.match(block.lines[0])
-        if heading and _in_order(heading.group(1), last_number):
+        first = block.lines[0]
+        heading = _HEADING.match(first)
+        shape = "plain"
+        if not heading:
+            heading = _CENTRED_HEADING.match(first)
+            shape = "centred"
+            if heading is None and (index == 0 or _line_ends_block(blocks[index - 1].lines[-1])
+                                    if blocks[index - 1].lines else True):
+                heading = _LEFT_COLUMN_HEADING.match(first)
+                shape = "left"
+        number = heading.group(2 if shape == "left" else 1) if heading else ""
+        if heading and _in_order(number, last_number):
             close()
-            number = heading.group(1)
             last_number = _int_prefix(number)
-            marginal_lines = [heading.group(2) or ""]
-            body_start = 1
+            if shape == "left":
+                left_column = True
+                marginal_lines = [heading.group(1)]
+                block.lines[0] = "  " + heading.group(3)
+                body_start = 0
+            else:
+                marginal_lines = [heading.group(2) or ""]
+                body_start = 1
+            if left_column:
+                # the wrapped marginal's further words sit at column 0 of
+                # the body lines that follow
+                for i in range(body_start, len(block.lines)):
+                    m = _LEFT_COLUMN_CONTINUATION.match(block.lines[i])
+                    if m and not _HEADING.match(block.lines[i]):
+                        marginal_lines.append(m.group(1))
+                        block.lines[i] = "  " + m.group(2)
+            if shape == "centred" and not heading.group(2) and body_start < len(block.lines):
+                # the marginal on the next centred line ("§1" / "Beitrittserklärung")
+                nxt = block.lines[body_start]
+                if (nxt.startswith("        ") and len(nxt.strip()) < 80
+                        and nxt.strip()[-1:] not in ".;:," and not _PARAGRAPH_MARK.match(nxt.strip())):
+                    marginal_lines = [nxt]
+                    body_start += 1
             # a marginal title wrapped onto the next line sits in its column
-            while (heading.group(2) and heading.group(2) != "…"
+            while (shape == "plain" and heading.group(2) and heading.group(2) != "…"
                    and body_start < min(len(block.lines), 3)
                    and (block.lines[body_start].startswith("      ")
-                        or not block.lines[body_start].startswith(" "))
+                        or (not block.lines[body_start].startswith(" ")
+                            # BE wraps a long marginal onto a short column-0
+                            # line; SO 111.53's body starts at column 0 too,
+                            # but with a full-width line
+                            and (len(block.lines[body_start].strip()) < 50
+                                 or marginal_lines[-1].rstrip().endswith("-"))))
                    and not _PARAGRAPH_MARK.match(block.lines[body_start].strip())):
                 marginal_lines.append(block.lines[body_start])
                 body_start += 1
@@ -541,7 +609,7 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
                 following.lines = following.lines[1:]
             current = {"number": number, "marginal": marginal,
                        "e_id": sections.e_id(number), "parent": sections.parent,
-                       "paragraphs": _paragraphs(block.lines[body_start:])}
+                       "paragraphs": _paragraphs(block.lines[body_start:], left_column)}
             label = block.lines[0].split()[0]
             title = f"{label} {number}" + (f" {marginal}" if marginal else "")
             lines.append(title)
@@ -561,7 +629,7 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
             # the signature block after the last article, an annex: not
             # part of the provision
             close()
-        paragraphs = _paragraphs(block.lines)
+        paragraphs = _paragraphs(block.lines, left_column)
         if current is not None:
             current["paragraphs"].extend(paragraphs)
         lines.extend(paragraphs)

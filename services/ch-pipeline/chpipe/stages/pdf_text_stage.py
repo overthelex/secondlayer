@@ -30,6 +30,14 @@ Per claimed row:
   3. store_articles + complete_version(-> 'parsed', akn_xml=raw text,
      full_text) in the same transaction shape as cantonal_parse_stage.
 
+CHPIPE_RESPLIT=1 runs the other half only: no download, no claim -- it
+takes the rows already at 'parsed' with article_count = 0 (the first prod
+pass left 389 of 692 there: decisions in numbered clauses, lists, tariffs,
+and three heading shapes the splitter did not know), re-runs
+pdf_text.split_text over their akn_xml and rewrites articles + full_text
+for the ones that now split. Rows that still yield no article are left
+as they are (their text is right; they have no articles).
+
 Before the first claim the stage retires 'shadow' rows -- LexFind lists
 a same-day replaced edition with date_end_applicability one day BEFORE
 date_applicability (~12.5K of the 55K) -- with last_error 'shadow_edition'
@@ -46,6 +54,8 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
+
+from psycopg.rows import tuple_row
 
 from .. import db, pdf_text, throttle
 from ..config import Settings
@@ -72,6 +82,9 @@ class PdfTextReport:
     too_short: int = 0
     shadows_retired: int = 0
     bytes_written: int = 0
+    # resplit mode: rows re-read from akn_xml, and how many now have articles
+    resplit: int = 0
+    recovered: int = 0
 
 
 def pdf_path(settings: Settings, version_id: int):
@@ -195,6 +208,56 @@ async def _process(row: dict, conn, fetcher: Fetcher, pacer: HostPacer, cpu: asy
             log.error("version %s: also failed recording the failure: %s", version_id, fail_exc)
 
 
+_RESPLIT_ROWS = (
+    "SELECT version_id, akn_xml FROM ch_act_version "
+    "WHERE source = ANY(%s) AND stage = 'parsed' AND article_count = 0 AND akn_xml IS NOT NULL")
+
+
+def resplit(settings: Settings, canton_code: str | None = None,
+            sources: tuple[str, ...] = SOURCES, limit: int | None = None) -> PdfTextReport:
+    """Re-split the article-less parsed editions from their stored
+    pdftotext output. Reads one row at a time (a 147 KB tariff is the
+    largest seen; no need to hold the set) and writes only the rows that
+    gained articles, in the same transaction shape as the fetch path."""
+    report = PdfTextReport()
+    prefix = cantonal_fetch_stage.url_prefix(canton_code)
+    conn = db.connect(settings)
+    try:
+        sql, params = _RESPLIT_ROWS, [list(sources)]
+        if prefix:
+            sql += " AND xml_url LIKE %s"
+            params.append(prefix.replace("%", "\\%").replace("_", "\\_") + "%")
+        sql += " ORDER BY version_id"
+        if limit is not None:
+            sql += " LIMIT %s"
+            params.append(limit)
+        # db.connect() hands out dict rows; a bare tuple unpack over those
+        # yields the column NAMES and split_text("akn_xml") splits nothing
+        with conn.cursor(row_factory=tuple_row) as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+        for version_id, raw in rows:
+            report.resplit += 1
+            try:
+                articles, full_text = pdf_text.split_text(raw)
+            except Exception as exc:                            # noqa: BLE001
+                log.error("version %s: resplit failed: %s", version_id, exc)
+                report.failed += 1
+                continue
+            if not articles:
+                continue
+            with conn.transaction():
+                parse_akn_stage.store_articles(conn, version_id, articles)
+            db.complete_version(conn, version_id, "parsed", full_text=full_text)
+            report.recovered += 1
+            report.articles += len(articles)
+        log.info("resplit=%d recovered=%d articles=%d failed=%d",
+                 report.resplit, report.recovered, report.articles, report.failed)
+    finally:
+        conn.close()
+    return report
+
+
 async def _run_async(settings: Settings, canton_code: str | None, sources: tuple[str, ...],
                      limit: int | None, transport) -> PdfTextReport:
     report = PdfTextReport()
@@ -246,10 +309,17 @@ def main() -> PdfTextReport:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
+    limit = int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None
+    if os.environ.get("CHPIPE_RESPLIT", "") not in ("", "0"):
+        result = resplit(Settings.from_env(),
+                         canton_code=os.environ.get("CHPIPE_CANTON") or None,
+                         sources=sources_from_env(os.environ.get("CHPIPE_SOURCE")), limit=limit)
+        log.info("RESPLIT resplit=%d recovered=%d articles=%d failed=%d",
+                 result.resplit, result.recovered, result.articles, result.failed)
+        return result
     result = run(Settings.from_env(),
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,
-                 sources=sources_from_env(os.environ.get("CHPIPE_SOURCE")),
-                 limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
+                 sources=sources_from_env(os.environ.get("CHPIPE_SOURCE")), limit=limit)
     log.info("parsed=%d articles=%d empty=%d failed=%d not_pdf=%d too_short=%d "
              "shadows_retired=%d bytes=%d", result.parsed, result.articles, result.empty,
              result.failed, result.not_pdf, result.too_short, result.shadows_retired,

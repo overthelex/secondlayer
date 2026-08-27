@@ -1838,6 +1838,26 @@ in-force subset (178 FR + 150 GR rows). The ~55K LexFind PDFs are one host
 (lexfind.ch) at 2 req/s: ~7.6 hours. Sizes: 100-850 KB per PDF, ~5 GB on
 disk for LexFind, ~4 GB for the hosts.
 
+Re-splitting without a download: the first prod pass (2026-08-27, in-force
+acts) left 389 of 692 parsed editions with text but `article_count = 0`.
+Read on 98 of them: ~175 are decisions in numbered clauses ("1. Der Kanton
+tritt ... bei", GR/SO/OW/AG accession decrees), ~30 lists, tables, tariffs
+and ballot templates, 28 FR one-paragraph notices ("published only in
+French / not in the SGF"), and three heading shapes the splitter did not
+know: `Art. 1. Ziele` (number with a dot, 40 rows, SO concordats), a
+centred `§1` with the marginal on the next line (ZG/AI accession decrees,
+~20) and a left-column marginal on the article's own line (AR 88258). The
+three are handled now; the rest have no articles. To apply a splitter
+change to what is already stored:
+
+    CHPIPE_RESPLIT=1 ./run-stage.sh pdf-text          # or one canton: ... SO
+
+reads `akn_xml` of every `source IN ('lexwork_pdf','lexfind')` row at
+`parsed` with `article_count = 0`, re-runs `pdf_text.split_text` and
+rewrites `ch_act_article` + `full_text` for the rows that now split
+(`recovered` in the log); nothing is fetched. Expected on the 389: ~60
+recovered (15%), the rest are genuinely article-less.
+
 Failure reasons: `not a PDF (...)` (the host answered HTML -- a login page
 or an error; retried within the attempt budget), `text too short`,
 `pdftotext: ...` (poppler refused the file), `shadow_edition`. Retry with

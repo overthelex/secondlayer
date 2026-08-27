@@ -162,3 +162,41 @@ def test_paren_footnotes_at_the_page_foot_are_dropped_but_not_enumerations():
 def test_empty_and_textless_input():
     assert pdf_text.split_text("") == ([], "")
     assert pdf_text.split_text("\f\f") == ([], "")
+
+
+# --- the three heading shapes found on the first prod pass ------------------
+# 389 lexwork_pdf editions had text but no articles on 2026-08-27; the raw
+# pdftotext output of the affected shapes, trimmed, is the fixture text.
+
+def test_article_number_with_a_trailing_dot_so_concordat():
+    articles, text = pdf_text.split_text((FIXTURES / "pdftext_so_111_53_art_dot.txt").read_text())
+    assert [(a.article_number, a.marginal_note) for a in articles] == [
+        ("1", "Ziele"), ("2", "Gebiet"), ("3", "Mitglieder")]
+    assert articles[0].text.startswith("Im Oberrheinrat schliessen sich")   # body, not marginal
+    assert articles[0].e_id == "t-0--t-1‐‐Kapitel‐--a-1"                   # "1. Kapitel: Grundlagen"
+    assert "Präambel" in text
+
+
+def test_centred_paragraph_sign_with_the_marginal_on_the_next_line_zg():
+    articles, _ = pdf_text.split_text((FIXTURES / "pdftext_zg_centered_par.txt").read_text())
+    assert [(a.article_number, a.marginal_note) for a in articles] == [
+        ("1", "Beitrittserklärung"), ("2", "Inkrafttreten")]
+    assert articles[0].text.startswith("Der Kanton Zug tritt der Interkantonalen Vereinbarung")
+    assert articles[1].text.startswith("1 Dieser Kantonsratsbeschluss untersteht")
+
+
+def test_left_column_marginals_with_inline_paragraph_numbers_ar():
+    articles, _ = pdf_text.split_text((FIXTURES / "pdftext_ar_left_column.txt").read_text())
+    assert [(a.article_number, a.marginal_note) for a in articles] == [
+        ("1", "Gegenstand"), ("2", "Grundsätze"), ("3", "Allgemeine Bestimmungen")]
+    assert articles[0].text.startswith("Die Gebühren, welche die ATIOZ")
+    assert "2 Bei der Gebührenerhebung wird zwischen folgenden Bereichen" in articles[1].text
+    assert "Aufsichtstätigkeit" in articles[2].text        # "Auf-" + column word + "sichtstätigkeit" untangled
+
+
+def test_a_citation_in_an_indented_line_is_still_not_a_heading():
+    articles, _ = pdf_text.split_text(_doc(
+        "Art. 1\n1\n  Eins.\n\n   Art. 45 Abs. 4 KV kann daher die Nichtwählbarkeit der Mitglieder des\n"
+        "   Kantonsrates nicht begründen.\n\n"
+        "          Art. 24 FV92  . . . . . . . . . . . . . . . . . . . 12\n"))
+    assert [a.article_number for a in articles] == ["1"]
