@@ -34,10 +34,11 @@ from chpipe import delta
 from chpipe.config import Settings
 from chpipe.stages import (acts_stage, aliases_stage, citations_resolve_stage,
                            citations_stage, diff_stage, extract_stage,
-                           fetch_stage, fetch_xml_stage, index_stage,
-                           load_stage, parse_akn_stage, project_legacy_stage,
-                           provenance_stage, shab_detail_stage,
-                           shab_list_stage, versions_stage, zefix_stage)
+                           fedlex_pdf_text_stage, fetch_stage, fetch_xml_stage,
+                           index_stage, load_stage, parse_akn_stage,
+                           project_legacy_stage, provenance_stage,
+                           shab_detail_stage, shab_list_stage, versions_stage,
+                           zefix_stage)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
@@ -574,6 +575,10 @@ def test_run_legislation_runs_acts_then_versions_then_drains_the_xml_queue(
         lambda settings, limit=None: calls.append("fetch-xml") or
         fetch_xml_stage.FetchXmlReport())
     monkeypatch.setattr(
+        fedlex_pdf_text_stage, "run",
+        lambda settings, limit=None, transport=None: calls.append("fedlex-pdf-text") or
+        fedlex_pdf_text_stage.FedlexPdfTextReport())
+    monkeypatch.setattr(
         parse_akn_stage, "run",
         lambda settings, limit=None: calls.append("parse-akn") or
         parse_akn_stage.ParseReport())
@@ -581,9 +586,42 @@ def test_run_legislation_runs_acts_then_versions_then_drains_the_xml_queue(
 
     report = delta.run_legislation(_settings(tmp_path))
 
-    assert calls == ["acts", "versions", "fetch-xml", "parse-akn",
-                     "project-legacy"]
+    assert calls == ["acts", "versions", "fetch-xml", "fedlex-pdf-text",
+                     "parse-akn", "project-legacy"]
     assert report.new_versions == 7
+
+
+def test_run_legislation_new_versions_counts_pdf_era_discoveries_too(
+        tmp_path, monkeypatch):
+    """versions_stage now runs two passes -- the XML `discovered` count and
+    the pdf-a `pdf_discovered` count (see versions_stage.VersionsReport) --
+    and both are new editions the delta discovered tonight. Reporting only
+    `discovered` under-counts a night where the pdf-a pass found rows the
+    XML pass did not (Task 1 review, CQ-7)."""
+    calls = []
+    monkeypatch.setattr(acts_stage, "run",
+                        lambda settings: calls.append("acts") or acts_stage.ActsReport())
+    monkeypatch.setattr(
+        versions_stage, "run",
+        lambda settings: calls.append("versions") or
+        versions_stage.VersionsReport(discovered=7, pdf_discovered=3))
+    monkeypatch.setattr(
+        fetch_xml_stage, "run",
+        lambda settings, limit=None: calls.append("fetch-xml") or
+        fetch_xml_stage.FetchXmlReport())
+    monkeypatch.setattr(
+        fedlex_pdf_text_stage, "run",
+        lambda settings, limit=None, transport=None: calls.append("fedlex-pdf-text") or
+        fedlex_pdf_text_stage.FedlexPdfTextReport())
+    monkeypatch.setattr(
+        parse_akn_stage, "run",
+        lambda settings, limit=None: calls.append("parse-akn") or
+        parse_akn_stage.ParseReport())
+    _stub_legislation_tail(monkeypatch, calls)
+
+    report = delta.run_legislation(_settings(tmp_path))
+
+    assert report.new_versions == 10
 
 
 # --- N1: parsing an edition is not what makes it readable ---------------
@@ -616,6 +654,10 @@ def _stub_legislation_head(monkeypatch, calls, acts):
     monkeypatch.setattr(fetch_xml_stage, "run",
                         lambda settings, limit=None: calls.append("fetch-xml") or
                         fetch_xml_stage.FetchXmlReport())
+    monkeypatch.setattr(
+        fedlex_pdf_text_stage, "run",
+        lambda settings, limit=None, transport=None: calls.append("fedlex-pdf-text") or
+        fedlex_pdf_text_stage.FedlexPdfTextReport())
     monkeypatch.setattr(parse_akn_stage, "run",
                         lambda settings, limit=None: calls.append("parse-akn") or
                         parse_akn_stage.ParseReport(parsed=len(acts), acts=set(acts)))
@@ -632,7 +674,8 @@ def test_a_newly_parsed_edition_gets_its_change_log_and_provenance(
 
     report = delta.run_legislation(_settings(tmp_path))
 
-    assert calls == ["acts", "versions", "fetch-xml", "parse-akn",
+    assert calls == ["acts", "versions", "fetch-xml", "fedlex-pdf-text",
+                     "parse-akn",
                      "diff(11,de)", "provenance(11,de)",
                      "diff(11,fr)", "provenance(11,fr)",
                      "project-legacy"]
