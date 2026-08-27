@@ -357,6 +357,14 @@ def _pdf_row(date="2026-01-01", lang="DEU", end=None, work=WORK):
     return row
 
 
+def test_versions_pdf_is_versions_with_only_the_manifestation_format_changed():
+    """A drift guard: VERSIONS_PDF is documented as "identical to VERSIONS
+    except the manifestation format" -- pin that literally, so a future edit
+    to one query that forgets the other shows up as a failing test instead
+    of a silent divergence."""
+    assert fq.VERSIONS.replace("user-format/xml", "user-format/pdf-a") == fq.VERSIONS_PDF
+
+
 def test_pdf_row_is_skipped_when_an_xml_row_already_covers_the_edition(conn):
     """The whole point of the ordering: an edition available in both formats
     must land as XML, never as pdf-a -- and the existing XML row must be

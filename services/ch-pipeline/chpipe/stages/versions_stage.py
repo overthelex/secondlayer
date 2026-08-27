@@ -215,10 +215,12 @@ def upsert_pdf_version(conn, row: dict) -> str:
     'skipped_has_xml' and 'orphaned' -- the NOT EXISTS clause and the
     act lookup can each independently produce zero rows, and psycopg
     cannot tell which one fired from the empty result alone. One cheap
-    SELECT after the fact (_SELECT_XML_ROW_EXISTS) distinguishes them: if
-    the work is missing from ch_act, upsert_version() would have returned
-    None for the exact same reason, so this checks that first, matching
-    the language of that function.
+    SELECT after the fact (_SELECT_XML_ROW_EXISTS) distinguishes them:
+    it checks whether an XML row already covers this (consolidation, lang)
+    first -- if one does, that alone explains the empty insert
+    ('skipped_has_xml'); only when no XML row exists either is the empty
+    insert attributed to the work being missing from ch_act
+    ('orphaned'), the same condition upsert_version() reports as None.
     """
     lang = fq.language_code(row.get("lang"))
     params = {
