@@ -285,7 +285,18 @@ INSERT INTO uk_legislation_versions
 SELECT id,
        COALESCE(valid_date, made_date, enactment_date, coming_into_force,
                 make_date(year, 1, 1)),
-       CASE WHEN leg_type IN ('uksi','wsi','nisi') THEN 'made' ELSE 'enacted' END,
+       -- Three labels, not two. Established 2026-08-27 by following the bare
+       -- URI of one unrevised item per type and reading the segment it lands on:
+       -- ssi/nisro/uksro redirect to /made like uksi, while ukmo and ukci land
+       -- on /created, which the first pass did not know existed. Classify by the
+       -- kind of instrument rather than by that redirect, because a REVISED item
+       -- serves at its bare URI and never redirects at all, so a single sample
+       -- says nothing about its type.
+       CASE
+         WHEN leg_type IN ('uksi','wsi','nisi','ssi','nisr','nisro','uksro') THEN 'made'
+         WHEN leg_type IN ('ukmo','ukci') THEN 'created'
+         ELSE 'enacted'
+       END,
        source_url, true, 200
   FROM uk_legislation
  WHERE version_count = 0

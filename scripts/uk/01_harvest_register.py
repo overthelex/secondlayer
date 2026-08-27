@@ -51,9 +51,43 @@ DB_URL = os.environ.get("DATABASE_URL")
 ATOM = "{http://www.w3.org/2005/Atom}"
 UKM = "{http://www.legislation.gov.uk/namespaces/metadata}"
 
-# England & Wales plus UK-wide only. Scotland (asp, ssi), Wales (asc, wsi) and
-# Northern Ireland (nia, nisr) are deliberately out of scope for this pass.
-IN_SCOPE = ["ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla"]
+# Every type legislation.gov.uk publishes. The first pass covered England & Wales
+# plus UK-wide only; the devolved legislatures were added 2026-08-27, because the
+# amendment graph already pointed at them — effects routinely carry
+# AffectingClass="NorthernIrelandAct" with AffectingURI=.../id/nia/2008/12, and
+# those resolved to nothing in the register.
+#
+# Each of the 15 added types was confirmed live on 2026-08-27 to answer
+# /{type}/data.feed?results-count=200 with entries whose ids carry that type as
+# their prefix. ⚠ leg:morePages is NOT a page count: it saturates at 12, and
+# reports 12 for ukpga, which has ~90 pages. Page with rel="next" and nothing
+# else, which is what this script already does.
+IN_SCOPE = [
+    # UK-wide and England & Wales (the original pass)
+    "ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla",
+    # Scotland
+    "asp",      # Acts of the Scottish Parliament
+    "ssi",      # Scottish Statutory Instruments
+    "aosp",     # Acts of the Old Scottish Parliament, pre-1707
+    # Wales
+    "anaw",     # Acts of the National Assembly for Wales
+    "asc",      # Acts of Senedd Cymru
+    "mwa",      # Measures of the National Assembly for Wales
+    "wsi",      # Welsh Statutory Instruments
+    # Northern Ireland
+    "nia",      # Acts of the Northern Ireland Assembly
+    "nisr",     # Northern Ireland Statutory Rules
+    "apni",     # Acts of the Northern Ireland Parliament, 1921-1972
+    "mnia",     # Measures of the Northern Ireland Assembly
+    "nisro",    # Northern Ireland Statutory Rules and Orders
+    "nisi",     # Northern Ireland Orders in Council
+    # UK historic and instrument types, absent from the first pass for no reason
+    # other than that nobody listed them
+    "uksro",    # UK Statutory Rules and Orders
+    "ukmo",     # UK Ministerial Orders
+    "ukci",     # UK Church Instruments
+    "gbla",     # Great Britain Local Acts
+]
 
 # The real ceiling is 1,500 requests / 5 minutes per IP (5/s), stated in the body
 # of the 429 the server returns. The developer docs claim 3,000; they are wrong.
