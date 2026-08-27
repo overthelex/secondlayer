@@ -244,6 +244,49 @@ function chDecisionActCitation(act: ToolResultData, effectiveDate: string): Cita
   };
 }
 
+const CH_COMPLETENESS_TITLE = 'Повнота видачі';
+const CH_UNRESOLVED_ABBR_EXAMPLES = 3;
+
+/**
+ * ch_get_decision_legislation: a synthetic, non-act summary Citation appended after the
+ * real acts so the evidence panel never looks like the complete citation list of a decision
+ * when the backend actually cut it short (acts_truncated) or couldn't resolve some citations
+ * to an act at all (unresolved.count). Not backed by any one act, so — unlike the other CH
+ * citations built in this file — it carries no sr_number/articleNumber: a fake one would
+ * read as a real act. Mirrors registry.ts's synthetic "Статистика реєстру" citation (text +
+ * source, no article badge). Returns null when neither condition applies (the common case).
+ */
+function chDecisionCompletenessFooter(parsed: ToolResultData): Citation | null {
+  const actsShown = Array.isArray(parsed.acts) ? parsed.acts.length : 0;
+  const totalActs = parsed.total_cited_acts != null ? Number(parsed.total_cited_acts) : actsShown;
+  const actsTruncated = parsed.acts_truncated === true;
+
+  const unresolved = parsed.unresolved && typeof parsed.unresolved === 'object' ? parsed.unresolved : {};
+  const unresolvedCount = unresolved.count != null ? Number(unresolved.count) : 0;
+
+  if (!actsTruncated && !(unresolvedCount > 0)) return null;
+
+  const sentences: string[] = [];
+  if (actsTruncated) {
+    sentences.push(`Показано ${actsShown} з ${totalActs} актів.`);
+  }
+  if (unresolvedCount > 0) {
+    const topAbbrs = Array.isArray(unresolved.top_abbrs) ? unresolved.top_abbrs : [];
+    const abbrList = topAbbrs
+      .slice(0, CH_UNRESOLVED_ABBR_EXAMPLES)
+      .map((a: ToolResultData) => a?.abbr)
+      .filter(Boolean)
+      .join(', ');
+    sentences.push(`Нерозпізнаних цитувань: ${unresolvedCount}${abbrList ? ` (наприклад: ${abbrList}…)` : '.'}`);
+  }
+
+  return {
+    text: sentences.join(' '),
+    source: CH_COMPLETENESS_TITLE,
+    npaTitle: CH_COMPLETENESS_TITLE,
+  };
+}
+
 // ch_get_act_text: the full (possibly sliced) text of one edition → one VaultDocument.
 // Title carries the edition range so the panel shows which point-in-time text this is
 // without opening the document; the truncation note is separate from the raw body so a
@@ -316,6 +359,8 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
     if (!parsed.error && Array.isArray(parsed.acts)) {
       const effectiveDate = String(parsed.effective_date || parsed.decision_date || '');
       for (const act of parsed.acts) citations.push(chDecisionActCitation(act, effectiveDate));
+      const footer = chDecisionCompletenessFooter(parsed);
+      if (footer) citations.push(footer);
     }
   } else if (toolName === 'ch_get_act_text') {
     // Error payload: { error: 'no_edition_for_date', act_id, earliest_edition }.

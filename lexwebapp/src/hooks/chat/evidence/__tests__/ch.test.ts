@@ -726,7 +726,7 @@ describe('extractChEvidence', () => {
       lang: 'de',
       total_cited_acts: 3,
       acts_truncated: false,
-      unresolved: { count: 2, top_abbrs: [{ abbr: 'ZPO/ZH', count: 2 }] },
+      unresolved: { count: 0, top_abbrs: [] },
       acts: [
         {
           act_id: 1,
@@ -802,7 +802,7 @@ describe('extractChEvidence', () => {
       expect(c.sectionTitle).toBeUndefined();
     });
 
-    it('orders citations by citations_count as the backend already sorted them, without dropping the unresolved tail data', () => {
+    it('orders citations by citations_count as the backend already sorted them', () => {
       const data = {
         ...DECISION,
         acts: [
@@ -819,6 +819,90 @@ describe('extractChEvidence', () => {
     it('returns empty evidence for a not_found error payload', () => {
       const result = extractChEvidence('ch_get_decision_legislation', { error: 'not_found', ecli: 'ECLI:X' });
       expect(result.citations).toHaveLength(0);
+    });
+
+    // Completeness footer: a synthetic, non-act summary Citation appended at the end so the
+    // evidence panel never looks like the full citation list when it isn't. Never fires when
+    // both acts_truncated is false and unresolved.count is 0 — the DECISION fixture default.
+    describe('completeness footer', () => {
+      it('appends nothing when neither acts_truncated nor unresolved.count apply', () => {
+        const result = extractChEvidence('ch_get_decision_legislation', DECISION);
+        expect(result.citations).toHaveLength(1);
+        expect(result.citations.some((c) => c.npaTitle === 'Повнота видачі')).toBe(false);
+      });
+
+      it('appends a "Показано N з M актів" footer when acts_truncated is true (truncated-only)', () => {
+        const data = { ...DECISION, acts_truncated: true, total_cited_acts: 5 };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        expect(result.citations).toHaveLength(2);
+        const footer = result.citations[1];
+        expect(footer.npaTitle).toBe('Повнота видачі');
+        expect(footer.source).toBe('Повнота видачі');
+        expect(footer.articleNumber).toBeUndefined();
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+        expect(footer.text).not.toContain('Нерозпізнаних');
+      });
+
+      it('appends a "Нерозпізнаних цитувань" footer when unresolved.count > 0 (unresolved-only)', () => {
+        const data = {
+          ...DECISION,
+          unresolved: {
+            count: 4,
+            top_abbrs: [{ abbr: 'ZPO/ZH', count: 2 }, { abbr: 'GVG', count: 1 }, { abbr: 'EG ZGB', count: 1 }],
+          },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        expect(result.citations).toHaveLength(2);
+        const footer = result.citations[1];
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 4');
+        expect(footer.text).toContain('ZPO/ZH, GVG, EG ZGB');
+        expect(footer.text).not.toContain('Показано');
+      });
+
+      it('combines both sentences when both truncated and unresolved apply', () => {
+        const data = {
+          ...DECISION,
+          acts_truncated: true,
+          total_cited_acts: 5,
+          unresolved: { count: 4, top_abbrs: [{ abbr: 'ZPO/ZH', count: 2 }] },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 4');
+      });
+
+      it('caps the example abbreviation list at 3', () => {
+        const data = {
+          ...DECISION,
+          unresolved: {
+            count: 9,
+            top_abbrs: [
+              { abbr: 'A', count: 4 }, { abbr: 'B', count: 3 }, { abbr: 'C', count: 1 }, { abbr: 'D', count: 1 },
+            ],
+          },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('A, B, C');
+        expect(footer.text).not.toContain('D');
+      });
+
+      it('does not throw and still reports the truncation when unresolved is entirely absent', () => {
+        const data = { ...DECISION, acts_truncated: true, total_cited_acts: 5, unresolved: undefined };
+        expect(() => extractChEvidence('ch_get_decision_legislation', data)).not.toThrow();
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+      });
+
+      it('does not throw and still reports the count when unresolved.top_abbrs is absent', () => {
+        const data = { ...DECISION, unresolved: { count: 2 } };
+        expect(() => extractChEvidence('ch_get_decision_legislation', data)).not.toThrow();
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 2');
+      });
     });
   });
 
