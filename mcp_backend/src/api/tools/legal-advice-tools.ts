@@ -1,11 +1,16 @@
 /**
  * Legal Advice Tools - Handlers for precedent search, citation analysis, and answer formatting
  *
- * 4 tools:
+ * 3 tools:
  * - format_answer_pack
  * - search_legal_precedents
- * - get_similar_reasoning
  * - get_citation_graph
+ *
+ * Note: get_similar_reasoning was removed (2026-07). It queried the legacy
+ * Voyage-embedding `legal_sections` collection, which is empty in the current
+ * topology (court data now lives in the BGE-M3 `edrsr_decisions` collection).
+ * Its capability is covered by search_court_decisions (semantic) and
+ * search_legal_precedents.
  */
 
 import { load } from 'cheerio';
@@ -167,33 +172,6 @@ export class LegalAdviceTools extends BaseToolHandler {
         },
       },
       {
-        name: 'get_similar_reasoning',
-        annotations: { title: 'Схожі обґрунтування', readOnlyHint: true },
-        description: `Пошук схожих судових обґрунтувань за векторною подібністю
-
-Векторний пошук по ембедінгах через Qdrant. Знаходить рішення зі схожою аргументацією суду.
-Використовуйте для пошуку рішень, де суд використав аналогічну логіку обґрунтування.
-Підтримує фільтри: дата, суд, палата, категорія спору, результат.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string' },
-            section_type: { type: 'string', enum: Object.values(SectionType) },
-            date_from: { type: 'string', description: 'YYYY-MM-DD' },
-            date_to: { type: 'string', description: 'YYYY-MM-DD' },
-            court: { type: 'string' },
-            chamber: { type: 'string' },
-            dispute_category: { type: 'string' },
-            outcome: { type: 'string' },
-            deviation_flag: { type: ['boolean', 'null'] },
-            precedent_status: { type: 'string' },
-            case_number: { type: 'string' },
-            limit: { type: 'number', default: 10 },
-          },
-          required: ['query'],
-        },
-      },
-      {
         name: 'get_citation_graph',
         annotations: { title: 'Граф цитувань', readOnlyHint: true, idempotentHint: true },
         description: `Граф цитувань судового рішення: на які НОРМИ/СТАТТІ законодавства воно посилається (decision→article).
@@ -220,8 +198,6 @@ export class LegalAdviceTools extends BaseToolHandler {
       case 'search_legal_precedents':
       case 'search_supreme_court_practice': // backward-compat alias
         return await this.searchLegalPrecedents(args);
-      case 'get_similar_reasoning':
-        return await this.getSimilarReasoning(args);
       case 'get_citation_graph':
         return await this.getCitationGraph(args);
       default:
@@ -239,35 +215,6 @@ export class LegalAdviceTools extends BaseToolHandler {
       risks: args.risks || args.counterarguments_and_risks || null,
       warning: 'format_answer_pack currently performs a structural packaging only.',
     });
-  }
-
-  private async getSimilarReasoning(args: any): Promise<ToolResult> {
-    const defaultDateFrom = (() => {
-      const d = new Date();
-      d.setFullYear(d.getFullYear() - 3);
-      return d.toISOString().slice(0, 10);
-    })();
-    const defaultSupremeCourtChambers = ['ВП ВС', 'КЦС', 'КГС', 'КАС', 'ККС'];
-
-    const queryEmbedding = await this.embeddingService.generateEmbedding(args.query);
-    const similar = await this.embeddingService.searchSimilar(
-      queryEmbedding,
-      {
-        section_type: args.section_type as SectionType,
-        date_from: args.date_from || defaultDateFrom,
-        date_to: args.date_to,
-        court: args.court,
-        chamber: args.chamber || defaultSupremeCourtChambers,
-        dispute_category: args.dispute_category,
-        outcome: args.outcome,
-        deviation_flag: args.deviation_flag,
-        precedent_status: args.precedent_status,
-        case_number: args.case_number,
-      },
-      args.limit || 10
-    );
-
-    return this.wrapResponse({ similar });
   }
 
   /**

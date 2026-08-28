@@ -43,7 +43,6 @@ const COURT_TOOLS = [
   'check_precedent_status',
   'analyze_case_pattern',
   'analyze_legal_patterns', // backward-compat alias
-  'get_similar_reasoning',
   'get_citation_graph',
   'get_case_text',
   'search_court_decisions',
