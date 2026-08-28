@@ -392,8 +392,11 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act",
                 "zefix", "shab-list", "shab-detail",
-                "lexfind-registry", "cantonal-acts", "cantonal-fetch",
-                "cantonal-parse", "reports-cantonal"}
+                "lexfind-registry", "lexfind-versions", "cantonal-acts",
+                "cantonal-fetch", "cantonal-parse", "cantonal-relink", "reports-cantonal",
+                "sil-acts", "sil-fetch", "sil-parse", "ti-acts", "ti-fetch", "ti-parse",
+                "lexwork-pdf-requeue", "pdf-text",
+                "zh-acts", "zh-fetch", "zh-parse"}
     assert _accepted_stage_names() == expected
 
 

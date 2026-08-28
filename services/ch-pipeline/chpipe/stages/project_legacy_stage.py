@@ -73,12 +73,14 @@ log = logging.getLogger(__name__)
 # share this single definition of "latest" rather than each restating it.
 #
 # The ORDER BY carries a second key ahead of recency:
-# (source IN ('fedlex_pdf', 'lexwork_pdf')) ASC puts every structured parsed
-# row (false) before every pdf-text row (true) for the same (act_id, lang) --
-# lexwork_pdf included pre-emptively: nothing writes it on this branch, but the
-# cantonal phase-2 branch does, and without the demotion the same eviction
-# would silently return for cantonal acts the day both branches are merged --
-# so DISTINCT ON
+# (source = 'fedlex_pdf') ASC puts every structured parsed row (false) before
+# every federal pdf-text row (true) for the same (act_id, lang). Only the
+# FEDERAL pdf rows are demoted: they carry full_text with no article split and
+# no akn_xml, so letting one outrank an XML edition would null akn_xml in the
+# projection. Cantonal pdf-text rows (lexwork_pdf/lexfind, phase 2) are NOT
+# demoted -- pdf_text_stage parses them into articles with akn_xml set, which
+# makes them first-class editions that must project when they are the newest.
+# So DISTINCT ON
 # picks a pdf-a row only when NO xml/cantonal parsed row exists for that
 # act+lang at all. Within each of those two groups, date_applicability DESC
 # still picks the latest edition -- unchanged recency semantics, just
@@ -93,7 +95,7 @@ _LATEST_PARSED_VERSION = """
     SELECT DISTINCT ON (act_id, lang) *
       FROM ch_act_version
      WHERE stage = 'parsed'
-     ORDER BY act_id, lang, (source IN ('fedlex_pdf', 'lexwork_pdf')) ASC, date_applicability DESC
+     ORDER BY act_id, lang, (source = 'fedlex_pdf') ASC, date_applicability DESC
 """
 
 # The editions this run will project, oldest version_id first. Read as a
@@ -132,7 +134,8 @@ SELECT a.eli_work_uri,
        v.akn_xml,
        v.full_text,
        v.xml_url,
-       CASE WHEN a.jurisdiction = 'CH' THEN 'fedlex' ELSE 'lexwork' END,
+       -- the edition's own source (migration 203): fedlex, lexwork, sil, ti_rl, ...
+       v.source,
        -- article_count is here so "this projected row is empty" is a
        -- queryable fact rather than a line in a run log somebody has to
        -- still have. A body-less Fedlex act is genuine data (see

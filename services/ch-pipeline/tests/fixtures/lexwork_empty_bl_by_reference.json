@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 783,
+   "title": "Vertrag für halbprivatversicherte Patientinnen und Patienten",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.1998 (Beschlussdatum: 17.02.1998)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  930.131\n</h1>\n<h1 class='title'>\n  Vertrag f&uuml;r halbprivatversicherte Patientinnen und Patienten\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 17.02.1998 (Stand 01.01.1998)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    In Kraft getreten am 1. Januar 1998.\n  </p>\n  <p>\n    Der Vertrag wird in der Gesetzessammlung nicht publiziert. Der Text ist erh&auml;ltlich bei der sant&eacute;suisse, Postfach, 4002 Basel, sowie auf der Volkswirtschafts- und Sanit&auml;tsdirektion, Bahnhofstrasse 5, 4410 Liestal.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_ags_source'>\n  GS 33.0046\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

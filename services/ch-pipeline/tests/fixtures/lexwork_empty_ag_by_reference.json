@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 808,
+   "title": "Benutzungs- und Gebührenreglement Aargauer Kantonsbibliothek",
+   "version_dates_str": "Version in Kraft von: 01.01.2010 bis: 31.12.2016 (Beschlussdatum: 23.10.2009)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  495.225\n</h1>\n<h1 class='title'>\n  Benutzungs- und Geb&uuml;hrenreglement Aargauer Kantonsbibliothek\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 23.10.2009 (Stand 01.01.2010)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'></div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'>\n  <p>\n    Dieses Reglement wird durch Verweisung publiziert. Es kann bei der Staatskanzlei und bei der Aargauer Kantonsbibliothek eingesehen und bezogen werden.\n  </p>\n</div>\n<div class='egress_ags_source'>\n  2009 S. 356\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

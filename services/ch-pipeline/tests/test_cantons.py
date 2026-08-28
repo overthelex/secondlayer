@@ -32,10 +32,33 @@ def test_bilingual_cantons_list_their_languages():
 
 
 def test_bespoke_cantons_have_no_lexwork_host():
-    for code in ("ZH", "VD", "TI", "NE", "GE", "JU", "SZ"):
+    for code in ("VD", "JU", "SZ"):
         assert cantons.ALL[code].platform == "lexfind"
         assert cantons.ALL[code].host == ""
         assert code not in cantons.LEXWORK
+    assert cantons.ALL["ZH"].platform == "zhlex" and "ZH" not in cantons.LEXWORK
+
+
+def test_sil_cantons_have_a_host_and_french_only():
+    assert set(cantons.SIL) == {"GE", "NE"}
+    assert cantons.SIL["GE"].host == "silgeneve.ch" and cantons.SIL["NE"].host == "rsn.ne.ch"
+    for code in ("GE", "NE"):
+        assert cantons.ALL[code].platform == "sil" and cantons.ALL[code].langs == ("fr",)
+        assert code not in cantons.LEXWORK
+    assert cantons.sil_codes(None) == ["GE", "NE"]
+    assert cantons.sil_codes("ne") == ["NE"]
+    with pytest.raises(ValueError):
+        cantons.sil_codes("BE")
+
+
+def test_version_source_follows_the_platform():
+    assert cantons.version_source("BE") == "lexwork"
+    assert cantons.version_source("GE") == "sil"
+    assert cantons.version_source("ZH") == "zhlex"
+    assert cantons.version_source("VD") is None
+    assert cantons.version_source("TI") == "ti_rl"
+    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI", "ZH"])
+    assert len(cantons.text_cantons()) == 23
 
 
 def test_canton_selection_from_the_environment_value():
@@ -44,3 +67,14 @@ def test_canton_selection_from_the_environment_value():
     assert cantons.lexwork_codes("be, gr") == ["BE", "GR"]
     with pytest.raises(ValueError):
         cantons.lexwork_codes("ZH")
+
+
+def test_ticino_has_its_own_platform_and_a_version_source():
+    ti = cantons.ALL["TI"]
+    assert ti.platform == "ti_rl" and ti.host == "www3.ti.ch" and ti.langs == ("it",)
+    assert "TI" not in cantons.LEXWORK
+    assert cantons.version_source("TI") == "ti_rl"
+    assert cantons.version_source("BE") == "lexwork"
+    assert cantons.version_source("ZH") == "zhlex"
+    assert cantons.version_source("VD") is None
+    assert cantons.text_cantons() == sorted(list(cantons.LEXWORK) + ["GE", "NE", "TI", "ZH"])

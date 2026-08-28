@@ -1,0 +1,38 @@
+{
+ "text_of_law": {
+  "systematic_number": "1021.001",
+  "title": "Kantonsratsbeschluss betreffend Objektkredit für die Instandsetzung und Erweiterung des Ausbildungszentrums Schönau auf dem GS 2257, Lorzenstrasse 4, Cham",
+  "abbreviation": "",
+  "abrogated": false,
+  "abrogated_dates_str": null,
+  "enactment": "2018-01-20",
+  "date_of_decision": "2017-10-26",
+  "text_of_law_type_id": 10,
+  "version_uid": "9dd36c5a06df4064e5edb6b465678f43",
+  "canonical_link": "https://bgs.zg.ch/app/de/texts_of_law/1021.001",
+  "current_version": {
+   "id": 2747,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 20.01.2018 (Beschlussdatum: 26.10.2017)",
+   "structured_document_id": 15603,
+   "title": "Kantonsratsbeschluss betreffend Objektkredit für die Instandsetzung und Erweiterung des Ausbildungszentrums Schönau auf dem GS 2257, Lorzenstrasse 4, Cham",
+   "abbreviation": ""
+  },
+  "old_versions": [],
+  "future_versions": [],
+  "change_documents": [
+   {
+    "id": 2564,
+    "date_title_string": "Publiziert am: 19.01.2018",
+    "number": "2018/003",
+    "pdf_link": "https://bgs.zg.ch/api/de/change_documents/file_dictionaries/2564/pdf_file",
+    "for_selected_version": true,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "19.01.2018",
+    "date_string": "19.01.2018",
+    "document_title": "Kantonsratsbeschluss betreffend Objektkredit für die Instandsetzung und Erweiterung des Ausbildungszentrums Schönau auf dem GS 2257, Lorzenstrasse 4, Cham",
+    "identifier_1": "19.01.2018",
+    "identifier_2": "2018/003"
+   }
+  ]
+ }
+}

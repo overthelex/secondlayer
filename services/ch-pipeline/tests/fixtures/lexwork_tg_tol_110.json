@@ -1,0 +1,24 @@
+{
+ "text_of_law": {
+  "systematic_number": "110",
+  "title": "Übereinkunft zwischen dem Grossherzogtum Baden und dem Kanton Thurgau betreffend die Grenzberichtigung bei Konstanz",
+  "abbreviation": "",
+  "abrogated": false,
+  "abrogated_dates_str": null,
+  "enactment": "1831-03-28",
+  "date_of_decision": "1831-03-28",
+  "text_of_law_type_id": 8,
+  "version_uid": "cf1ffe4463bf21be50e0dc45e8d77aee",
+  "canonical_link": "https://www.rechtsbuch.tg.ch/app/de/texts_of_law/110",
+  "current_version": {
+   "id": 2407,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 28.03.1831 (Beschlussdatum: 28.03.1831)",
+   "structured_document_id": 10681,
+   "title": "Übereinkunft zwischen dem Grossherzogtum Baden und dem Kanton Thurgau betreffend die Grenzberichtigung bei Konstanz",
+   "abbreviation": ""
+  },
+  "old_versions": [],
+  "future_versions": [],
+  "change_documents": []
+ }
+}

@@ -4,7 +4,12 @@
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|fedlex-pdf-text|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
-#   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal [canton]
+#   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
+#                 ./run-stage.sh lexfind-versions [canton]   (CHPIPE_LEXFIND_SCOPE=all|gaps from the env)
+#                 ./run-stage.sh lexwork-pdf-requeue|pdf-text [canton]   (PDF editions; see README "PDF editions")
+#   SIL (GE, NE): ./run-stage.sh sil-acts|sil-fetch|sil-parse [canton]
+#   ticino:       ./run-stage.sh ti-acts|ti-fetch|ti-parse   (no argument; one canton, one host)
+#   zurich:       ./run-stage.sh zh-acts|zh-fetch|zh-parse   (no argument; CHPIPE_ZH_ONLY narrows zh-acts)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -63,13 +68,27 @@ case "$STAGE" in
     ARG="${POS:-${CHPIPE_SHAB_MONTHS:-}}"
     export CHPIPE_SHAB_MONTHS="$ARG"
     ;;
-  lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|reports-cantonal)
+  lexfind-registry|lexfind-versions|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal|sil-acts|sil-fetch|sil-parse|lexwork-pdf-requeue|pdf-text)
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
+    # The sil-* stages accept GE, NE or nothing (both). pdf-text and
+    # lexwork-pdf-requeue take one canton or none; pdf-text also reads
+    # CHPIPE_SOURCE (lexwork_pdf|lexfind) and CHPIPE_RESPLIT=1 (re-split the
+    # article-less parsed rows from akn_xml, no download), and
+    # lexwork-pdf-requeue CHPIPE_CURRENT_ONLY=1, from the environment.
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail)
+  ti-acts|ti-fetch|ti-parse)
+    # Ticino's own text platform (chpipe/ti_rl.py): TI only, so no canton
+    # argument; ti-fetch and ti-parse are bounded by CHPIPE_LIMIT like the
+    # other queue stages.
+    if [ -n "$POS" ]; then
+      echo "$STAGE takes no second argument (got '$ARG')" >&2
+      exit 2
+    fi
+    ;;
+  acts|versions|fetch-xml|fedlex-pdf-text|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

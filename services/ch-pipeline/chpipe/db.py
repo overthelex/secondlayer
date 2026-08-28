@@ -361,7 +361,7 @@ _COMPLETE_VERSION_ALLOWED_COLUMNS = frozenset({
 
 def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3,
                    backoff_minutes: tuple[int, ...] | None = RETRY_BACKOFF_MINUTES,
-                   source: str = "fedlex",
+                   source: str | tuple[str, ...] = "fedlex",
                    url_prefix: str | None = None) -> list[dict]:
     """The same queue discipline as claim(), against ch_act_version --
     filtered by `source` (migration 201): the Akoma Ntoso parser and the
@@ -379,10 +379,16 @@ def claim_versions(conn, stage: str, limit: int, max_attempts: int = 3,
     still NULL (migration 197 enrolled it with none) is claimable
     immediately. See claim()'s docstring for why the predicate is `>=`-style
     time math rather than a re-queue timestamp, and why a row is never
-    delayed until it has actually failed once."""
+    delayed until it has actually failed once.
+
+    `source` may be a tuple: the PDF text stage serves both 'lexwork_pdf'
+    (a host's own PDF of a PDF-only edition) and 'lexfind' (lexfind.ch's
+    PDF) from one queue walk, and two claims in sequence would starve the
+    second source whenever the first has more than `limit` rows."""
+    sources = (source,) if isinstance(source, str) else tuple(source)
     sql = (f"SELECT {_CLAIM_VERSION_COLUMNS} FROM ch_act_version "
-           "WHERE stage = %s AND attempts < %s AND source = %s")
-    params: list = [stage, max_attempts, source]
+           "WHERE stage = %s AND attempts < %s AND source = ANY(%s)")
+    params: list = [stage, max_attempts, list(sources)]
     if url_prefix:
         sql += " AND xml_url LIKE %s"
         params.append(url_prefix.replace("%", "\\%").replace("_", "\\_") + "%")

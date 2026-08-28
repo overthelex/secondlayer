@@ -61,10 +61,10 @@ def apply_migration_199(conn) -> None:
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
 MIGRATION_198 = _REPO_ROOT / "mcp_backend/src/migrations/198_ch_as_bbl.sql"
 MIGRATION_201 = _REPO_ROOT / "mcp_backend/src/migrations/201_ch_cantonal_legislation.sql"
-# 202 (ch_zefix_*/ch_shab_*) and 203 (unmerged, feat/ch-cantonal-phase2,
-# applied on prod by hand) touch neither ch_act nor ch_act_version, so
-# reset_legislation_schema does not need them -- 204 is the next migration
-# that does, and it is written to apply cleanly whether or not 203 has run.
+MIGRATION_203 = _REPO_ROOT / "mcp_backend/src/migrations/203_ch_cantonal_sources.sql"
+# 204 re-adds the ch_act_version.source CHECK as a superset of 203's list, so
+# the pair applies cleanly in this order (and 204 alone applies cleanly on a
+# database that never saw 203 -- prod recorded 203 by hand).
 MIGRATION_204 = _REPO_ROOT / "mcp_backend/src/migrations/204_ch_fedlex_pdf.sql"
 
 _LEGISLATION_TABLES = (
@@ -91,7 +91,8 @@ def reset_legislation_schema(conn) -> None:
     for table in _LEGISLATION_TABLES:
         conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     conn.execute(_CH_LEGISLATION_135)
-    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201, MIGRATION_204):
+    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201, MIGRATION_203,
+                      MIGRATION_204):
         conn.execute(migration.read_text())
 
 

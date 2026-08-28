@@ -1568,7 +1568,8 @@ Stages (`run-stage.sh <stage> [canton]`, `CHPIPE_CANTON` is the env twin):
 | `lexfind-registry [canton]` | all 26 cantons (or one): every act and its version list from lexfind.ch into `ch_cantonal_registry`. ~33K acts, hours at 2 req/s; idempotent |
 | `cantonal-acts [canton]` | Lexwork host(s): acts + versions (stage `discovered`, source `lexwork`) + change documents. Driving set = host index + change-document index + the registry's numbers for the canton (that is how abrogated acts get in). Comma-separated codes allowed |
 | `cantonal-fetch [canton]` | show_as_json payload per version into `akn_xml` (+ audit copy `raw/cantonal/{version_id}.json`). One canton or all; sibling languages share one download |
-| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document`) |
+| `cantonal-parse [canton]` | articles (`ch_act_article`), `full_text`, and provenance from the modification table (`ch_article_provenance`, linked to `ch_act_change_document` through the host's history map, or through `change_refs` when the host ships none); fills `date_decision` on the documents the rows cite |
+| `cantonal-relink [canton]` | recompute `change_document_id` on already-parsed provenance rows from `raw_note` (no refetch): per act, per edition, one UPDATE per edition. Idempotent; already-linked rows are kept (`CHPIPE_RELINK_FORCE=1` recomputes them). Reports linked / already_linked / unlinked by reason. `CHPIPE_LIMIT` bounds editions |
 | `diff`, `project-legacy` | unchanged; `diff` walks cantonal acts too (`e_id` = Lexwork uid) |
 | `reports-cantonal [canton]` | Gate F: Lexwork corpus against the LexFind registry, quality counters, amendment counters |
 
@@ -1587,6 +1588,16 @@ cron:
 
     0 4 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh cantonal-acts
     0 5 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh lexfind-registry
+
+Relink (one-off, after this code ships; 2026-08-26 prod had 993,939 of
+1,501,980 cantonal provenance rows unlinked because seven hosts ship an
+empty history map): `./run-stage.sh cantonal-relink BL` first (85K rows,
+minutes), read the report's `by_reason`, then `cantonal-relink` for all
+cantons (~1.5M rows; one row read and at most one row written each; expect
+tens of minutes). Expected link rate on the 2% sample (`change_refs`
+docstring): OW 98%, ZG 85%, LU 80%, BL 56%, BS 33%, TG 0.4%, AR 0 (the
+host publishes no change documents at all: `change_documents/lightweight_index`
+is `{}`, checked 2026-08-26). Rerunning is a no-op.
 
 Env: `CHPIPE_CANTONAL_PER_HOST` (default 2) caps requests in flight per
 cantonal host; `CHPIPE_HTTP_CONCURRENCY` still caps the total.
@@ -1608,8 +1619,315 @@ Measured on the BE pilot (2026-08-26): acts ~8/s, fetch ~1K rows/min (367 KB
 average payload, sibling languages share one download), parse ~1.6K rows/min,
 narrowed diff ~5 acts/s per language; BE end to end 13 minutes.
 
-Phase 2 (not built): text for ZH, VD, TI, NE, GE, JU, SZ from LexFind PDFs
-or their own portals; the registry already holds their acts and versions.
+### LexFind editions (phase 2)
+
+LexFind serves every version it lists as a PDF on the site root:
+`https://www.lexfind.ch/tolv/{version_id}/{lang}` (verified 2026-08-26:
+HTTP 200, `application/pdf`, body `%PDF-1.4`, no redirect, no browser
+User-Agent needed; `dtah_urls[].url` in with-version-groups is exactly that
+path, and `/api/fe/de/tolv/...` is a 404). Since the URL is a function of
+the ids, `lexfind-versions` derives it (`lexfind_api.pdf_url`) and a
+registry walked before `versions_json` kept `pdf_urls` per language is
+materialised as is: **re-running `lexfind-registry` is not a precondition**
+(it is idempotent and refreshes `pdf_urls`, ~26K acts at 2 req/s is ~4 h,
+so do it in the weekly slot, not before the first materialisation).
+
+| stage | what it does |
+|---|---|
+| `lexfind-versions [canton]` | registry -> `ch_act` / `ch_act_version` (source `lexfind`, stage `discovered`, `xml_url` = the PDF). No network. `CHPIPE_LEXFIND_SCOPE=all\|gaps`; unset follows the platform: `all` for ZH VD TI NE GE JU SZ, `gaps` for the 19 Lexwork cantons |
+| pdf-text (separate stage) | claims `source IN ('lexfind','lexwork_pdf')` at `discovered`, downloads `xml_url` as a PDF, extracts the text |
+
+Order on prod: `lexfind-versions ZH,VD,TI,NE,GE,JU,SZ` (scope all), then
+`lexfind-versions` for the 19 Lexwork cantons (scope gaps, only after
+`cantonal-acts` has walked them: the gap logic reads the host's editions
+that exist), then the pdf-text stage, then `reports-cantonal` (Gate F prints
+`from lexfind: acts N, editions M` per canton). Rerunning is safe: acts and
+versions are upserted on `lexfind:{tol_id}` / `lexfind:{version_id}/{lang}`,
+stage is never touched, the log reports `versions_updated` instead of
+`versions_inserted`.
+
+What to expect, from the registry of 2026-08-26:
+
+* scope `all`, the 7 cantons: 8,488 acts and 67,710 versions, one language
+  each (ZH 1,378 / 5,098; VD 1,311 / 20,139; TI 1,022 / 10,119; NE 1,703 /
+  8,658; GE 1,314 / 16,455; JU 1,169 / 4,003; SZ 591 / 3,238). Every
+  version is written; `versions_same_day_shadow` (a "formless" correction
+  listed next to the version it corrects, 12,562 same-day groups across
+  the 7) counts rows that get `date_end = date_applicability - 1` and are
+  never served for any as-of date, the same rule `cantonal-acts` applies
+  to GR; SZ smoke 2026-08-27: 1,450 of 3,238 rows, so expect the pdf-text
+  stage to download roughly a third more PDFs than editions that can ever
+  be served. `versions_unparseable_date` and `versions_no_pdf` should be 0
+  (they were on every one of the 67,710). An abrogated or "removed"
+  (renumbered) act's last edition ends on `version_inactive_since` /
+  `info_badge_date` minus one, so a not-in-force act has no open edition
+  (SZ: 0 of 161 after the run).
+* scope `gaps`, the 19 Lexwork cantons: ~3,4K acts LexFind holds that the
+  hosts answer 404 to (3,407 registry rows with no `ch_act` on 2026-08-26,
+  all abrogated except 2 in FR; ~8.9K versions) plus ~17,1K versions on
+  shared acts dated before the host's earliest edition minus 7 days
+  (17,059 measured). `versions_skipped_existing` (within +-7 days of an
+  edition of another source; 123 measured) and `versions_skipped_in_history`
+  (inside or after the host's history) are the versions deliberately not
+  written. A lexfind version that precedes the host's first edition ends
+  the day before it, so "exactly one open edition per act and language"
+  keeps holding.
+
+Act matching: a registry act is its own `ch_act` (`eli_work_uri
+lexfind:{tol_id}`) or, for a Lexwork canton, the host's act with the same
+`(jurisdiction, sr_number)`. Numbers are reused inside a canton (BE 322.1:
+an abrogated act and the active one the host serves), so a shared number is
+matched on in-force status and the other tol gets its own act; a matched
+host act is never rewritten (`cantonal-acts` owns its metadata).
+
+Not covered: ZH/GE/NE/TI have their own portals with structured text
+(zhlex, SIL, RLeggi) for current editions; LexFind's PDFs are the history.
+Phase 2: text for the seven cantons without a Lexwork host from their own
+portals; the registry already holds their acts and versions. TI is below;
+ZH, VD, NE, GE, JU, SZ are not built.
+
+### Ticino (TI)
+
+Source: the Raccolta delle leggi on `www3.ti.ch/CAN/RLeggi` (module
+`chpipe/ti_rl.py`; migration 203 allows `source = 'ti_rl'`). One list page
+(`elenco-atti`, the acts in force: 623 on 2026-08-26, the same count LexFind
+has active for TI) and one flat Word-HTML page per act
+(`legge-piatta/num/{id}`), always the current consolidated text -- there is
+no version history on the portal, so each act is exactly one open edition
+(lang `it`, `eli_consolidation_uri = ti_rl:num/{id}`, `date_applicability` =
+LexFind's current `version_active_since`, the run date for an act LexFind
+does not know). Acts are joined to `ch_cantonal_registry` by the portal id
+in LexFind's `original_url` (622 of 623) and by systematic number otherwise.
+Italian only.
+
+| stage | what it does |
+|---|---|
+| `ti-acts` | the list -> `ch_act` (jurisdiction TI, `title_it`, `in_force` from LexFind) + one `discovered` edition per act. One request; idempotent, a rerun creates no second row and reopens an edition only when LexFind's date moved |
+| `ti-fetch` | the flat page into `akn_xml` (+ audit copy `raw/ti_rl/{version_id}.html`), one request a second, sequential. The portal answers an unknown id with HTTP 200 and "L'atto normativo cercato non è presente!" -- that body fails the row with that reason (`not_present` in the report) |
+| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason |
+| `reports-cantonal TI` | Gate F on `source = 'ti_rl'` (it filters by `cantons.version_source`) |
+
+Backfill order on prod, supervised: `lexfind-registry TI` (if the registry is
+older than a week), `ti-acts` (seconds), `ti-fetch` (~12 minutes for 623
+pages at one a second; the constitution took 10.7 s to render on the first
+probe), `ti-parse` (under a minute), `diff` is a no-op with one edition per
+act, `reports-cantonal TI`. Read 10 articles against the site before
+`project-legacy`. Measured on the 2026-08-26 smoke (15 acts, test DB): 15
+of 15 parsed, 686 articles (7 to 139 per act; the constitution 103), 0
+failures, Gate F dates match 15 / mismatch 0.
+
+Known limits: no amendment provenance (the footnotes name the amending
+act and its BU page but there is no change-document index to link to; they
+are kept as the article's notes); annexes after the last article stay in
+that article's text; the 398 TI acts LexFind holds as abrogated are not on
+the portal and stay registry-only.
+Phase 2: text for the seven cantons without a Lexwork host, source by
+source (migration 203 widens `ch_act_version.source`). Built so far: GE
+and NE below. ZH, VD, TI, JU, SZ are still registry only.
+
+## SIL cantons (GE, NE)
+
+Geneva (rsGE, silgeneve.ch) and Neuchâtel (RSN, rsn.ne.ch) publish their
+collections on the SIL platform as static Word-generated HTML, windows-1252,
+one `content.htm` table of contents per canton and one `htm/{file}.htm`
+page per act, consolidated text in force only (no version history). The
+TOC lists exactly LexFind's active acts (2026-08-26: GE 863 / 863, NE
+825 / 825), so the abrogated acts LexFind holds for the two cantons (451
+GE, 878 NE) have no text here. Parser: `chpipe/sil.py` (GE splits
+articles on `p.article`, NE on the `Art. N` prefix of `p.xNormal`; footnote
+references are stripped from the text and stored as `notes`).
+
+Stages (`run-stage.sh <stage> [GE|NE]`, both cantons when omitted; the
+rows share the `ch_act_version` queue under `source = 'sil'`):
+
+| stage | what it does |
+|---|---|
+| `sil-acts [canton]` | one TOC request per canton: `ch_act` (in force, `title_fr`, `metadata_json.platform = 'sil'`) and exactly one open `ch_act_version` per act (`lang fr`, stage `discovered`, `xml_url` = the page). `date_applicability` = `version_active_since` of LexFind's current version for the number (`sil_date_source: lexfind` in the act's metadata) or today (`run`). Idempotent: an act with an open sil version keeps it |
+| `sil-fetch [canton]` | the page, decoded from its declared charset, into `akn_xml` (+ bytes under `raw/sil/{version_id}.htm`); 0.5 s between requests, `CHPIPE_CANTONAL_PER_HOST` in flight. A 404 retires the row at once with the URL in `last_error` |
+| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). No provenance rows (SIL has no structured modification table) |
+| `reports-cantonal GE` / `NE` | Gate F, source filter from the canton's platform; GE and NE are in the default list |
+
+Backfill on prod, supervised, in this order (measured on the live smoke
+2026-08-26, see the numbers in the PR): `lexfind-registry` must already
+hold GE and NE (it does since 2026-08-26); then
+
+    ./run-stage.sh sil-acts            # 2 requests, ~1.7K acts, seconds
+    ./run-stage.sh sil-fetch GE        # 863 pages at 2 req/s: ~8 min
+    ./run-stage.sh sil-fetch NE        # 825 pages: ~7 min
+    ./run-stage.sh sil-parse           # ~1.7K pages, under a minute
+    ./run-stage.sh reports-cantonal GE
+    ./run-stage.sh reports-cantonal NE
+    CHPIPE_LANG=fr ./run-stage.sh diff # optional: one edition per act, so
+                                       # nothing to diff until a re-edition
+
+Re-editions: `sil-acts` never closes a version. When a page changes (its
+`Etat au` date moves), the follow-up is a rule that closes the open version
+the day before and discovers a new one; until then a re-fetch of a
+`parsed` row needs `retry_failed_versions` or a manual `stage = 'discovered'`.
+Failure reasons worth knowing: `no_articles` is an act written without
+`Art.` headings (a treaty in numbered paragraphs, a tariff table) --
+listed in Gate F, the text is not lost (it is in `akn_xml`), but there are
+no article rows; `404: act page gone` is a TOC entry the host does not
+serve, compare against the TOC of the day.
+
+## PDF editions (Lexwork PDF-only versions, LexFind PDFs)
+
+Two kinds of edition have no HTML: a Lexwork host's version without a
+structured document (`pdf_only` in `cantonal-fetch`: 18,777 rows on
+2026-08-26, 670 in-force acts whose CURRENT edition is one; LEXAI-2010),
+and the editions only lexfind.ch holds (the seven cantons without a host,
+and editions older than a host's history; ~55K PDFs, LEXAI-2016/2017).
+Both go through one stage, `pdf-text` (`chpipe/stages/pdf_text_stage.py`),
+which claims `ch_act_version` rows with `source IN ('lexwork_pdf',
+'lexfind')` at stage `discovered`, downloads `xml_url` (a PDF URL), keeps
+the file under `raw/pdf/{version_id}.pdf`, runs `chpipe/pdf_text.py`
+(pdftotext -layout, then the split) and stores the raw pdftotext output in
+`akn_xml`, the articles in `ch_act_article` and `full_text` -- stage
+`parsed`, like the HTML path. `pdf_text.split_text(akn_xml)` re-splits an
+edition offline, so a better splitter never needs the PDF again.
+
+The extractor was gated before it was trusted (`scripts/pdf_gate.py`, the
+numbers are in its docstring): 60 editions from 9 hosts in de/fr/it/rm
+that exist BOTH as HTML and as the host's PDF, compared article by article
+-- 60/60 with the same article count, per-article text ratio median 1.000
+(p25 1.000, 927 articles), Lexwork uid reproduced for 100% of them, so
+`diff` can key a PDF edition against an HTML one of the same act. Known
+shapes below 0.9: tables inside a provision (pdftotext emits rows, the
+HTML walks cells) and pre-2015 conversions with older layouts (VS 101.1 of
+2008 loses two of 103 article headings). Article-less acts (a coat of
+arms, an accession decision: 3 of 20 PDF-only editions sampled) are stored
+with `article_count = 0` and counted as `empty`, as `cantonal-parse` does;
+under 200 characters of text is retired as `text too short`.
+
+Install on prod (once): `pdftotext` is poppler-utils, already on the box
+(22.02) for the decisions corpus; the venv needs nothing new
+(`~/ch-pipeline-venv` has httpx, lxml, psycopg). Check with
+`which pdftotext && ~/ch-pipeline-venv/bin/python -c "import chpipe.pdf_text"`.
+
+Order, supervised (tmux, never under the nightly flock):
+
+    # 1. the 670 in-force acts first: one tol request per act, no PDFs yet
+    CHPIPE_CURRENT_ONLY=1 ./run-stage.sh lexwork-pdf-requeue          # or one canton: ... FR
+    # 2. their PDFs
+    ./run-stage.sh pdf-text                                            # CHPIPE_SOURCE=lexwork_pdf to leave LexFind rows alone
+    # 3. read 20 of them against the host, then the rest of the host backlog
+    ./run-stage.sh lexwork-pdf-requeue
+    ./run-stage.sh pdf-text
+    # 4. LexFind (the rows lexfind-registry materialised as source 'lexfind')
+    CHPIPE_SOURCE=lexfind ./run-stage.sh pdf-text
+
+`lexwork-pdf-requeue` fetches each act's tol record once (cache per act)
+and, per PDF-only row, sets `source = 'lexwork_pdf'`, `stage =
+'discovered'`, `xml_url = https://{host}/api/{lang}/versions/{id}/pdf_file`
+-- the one URL shape every host uses (read off 60 parsed versions on 9
+hosts, confirmed 20/20 live on PDF-only rows across 7 hosts; the tol record
+itself lists versions WITHOUT a pdf link). A version the host has since
+given a structured document goes back to the HTML path instead
+(`requeued_html`); a version the host no longer lists stays failed
+(`pdf_only: version not listed by host`). `pdf-text` retires LexFind's
+"shadow" rows (same-day replaced editions, `date_end_applicability` one
+day before `date_applicability`, ~12.5K) with `last_error =
+'shadow_edition'` before its first claim, so they are never downloaded.
+
+Rate: `CHPIPE_PDF_RPS` (default 2) request starts per second per host,
+`CHPIPE_CANTONAL_PER_HOST` (default 2) in flight per host, pdftotext
+bounded by `CHPIPE_CPU_WORKERS`. Expected runtime: the 18,777 host PDFs
+are spread over 18 hosts, and FR (6,172) and GR (4,980) bound the run at
+2 req/s: ~52 minutes for FR, ~42 for GR, the other hosts finish inside
+that -- about an hour end to end for LEXAI-2010, a few minutes for the
+in-force subset (178 FR + 150 GR rows). The ~55K LexFind PDFs are one host
+(lexfind.ch) at 2 req/s: ~7.6 hours. Sizes: 100-850 KB per PDF, ~5 GB on
+disk for LexFind, ~4 GB for the hosts.
+
+Re-splitting without a download: the first prod pass (2026-08-27, in-force
+acts) left 389 of 692 parsed editions with text but `article_count = 0`.
+Read on 98 of them: ~175 are decisions in numbered clauses ("1. Der Kanton
+tritt ... bei", GR/SO/OW/AG accession decrees), ~30 lists, tables, tariffs
+and ballot templates, 28 FR one-paragraph notices ("published only in
+French / not in the SGF"), and three heading shapes the splitter did not
+know: `Art. 1. Ziele` (number with a dot, 40 rows, SO concordats), a
+centred `§1` with the marginal on the next line (ZG/AI accession decrees,
+~20) and a left-column marginal on the article's own line (AR 88258). The
+three are handled now; the rest have no articles. To apply a splitter
+change to what is already stored:
+
+    CHPIPE_RESPLIT=1 ./run-stage.sh pdf-text          # or one canton: ... SO
+
+reads `akn_xml` of every `source IN ('lexwork_pdf','lexfind')` row at
+`parsed` with `article_count = 0`, re-runs `pdf_text.split_text` and
+rewrites `ch_act_article` + `full_text` for the rows that now split
+(`recovered` in the log); nothing is fetched. Expected on the 389: ~60
+recovered (15%), the rest are genuinely article-less.
+
+Failure reasons: `not a PDF (...)` (the host answered HTML -- a login page
+or an error; retried within the attempt budget), `text too short`,
+`pdftotext: ...` (poppler refused the file), `shadow_edition`. Retry with
+`db.retry_failed_versions()` as for the other legislation stages.
+
+Phase 2: text for the seven cantons without a Lexwork host from their own
+portals, each with its own stage family and `ch_act_version.source`
+(migration 203); the registry already holds their acts and versions.
+Zürich is below.
+
+### Zürich (ZH-Lex)
+
+Source: `www.zh.ch` (AEM) in front of a Lotus Domino database on
+`www.notes.zh.ch`. `chpipe/zhlex.py` holds the parsers, `cantons.py`
+marks ZH as platform `zhlex`, which is also the `source` its editions
+carry. Everything was read out of the site's SPA bundle
+(`main.06e084f.min.js`, `FlexData.constructUrl`) and measured 2026-08-27.
+
+| stage | what it does |
+|---|---|
+| `zh-acts` | enumerate every edition through the index JSON, fetch every edition page, upsert `ch_act` (jurisdiction `ZH`, `eli_work_uri` = `http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr={nr}`) and one `ch_act_version` per edition (`zhlex:{nr}/{version}`, lang `de`, source `zhlex`, stage `discovered`, `xml_url` = the edition's text link). `CHPIPE_ZH_ONLY=101,131.1` narrows to numbers |
+| `zh-fetch` | Domino HTML rendering (`xml_url` under `https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/`) into `akn_xml`, decoded at fetch time (the pages declare ISO-8859-1), audit copy `raw/zhlex/{version_id}.html`. PDF editions (`OpenAttachment?...file=...pdf`) are never claimed here; the shared PDF path takes them by the same prefix rule |
+| `zh-parse` | `§`- / `Art.`-numbered articles (`e_id` `par_7` / `art_7`), section headings as marginal notes, page footnotes as `notes`, `full_text` |
+| `reports-cantonal ZH` | Gate F on source `zhlex` |
+
+The index (`.../lawcollectionsearch_312548694.zhweb-zhlex-ls.zhweb-cache.json`)
+answers the search form's field names: without parameters it lists in-force
+acts 15 per page and caps at 150 rows (`moreSearchResultsThanAllowed`);
+`fileNumber=1..14` (systematic chapters) sums to exactly 944 in-force acts,
+LexFind's active count. With `includeRepealedEnactments=true` every row is
+an EDITION (101 alone is 26 rows), so `zh-acts` bisects
+`enactmentDate=YYYY-MM-DD_YYYY-MM-DD` (the form's range, ISO with an
+underscore) until no slice is capped, chapters as the second axis for a
+single day; ~5,100 rows in ~400 requests. A short `referenceNumber` answers
+204, so numbers cannot slice.
+
+Editions of one Ordnungsnummer form one Nachtrag series across
+re-enactments (101: 000..039 the 1869 constitution, 051..129 the 2005 one;
+131.6: 000/069/099 the 1990 act, 111 the 2020 act), so the act is keyed on
+the number and a point-in-time lookup resolves to the text in force then.
+The edition page carries no text: a description list (Erlassdatum,
+Inkraftsetzungsdatum, Aufhebungsdatum, Publikationsdatum), the Historie, and
+the text link. Dates: start = Publikationsdatum (what LexFind lists as
+`version_active_since`); the loose-leaf editions before 2006 have none and
+start the day after their predecessor's Aufhebungsdatum (a quarter's last
+day: 30.09.1995, 31.12.1995 ...); the first edition falls back to
+Inkraftsetzungsdatum, then Erlassdatum. End = the successor's start minus
+one day (same-day replacement, 101/125, ends before it starts, the corpus
+rule); the last edition of a withdrawn act ends the day before a
+first-of-month Aufhebungsdatum (the repeal's effective day) or on any other
+value (the last day in force). An act whose dates cannot be derived is
+counted (`dates_underivable`) and skipped, never guessed.
+
+Backfill order, supervised, all three at 2 req/s to zh.ch and notes.zh.ch
+together (the client paces the whole process): `lexfind-registry ZH`,
+`zh-acts` (~400 index requests + ~5,100 edition pages: about 45 minutes),
+`zh-fetch` (the HTML editions: the loose-leaf ones before ~2005, a few
+minutes per thousand), `zh-parse`, `diff` (de), `reports-cantonal ZH`. Weekly
+re-walk alongside the cantonal cron:
+
+    0 6 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-acts
+
+Counters worth knowing: `capped_slices` (a day+chapter slice still over
+150 rows: rows past the cap were not enumerated, zero on the whole
+collection), `pages_failed` (an edition page that did not answer: the
+edition was dropped from the pass and its neighbours dated from their own
+pages; rerun with `CHPIPE_ZH_ONLY`), `historie_mismatch` (the current
+page's Historie lists other editions than the index), `no_provisions` in
+`zh-fetch` (a Domino page without a single § or Art., retired at once).
 
 ## Point-in-time benchmark (chpipe.bench)
 

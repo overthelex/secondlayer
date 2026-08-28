@@ -30,12 +30,12 @@ def _act(conn, code, sysnr, in_force=True):
 
 
 def _version(conn, act_id, date, stage="parsed", lang="de", text="x" * 500, count=3,
-             error=None):
+             error=None, source="lexwork"):
     return conn.execute(
         "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
         "source, stage, full_text, article_count, last_error) "
-        "VALUES (%s, %s, %s, %s, 'lexwork', %s, %s, %s, %s) RETURNING version_id",
-        (act_id, f"{act_id}/{date}/{lang}", lang, date, stage, text, count, error)).fetchone()[0]
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING version_id",
+        (act_id, f"{act_id}/{date}/{lang}", lang, date, source, stage, text, count, error)).fetchone()[0]
 
 
 def _registry(conn, tol_id, code, sysnr, dates, active=True):
@@ -76,6 +76,15 @@ def conn(settings):
                   "VALUES (%s, 'a-1', 'x', %s), (%s, 'a-2', 'y', NULL)", (vs[3][0], linked, vs[3][0]))
         # ZG: nothing loaded, one registry entry
         _registry(c, 3, "ZG", "111.1", ["01.01.2010"])
+        # GE (SIL): one parsed sil edition dated from LexFind, one retired
+        # without articles, one lexwork-sourced stray that must NOT count
+        g = _act(c, "GE", "A 1 01")
+        _version(c, g, "2013-06-01", lang="fr", source="sil")
+        _version(c, g, "2013-06-02", lang="fr", source="sil", stage="failed",
+                 error="no_articles: prose without an Art. heading")
+        _version(c, g, "2013-06-03", lang="fr", source="lexwork")
+        _registry(c, 4, "GE", "A 1 01", ["19.05.1815", "01.06.2013"])
+        _registry(c, 5, "GE", "A 1 02", ["01.01.1900"], active=False)
         yield c
 
 
@@ -110,11 +119,11 @@ def test_amendment_counters(conn):
     assert row["change_documents"] == 2 and row["change_documents_unlinked"] == 1
 
 
-def test_all_lexwork_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
+def test_all_text_cantons_are_reported_and_an_empty_one_reads_as_zero(conn):
     rows = reports_cantonal.gate_f(conn)
     assert [r["canton"] for r in rows] == sorted(
-        c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GL", "GR", "LU", "NW", "OW",
-                    "SG", "SH", "SO", "TG", "UR", "VS", "ZG"))
+        c for c in ("AG", "AI", "AR", "BE", "BL", "BS", "FR", "GE", "GL", "GR", "LU", "NE", "NW",
+                    "OW", "SG", "SH", "SO", "TG", "TI", "UR", "VS", "ZG", "ZH"))
     zg = next(r for r in rows if r["canton"] == "ZG")
     assert zg["acts_lexwork"] == 0 and zg["acts_lexfind"] == 1
     assert zg["only_in_lexfind"] == ["111.1"] and zg["versions_lexfind"] == 1
@@ -125,3 +134,53 @@ def test_the_stage_prints_one_block_per_canton(conn, settings, capsys):
     assert result.text.startswith("Gate F")
     assert "BE: acts lexwork 2 (in force 2) / lexfind 2 (active 1)" in result.text
     assert "dates match 3 / mismatch 2 / future 1" in result.text
+
+
+def test_ticino_editions_are_counted_by_their_own_source(conn):
+    """TI rows carry source 'ti_rl' and lang 'it'; a 'lexwork' filter would
+    report the canton as empty while its acts are parsed."""
+    a = _act(conn, "TI", "101.000")
+    conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+        "source, stage, full_text, article_count) VALUES (%s, 'ti_rl:num/1', 'it', '2023-01-01', "
+        "'ti_rl', 'parsed', %s, 96)", (a, "x" * 500))
+    _registry(conn, 9, "TI", "101.000", ["01.01.2023"])
+    row = reports_cantonal.gate_f(conn, "TI")[0]
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 1
+    assert row["versions_lexwork"] == 1 and row["parsed"] == 1
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 0
+
+
+def test_a_sil_canton_is_filtered_on_its_own_source(conn):
+    row = reports_cantonal.gate_f(conn, "GE")[0]
+    assert row["source"] == "sil"
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 2 and row["only_in_lexfind"] == ["A 1 02"]
+    assert row["versions_lexwork"] == 2, "the lexwork-sourced stray is not a GE sil edition"
+    assert row["versions_lexfind"] == 3
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 0
+    assert row["parsed"] == 1 and row["failed"] == 1 and row["pending"] == 0
+    assert row["failed_by_reason"] == {"no_articles: prose without an Art. heading": 1}
+    text = reports_cantonal.format_gate_f([row])
+    assert "GE: acts sil 1 (in force 1) / lexfind 2 (active 1)" in text and "editions sil 2 / lexfind 3" in text
+
+
+def test_zurich_is_compared_on_its_own_source(conn):
+    """ZH editions carry source 'zhlex'; a lexwork row under ZH would be
+    another pipeline's mistake and must not count."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number, enforcement_status) "
+                 "VALUES (50, 'http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr=101', 'ZH', '101', 0)")
+    conn.execute("INSERT INTO ch_cantonal_registry (lexfind_tol_id, canton, systematic_number, is_active, "
+                 "versions_json, version_count) VALUES (21736, 'ZH', '101', true, "
+                 "'[{\"version_active_since\": \"01.07.2024\"}, {\"version_active_since\": \"01.04.2023\"}]', 2)")
+    for uri, start, source, stage in (("zhlex:101/129", "2024-07-01", "zhlex", "parsed"),
+                                      ("zhlex:101/121", "2023-04-01", "zhlex", "discovered"),
+                                      ("zhlex:101/000", "1869-04-18", "zhlex", "parsed"),
+                                      ("lexwork:oops", "2024-07-01", "lexwork", "parsed")):
+        conn.execute("INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+                     "xml_url, source, stage, article_count, full_text) VALUES (50, %s, 'de', %s, 'x', %s, %s, 5, "
+                     "repeat('x', 300))", (uri, start, source, stage))
+    row = reports_cantonal.gate_f(conn, "ZH")[0]
+    assert row["acts_lexwork"] == 1 and row["acts_lexfind"] == 1
+    assert row["versions_lexwork"] == 3 and row["versions_lexfind"] == 2
+    assert row["date_matches"] == 1 and row["date_mismatches"] == 1, "1869 predates LexFind's history"
+    assert row["parsed"] == 2 and row["pending"] == 1
