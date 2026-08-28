@@ -125,8 +125,16 @@ jobs:
       - name: Reset dist ownership (self-hosted runner)
         run: sudo chown -R "$(id -u):$(id -g)" packages/shared/dist mcp_backend/dist 2>/dev/null || true
 
+      # Одна установка на весь монорепозиторий. `package.json` в корне объявляет
+      # рабочие области (mcp_backend, mcp_rada, mcp_openreyestr, lexwebapp,
+      # packages/shared), поэтому npm из каталога пакета всё равно уходит в
+      # корень — шесть прежних `npm install` шесть раз ставили одно и то же.
+      # `ci` вместо `install`: ставится ровно то, что записано в lock-файле.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
       - name: Build shared package
-        run: cd packages/shared && npm install --legacy-peer-deps && npm run build
+        run: cd packages/shared && npm run build
 
       # Backend/RADA/OpenReyestr integration tests require running infrastructure (DB, Redis, MinIO).
       # CI runs TypeScript compilation + unit tests (mocked, no infra needed).
@@ -152,7 +160,7 @@ jobs:
       - name: Build backend
         if: needs.detect-changes.outputs.backend == 'true'
         run: |
-          cd mcp_backend && npm install && npm run build
+          cd mcp_backend && npm run build
 
       - name: Unit test backend
         if: needs.detect-changes.outputs.backend == 'true'
@@ -165,15 +173,11 @@ jobs:
 
       - name: Build RADA
         if: needs.detect-changes.outputs.rada == 'true'
-        run: cd mcp_rada && npm install && npm run build
+        run: cd mcp_rada && npm run build
 
       - name: Build OpenReyestr
         if: needs.detect-changes.outputs.openreyestr == 'true'
-        run: cd mcp_openreyestr && npm install && npm run build
-
-      - name: Install frontend deps
-        if: needs.detect-changes.outputs.frontend == 'true'
-        run: cd lexwebapp && npm install --legacy-peer-deps
+        run: cd mcp_openreyestr && npm run build
 
       - name: Test frontend
         if: needs.detect-changes.outputs.frontend_tests_needed == 'true'
@@ -207,7 +211,7 @@ jobs:
 
       - name: Build platform
         if: needs.detect-changes.outputs.platform == 'true'
-        run: cd platform && npm install --legacy-peer-deps && npm run build
+        run: cd platform && npm ci --legacy-peer-deps --no-audit --no-fund && npm run build
 
   # ─── Step 2b: Self-heal build failures with Claude Code (DISABLED) ──
   self-heal-build:

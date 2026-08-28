@@ -135,8 +135,9 @@ deployment/wireguard/*.conf
 mcp_backend/start-mcp-container.sh
 
 # Lock files (managed per workspace)
-package-lock.json
-!platform/package-lock.json
+# package-lock.json НЕ игнорируем: без него CI ставил зависимости через
+# `npm install`, каждый раз заново разрешая ^-диапазоны. 28.08.2026 чужой
+# релиз jest-mock 30.5 уронил сборку main без единого коммита у нас.
 
 # Data downloads (large binary files)
 scripts/judges/downloads/

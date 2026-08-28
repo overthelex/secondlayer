@@ -85,8 +85,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
       - name: Build shared package
-        run: cd packages/shared && npm install --legacy-peer-deps && npm run build
+        run: cd packages/shared && npm run build
 
       - name: Overlay proprietary source
         if: env.BACKEND_CHANGED == 'true'
@@ -109,7 +112,7 @@ jobs:
 
       - name: Build backend
         if: env.BACKEND_CHANGED == 'true'
-        run: cd mcp_backend && npm install && npm run build
+        run: cd mcp_backend && npm run build
 
       - name: Unit test backend
         if: env.BACKEND_CHANGED == 'true'
@@ -122,15 +125,11 @@ jobs:
 
       - name: Build RADA
         if: env.RADA_CHANGED == 'true'
-        run: cd mcp_rada && npm install && npm run build
+        run: cd mcp_rada && npm run build
 
       - name: Build OpenReyestr
         if: env.OPENREYESTR_CHANGED == 'true'
-        run: cd mcp_openreyestr && npm install && npm run build
-
-      - name: Install frontend deps
-        if: env.FRONTEND_CHANGED == 'true'
-        run: cd lexwebapp && npm install --legacy-peer-deps
+        run: cd mcp_openreyestr && npm run build
 
       - name: Build frontend
         if: env.FRONTEND_CHANGED == 'true'

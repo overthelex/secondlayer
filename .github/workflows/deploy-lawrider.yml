@@ -204,8 +204,14 @@ jobs:
       - name: Reset dist ownership (self-hosted runner)
         run: sudo chown -R "$(id -u):$(id -g)" packages/shared/dist mcp_backend/dist 2>/dev/null || true
 
+      # Одна установка из lock-файла на весь монорепозиторий: рабочие области
+      # объявлены в корневом package.json, а `ci` не даёт чужому релизу в npm
+      # поменять дерево между двумя выкатками.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
       - name: Build shared package
-        run: cd packages/shared && npm install --legacy-peer-deps && npm run build
+        run: cd packages/shared && npm run build
 
       - name: Overlay proprietary source
         if: needs.detect-changes.outputs.backend == 'true'
@@ -223,7 +229,7 @@ jobs:
       - name: Build & test backend
         if: needs.detect-changes.outputs.backend == 'true'
         run: |
-          cd mcp_backend && npm install && npm run build
+          cd mcp_backend && npm run build
           npx jest --no-cache --forceExit \
             src/controllers/__tests__/ \
             src/middleware/__tests__/ \
@@ -234,7 +240,6 @@ jobs:
         if: needs.detect-changes.outputs.frontend == 'true'
         run: |
           cd lexwebapp
-          npm install --legacy-peer-deps
           npm test 2>&1 | tee /tmp/vitest-output.txt || true
           if grep -q "Tests.*failed" /tmp/vitest-output.txt; then
             echo "::error::Some tests failed"
