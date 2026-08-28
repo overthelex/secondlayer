@@ -717,11 +717,267 @@ describe('extractChEvidence', () => {
     });
   });
 
+  describe('ch_get_decision_legislation', () => {
+    const DECISION = {
+      ecli: 'ECLI:CH:BGER:2020:4A.1.2020',
+      decision_date: '2020-03-15',
+      effective_date: '2020-03-15',
+      date_unreliable: false,
+      lang: 'de',
+      total_cited_acts: 3,
+      acts_truncated: false,
+      unresolved: { count: 0, top_abbrs: [] },
+      acts: [
+        {
+          act_id: 1,
+          sr_number: '220',
+          title: 'Obligationenrecht',
+          abbreviation: 'OR',
+          jurisdiction: 'CH',
+          citations_count: 5,
+          articles_cited: ['1', '18', '336'],
+          articles_truncated: false,
+          edition: { date_applicability: '2016-06-01', date_end_applicability: '2020-01-01', source: 'fedlex', lang: 'de' },
+          retrieval_status: 'edition_at_date',
+          next: { tool: 'ch_get_act_text', act_id: 1, as_of: '2020-03-15', lang: 'de' },
+        },
+      ],
+    };
+
+    it('maps each cited act to one Citation with the edition-at-date status', () => {
+      const result = extractChEvidence('ch_get_decision_legislation', DECISION);
+      expect(result.citations).toHaveLength(1);
+      const c = result.citations[0];
+      expect(c.npaTitle).toBe('Obligationenrecht (SR 220)');
+      expect(c.articleNumber).toBe('OR');
+      expect(c.text).toContain('2020-03-15');
+      expect(c.text).toContain('5');
+      expect(c.sectionTitle).toBe('2016-06-01 — 2020-01-01');
+    });
+
+    it('labels a cantonal act with the canton code, mirroring the search/article citations', () => {
+      const data = {
+        ...DECISION,
+        acts: [{ ...DECISION.acts[0], sr_number: '131.1', jurisdiction: 'ZH', title: 'KV', abbreviation: null }],
+      };
+      const result = extractChEvidence('ch_get_decision_legislation', data);
+      expect(result.citations[0].npaTitle).toBe('KV (ZH 131.1)');
+      expect(result.citations[0].articleNumber).toBe('131.1');
+    });
+
+    it('flags a nearest-earlier edition with the amended warning wording', () => {
+      const data = {
+        ...DECISION,
+        acts: [{
+          ...DECISION.acts[0],
+          retrieval_status: 'nearest_earlier_edition',
+          edition: { date_applicability: '2010-01-01', date_end_applicability: '2015-12-31', source: 'fedlex', lang: 'de' },
+        }],
+      };
+      const result = extractChEvidence('ch_get_decision_legislation', data);
+      expect(result.citations[0].text).toContain('⚠ найближча раніша редакція');
+    });
+
+    it('flags a nearest-later edition with the amended warning wording', () => {
+      const data = {
+        ...DECISION,
+        acts: [{
+          ...DECISION.acts[0],
+          retrieval_status: 'nearest_later_edition',
+          edition: { date_applicability: '2021-01-01', date_end_applicability: null, source: 'fedlex', lang: 'de' },
+        }],
+      };
+      const result = extractChEvidence('ch_get_decision_legislation', data);
+      expect(result.citations[0].text).toContain('⚠ найближча пізніша редакція');
+    });
+
+    it('labels a no_text act as text unavailable and omits the edition interval', () => {
+      const data = {
+        ...DECISION,
+        acts: [{ ...DECISION.acts[0], retrieval_status: 'no_text', edition: null }],
+      };
+      const result = extractChEvidence('ch_get_decision_legislation', data);
+      const c = result.citations[0];
+      expect(c.text).toContain('текст недоступний');
+      expect(c.sectionTitle).toBeUndefined();
+    });
+
+    it('orders citations by citations_count as the backend already sorted them', () => {
+      const data = {
+        ...DECISION,
+        acts: [
+          { ...DECISION.acts[0], act_id: 1, citations_count: 5 },
+          { ...DECISION.acts[0], act_id: 2, citations_count: 2, sr_number: '210', title: 'ZGB', abbreviation: 'ZGB' },
+        ],
+      };
+      const result = extractChEvidence('ch_get_decision_legislation', data);
+      expect(result.citations).toHaveLength(2);
+      expect(result.citations[0].text).toContain('5');
+      expect(result.citations[1].text).toContain('2');
+    });
+
+    it('returns empty evidence for a not_found error payload', () => {
+      const result = extractChEvidence('ch_get_decision_legislation', { error: 'not_found', ecli: 'ECLI:X' });
+      expect(result.citations).toHaveLength(0);
+    });
+
+    // Completeness footer: a synthetic, non-act summary Citation appended at the end so the
+    // evidence panel never looks like the full citation list when it isn't. Never fires when
+    // both acts_truncated is false and unresolved.count is 0 — the DECISION fixture default.
+    describe('completeness footer', () => {
+      it('appends nothing when neither acts_truncated nor unresolved.count apply', () => {
+        const result = extractChEvidence('ch_get_decision_legislation', DECISION);
+        expect(result.citations).toHaveLength(1);
+        expect(result.citations.some((c) => c.npaTitle === 'Повнота видачі')).toBe(false);
+      });
+
+      it('appends a "Показано N з M актів" footer when acts_truncated is true (truncated-only)', () => {
+        const data = { ...DECISION, acts_truncated: true, total_cited_acts: 5 };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        expect(result.citations).toHaveLength(2);
+        const footer = result.citations[1];
+        expect(footer.npaTitle).toBe('Повнота видачі');
+        expect(footer.source).toBe('Повнота видачі');
+        expect(footer.articleNumber).toBeUndefined();
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+        expect(footer.text).not.toContain('Нерозпізнаних');
+      });
+
+      it('appends a "Нерозпізнаних цитувань" footer when unresolved.count > 0 (unresolved-only)', () => {
+        const data = {
+          ...DECISION,
+          unresolved: {
+            count: 4,
+            top_abbrs: [{ abbr: 'ZPO/ZH', count: 2 }, { abbr: 'GVG', count: 1 }, { abbr: 'EG ZGB', count: 1 }],
+          },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        expect(result.citations).toHaveLength(2);
+        const footer = result.citations[1];
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 4');
+        expect(footer.text).toContain('ZPO/ZH, GVG, EG ZGB');
+        expect(footer.text).not.toContain('Показано');
+      });
+
+      it('combines both sentences when both truncated and unresolved apply', () => {
+        const data = {
+          ...DECISION,
+          acts_truncated: true,
+          total_cited_acts: 5,
+          unresolved: { count: 4, top_abbrs: [{ abbr: 'ZPO/ZH', count: 2 }] },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 4');
+      });
+
+      it('caps the example abbreviation list at 3', () => {
+        const data = {
+          ...DECISION,
+          unresolved: {
+            count: 9,
+            top_abbrs: [
+              { abbr: 'A', count: 4 }, { abbr: 'B', count: 3 }, { abbr: 'C', count: 1 }, { abbr: 'D', count: 1 },
+            ],
+          },
+        };
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('A, B, C');
+        expect(footer.text).not.toContain('D');
+      });
+
+      it('does not throw and still reports the truncation when unresolved is entirely absent', () => {
+        const data = { ...DECISION, acts_truncated: true, total_cited_acts: 5, unresolved: undefined };
+        expect(() => extractChEvidence('ch_get_decision_legislation', data)).not.toThrow();
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Показано 1 з 5 актів.');
+      });
+
+      it('does not throw and still reports the count when unresolved.top_abbrs is absent', () => {
+        const data = { ...DECISION, unresolved: { count: 2 } };
+        expect(() => extractChEvidence('ch_get_decision_legislation', data)).not.toThrow();
+        const result = extractChEvidence('ch_get_decision_legislation', data);
+        const footer = result.citations[result.citations.length - 1];
+        expect(footer.text).toContain('Нерозпізнаних цитувань: 2');
+      });
+    });
+  });
+
+  describe('ch_get_act_text', () => {
+    const ACT_TEXT = {
+      act_id: 1,
+      sr_number: '220',
+      title: 'Obligationenrecht',
+      jurisdiction: 'CH',
+      lang: 'de',
+      requested_lang: 'de',
+      as_of: '2020-03-15',
+      retrieval_status: 'edition_at_date',
+      edition: { date_applicability: '2016-06-01', date_end_applicability: '2020-01-01', source: 'fedlex' },
+      text: 'Art. 1 Der Vertrag...',
+      text_offset: 0,
+      text_total_chars: 21,
+      truncated: false,
+    };
+
+    it('builds one VaultDocument with the edition range in the title and the text in the body', () => {
+      const result = extractChEvidence('ch_get_act_text', ACT_TEXT);
+      expect(result.documents).toHaveLength(1);
+      const doc = result.documents[0];
+      expect(doc.title).toContain('Obligationenrecht');
+      expect(doc.title).toContain('SR 220');
+      expect(doc.title).toContain('2016-06-01');
+      expect(doc.title).toContain('2020-01-01');
+      expect(doc.metadata?.body).toBe('Art. 1 Der Vertrag...');
+      expect(doc.metadata?.truncated).toBe(false);
+    });
+
+    it('adds a "показано N з M символів" note when truncated is true', () => {
+      const data = { ...ACT_TEXT, text: 'Art. 1 Der Vert', text_total_chars: 21, truncated: true };
+      const result = extractChEvidence('ch_get_act_text', data);
+      const doc = result.documents[0];
+      expect(doc.metadata?.snippet).toContain('показано 15 з 21 символів');
+    });
+
+    it('omits the truncation note when truncated is false', () => {
+      const result = extractChEvidence('ch_get_act_text', ACT_TEXT);
+      expect(result.documents[0].metadata?.snippet).not.toContain('показано');
+    });
+
+    it('uses "донині" for an open-ended edition', () => {
+      const data = { ...ACT_TEXT, edition: { date_applicability: '2020-01-01', date_end_applicability: null, source: 'fedlex' } };
+      const result = extractChEvidence('ch_get_act_text', data);
+      expect(result.documents[0].title).toContain('донині');
+    });
+
+    it('returns no document for an error payload', () => {
+      const result = extractChEvidence('ch_get_act_text', { error: 'no_edition_for_date', act_id: 1, earliest_edition: null });
+      expect(result.documents).toHaveLength(0);
+    });
+  });
+
   describe('unrelated tools', () => {
     it('returns empty evidence for a non-CH tool name', () => {
       const result = extractChEvidence('search_court_decisions', { results: [{ ecli: 'x' }] });
       expect(result.decisions).toHaveLength(0);
       expect(result.citations).toHaveLength(0);
+      expect(result.documents).toHaveLength(0);
+    });
+
+    it('does not build decision-legislation citations under an unrelated tool name', () => {
+      const result = extractChEvidence('search_legislation', {
+        acts: [{ act_id: 1, sr_number: '220', title: 'x', citations_count: 1, retrieval_status: 'edition_at_date' }],
+      });
+      expect(result.citations).toHaveLength(0);
+    });
+
+    it('does not build an act-text document under an unrelated tool name', () => {
+      const result = extractChEvidence('get_document', {
+        act_id: 1, sr_number: '220', title: 'x', text: 'text', retrieval_status: 'edition_at_date',
+      });
       expect(result.documents).toHaveLength(0);
     });
   });

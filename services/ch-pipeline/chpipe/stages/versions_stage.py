@@ -48,6 +48,18 @@ The file URL is read from the graph (jolux:isExemplifiedBy on the XML
 manifestation), never assembled from a string pattern. Building it by
 pattern is the bug that filled 96% of production's ch_legislation with HTML
 error pages instead of documents.
+
+PDF-A DISCOVERY (source='fedlex_pdf'). Fedlex serves pdf-a manifestations
+back to roughly 1995-2001, well before the XML era begins (~2007 on); most
+of the corpus's pre-XML history exists only as pdf-a. run() therefore makes
+a SECOND pass over the same driving set with fq.VERSIONS_PDF, writing
+source='fedlex_pdf' rows ONLY where no XML edition already covers the same
+(consolidation, lang) -- see upsert_pdf_version() and _UPSERT_PDF_VERSION
+below. The pdf pass runs strictly AFTER the xml pass, in the same run(),
+over the same works list: that ordering (not a query-time check against a
+possibly-stale database) is what guarantees a consolidation available in
+both formats always lands as XML. Migration 204 is what lets 'fedlex_pdf'
+past the source CHECK constraint migration 201 added.
 """
 from __future__ import annotations
 
@@ -91,6 +103,15 @@ class VersionsReport:
     # of tens of thousands of rows. Counted here instead, same shape as
     # acts_stage.
     errors: int = 0
+    # The pdf pass (source='fedlex_pdf'). pdf_discovered counts rows
+    # actually written -- new or re-walked; pdf_skipped_has_xml counts the
+    # desired no-op of upsert_pdf_version() finding an XML row already
+    # covering the (consolidation, lang), which is not an error and not a
+    # write, but is worth a number of its own rather than disappearing into
+    # a silent zero. orphaned/skipped_language/errors above are shared with
+    # the pdf pass -- same per-row guard, same meaning either way.
+    pdf_discovered: int = 0
+    pdf_skipped_has_xml: int = 0
 
 
 def _sample(bucket: list[str], value: str) -> None:
@@ -98,18 +119,48 @@ def _sample(bucket: list[str], value: str) -> None:
         bucket.append(value)
 
 
+# source='fedlex' on the INSERT branch is redundant with migration 201's
+# column DEFAULT, but naming it here (rather than relying on the default)
+# is what keeps the ON CONFLICT arm below honest about what it is
+# reclaiming FROM.
+#
+# The ON CONFLICT arm resets stage/full_text/article_count with a CASE
+# gated on the EXISTING row's source, not the new one -- an edition first
+# discovered as pdf-a (source='fedlex_pdf') and already walked through
+# fedlex-pdf-text to stage='parsed' with pdf full_text can later gain a
+# real XML manifestation. Before this CASE existed, this upsert flipped
+# xml_url to the XML file while leaving source='fedlex_pdf' and
+# stage='parsed' untouched: db.claim_versions()'s source='fedlex_pdf' AND
+# stage='discovered' filter would then never re-claim the row, so nothing
+# would ever fetch or parse the XML, and the stale pdf full_text would go
+# on being served as if it were that (silently unparsed) xml edition. The
+# fix is a reclaim, not just a source flip: stage goes back to
+# 'discovered' so the ordinary XML pipeline (fetch_xml_stage,
+# parse_akn_stage) walks the row from the top, and full_text/article_count
+# are cleared so no stale pdf-derived text can be read back before the XML
+# pipeline has re-populated them. A re-walk of an already-XML row (source
+# already 'fedlex' -- the ordinary case this stage exists for) must NOT
+# reset a row parse_akn_stage has already finished, which is exactly what
+# gating the CASE on the existing row's source guarantees.
 _UPSERT_VERSION = """
 INSERT INTO ch_act_version
     (act_id, eli_consolidation_uri, lang, date_applicability,
-     date_end_applicability, xml_url, stage, updated_at)
+     date_end_applicability, xml_url, stage, source, updated_at)
 SELECT a.act_id, %(consolidation)s, %(lang)s, %(date_app)s, %(date_end)s,
-       %(xml_url)s, 'discovered', now()
+       %(xml_url)s, 'discovered', 'fedlex', now()
   FROM ch_act a WHERE a.eli_work_uri = %(work)s
 ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
     date_applicability     = EXCLUDED.date_applicability,
     date_end_applicability = COALESCE(EXCLUDED.date_end_applicability,
                                       ch_act_version.date_end_applicability),
     xml_url                = COALESCE(EXCLUDED.xml_url, ch_act_version.xml_url),
+    source                 = 'fedlex',
+    stage                  = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN 'discovered' ELSE ch_act_version.stage END,
+    full_text              = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN NULL ELSE ch_act_version.full_text END,
+    article_count          = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN NULL ELSE ch_act_version.article_count END,
     updated_at             = now()
 RETURNING version_id
 """
@@ -133,6 +184,92 @@ def upsert_version(conn, row: dict) -> int | None:
     if result is None:
         return None                     # the SELECT matched no act
     return result["version_id"] if isinstance(result, dict) else result[0]
+
+
+# Same shape as _UPSERT_VERSION, with two differences that carry the whole
+# "only where no XML edition exists" contract:
+#   * the INSERT's WHERE carries a NOT EXISTS against any row for this
+#     (consolidation, lang) whose source is not 'fedlex_pdf' -- i.e. an XML
+#     row. That NOT EXISTS is what makes the insert a no-op (zero rows,
+#     "the SELECT matched no act OR an XML row already exists" -- see
+#     upsert_pdf_version() for how the two are told apart) rather than a
+#     write that would then collide with the XML row's own unique index.
+#   * the ON CONFLICT arm carries `WHERE ch_act_version.source = 'fedlex_pdf'`
+#     so a conflicting row that turned out to be XML (which cannot actually
+#     happen -- the NOT EXISTS above already excluded that case -- see the
+#     task brief's own note) is never touched by this statement.
+_UPSERT_PDF_VERSION = """
+INSERT INTO ch_act_version
+    (act_id, eli_consolidation_uri, lang, date_applicability,
+     date_end_applicability, xml_url, stage, source, updated_at)
+SELECT a.act_id, %(consolidation)s, %(lang)s, %(date_app)s, %(date_end)s,
+       %(file_url)s, 'discovered', 'fedlex_pdf', now()
+  FROM ch_act a WHERE a.eli_work_uri = %(work)s
+   AND NOT EXISTS (SELECT 1 FROM ch_act_version v
+                    WHERE v.eli_consolidation_uri = %(consolidation)s
+                      AND v.lang = %(lang)s AND v.source <> 'fedlex_pdf')
+ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
+    date_applicability     = EXCLUDED.date_applicability,
+    date_end_applicability = COALESCE(EXCLUDED.date_end_applicability,
+                                      ch_act_version.date_end_applicability),
+    xml_url                = COALESCE(EXCLUDED.xml_url, ch_act_version.xml_url),
+    updated_at             = now()
+  WHERE ch_act_version.source = 'fedlex_pdf'
+RETURNING version_id
+"""
+
+_SELECT_XML_ROW_EXISTS = """
+SELECT 1 FROM ch_act_version
+ WHERE eli_consolidation_uri = %(consolidation)s AND lang = %(lang)s
+   AND source <> 'fedlex_pdf'
+"""
+
+
+def upsert_pdf_version(conn, row: dict) -> str:
+    """The pdf-a counterpart of upsert_version(): writes source='fedlex_pdf',
+    stage='discovered' ONLY where no XML row already covers this
+    (consolidation, lang), and never touches a non-pdf row.
+
+    Returns one of:
+      'upserted'         -- written, new row or a re-walk of an existing
+                            pdf-a row (COALESCE semantics, same as
+                            upsert_version()).
+      'skipped_has_xml'  -- the desired no-op: an XML row already covers
+                            this edition, so nothing was written. Not an
+                            error.
+      'orphaned'         -- the parent work is not in ch_act (run the acts
+                            stage first, or Fedlex answered a VALUES batch
+                            with a work outside it).
+
+    _UPSERT_PDF_VERSION's INSERT ... SELECT returns no row for BOTH
+    'skipped_has_xml' and 'orphaned' -- the NOT EXISTS clause and the
+    act lookup can each independently produce zero rows, and psycopg
+    cannot tell which one fired from the empty result alone. One cheap
+    SELECT after the fact (_SELECT_XML_ROW_EXISTS) distinguishes them:
+    it checks whether an XML row already covers this (consolidation, lang)
+    first -- if one does, that alone explains the empty insert
+    ('skipped_has_xml'); only when no XML row exists either is the empty
+    insert attributed to the work being missing from ch_act
+    ('orphaned'), the same condition upsert_version() reports as None.
+    """
+    lang = fq.language_code(row.get("lang"))
+    params = {
+        "work": row["work"],
+        "consolidation": row["consolidation"],
+        "lang": lang,
+        "date_app": row["dateApplicability"][:10],
+        "date_end": (row.get("dateEndApplicability") or "")[:10] or None,
+        "file_url": row.get("fileUrl"),
+    }
+    result = conn.execute(_UPSERT_PDF_VERSION, params).fetchone()
+    if result is not None:
+        return "upserted"
+    # No row written. Either the work is not in ch_act, or an XML row
+    # already covers this edition -- tell them apart with one cheap check.
+    xml_exists = conn.execute(_SELECT_XML_ROW_EXISTS, params).fetchone()
+    if xml_exists is not None:
+        return "skipped_has_xml"
+    return "orphaned"
 
 
 _SELECT_WORKS = "SELECT eli_work_uri FROM ch_act ORDER BY eli_work_uri"
@@ -198,6 +335,41 @@ def run(settings: Settings,
             if report.discovered % 5000 == 0:
                 log.info("versions discovered=%d orphaned=%d skipped_language=%d",
                           report.discovered, report.orphaned, report.skipped_language)
+
+        # The pdf-a pass. Deliberately AFTER the xml pass above and over the
+        # SAME works list: a consolidation with both manifestations must
+        # land as XML, and upsert_pdf_version()'s NOT EXISTS clause only
+        # gets that guarantee for free because every XML row this run will
+        # ever write is already committed by the time this loop starts. Not
+        # asserted -- just kept in this order, which is why it matters that
+        # nothing above reorders these two loops.
+        for row in client.batched(fq.VERSIONS_PDF, works, batch_size=batch_size):
+            try:
+                lang = fq.language_code(row.get("lang"))
+                if not lang:
+                    report.skipped_language += 1
+                    _sample(report.skipped_langs, row.get("lang") or "<missing>")
+                    continue
+                outcome = upsert_pdf_version(conn, row)
+            except Exception as exc:                      # noqa: BLE001
+                log.error("versions(pdf): %s: %s",
+                          row.get("consolidation") or row.get("work"), exc)
+                report.errors += 1
+                continue
+
+            if outcome == "orphaned":
+                report.orphaned += 1
+                _sample(report.orphaned_works, row.get("work") or "<unknown>")
+                continue
+            if outcome == "skipped_has_xml":
+                report.pdf_skipped_has_xml += 1
+                continue
+
+            report.pdf_discovered += 1
+            report.by_lang[lang] = report.by_lang.get(lang, 0) + 1
+            if report.pdf_discovered % 5000 == 0:
+                log.info("versions(pdf) discovered=%d skipped_has_xml=%d",
+                          report.pdf_discovered, report.pdf_skipped_has_xml)
     finally:
         conn.close()
         client.close()
@@ -215,9 +387,11 @@ def main() -> VersionsReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env())
-    log.info("discovered=%d orphaned=%d skipped_language=%d errors=%d by_lang=%s",
+    log.info("discovered=%d orphaned=%d skipped_language=%d errors=%d by_lang=%s "
+             "pdf_discovered=%d pdf_skipped_has_xml=%d",
              result.discovered, result.orphaned, result.skipped_language,
-             result.errors, result.by_lang)
+             result.errors, result.by_lang,
+             result.pdf_discovered, result.pdf_skipped_has_xml)
     # A non-zero orphaned count after a full acts run is a silent-gap signal,
     # not a footnote -- surface it (and who it is) at warning level so it
     # cannot be missed in a scrolled-past log.

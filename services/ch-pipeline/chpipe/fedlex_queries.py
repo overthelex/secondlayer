@@ -149,6 +149,34 @@ SELECT DISTINCT ?work ?consolidation ?dateApplicability ?dateEndApplicability
 ORDER BY ?work ?dateApplicability ?lang
 """
 
+# Identical to VERSIONS above except the manifestation format: pdf-a instead
+# of xml. This is what discovers the pre-XML-era backfill (Fedlex serves
+# pdf-a back to ~1995-2001; XML only exists from roughly 2007 on) --
+# versions_stage's pdf pass writes what this returns as source='fedlex_pdf'
+# rows, and only where no XML edition already covers the same
+# (consolidation, lang); see that module for the ON CONFLICT semantics.
+#
+# Verified live 2026-08-27, in exactly the stage's `VALUES ?work {...}`
+# batch form: SR 220 (Code of Obligations) as the sole work in the batch
+# returns 205 rows -- DEU 53, FRA 55, ITA 53 (ENG and ROH rows exist too but
+# are skipped by LANGUAGE_MAP, as VERSIONS's rows always are).
+VERSIONS_PDF = _PREFIXES + """
+SELECT DISTINCT ?work ?consolidation ?dateApplicability ?dateEndApplicability
+                ?lang ?fileUrl WHERE {
+  VALUES ?work { %(values)s }
+  ?consolidation a jolux:Consolidation ;
+                 jolux:isMemberOf ?work ;
+                 jolux:dateApplicability ?dateApplicability .
+  OPTIONAL { ?consolidation jolux:dateEndApplicability ?dateEndApplicability }
+  ?consolidation jolux:isRealizedBy ?expr .
+  ?expr jolux:language ?lang ;
+        jolux:isEmbodiedBy ?manifestation .
+  ?manifestation jolux:isExemplifiedBy ?fileUrl ;
+                 jolux:userFormat <https://fedlex.data.admin.ch/vocabulary/user-format/pdf-a> .
+}
+ORDER BY ?work ?dateApplicability ?lang
+"""
+
 # Gate E's live cross-check (chpipe/reports_leg.py): how many consolidated
 # editions of a work identified by SR number Fedlex itself claims to publish
 # as an XML manifestation, in a given language -- independent of what this

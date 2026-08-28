@@ -75,11 +75,12 @@ from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
 from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
-                     citations_stage, diff_stage, extract_stage, fetch_stage,
-                     fetch_xml_stage, index_stage, load_stage,
-                     parse_akn_stage, project_legacy_stage,
-                     provenance_stage, shab_detail_stage, shab_list_stage,
-                     versions_stage, zefix_stage)
+                     citations_stage, diff_stage, extract_stage,
+                     fedlex_pdf_text_stage, fetch_stage, fetch_xml_stage,
+                     index_stage, load_stage, parse_akn_stage,
+                     project_legacy_stage, provenance_stage,
+                     shab_detail_stage, shab_list_stage, versions_stage,
+                     zefix_stage)
 
 log = logging.getLogger(__name__)
 
@@ -537,6 +538,11 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     return DeltaReport(spiders=spiders, new_documents=index_report.inserted)
 
 
+# One night's ceiling for the fedlex-pdf-text drain -- see the comment at its
+# call site in run_legislation().
+_FEDLEX_PDF_TEXT_NIGHTLY_CAP = 2000
+
+
 def run_legislation(settings: Settings) -> DeltaReport:
     acts_stage.run(settings)
     versions = versions_stage.run(settings)
@@ -545,6 +551,18 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # separately-scheduled pass, so a new consolidation is fetched and
     # parsed the same night it is found, not merely recorded as pending.
     fetch_xml_stage.run(settings)
+    # versions_stage's pdf-a pass (source='fedlex_pdf') writes to the same
+    # 'discovered' queue for consolidations that have no XML manifestation.
+    # New editions going forward are XML-era, so this is normally a no-op;
+    # it exists so a future Fedlex PDF-only edition (or a re-queued failure)
+    # drains nightly instead of rotting. Its return value is discarded the
+    # same way fetch_xml_stage's is above -- this stage's own progress
+    # logging is what a night's run is read from, not a DeltaReport field.
+    # Capped: the supervised backfill owns the bulk of the PDF-era queue
+    # (~50K rows right after deploy, hours of downloads); a nightly delta
+    # only drains stragglers. A capped night leaves the rest claimable for
+    # the next one -- nothing is lost, only deferred.
+    fedlex_pdf_text_stage.run(settings, limit=_FEDLEX_PDF_TEXT_NIGHTLY_CAP)
     parsed = parse_akn_stage.run(settings)
 
     # Parsing is not where a new edition becomes readable. `diff` is what
@@ -562,7 +580,17 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # an act WHOLE (every consecutive edition pair, every parsed edition) --
     # that is their unit of work and it is what makes them idempotent, so
     # the narrowing is by act, not by edition.
-    report = DeltaReport(new_versions=versions.discovered)
+    # new_versions is "editions the versions stage discovered tonight" --
+    # both passes count towards that, not just the XML one. Before this fix
+    # a pdf-a-only night (versions.discovered == 0, versions.pdf_discovered
+    # > 0) printed new_versions=0 in the one place this field is logged
+    # (main()'s summary line below), silently under-reporting real work
+    # (Task 1 review, CQ-7). Folded into the same field rather than given
+    # its own: DeltaReport has exactly one consumer that prints new_versions
+    # (that summary line, a single %d), and a second field would need wiring
+    # through it too to keep the printed summary honest -- summing here does
+    # that with no other surface to touch.
+    report = DeltaReport(new_versions=versions.discovered + versions.pdf_discovered)
     for act_id, lang in sorted(parsed.acts):
         report.new_changes += diff_stage.run(
             settings, lang=lang, act_id=act_id).changes

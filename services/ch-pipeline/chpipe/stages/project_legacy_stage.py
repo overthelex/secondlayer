@@ -71,11 +71,31 @@ log = logging.getLogger(__name__)
 # latest date_applicability" completely and correctly, so it is the only
 # mechanism kept here -- both _PROJECT and the two report queries below
 # share this single definition of "latest" rather than each restating it.
+#
+# The ORDER BY carries a second key ahead of recency:
+# (source = 'fedlex_pdf') ASC puts every structured parsed row (false) before
+# every federal pdf-text row (true) for the same (act_id, lang). Only the
+# FEDERAL pdf rows are demoted: they carry full_text with no article split and
+# no akn_xml, so letting one outrank an XML edition would null akn_xml in the
+# projection. Cantonal pdf-text rows (lexwork_pdf/lexfind, phase 2) are NOT
+# demoted -- pdf_text_stage parses them into articles with akn_xml set, which
+# makes them first-class editions that must project when they are the newest.
+# So DISTINCT ON
+# picks a pdf-a row only when NO xml/cantonal parsed row exists for that
+# act+lang at all. Within each of those two groups, date_applicability DESC
+# still picks the latest edition -- unchanged recency semantics, just
+# scoped to whichever source group actually has a real XML/cantonal
+# edition. Without this, a pdf-a edition that merely post-dates every XML
+# edition of the same act won outright, and _PROJECT's ON CONFLICT then
+# overwrote ch_legislation's real akn_xml/article_count with NULL. For an
+# act with ONLY pdf-a editions (typically repealed pre-2021 acts that
+# previously projected nothing at all), the pdf row still wins -- a pure
+# gain, and akn_xml NULL there is honest, not a regression.
 _LATEST_PARSED_VERSION = """
     SELECT DISTINCT ON (act_id, lang) *
       FROM ch_act_version
      WHERE stage = 'parsed'
-     ORDER BY act_id, lang, date_applicability DESC
+     ORDER BY act_id, lang, (source = 'fedlex_pdf') ASC, date_applicability DESC
 """
 
 # The editions this run will project, oldest version_id first. Read as a

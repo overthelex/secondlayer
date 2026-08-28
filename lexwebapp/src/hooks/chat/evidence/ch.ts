@@ -16,7 +16,13 @@ import { formatLegislationText } from './format-legislation';
  */
 
 const CH_COURT_TOOLS = new Set(['ch_search_court_decisions', 'ch_get_court_decision']);
-const CH_LEGISLATION_TOOLS = new Set(['ch_search_legislation', 'ch_get_act_article', 'ch_get_act_history']);
+const CH_LEGISLATION_TOOLS = new Set([
+  'ch_search_legislation',
+  'ch_get_act_article',
+  'ch_get_act_history',
+  'ch_get_decision_legislation',
+  'ch_get_act_text',
+]);
 const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
 
 const MAX_HISTORY_CITATIONS = 50;
@@ -196,8 +202,128 @@ function chProvenanceCitation(parsed: ToolResultData, row: ToolResultData): Cita
   };
 }
 
+// Non-exact-edition wording for ch_get_decision_legislation / ch_get_act_text, amended per
+// spec: 'edition_at_date' gets a live date ("редакція на …"), the other statuses are fixed.
+const CH_RETRIEVAL_STATUS_LABELS: Record<string, string> = {
+  nearest_earlier_edition: '⚠ найближча раніша редакція',
+  nearest_later_edition: '⚠ найближча пізніша редакція',
+  no_text: 'текст недоступний',
+};
+
+function chRetrievalStatusLabel(status: unknown, effectiveDate: string): string {
+  if (status === 'edition_at_date') return `редакція на ${effectiveDate}`;
+  const key = String(status || '');
+  return CH_RETRIEVAL_STATUS_LABELS[key] || key;
+}
+
+function chEditionInterval(edition: ToolResultData | null | undefined): string | undefined {
+  if (!edition || !edition.date_applicability) return undefined;
+  return `${edition.date_applicability} — ${edition.date_end_applicability || 'донині'}`;
+}
+
+// ch_get_decision_legislation: one Citation per cited act, in the edition valid at the
+// decision date (or the nearest available one — the retrieval_status label says which).
+function chDecisionActCitation(act: ToolResultData, effectiveDate: string): Citation {
+  const npaTitle = chActTitle(act);
+  const editionInterval = chEditionInterval(act.edition);
+  const statusLabel = chRetrievalStatusLabel(act.retrieval_status, effectiveDate);
+  const articles = Array.isArray(act.articles_cited) && act.articles_cited.length > 0
+    ? ` Статті: ${act.articles_cited.join(', ')}${act.articles_truncated ? '…' : ''}.`
+    : '';
+  const text = [
+    `${statusLabel}${editionInterval ? ` (${editionInterval})` : ''}.`,
+    `Цитувань: ${act.citations_count}.`,
+  ].join(' ') + articles;
+
+  return {
+    text: text.trim(),
+    source: npaTitle,
+    npaTitle,
+    articleNumber: act.abbreviation ? String(act.abbreviation) : (act.sr_number ? String(act.sr_number) : undefined),
+    sectionTitle: editionInterval,
+  };
+}
+
+const CH_COMPLETENESS_TITLE = 'Повнота видачі';
+const CH_UNRESOLVED_ABBR_EXAMPLES = 3;
+
+/**
+ * ch_get_decision_legislation: a synthetic, non-act summary Citation appended after the
+ * real acts so the evidence panel never looks like the complete citation list of a decision
+ * when the backend actually cut it short (acts_truncated) or couldn't resolve some citations
+ * to an act at all (unresolved.count). Not backed by any one act, so — unlike the other CH
+ * citations built in this file — it carries no sr_number/articleNumber: a fake one would
+ * read as a real act. Mirrors registry.ts's synthetic "Статистика реєстру" citation (text +
+ * source, no article badge). Returns null when neither condition applies (the common case).
+ */
+function chDecisionCompletenessFooter(parsed: ToolResultData): Citation | null {
+  const actsShown = Array.isArray(parsed.acts) ? parsed.acts.length : 0;
+  const totalActs = parsed.total_cited_acts != null ? Number(parsed.total_cited_acts) : actsShown;
+  const actsTruncated = parsed.acts_truncated === true;
+
+  const unresolved = parsed.unresolved && typeof parsed.unresolved === 'object' ? parsed.unresolved : {};
+  const unresolvedCount = unresolved.count != null ? Number(unresolved.count) : 0;
+
+  if (!actsTruncated && !(unresolvedCount > 0)) return null;
+
+  const sentences: string[] = [];
+  if (actsTruncated) {
+    sentences.push(`Показано ${actsShown} з ${totalActs} актів.`);
+  }
+  if (unresolvedCount > 0) {
+    const topAbbrs = Array.isArray(unresolved.top_abbrs) ? unresolved.top_abbrs : [];
+    const abbrList = topAbbrs
+      .slice(0, CH_UNRESOLVED_ABBR_EXAMPLES)
+      .map((a: ToolResultData) => a?.abbr)
+      .filter(Boolean)
+      .join(', ');
+    sentences.push(`Нерозпізнаних цитувань: ${unresolvedCount}${abbrList ? ` (наприклад: ${abbrList}…)` : '.'}`);
+  }
+
+  return {
+    text: sentences.join(' '),
+    source: CH_COMPLETENESS_TITLE,
+    npaTitle: CH_COMPLETENESS_TITLE,
+  };
+}
+
+// ch_get_act_text: the full (possibly sliced) text of one edition → one VaultDocument.
+// Title carries the edition range so the panel shows which point-in-time text this is
+// without opening the document; the truncation note is separate from the raw body so a
+// consumer that only wants the text (metadata.body) never sees the note mixed in.
+function chActTextDocument(parsed: ToolResultData): VaultDocument {
+  const npaTitle = chActTitle(parsed);
+  const editionInterval = chEditionInterval(parsed.edition);
+  const title = editionInterval ? `${npaTitle} (${editionInterval})` : npaTitle;
+  const text = typeof parsed.text === 'string' ? parsed.text : '';
+  const totalChars = parsed.text_total_chars != null ? Number(parsed.text_total_chars) : text.length;
+  const truncationNote = parsed.truncated === true
+    ? `показано ${text.length} з ${totalChars} символів`
+    : undefined;
+
+  return {
+    id: `ch-act-text-${parsed.act_id}-${parsed.edition?.date_applicability || parsed.as_of || ''}`,
+    title,
+    type: 'other',
+    metadata: {
+      body: text,
+      snippet: [truncationNote, text].filter(Boolean).join(' • '),
+      act_id: parsed.act_id,
+      sr_number: parsed.sr_number,
+      lang: parsed.lang,
+      requested_lang: parsed.requested_lang,
+      as_of: parsed.as_of,
+      retrieval_status: parsed.retrieval_status,
+      truncated: parsed.truncated === true,
+      text_offset: parsed.text_offset,
+      text_total_chars: parsed.text_total_chars,
+    },
+  };
+}
+
 function extractChLegislationEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
   const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
 
   if (toolName === 'ch_search_legislation') {
     const rows = Array.isArray(parsed.results) ? parsed.results : [];
@@ -228,9 +354,22 @@ function extractChLegislationEvidence(toolName: string, parsed: ToolResultData):
         }
       }
     }
+  } else if (toolName === 'ch_get_decision_legislation') {
+    // Error payload: { error: 'not_found', ecli } (consistent with ch_get_court_decision).
+    if (!parsed.error && Array.isArray(parsed.acts)) {
+      const effectiveDate = String(parsed.effective_date || parsed.decision_date || '');
+      for (const act of parsed.acts) citations.push(chDecisionActCitation(act, effectiveDate));
+      const footer = chDecisionCompletenessFooter(parsed);
+      if (footer) citations.push(footer);
+    }
+  } else if (toolName === 'ch_get_act_text') {
+    // Error payload: { error: 'no_edition_for_date', act_id, earliest_edition }.
+    if (!parsed.error && parsed.act_id != null) {
+      documents.push(chActTextDocument(parsed));
+    }
   }
 
-  return { decisions: [], citations, documents: [] };
+  return { decisions: [], citations, documents };
 }
 
 /**

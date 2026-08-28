@@ -53,8 +53,8 @@ def apply_migration_199(conn) -> None:
 
 # ---------------------------------------------------------------------------
 # Whole-schema reset for the legislation side (migration 135's stand-in, then
-# 197, 198 and 201). The cantonal stages read columns from all three, so a
-# test that builds only 197's tables would pass against a shape production
+# 197, 198, 201 and 204). The cantonal stages read columns from all three, so
+# a test that builds only 197's tables would pass against a shape production
 # does not have -- the exact class of mismatch conftest's docstring above
 # describes for ch_act_article.
 # ---------------------------------------------------------------------------
@@ -62,6 +62,10 @@ MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corp
 MIGRATION_198 = _REPO_ROOT / "mcp_backend/src/migrations/198_ch_as_bbl.sql"
 MIGRATION_201 = _REPO_ROOT / "mcp_backend/src/migrations/201_ch_cantonal_legislation.sql"
 MIGRATION_203 = _REPO_ROOT / "mcp_backend/src/migrations/203_ch_cantonal_sources.sql"
+# 204 re-adds the ch_act_version.source CHECK as a superset of 203's list, so
+# the pair applies cleanly in this order (and 204 alone applies cleanly on a
+# database that never saw 203 -- prod recorded 203 by hand).
+MIGRATION_204 = _REPO_ROOT / "mcp_backend/src/migrations/204_ch_fedlex_pdf.sql"
 
 _LEGISLATION_TABLES = (
     "ch_cantonal_registry", "ch_article_provenance", "ch_act_change_document",
@@ -83,11 +87,12 @@ CREATE TABLE IF NOT EXISTS ch_legislation (
 
 def reset_legislation_schema(conn) -> None:
     """Drop and re-create the whole CH legislation schema so a stage test
-    starts from the real shape, migration 201 included."""
+    starts from the real shape, migrations 201 and 204 included."""
     for table in _LEGISLATION_TABLES:
         conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
     conn.execute(_CH_LEGISLATION_135)
-    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201, MIGRATION_203):
+    for migration in (MIGRATION_197, MIGRATION_198, MIGRATION_201, MIGRATION_203,
+                      MIGRATION_204):
         conn.execute(migration.read_text())
 
 

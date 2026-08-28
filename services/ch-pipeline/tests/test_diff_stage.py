@@ -5,13 +5,14 @@ import pytest
 from chpipe.config import Settings
 from chpipe.stages import acts_stage, diff_stage, versions_stage
 
+from conftest import reset_legislation_schema
+
 # Derive repo root from this file's location: services/ch-pipeline/tests/
 # test_diff_stage.py is 3 levels down from the repo root -- paths must
 # resolve from __file__, never from the working directory a suite happens to
 # be invoked from (this file is run from both the service directory and the
 # repo root; see the two full-suite commands in the task brief).
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
-M197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
 WORK = "https://fedlex.data.admin.ch/eli/cc/27/317_321_377"
 L = "http://publications.europa.eu/resource/authority/language/"
 
@@ -35,12 +36,11 @@ def settings():
 @pytest.fixture
 def conn(settings):
     with psycopg.connect(settings.dsn, autocommit=True) as c:
-        for t in ("ch_act_change", "ch_act_article", "ch_act_version", "ch_act"):
-            c.execute(f"DROP TABLE IF EXISTS {t} CASCADE")
-        c.execute("DROP TABLE IF EXISTS ch_legislation CASCADE")
-        c.execute("CREATE TABLE ch_legislation (eli_uri text, lang text, "
-                  "PRIMARY KEY (eli_uri, lang))")
-        c.execute(M197.read_text())
+        # reset_legislation_schema (conftest.py) applies 197, 198, 201 and
+        # 204 -- versions_stage.upsert_version() now writes `source`
+        # (migration 201) on every call, xml or pdf, so this fixture needs
+        # that column to exist, not just 197's original ch_act_version.
+        reset_legislation_schema(c)
         acts_stage.upsert_act(c, {"work": WORK, "srNotation": "220"})
         yield c
 

@@ -2,11 +2,11 @@
  * Registration tests for the Swiss (CH) tool surface.
  *
  * Covers:
- * - The seven ch_* tool names are present in the curated V2_TOOL_NAMES set exposed to
+ * - The eight ch_* tool names are present in the curated V2_TOOL_NAMES set exposed to
  *   external MCP clients.
  * - ChCourtTools / ChLegislationTools / ChRegistryTools expose exactly those names, each
  *   with a non-empty Ukrainian description and an object-typed inputSchema.
- * - Registering all three handlers into a fresh ToolRegistry surfaces all seven tools via
+ * - Registering all three handlers into a fresh ToolRegistry surfaces all eight tools via
  *   getLocalToolDefinitions().
  */
 
@@ -26,6 +26,8 @@ const CH_TOOL_NAMES = [
   'ch_search_legislation',
   'ch_get_act_article',
   'ch_get_act_history',
+  'ch_get_act_text',
+  'ch_get_decision_legislation',
   'ch_search_companies',
   'ch_get_company',
 ];
@@ -39,7 +41,7 @@ function isCyrillic(text: string): boolean {
 }
 
 describe('CH tool surface registration', () => {
-  it('V2_TOOL_NAMES contains the seven ch_* tools', () => {
+  it('V2_TOOL_NAMES contains the eight ch_* tools', () => {
     for (const name of CH_TOOL_NAMES) {
       expect(V2_TOOL_NAMES.has(name)).toBe(true);
     }
@@ -88,11 +90,11 @@ describe('CH tool surface registration', () => {
       expect(doc).not.toMatch(/Société|Sàrl|Sagl|società|anonima/i);
     });
 
-    it('ChLegislationTools exposes exactly its three tools with Ukrainian descriptions', () => {
+    it('ChLegislationTools exposes exactly its five tools with Ukrainian descriptions', () => {
       const tool = new ChLegislationTools(stubDb);
       const defs = tool.getToolDefinitions();
       expect(defs.map(d => d.name).sort()).toEqual(
-        ['ch_get_act_article', 'ch_get_act_history', 'ch_search_legislation'].sort()
+        ['ch_get_act_article', 'ch_get_act_history', 'ch_get_act_text', 'ch_get_decision_legislation', 'ch_search_legislation'].sort()
       );
       for (const def of defs) {
         expect(def.description).toBeTruthy();
@@ -103,7 +105,7 @@ describe('CH tool surface registration', () => {
   });
 
   describe('ToolRegistry registration', () => {
-    it('getLocalToolDefinitions includes all seven ch_* tools after registering the handlers', () => {
+    it('getLocalToolDefinitions includes all eight ch_* tools after registering the handlers', () => {
       const registry = new ToolRegistry();
       registry.registerHandler(new ChCourtTools(stubDb));
       registry.registerHandler(new ChLegislationTools(stubDb));
