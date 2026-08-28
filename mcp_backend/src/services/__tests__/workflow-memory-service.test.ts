@@ -16,14 +16,17 @@
 // The mock variables are set up in beforeEach to avoid TypeScript inference issues
 // with module-level mockResolvedValue calls.
 
+// Typed as functions (not jest.Mock<any>): jest-mock 30.5 infers `never` for
+// mockResolvedValue's parameter when the mock's function type is `any`, which
+// fails the suite at type-check time on an unlocked runner install.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockGetCollections: jest.Mock<any> = jest.fn();
+const mockGetCollections = jest.fn<(...args: any[]) => Promise<any>>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockCreateCollection: jest.Mock<any> = jest.fn();
+const mockCreateCollection = jest.fn<(...args: any[]) => Promise<any>>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSearch: jest.Mock<any> = jest.fn();
+const mockSearch = jest.fn<(...args: any[]) => Promise<any>>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockUpsert: jest.Mock<any> = jest.fn();
+const mockUpsert = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock('@qdrant/js-client-rest', () => ({
   QdrantClient: jest.fn().mockImplementation(() => ({
@@ -58,7 +61,7 @@ function makeDb(responder?: (sql: string) => any) {
 
 function makeEmbeddingService() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mock: jest.Mock<any> = jest.fn();
+  const mock = jest.fn<(...args: any[]) => Promise<any>>();
   mock.mockResolvedValue(FAKE_EMBEDDING);
   return { generateEmbedding: mock } as any;
 }
