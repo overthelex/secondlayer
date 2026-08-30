@@ -580,7 +580,7 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # an act WHOLE (every consecutive edition pair, every parsed edition) --
     # that is their unit of work and it is what makes them idempotent, so
     # the narrowing is by act, not by edition.
-    # new_versions is "editions the versions stage discovered tonight" --
+    # new_versions is "editions the versions stage CREATED tonight" --
     # both passes count towards that, not just the XML one. Before this fix
     # a pdf-a-only night (versions.discovered == 0, versions.pdf_discovered
     # > 0) printed new_versions=0 in the one place this field is logged
@@ -589,7 +589,10 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # its own: DeltaReport has exactly one consumer that prints new_versions
     # (that summary line, a single %d), and a second field would need wiring
     # through it too to keep the printed summary honest -- summing here does
-    # that with no other surface to touch.
+    # that with no other surface to touch. Re-walks of already-known
+    # editions (versions.rewalked / versions.pdf_rewalked -- the whole
+    # corpus, every night) are deliberately NOT in this sum: on 2026-08-30
+    # they inflated new_versions to 88989 on a night with 17 new rows.
     report = DeltaReport(new_versions=versions.discovered + versions.pdf_discovered)
     for act_id, lang in sorted(parsed.acts):
         report.new_changes += diff_stage.run(
