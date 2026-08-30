@@ -388,7 +388,7 @@ def _accepted_stage_names() -> set[str]:
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
                 "aliases", "citations", "citations-resolve",
-                "acts", "versions", "fetch-xml", "fedlex-pdf-text",
+                "acts", "versions", "fetch-xml", "fedlex-pdf-text", "fedlex-pdf-ocr",
                 "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act",
                 "zefix", "shab-list", "shab-detail",

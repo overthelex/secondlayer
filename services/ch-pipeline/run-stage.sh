@@ -3,7 +3,7 @@
 #
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
 #   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
-#   legislation:  ./run-stage.sh acts|versions|fetch-xml|fedlex-pdf-text|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
+#   legislation:  ./run-stage.sh acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
 #                 ./run-stage.sh lexfind-versions [canton]   (CHPIPE_LEXFIND_SCOPE=all|gaps from the env)
 #                 ./run-stage.sh lexwork-pdf-requeue|pdf-text [canton]   (PDF editions; see README "PDF editions")
@@ -88,7 +88,7 @@ case "$STAGE" in
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
+  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
