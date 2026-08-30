@@ -81,7 +81,7 @@ def test_gate_e_editions_excludes_parsed_pdf_rows(conn):
         "work": WORK, "consolidation": f"{WORK}/1995-01-01",
         "dateApplicability": "1995-01-01", "lang": L + "DEU",
         "fileUrl": "https://x/1995.pdf"})
-    assert status == "upserted"
+    assert status == "inserted"
     conn.execute("UPDATE ch_act_version SET stage='parsed', "
                  "full_text='some pdf-a text' "
                  "WHERE eli_consolidation_uri=%s", (f"{WORK}/1995-01-01",))
@@ -110,7 +110,7 @@ def test_gate_e_articles_latest_excludes_a_later_dated_pdf_row(conn):
         "work": WORK, "consolidation": f"{WORK}/2026-06-01",
         "dateApplicability": "2026-06-01", "lang": L + "DEU",
         "fileUrl": "https://x/2026.pdf"})
-    assert status == "upserted"
+    assert status == "inserted"
     conn.execute("UPDATE ch_act_version SET stage='parsed', "
                  "full_text='some later pdf-a text' "
                  "WHERE eli_consolidation_uri=%s", (f"{WORK}/2026-06-01",))

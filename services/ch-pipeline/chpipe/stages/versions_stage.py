@@ -83,7 +83,14 @@ _SAMPLE_CAP = 12
 
 @dataclass
 class VersionsReport:
+    # discovered counts rows this run actually CREATED. A nightly re-walk
+    # of the full edition list re-upserts every existing row (COALESCE
+    # semantics, harmless), and before these two counters were split that
+    # inflated "new_versions" by the size of the whole corpus (~88K on
+    # 2026-08-30, of which 17 were new). rewalked is that other, ordinary
+    # outcome: the row already existed and was refreshed in place.
     discovered: int = 0
+    rewalked: int = 0
     # orphaned: a version whose parent work is not in ch_act. Now that the
     # walk is driven BY ch_act, this should be structurally impossible, which
     # makes a non-zero value a louder signal than before rather than a quieter
@@ -104,13 +111,15 @@ class VersionsReport:
     # acts_stage.
     errors: int = 0
     # The pdf pass (source='fedlex_pdf'). pdf_discovered counts rows
-    # actually written -- new or re-walked; pdf_skipped_has_xml counts the
+    # actually created, pdf_rewalked rows refreshed in place (same split
+    # as discovered/rewalked above); pdf_skipped_has_xml counts the
     # desired no-op of upsert_pdf_version() finding an XML row already
     # covering the (consolidation, lang), which is not an error and not a
     # write, but is worth a number of its own rather than disappearing into
     # a silent zero. orphaned/skipped_language/errors above are shared with
     # the pdf pass -- same per-row guard, same meaning either way.
     pdf_discovered: int = 0
+    pdf_rewalked: int = 0
     pdf_skipped_has_xml: int = 0
 
 
@@ -162,13 +171,37 @@ ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
     article_count          = CASE WHEN ch_act_version.source = 'fedlex_pdf'
                                   THEN NULL ELSE ch_act_version.article_count END,
     updated_at             = now()
-RETURNING version_id
+RETURNING version_id, (xmax = 0) AS inserted
 """
 
 
-def upsert_version(conn, row: dict) -> int | None:
-    """Returns the version_id, or None if the language is unmapped or the
-    parent work has not been discovered yet (run the acts stage first)."""
+class VersionUpsert(int):
+    """The version_id, as a plain int (every existing caller keeps using it
+    as one -- in SQL params, in equality checks), carrying one extra fact:
+    whether this write took the INSERT arm or the DO UPDATE arm.
+
+    `inserted` comes from `(xmax = 0)` on the RETURNING row -- the standard
+    idiom for telling ON CONFLICT's two arms apart in one statement: xmax
+    is the row version's deleting/locking transaction, which a freshly
+    inserted row does not have (0) and a row rewritten by DO UPDATE does
+    (the updater's xid)."""
+
+    inserted: bool
+
+    def __new__(cls, version_id: int, inserted: bool) -> "VersionUpsert":
+        obj = super().__new__(cls, version_id)
+        obj.inserted = inserted
+        return obj
+
+    @property
+    def version_id(self) -> int:
+        return int(self)
+
+
+def upsert_version(conn, row: dict) -> VersionUpsert | None:
+    """Returns (version_id, inserted), or None if the language is unmapped
+    or the parent work has not been discovered yet (run the acts stage
+    first). inserted is False on a re-walk of an already-known edition."""
     lang = fq.language_code(row.get("lang"))
     if not lang:
         return None
@@ -183,7 +216,9 @@ def upsert_version(conn, row: dict) -> int | None:
     result = conn.execute(_UPSERT_VERSION, params).fetchone()
     if result is None:
         return None                     # the SELECT matched no act
-    return result["version_id"] if isinstance(result, dict) else result[0]
+    if isinstance(result, dict):
+        return VersionUpsert(result["version_id"], result["inserted"])
+    return VersionUpsert(result[0], result[1])
 
 
 # Same shape as _UPSERT_VERSION, with two differences that carry the whole
@@ -215,7 +250,7 @@ ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
     xml_url                = COALESCE(EXCLUDED.xml_url, ch_act_version.xml_url),
     updated_at             = now()
   WHERE ch_act_version.source = 'fedlex_pdf'
-RETURNING version_id
+RETURNING version_id, (xmax = 0) AS inserted
 """
 
 _SELECT_XML_ROW_EXISTS = """
@@ -231,9 +266,9 @@ def upsert_pdf_version(conn, row: dict) -> str:
     (consolidation, lang), and never touches a non-pdf row.
 
     Returns one of:
-      'upserted'         -- written, new row or a re-walk of an existing
-                            pdf-a row (COALESCE semantics, same as
-                            upsert_version()).
+      'inserted'         -- written, a new row.
+      'rewalked'         -- written, a re-walk of an existing pdf-a row
+                            (COALESCE semantics, same as upsert_version()).
       'skipped_has_xml'  -- the desired no-op: an XML row already covers
                             this edition, so nothing was written. Not an
                             error.
@@ -263,7 +298,8 @@ def upsert_pdf_version(conn, row: dict) -> str:
     }
     result = conn.execute(_UPSERT_PDF_VERSION, params).fetchone()
     if result is not None:
-        return "upserted"
+        inserted = result["inserted"] if isinstance(result, dict) else result[1]
+        return "inserted" if inserted else "rewalked"
     # No row written. Either the work is not in ch_act, or an XML row
     # already covers this edition -- tell them apart with one cheap check.
     xml_exists = conn.execute(_SELECT_XML_ROW_EXISTS, params).fetchone()
@@ -318,23 +354,29 @@ def run(settings: Settings,
                     report.skipped_language += 1
                     _sample(report.skipped_langs, row.get("lang") or "<missing>")
                     continue
-                version_id = upsert_version(conn, row)
+                result = upsert_version(conn, row)
             except Exception as exc:                      # noqa: BLE001
                 log.error("versions: %s: %s",
                           row.get("consolidation") or row.get("work"), exc)
                 report.errors += 1
                 continue
 
-            if version_id is None:
+            if result is None:
                 report.orphaned += 1
                 _sample(report.orphaned_works, row.get("work") or "<unknown>")
                 continue
 
-            report.discovered += 1
+            if result.inserted:
+                report.discovered += 1
+            else:
+                report.rewalked += 1
             report.by_lang[lang] = report.by_lang.get(lang, 0) + 1
-            if report.discovered % 5000 == 0:
-                log.info("versions discovered=%d orphaned=%d skipped_language=%d",
-                          report.discovered, report.orphaned, report.skipped_language)
+            walked = report.discovered + report.rewalked
+            if walked % 5000 == 0:
+                log.info("versions discovered=%d rewalked=%d orphaned=%d "
+                         "skipped_language=%d",
+                          report.discovered, report.rewalked, report.orphaned,
+                          report.skipped_language)
 
         # The pdf-a pass. Deliberately AFTER the xml pass above and over the
         # SAME works list: a consolidation with both manifestations must
@@ -365,11 +407,17 @@ def run(settings: Settings,
                 report.pdf_skipped_has_xml += 1
                 continue
 
-            report.pdf_discovered += 1
+            if outcome == "inserted":
+                report.pdf_discovered += 1
+            else:
+                report.pdf_rewalked += 1
             report.by_lang[lang] = report.by_lang.get(lang, 0) + 1
-            if report.pdf_discovered % 5000 == 0:
-                log.info("versions(pdf) discovered=%d skipped_has_xml=%d",
-                          report.pdf_discovered, report.pdf_skipped_has_xml)
+            pdf_walked = report.pdf_discovered + report.pdf_rewalked
+            if pdf_walked % 5000 == 0:
+                log.info("versions(pdf) discovered=%d rewalked=%d "
+                         "skipped_has_xml=%d",
+                          report.pdf_discovered, report.pdf_rewalked,
+                          report.pdf_skipped_has_xml)
     finally:
         conn.close()
         client.close()
@@ -387,11 +435,13 @@ def main() -> VersionsReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env())
-    log.info("discovered=%d orphaned=%d skipped_language=%d errors=%d by_lang=%s "
-             "pdf_discovered=%d pdf_skipped_has_xml=%d",
-             result.discovered, result.orphaned, result.skipped_language,
-             result.errors, result.by_lang,
-             result.pdf_discovered, result.pdf_skipped_has_xml)
+    log.info("discovered=%d rewalked=%d orphaned=%d skipped_language=%d "
+             "errors=%d by_lang=%s "
+             "pdf_discovered=%d pdf_rewalked=%d pdf_skipped_has_xml=%d",
+             result.discovered, result.rewalked, result.orphaned,
+             result.skipped_language, result.errors, result.by_lang,
+             result.pdf_discovered, result.pdf_rewalked,
+             result.pdf_skipped_has_xml)
     # A non-zero orphaned count after a full acts run is a silent-gap signal,
     # not a footnote -- surface it (and who it is) at warning level so it
     # cannot be missed in a scrolled-past log.

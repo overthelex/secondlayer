@@ -133,7 +133,7 @@ def _run_with_rows(monkeypatch, settings, rows, capture=None, pdf_rows=None):
 
 
 def test_stores_a_version_against_its_act(conn):
-    vid = versions_stage.upsert_version(conn, _row())
+    vid = versions_stage.upsert_version(conn, _row()).version_id
     row = conn.execute(
         "SELECT v.date_applicability, v.lang, v.xml_url, a.sr_number "
         "FROM ch_act_version v JOIN ch_act a USING (act_id) "
@@ -162,12 +162,17 @@ def test_duplicate_rows_from_named_graphs_collapse(conn):
     write must update, not duplicate."""
     first = versions_stage.upsert_version(conn, _row())
     second = versions_stage.upsert_version(conn, _row())
-    assert first == second
+    assert first.version_id == second.version_id
+    # The same statement's two ON CONFLICT arms, told apart by (xmax = 0):
+    # the first write created the row, the second refreshed it in place.
+    assert first.inserted is True
+    assert second.inserted is False
     assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 1
 
 
 def test_end_of_applicability_is_kept_when_present(conn):
-    vid = versions_stage.upsert_version(conn, _row(date="2020-01-01", end="2021-12-31"))
+    vid = versions_stage.upsert_version(
+        conn, _row(date="2020-01-01", end="2021-12-31")).version_id
     assert str(conn.execute(
         "SELECT date_end_applicability FROM ch_act_version WHERE version_id=%s",
         (vid,)).fetchone()[0]) == "2021-12-31"
@@ -187,7 +192,7 @@ def test_a_language_we_do_not_map_is_skipped(conn):
 
 
 def test_new_versions_start_at_stage_discovered(conn):
-    vid = versions_stage.upsert_version(conn, _row())
+    vid = versions_stage.upsert_version(conn, _row()).version_id
     assert conn.execute(
         "SELECT stage FROM ch_act_version WHERE version_id=%s", (vid,)).fetchone()[0] \
         == "discovered"
@@ -442,7 +447,7 @@ def test_pdf_row_is_skipped_when_an_xml_row_already_covers_the_edition(conn):
 def test_new_pdf_row_is_inserted_as_fedlex_pdf_discovered(conn):
     pdf_row = _pdf_row()
     outcome = versions_stage.upsert_pdf_version(conn, pdf_row)
-    assert outcome == "upserted"
+    assert outcome == "inserted"
     row = conn.execute(
         "SELECT source, stage, xml_url FROM ch_act_version "
         "WHERE eli_consolidation_uri = %s AND lang = 'de'",
@@ -454,10 +459,10 @@ def test_new_pdf_row_is_inserted_as_fedlex_pdf_discovered(conn):
 
 def test_rewalk_of_a_pdf_row_updates_dates_with_coalesce_semantics(conn):
     pdf_row = _pdf_row(date="2020-01-01")
-    assert versions_stage.upsert_pdf_version(conn, pdf_row) == "upserted"
+    assert versions_stage.upsert_pdf_version(conn, pdf_row) == "inserted"
     pdf_row_with_end = _pdf_row(date="2020-01-01", end="2022-12-31")
     outcome = versions_stage.upsert_pdf_version(conn, pdf_row_with_end)
-    assert outcome == "upserted"
+    assert outcome == "rewalked"
     end = conn.execute(
         "SELECT date_end_applicability FROM ch_act_version "
         "WHERE eli_consolidation_uri = %s AND lang = 'de'",
@@ -493,7 +498,8 @@ def test_pdf_skip_does_not_consume_the_version_id_sequence(conn):
         "SELECT last_value FROM ch_act_version_version_id_seq").fetchone()[0]
     outcome = versions_stage.upsert_pdf_version(conn, _pdf_row())
     assert outcome == "skipped_has_xml"
-    fresh_id = versions_stage.upsert_version(conn, _row(date="2019-01-01"))
+    fresh_id = versions_stage.upsert_version(
+        conn, _row(date="2019-01-01")).version_id
     assert fresh_id == seq_before + 1, (
         "the pdf skip must not have advanced ch_act_version_version_id_seq "
         "-- a gap here means the NOT EXISTS guard let an insert attempt "
@@ -589,3 +595,30 @@ def test_run_pdf_pass_skips_editions_the_xml_pass_already_covered(conn, settings
     stored = conn.execute(
         "SELECT source, count(*) FROM ch_act_version GROUP BY source").fetchall()
     assert stored == [("fedlex", 1)]
+
+
+def test_run_reports_a_rewalk_as_rewalked_not_discovered(conn, settings,
+                                                          monkeypatch):
+    """The 2026-08-30 nightly delta reported new_versions=88989 on a night
+    that created 17 rows: both passes re-upsert the whole corpus every
+    night (idempotent, by design) and counted every re-walk as a discovery.
+    Running the same rows twice must attribute the second walk entirely to
+    the rewalked counters, leaving discovered -- and through it the delta's
+    new_versions -- at zero."""
+    rows = [_row(lang="DEU"), _row(lang="FRA")]
+    # date 2019: a consolidation distinct from both xml rows, so the pdf
+    # pass lands it instead of skipping on an existing xml edition.
+    pdf_rows = [_pdf_row(date="2019-01-01")]
+    first = _run_with_rows(monkeypatch, settings, rows, pdf_rows=pdf_rows)
+    assert first.discovered == 2
+    assert first.rewalked == 0
+    assert first.pdf_discovered == 1
+    assert first.pdf_rewalked == 0
+
+    second = _run_with_rows(monkeypatch, settings, rows, pdf_rows=pdf_rows)
+    assert second.discovered == 0
+    assert second.rewalked == 2
+    assert second.pdf_discovered == 0
+    assert second.pdf_rewalked == 1
+    # The re-walk wrote no new rows.
+    assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 3
