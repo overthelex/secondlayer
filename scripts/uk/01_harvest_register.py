@@ -37,7 +37,44 @@ import time
 import xml.etree.ElementTree as ET
 
 import psycopg2
-import requests
+# ⚠⚠ curl_cffi, not requests — but read the whole note before trusting it.
+#
+# legislation.gov.uk sits behind Cloudflare, which scores the TLS handshake and
+# refuses a client it dislikes with **HTTP 202 and a zero-length body**. Not 403,
+# not 429: an empty 202, which a naive client reads as "accepted, come back
+# later" and a retry loop reads as transient. That is the whole trap.
+#
+# Measured on prod 2026-08-27, same host, same second:
+#
+#   curl       /ukpga/2006/46/contents/data.xml -> 200
+#   requests   same URL                         -> 202, 0 bytes
+#   curl_cffi  same URL                         -> 200, 1,246,546 bytes
+#
+# It is not the headers: a curl User-Agent, Accept: */*, and dropping
+# Accept-Encoding and Connection all still returned 202.
+#
+# ⚠⚠ AND THEN curl_cffi WAS BURNED TOO. Twenty minutes of fleet traffic on the
+# new transport and the same three URLs answered 202 to curl_cffi while plain
+# curl still answered 200. So this is not "requests bad, curl_cffi good": each
+# transport buys a window, and running a 15-address fleet through it spends that
+# window. Swapping the client again is a treadmill, not a fix.
+#
+# What the numbers actually say. The published fair-use ceiling is 1,500 requests
+# per 5 minutes per IP. The fleet ran at ~42 items/s, and with the 307 redirect
+# that unrevised items serve, that is ~84 requests/s — 25,200 per 5 minutes in
+# aggregate, sixteen times the ceiling however it is sliced per address. A
+# calibration run confirmed the refusal is not rate-tunable once triggered:
+# 12 threads at 4/s and 8 threads at 2/s both returned 202 on 600 of 600.
+#
+# The honest fix is capacity, not transport: Legislation@nationalarchives.gov.uk
+# grants higher limits, which is what the letter in UKENT-15 is for. Until then
+# run narrow and slow, and treat a 902 as "stop, you are over budget".
+#
+# ⚠ If you do reach for impersonation: do NOT pass impersonate="chrome" on
+# curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
+# Source binding survives the switch — Session(interface=<ip>) replaces the
+# HTTPAdapter, verified 200 from three of the fleet's addresses.
+from curl_cffi import requests
 from psycopg2.extras import execute_values
 
 BASE = "https://www.legislation.gov.uk"
@@ -51,9 +88,43 @@ DB_URL = os.environ.get("DATABASE_URL")
 ATOM = "{http://www.w3.org/2005/Atom}"
 UKM = "{http://www.legislation.gov.uk/namespaces/metadata}"
 
-# England & Wales plus UK-wide only. Scotland (asp, ssi), Wales (asc, wsi) and
-# Northern Ireland (nia, nisr) are deliberately out of scope for this pass.
-IN_SCOPE = ["ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla"]
+# Every type legislation.gov.uk publishes. The first pass covered England & Wales
+# plus UK-wide only; the devolved legislatures were added 2026-08-27, because the
+# amendment graph already pointed at them — effects routinely carry
+# AffectingClass="NorthernIrelandAct" with AffectingURI=.../id/nia/2008/12, and
+# those resolved to nothing in the register.
+#
+# Each of the 15 added types was confirmed live on 2026-08-27 to answer
+# /{type}/data.feed?results-count=200 with entries whose ids carry that type as
+# their prefix. ⚠ leg:morePages is NOT a page count: it saturates at 12, and
+# reports 12 for ukpga, which has ~90 pages. Page with rel="next" and nothing
+# else, which is what this script already does.
+IN_SCOPE = [
+    # UK-wide and England & Wales (the original pass)
+    "ukpga", "uksi", "apgb", "ukppa", "aep", "ukcm", "ukla",
+    # Scotland
+    "asp",      # Acts of the Scottish Parliament
+    "ssi",      # Scottish Statutory Instruments
+    "aosp",     # Acts of the Old Scottish Parliament, pre-1707
+    # Wales
+    "anaw",     # Acts of the National Assembly for Wales
+    "asc",      # Acts of Senedd Cymru
+    "mwa",      # Measures of the National Assembly for Wales
+    "wsi",      # Welsh Statutory Instruments
+    # Northern Ireland
+    "nia",      # Acts of the Northern Ireland Assembly
+    "nisr",     # Northern Ireland Statutory Rules
+    "apni",     # Acts of the Northern Ireland Parliament, 1921-1972
+    "mnia",     # Measures of the Northern Ireland Assembly
+    "nisro",    # Northern Ireland Statutory Rules and Orders
+    "nisi",     # Northern Ireland Orders in Council
+    # UK historic and instrument types, absent from the first pass for no reason
+    # other than that nobody listed them
+    "uksro",    # UK Statutory Rules and Orders
+    "ukmo",     # UK Ministerial Orders
+    "ukci",     # UK Church Instruments
+    "gbla",     # Great Britain Local Acts
+]
 
 # The real ceiling is 1,500 requests / 5 minutes per IP (5/s), stated in the body
 # of the 429 the server returns. The developer docs claim 3,000; they are wrong.
@@ -86,10 +157,19 @@ class Fetcher:
             self.last = time.time()
             try:
                 r = self.s.get(url, timeout=60)
-            except requests.RequestException as e:
+            except requests.RequestsError as e:
                 print(f"    net error ({e}); retry {attempt + 1}/{tries}", flush=True)
                 time.sleep(3 * (attempt + 1))
                 continue
+            # An empty 202 is Cloudflare refusing the handshake, NOT the
+            # publisher saying "not ready" — see the note at the imports.
+            # Retrying cannot change a fingerprint, so say so once and stop
+            # rather than spending the budget and reporting a network error.
+            if r.status_code == 202:
+                print(f"    202 empty body on {url} — TLS fingerprint refused; "
+                      f"the transport needs fixing, not the retry budget",
+                      flush=True)
+                return None
             if r.status_code == 200:
                 return r.text
             if r.status_code in (403, 429, 503):

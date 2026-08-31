@@ -43,7 +43,44 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg2
-import requests
+# ⚠⚠ curl_cffi, not requests — but read the whole note before trusting it.
+#
+# legislation.gov.uk sits behind Cloudflare, which scores the TLS handshake and
+# refuses a client it dislikes with **HTTP 202 and a zero-length body**. Not 403,
+# not 429: an empty 202, which a naive client reads as "accepted, come back
+# later" and a retry loop reads as transient. That is the whole trap.
+#
+# Measured on prod 2026-08-27, same host, same second:
+#
+#   curl       /ukpga/2006/46/contents/data.xml -> 200
+#   requests   same URL                         -> 202, 0 bytes
+#   curl_cffi  same URL                         -> 200, 1,246,546 bytes
+#
+# It is not the headers: a curl User-Agent, Accept: */*, and dropping
+# Accept-Encoding and Connection all still returned 202.
+#
+# ⚠⚠ AND THEN curl_cffi WAS BURNED TOO. Twenty minutes of fleet traffic on the
+# new transport and the same three URLs answered 202 to curl_cffi while plain
+# curl still answered 200. So this is not "requests bad, curl_cffi good": each
+# transport buys a window, and running a 15-address fleet through it spends that
+# window. Swapping the client again is a treadmill, not a fix.
+#
+# What the numbers actually say. The published fair-use ceiling is 1,500 requests
+# per 5 minutes per IP. The fleet ran at ~42 items/s, and with the 307 redirect
+# that unrevised items serve, that is ~84 requests/s — 25,200 per 5 minutes in
+# aggregate, sixteen times the ceiling however it is sliced per address. A
+# calibration run confirmed the refusal is not rate-tunable once triggered:
+# 12 threads at 4/s and 8 threads at 2/s both returned 202 on 600 of 600.
+#
+# The honest fix is capacity, not transport: Legislation@nationalarchives.gov.uk
+# grants higher limits, which is what the letter in UKENT-15 is for. Until then
+# run narrow and slow, and treat a 902 as "stop, you are over budget".
+#
+# ⚠ If you do reach for impersonation: do NOT pass impersonate="chrome" on
+# curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
+# Source binding survives the switch — Session(interface=<ip>) replaces the
+# HTTPAdapter, verified 200 from three of the fleet's addresses.
+from curl_cffi import requests
 from psycopg2.extras import execute_values
 
 BASE = "https://www.legislation.gov.uk"
@@ -79,19 +116,6 @@ class Limiter:
             self.next_at += self.interval
         if delay > 0:
             time.sleep(delay)
-
-
-class SourceAddressAdapter(requests.adapters.HTTPAdapter):
-    """Bind outgoing connections to one local address, so each session leaves the
-    box from a different public IP."""
-
-    def __init__(self, source_address, **kwargs):
-        self._source_address = source_address
-        super().__init__(**kwargs)
-
-    def init_poolmanager(self, *args, **kwargs):
-        kwargs["source_address"] = (self._source_address, 0)
-        super().init_poolmanager(*args, **kwargs)
 
 
 def detect_source_ips():
@@ -134,9 +158,19 @@ def fetch(session, limiter, url, tries=4):
             # and a fresh curl to the same host answered in 0.07s. Failing fast and
             # retrying beats waiting on a connection that will never deliver.
             r = session.get(url, timeout=(10, 90))
-        except requests.RequestException:
+        except requests.RequestsError:
             time.sleep(3 * (attempt + 1))
             continue
+        # An empty 202 is Cloudflare refusing us, NOT the publisher saying "not
+        # ready" — see the note at the imports. Recorded once and never retried:
+        # twelve retries over a minute were measured to be futile, and a 91-item
+        # sample spread over every decade from 1820 to 2020 came back 202 on all
+        # 91, which is how you tell a refusal from a content gap. A run that
+        # starts reporting 902 should be STOPPED, not retried harder: it means
+        # the aggregate request budget is spent.
+        if r.status_code == 202:
+            return None, 902
+
         if r.status_code == 200:
             body = r.text
             if not body.strip():
@@ -285,7 +319,18 @@ INSERT INTO uk_legislation_versions
 SELECT id,
        COALESCE(valid_date, made_date, enactment_date, coming_into_force,
                 make_date(year, 1, 1)),
-       CASE WHEN leg_type IN ('uksi','wsi','nisi') THEN 'made' ELSE 'enacted' END,
+       -- Three labels, not two. Established 2026-08-27 by following the bare
+       -- URI of one unrevised item per type and reading the segment it lands on:
+       -- ssi/nisro/uksro redirect to /made like uksi, while ukmo and ukci land
+       -- on /created, which the first pass did not know existed. Classify by the
+       -- kind of instrument rather than by that redirect, because a REVISED item
+       -- serves at its bare URI and never redirects at all, so a single sample
+       -- says nothing about its type.
+       CASE
+         WHEN leg_type IN ('uksi','wsi','nisi','ssi','nisr','nisro','uksro') THEN 'made'
+         WHEN leg_type IN ('ukmo','ukci') THEN 'created'
+         ELSE 'enacted'
+       END,
        source_url, true, 200
   FROM uk_legislation
  WHERE version_count = 0
@@ -403,12 +448,8 @@ def main():
         if not hasattr(local, "s"):
             idx = next(ip_counter)
             ip = source_ips[idx % len(source_ips)] if source_ips else None
-            s = requests.Session()
+            s = requests.Session(interface=ip) if ip else requests.Session()
             s.headers["User-Agent"] = UA
-            if ip:
-                ad = SourceAddressAdapter(source_address=ip)
-                s.mount("https://", ad)
-                s.mount("http://", ad)
             local.s = s
             local.lim = limiters[idx % len(limiters)]
             local.ip = ip

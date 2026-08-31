@@ -76,7 +76,44 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg2
-import requests
+# ⚠⚠ curl_cffi, not requests — but read the whole note before trusting it.
+#
+# legislation.gov.uk sits behind Cloudflare, which scores the TLS handshake and
+# refuses a client it dislikes with **HTTP 202 and a zero-length body**. Not 403,
+# not 429: an empty 202, which a naive client reads as "accepted, come back
+# later" and a retry loop reads as transient. That is the whole trap.
+#
+# Measured on prod 2026-08-27, same host, same second:
+#
+#   curl       /ukpga/2006/46/contents/data.xml -> 200
+#   requests   same URL                         -> 202, 0 bytes
+#   curl_cffi  same URL                         -> 200, 1,246,546 bytes
+#
+# It is not the headers: a curl User-Agent, Accept: */*, and dropping
+# Accept-Encoding and Connection all still returned 202.
+#
+# ⚠⚠ AND THEN curl_cffi WAS BURNED TOO. Twenty minutes of fleet traffic on the
+# new transport and the same three URLs answered 202 to curl_cffi while plain
+# curl still answered 200. So this is not "requests bad, curl_cffi good": each
+# transport buys a window, and running a 15-address fleet through it spends that
+# window. Swapping the client again is a treadmill, not a fix.
+#
+# What the numbers actually say. The published fair-use ceiling is 1,500 requests
+# per 5 minutes per IP. The fleet ran at ~42 items/s, and with the 307 redirect
+# that unrevised items serve, that is ~84 requests/s — 25,200 per 5 minutes in
+# aggregate, sixteen times the ceiling however it is sliced per address. A
+# calibration run confirmed the refusal is not rate-tunable once triggered:
+# 12 threads at 4/s and 8 threads at 2/s both returned 202 on 600 of 600.
+#
+# The honest fix is capacity, not transport: Legislation@nationalarchives.gov.uk
+# grants higher limits, which is what the letter in UKENT-15 is for. Until then
+# run narrow and slow, and treat a 902 as "stop, you are over budget".
+#
+# ⚠ If you do reach for impersonation: do NOT pass impersonate="chrome" on
+# curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
+# Source binding survives the switch — Session(interface=<ip>) replaces the
+# HTTPAdapter, verified 200 from three of the fleet's addresses.
+from curl_cffi import requests
 from psycopg2.extras import execute_values
 
 BASE = "https://www.legislation.gov.uk"
@@ -115,19 +152,6 @@ class Limiter:
             time.sleep(delay)
 
 
-class SourceAddressAdapter(requests.adapters.HTTPAdapter):
-    """Bind outgoing connections to one local address, so each session leaves the
-    box from a different public IP."""
-
-    def __init__(self, source_address, **kwargs):
-        self._source_address = source_address
-        super().__init__(**kwargs)
-
-    def init_poolmanager(self, *args, **kwargs):
-        kwargs["source_address"] = (self._source_address, 0)
-        super().init_poolmanager(*args, **kwargs)
-
-
 def detect_source_ips():
     """Secondary private addresses on the interface carrying the default route.
     Every other address on this host is a docker bridge or WireGuard and cannot
@@ -153,6 +177,7 @@ def fetch(session, limiter, url, tries=4):
     status, or a code above the HTTP range for a fetch that succeeded but is
     unusable.
       900 = empty body   901 = served 200 but not an Atom feed   599 = gave up
+      902 = empty 202: the TLS fingerprint was refused, see the imports
     A scope truncated by --max-pages is recorded as 903 by crawl_scope, so a
     silent cap stays visible and outstanding rather than looking complete.
     """
@@ -160,9 +185,19 @@ def fetch(session, limiter, url, tries=4):
         limiter.wait()
         try:
             r = session.get(url, timeout=(10, 60))
-        except requests.RequestException:
+        except requests.RequestsError:
             time.sleep(3 * (attempt + 1))
             continue
+        # An empty 202 is Cloudflare refusing us, NOT the publisher saying "not
+        # ready" — see the note at the imports. Recorded once and never retried:
+        # twelve retries over a minute were measured to be futile, and a 91-item
+        # sample spread over every decade from 1820 to 2020 came back 202 on all
+        # 91, which is how you tell a refusal from a content gap. A run that
+        # starts reporting 902 should be STOPPED, not retried harder: it means
+        # the aggregate request budget is spent.
+        if r.status_code == 202:
+            return None, 902
+
         if r.status_code == 200:
             body = r.text
             if not body.strip():
@@ -613,15 +648,12 @@ def main():
     def worker_state():
         if getattr(local, "session", None) is None:
             idx = next(ip_counter)
-            s = requests.Session()
+            addr = source_ips[idx % len(source_ips)] if source_ips else None
+            # interface binds the whole session, so a redirect to http:// cannot
+            # slip past it the way a scheme-mounted HTTPAdapter allowed.
+            s = requests.Session(interface=addr) if addr else requests.Session()
             s.headers["User-Agent"] = UA
             s.headers["Accept"] = "application/atom+xml, application/xml"
-            if source_ips:
-                addr = source_ips[idx % len(source_ips)]
-                # Both schemes: a redirect to http:// would otherwise slip past the
-                # binding and land on the default address.
-                s.mount("https://", SourceAddressAdapter(addr))
-                s.mount("http://", SourceAddressAdapter(addr))
             local.session = s
             local.limiter = limiters[idx % len(limiters)]
             # One connection per thread: execute_values on a shared cursor from
