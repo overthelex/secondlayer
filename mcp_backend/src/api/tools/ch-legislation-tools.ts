@@ -250,7 +250,10 @@ offset/max_chars керують посторінковим читанням до
     try {
       const values: any[] = [rawQuery, String(lang)];
       let pi = 3;
-      const forceFilter = in_force_only === false ? '' : 'AND enforcement_status = 0';
+      const forceFilter = in_force_only === false ? '' :
+      // Fedlex lags: ~26 CH works keep enforcement_status=0 with a past
+      // date_no_longer_in_force (audit 2026-08-31), so both are checked
+      "AND enforcement_status = 0 AND (date_no_longer_in_force IS NULL OR date_no_longer_in_force > CURRENT_DATE)";
 
       // A 1-5 char query with no whitespace is almost always an abbreviation (CO, OR,
       // ZGB, StGB) — match the title on a word boundary instead of a bare ILIKE
@@ -314,7 +317,7 @@ offset/max_chars керують посторінковим читанням до
                        ${aliasTierCond}
                        ELSE 2 END,
                   ${aliasTieBreak}
-                  in_force DESC,
+                  (in_force AND (date_no_longer_in_force IS NULL OR date_no_longer_in_force > CURRENT_DATE)) DESC,
                   date_entry_force DESC NULLS LAST,
                   a.act_id
          LIMIT $${limIdx} OFFSET $${offIdx}`;
@@ -637,7 +640,7 @@ offset/max_chars керують посторінковим читанням до
         : (await this.db.query(
             `SELECT act_id, sr_number, jurisdiction, title_de, title_fr, title_it
                FROM ch_act WHERE jurisdiction = 'CH' AND sr_number = $1
-              ORDER BY in_force DESC, date_entry_force DESC NULLS LAST
+              ORDER BY (in_force AND (date_no_longer_in_force IS NULL OR date_no_longer_in_force > CURRENT_DATE)) DESC, date_entry_force DESC NULLS LAST
               LIMIT 1`,
             [String(sr_number)]
           )).rows[0];

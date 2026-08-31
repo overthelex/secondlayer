@@ -73,9 +73,11 @@ case "$STAGE" in
     # for every canton the stage knows. Same env-survives rule as the others.
     # The sil-* stages accept GE, NE or nothing (both). pdf-text and
     # lexwork-pdf-requeue take one canton or none; pdf-text also reads
-    # CHPIPE_SOURCE (lexwork_pdf|lexfind) and CHPIPE_RESPLIT=1 (re-split the
-    # article-less parsed rows from akn_xml, no download), and
-    # lexwork-pdf-requeue CHPIPE_CURRENT_ONLY=1, from the environment.
+    # CHPIPE_SOURCE (lexwork_pdf|lexfind), CHPIPE_RESPLIT=1 (re-split the
+    # article-less parsed rows from akn_xml, no download) and CHPIPE_ANNEX=1
+    # (append the BS annex-PDF text to the article-less parsed lexwork
+    # rows), and lexwork-pdf-requeue CHPIPE_CURRENT_ONLY=1, from the
+    # environment.
     ARG="${POS:-${CHPIPE_CANTON:-}}"
     export CHPIPE_CANTON="$ARG"
     ;;

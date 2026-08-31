@@ -14,12 +14,16 @@ Per claimed row (stage 'fetched', source 'ti_rl'):
      "Entrata in vigore" only the page has);
   4. complete_version(-> 'parsed', full_text=...).
 
-A page that yields no article, or fewer than 200 characters of text, is
-retired at once (max_attempts=1) with 'no_articles: ...' / 'short_text: ...'
-as its reason: retrying the same page tomorrow does not grow it, and the
-count is Gate F's business. A page the parser refuses outright (no content
-div) fails with the parser's message and the normal retry budget, since
-the fetch stage should not have stored it.
+A page with fewer than 200 characters of text is retired at once
+(max_attempts=1, 'short_text: ...'): retrying the same page tomorrow does
+not grow it. A page with real prose but no 'Art. N' heading (an accession
+decree, a tariff) is stored as PARSED with article_count=0 and its text in
+full_text -- the policy the PDF path always had, adopted for the portal
+parsers on 2026-08-31 after the F3/K9 audit found 12 in-force TI acts
+"missing" that the source publishes exactly so; Gate F shows them as
+empty_articles. A page the parser refuses outright (no content div) fails
+with the parser's message and the normal retry budget, since the fetch
+stage should not have stored it.
 """
 from __future__ import annotations
 
@@ -86,17 +90,22 @@ def run(settings: Settings, limit: int | None = None) -> TiParseReport:
                         db.fail_version(conn, row["version_id"], str(exc), settings.max_attempts)
                         report.failed += 1
                         continue
-                    if not articles:
-                        db.fail_version(conn, row["version_id"],
-                                        f"no_articles: {len(text)} chars of text, no 'Art. N' paragraph",
-                                        max_attempts=1)
-                        report.no_articles += 1
-                        continue
                     if len(text) < MIN_TEXT_CHARS:
                         db.fail_version(conn, row["version_id"],
                                         f"short_text: {len(text)} chars, {len(articles)} article(s)",
                                         max_attempts=1)
                         report.short_text += 1
+                        continue
+                    if not articles:
+                        # real prose, no Art. heading: parsed, searchable text,
+                        # zero article rows (the PDF path's rule);
+                        # store_articles([]) sets article_count = 0
+                        with conn.transaction():
+                            parse_akn_stage.store_articles(conn, row["version_id"], [])
+                        db.complete_version(conn, row["version_id"], "parsed", full_text=text)
+                        report.no_articles += 1
+                        report.parsed += 1
+                        report.acts.add((row["act_id"], row["lang"]))
                         continue
                     with conn.transaction():
                         parse_akn_stage.store_articles(conn, row["version_id"], articles)

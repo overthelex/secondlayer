@@ -81,7 +81,7 @@ def conn(settings):
         g = _act(c, "GE", "A 1 01")
         _version(c, g, "2013-06-01", lang="fr", source="sil")
         _version(c, g, "2013-06-02", lang="fr", source="sil", stage="failed",
-                 error="no_articles: prose without an Art. heading")
+                 error="short_text: 12 chars, 0 article(s)")
         _version(c, g, "2013-06-03", lang="fr", source="lexwork")
         _registry(c, 4, "GE", "A 1 01", ["19.05.1815", "01.06.2013"])
         _registry(c, 5, "GE", "A 1 02", ["01.01.1900"], active=False)
@@ -159,7 +159,7 @@ def test_a_sil_canton_is_filtered_on_its_own_source(conn):
     assert row["versions_lexfind"] == 3
     assert row["date_matches"] == 1 and row["date_mismatches"] == 0
     assert row["parsed"] == 1 and row["failed"] == 1 and row["pending"] == 0
-    assert row["failed_by_reason"] == {"no_articles: prose without an Art. heading": 1}
+    assert row["failed_by_reason"] == {"short_text: 12 chars, 0 article(s)": 1}
     text = reports_cantonal.format_gate_f([row])
     assert "GE: acts sil 1 (in force 1) / lexfind 2 (active 1)" in text and "editions sil 2 / lexfind 3" in text
 
@@ -184,3 +184,25 @@ def test_zurich_is_compared_on_its_own_source(conn):
     assert row["versions_lexwork"] == 3 and row["versions_lexfind"] == 2
     assert row["date_matches"] == 1 and row["date_mismatches"] == 1, "1869 predates LexFind's history"
     assert row["parsed"] == 2 and row["pending"] == 1
+
+
+def test_in_force_no_current_counts_in_force_acts_with_no_parsed_edition_covering_today(conn):
+    """The F3/K9 gap counter (prod 2026-08-31: 55 cantonal acts): in-force
+    acts with zero parsed editions whose [date_applicability,
+    date_end_applicability] contains today, any language, any source."""
+    row = reports_cantonal.gate_f(conn, "BE")[0]
+    assert row["in_force_no_current"] == 1, "152.01's only edition is 'discovered'; 101.1 is covered"
+    # SH: a future-only act counts, a closed-edition act counts, an
+    # abrogated act and a covered act do not.
+    future = _act(conn, "SH", "173.201")
+    _version(conn, future, "2099-10-01")
+    closed = _act(conn, "SH", "200.1")
+    conn.execute("UPDATE ch_act_version SET date_end_applicability = '2020-01-01' "
+                 "WHERE version_id = %s", (_version(conn, closed, "2010-01-01"),))
+    abrogated = _act(conn, "SH", "300.1", in_force=False)
+    _version(conn, abrogated, "2010-01-01", stage="failed", error="x")
+    covered = _act(conn, "SH", "400.1")
+    _version(conn, covered, "2010-01-01")
+    row = reports_cantonal.gate_f(conn, "SH")[0]
+    assert row["in_force_no_current"] == 2
+    assert "in_force_no_current 2" in reports_cantonal.format_gate_f([row])

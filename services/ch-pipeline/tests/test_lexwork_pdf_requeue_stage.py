@@ -150,3 +150,79 @@ def test_versions_of_reads_all_three_lists():
                                 "future_versions": [{"id": 4, "structured_document_id": None}]})
     assert listed == {3: 9, 2: None, 4: None}
     assert stage.pdf_url("bgs.so.ch", "de", 839) == "https://bgs.so.ch/api/de/versions/839/pdf_file"
+
+
+GL_HOST = "https://gesetze.gl.ch"
+
+
+def test_a_gl_sysnr_with_spaces_and_slashes_is_recognised(conn, settings):
+    """All 114 leftovers of the first prod run (2026-08-31) are GL rows whose
+    systematic number contains spaces and slashes ('I A/1/1'): the sysnr
+    group of _VERSION_URL must span path segments."""
+    vid = _pdf_only(conn, sysnr="I A/1/1", vid=516)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 (f"{GL_HOST}/api/de/texts_of_law/I A/1/1/versions/516/show_as_json", vid))
+    calls = []
+
+    def host(request):
+        calls.append(str(request.url))
+        # httpx encodes the space; the tol endpoint for the multi-segment sysnr
+        assert str(request.url) == f"{GL_HOST}/api/de/texts_of_law/I%20A/1/1"
+        return httpx.Response(200, content=json.dumps({"text_of_law": {
+            "current_version": {"id": 2603, "structured_document_id": 10432},
+            "old_versions": [{"id": 516, "structured_document_id": None}],
+            "future_versions": []}}).encode())
+
+    report = stage.run(settings, transport=httpx.MockTransport(host))
+    assert report.requeued_pdf == 1 and report.unknown_url == 0
+    assert len(calls) == 1
+    assert _state(conn, vid) == ("lexwork_pdf", "discovered", 0, None,
+                                 f"{GL_HOST}/api/de/versions/516/pdf_file")
+
+
+def test_urls_that_still_cannot_be_resolved_get_a_precise_reason(conn, settings):
+    foreign_host = _pdf_only(conn, vid=901)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 ("https://example.ch/api/de/texts_of_law/1.1/versions/9/show_as_json",
+                  foreign_host))
+    no_shape = _pdf_only(conn, vid=902)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 ("https://www.belex.sites.be.ch/app/de/texts_of_law/1.1", no_shape))
+    report = stage.run(settings, transport=httpx.MockTransport(
+        lambda request: httpx.Response(404, content=b"")))
+    assert report.unknown_url == 2
+    assert _state(conn, foreign_host)[3] == "pdf_only: host example.ch is not a Lexwork host"
+    assert _state(conn, no_shape)[3] == "pdf_only: xml_url is not a Lexwork version URL"
+
+
+def test_a_slash_bearing_systematic_number_is_still_a_lexwork_version_url(conn, settings):
+    """GL numbers its acts 'VII A/1/6': the slashes are part of the
+    systematic number. Prod 2026-08-31: all 7 GL in-force acts with no
+    current edition were pdf_only rows retired as 'xml_url is not a
+    Lexwork version URL' because the URL pattern read the number as
+    [^/]+. The host serves the version (id 2644) and its PDF."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number) VALUES "
+                 "(2, 'https://gesetze.gl.ch/app/de/texts_of_law/VII A/1/6', 'GL', 'VII A/1/6')")
+    gl = conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+        "xml_url, source, stage, attempts, last_error, failed_stage) VALUES (2, "
+        "'https://gesetze.gl.ch/app/de/texts_of_law/VII A/1/6/versions/2644#de', 'de', '2025-05-05', "
+        "'https://gesetze.gl.ch/api/de/texts_of_law/VII A/1/6/versions/2644/show_as_json', "
+        "'lexwork', 'failed', 1, 'pdf_only: version has no structured document, PDF only', "
+        "'discovered') RETURNING version_id").fetchone()[0]
+
+    tols = []
+
+    def gl_host(request):
+        tols.append(str(request.url))
+        assert "texts_of_law/VII%20A/1/6" in str(request.url)
+        return httpx.Response(200, content=json.dumps({"text_of_law": {
+            "systematic_number": "VII A/1/6",
+            "current_version": {"id": 2644, "structured_document_id": None},
+            "old_versions": [], "future_versions": []}}).encode())
+
+    report = _run(settings, gl_host)
+    assert report.unknown_url == 0
+    assert report.requeued_pdf == 1 and report.acts_fetched == 1
+    assert _state(conn, gl) == ("lexwork_pdf", "discovered", 0, None,
+                                "https://gesetze.gl.ch/api/de/versions/2644/pdf_file")

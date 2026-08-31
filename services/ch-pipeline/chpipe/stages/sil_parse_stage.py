@@ -6,12 +6,13 @@ article (ch_act_article.notes) and no ch_article_provenance is written.
 
 Per claimed row (stage 'fetched', source 'sil'):
   1. sil.parse_act(page) -> articles, full text, page dates;
-  2. fewer than MIN_TEXT_CHARS of text, or no article at all, fails the
-     row at once (max_attempts=1) with a counted reason -- 'short_text' /
-     'no_articles' in Gate F's failed_by_reason. A page with prose but no
-     "Art." (a treaty written as numbered paragraphs, a tariff that is one
-     table) is exactly the row an operator should see listed, not one to
-     retry tomorrow with the same parser;
+  2. fewer than MIN_TEXT_CHARS of text fails the row at once
+     (max_attempts=1, 'short_text' in Gate F's failed_by_reason). A page
+     with prose but no "Art." heading (a treaty in numbered paragraphs, a
+     tariff that is one table) is stored as PARSED with article_count=0 --
+     the PDF path's long-standing rule, adopted here 2026-08-31 after the
+     F3/K9 audit found 27 in-force GE/NE acts "missing" that the source
+     publishes exactly so; Gate F counts them as empty_articles;
   3. parse_akn_stage.store_articles() -- the same replace-not-upsert write,
      in one transaction -- then complete_version(-> 'parsed', full_text).
   4. When sil_acts_stage had to date the version with the run date
@@ -105,12 +106,20 @@ def run(settings: Settings, canton_code: str | None = None,
                         report.failed += 1
                         continue
                     if not parsed.articles:
-                        log.warning("version %s: %d chars of text, no Art. heading",
-                                    row["version_id"], len(parsed.text))
-                        db.fail_version(conn, row["version_id"],
-                                        "no_articles: prose without an Art. heading", max_attempts=1)
+                        # real prose, no Art. heading: parsed, searchable
+                        # text, zero article rows (the PDF path's rule)
+                        log.info("version %s: %d chars of prose, no Art. heading",
+                                 row["version_id"], len(parsed.text))
+                        with conn.transaction():
+                            # replace-with-nothing sets article_count = 0
+                            parse_akn_stage.store_articles(conn, row["version_id"], [])
+                            if _refine_date(conn, row, loaded["metadata_json"], parsed):
+                                report.dates_from_page += 1
+                        db.complete_version(conn, row["version_id"], "parsed",
+                                            full_text=parsed.text)
                         report.no_articles += 1
-                        report.failed += 1
+                        report.parsed += 1
+                        report.acts.add((row["act_id"], row["lang"]))
                         continue
                     with conn.transaction():
                         parse_akn_stage.store_articles(conn, row["version_id"], parsed.articles)

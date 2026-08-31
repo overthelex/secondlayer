@@ -259,7 +259,10 @@ def test_parse_stores_articles_text_and_the_page_dates(conn, settings):
     assert date_document == datetime.date(1997, 12, 14) and date_entry == datetime.date(1998, 1, 1)
 
 
-def test_pages_with_no_article_or_too_little_text_are_retired_with_a_reason(conn, settings):
+def test_short_pages_retire_and_prose_pages_parse_with_zero_articles(conn, settings):
+    """12 in-force TI acts are published without an 'Art. N' paragraph (the
+    F3/K9 audit, 2026-08-31): prose keeps its text as a parsed edition with
+    article_count 0; only a near-empty page retires."""
     conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number) "
                  "VALUES (1, %s, 'TI', '1.1'), (2, %s, 'TI', '1.2'), (3, %s, 'TI', '1.3')",
                  (ti_rl.act_url(1), ti_rl.act_url(2), ti_rl.act_url(3)))
@@ -273,10 +276,13 @@ def test_pages_with_no_article_or_too_little_text_are_retired_with_a_reason(conn
                      "(%s, %s, 'it', '2026-01-01', 'x', 'ti_rl', 'fetched', %s)",
                      (act_id, f"ti_rl:num/{act_id}", page))
     report = ti_parse_stage.run(settings)
-    assert report.parsed == 0 and report.no_articles == 1 and report.short_text == 1
+    assert report.parsed == 1 and report.no_articles == 1 and report.short_text == 1
     assert report.failed == 1
-    rows = dict(conn.execute("SELECT act_id, stage || ' ' || left(last_error, 40) FROM ch_act_version").fetchall())
-    assert rows[1].startswith("failed no_articles:")
+    rows = dict(conn.execute("SELECT act_id, stage || ' ' || left(coalesce(last_error,''), 40) "
+                             "FROM ch_act_version").fetchall())
+    assert rows[1].startswith("parsed"), "prose is kept, not retired"
+    assert conn.execute("SELECT article_count, length(full_text) FROM ch_act_version "
+                        "WHERE act_id=1").fetchone()[0] == 0
     assert rows[2].startswith("failed short_text:")
     assert rows[3].startswith("fetched L'atto normativo"), "a parser refusal keeps its retry budget"
 

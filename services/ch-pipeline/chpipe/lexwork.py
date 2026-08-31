@@ -369,6 +369,28 @@ def empty_reason(payload: dict, lang: str, text: str) -> str:
     return "unstructured_text"
 
 
+def annex_pdf_url(payload: dict) -> str | None:
+    """The PDF the host serves this version's annexes as, for the annex_only
+    editions (BS: the act body is "siehe Anhang" plus a PDF). The payload
+    names it twice, identically: `selected_version.pdf_link_annexes` is ONE
+    URL (`https://{host}/api/{lang}/versions/{id}/annexes`, one bundle of
+    all annexes -- verified live 2026-08-31 on BS 834.420 v2939: 200
+    application/pdf, %PDF-1.5, exactly pdf_link_annexes_size bytes), and
+    every `annex_documents[].url` that is not null repeats the same bundle
+    URL (85 of 85 BS rows). Returns None when the version lists no annex
+    documents (not annex_only -- the caller skips), and '' when annexes are
+    listed but no link is given (a defect worth counting, not skipping)."""
+    selected = _selected(payload)
+    if not selected.get("annex_documents"):
+        return None
+    if selected.get("pdf_link_annexes"):
+        return selected["pdf_link_annexes"]
+    for doc in selected["annex_documents"]:
+        if doc.get("url"):
+            return doc["url"]
+    return ""
+
+
 def _action(text: str) -> str | None:
     for name, pattern in _ACTIONS:
         if pattern.search(text):
