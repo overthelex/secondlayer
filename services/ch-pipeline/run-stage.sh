@@ -26,6 +26,12 @@
 # from the environment, which is how the nightly delta stops on the clock.
 set -euo pipefail
 
+# python3 -m chpipe... resolves the package relative to the CURRENT directory,
+# so run from our own -- a crontab or systemd entry calls this by absolute path
+# with $HOME as cwd, and the first Sunday run of cantonal-acts (2026-08-30)
+# died with ModuleNotFoundError exactly that way. run-delta.sh already cds.
+cd "$(dirname "$0")"
+
 STAGE="${1:?stage required}"
 # A positional argument wins; with none given, the family's OWN env var
 # survives instead of being clobbered to "". The first prod run of `index`

@@ -656,3 +656,15 @@ def test_a_leftover_spider_does_not_become_a_language(tmp_path, monkeypatch):
     _, line = _run_wrapper(tmp_path, monkeypatch, ["diff"],
                            {"CHPIPE_SPIDER": "CH_VB"})
     assert line == "SPIDER=CH_VB LANG=", "diff exports LANG=\"\" (its own default), never the spider"
+
+
+def test_run_stage_works_from_any_cwd(tmp_path):
+    """The first Sunday cron run (2026-08-30) called run-stage.sh by absolute
+    path with $HOME as cwd and died with ModuleNotFoundError: python3 -m
+    resolves chpipe relative to the current directory. The script must cd to
+    its own directory before exec."""
+    assert re.search(r'^cd "\$\(dirname "\$0"\)"$', _RUN_STAGE.read_text(), re.M), \
+        "run-stage.sh must cd to its own directory before python3 -m chpipe..."
+    # and the cd comes before anything reads a relative path
+    text = _RUN_STAGE.read_text()
+    assert text.index('cd "$(dirname') < text.index('MODULE=')
