@@ -64,7 +64,21 @@ SELECT
     (SELECT count(*) FROM ch_act WHERE jurisdiction = %(canton)s
         AND metadata_json ->> 'platform' = 'lexfind') AS acts_from_lexfind,
     (SELECT count(*) FROM ch_act_version v JOIN ch_act a USING (act_id)
-      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexfind') AS editions_from_lexfind
+      WHERE a.jurisdiction = %(canton)s AND v.source = 'lexfind') AS editions_from_lexfind,
+    -- F3/K9: in-force acts with no parsed edition covering today, in ANY
+    -- language from ANY source. This is the user-facing gap: the act is
+    -- law right now and the point-in-time tools have no text to answer
+    -- with (prod 2026-08-31: 55 acts -- 39 prose acts the sil/ti_rl
+    -- parsers retire as no_articles, 7 GL slash-number pdf_only rows,
+    -- 8 image/scan PDFs, 1 SH act whose first edition is future-dated).
+    -- An act whose only editions are future-dated counts until the day
+    -- the edition takes effect: until then the corpus cannot answer.
+    (SELECT count(*) FROM ch_act ia WHERE ia.jurisdiction = %(canton)s AND ia.in_force
+        AND NOT EXISTS (SELECT 1 FROM ch_act_version v
+                         WHERE v.act_id = ia.act_id AND v.stage = 'parsed'
+                           AND v.date_applicability <= current_date
+                           AND (v.date_end_applicability IS NULL
+                                OR v.date_end_applicability >= current_date))) AS in_force_no_current
 """
 
 _VERSIONS = """
@@ -170,7 +184,8 @@ def format_gate_f(rows: list[dict]) -> str:
             f"from lexfind: acts {r['acts_from_lexfind']}, editions {r['editions_from_lexfind']}")
         out.append(
             f"    editions {r.get('source', 'lexwork')} {r['versions_lexwork']} / lexfind {r['versions_lexfind']}; "
-            f"dates match {r['date_matches']} / mismatch {r['date_mismatches']} / future {r['date_future']}")
+            f"dates match {r['date_matches']} / mismatch {r['date_mismatches']} / future {r['date_future']}; "
+            f"in_force_no_current {r['in_force_no_current']}")
         out.append(
             f"    parsed {r['parsed']} failed {r['failed']} pending {r['pending']} "
             f"empty_articles {r['empty_articles']} short_text {r['short_text']} "

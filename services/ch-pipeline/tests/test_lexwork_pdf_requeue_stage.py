@@ -150,3 +150,36 @@ def test_versions_of_reads_all_three_lists():
                                 "future_versions": [{"id": 4, "structured_document_id": None}]})
     assert listed == {3: 9, 2: None, 4: None}
     assert stage.pdf_url("bgs.so.ch", "de", 839) == "https://bgs.so.ch/api/de/versions/839/pdf_file"
+
+
+def test_a_slash_bearing_systematic_number_is_still_a_lexwork_version_url(conn, settings):
+    """GL numbers its acts 'VII A/1/6': the slashes are part of the
+    systematic number. Prod 2026-08-31: all 7 GL in-force acts with no
+    current edition were pdf_only rows retired as 'xml_url is not a
+    Lexwork version URL' because the URL pattern read the number as
+    [^/]+. The host serves the version (id 2644) and its PDF."""
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number) VALUES "
+                 "(2, 'https://gesetze.gl.ch/app/de/texts_of_law/VII A/1/6', 'GL', 'VII A/1/6')")
+    gl = conn.execute(
+        "INSERT INTO ch_act_version (act_id, eli_consolidation_uri, lang, date_applicability, "
+        "xml_url, source, stage, attempts, last_error, failed_stage) VALUES (2, "
+        "'https://gesetze.gl.ch/app/de/texts_of_law/VII A/1/6/versions/2644#de', 'de', '2025-05-05', "
+        "'https://gesetze.gl.ch/api/de/texts_of_law/VII A/1/6/versions/2644/show_as_json', "
+        "'lexwork', 'failed', 1, 'pdf_only: version has no structured document, PDF only', "
+        "'discovered') RETURNING version_id").fetchone()[0]
+
+    tols = []
+
+    def gl_host(request):
+        tols.append(str(request.url))
+        assert "texts_of_law/VII%20A/1/6" in str(request.url)
+        return httpx.Response(200, content=json.dumps({"text_of_law": {
+            "systematic_number": "VII A/1/6",
+            "current_version": {"id": 2644, "structured_document_id": None},
+            "old_versions": [], "future_versions": []}}).encode())
+
+    report = _run(settings, gl_host)
+    assert report.unknown_url == 0
+    assert report.requeued_pdf == 1 and report.acts_fetched == 1
+    assert _state(conn, gl) == ("lexwork_pdf", "discovered", 0, None,
+                                "https://gesetze.gl.ch/api/de/versions/2644/pdf_file")

@@ -51,8 +51,14 @@ from . import cantonal_fetch_stage
 
 log = logging.getLogger(__name__)
 
+# The systematic number is (.+), not [^/]+: GL numbers its acts with
+# slashes ('VII A/1/6'), and reading the number as one path segment made
+# every GL pdf_only row an 'xml_url is not a Lexwork version URL' -- all
+# seven GL in-force acts with no current edition on prod 2026-08-31 were
+# exactly that. The greedy match is safe because '/versions/<digits>/
+# show_as_json' anchors the tail.
 _VERSION_URL = re.compile(
-    r"^https://([^/]+)/api/[a-z]{2}/texts_of_law/([^/]+)/versions/(\d+)/show_as_json$")
+    r"^https://([^/]+)/api/[a-z]{2}/texts_of_law/(.+)/versions/(\d+)/show_as_json$")
 _BY_HOST = {c.host: c for c in cantons.LEXWORK.values()}
 
 
