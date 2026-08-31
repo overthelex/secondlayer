@@ -26,10 +26,12 @@ fields on every era):
   * No decision date for a Nachtrag. The edition page's Erlassdatum is the
     SERIES' enactment date, repeated verbatim on every edition (101/129 of
     2024 says 27.02.2005). date_decision is therefore null -- except where
-    the edition's Erlassdatum differs from its predecessor's, which is a
-    re-enactment (101/051: the 2005 constitution replacing the 1869 one),
-    and there the new Erlassdatum IS the decision date of the amending
-    (total-revision) act.
+    the edition's Erlassdatum is strictly later than any seen so far in
+    the act, which is a re-enactment (101/051: the 2005 constitution
+    replacing the 1869 one), and there the new Erlassdatum IS the decision
+    date of the amending (total-revision) act. Strictly later, not merely
+    different: 631.41 interleaves the 1958 and 1994 series' dates across
+    008a/008b/023.
   * No per-article modification table. Article-level linkage is the diff
     stage's job (ch_act_change, computed between consecutive parsed
     editions); the linkage here is edition-level ONLY:
@@ -73,8 +75,8 @@ class AmendReport:
     documents: int = 0
     # Editions skipped as the act's original enactment, one per act walked.
     first_editions: int = 0
-    # Successor editions whose Erlassdatum differs from their predecessor's:
-    # a re-enactment, the one case where date_decision is known.
+    # Successor editions whose Erlassdatum is strictly later than any seen
+    # so far: a re-enactment, the one case where date_decision is known.
     reenactments: int = 0
     # Documents a previous run wrote for an edition this pass no longer
     # produces -- deleted, same argument as diff_stage's _CLEAR_CHANGES.
@@ -166,11 +168,11 @@ def _one_act(conn, act_id: int, sr_number: str, metadata: dict | None,
 
     kept: list[int] = []
     with conn.transaction():
-        previous_no = None
+        latest_enactment: str | None = None
         for index, (_, no) in enumerate(ordered):
             if index == 0:
                 report.first_editions += 1
-                previous_no = no
+                latest_enactment = (editions[no] or {}).get("enactment")
                 continue
             edition = editions[no] or {}
             version = versions.get(no)
@@ -186,9 +188,16 @@ def _one_act(conn, act_id: int, sr_number: str, metadata: dict | None,
                 date_publication, date_source = None, None
                 report.date_missing += 1
             enactment = edition.get("enactment")
-            previous_enactment = (editions.get(previous_no) or {}).get("enactment")
-            reenactment = bool(enactment and previous_enactment
-                               and enactment != previous_enactment)
+            # A re-enactment is an edition whose Erlassdatum is LATER than
+            # any seen so far in the series -- strictly later, not merely
+            # different: 631.41 interleaves 1958 and 1994 dates across
+            # 008a/008b/023 (the correction 008b carries the OLD series'
+            # date), and "differs from the predecessor" would mint three
+            # re-enactments there where the collection has one.
+            reenactment = bool(enactment and latest_enactment
+                               and enactment > latest_enactment)
+            if enactment and (latest_enactment is None or enactment > latest_enactment):
+                latest_enactment = enactment
             if reenactment:
                 report.reenactments += 1
             kind = edition.get("kind")
@@ -219,7 +228,6 @@ def _one_act(conn, act_id: int, sr_number: str, metadata: dict | None,
                 }, ensure_ascii=False),
             })
             report.documents += 1
-            previous_no = no
         stale = conn.execute(_CLEAR, (JURISDICTION, act_id, kept or [-1])).fetchall()
     report.orphaned += len(stale)
     report.acts += 1

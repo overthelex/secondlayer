@@ -248,3 +248,23 @@ def test_gate_f_zh_amendment_counters_become_nonzero(conn, settings):
         "WHERE d.jurisdiction = 'ZH'").fetchone()["n"]
     assert linked == diffed.changes
     assert row["provenance_rows"] == 0
+
+
+def test_interleaved_series_dates_mint_one_reenactment_not_three(conn, settings):
+    """631.41's shape: the correction 008b carries the OLD series'
+    Erlassdatum between two 1994-series editions. A re-enactment is an
+    Erlassdatum strictly later than any seen so far, so only 008a is one."""
+    act = _act(conn, "631.41", {
+        "000": _edition("p0", "html", "u0", "T", "1958-11-10", None, None),
+        "008": _edition("p8", "html", "u8", "T", "1958-11-10", None, None),
+        "008a": _edition("p8a", "html", "u8a", "T", "1994-02-02", None, None),
+        "008b": _edition("p8b", "html", "u8b", "T", "1958-11-10", None, None),
+        "023": _edition("p23", "pdf", "u23.pdf", "T", "1994-02-02", None, None),
+    })
+    report = zh_amend_stage.run(settings)
+    docs = {d["number"]: d for d in _docs(conn, act)}
+    assert set(docs) == {"008", "008a", "008b", "023"}
+    assert docs["008a"]["date_decision"] == D(1994, 2, 2)
+    assert docs["008b"]["date_decision"] is None
+    assert docs["023"]["date_decision"] is None
+    assert report.reenactments == 1
