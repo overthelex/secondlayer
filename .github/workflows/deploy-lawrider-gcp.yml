@@ -119,7 +119,12 @@ jobs:
           echo "deploy OK"
 
   migrate:
-    if: github.event_name == 'workflow_dispatch' && inputs.migrate
+    # always(): the first deploy on an empty database fails by design —
+    # migrations cannot bootstrap from zero (they assume tables created
+    # outside them, e.g. spain_eurlex_legislation in migration 121). The
+    # restore this job performs is exactly what unblocks deploy, so it
+    # must run even when the deploy job failed.
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.migrate
     needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 350
