@@ -8,12 +8,11 @@ import { WebAPIJsonLd } from '../../components/seo/WebAPIJsonLd';
    ================================================================ */
 
 const API_BASE = 'https://platform.legal.org.ua/api/tools';
-/** Streamable HTTP — канонічний транспорт, куратований набір із 28 інструментів. */
+/**
+ * Єдиний MCP-ендпоінт (Streamable HTTP, куратований набір). Кількість інструментів
+ * не хардкодимо: канонічне джерело — tools/list цього ендпоінта.
+ */
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
-/** Legacy SSE — той самий куратований набір, для клієнтів без Streamable HTTP. */
-const MCP_SSE_URL = 'https://mcp.legal.org.ua/sse';
-/** Повний набір інструментів через MCP (для власних інтеграцій). */
-const MCP_FULL_URL = 'https://mcp.legal.org.ua/api/v1/mcp';
 
 /** Кількість інструментів за сервісами — звірено з GET /api/tools, 20.08.2026. */
 const TOOL_COUNTS = { total: 124, backend: 90, rada: 5, openreyestr: 29 };
@@ -268,7 +267,7 @@ export function DeveloperDocsPage() {
 
   useDocumentMeta({
     title: `LEX AI API — документація MCP сервера | ${TOOL_COUNTS.total} юридичних інструментів`,
-    description: `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${TOOL_COUNTS.total} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, due diligence. REST API, MCP Streamable HTTP та SSE.`,
+    description: `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${TOOL_COUNTS.total} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, due diligence. REST API та MCP Streamable HTTP.`,
     ogTitle: 'LEX AI API — MCP сервер для юридичного аналізу',
     ogDescription: `Підключіть Claude, Cursor або ChatGPT до ${TOOL_COUNTS.total} інструментів юридичного аналізу через MCP. Судова практика, законодавство, реєстри України.`,
     ogImage: 'https://legal.org.ua/og-image.png',
@@ -306,7 +305,7 @@ export function DeveloperDocsPage() {
     <div ref={contentRef} className="flex-1 h-full overflow-y-auto">
       <WebAPIJsonLd
         name="LEX AI MCP Server"
-        description={`MCP сервер для юридичного аналізу: ${TOOL_COUNTS.total} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, due diligence. Підключається через Streamable HTTP або SSE до Claude Desktop, Cursor, VS Code, ChatGPT.`}
+        description={`MCP сервер для юридичного аналізу: ${TOOL_COUNTS.total} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, due diligence. Підключається через MCP Streamable HTTP до Claude Desktop, Cursor, VS Code, ChatGPT.`}
         url={MCP_HTTP_URL}
         documentationUrl="https://legal.org.ua/developer/docs"
         provider={{ name: "SecondLayer", url: "https://legal.org.ua" }}
@@ -443,17 +442,7 @@ function OverviewSection() {
           <tr className="border-b border-claude-border/50">
             <Td>MCP Streamable HTTP</Td>
             <Td><Code>{MCP_HTTP_URL}</Code></Td>
-            <Td>Claude, Cursor, VS Code. Куратований набір із 28 інструментів</Td>
-          </tr>
-          <tr className="border-b border-claude-border/50">
-            <Td>MCP SSE (legacy)</Td>
-            <Td><Code>{MCP_SSE_URL}</Code></Td>
-            <Td>Клієнти без підтримки Streamable HTTP. Той самий набір із 28 інструментів</Td>
-          </tr>
-          <tr className="border-b border-claude-border/50">
-            <Td>MCP — повний набір</Td>
-            <Td><Code>{MCP_FULL_URL}</Code></Td>
-            <Td>Власні інтеграції, яким потрібні всі {TOOL_COUNTS.total} інструментів</Td>
+            <Td>Claude, Cursor, VS Code, ChatGPT. Куратований набір інструментів</Td>
           </tr>
         </tbody>
       </table>
@@ -537,8 +526,6 @@ function GettingStartedSection() {
             <EndpointTableRow method="POST" path="/api/tools/batch" desc="Пакетне виконання" />
             <EndpointTableRow method="GET" path="/api/tools" desc="Список доступних інструментів зі схемами параметрів" />
             <EndpointTableRow method="POST" path="/api/v2/mcp" desc="MCP Streamable HTTP — куратований набір" />
-            <EndpointTableRow method="POST" path="/api/v1/mcp" desc="MCP Streamable HTTP — повний набір" />
-            <EndpointTableRow method="GET" path="/sse" desc="MCP SSE (legacy транспорт)" />
             <EndpointTableRow method="GET" path="/health" desc="Перевірка стану сервісу" />
           </tbody>
         </table>
@@ -771,35 +758,31 @@ function MCPClientsSection() {
   }
 }`;
 
-  const mcpConfigSse = `{
-  "mcpServers": {
-    "secondlayer": {
-      "type": "sse",
-      "url": "${MCP_SSE_URL}",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_TOKEN"
-      }
-    }
-  }
-}`;
-
   return (
     <section id="mcp-clients" data-section>
       <h1 className="text-[24px] font-bold text-claude-text tracking-tight">MCP клієнти</h1>
       <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
-        LEX AI підтримує Streamable HTTP (канонічний транспорт) та SSE для старіших клієнтів.
+        Єдиний MCP-ендпоінт &mdash; <Code>{MCP_HTTP_URL}</Code> (Streamable HTTP).
         Згенеруйте токен у <a href="/profile" className="text-claude-accent hover:underline">Профілі &rarr; MCP Access Tokens</a>.
       </p>
       <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
-        Через MCP клієнт отримує куратований набір із 28 інструментів: законодавство (6),
-        ЄДРСР (9), <Code>search_registry</Code> і державні реєстри OpenReyestr (12).
-        Повний набір із {TOOL_COUNTS.total} інструментів &mdash; через REST або <Code>{MCP_FULL_URL}</Code>.
+        Через MCP клієнт отримує куратований набір інструментів: законодавство і повний корпус
+        НПА, судова практика ЄДРСР, <Code>search_registry</Code> та державні реєстри OpenReyestr,
+        відкриті дані, інтелектуальна власність, парламентські дані, швейцарський корпус
+        (<Code>ch_*</Code>). Актуальний перелік повертає
+        сам ендпоінт (<Code>tools/list</Code>). Повний набір інструментів &mdash; через REST.
       </p>
 
       <div id="mcp-claude-code" data-section className="mt-8">
         <h2 className="text-[17px] font-semibold text-claude-text">Claude Code</h2>
         <p className="mt-2 text-[13px] text-claude-subtext">
-          Додайте до <Code>~/.claude/settings.json</Code> або <Code>.mcp.json</Code> в корені проєкту:
+          Одна команда в терміналі:
+        </p>
+        <CodeBlock lang="bash" code={`claude mcp add --transport http secondlayer \\
+  ${MCP_HTTP_URL} \\
+  --header "Authorization: Bearer YOUR_API_TOKEN"`} />
+        <p className="mt-2 text-[13px] text-claude-subtext">
+          Або збережіть як <Code>.mcp.json</Code> в корені проєкту:
         </p>
         <CodeBlock lang="json" code={mcpConfig} />
         <p className="mt-2 text-[12px] text-zinc-400">
@@ -834,68 +817,13 @@ function MCPClientsSection() {
       <div id="mcp-chatgpt" data-section className="mt-8">
         <h2 className="text-[17px] font-semibold text-claude-text">ChatGPT</h2>
         <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
-          ChatGPT підтримує MCP через SSE транспорт (Plus/Team/Enterprise).
+          ChatGPT підтримує MCP-конектори у платних планах (Plus/Team/Enterprise).
         </p>
         <ol className="mt-3 text-[13px] text-claude-subtext space-y-2 list-decimal list-inside">
-          <li>Відкрийте <Code>Settings &rarr; Features &rarr; MCP Servers &rarr; Add</Code></li>
-          <li>Server URL: <Code>{MCP_SSE_URL}</Code></li>
+          <li>Відкрийте <Code>Settings &rarr; Connectors &rarr; Add</Code></li>
+          <li>Server URL: <Code>{MCP_HTTP_URL}</Code></li>
           <li>Authorization header: <Code>Bearer YOUR_API_TOKEN</Code></li>
         </ol>
-      </div>
-
-      <div id="mcp-continue" data-section className="mt-8">
-        <h2 className="text-[17px] font-semibold text-claude-text">Continue.dev</h2>
-        <p className="mt-2 text-[13px] text-claude-subtext">
-          Збережіть як <Code>.continue/mcpServers/secondlayer.yaml</Code>:
-        </p>
-        <CodeBlock lang="yaml" code={`name: secondlayer
-type: sse
-url: ${MCP_SSE_URL}
-
-headers:
-  Authorization: "Bearer YOUR_API_TOKEN"`} />
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-[17px] font-semibold text-claude-text">Клієнти без Streamable HTTP</h2>
-        <p className="mt-2 text-[13px] text-claude-subtext">
-          Якщо клієнт не підтримує <Code>type: &quot;http&quot;</Code>, використайте SSE:
-        </p>
-        <CodeBlock lang="json" code={mcpConfigSse} />
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-[17px] font-semibold text-claude-text">Версіонування</h2>
-        <table className="mt-3 w-full text-[13px]">
-          <thead>
-            <tr className="border-b border-claude-border text-left">
-              <Th>Ендпоінт</Th>
-              <Th>Транспорт</Th>
-              <Th>Набір</Th>
-              <Th>Статус</Th>
-            </tr>
-          </thead>
-          <tbody className="text-claude-subtext">
-            <tr className="border-b border-claude-border/50">
-              <Td><Code>{MCP_HTTP_URL}</Code></Td>
-              <Td>Streamable HTTP</Td>
-              <Td>28</Td>
-              <Td>Канонічний</Td>
-            </tr>
-            <tr className="border-b border-claude-border/50">
-              <Td><Code>{MCP_SSE_URL}</Code></Td>
-              <Td>SSE</Td>
-              <Td>28</Td>
-              <Td>Legacy, підтримується</Td>
-            </tr>
-            <tr className="border-b border-claude-border/50">
-              <Td><Code>{MCP_FULL_URL}</Code></Td>
-              <Td>Streamable HTTP</Td>
-              <Td>{TOOL_COUNTS.total}</Td>
-              <Td>Stable</Td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </section>
   );
