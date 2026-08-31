@@ -1708,7 +1708,7 @@ Italian only.
 |---|---|
 | `ti-acts` | the list -> `ch_act` (jurisdiction TI, `title_it`, `in_force` from LexFind) + one `discovered` edition per act. One request; idempotent, a rerun creates no second row and reopens an edition only when LexFind's date moved |
 | `ti-fetch` | the flat page into `akn_xml` (+ audit copy `raw/ti_rl/{version_id}.html`), one request a second, sequential. The portal answers an unknown id with HTTP 200 and "L'atto normativo cercato non è presente!" -- that body fails the row with that reason (`not_present` in the report) |
-| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason |
+| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason. Amendment provenance from the footnotes -- see "Portal amendments" below |
 | `reports-cantonal TI` | Gate F on `source = 'ti_rl'` (it filters by `cantons.version_source`) |
 
 Backfill order on prod, supervised: `lexfind-registry TI` (if the registry is
@@ -1748,7 +1748,7 @@ rows share the `ch_act_version` queue under `source = 'sil'`):
 |---|---|
 | `sil-acts [canton]` | one TOC request per canton: `ch_act` (in force, `title_fr`, `metadata_json.platform = 'sil'`) and exactly one open `ch_act_version` per act (`lang fr`, stage `discovered`, `xml_url` = the page). `date_applicability` = `version_active_since` of LexFind's current version for the number (`sil_date_source: lexfind` in the act's metadata) or today (`run`). Idempotent: an act with an open sil version keeps it |
 | `sil-fetch [canton]` | the page, decoded from its declared charset, into `akn_xml` (+ bytes under `raw/sil/{version_id}.htm`); 0.5 s between requests, `CHPIPE_CANTONAL_PER_HOST` in flight. A 404 retires the row at once with the URL in `last_error` |
-| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). No provenance rows (SIL has no structured modification table) |
+| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). Amendment provenance from the notes (GE's modification-table rows, NE's footnote prose) -- see "Portal amendments" below |
 | `reports-cantonal GE` / `NE` | Gate F, source filter from the canton's platform; GE and NE are in the default list |
 
 Backfill on prod, supervised, in this order (measured on the live smoke
@@ -1773,6 +1773,45 @@ Failure reasons worth knowing: `no_articles` is an act written without
 listed in Gate F, the text is not lost (it is in `akn_xml`), but there are
 no article rows; `404: act page gone` is a TOC entry the host does not
 serve, compare against the TOC of the day.
+
+## Portal amendments (GE, NE, TI)
+
+The SIL and Raccolta platforms publish no change-document index, but every
+page carries its amendment history in the notes the parsers already
+resolve onto each article, and `chpipe/portal_amendments.py` reads them
+(grammar and sample rates in its docstring; measured 2026-08-31 on 45
+random parsed prod pages):
+
+  * GE: one note per modification-table row, `"{body} | {adoption} |
+    {vigueur}"`. The table names no amending act, so the adoption date as
+    printed is the reference; the action (`n.`/`n.t.`/`a.` = inserted /
+    amended / repealed) is resolved per article from the body's group
+    lists. 137/137 sampled notes gave a full (decision, in-force, ref)
+    triple.
+  * NE: `"Teneur selon L du 5 novembre 2013 (FO 2013 N° 47) avec effet au
+    1er janvier 2014"`, several events per note; the reference is the
+    Feuille officielle issue. 139/168 notes yielded events (the rest are
+    `RS`/`RSN`/`RLN` cross-references, correctly nothing).
+  * TI: `"Art. modificato dal R 10.11.2021; in vigore dal 12.11.2021 -
+    BU 2021, 328."`; the reference is the Bollettino ufficiale page, and
+    trailing `precedenti modifiche:` refs become ref-only events. 137/152
+    notes yielded events.
+
+One parsed event = one `ch_article_provenance` row (raw_note = the whole
+original note); the distinct references of an act = its
+`ch_act_change_document` rows, `source_id` a stable 63-bit hash of the
+reference (the portals have no numeric ids), `date_publication` NULL
+(an FO issue or BU page says where, never when). Written by `sil-parse` /
+`ti-parse` in the same transaction as the articles, and recoverable for
+editions parsed before this existed without refetching a page:
+
+    CHPIPE_REPROVENANCE=1 ./run-stage.sh sil-parse       # or one canton: ... GE
+    CHPIPE_REPROVENANCE=1 ./run-stage.sh ti-parse
+    ./run-stage.sh reports-cantonal GE                   # amendments line now non-zero
+
+The rebuild touches only provenance and change documents -- articles,
+`full_text` and dates stay exactly as parsed -- and converges: rows are
+replaced per version, documents upserted on the stable hash.
 
 ## PDF editions (Lexwork PDF-only versions, LexFind PDFs)
 

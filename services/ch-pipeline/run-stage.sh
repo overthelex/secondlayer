@@ -77,7 +77,10 @@ case "$STAGE" in
   lexfind-registry|lexfind-versions|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal|sil-acts|sil-fetch|sil-parse|lexwork-pdf-requeue|pdf-text)
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
-    # The sil-* stages accept GE, NE or nothing (both). pdf-text and
+    # The sil-* stages accept GE, NE or nothing (both); sil-parse also
+    # reads CHPIPE_REPROVENANCE=1 (rewrite provenance rows and change
+    # documents for the already-parsed editions from their stored pages,
+    # no download -- ti-parse reads the same flag). pdf-text and
     # lexwork-pdf-requeue take one canton or none; pdf-text also reads
     # CHPIPE_SOURCE (lexwork_pdf|lexfind), CHPIPE_RESPLIT=1 (re-split the
     # article-less parsed rows from akn_xml, no download) and CHPIPE_ANNEX=1
@@ -90,7 +93,8 @@ case "$STAGE" in
   ti-acts|ti-fetch|ti-parse)
     # Ticino's own text platform (chpipe/ti_rl.py): TI only, so no canton
     # argument; ti-fetch and ti-parse are bounded by CHPIPE_LIMIT like the
-    # other queue stages.
+    # other queue stages, and ti-parse reads CHPIPE_REPROVENANCE=1 (see
+    # sil-parse above).
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
