@@ -96,6 +96,17 @@ def reset_legislation_schema(conn) -> None:
         conn.execute(migration.read_text())
 
 
+MIGRATION_207 = _REPO_ROOT / "mcp_backend/src/migrations/207_ch_decision_index.sql"
+
+
+def apply_migration_207(conn) -> None:
+    """199 and then 207 -- decision_index_stage reads ch_case_citations (199)
+    and writes ch_decision_index (207), so its tests want both, in order.
+    Idempotent for the same reasons apply_migration_199() is."""
+    apply_migration_199(conn)
+    conn.execute(MIGRATION_207.read_text())
+
+
 def apply_migration_200(conn) -> None:
     """199 and then 200 -- the pair the citation stages actually run against.
 

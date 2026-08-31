@@ -134,14 +134,15 @@ def test_index_with_neither_walks_every_spider(monkeypatch):
 
 from chpipe import throttle
 from chpipe.stages import (acts_stage, as_bbl_stage, basic_act_stage,
-                           citations_resolve_stage, diff_stage, fetch_xml_stage,
+                           citations_resolve_stage, decision_index_stage,
+                           diff_stage, fetch_xml_stage,
                            parse_akn_stage, project_legacy_stage,
                            provenance_stage, versions_stage)
 
 LEGISLATION_STAGES = [acts_stage, versions_stage, fetch_xml_stage,
                       parse_akn_stage, diff_stage, project_legacy_stage,
                       provenance_stage, as_bbl_stage, basic_act_stage,
-                      citations_resolve_stage]
+                      citations_resolve_stage, decision_index_stage]
 
 _LEG_REPORT = {
     acts_stage: lambda: acts_stage.ActsReport(),
@@ -154,6 +155,7 @@ _LEG_REPORT = {
     as_bbl_stage: lambda: as_bbl_stage.AsReport(),
     basic_act_stage: lambda: basic_act_stage.LinkReport(),
     citations_resolve_stage: lambda: citations_resolve_stage.ResolveReport(),
+    decision_index_stage: lambda: decision_index_stage.DecisionIndexReport(),
 }
 
 # Spec section 8. fetch-xml, acts and versions are network walks that still
@@ -178,6 +180,9 @@ EXPECTED_NICE = {
     as_bbl_stage: throttle.NICE_IO,
     basic_act_stage: throttle.NICE_IO,
     citations_resolve_stage: throttle.NICE_IO,
+    # decision-index is two set-based statements executed and waited on --
+    # the same shape as citations-resolve, so the same NICE_IO.
+    decision_index_stage: throttle.NICE_IO,
 }
 
 
@@ -387,7 +392,7 @@ def _accepted_stage_names() -> set[str]:
 
 def test_run_stage_accepts_every_stage_this_package_has():
     expected = {"index", "fetch", "extract", "ocr", "load",
-                "aliases", "citations", "citations-resolve",
+                "aliases", "citations", "citations-resolve", "decision-index",
                 "acts", "versions", "fetch-xml", "fedlex-pdf-text", "fedlex-pdf-ocr",
                 "parse-akn", "diff",
                 "project-legacy", "provenance", "as-bbl", "basic-act",
@@ -456,6 +461,11 @@ def _stub_resolve(monkeypatch, calls=None):
     monkeypatch.setattr(
         delta_module.aliases_stage, "run",
         lambda settings: delta_module.aliases_stage.AliasReport())
+    # decision_index_stage is the tail step after the resolve pass -- same
+    # reason: left real, it opens a connection against the FAKE dsn.
+    monkeypatch.setattr(
+        delta_module.decision_index_stage, "run",
+        lambda settings: delta_module.decision_index_stage.DecisionIndexReport())
 
 
 def _stub_registries(monkeypatch, calls=None):

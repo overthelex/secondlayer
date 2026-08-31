@@ -33,7 +33,8 @@ import pytest
 from chpipe import delta
 from chpipe.config import Settings
 from chpipe.stages import (acts_stage, aliases_stage, citations_resolve_stage,
-                           citations_stage, diff_stage, extract_stage,
+                           citations_stage, decision_index_stage, diff_stage,
+                           extract_stage,
                            fedlex_pdf_text_stage, fetch_stage, fetch_xml_stage,
                            index_stage, load_stage, parse_akn_stage,
                            project_legacy_stage, provenance_stage,
@@ -1222,7 +1223,12 @@ def _stub_registries(monkeypatch, order=None):
 
 def _stub_alias_and_resolve(monkeypatch, order: list):
     """Both tail stages stubbed onto one order-preserving list, so a test can
-    assert not just that each ran once but that the alias seed ran FIRST."""
+    assert not just that each ran once but that the alias seed ran FIRST.
+
+    decision_index_stage is stubbed too (silently -- the existing order
+    assertions predate it): it runs in the same tail, and left real it would
+    try the fake DSN these tests set. _stub_decision_index() replaces this
+    silent stub in the tests that assert on ITS position."""
     monkeypatch.setattr(
         aliases_stage, "run",
         lambda settings: order.append("aliases") or aliases_stage.AliasReport())
@@ -1230,6 +1236,16 @@ def _stub_alias_and_resolve(monkeypatch, order: list):
         citations_resolve_stage, "run",
         lambda settings, resolve_all=False: order.append("resolve") or
         citations_resolve_stage.ResolveReport())
+    monkeypatch.setattr(
+        decision_index_stage, "run",
+        lambda settings: decision_index_stage.DecisionIndexReport())
+
+
+def _stub_decision_index(monkeypatch, order: list):
+    monkeypatch.setattr(
+        decision_index_stage, "run",
+        lambda settings: order.append("decision-index") or
+        decision_index_stage.DecisionIndexReport())
 
 
 def test_main_runs_citations_resolve_exactly_once_after_both_halves(
@@ -1341,6 +1357,55 @@ def test_main_still_runs_citations_resolve_once_when_registries_fails(
         delta.main()
 
     assert order == ["aliases", "resolve"]
+
+
+def test_main_refreshes_the_decision_index_after_resolve(tmp_path, monkeypatch):
+    """decision_index_stage aggregates the to_ecli edges citations-resolve
+    has just written, so it belongs strictly AFTER the resolve pass: running
+    it first would compute tonight's index from yesterday's resolutions."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_decisions",
+                        lambda settings, fetcher_factory=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+    order = []
+    _stub_registries(monkeypatch)
+    _stub_alias_and_resolve(monkeypatch, order)
+    _stub_decision_index(monkeypatch, order)
+
+    delta.main()
+
+    assert order == ["aliases", "resolve", "decision-index"]
+
+
+def test_main_still_refreshes_the_index_when_resolve_fails(
+        tmp_path, monkeypatch):
+    """Same guard shape as every other tail step: a failing resolve pass is
+    logged and re-raised at the end, but whatever edges are ALREADY resolved
+    from earlier nights still deserve a correct index."""
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://u@h/db")
+    monkeypatch.setattr(delta, "run_cantonal",
+                        lambda settings, transport=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_decisions",
+                        lambda settings, fetcher_factory=None: delta.DeltaReport())
+    monkeypatch.setattr(delta, "run_legislation",
+                        lambda settings: delta.DeltaReport())
+    order = []
+    _stub_registries(monkeypatch)
+    _stub_alias_and_resolve(monkeypatch, order)
+    _stub_decision_index(monkeypatch, order)
+
+    def boom(settings, resolve_all=False):
+        raise RuntimeError("simulated resolve failure")
+
+    monkeypatch.setattr(citations_resolve_stage, "run", boom)
+
+    with pytest.raises(RuntimeError, match="simulated resolve failure"):
+        delta.main()
+
+    assert order == ["aliases", "decision-index"]
 
 
 # --- run_cantonal: composition, monkeypatched at the stage boundary ---
