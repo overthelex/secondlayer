@@ -1999,6 +1999,7 @@ carry. Everything was read out of the site's SPA bundle
 | `zh-acts` | enumerate every edition through the index JSON, fetch every edition page, upsert `ch_act` (jurisdiction `ZH`, `eli_work_uri` = `http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr={nr}`) and one `ch_act_version` per edition (`zhlex:{nr}/{version}`, lang `de`, source `zhlex`, stage `discovered`, `xml_url` = the edition's text link). `CHPIPE_ZH_ONLY=101,131.1` narrows to numbers |
 | `zh-fetch` | Domino HTML rendering (`xml_url` under `https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/`) into `akn_xml`, decoded at fetch time (the pages declare ISO-8859-1), audit copy `raw/zhlex/{version_id}.html`. PDF editions (`OpenAttachment?...file=...pdf`) are never claimed here; the shared PDF path takes them by the same prefix rule |
 | `zh-parse` | `§`- / `Art.`-numbered articles (`e_id` `par_7` / `art_7`), section headings as marginal notes, page footnotes as `notes`, `full_text` |
+| `zh-amend` | one `ch_act_change_document` per Nachtrag edition after the act's first (jurisdiction `ZH`, `source_id` = numeric Nachtrag encoding: `129` → 12900, `008b` → 802, `number` = the Nachtrag number). Pure DB pass over what `zh-acts` stored (`metadata_json.editions` + the version rows), no network. `date_publication` = Publikationsdatum, falling back to the derived `date_applicability` (`metadata_json.date_source` says which); `date_decision` only at a re-enactment (the edition's Erlassdatum is strictly later than any seen so far in the act -- 101/051; merely *different* is not enough, 631.41 interleaves two series' dates), because within a series the page repeats the series' Erlassdatum. ZH prints no OS reference on any era of edition page (verified live 2026-08-31), so `os_ref` is an explicit null. Article-level linkage is `diff`'s `ch_act_change`; the document names its edition in `metadata_json.version_id`/`.consolidation` (edition-level linkage -- ZH publishes no per-article modification table, so no `ch_article_provenance` rows are written). `CHPIPE_ZH_ONLY` narrows to numbers |
 | `reports-cantonal ZH` | Gate F on source `zhlex` |
 
 The index (`.../lawcollectionsearch_312548694.zhweb-zhlex-ls.zhweb-cache.json`)
@@ -2033,10 +2034,13 @@ Backfill order, supervised, all three at 2 req/s to zh.ch and notes.zh.ch
 together (the client paces the whole process): `lexfind-registry ZH`,
 `zh-acts` (~400 index requests + ~5,100 edition pages: about 45 minutes),
 `zh-fetch` (the HTML editions: the loose-leaf ones before ~2005, a few
-minutes per thousand), `zh-parse`, `diff` (de), `reports-cantonal ZH`. Weekly
-re-walk alongside the cantonal cron:
+minutes per thousand), `zh-parse`, `diff` (de), `zh-amend` (a pure DB pass,
+under a minute), `reports-cantonal ZH`. Weekly re-walk alongside the
+cantonal cron (`zh-amend` after `zh-acts`, so a new Nachtrag gets its
+change document the same morning):
 
     0 6 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-acts
+    0 7 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-amend
 
 Counters worth knowing: `capped_slices` (a day+chapter slice still over
 150 rows: rows past the cap were not enumerated, zero on the whole
