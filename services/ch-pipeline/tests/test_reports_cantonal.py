@@ -81,7 +81,7 @@ def conn(settings):
         g = _act(c, "GE", "A 1 01")
         _version(c, g, "2013-06-01", lang="fr", source="sil")
         _version(c, g, "2013-06-02", lang="fr", source="sil", stage="failed",
-                 error="no_articles: prose without an Art. heading")
+                 error="short_text: 12 chars, 0 article(s)")
         _version(c, g, "2013-06-03", lang="fr", source="lexwork")
         _registry(c, 4, "GE", "A 1 01", ["19.05.1815", "01.06.2013"])
         _registry(c, 5, "GE", "A 1 02", ["01.01.1900"], active=False)
@@ -159,7 +159,7 @@ def test_a_sil_canton_is_filtered_on_its_own_source(conn):
     assert row["versions_lexfind"] == 3
     assert row["date_matches"] == 1 and row["date_mismatches"] == 0
     assert row["parsed"] == 1 and row["failed"] == 1 and row["pending"] == 0
-    assert row["failed_by_reason"] == {"no_articles: prose without an Art. heading": 1}
+    assert row["failed_by_reason"] == {"short_text: 12 chars, 0 article(s)": 1}
     text = reports_cantonal.format_gate_f([row])
     assert "GE: acts sil 1 (in force 1) / lexfind 2 (active 1)" in text and "editions sil 2 / lexfind 3" in text
 

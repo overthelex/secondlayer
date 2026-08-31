@@ -80,18 +80,22 @@ def test_a_run_dated_version_takes_the_date_printed_on_the_page(conn, settings):
                         (ge,)).fetchone()[0] == datetime.date(2026, 2, 27), "a lexfind date is not touched"
 
 
-def test_short_pages_and_pages_without_articles_are_retired_with_a_reason(conn, settings):
+def test_short_pages_retire_and_prose_pages_parse_with_zero_articles(conn, settings):
+    """The F3/K9 audit (2026-08-31): 27 in-force GE/NE acts are published as
+    prose without an Art. heading. Such a page keeps its text (parsed,
+    article_count 0, the PDF path's rule); only a near-empty page retires."""
     short = _fetched(conn, page="<html><head><title>x</title></head><body><p>Texte en vigueur</p></body></html>",
                      date="2020-01-01")
     prose = _fetched(conn, page="<html><head><title>x</title></head><body>"
                      + "".join(f"<p class=Texte>Paragraphe {i} sans article, du texte suivi.</p>" for i in range(20))
                      + "</body></html>", date="2020-01-02")
     report = sil_parse_stage.run(settings)
-    assert report.failed == 2 and report.short_text == 1 and report.no_articles == 1 and report.parsed == 0
-    reasons = dict(conn.execute("SELECT version_id, last_error FROM ch_act_version").fetchall())
-    assert reasons[short].startswith("short_text: ") and reasons[prose].startswith("no_articles: ")
-    assert conn.execute("SELECT count(*) FROM ch_act_version WHERE stage='failed' AND failed_stage='fetched'"
-                        ).fetchone()[0] == 2
+    assert report.failed == 1 and report.short_text == 1 and report.no_articles == 1 and report.parsed == 1
+    stage_of = dict(conn.execute("SELECT version_id, stage FROM ch_act_version").fetchall())
+    assert stage_of[short] == "failed" and stage_of[prose] == "parsed"
+    text, count = conn.execute("SELECT full_text, article_count FROM ch_act_version "
+                               "WHERE version_id=%s", (prose,)).fetchone()
+    assert "sans article" in text and count == 0
 
 
 def test_reparse_replaces_articles(conn, settings):
