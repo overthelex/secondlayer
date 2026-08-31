@@ -184,3 +184,25 @@ def test_zurich_is_compared_on_its_own_source(conn):
     assert row["versions_lexwork"] == 3 and row["versions_lexfind"] == 2
     assert row["date_matches"] == 1 and row["date_mismatches"] == 1, "1869 predates LexFind's history"
     assert row["parsed"] == 2 and row["pending"] == 1
+
+
+def test_in_force_no_current_counts_in_force_acts_with_no_parsed_edition_covering_today(conn):
+    """The F3/K9 gap counter (prod 2026-08-31: 55 cantonal acts): in-force
+    acts with zero parsed editions whose [date_applicability,
+    date_end_applicability] contains today, any language, any source."""
+    row = reports_cantonal.gate_f(conn, "BE")[0]
+    assert row["in_force_no_current"] == 1, "152.01's only edition is 'discovered'; 101.1 is covered"
+    # SH: a future-only act counts, a closed-edition act counts, an
+    # abrogated act and a covered act do not.
+    future = _act(conn, "SH", "173.201")
+    _version(conn, future, "2099-10-01")
+    closed = _act(conn, "SH", "200.1")
+    conn.execute("UPDATE ch_act_version SET date_end_applicability = '2020-01-01' "
+                 "WHERE version_id = %s", (_version(conn, closed, "2010-01-01"),))
+    abrogated = _act(conn, "SH", "300.1", in_force=False)
+    _version(conn, abrogated, "2010-01-01", stage="failed", error="x")
+    covered = _act(conn, "SH", "400.1")
+    _version(conn, covered, "2010-01-01")
+    row = reports_cantonal.gate_f(conn, "SH")[0]
+    assert row["in_force_no_current"] == 2
+    assert "in_force_no_current 2" in reports_cantonal.format_gate_f([row])
