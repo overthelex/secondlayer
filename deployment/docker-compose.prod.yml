@@ -560,6 +560,8 @@ services:
       BEDROCK_FALLBACK_REGIONS: ${BEDROCK_FALLBACK_REGIONS:-}
       BEDROCK_HEDGE_MS: ${BEDROCK_HEDGE_MS:-}
       CHAT_PARALLEL_SEED_MIN: ${CHAT_PARALLEL_SEED_MIN:-}
+      CHAT_DEEP_TIMEOUT_MS: ${CHAT_DEEP_TIMEOUT_MS:-}
+      CHAT_CAPPED_TIMEOUT_MS: ${CHAT_CAPPED_TIMEOUT_MS:-}
       VOYAGEAI_API_KEY: ${VOYAGEAI_API_KEY:-}
       VOYAGEAI_API_KEY_2: ${VOYAGEAI_API_KEY_2:-}
       VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
@@ -808,7 +810,7 @@ services:
       dockerfile: lexwebapp/Dockerfile
       args:
         - BUILD_ENV=production
-        - VITE_API_URL=https://legal.org.ua
+        - VITE_API_URL=${VITE_API_URL_PROD:-https://legal.org.ua}
         - VITE_API_KEY=${VITE_API_KEY_PROD:-REDACTED_SL_KEY_PROD}
         - VITE_ENABLE_SSE_STREAMING=true
         - VITE_ENABLE_ALL_MCP_TOOLS=true
@@ -855,7 +857,7 @@ services:
       dockerfile: platform/Dockerfile
       args:
         - BUILD_ENV=production
-        - VITE_API_URL=https://platform.legal.org.ua
+        - VITE_API_URL=${VITE_PLATFORM_API_URL_PROD:-https://platform.legal.org.ua}
         - GIT_SHA=${GIT_SHA:-unknown}
     image: platform-prod:latest
     container_name: platform-prod
@@ -1010,6 +1012,8 @@ services:
       BEDROCK_FALLBACK_REGIONS: ${BEDROCK_FALLBACK_REGIONS:-}
       BEDROCK_HEDGE_MS: ${BEDROCK_HEDGE_MS:-}
       CHAT_PARALLEL_SEED_MIN: ${CHAT_PARALLEL_SEED_MIN:-}
+      CHAT_DEEP_TIMEOUT_MS: ${CHAT_DEEP_TIMEOUT_MS:-}
+      CHAT_CAPPED_TIMEOUT_MS: ${CHAT_CAPPED_TIMEOUT_MS:-}
       VOYAGEAI_API_KEY: ${VOYAGEAI_API_KEY:-}
       VOYAGEAI_API_KEY_2: ${VOYAGEAI_API_KEY_2:-}
       VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
@@ -1476,7 +1480,10 @@ services:
     volumes:
       - ./prometheus/qdrant-edrsr-metrics-cache.js:/app/qdrant-edrsr-metrics-cache.js:ro
     environment:
-      UPSTREAM_URL: "http://10.88.0.6:6333/metrics"
+      # Follows QDRANT_EDRSR_URL so a move of the collection is one env change, not two.
+      # 10.88.0.6 was the big box; it is gone, and the cache served Prometheus a body that
+      # was 49 days stale while every panel looked healthy.
+      UPSTREAM_URL: "${QDRANT_EDRSR_URL:-http://10.88.0.2:6343}/metrics"
       QDRANT_EDRSR_API_KEY: "${QDRANT_EDRSR_API_KEY}"
       REFRESH_INTERVAL_MS: "120000"
       UPSTREAM_TIMEOUT_MS: "300000"

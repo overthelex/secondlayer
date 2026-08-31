@@ -41,11 +41,13 @@ describe('search_legal_precedents tool', () => {
     legislationTools = new LegislationTools(legislationService);
 
     // Initialize MCP API
+    // MCPQueryAPI no longer takes the sectionizer (mcp-query-api.ts:42) — passing it shifted
+    // every later argument by one, so embeddingService landed on patternStore and the suite
+    // failed to compile.
     mcpAPI = new MCPQueryAPI(
       queryPlanner,
       zoAdapter,
       zoAdapter,
-      sectionizer,
       embeddingService,
       patternStore,
       citationValidator,

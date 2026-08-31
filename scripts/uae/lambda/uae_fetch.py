@@ -95,11 +95,46 @@ VERDICT_URL = ("https://www.dc.gov.ae/PublicServices/VerdictPreview.aspx?"
                "lang=&DecisionNumber=%(decision_no)s&OpenedLitigationStage=%(stage)s")
 
 
+# The judgment always opens with the Basmala; everything before it is site
+# navigation, and everything from the loading widget on is the page footer.
+# The old greedy `<div class="...content...">(.*)</div>` swallowed both — about
+# 3.7k characters of identical chrome per document, ~29% of the corpus.
+BASMALA = "بِسْمِ"
+FOOTER = "جاري التحميل"
+
+
+def _strip_chrome(t):
+    i = t.find(BASMALA)
+    if i == -1:
+        i = t.find("باسم صاحب السمو")
+    if 0 < i < 8000:
+        t = t[i:]
+    j = t.rfind(FOOTER)
+    if j > 500:
+        t = t[:j]
+    return t.strip()
+
+
 def _text(doc):
+    """Judgment text from the ut_verdict container.
+
+    Case-SENSITIVE on the class: 'ut_VerdictWeb' is the small parties block and
+    appears earlier in the page. The old greedy
+    `<div class="...content...">(.*)</div>` swallowed the site nav and footer -
+    about 3.7k characters of identical chrome per document, ~29% of the corpus.
+    """
     t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", doc)
-    m = re.search(r'(?is)<div[^>]*class="[^"]*content[^"]*"[^>]*>(.*)</div>', t)
-    if m and len(m.group(1)) > 500:
-        t = m.group(1)
+    m = re.search(r'<div[^>]*class="[^"]*ut_verdict[\s"]', t)
+    if m:
+        start = t.find(">", m.start()) + 1
+        depth, end = 1, len(t)
+        for mm in re.finditer(r"<(/?)div\b", t[start:]):
+            depth += 1 if not mm.group(1) else -1
+            if depth == 0:
+                end = start + mm.start()
+                break
+        if end - start > 500:
+            t = t[start:end]
     t = re.sub(r"(?i)<br\s*/?>", "\n", t)
     t = re.sub(r"(?i)</(p|div|tr|li|h[1-6])>", "\n", t)
     t = re.sub(r"(?s)<[^>]+>", " ", t)
@@ -109,9 +144,7 @@ def _text(doc):
     t = t.replace("\x00", "").replace("\x01", " ").replace("\x02", " ")
     t = re.sub(r"[ \t]+", " ", t)
     t = re.sub(r"\n\s*\n+", "\n\n", t)
-    return t.strip()
-
-
+    return _strip_chrome(t.strip())
 
 
 def _dump_cookies(cj):
@@ -150,6 +183,9 @@ def lambda_handler(event, context):
                      ("Accept-Language", "ar,en;q=0.8")]
 
     if mode == "fetch":
+        for k, v in (event.get("headers") or {}).items():
+            op.addheaders = [(a, b) for a, b in op.addheaders if a.lower() != k.lower()]
+            op.addheaders.append((k, v))
         try:
             with op.open(event["url"], timeout=timeout) as r:
                 body = _read(r)
@@ -173,6 +209,38 @@ def lambda_handler(event, context):
             return {"ok": True, "count": len(out), "s3": _s3_put(event["s3_key"], out)}
         return {"ok": True, "count": len(out), "items": out}
 
+    if mode == "grab":
+        """Fetch a list of URLs and park each PDF in S3. Used for the UAE legislation
+        portal, where every law is at /ar/legislations/<id>/download and a missing id
+        answers 200 with a ~650 KB HTML shell instead of a 404."""
+        hdrs = {"Accept": "*/*", "Accept-Language": "ar-AE,ar;q=0.9",
+                "Referer": "https://uaelegislation.gov.ae/ar/legislations",
+                "Sec-Fetch-Dest": "document", "Sec-Fetch-Mode": "navigate",
+                "Upgrade-Insecure-Requests": "1"}
+        hdrs.update(event.get("headers") or {})
+        op.addheaders = [(k, v) for k, v in hdrs.items()] + [("User-Agent", UA)]
+        s3 = boto3.client("s3")
+        out = []
+        for it in event.get("items", []):
+            rec = {"id": it["id"]}
+            try:
+                req = urllib.request.Request(it["url"])
+                with op.open(req, timeout=timeout) as r:
+                    body = r.read()
+                if body[:4] == b"%PDF":
+                    key = "%s%s.pdf" % (event.get("s3_prefix", "leg/"), it["id"])
+                    s3.put_object(Bucket=BUCKET, Key=key, Body=body,
+                                  ContentType="application/pdf")
+                    rec.update(ok=True, kind="pdf", bytes=len(body), key=key)
+                else:
+                    rec.update(ok=True, kind="missing", bytes=len(body))
+            except Exception as e:  # noqa: BLE001
+                rec.update(ok=False, err="%s: %s" % (type(e).__name__, e))
+            out.append(rec)
+            time.sleep(float(event.get("delay", 0.2)))
+        found = sum(1 for r in out if r.get("kind") == "pdf")
+        return {"ok": True, "count": len(out), "pdfs": found, "items": out}
+
     stage = str(event.get("stage", "5"))
     pages = int(event.get("pages", 5))
     filters = {P + "wtUT_LitigationStageInput": stage,
@@ -191,6 +259,18 @@ def lambda_handler(event, context):
             return _read(r)
 
     resumed_at = None
+
+    def _attempt(fn, tries=4):
+        """Network calls here face abrupt TLS EOFs; one must not kill a chunk."""
+        last = None
+        for a in range(tries):
+            try:
+                return fn()
+            except Exception as e:  # noqa: BLE001
+                last = e
+                time.sleep(5 * (a + 1) ** 2)
+        raise last
+
     try:
         if event.get("resume_state_key"):
             st = _s3_get(event["resume_state_key"])
@@ -201,16 +281,18 @@ def lambda_handler(event, context):
             fields["__EVENTTARGET"] = st["next_target"][1]
             fields["__EVENTARGUMENT"] = ""
             fields["__AJAX"] = "1440,3200,%s,2400,300,0,0,700,2450," % st["next_target"][0]
-            raw = post(fields)
+            raw = _attempt(lambda: post(fields))
             inner = _unescape_partial(raw)
             view = (inner + "\n" + raw) if inner else raw
         else:
-            with op.open(LIST_URL, timeout=timeout) as r:
-                doc = _read(r)
+            def _fresh():
+                with op.open(LIST_URL, timeout=timeout) as r:
+                    return _read(r)
+            doc = _attempt(_fresh)
             f = _hidden(doc)
             f.update(filters)
             f[P + "wtUT_SearchButton"] = "بحث"
-            view = post(f)
+            view = _attempt(lambda: post(f))
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "phase": "search/resume",
                 "err": "%s: %s" % (type(e).__name__, e)}

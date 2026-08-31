@@ -13,6 +13,38 @@ import axios from 'axios';
 
 // ========================= Pure Functions =========================
 
+const KYIV_DATE = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Europe/Kyiv',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/**
+ * Render an EDRSR date as the calendar date the court actually stamped on the act.
+ *
+ * `adjudication_date` is a timestamptz holding Kyiv midnight, so a decision of
+ * 23.04.2026 is the instant 2026-04-22T21:00:00Z. Serialised straight to JSON it
+ * reaches the model as that UTC string, and every consumer reading the UTC
+ * calendar day is one day early — a report on 907/665/18 dated all six cited
+ * decisions to the day before the documents themselves (2026-08-13).
+ *
+ * Emitting `YYYY-MM-DD` in Kyiv removes the ambiguity instead of moving it:
+ * there is no time-of-day left to reinterpret downstream. Values that are
+ * already date-only pass through untouched, and anything unparseable is left
+ * exactly as it came rather than silently becoming a wrong date.
+ */
+export function formatCourtDate(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : KYIV_DATE.format(value);
+  }
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : KYIV_DATE.format(parsed);
+}
+
 /**
  * Parse JSON from LLM response, stripping markdown fences if present.
  * Handles: ```json {...} ```, ```{...}```, or raw JSON.
@@ -167,14 +199,158 @@ export function extractSnippets(fullText: string, query: string, limit: number):
 }
 
 /**
+ * Suffixes that actually occur in EDRSR `cause_num`, taken from a 3% sample of
+ * edrsr_case_index rather than guessed. The four procedural ones carry 99.9% of the
+ * volume — ц 112,049 / к 64,556 / п 61,022 / а 17,155 — and the rest is a long thin tail
+ * (С 748, г 561, Е 360, А 334, Ц 65, НМ 51, Б 45, ад 42, К 20, НА 20, б 17, АП 16, Д 10,
+ * НР 6, Н 3, н 3) that mostly belongs to older commercial and bankruptcy numbering.
+ *
+ * The tail is included because each entry costs one extra equality probe on a primary-key
+ * index and nothing else. Anything outside the set simply fails to resolve, and the caller
+ * keeps whatever it did before — this is a lookup shortcut, not a validation rule.
+ */
+const CAUSE_NUM_SUFFIXES = [
+  'ц', 'к', 'п', 'а',
+  'Ц', 'К', 'П', 'А',
+  'С', 'с', 'г', 'Г', 'е', 'Е', 'Б', 'б', 'Д', 'д', 'Н', 'н',
+  'НМ', 'НА', 'НР', 'АП', 'ад',
+];
+
+const HAS_SUFFIX_RE = /-[а-яіїєґА-ЯІЇЄҐ]+$/;
+
+/**
+ * A procedural suffix the caller typed, captured in group 1.
+ *
+ * Broader than HAS_SUFFIX_RE in one direction: candidate generation only ever produces
+ * Cyrillic suffixes, but the guard against swapping one has to recognise a suffix we would
+ * never generate — a Latin or otherwise unmeasured tail is still the caller saying which
+ * case they mean.
+ *
+ * Anchored to the modern digits/digits/year shape in the other direction, because a bare
+ * trailing "-token" is not always a suffix. Pre-2017 Supreme Court numbers put a hyphen in
+ * the middle of the identifier itself: "5-15кс12" would otherwise read as suffix "-15кс12"
+ * and then fail to match its own canonical spelling "5-15/12", which carries no suffix at
+ * all — so the guard would have blocked exactly the rewrite the VSU branch of
+ * generateCaseNumberVariations exists to perform.
+ */
+const ASKED_SUFFIX_RE = /^\d+\/\d+\/\d{2,4}(-[^/\s-]*[A-Za-zА-Яа-яІіЇїЄєҐґ][^/\s-]*)$/;
+
+/**
+ * Case-number spellings worth probing against the corpus — the variations above, plus a
+ * suffixed form of every unsuffixed one.
+ *
+ * generateCaseNumberVariations is deliberately asymmetric: it STRIPS a suffix but never
+ * adds one, so "369/6892/15-ц" degrades to "369/6892/15" while the reverse never happens.
+ * That is the direction that breaks in practice, because the chat model drops the suffix
+ * on its way to the tool and the bare number matches nothing.
+ *
+ * These are candidates, not answers. Roughly 1 base number in 700 carries two different
+ * suffixes (364 of 263,565 distinct bases in the same sample), and those are genuinely
+ * different cases — which is why resolveCauseNumber looks them up rather than passing the
+ * whole list to a `cause_num = ANY(...)` filter, where two unrelated cases would silently
+ * merge into one instance chain.
+ */
+export function generateCaseNumberCandidates(caseNumber: string): string[] {
+  const candidates = new Set<string>();
+  for (const variant of generateCaseNumberVariations(caseNumber)) {
+    candidates.add(variant);
+    if (!HAS_SUFFIX_RE.test(variant)) {
+      for (const suffix of CAUSE_NUM_SUFFIXES) candidates.add(`${variant}-${suffix}`);
+    }
+  }
+  return Array.from(candidates);
+}
+
+/**
+ * Pool holding the EDRSR corpus tables (edrsr_documents / edrsr_fulltext / edrsr_case_index).
+ *
+ * When EDRSR_DATABASE_URL is set the corpus lives in its own database and EdsrFtsService
+ * opens a dedicated pool for it; otherwise it is co-located with the application data and
+ * the caller's own pool is right. Shared rather than copied per tool class, so the rule has
+ * one home and cannot drift between the tools that read the corpus.
+ */
+export function edrsrPool(ftsService: { getDedicatedPool(): any } | undefined, fallback: any): any {
+  return ftsService?.getDedicatedPool() ?? fallback;
+}
+
+export interface CauseNumberResolution {
+  /** The spelling to query with, or null when nothing matched or the input is ambiguous. */
+  resolved: string | null;
+  /** Every candidate that exists in the corpus, most documents first. */
+  matches: Array<{ cause_num: string; member_count: number }>;
+  /** True when several distinct cases share the base number — the caller must not guess. */
+  ambiguous: boolean;
+}
+
+/**
+ * Resolve a user- or model-supplied case number to the spelling EDRSR actually uses.
+ *
+ * Looks the candidates up by equality against `edrsr_case_index` (cause_num is its primary
+ * key, so this is a handful of btree probes — 1.7ms measured on prod for 12 candidates).
+ * Equality rather than `LIKE 'base%'` on purpose: the database collation is en_US.utf8, so
+ * a prefix LIKE cannot use that index and seq-scans instead (5.2s measured), and a
+ * collation-ordered range would depend on how glibc sorts punctuation.
+ *
+ * An exact hit on the caller's own spelling always wins — they may have been specific.
+ * Otherwise a single surviving candidate is the answer. Several means the base number maps
+ * to more than one real case, and the resolution stays null so nothing is silently merged.
+ *
+ * Fail-safe: any error (or no pool) resolves to null with no matches, leaving the caller on
+ * whatever it did before.
+ */
+export async function resolveCauseNumber(caseNumber: string, dbPool: any): Promise<CauseNumberResolution> {
+  const empty: CauseNumberResolution = { resolved: null, matches: [], ambiguous: false };
+  const input = String(caseNumber || '').trim();
+  if (!input || !dbPool?.query) return empty;
+
+  try {
+    const { rows } = await dbPool.query(
+      `SELECT cause_num, COALESCE(member_count, 0)::int AS member_count
+         FROM edrsr_case_index
+        WHERE cause_num = ANY($1::text[])
+        ORDER BY member_count DESC NULLS LAST`,
+      [generateCaseNumberCandidates(input)],
+    );
+    const all = rows.map((r: any) => ({ cause_num: r.cause_num as string, member_count: Number(r.member_count) }));
+
+    // A suffix the caller typed is a statement about WHICH case they mean, so it may be
+    // completed but never swapped. Without this, "905/1234/20-XYZ" (a suffix outside the
+    // measured set, hence not in the corpus) would strip down to "905/1234/20", pick up the
+    // measured suffixes as candidates, and resolve to 905/1234/20-ц — a different real case
+    // answered as if it were the one asked about. Year expansion still works, because an
+    // expanded variant keeps the same suffix.
+    const askedSuffix = input.match(ASKED_SUFFIX_RE)?.[1] ?? null;
+    const matches = askedSuffix
+      ? all.filter((m: { cause_num: string }) => (m.cause_num.match(ASKED_SUFFIX_RE)?.[1] ?? null) === askedSuffix)
+      : all;
+
+    if (matches.length === 0) return empty;
+    if (matches.some((m: { cause_num: string }) => m.cause_num === input)) {
+      return { resolved: input, matches, ambiguous: false };
+    }
+    if (matches.length === 1) return { resolved: matches[0].cause_num, matches, ambiguous: false };
+    return { resolved: null, matches, ambiguous: true };
+  } catch (error: any) {
+    logger.warn('[tool-utils] resolveCauseNumber failed; keeping the caller-supplied number', {
+      caseNumber: input,
+      error: error?.message,
+    });
+    return empty;
+  }
+}
+
+/**
  * Generate case number variations (short/long year, with/without suffix).
  */
 export function generateCaseNumberVariations(caseNumber: string): string[] {
   const variations = new Set<string>();
   variations.add(caseNumber);
 
-  // Standard format: 123/456/22-ц
-  const match = caseNumber.match(/^(\d+\/\d+\/)(\d{2,4})(-[а-яіїєґА-ЯІЇЄҐ])?$/);
+  // Standard format: 123/456/22-ц. The suffix group is `+`, not a single character: the
+  // corpus carries multi-letter ones too (ад, НМ, НА, НР, АП — see CAUSE_NUM_SUFFIXES), and
+  // with a single-character group the whole regex missed them, so those numbers got no
+  // year expansion at all.
+  const match = caseNumber.match(/^(\d+\/\d+\/)(\d{2,4})(-[а-яіїєґА-ЯІЇЄҐ]+)?$/);
   if (match) {
     const prefix = match[1];
     const year = match[2];
@@ -448,7 +624,7 @@ export async function countAllResults(
     cause_num: r.cause_num,
     judge: r.judge,
     court_code: r.court_code,
-    adjudication_date: r.adjudication_date,
+    adjudication_date: formatCourtDate(r.adjudication_date),
     url: `https://reyestr.court.gov.ua/Review/${r.doc_id}`,
   }));
 

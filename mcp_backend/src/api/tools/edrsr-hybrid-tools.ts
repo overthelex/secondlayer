@@ -14,6 +14,7 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { logger } from '../../utils/logger.js';
 import type { EdsrFtsService, EdsrFtsFilters, EdsrFtsResult } from '../../services/edrsr-fts-service.js';
 import type { EdsrVectorizerService, EdrsrSearchFilters, EdrsrSearchResult } from '../../services/edrsr-vectorizer-service.js';
+import { formatCourtDate } from '../tool-utils.js';
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
@@ -233,7 +234,7 @@ snippet з FTS, найкращий chunk з Qdrant). Dedup по doc_id (Qdrant �
           court_code: r.court_code,
           justice_kind: r.justice_kind,
           judgment_code: r.judgment_code,
-          adjudication_date: r.adjudication_date,
+          adjudication_date: formatCourtDate(r.adjudication_date),
         },
       };
       byDocId.set(docId, hit);
@@ -295,7 +296,7 @@ snippet з FTS, найкращий chunk з Qdrant). Dedup по doc_id (Qdrant �
             justice_kind: v.metadata?.justice_kind,
             judgment_code: v.metadata?.judgment_code,
             category_code: v.metadata?.category_code,
-            adjudication_date: v.metadata?.adjudication_date,
+            adjudication_date: formatCourtDate(v.metadata?.adjudication_date),
           },
         });
       }
@@ -357,7 +358,7 @@ snippet з FTS, найкращий chunk з Qdrant). Dedup по doc_id (Qdrant �
       judgment_code: h.metadata.judgment_code ?? null,
       judgment_form: h.metadata.judgment_code ? judgmentMap.get(h.metadata.judgment_code) || null : null,
       category_code: h.metadata.category_code ?? null,
-      adjudication_date: h.metadata.adjudication_date || null,
+      adjudication_date: formatCourtDate(h.metadata.adjudication_date) || null,
       rrf_score: Number(h.rrf_score.toFixed(6)),
       fts_position: h.fts_position,
       fts_rank: h.fts_rank,
@@ -391,11 +392,7 @@ snippet з FTS, найкращий chunk з Qdrant). Dedup по doc_id (Qdrant �
           justice_kind: row.justice_kind ?? undefined,
           judgment_code: row.judgment_code ?? undefined,
           category_code: row.category_code ?? undefined,
-          adjudication_date: row.adjudication_date
-            ? (typeof row.adjudication_date === 'string'
-                ? row.adjudication_date
-                : row.adjudication_date.toISOString())
-            : undefined,
+          adjudication_date: formatCourtDate(row.adjudication_date),
         });
       }
     } catch (err: any) {

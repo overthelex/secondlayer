@@ -50,6 +50,37 @@ def get_conn():
 
 # ── Citation patterns ────────────────────────────────────────
 
+# Act number as it appears after «№», e.g. 2262-XII / 2262-ХІІ / 254к/96-ВР /
+# 1199-2022-п / 1030а-12.
+#
+# The previous class was `[\d\-]{1,20}(?:\-[IVX]{1,5})?` and it captured NONE of
+# these suffixes. `[\d\-]` is greedy and swallows the separating hyphen, after
+# which the optional group needs a SECOND one and matches empty without
+# backtracking — so Latin «2262-XII» was truncated to «2262-» exactly as
+# reliably as Cyrillic «2262-ХІІ». The Latin-only [IVX] was a second, smaller
+# defect on top. Measured on prod: of 168K sampled citation rows, not one
+# carried a Roman suffix in either alphabet.
+#
+# Built piece by piece instead: numeric core, optional index letter, optional
+# /YY, optional -YYYY, then ONE optional tail that is either a two-digit
+# convocation code or a letter suffix. Letters are Latin and Cyrillic together
+# because court texts mix them inside a single numeral («2755-VІ» is Latin V
+# plus Cyrillic І); normalisation decides what they mean, extraction only has
+# to keep them.
+# Bounds are measured, not guessed: across all 293 049 acts the longest numeric
+# core is 5 digits and the longest letter suffix is 2. The trailing lookahead
+# then makes an out-of-range token match NOTHING rather than match a prefix --
+# storing «12345» for a six-digit number would be the same silent-truncation
+# bug this commit exists to remove, just with a different cause.
+_ACT_NUM = (
+    r'(\d{1,5}[а-яіїєґa-z]?'
+    r'(?:/\d{2,4})?'
+    r'(?:-\d{4})?'
+    r'(?:-(?:\d{2}(?!\d)|[A-Za-zА-Яа-яІіЇїЄєҐґ]{1,6}))?)'
+    r'(?![\dA-Za-zА-Яа-яІіЇїЄєҐґ/-])'
+)
+
+
 # Ukrainian law reference patterns
 PATTERNS = {
     # "статті 3, 5 Закону України «Про ...»" or "ст. 3 ЗУ «Про ...»"
@@ -57,7 +88,13 @@ PATTERNS = {
         r'(?:стат(?:т[іея]|ей)|ст\.)\s*'
         r'([\d,\s\-]{1,50})'
         r'\s+(?:Закону\s+України|ЗУ|Закону)\s+'
-        r'(?:[«"]([^»"]{1,200})[»"]|(?:від|№)\s*(\d[\d.\-/]{1,30}))',
+        # The number branch now REQUIRES «№», with the date optional in front of
+        # it. It used to be (?:від|№), and «від» wins the alternation, so
+        # «від 09.04.1992 № 2262-ХІІ» stored the DATE as the law number —
+        # «20.12.1991» and «09.04.1992» are really sitting in law_number_raw
+        # on prod today. A citation that gives only a date identifies nothing.
+        r'(?:[«"]([^»"]{1,200})[»"]'
+        r'|(?:від\s+\d{1,2}\.\d{1,2}\.\d{4}\s*(?:р\.|року)?\s*)?№\s*' + _ACT_NUM + r')',
         re.IGNORECASE | re.UNICODE
     ),
     # Codex references: "ст. 625 ЦК України", "ч. 1 ст. 3 КАС України"
@@ -100,8 +137,8 @@ PATTERNS = {
     # Law by number: "Закон України від 01.01.2020 № 123-IX"
     "law_by_number": re.compile(
         r'Закон(?:у|ом)?\s+України\s+'
-        r'(?:від\s+(\d{2}\.\d{2}\.\d{4})\s+)?'
-        r'№\s*([\d\-]{1,20}(?:\-[IVX]{1,5})?)',
+        r'(?:від\s+(\d{2}\.\d{2}\.\d{4})\s*(?:р\.|року)?\s*)?'
+        r'№\s*' + _ACT_NUM,
         re.IGNORECASE | re.UNICODE
     ),
     # Постанова Пленуму Верховного Суду
@@ -161,7 +198,7 @@ class PartitionStats:
 MAX_RANGE_SPAN = 20
 
 
-def parse_article_numbers(raw: str) -> list[str]:
+def parse_article_numbers(raw: str, act: str | None = None) -> list[str]:
     """Parse an article enumeration into a list of canonical article numbers.
 
     Handles three shapes:
@@ -200,35 +237,83 @@ def parse_article_numbers(raw: str) -> list[str]:
                 # superscript list mis-joined by a stray hyphen: keep only the
                 # endpoints in canonical dashed form, drop the phantom middle.
                 else:
-                    articles.append(normalize_flattened(a))
-                    articles.append(normalize_flattened(b))
+                    articles.append(normalize_flattened(a, act))
+                    articles.append(normalize_flattened(b, act))
             else:
                 articles.append(part)
         elif part.isdigit():
-            articles.append(normalize_flattened(part))
+            articles.append(normalize_flattened(part, act))
     return articles
 
 
-def normalize_flattened(num: str) -> str:
+_ART_INDEX: dict[str, set[str]] = {}
+_ART_INDEX_READY = False
+
+
+def _load_article_index() -> None:
+    """Current article numbers per act, keyed on the act title the builder matches.
+
+    One query per worker process. Failure is not fatal: an empty index makes
+    normalize_flattened keep what the document actually says, which is the safe
+    direction — see the note there.
+    """
+    global _ART_INDEX_READY
+    if _ART_INDEX_READY:
+        return
+    _ART_INDEX_READY = True
+    titles = sorted(set(CODEX_NAMES.values()) | {"Конституція України"})
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT l.title, a.article_number "
+                "FROM legislation l JOIN legislation_articles a ON a.legislation_id = l.id "
+                "WHERE a.is_current AND l.title = ANY(%s)",
+                (titles,),
+            )
+            for title, art in cur.fetchall():
+                _ART_INDEX.setdefault(title, set()).add(str(art).strip())
+    except Exception as e:                                    # noqa: BLE001
+        print(f"[warn] article index unavailable ({type(e).__name__}); "
+              f"flattened-superscript splitting disabled", flush=True)
+
+
+def normalize_flattened(num: str, act: str | None = None) -> str:
     """Map an OCR-flattened superscript article number to canonical 'base-index'.
 
     Ukrainian procedural codes number inserted articles with a superscript:
     стаття 111⁵ (article 111, insert 5). When the superscript collapses into the
-    base it becomes '1115'. Heuristic: a 4-5 digit token whose leading 1-3 digits
-    form a plausible base article and trailing 1-2 digits a plausible insert index
-    is rewritten as 'base-index'. Plain 1-3 digit articles pass through unchanged.
+    base it becomes '1115', which has to be read as 111-5.
 
-    NOTE: this is a best-effort heuristic for the regex capture path. The
-    authoritative disambiguation against the legislation_articles registry happens
-    in the backfill SQL; here we only avoid emitting raw 4-5 digit garbage.
+    This USED to split every 4-5 digit token unconditionally, and that was wrong
+    for any act with genuine four-digit articles. The Civil Code has 301 of them
+    (up to 1308), so «ст. 1054 ЦК» was stored as '105-4', «ст. 1268» as '126-8',
+    «ст. 1166» as '116-6' — the whole law of obligations, delict and inheritance.
+    Measured on prod 2026-08-18: 9 536 839 rows carried the split signature across
+    65 acts, of which 5 320 562 resolved to nothing; on the Civil Code alone
+    4 624 318 citations pointed at articles that cannot exist. The docstring
+    promised the registry would disambiguate downstream. Nothing did.
+
+    So the registry decides here, where the act is still known: keep the literal
+    reading when the act really has that article, split only when it does not and
+    the split form does exist. With no index (act unknown, or the DB unreachable)
+    keep the literal — it is what the document says, and a wrong split loses the
+    citation silently.
     """
     if len(num) <= 3 or not num.isdigit():
         return num
-    # Prefer a 2-digit insert index for 5-digit tokens, 1-digit for 4-digit tokens.
-    if len(num) == 5:
-        return f"{num[:3]}-{num[3:]}"
-    # 4 digits: split as 3+1 (e.g. 1115 -> 111-5). Callers reconcile against registry.
-    return f"{num[:3]}-{num[3:]}"
+    split = f"{num[:3]}-{num[3:]}"
+    if not act:
+        return num
+    _load_article_index()
+    known = _ART_INDEX.get(act)
+    if not known:
+        return num
+    if num in known:
+        return num
+    if split in known:
+        return split
+    return num
+
 
 MAX_TEXT_LEN = 10_000
 
@@ -240,19 +325,19 @@ def extract_citations_from_text(doc_id: int, text: str) -> list[Citation]:
     for m in PATTERNS["law_article"].finditer(text):
         articles_raw = m.group(1)
         law_name = m.group(2) or m.group(3) or ""
-        for art in parse_article_numbers(articles_raw):
+        for art in parse_article_numbers(articles_raw, law_name.strip()):
             citations.append(Citation(doc_id, "law_article", law_name.strip(), art, m.group(0)[:200]))
 
     for m in PATTERNS["codex_article"].finditer(text):
         articles_raw = m.group(1)
         codex_abbr = m.group(2).upper()
         codex_name = CODEX_NAMES.get(codex_abbr, codex_abbr)
-        for art in parse_article_numbers(articles_raw):
+        for art in parse_article_numbers(articles_raw, codex_name):
             citations.append(Citation(doc_id, "codex_article", codex_name, art, m.group(0)[:200]))
 
     for m in PATTERNS["constitution"].finditer(text):
         articles_raw = m.group(1)
-        for art in parse_article_numbers(articles_raw):
+        for art in parse_article_numbers(articles_raw, "Конституція України"):
             citations.append(Citation(doc_id, "constitution", "Конституція України", art, m.group(0)[:200]))
 
     # Transitional provisions (LEXAI-1817): dotted point numbers must NOT go through
@@ -295,6 +380,24 @@ _NO_ENRICH = False
 # Targeted mode (LEXAI-1817): restrict scanned rows to tsv @@ to_tsquery('simple', _TSQUERY).
 # Lets a backfill touch only candidate docs (e.g. '38.6 | 69.22') instead of the whole corpus.
 _TSQUERY = None
+# Targeted mode by DOC ID (LEXAI-1947). --tsquery restricts by text, which cannot
+# express "the documents whose stored citations are damaged". This takes a table
+# of doc_ids instead, so a backfill can re-read exactly the affected decisions
+# rather than the whole corpus.
+_DOC_IDS_TABLE = None
+
+
+def _doc_ids_cond() -> str | None:
+    """The doc-id restriction, in one place.
+
+    It is needed at four sites — both branches of process_chunk and both
+    COUNT(*) queries in process_year — and the count MUST match the select or
+    the chunk plan is sized for rows the query never returns.
+    """
+    if _DOC_IDS_TABLE is None:
+        return None
+    return f"doc_id IN (SELECT doc_id FROM {_DOC_IDS_TABLE})"
+
 # Effective per-doc scan window; --max-text-len can raise it for targeted backfills
 # where the citation may sit deep in a long decision.
 _MAX_TEXT_LEN = MAX_TEXT_LEN
@@ -333,6 +436,8 @@ def process_chunk(args: tuple) -> dict:
             conds.append("justice_kind = %s"); params.append(_JUSTICE_KIND_FILTER)
         if _TSQUERY is not None:
             conds.append("tsv @@ to_tsquery('simple', %s)"); params.append(_TSQUERY)
+        if (_c := _doc_ids_cond()) is not None:
+            conds.append(_c)
         where = f"WHERE {' AND '.join(conds)} " if conds else ""
         cur.execute(
             f"SELECT doc_id, full_text, justice_kind FROM {table} {where}OFFSET %s LIMIT %s",
@@ -344,6 +449,8 @@ def process_chunk(args: tuple) -> dict:
             conds.append("justice_kind = %s"); params.append(_JUSTICE_KIND_FILTER)
         if _TSQUERY is not None:
             conds.append("tsv @@ to_tsquery('simple', %s)"); params.append(_TSQUERY)
+        if (_c := _doc_ids_cond()) is not None:
+            conds.append(_c)
         cur.execute(
             f"SELECT doc_id, full_text, justice_kind FROM edrsr_fulltext WHERE {' AND '.join(conds)} OFFSET %s LIMIT %s",
             tuple(params + [offset, chunk_size]),
@@ -455,6 +562,9 @@ def process_year(year: int, workers: int, dry_run: bool, chunk_size: int = 50000
             conds.append("justice_kind = %s"); params.append(_JUSTICE_KIND_FILTER)
         if _TSQUERY is not None:
             conds.append("tsv @@ to_tsquery('simple', %s)"); params.append(_TSQUERY)
+        # Mirrors process_chunk via the shared _doc_ids_cond().
+        if (_c := _doc_ids_cond()) is not None:
+            conds.append(_c)
         where = f" WHERE {' AND '.join(conds)}" if conds else ""
         cur.execute(f"SELECT COUNT(*) FROM {table}{where}", tuple(params))
     else:
@@ -463,6 +573,8 @@ def process_year(year: int, workers: int, dry_run: bool, chunk_size: int = 50000
             conds.append("justice_kind = %s"); params.append(_JUSTICE_KIND_FILTER)
         if _TSQUERY is not None:
             conds.append("tsv @@ to_tsquery('simple', %s)"); params.append(_TSQUERY)
+        if (_c := _doc_ids_cond()) is not None:
+            conds.append(_c)
         cur.execute(f"SELECT COUNT(*) FROM edrsr_fulltext WHERE {' AND '.join(conds)}", tuple(params))
     total = cur.fetchone()[0]
     cur.close()
@@ -538,13 +650,16 @@ def main():
     parser.add_argument("--bulk-load", action="store_true", help="Plain INSERT, no ON CONFLICT (deferred index: target tables must have NO unique index; dedup+index built afterwards)")
     parser.add_argument("--no-enrich", action="store_true", help="Skip per-year justice_kind enrich UPDATE (defer to a single end-of-run pass)")
     parser.add_argument("--tsquery", type=str, default=None, help="Targeted mode: only rows matching to_tsquery('simple', TSQUERY), e.g. '38.6 | 69.22' (LEXAI-1817)")
+    parser.add_argument("--doc-ids-table", type=str, default=None,
+                        help="Targeted mode: only doc_ids present in this table (must have a doc_id column). "
+                             "Use for backfills that must re-read specific decisions (LEXAI-1947).")
     parser.add_argument("--max-text-len", type=int, default=MAX_TEXT_LEN, help=f"Per-doc scan window in chars (default {MAX_TEXT_LEN}); raise for targeted backfills")
     args = parser.parse_args()
 
     if not args.year and not args.all:
         parser.error("Specify --year YYYY or --all")
 
-    global _JUSTICE_KIND_FILTER, _TARGET_TABLE, _CASE_TABLE, _BULK_LOAD, _NO_ENRICH, _TSQUERY, _MAX_TEXT_LEN
+    global _JUSTICE_KIND_FILTER, _TARGET_TABLE, _CASE_TABLE, _BULK_LOAD, _NO_ENRICH, _TSQUERY, _MAX_TEXT_LEN, _DOC_IDS_TABLE
     _JUSTICE_KIND_FILTER = args.justice_kind
     _TARGET_TABLE = args.target_table
     _CASE_TABLE = args.case_table
@@ -552,6 +667,12 @@ def main():
     _NO_ENRICH = args.no_enrich
     _TSQUERY = args.tsquery
     _MAX_TEXT_LEN = args.max_text_len
+    if args.doc_ids_table:
+        # Interpolated into SQL as an identifier, so it is validated rather than
+        # trusted: operator-supplied is not the same as safe.
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?', args.doc_ids_table):
+            parser.error(f"--doc-ids-table must be a plain identifier, got {args.doc_ids_table!r}")
+    _DOC_IDS_TABLE = args.doc_ids_table
 
     years = list(range(args.years_from, args.years_to + 1)) if args.all else [args.year]
 

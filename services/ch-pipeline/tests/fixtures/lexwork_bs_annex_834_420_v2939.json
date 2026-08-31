@@ -1,0 +1,56 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 2939,
+   "title": "Beschluss des Regierungsrates betreffend Liste der Pflegeheime für den Kanton Basel-Stadt",
+   "version_dates_str": "Version in Kraft seit: 01.01.2014 bis: 31.12.2014 (Beschlussdatum: 28.01.2014)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "pdf_link_annexes": "https://www.gesetzessammlung.bs.ch/api/de/versions/2939/annexes",
+   "pdf_link_annexes_size": 40424,
+   "annex_documents": [
+    {
+     "id": 882,
+     "title": "Liste der Pflegeheime für den Kanton Basel-Stadt 2014",
+     "url": "https://www.gesetzessammlung.bs.ch/api/de/versions/2939/annexes",
+     "number": "834.420",
+     "pdf_size": 40424,
+     "abrogated": false
+    }
+   ],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h2 class='header_text'>\n  Pflegeheimliste: RRB | Kranken- und Unfallversicherung\n</h2>\n<h1 class='systematic_number'>\n  834.420\n</h1>\n<h1 class='title'>\n  Beschluss des Regierungsrates betreffend Liste der Pflegeheime f&uuml;r den Kanton Basel-Stadt\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 12. Dezember 1995 (Stand 1. Januar 2014)\n</div>\n<div class='ingress_author'>\n  Der Regierungsrat des Kantons Basel-Stadt erl&auml;sst,\n</div>\n<div class='ingress_foundation'>\n  <p>\n    1. gest&uuml;tzt auf Art. 35 Abs. 2 lit. k und Art. 39 Abs. 3 des Bundesgesetzes &uuml;ber die Krankenversicherung (KVG) vom 18. M&auml;rz 1994<a class=\"footnote\" name=\"structured_documentingress_foundation_fn_8570_2_1\" href=\"#structured_documentingress_foundation_fn_8570_2_1_c\" id=\"structured_documentingress_foundation_fn_8570_2_1\">[1]</a> sowie &sect; 6 der Verordnung &uuml;ber die Krankenversicherung im Kanton Basel-Stadt (KVO) vom 7. November 1995<a class=\"footnote\" name=\"structured_documentingress_foundation_fn_8570_2_2\" href=\"#structured_documentingress_foundation_fn_8570_2_2_c\" id=\"structured_documentingress_foundation_fn_8570_2_2\">[2]</a>, die Liste der Pflegeheime f&uuml;r den Kanton Basel-Stadt gem&auml;ss Anhang.\n  </p>\n  <p>\n    2. Die Aufnahme weiterer Pflegeheime auf die Pflegeheimliste erfolgt k&uuml;nftig im Einzelfall durch den Regierungsrat. Schriftliche Gesuche sind dem Gesundheitsdepartement<a class=\"footnote\" name=\"structured_documentingress_foundation_fn_8570_2_3\" href=\"#structured_documentingress_foundation_fn_8570_2_3_c\" id=\"structured_documentingress_foundation_fn_8570_2_3\">[3]</a> einzureichen. Den Gesuchen sind beizulegen:\n  </p>\n  <p>\n    &ndash; Ausbildungsunterlagen der fachlich verantwortlichen Personen;\n  </p>\n  <p>\n    &ndash; Unterlagen, aus denen Art, Zweck und Organisation des Betriebes ersichtlich sind;\n  </p>\n  <p>\n    &ndash; Pl&auml;ne und Beschriebe &uuml;ber den Bau und die Ausr&uuml;stung der Institution;\n  </p>\n  <p>\n    &ndash; Stellenpl&auml;ne und Qualifikationsanforderungen an das Personal;\n  </p>\n  <p>\n    &ndash; Befugnisse und Zust&auml;ndigkeiten in &auml;rztlicher, pflegerischer, pharmazeutischer und administrativer Hinsicht;\n  </p>\n  <p>\n    &ndash; kantonale Bewilligung zur F&uuml;hrung und zum Betrieb eines Alters- und Pflegeheims gem&auml;ss Alters- und Pflegeheimverordnung vom 11. Dezember 1990.&nbsp;\n  </p>\n  <p>\n    &nbsp;\n  </p>\n  <p>\n    Dieser Beschluss ist samt Anhang zu publizieren und den betroffenen Institutionen zuzustellen. Der Beschluss wird am 1. Januar 1996 wirksam.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  KB 23.12.1995\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "html_content": {
+       "de": ""
+      },
+      "text": {},
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

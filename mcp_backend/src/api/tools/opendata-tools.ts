@@ -106,7 +106,12 @@ export class OpenDataTools extends BaseToolHandler {
     let pi = 1;
 
     if (name) { conditions.push(`c.name ILIKE $${pi}`); values.push(`%${name}%`); pi++; }
-    if (number) { conditions.push(`c.number = $${pi}`); values.push(number); pi++; }
+    // Normalised on BOTH sides. c.number = $n was raw equality against a column
+    // holding 5 435 NULLs, 97 zero-padded numbers ("007"), 11 929 with Roman
+    // characters, and shapes like 08-а, 02/01, 1-зп, 10-VII — so a user typing
+    // «7» never found «007» and a Cyrillic-typed Roman never matched a Latin
+    // one. Index: idx_edrnpa_number_norm (migration 189).
+    if (number) { conditions.push(`npa.norm_number(c.number) = npa.norm_number($${pi})`); values.push(String(number)); pi++; }
     if (publisher) { conditions.push(`c.publisher ILIKE $${pi}`); values.push(`%${publisher}%`); pi++; }
     if (doc_type) { conditions.push(`c.doc_type ILIKE $${pi}`); values.push(`%${doc_type}%`); pi++; }
     if (keywords) { conditions.push(`c.keywords ILIKE $${pi}`); values.push(`%${keywords}%`); pi++; }

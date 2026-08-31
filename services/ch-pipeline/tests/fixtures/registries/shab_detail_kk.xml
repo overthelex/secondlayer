@@ -1,0 +1,58 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<KK01:publication xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:KK01="https://shab.ch/shab/KK01-export" xsi:schemaLocation="https://shab.ch/shab/KK01-export https://amtsblattportal.ch/api/v1/schemas/shab/1.26/KK01-export.xsd">
+<meta>
+  <id>c4ebb597-ac02-48a6-a87b-efba3e5f71e3</id>
+  <rubric>KK</rubric>
+  <subRubric>KK01</subRubric>
+  <language>de</language>
+  <registrationOffice>
+    <id>14c84ad9-a54f-11e8-a160-0050569db5fb</id>
+    <displayName>Konkursamt Hochdorf</displayName>
+    <street>Arsenalstrasse</street>
+    <streetNumber>43</streetNumber>
+    <swissZipCode>6010</swissZipCode>
+    <town>Kriens</town>
+    <containsPostOfficeBox>false</containsPostOfficeBox>
+  </registrationOffice>
+  <publicationNumber>KK01-0000069210</publicationNumber>
+  <publicationState>PUBLISHED</publicationState>
+  <publicationDate>2026-08-25</publicationDate>
+  <expirationDate>2031-08-25</expirationDate>
+  <primaryTenantCode>shab</primaryTenantCode>
+  <legalRemedy>Schuldner des Konkursiten können ihre Schulden nicht mehr durch Zahlung an den Konkursiten begleichen; sie riskieren, zweimal bezahlen zu müssen. Ferner sind Personen, die Vermögensgegenstände des Konkursiten verwahren, unabhängig vom Rechtstitel der Verwahrung, bei Straffolge (Art. 324 Ziff. 5 StGB) verpflichtet, diese unverzüglich dem Konkursamt herauszugeben. Die Publikation betreffend Art, Verfahren, Eingabefrist usw. erfolgt später. &lt;br />Publikation nach Art. 222 SchKG.</legalRemedy>
+  <cantons>LU</cantons>
+  <secondaryTenants>
+    <tenantCode>kablu</tenantCode>
+    <publicationDate>2026-08-29</publicationDate>
+  </secondaryTenants>
+  <title>
+    <de>Vorläufige Konkursanzeige SM Regio Print GmbH</de>
+    <en>Provisional announcement of bankruptcy SM Regio Print GmbH</en>
+    <it>Avviso provvisorio di apertura di fallimento SM Regio Print GmbH</it>
+    <fr>Avis préalable d'ouverture de faillite SM Regio Print GmbH</fr>
+  </title>
+</meta>
+<content>
+  <debtor>
+    <selectType>company</selectType>
+    <companies>
+      <noUID>false</noUID>
+      <company>
+        <name>SM Regio Print GmbH</name>
+        <uid>CHE-278.850.327</uid>
+        <uidOrganisationId>278850327</uidOrganisationId>
+        <uidOrganisationIdCategorie>CHE</uidOrganisationIdCategorie>
+        <address>
+          <street>Gerliswilstrasse</street>
+          <houseNumber>12</houseNumber>
+          <swissZipCode>6020</swissZipCode>
+          <town>Emmenbrücke</town>
+        </address>
+        <canton>LU</canton>
+      </company>
+    </companies>
+  </debtor>
+  <or731b>Yes</or731b>
+  <resolutionDate>2026-07-20</resolutionDate>
+</content>
+</KK01:publication>

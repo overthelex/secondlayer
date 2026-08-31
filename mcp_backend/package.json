@@ -38,7 +38,8 @@
     "scrape:court:civil-contracts": "JUSTICE_KIND=Цивільне JUSTICE_KIND_ID=1 DOC_FORM=Рішення SEARCH_TEXT='недійсність договору купівлі-продажу нерухомого майна' MAX_DOCS=500 npm run scrape:court",
     "backfill:reyestr": "npm run build && node dist/scripts/backfill-fulltext-reyestr.js",
     "compute:judge-analytics": "npx tsx src/scripts/compute-judge-analytics.ts",
-    "backfill:tsv": "npx tsx src/scripts/backfill-tsv.ts"
+    "backfill:tsv": "npx tsx src/scripts/backfill-tsv.ts",
+    "test:integration": "jest --no-cache --verbose --testPathIgnorePatterns=/node_modules/ src/api/__tests__/sse src/api/__tests__/all-tools-integration.test.ts src/api/__tests__/smoke-test-all-tools.test.ts src/api/__tests__/get-case-documents-chain.test.ts src/api/__tests__/get-legal-advice-cpc-gpc.test.ts src/api/__tests__/search-legal-precedents.test.ts"
   },
   "keywords": [
     "mcp",
@@ -96,7 +97,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^5.5.207",
+    "pdfjs-dist": "~5.5.207",
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "playwright": "^1.58.0",

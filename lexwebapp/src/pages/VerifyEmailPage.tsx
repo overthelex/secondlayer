@@ -5,8 +5,9 @@ import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import showToast from '../utils/toast';
 import { toastT } from '../i18n/toast-i18n';
 import { getErrorMessage } from '../utils/errors';
+import { API_BASE } from '../utils/api/base';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = API_BASE;
 const BASE_URL = API_URL.replace(/\/api$/, '');
 
 export function VerifyEmailPage() {

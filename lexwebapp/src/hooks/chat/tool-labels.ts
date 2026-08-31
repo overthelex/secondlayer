@@ -53,6 +53,15 @@ export const TOOL_LABELS: Record<string, string> = {
   openreyestr_search_notaries: 'Нотаріуси',
   openreyestr_search_court_experts: 'Судові експерти',
   openreyestr_search_arbitration_managers: 'Арбітражні керуючі',
+  ch_search_court_decisions: 'Пошук рішень судів Швейцарії',
+  ch_get_court_decision: 'Рішення суду Швейцарії',
+  ch_search_legislation: 'Пошук законодавства Швейцарії (SR)',
+  ch_get_act_article: 'Стаття акта Швейцарії на дату',
+  ch_get_act_history: 'Історія змін акта Швейцарії',
+  ch_get_decision_legislation: 'Законодавство до рішення (Швейцарія)',
+  ch_get_act_text: 'Текст акта на дату (Швейцарія)',
+  ch_search_companies: 'Пошук компаній Швейцарії (Zefix)',
+  ch_get_company: 'Компанія Швейцарії: реєстр, SHAB, FINMA, SECO',
 };
 
 export function getToolLabel(toolName: string): string {

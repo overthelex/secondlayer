@@ -120,14 +120,17 @@ export function buildWhere(
         pi++;
         break;
 
+      // ftsExpression, when a registry declares one, must be reproduced verbatim:
+      // a GIN index over a tsvector expression is only used if the query spells
+      // that expression identically. See FieldDef.ftsExpression.
       case 'fts':
-        conditions.push(`to_tsvector('english', ${field.columns[0]}) @@ plainto_tsquery('english', $${pi})`);
+        conditions.push(`to_tsvector('english', ${field.ftsExpression || field.columns[0]}) @@ plainto_tsquery('english', $${pi})`);
         values.push(val);
         pi++;
         break;
 
       case 'fts_simple':
-        conditions.push(`to_tsvector('simple', ${field.columns[0]}) @@ plainto_tsquery('simple', $${pi})`);
+        conditions.push(`to_tsvector('simple', ${field.ftsExpression || field.columns[0]}) @@ plainto_tsquery('simple', $${pi})`);
         values.push(val);
         pi++;
         break;

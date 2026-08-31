@@ -1,0 +1,1033 @@
+{
+ "text_of_law": {
+  "systematic_number": "101.1",
+  "systematic_number_hl": "101.1",
+  "title": "Verfassung des Kantons Bern",
+  "title_hl": "Verfassung des Kantons Bern",
+  "abbreviation": "KV",
+  "abbreviation_hl": "KV",
+  "enactment": "1995-01-01",
+  "date_of_decision": "1993-06-06",
+  "date_of_decision_multiple": false,
+  "publication_enactment": "2026-01-01",
+  "text_of_law_type_id": 3,
+  "text_of_law_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+  "pdf_link": "https://www.belex.sites.be.ch/api/de/versions/3147/pdf_file_with_annexes",
+  "canonical_link": "https://www.belex.sites.be.ch/app/de/texts_of_law/101.1",
+  "abrogated": false,
+  "abrogated_dates_str": null,
+  "abrogated_dates_str_short": null,
+  "abrogated_scheduled": false,
+  "abrogated_scheduled_date_str": null,
+  "abrogated_scheduled_date_str_short": null,
+  "version_uid": "f0fa50e075710313ee5b8a64dc3f2003",
+  "snippet_msg": null,
+  "snippet": null,
+  "current_version": {
+   "id": 3147,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.01.2026 (Beschlussdatum: 27.11.2023)",
+   "structured_document_id": 33807,
+   "title": "Verfassung des Kantons Bern",
+   "abbreviation": "KV"
+  },
+  "selected_version": {
+   "id": 3020,
+   "version_dates_str": "Version in Kraft von: 03.03.2024 bis: 31.12.2025 (Beschlussdatum: 03.03.2024)",
+   "structured_document_id": 31418,
+   "title": "Verfassung des Kantons Bern",
+   "abbreviation": "KV",
+   "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+   "pdf_link_tol": "https://www.belex.sites.be.ch/api/de/versions/3020/pdf_file",
+   "pdf_link_tol_size": 990167,
+   "json_content": {
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  101.1\n</h1>\n<h1 class='title'>\n  Verfassung<br />\n  des Kantons Bern&nbsp;<strong>*</strong>\n</h1>\n<h2 class='abbreviation'>\n  (KV)\n</h2>\n<div class='enactment'>\n  vom 06.06.1993 (Stand 03.03.2024)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    In der Absicht, Freiheit und Recht zu sch&uuml;tzen und ein Gemeinwesen zu gestalten, in dem alle in Verantwortung gegen&uuml;ber der Sch&ouml;pfung zusammenleben,\n  </p>\n</div>\n<div class='ingress_action'>\n  gibt sich das Volk des Kantons Bern folgende Verfassung:\n</div>",
+      "fr": "<h1 class='systematic_number'>\n  101.1\n</h1>\n<h1 class='title'>\n  Constitution<br />\n  du canton de Berne&nbsp;<strong>*</strong>\n</h1>\n<h2 class='abbreviation'>\n  (ConstC)\n</h2>\n<div class='enactment'>\n  du 06.06.1993 (&eacute;tat au 03.03.2024)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Dans l'intention&nbsp;de prot&eacute;ger la libert&eacute; et le droit et d'am&eacute;nager une collectivit&eacute; dans laquelle tous vivent solidairement et sont conscients de leur responsabilit&eacute; envers la cr&eacute;ation,\n  </p>\n</div>\n<div class='ingress_action'>\n  le peuple bernois se donne la Constitution suivante:\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "html_content": {
+       "de": "",
+       "fr": ""
+      },
+      "text": {},
+      "children": [
+       {
+        "uid": "t-0--t-1",
+        "type": "title",
+        "number": {
+         "de": "1",
+         "fr": "1"
+        },
+        "html_content": {
+         "de": "<div class='level_1 title'>\n  <span class='number'>1</span> <span class='title_text'>Allgemeine Grunds&auml;tze</span>\n</div>",
+         "fr": "<div class='level_1 title'>\n  <span class='number'>1</span> <span class='title_text'>Principes g&eacute;n&eacute;raux</span>\n</div>"
+        },
+        "text": {
+         "de": "Allgemeine Grundsätze",
+         "fr": "Principes généraux"
+        },
+        "children": [
+         {
+          "uid": "t-0--t-1--a-1",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;1",
+           "fr": "Art.&nbsp;1"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>1</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Der Kanton Bern</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>1</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Le canton de Berne</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Der Kanton Bern",
+           "fr": "Le canton de Berne"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-1--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Der Kanton Bern ist ein freiheitlicher, demokratischer und sozialer Rechtsstaat.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Le canton de Berne est un Etat de droit lib&eacute;ral, d&eacute;mocratique et social.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-1--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Die Staatsgewalt beruht auf dem Volk. Sie wird durch die Stimmberechtigten und die Beh&ouml;rden ausge&uuml;bt.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Le pouvoir de l'Etat appartient au peuple. Il est exerc&eacute; par le corps &eacute;lectoral et les autorit&eacute;s.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-2",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;2",
+           "fr": "Art.&nbsp;2"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>2</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Verh&auml;ltnis zum Bund und zu den anderen Kantonen</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>2</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Rapport avec la Conf&eacute;d&eacute;ration et les autres cantons</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Verhältnis zum Bund und zu den anderen Kantonen",
+           "fr": "Rapport avec la Confédération et les autres cantons"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-2--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Der Kanton Bern ist ein Stand der Schweizerischen Eidgenossenschaft.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Le canton de Berne est l'un des Etats de la Conf&eacute;d&eacute;ration suisse.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-2--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Er arbeitet mit dem Bund und den anderen Kantonen zusammen und versteht sich als Mittler zwischen der deutschsprachigen und der franz&ouml;sischsprachigen Schweiz.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Il coop&egrave;re avec la Conf&eacute;d&eacute;ration et les autres cantons et se consid&egrave;re comme un lien entre la Suisse romande et la Suisse al&eacute;manique.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-3",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;3",
+           "fr": "Art.&nbsp;3"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>3</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Kantonsgebiet</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>3</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Territoire cantonal</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Kantonsgebiet",
+           "fr": "Territoire cantonal"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-3--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Der Kanton umfasst das Gebiet, das ihm durch die Eidgenossenschaft gew&auml;hrleistet ist.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Le canton de Berne comprend le territoire qui lui est garanti par la Conf&eacute;d&eacute;ration.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-3--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Er ist in Verwaltungsregionen, Verwaltungskreise, Amtsbezirke sowie Gemeinden gegliedert.&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Il est divis&eacute; en r&eacute;gions administratives, en arrondissements administratifs, en districts et en communes.&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-3--p-3",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Zur L&ouml;sung besonderer Aufgaben k&ouml;nnen regionale Organisationen gebildet werden.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Des organisations r&eacute;gionales peuvent &ecirc;tre cr&eacute;&eacute;es pour accomplir des t&acirc;ches particuli&egrave;res.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-4",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;4",
+           "fr": "Art.&nbsp;4"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>4</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Minderheiten</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>4</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Minorit&eacute;s</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Minderheiten",
+           "fr": "Minorités"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-4--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Den Bed&uuml;rfnissen von sprachlichen, kulturellen und regionalen Minderheiten ist Rechnung zu tragen.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Il est tenu compte des besoins des minorit&eacute;s linguistiques, culturelles et r&eacute;gionales.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-4--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Zu diesem Zweck k&ouml;nnen diesen Minderheiten besondere Befugnisse zuerkannt werden.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>A cet effet, des comp&eacute;tences particuli&egrave;res peuvent &ecirc;tre attribu&eacute;es &agrave; ces minorit&eacute;s.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-5",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;5",
+           "fr": "Art.&nbsp;5"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>5</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Berner Jura</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>5</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Jura bernois</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Berner Jura",
+           "fr": "Jura bernois"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-5--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Dem Berner Jura, der die Verwaltungsregion Berner Jura bildet, wird eine besondere Stellung zuerkannt. Diese soll es ihm erm&ouml;glichen, seine Identit&auml;t zu bewahren, seine sprachliche und kulturelle Eigenart zu erhalten und an der kantonalen Politik aktiv teilzunehmen.&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Un statut particulier est reconnu au Jura bernois que constitue la r&eacute;gion administrative du Jura bernois. Ce statut doit lui permettre de pr&eacute;server son identit&eacute;, de conserver sa particularit&eacute; linguistique et culturelle et de participer activement &agrave; la vie politique cantonale.&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-5--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Der Kanton trifft Vorkehren, um die Verbundenheit zwischen dem Berner Jura und dem &uuml;brigen Kanton zu st&auml;rken.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Le canton prend des mesures pour renforcer les liens entre le Jura bernois et le reste du canton.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-6",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;6",
+           "fr": "Art.&nbsp;6"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>6</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Sprachen</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>6</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Langues</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Sprachen",
+           "fr": "Langues"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-6--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Das Deutsche und das Franz&ouml;sische sind die bernischen Landes- und Amtssprachen.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Le fran&ccedil;ais et l'allemand sont les langues nationales et officielles du canton de Berne.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-6--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Die Amtssprachen sind&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Les langues officielles sont&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [
+             {
+              "uid": "t-0--t-1--a-6--p-2--l-a",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      das Franz&ouml;sische in der Verwaltungsregion Berner Jura,\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      le fran&ccedil;ais dans la r&eacute;gion administrative du Jura bernois,\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-6--p-2--l-b",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      das Deutsche und das Franz&ouml;sische in der Verwaltungsregion Seeland sowie im Verwaltungskreis Biel/Bienne,\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      le fran&ccedil;ais et l&rsquo;allemand dans la r&eacute;gion administrative du Seeland ainsi que dans l&rsquo;arrondissement administratif de Biel/Bienne,\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-6--p-2--l-c",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      c\n    </td>\n    <td class='left_col last' colspan='3'>\n      das Deutsche in den &uuml;brigen Verwaltungsregionen sowie im Verwaltungskreis Seeland.\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      c\n    </td>\n    <td class='left_col last' colspan='3'>\n      l&rsquo;allemand dans les autres r&eacute;gions administratives ainsi que dans l&rsquo;arrondissement administratif du Seeland.\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             }
+            ],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-6--p-3",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Die Amtssprachen der Gemeinden in den Verwaltungskreisen der Verwaltungsregion Seeland sind&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Les langues officielles des communes des arrondissements administratifs de la r&eacute;gion administrative du Seeland sont&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [
+             {
+              "uid": "t-0--t-1--a-6--p-3--l-a",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      das Deutsche und das Franz&ouml;sische f&uuml;r die Gemeinden Biel/Bienne und Leubringen,\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      le fran&ccedil;ais et l&rsquo;allemand dans les communes de Biel/Bienne et d&rsquo;Evilard,\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-6--p-3--l-b",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      das Deutsche f&uuml;r die &uuml;brigen Gemeinden.\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      l&rsquo;allemand dans les autres communes.\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             }
+            ],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-6--p-4",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>4</span>\n  <p>\n    <span class='text_content'>Kanton und Gemeinden k&ouml;nnen besonderen Verh&auml;ltnissen, die sich aus der Zweisprachigkeit des Kantons ergeben, Rechnung tragen.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>4</span>\n  <p>\n    <span class='text_content'>Le canton et les communes peuvent tenir compte de situations particuli&egrave;res r&eacute;sultant du caract&egrave;re bilingue du canton.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-6--p-5",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>5</span>\n  <p>\n    <span class='text_content'>An die f&uuml;r den ganzen Kanton zust&auml;ndigen Beh&ouml;rden k&ouml;nnen sich alle in der Amtssprache ihrer Wahl wenden.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>5</span>\n  <p>\n    <span class='text_content'>Toute personne peut s'adresser dans la langue officielle de son choix aux autorit&eacute;s comp&eacute;tentes pour l'ensemble du canton.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-7",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;7",
+           "fr": "Art.&nbsp;7"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>7</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>B&uuml;rgerrecht</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>7</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Droit de cit&eacute;</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Bürgerrecht",
+           "fr": "Droit de cité"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-7--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Erwerb und Verlust des Kantons- und des Gemeindeb&uuml;rgerrechts werden im Rahmen des Bundesrechts durch die Gesetzgebung unter Vorbehalt folgender Grunds&auml;tze geregelt.&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>La l&eacute;gislation r&egrave;gle l&rsquo;acquisition et la perte du droit de cit&eacute; cantonal et du droit de cit&eacute; communal dans les limites du droit f&eacute;d&eacute;ral et sous r&eacute;serve des principes d&eacute;finis ci-apr&egrave;s.&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-7--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Das Kantonsb&uuml;rgerrecht beruht auf dem Gemeindeb&uuml;rgerrecht.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Le droit de cit&eacute; communal fonde le droit de cit&eacute; cantonal.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-7--p-3",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Nicht eingeb&uuml;rgert wird namentlich, wer:&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>3</span>\n  <p>\n    <span class='text_content'>Le droit de cit&eacute; est notamment refus&eacute; &agrave; quiconque&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [
+             {
+              "uid": "t-0--t-1--a-7--p-3--l-a",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      wegen eines Verbrechens rechtskr&auml;ftig verurteilt worden ist oder wer f&uuml;r eine Straftat zu einer Freiheitsstrafe von mindestens zwei Jahren rechtskr&auml;ftig verurteilt worden ist;\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      a\n    </td>\n    <td class='left_col last' colspan='3'>\n      a &eacute;t&eacute; condamn&eacute; pour un crime par un jugement entr&eacute; en force ou &agrave; quiconque qui a &eacute;t&eacute; condamn&eacute; par un jugement entr&eacute; en force &agrave; une peine privative de libert&eacute; de deux ans au moins pour une infraction;\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-7--p-3--l-b",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      Leistungen der Sozialhilfe bezieht oder bezogene Leistungen nicht vollumf&auml;nglich zur&uuml;ckbezahlt hat;\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      b\n    </td>\n    <td class='left_col last' colspan='3'>\n      b&eacute;n&eacute;ficie des prestations de l&rsquo;aide sociale ou n&rsquo;a pas enti&egrave;rement rembours&eacute; les prestations per&ccedil;ues;\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-7--p-3--l-c",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      c\n    </td>\n    <td class='left_col last' colspan='3'>\n      nicht nachweislich &uuml;ber gute Kenntnisse einer Amtssprache verf&uuml;gt;\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      c\n    </td>\n    <td class='left_col last' colspan='3'>\n      ne peut justifier de bonnes connaissances d&rsquo;une langue officielle;\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-7--p-3--l-d",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      d\n    </td>\n    <td class='left_col last' colspan='3'>\n      nicht nachweislich &uuml;ber ausreichende Kenntnisse des schweizerischen und kantonalen Staatsaufbaus und seiner Geschichte verf&uuml;gt;\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      d\n    </td>\n    <td class='left_col last' colspan='3'>\n      ne peut justifier de bonnes connaissances des institutions suisses et cantonales et de leur histoire;\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             },
+             {
+              "uid": "t-0--t-1--a-7--p-3--l-e",
+              "type": "enumeration",
+              "html_content": {
+               "de": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      e\n    </td>\n    <td class='left_col last' colspan='3'>\n      nicht &uuml;ber eine Niederlassungsbewilligung verf&uuml;gt.\n    </td>\n  </tr>\n</table>",
+               "fr": "<table class='enumeration_item'>\n  <tr>\n    <td class='number'>\n      e\n    </td>\n    <td class='left_col last' colspan='3'>\n      ne dispose pas d&rsquo;une autorisation d&rsquo;&eacute;tablissement.\n    </td>\n  </tr>\n</table>"
+              },
+              "children": []
+             }
+            ],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-7--p-4",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>4</span>\n  <p>\n    <span class='text_content'>Es besteht kein Anspruch auf Einb&uuml;rgerung.&nbsp;<strong>*</strong></span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>4</span>\n  <p>\n    <span class='text_content'>Nul ne peut se pr&eacute;valoir du droit de cit&eacute;.&nbsp;<strong>*</strong></span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         },
+         {
+          "uid": "t-0--t-1--a-8",
+          "type": "article",
+          "number": {
+           "de": "Art.&nbsp;8",
+           "fr": "Art.&nbsp;8"
+          },
+          "html_content": {
+           "de": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>8</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Pflichten</span>\n  </div>\n</div>",
+           "fr": "<div class='article'>\n  <div class='article_number'>\n    <span class='article_symbol'>Art.</span> <span class='number'>8</span>\n  </div>\n  <div class='article_title'>\n    <span class='title_text'>Devoirs</span>\n  </div>\n</div>"
+          },
+          "text": {
+           "de": "Pflichten",
+           "fr": "Devoirs"
+          },
+          "children": [
+           {
+            "uid": "t-0--t-1--a-8--p-1",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Jede Person hat die Pflichten zu erf&uuml;llen, die ihr durch die Verfassung und die auf ihr beruhende Gesetzgebung auferlegt werden.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>1</span>\n  <p>\n    <span class='text_content'>Toute personne est tenue d'accomplir les devoirs qui lui incombent en vertu de la Constitution et de la l&eacute;gislation qui y est conforme.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           },
+           {
+            "uid": "t-0--t-1--a-8--p-2",
+            "type": "paragraph",
+            "html_content": {
+             "de": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Neben der Verantwortung f&uuml;r sich selbst tr&auml;gt jede Person Verantwortung gegen&uuml;ber den Mitmenschen sowie Mitverantwortung daf&uuml;r, dass das Recht zur Selbstbestimmung auch k&uuml;nftigen Generationen gewahrt bleibt.</span>\n  </p>\n</div>",
+             "fr": "<div class='paragraph'>\n  <span class='number'>2</span>\n  <p>\n    <span class='text_content'>Toute personne est responsable d'elle-m&ecirc;me, assume sa responsabilit&eacute; envers les autres &ecirc;tres humains et prend sa part de responsabilit&eacute; pour garantir aux g&eacute;n&eacute;rations futures qu'elles auront aussi le droit de d&eacute;cider elles-m&ecirc;mes de leur devenir.</span>\n  </p>\n</div>"
+            },
+            "children": [],
+            "html_content_post": {
+             "de": "<div class='paragraph_post'></div>",
+             "fr": "<div class='paragraph_post'></div>"
+            }
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'>\n  Bern, 10. November 1992\n</div>\n<div class='egress_sign_off_signature'>\n  <p>\n    Im Namen des Grossen Rates\n  </p>\n  <p>\n    Die Pr&auml;sidentin: Zbinden\n  </p>\n  <p>\n    Der Staatsschreiber: Nuspliger\n  </p>\n</div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  94-1\n</div>",
+      "fr": "<div class='egress_sign_off_date'>\n  Berne, 10 novembre 1992\n</div>\n<div class='egress_sign_off_signature'>\n  <p>\n    Au nom du Grand Conseil,\n  </p>\n  <p>\n    la pr&eacute;sidente: Zbinden\n  </p>\n  <p>\n    le chancelier: Nuspliger\n  </p>\n</div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  94-1\n</div>"
+     },
+     "annex_documents": {}
+    },
+    "footnotes": {
+     "de": "<div class='footnotes' id=''></div>",
+     "fr": "<div class='footnotes' id=''></div>"
+    },
+    "modification_table": [
+     {
+      "uid": "mt-0",
+      "type": "date",
+      "text": {
+       "de": "Änderungstabelle - nach Beschluss",
+       "fr": "Tableau des modifications par date de décision"
+      },
+      "html_content": {
+       "de": "<h1>\n  &Auml;nderungstabelle - nach Beschluss\n</h1>\n<table>\n  <tr>\n    <th>\n      Beschluss\n    </th>\n    <th>\n      Inkrafttreten\n    </th>\n    <th>\n      Element\n    </th>\n    <th>\n      &Auml;nderung\n    </th>\n    <th>\n      BAG-Fundstelle\n    </th>\n  </tr>\n  <tr class='history_info_0'>\n    <td>\n      06.06.1993\n    </td>\n    <td>\n      01.01.1995\n    </td>\n    <td>\n      Erlass\n    </td>\n    <td>\n      Erstfassung\n    </td>\n    <td class='ags_source_publication'>\n      94-1\n    </td>\n  </tr>\n  <tr class='history_info_3332761'>\n    <td>\n      03.03.2002\n    </td>\n    <td>\n      01.05.2002\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      02-33 | 03-57\n    </td>\n  </tr>\n  <tr class='history_info_3332706'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 61 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332707'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 62 Abs. 1, f\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332717'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 72\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332718'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 73 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332719'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 73 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332730'>\n    <td>\n      25.09.2005\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 79 Abs. 1, f\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      05-115\n    </td>\n  </tr>\n  <tr class='history_info_3332697'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 3 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332698'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 5 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332699'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 6 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332700'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 6 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332712'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 68 Abs. 1, c\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332733'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 93\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332736'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      Art. 97 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332744'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      Art. 99 Abs. 1, b\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332774'>\n    <td>\n      17.06.2007\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 110a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      07-102 | 09-37\n    </td>\n  </tr>\n  <tr class='history_info_3332708'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 62 Abs. 1, f\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332721'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 75 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332722'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 76 Abs. 1, b\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332732'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 89 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332762'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      Titel ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332753'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332755'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332757'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a Abs. 4\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332759'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a Abs. 5\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332768'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101b\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332769'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101c\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332720'>\n    <td>\n      30.11.2008\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 73 Abs. 4\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-84 | 10-14\n    </td>\n  </tr>\n  <tr class='history_info_3332770'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332771'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332772'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 Abs. 4\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332773'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 Abs. 5\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332775'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 113 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332701'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332702'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 Abs. 3\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332703'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 Abs. 4\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332705'>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      Titel 3.1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332704'>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      Art. 31a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332709'>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      Art. 63 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332710'>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      Art. 63 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332696'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Erlasstitel\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332711'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 Abs. 1, b\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332713'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 Abs. 1, c1\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332715'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332716'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 Abs. 4\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332723'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 76 Abs. 1, e\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332724'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 77 Abs. 1, e\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332725'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 77 Abs. 1, f\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332728'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332726'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 Abs. 1, a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332727'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 Abs. 1, b\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332729'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 Abs. 2\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332731'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 83a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332751'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Titel 5.5\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332734'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332735'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 Abs. 1a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332737'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332738'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332739'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 Abs. 1, a\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332740'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 Abs. 1, b\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332741'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 Abs. 1, c\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332742'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332743'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 1, a\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332745'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 1, b\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332746'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 1, c\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332747'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 1, d\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332748'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 1a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332749'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332750'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 100a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332714'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 Abs. 1a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-060\n    </td>\n  </tr>\n  <tr class='history_info_3332763'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      Titel ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332752'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a Abs. 1\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332754'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332756'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332758'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a Abs. 4\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332760'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a Abs. 5\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332764'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b Abs. 2\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332765'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b Abs. 3\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332766'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b Abs. 4\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332767'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b Abs. 5\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3352583'>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      Art. 61 Abs. 1, a1\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3352584'>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      Art. 74a\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n</table>",
+       "fr": "<h1>\n  Tableau des modifications par date de d&eacute;cision\n</h1>\n<table>\n  <tr>\n    <th>\n      D&eacute;cision\n    </th>\n    <th>\n      Entr&eacute;e en vigueur\n    </th>\n    <th>\n      El&eacute;ment\n    </th>\n    <th>\n      Modification\n    </th>\n    <th>\n      R&eacute;f&eacute;rence ROB\n    </th>\n  </tr>\n  <tr class='history_info_0'>\n    <td>\n      06.06.1993\n    </td>\n    <td>\n      01.01.1995\n    </td>\n    <td>\n      Texte l&eacute;gislatif\n    </td>\n    <td>\n      premi&egrave;re version\n    </td>\n    <td class='ags_source_publication'>\n      94-1\n    </td>\n  </tr>\n  <tr class='history_info_3332761'>\n    <td>\n      03.03.2002\n    </td>\n    <td>\n      01.05.2002\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      02-33 | 03-57\n    </td>\n  </tr>\n  <tr class='history_info_3332706'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 61 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332707'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 62 al. 1, f\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332717'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 72\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332718'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 73 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332719'>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      Art. 73 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332730'>\n    <td>\n      25.09.2005\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      Art. 79 al. 1, f\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      05-115\n    </td>\n  </tr>\n  <tr class='history_info_3332697'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 3 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332698'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 5 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332699'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 6 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332700'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 6 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332712'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 68 al. 1, c\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332733'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 93\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332736'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      Art. 97 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332744'>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      Art. 99 al. 1, b\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332774'>\n    <td>\n      17.06.2007\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 110a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      07-102 | 09-37\n    </td>\n  </tr>\n  <tr class='history_info_3332708'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 62 al. 1, f\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332721'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 75 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332722'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 76 al. 1, b\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332732'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 89 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332762'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      titre modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332753'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332755'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332757'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a al. 4\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332759'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101a al. 5\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332768'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101b\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332769'>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Art. 101c\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332720'>\n    <td>\n      30.11.2008\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      Art. 73 al. 4\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-84 | 10-14\n    </td>\n  </tr>\n  <tr class='history_info_3332770'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332771'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332772'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 al. 4\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332773'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 108 al. 5\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332775'>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      Art. 113 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332701'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332702'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 al. 3\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332703'>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      Art. 7 al. 4\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332705'>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      Titre 3.1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332704'>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      Art. 31a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332709'>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      Art. 63 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332710'>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      Art. 63 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332696'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Titre de l'acte l&eacute;gislatif\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332711'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 al. 1, b\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332713'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 al. 1, c1\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332715'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332716'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 al. 4\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332723'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 76 al. 1, e\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332724'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 77 al. 1, e\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332725'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 77 al. 1, f\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332728'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332726'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 al. 1, a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332727'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 al. 1, b\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332729'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 78 al. 2\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332731'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 83a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332751'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Titre 5.5\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332734'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332735'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 al. 1a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332737'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97 al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332738'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 97a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332739'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 al. 1, a\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332740'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 al. 1, b\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332741'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 al. 1, c\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332742'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 98 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332743'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 1, a\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332745'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 1, b\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332746'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 1, c\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332747'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 1, d\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332748'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 1a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332749'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 99 al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332750'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 100a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332714'>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 68 al. 1a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-060\n    </td>\n  </tr>\n  <tr class='history_info_3332763'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      titre modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332752'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a al. 1\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332754'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332756'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332758'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a al. 4\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332760'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101a al. 5\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332764'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b al. 2\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332765'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b al. 3\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332766'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b al. 4\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332767'>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Art. 101b al. 5\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3352583'>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      Art. 61 al. 1, a1\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3352584'>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      Art. 74a\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n</table>"
+      }
+     },
+     {
+      "uid": "mt-1",
+      "type": "element",
+      "text": {
+       "de": "Änderungstabelle - nach Artikel",
+       "fr": "Tableau des modifications par disposition"
+      },
+      "html_content": {
+       "de": "<h1>\n  &Auml;nderungstabelle - nach Artikel\n</h1>\n<table>\n  <tr>\n    <th>\n      Element\n    </th>\n    <th>\n      Beschluss\n    </th>\n    <th>\n      Inkrafttreten\n    </th>\n    <th>\n      &Auml;nderung\n    </th>\n    <th>\n      BAG-Fundstelle\n    </th>\n  </tr>\n  <tr class='history_info_0'>\n    <td>\n      Erlass\n    </td>\n    <td>\n      06.06.1993\n    </td>\n    <td>\n      01.01.1995\n    </td>\n    <td>\n      Erstfassung\n    </td>\n    <td class='ags_source_publication'>\n      94-1\n    </td>\n  </tr>\n  <tr class='history_info_3332696'>\n    <td>\n      Erlasstitel\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332697'>\n    <td>\n      Art. 3 Abs. 2\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332698'>\n    <td>\n      Art. 5 Abs. 1\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332699'>\n    <td>\n      Art. 6 Abs. 2\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332700'>\n    <td>\n      Art. 6 Abs. 3\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332701'>\n    <td>\n      Art. 7 Abs. 1\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332702'>\n    <td>\n      Art. 7 Abs. 3\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332703'>\n    <td>\n      Art. 7 Abs. 4\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332705'>\n    <td>\n      Titel 3.1\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332704'>\n    <td>\n      Art. 31a\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3352583'>\n    <td>\n      Art. 61 Abs. 1, a1\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3332706'>\n    <td>\n      Art. 61 Abs. 2\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332707'>\n    <td>\n      Art. 62 Abs. 1, f\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332708'>\n    <td>\n      Art. 62 Abs. 1, f\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332709'>\n    <td>\n      Art. 63 Abs. 2\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332710'>\n    <td>\n      Art. 63 Abs. 3\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332711'>\n    <td>\n      Art. 68 Abs. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332712'>\n    <td>\n      Art. 68 Abs. 1, c\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332713'>\n    <td>\n      Art. 68 Abs. 1, c1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332714'>\n    <td>\n      Art. 68 Abs. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-060\n    </td>\n  </tr>\n  <tr class='history_info_3332715'>\n    <td>\n      Art. 68 Abs. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332716'>\n    <td>\n      Art. 68 Abs. 4\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332717'>\n    <td>\n      Art. 72\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332718'>\n    <td>\n      Art. 73 Abs. 2\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332719'>\n    <td>\n      Art. 73 Abs. 3\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332720'>\n    <td>\n      Art. 73 Abs. 4\n    </td>\n    <td>\n      30.11.2008\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-84 | 10-14\n    </td>\n  </tr>\n  <tr class='history_info_3352584'>\n    <td>\n      Art. 74a\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3332721'>\n    <td>\n      Art. 75 Abs. 1\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332722'>\n    <td>\n      Art. 76 Abs. 1, b\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332723'>\n    <td>\n      Art. 76 Abs. 1, e\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332724'>\n    <td>\n      Art. 77 Abs. 1, e\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332725'>\n    <td>\n      Art. 77 Abs. 1, f\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332728'>\n    <td>\n      Art. 78 Abs. 1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332726'>\n    <td>\n      Art. 78 Abs. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332727'>\n    <td>\n      Art. 78 Abs. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332729'>\n    <td>\n      Art. 78 Abs. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332730'>\n    <td>\n      Art. 79 Abs. 1, f\n    </td>\n    <td>\n      25.09.2005\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      05-115\n    </td>\n  </tr>\n  <tr class='history_info_3332731'>\n    <td>\n      Art. 83a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332732'>\n    <td>\n      Art. 89 Abs. 1\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332733'>\n    <td>\n      Art. 93\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332751'>\n    <td>\n      Titel 5.5\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332734'>\n    <td>\n      Art. 97 Abs. 1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332735'>\n    <td>\n      Art. 97 Abs. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332736'>\n    <td>\n      Art. 97 Abs. 3\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332737'>\n    <td>\n      Art. 97 Abs. 3\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332738'>\n    <td>\n      Art. 97a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332739'>\n    <td>\n      Art. 98 Abs. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332740'>\n    <td>\n      Art. 98 Abs. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332741'>\n    <td>\n      Art. 98 Abs. 1, c\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332742'>\n    <td>\n      Art. 98 Abs. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332743'>\n    <td>\n      Art. 99 Abs. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332744'>\n    <td>\n      Art. 99 Abs. 1, b\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332745'>\n    <td>\n      Art. 99 Abs. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332746'>\n    <td>\n      Art. 99 Abs. 1, c\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332747'>\n    <td>\n      Art. 99 Abs. 1, d\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      aufgehoben\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332748'>\n    <td>\n      Art. 99 Abs. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332749'>\n    <td>\n      Art. 99 Abs. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332750'>\n    <td>\n      Art. 100a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332761'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      03.03.2002\n    </td>\n    <td>\n      01.05.2002\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      02-33 | 03-57\n    </td>\n  </tr>\n  <tr class='history_info_3332762'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      Titel ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332763'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      Titel ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332752'>\n    <td>\n      Art. 101a Abs. 1\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332753'>\n    <td>\n      Art. 101a Abs. 2\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332754'>\n    <td>\n      Art. 101a Abs. 2\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332755'>\n    <td>\n      Art. 101a Abs. 3\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332756'>\n    <td>\n      Art. 101a Abs. 3\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332757'>\n    <td>\n      Art. 101a Abs. 4\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332758'>\n    <td>\n      Art. 101a Abs. 4\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332759'>\n    <td>\n      Art. 101a Abs. 5\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332760'>\n    <td>\n      Art. 101a Abs. 5\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332768'>\n    <td>\n      Art. 101b\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332764'>\n    <td>\n      Art. 101b Abs. 2\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332765'>\n    <td>\n      Art. 101b Abs. 3\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332766'>\n    <td>\n      Art. 101b Abs. 4\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332767'>\n    <td>\n      Art. 101b Abs. 5\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332769'>\n    <td>\n      Art. 101c\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332770'>\n    <td>\n      Art. 108 Abs. 2\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332771'>\n    <td>\n      Art. 108 Abs. 3\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332772'>\n    <td>\n      Art. 108 Abs. 4\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332773'>\n    <td>\n      Art. 108 Abs. 5\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332774'>\n    <td>\n      Art. 110a\n    </td>\n    <td>\n      17.06.2007\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      eingef&uuml;gt\n    </td>\n    <td class='ags_source_publication'>\n      07-102 | 09-37\n    </td>\n  </tr>\n  <tr class='history_info_3332775'>\n    <td>\n      Art. 113 Abs. 3\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      ge&auml;ndert\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n</table>",
+       "fr": "<h1>\n  Tableau des modifications par disposition\n</h1>\n<table>\n  <tr>\n    <th>\n      El&eacute;ment\n    </th>\n    <th>\n      D&eacute;cision\n    </th>\n    <th>\n      Entr&eacute;e en vigueur\n    </th>\n    <th>\n      Modification\n    </th>\n    <th>\n      R&eacute;f&eacute;rence ROB\n    </th>\n  </tr>\n  <tr class='history_info_0'>\n    <td>\n      Texte l&eacute;gislatif\n    </td>\n    <td>\n      06.06.1993\n    </td>\n    <td>\n      01.01.1995\n    </td>\n    <td>\n      premi&egrave;re version\n    </td>\n    <td class='ags_source_publication'>\n      94-1\n    </td>\n  </tr>\n  <tr class='history_info_3332696'>\n    <td>\n      Titre de l'acte l&eacute;gislatif\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332697'>\n    <td>\n      Art. 3 al. 2\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332698'>\n    <td>\n      Art. 5 al. 1\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332699'>\n    <td>\n      Art. 6 al. 2\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332700'>\n    <td>\n      Art. 6 al. 3\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332701'>\n    <td>\n      Art. 7 al. 1\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332702'>\n    <td>\n      Art. 7 al. 3\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332703'>\n    <td>\n      Art. 7 al. 4\n    </td>\n    <td>\n      24.11.2013\n    </td>\n    <td>\n      11.12.2013\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      14-4 | 15-60\n    </td>\n  </tr>\n  <tr class='history_info_3332705'>\n    <td>\n      Titre 3.1\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3332704'>\n    <td>\n      Art. 31a\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      26.09.2021\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      21-095\n    </td>\n  </tr>\n  <tr class='history_info_3352583'>\n    <td>\n      Art. 61 al. 1, a1\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3332706'>\n    <td>\n      Art. 61 al. 2\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332707'>\n    <td>\n      Art. 62 al. 1, f\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332708'>\n    <td>\n      Art. 62 al. 1, f\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332709'>\n    <td>\n      Art. 63 al. 2\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332710'>\n    <td>\n      Art. 63 al. 3\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      15.05.2022\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      22-049\n    </td>\n  </tr>\n  <tr class='history_info_3332711'>\n    <td>\n      Art. 68 al. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332712'>\n    <td>\n      Art. 68 al. 1, c\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332713'>\n    <td>\n      Art. 68 al. 1, c1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332714'>\n    <td>\n      Art. 68 al. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-060\n    </td>\n  </tr>\n  <tr class='history_info_3332715'>\n    <td>\n      Art. 68 al. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332716'>\n    <td>\n      Art. 68 al. 4\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332717'>\n    <td>\n      Art. 72\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332718'>\n    <td>\n      Art. 73 al. 2\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332719'>\n    <td>\n      Art. 73 al. 3\n    </td>\n    <td>\n      22.09.2002\n    </td>\n    <td>\n      01.01.2006\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      04-9\n    </td>\n  </tr>\n  <tr class='history_info_3332720'>\n    <td>\n      Art. 73 al. 4\n    </td>\n    <td>\n      30.11.2008\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-84 | 10-14\n    </td>\n  </tr>\n  <tr class='history_info_3352584'>\n    <td>\n      Art. 74a\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      03.03.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      24-018\n    </td>\n  </tr>\n  <tr class='history_info_3332721'>\n    <td>\n      Art. 75 al. 1\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332722'>\n    <td>\n      Art. 76 al. 1, b\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332723'>\n    <td>\n      Art. 76 al. 1, e\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332724'>\n    <td>\n      Art. 77 al. 1, e\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332725'>\n    <td>\n      Art. 77 al. 1, f\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332728'>\n    <td>\n      Art. 78 al. 1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332726'>\n    <td>\n      Art. 78 al. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332727'>\n    <td>\n      Art. 78 al. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332729'>\n    <td>\n      Art. 78 al. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332730'>\n    <td>\n      Art. 79 al. 1, f\n    </td>\n    <td>\n      25.09.2005\n    </td>\n    <td>\n      01.06.2006\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      05-115\n    </td>\n  </tr>\n  <tr class='history_info_3332731'>\n    <td>\n      Art. 83a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332732'>\n    <td>\n      Art. 89 al. 1\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332733'>\n    <td>\n      Art. 93\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2010\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      09-83\n    </td>\n  </tr>\n  <tr class='history_info_3332751'>\n    <td>\n      Titre 5.5\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332734'>\n    <td>\n      Art. 97 al. 1\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332735'>\n    <td>\n      Art. 97 al. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332736'>\n    <td>\n      Art. 97 al. 3\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332737'>\n    <td>\n      Art. 97 al. 3\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332738'>\n    <td>\n      Art. 97a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332739'>\n    <td>\n      Art. 98 al. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332740'>\n    <td>\n      Art. 98 al. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332741'>\n    <td>\n      Art. 98 al. 1, c\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332742'>\n    <td>\n      Art. 98 al. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332743'>\n    <td>\n      Art. 99 al. 1, a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332744'>\n    <td>\n      Art. 99 al. 1, b\n    </td>\n    <td>\n      24.09.2006\n    </td>\n    <td>\n      01.01.2011\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      10-58\n    </td>\n  </tr>\n  <tr class='history_info_3332745'>\n    <td>\n      Art. 99 al. 1, b\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332746'>\n    <td>\n      Art. 99 al. 1, c\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332747'>\n    <td>\n      Art. 99 al. 1, d\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      abrog&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332748'>\n    <td>\n      Art. 99 al. 1a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332749'>\n    <td>\n      Art. 99 al. 2\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332750'>\n    <td>\n      Art. 100a\n    </td>\n    <td>\n      12.03.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      23-059\n    </td>\n  </tr>\n  <tr class='history_info_3332761'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      03.03.2002\n    </td>\n    <td>\n      01.05.2002\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      02-33 | 03-57\n    </td>\n  </tr>\n  <tr class='history_info_3332762'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      titre modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332763'>\n    <td>\n      Art. 101a\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      titre modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332752'>\n    <td>\n      Art. 101a al. 1\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332753'>\n    <td>\n      Art. 101a al. 2\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332754'>\n    <td>\n      Art. 101a al. 2\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332755'>\n    <td>\n      Art. 101a al. 3\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332756'>\n    <td>\n      Art. 101a al. 3\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332757'>\n    <td>\n      Art. 101a al. 4\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332758'>\n    <td>\n      Art. 101a al. 4\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332759'>\n    <td>\n      Art. 101a al. 5\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332760'>\n    <td>\n      Art. 101a al. 5\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332768'>\n    <td>\n      Art. 101b\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332764'>\n    <td>\n      Art. 101b al. 2\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332765'>\n    <td>\n      Art. 101b al. 3\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332766'>\n    <td>\n      Art. 101b al. 4\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332767'>\n    <td>\n      Art. 101b al. 5\n    </td>\n    <td>\n      18.06.2023\n    </td>\n    <td>\n      01.01.2024\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      23-048\n    </td>\n  </tr>\n  <tr class='history_info_3332769'>\n    <td>\n      Art. 101c\n    </td>\n    <td>\n      24.02.2008\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      08-58 | 09-14\n    </td>\n  </tr>\n  <tr class='history_info_3332770'>\n    <td>\n      Art. 108 al. 2\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332771'>\n    <td>\n      Art. 108 al. 3\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332772'>\n    <td>\n      Art. 108 al. 4\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332773'>\n    <td>\n      Art. 108 al. 5\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n  <tr class='history_info_3332774'>\n    <td>\n      Art. 110a\n    </td>\n    <td>\n      17.06.2007\n    </td>\n    <td>\n      01.01.2008\n    </td>\n    <td>\n      introduit\n    </td>\n    <td class='ags_source_publication'>\n      07-102 | 09-37\n    </td>\n  </tr>\n  <tr class='history_info_3332775'>\n    <td>\n      Art. 113 al. 3\n    </td>\n    <td>\n      23.09.2012\n    </td>\n    <td>\n      01.01.2013\n    </td>\n    <td>\n      modifi&eacute;\n    </td>\n    <td class='ags_source_publication'>\n      12-82 | 14-93\n    </td>\n  </tr>\n</table>"
+      }
+     }
+    ]
+   },
+   "pdf_link_annexes": null,
+   "pdf_link_tol_with_annexes": null,
+   "doc_link_tol": null,
+   "history_information_map": {
+    "3332696": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332704": {
+     "change_document_id": 2001,
+     "materials_count": 0
+    },
+    "3332705": {
+     "change_document_id": 2001,
+     "materials_count": 0
+    },
+    "3332709": {
+     "change_document_id": 2089,
+     "materials_count": 0
+    },
+    "3332710": {
+     "change_document_id": 2089,
+     "materials_count": 0
+    },
+    "3332711": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332713": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332714": {
+     "change_document_id": 2225,
+     "materials_count": 0
+    },
+    "3332715": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332716": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332723": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332724": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332725": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332726": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332727": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332728": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332729": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332730": {
+     "change_document_id": 118,
+     "materials_count": 0
+    },
+    "3332731": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332734": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332735": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332737": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332738": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332739": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332740": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332741": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332742": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332743": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332745": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332746": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332747": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332748": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332749": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332750": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332751": {
+     "change_document_id": 2224,
+     "materials_count": 0
+    },
+    "3332752": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332754": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332756": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332758": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332760": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332763": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332764": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332765": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332766": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3332767": {
+     "change_document_id": 2212,
+     "materials_count": 0
+    },
+    "3352583": {
+     "change_document_id": 2301,
+     "materials_count": 0
+    },
+    "3352584": {
+     "change_document_id": 2301,
+     "materials_count": 0
+    }
+   },
+   "materials": [],
+   "external_links": [],
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    },
+    {
+     "language": {
+      "id": 3,
+      "iso639_1_code": "fr",
+      "iso639_2_code": "fra",
+      "name_native": "Français",
+      "priority": 2,
+      "position": 2,
+      "name": "Französisch"
+     }
+    }
+   ],
+   "annex_documents": []
+  },
+  "old_versions": [
+   {
+    "id": 3020,
+    "version_dates_str": "Version in Kraft von: 03.03.2024 bis: 31.12.2025 (Beschlussdatum: 03.03.2024)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 31418,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   },
+   {
+    "id": 2876,
+    "version_dates_str": "Version in Kraft von: 01.01.2024 bis: 02.03.2024 (Beschlussdatum: 12.03.2023)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 30568,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   },
+   {
+    "id": 2614,
+    "version_dates_str": "Version in Kraft von: 15.05.2022 bis: 31.12.2023 (Beschlussdatum: 15.05.2022)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 26828,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   },
+   {
+    "id": 2420,
+    "version_dates_str": "Version in Kraft von: 26.09.2021 bis: 14.05.2022 (Beschlussdatum: 26.09.2021)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 22605,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   },
+   {
+    "id": 962,
+    "version_dates_str": "Version in Kraft von: 11.12.2013 bis: 25.09.2021 (Beschlussdatum: 24.11.2013)",
+    "original_dates_str": "vom 06.06.1993, in Kraft seit: 01.01.1995",
+    "structured_document_id": 4281,
+    "title": "Verfassung des Kantons Bern",
+    "abbreviation": "KV"
+   }
+  ],
+  "future_versions": [],
+  "change_documents": [
+   {
+    "id": 2374,
+    "date_title_string": "Publikationsdatum 19.03.2025",
+    "number": "25-022",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4747/pdf_file",
+    "pdf_link_size": 233856,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "19.03.2025",
+    "date_string": "19.03.2025",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 27.11.2023)",
+    "identifier_1": "19.03.2025",
+    "identifier_2": "25-022",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2301,
+    "date_title_string": "Publikationsdatum 17.04.2024",
+    "number": "24-018",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4601/pdf_file",
+    "pdf_link_size": 126536,
+    "for_selected_version": true,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "17.04.2024",
+    "date_string": "17.04.2024",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 03.03.2024)",
+    "identifier_1": "17.04.2024",
+    "identifier_2": "24-018",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2225,
+    "date_title_string": "Publikationsdatum 22.11.2023",
+    "number": "23-060",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4449/pdf_file",
+    "pdf_link_size": 136609,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "22.11.2023",
+    "date_string": "22.11.2023",
+    "document_title": "Verfassung des Kantons Bern (Änderung vom 12.03.2023)",
+    "identifier_1": "22.11.2023",
+    "identifier_2": "23-060",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2224,
+    "date_title_string": "Publikationsdatum 22.11.2023",
+    "number": "23-059",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4447/pdf_file",
+    "pdf_link_size": 157766,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "22.11.2023",
+    "date_string": "22.11.2023",
+    "document_title": "Verfassung des Kantons Bern (Änderung vom 12.03.2023)",
+    "identifier_1": "22.11.2023",
+    "identifier_2": "23-059",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2212,
+    "date_title_string": "Publikationsdatum 20.09.2023",
+    "number": "23-048",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4423/pdf_file",
+    "pdf_link_size": 135553,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "20.09.2023",
+    "date_string": "20.09.2023",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 18.06.2023)",
+    "identifier_1": "20.09.2023",
+    "identifier_2": "23-048",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2208,
+    "date_title_string": "Publikationsdatum 23.08.2023",
+    "number": "23-044",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4415/pdf_file",
+    "pdf_link_size": 165910,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "23.08.2023",
+    "date_string": "23.08.2023",
+    "document_title": "Mitteilung: Bundesbeschlüsse über die Gewährleistung der Verfassung des Kantons Bern (KV)",
+    "identifier_1": "23.08.2023",
+    "identifier_2": "23-044",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2089,
+    "date_title_string": "Publikationsdatum 20.07.2022",
+    "number": "22-049",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4177/pdf_file",
+    "pdf_link_size": 144567,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "20.07.2022",
+    "date_string": "20.07.2022",
+    "document_title": "Verfassung des Kantons Bern (Änderung vom 15.05.2022)",
+    "identifier_1": "20.07.2022",
+    "identifier_2": "22-049",
+    "external_links": [],
+    "materials": []
+   },
+   {
+    "id": 2001,
+    "date_title_string": "Publikationsdatum 17.11.2021",
+    "number": "21-095",
+    "pdf_link": "https://www.belex.sites.be.ch/api/de/change_documents/file_dictionaries/4001/pdf_file",
+    "pdf_link_size": 118714,
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "17.11.2021",
+    "date_string": "17.11.2021",
+    "document_title": "Verfassung des Kantons Bern (KV) (Änderung vom 26.09.2021)",
+    "identifier_1": "17.11.2021",
+    "identifier_2": "21-095",
+    "external_links": [],
+    "materials": []
+   }
+  ]
+ }
+}

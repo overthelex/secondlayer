@@ -91,11 +91,20 @@ function stemToPrefix(token: string): string {
  * usable content tokens (caller must then skip the tsquery branch — to_tsquery('') errors).
  */
 export function buildLegislationTsquery(query: string): string {
+  return legislationStems(query).map((s) => `${s}:*`).join(' | ');
+}
+
+/**
+ * Content stems of a free-text query, deduped and capped — the shared basis for every
+ * tsquery we build. Exported so callers that need a different boolean join (search_npa
+ * runs AND-first over 429K editions, where OR-of-prefixes matches almost everything)
+ * don't have to re-derive the tokenisation and stemming.
+ */
+export function legislationStems(query: string): string[] {
   const tokens = (String(query || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
     .filter((t) => t.length >= 3 && !UK_STOPWORDS.has(t) && !/^\d+$/.test(t))
     .slice(0, 10);
-  const stems = tokens.map(stemToPrefix).filter(Boolean);
-  return [...new Set(stems)].map((s) => `${s}:*`).join(' | ');
+  return [...new Set(tokens.map(stemToPrefix).filter(Boolean))];
 }
 
 /**

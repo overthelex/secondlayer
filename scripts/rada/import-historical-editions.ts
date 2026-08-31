@@ -19,6 +19,7 @@ import * as path from 'path';
 import * as http from 'http';
 import * as https from 'https';
 import pg from 'pg';
+import { ARTICLE_NUMBER_PATTERN, normalizeArticleNumber } from '../../mcp_backend/src/services/act-number.js';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -217,10 +218,19 @@ function extractArticlesFromEditionHtml(html: string): Array<{ article_number: s
   const seen = new Set<string>();
 
   // Try <pre><b> format first (historical editions)
-  const preBoldRegex = /<b>Стаття\s+(\d+(?:-\d+)?)\.?<\/b>\s*(.*?)(?=<b>Стаття\s+\d|<\/pre>\s*$|$)/gs;
+// The index is separated by a hyphen that Rada often surrounds with spaces and
+// sometimes writes as an en/em dash: the stored ЦПК heading is «Стаття 350 - 1 .».
+// The old pattern allowed neither, so it captured «350», collided with the real
+// article 350 and was dropped by ON CONFLICT DO NOTHING — which is why every ЦПК
+// edition from 2004 to 2028 held exactly 500 articles and not one with an index,
+// against 525 in npa.article. 1 018 in-force indexed articles had no row at all
+// (LEXAI-1957). normalizeArticleNumber folds the dashes and strips the spaces so
+// the stored value matches npa.article.art_no character for character.
+  const preBoldRegex = new RegExp(
+    `<b>Стаття\\s+(${ARTICLE_NUMBER_PATTERN})\\.?</b>\\s*([\\s\\S]*?)(?=<b>Стаття\\s+\\d|</pre>\\s*$|$)`, 'g');
   let match;
   while ((match = preBoldRegex.exec(html)) !== null) {
-    const artNum = match[1].trim();
+    const artNum = normalizeArticleNumber(match[1]);
     if (seen.has(artNum)) continue;
     seen.add(artNum);
 
@@ -247,9 +257,10 @@ function extractArticlesFromEditionHtml(html: string): Array<{ article_number: s
   // Fallback: <span class=rvts9> format (current /print pages)
   seen.clear();
   articles.length = 0;
-  const rvtsRegex = /<span\s+class=["']?rvts9["']?>\s*Стаття\s+(\d+(?:-\d+)?)\.?\s*([^<]*)<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9["']?>\s*Стаття\s+\d|$)/gs;
+  const rvtsRegex = new RegExp(
+    `<span\\s+class=["']?rvts9["']?>\\s*Стаття\\s+(${ARTICLE_NUMBER_PATTERN})\\.?\\s*([^<]*)</span>\\s*([\\s\\S]*?)(?=<span\\s+class=["']?rvts9["']?>\\s*Стаття\\s+\\d|$)`, 'g');
   while ((match = rvtsRegex.exec(html)) !== null) {
-    const artNum = match[1].trim();
+    const artNum = normalizeArticleNumber(match[1]);
     if (seen.has(artNum)) continue;
     seen.add(artNum);
 
@@ -272,9 +283,10 @@ function extractArticlesFromEditionHtml(html: string): Array<{ article_number: s
   if (articles.length < 3) {
     seen.clear();
     articles.length = 0;
-    const plainRegex = /Стаття\s+(\d+(?:-\d+)?)\.\s*([^\n]{3,200})/g;
+    const plainRegex = new RegExp(
+      `Стаття\\s+(${ARTICLE_NUMBER_PATTERN})\\.\\s*([^\\n]{3,200})`, 'g');
     while ((match = plainRegex.exec(html)) !== null) {
-      const artNum = match[1].trim();
+      const artNum = normalizeArticleNumber(match[1]);
       if (!seen.has(artNum)) {
         seen.add(artNum);
         articles.push({

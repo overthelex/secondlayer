@@ -87,5 +87,10 @@ describe('MCPSSEServer tools/list curated whitelist', () => {
     for (const n of names) {
       expect(V2_TOOL_NAMES.has(n)).toBe(true);
     }
+
+    // tools/list must read the merged list, not the local-only one: /sse can execute
+    // rada_*/openreyestr_* (handleToolCall proxies via toolRegistry.executeTool) but used to
+    // advertise only local tools, hiding 23 of the 54 curated tools from a ChatGPT client.
+    expect(fakeRegistry.getAllToolDefinitions).toHaveBeenCalled();
   });
 });

@@ -704,42 +704,6 @@ export class LegislationTools extends BaseToolHandler {
     };
   }
 
-  async extractLegislationReferences(text: string): Promise<any[]> {
-    const references: any[] = [];
-    
-    const patterns = [
-      { regex: /стаття\s+(\d+(?:-\d+)?)\s+ЦПК/gi, rada_id: '1618-15', code: 'ЦПК' },
-      { regex: /стаття\s+(\d+(?:-\d+)?)\s+ГПК/gi, rada_id: '435-15', code: 'ГПК' },
-      { regex: /стаття\s+(\d+(?:-\d+)?)\s+КАС/gi, rada_id: '2747-15', code: 'КАС' },
-      { regex: /стаття\s+(\d+(?:-\d+)?)\s+КПК/gi, rada_id: '4651-17', code: 'КПК' },
-    ];
-
-    for (const pattern of patterns) {
-      let match;
-      while ((match = pattern.regex.exec(text)) !== null) {
-        const articleNumber = match[1];
-        
-        try {
-          const article = await this.service.getArticle(pattern.rada_id, articleNumber);
-          if (article) {
-            references.push({
-              code: pattern.code,
-              rada_id: pattern.rada_id,
-              article_number: articleNumber,
-              title: article.title,
-              full_text: capText(article.full_text),
-              url: article.url,
-            });
-          }
-        } catch (error: any) {
-          logger.warn(`Failed to fetch article ${articleNumber} from ${pattern.rada_id}:`, error.message);
-        }
-      }
-    }
-
-    return references;
-  }
-
   getToolDefinitions() {
     return [
       {

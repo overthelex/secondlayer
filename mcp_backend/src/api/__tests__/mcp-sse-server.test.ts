@@ -9,21 +9,14 @@ import { MCPSSEServer, MCPRequest } from '../mcp-sse-server.js';
 import { MockSSEResponse } from '../../__tests__/helpers/mock-sse-response.js';
 import { Request } from 'express';
 
-// Mock dependencies
-const mockMCPQueryAPI = {
-  getTools: jest.fn(),
-  handleToolCall: jest.fn(),
-  classifyIntent: jest.fn(),
-  searchCourtCases: jest.fn(),
-};
-
-const mockLegislationTools = {
-  getToolDefinitions: jest.fn(),
-  executeTool: jest.fn(),
-};
-
-const mockDocumentAnalysisTools = {
-  getToolDefinitions: jest.fn(),
+// MCPSSEServer took (mcpQueryAPI, legislationTools, documentAnalysisTools, costTracker) before
+// the unified gateway landed; it now takes (toolRegistry, costTracker, creditService?) and reads
+// every tool through the registry. This mock models that single dependency.
+const mockToolRegistry = {
+  // Typed as any[] so per-test mockReturnValue can supply tool objects; an inferred
+  // never[] rejects them.
+  getLocalToolDefinitions: jest.fn((): any[] => []),
+  getAllToolDefinitions: jest.fn((): Promise<any[]> => Promise.resolve([])),
   executeTool: jest.fn(),
 };
 
@@ -50,9 +43,7 @@ describe('MCPSSEServer', () => {
   beforeEach(() => {
     // Create server instance with mocked dependencies
     server = new MCPSSEServer(
-      mockMCPQueryAPI as any,
-      mockLegislationTools as any,
-      mockDocumentAnalysisTools as any,
+      mockToolRegistry as any,
       mockCostTracker as any
     );
 
@@ -75,8 +66,9 @@ describe('MCPSSEServer', () => {
 
   describe('getAllTools', () => {
     it('should return all tools in MCP format', () => {
-      // Setup mocks
-      mockMCPQueryAPI.getTools.mockReturnValue([
+      // One flat list from the registry — getAllTools() reads getLocalToolDefinitions()
+      // (mcp-sse-server.ts:72) rather than concatenating three per-service tool lists.
+      mockToolRegistry.getLocalToolDefinitions.mockReturnValue([
         {
           name: 'classify_intent',
           description: 'Classify legal query intent',
@@ -86,36 +78,12 @@ describe('MCPSSEServer', () => {
             required: ['query'],
           },
         },
-        {
-          name: 'search_court_cases',
-          description: 'Search court cases',
-          inputSchema: {
-            type: 'object',
-            properties: { query: { type: 'string' } },
-          },
-        },
-      ]);
-
-      mockLegislationTools.getToolDefinitions.mockReturnValue([
-        {
-          name: 'search_legislation',
-          description: 'Search legislation',
-          inputSchema: {
-            type: 'object',
-            properties: { query: { type: 'string' } },
-          },
-        },
-      ]);
-
-      mockDocumentAnalysisTools.getToolDefinitions.mockReturnValue([
-        {
-          name: 'parse_document',
-          description: 'Parse legal document',
-          inputSchema: {
-            type: 'object',
-            properties: { documentId: { type: 'string' } },
-          },
-        },
+        { name: 'search_court_cases', description: 'Search court cases',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } } } },
+        { name: 'search_legislation', description: 'Search legislation',
+          inputSchema: { type: 'object', properties: { query: { type: 'string' } } } },
+        { name: 'parse_document', description: 'Parse legal document',
+          inputSchema: { type: 'object', properties: { documentId: { type: 'string' } } } },
       ]);
 
       // Execute
@@ -138,14 +106,9 @@ describe('MCPSSEServer', () => {
     });
 
     it('should handle tools without inputSchema', () => {
-      mockMCPQueryAPI.getTools.mockReturnValue([
-        {
-          name: 'test_tool',
-          description: 'Test tool without schema',
-        },
+      mockToolRegistry.getLocalToolDefinitions.mockReturnValue([
+        { name: 'test_tool', description: 'Test tool without schema' },
       ]);
-      mockLegislationTools.getToolDefinitions.mockReturnValue([]);
-      mockDocumentAnalysisTools.getToolDefinitions.mockReturnValue([]);
 
       const tools = server.getAllTools();
 
@@ -157,9 +120,7 @@ describe('MCPSSEServer', () => {
     });
 
     it('should handle empty tools list', () => {
-      mockMCPQueryAPI.getTools.mockReturnValue([]);
-      mockLegislationTools.getToolDefinitions.mockReturnValue([]);
-      mockDocumentAnalysisTools.getToolDefinitions.mockReturnValue([]);
+      mockToolRegistry.getLocalToolDefinitions.mockReturnValue([]);
 
       const tools = server.getAllTools();
 
@@ -214,11 +175,9 @@ describe('MCPSSEServer', () => {
     });
 
     it('should handle tools/list request', async () => {
-      mockMCPQueryAPI.getTools.mockReturnValue([
+      mockToolRegistry.getLocalToolDefinitions.mockReturnValue([
         { name: 'tool1', description: 'Tool 1', inputSchema: { type: 'object', properties: {} } },
       ]);
-      mockLegislationTools.getToolDefinitions.mockReturnValue([]);
-      mockDocumentAnalysisTools.getToolDefinitions.mockReturnValue([]);
 
       mockReq.body = {
         jsonrpc: '2.0',

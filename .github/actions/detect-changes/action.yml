@@ -26,6 +26,9 @@ outputs:
   deployment:
     description: 'Whether deployment configs changed'
     value: ${{ steps.changes.outputs.deployment }}
+  local_only:
+    description: 'Whether only local-environment compose files changed (prod must not deploy)'
+    value: ${{ steps.changes.outputs.local_only }}
   mobile:
     description: 'Whether mobile/ Flutter app changed'
     value: ${{ steps.changes.outputs.mobile }}
@@ -127,6 +130,7 @@ runs:
 
         DEPLOY_INFRA=false  # Dockerfiles, compose files, nginx — triggers full rebuild
         DEPLOY_MONITORING=false  # Grafana, prometheus — deploy-only, no rebuild
+        LOCAL_ONLY=false  # только локальные compose-файлы — прод не трогаем
 
         while IFS= read -r file; do
           case "$file" in
@@ -136,6 +140,9 @@ runs:
             mcp_openreyestr/*) OPENREYESTR=true ;;
             lexwebapp/public/*) FRONTEND=true ;;
             lexwebapp/*) FRONTEND=true; FRONTEND_SRC=true ;;
+            # Локальные окружения на проде не используются, поэтому DEPLOY_INFRA
+            # не ставим: иначе правка docker-compose.local.yml выкатывает прод.
+            deployment/docker-compose.local.yml|deployment/docker-compose.dev-vm.yml|deployment/docker-compose.stage.yml) LOCAL_ONLY=true; DEPLOYMENT=true ;;
             deployment/grafana/*|deployment/prometheus/*) DEPLOY_MONITORING=true; DEPLOYMENT=true ;;
             deployment/*) DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             mobile/*) MOBILE=true ;;
@@ -216,6 +223,7 @@ runs:
         echo "openreyestr=$OPENREYESTR" >> "$GITHUB_OUTPUT"
         echo "frontend=$FRONTEND" >> "$GITHUB_OUTPUT"
         echo "deployment=$DEPLOYMENT" >> "$GITHUB_OUTPUT"
+        echo "local_only=$LOCAL_ONLY" >> "$GITHUB_OUTPUT"
         echo "monitoring=$DEPLOY_MONITORING" >> "$GITHUB_OUTPUT"
         echo "mobile=$MOBILE" >> "$GITHUB_OUTPUT"
         echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
@@ -232,6 +240,7 @@ runs:
         echo "  openreyestr: $OPENREYESTR"
         echo "  frontend:    $FRONTEND"
         echo "  deployment:  $DEPLOYMENT"
+        echo "  local_only:  $LOCAL_ONLY"
         echo "  monitoring:  $DEPLOY_MONITORING"
         echo "  mobile:      $MOBILE"
         echo "  platform:    $PLATFORM"

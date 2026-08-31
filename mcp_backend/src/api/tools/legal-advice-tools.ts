@@ -22,7 +22,7 @@ import { SectionType } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../../utils/html-parser.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets } from '../tool-utils.js';
+import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate } from '../tool-utils.js';
 
 /** Max cases to enrich with precedent status per search (cost/latency guard) */
 const MAX_SHEPARDIZATION_BATCH = 15;
@@ -78,7 +78,7 @@ export class LegalAdviceTools extends BaseToolHandler {
       judge: r.judge,
       court_code: r.court_code,
       justice_kind: r.justice_kind,
-      adjudication_date: r.adjudication_date,
+      adjudication_date: formatCourtDate(r.adjudication_date),
       url: `https://reyestr.court.gov.ua/Review/${r.doc_id}`,
       ...(r.headline ? { headline: r.headline } : {}),
       ...(r.rank != null ? { rank: r.rank } : {}),
@@ -439,7 +439,7 @@ export class LegalAdviceTools extends BaseToolHandler {
             doc_id: sourceCase.doc_id,
             judge: sourceCase.judge,
             court_code: sourceCase.court_code,
-            adjudication_date: sourceCase.adjudication_date,
+            adjudication_date: formatCourtDate(sourceCase.adjudication_date),
             url: `https://reyestr.court.gov.ua/Review/${sourceCase.doc_id}`,
             category_code: sourceCase.category_code,
             justice_kind: sourceCase.justice_kind,

@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { Mail, Loader2, X } from 'lucide-react';
 import showToast from '../../utils/toast';
 import { useForgotPasswordT } from '../../i18n/locales';
+import { API_BASE } from '../../utils/api/base';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = API_BASE;
 const BASE_URL = API_URL.replace(/\/api$/, '');
 
 interface ForgotPasswordModalProps {

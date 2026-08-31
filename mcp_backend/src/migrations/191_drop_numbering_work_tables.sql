@@ -1,0 +1,48 @@
+-- 191_drop_numbering_work_tables.sql
+--
+-- Drops three tables the act-numbering work left behind. All three have done
+-- their job; keeping them invites someone to act on stale scaffolding.
+--
+-- ---------------------------------------------------------------------------
+-- 1. legislation_orphaned_vectors (100 rows)
+--
+-- Created by migration 188 when the duplicate act rows were merged. The 4173
+-- pair held two DISJOINT chunk sets (0 shared vector ids of 100 each), and
+-- legislation_chunks is UNIQUE on (article_id, chunk_index), so the loser's
+-- rows could not be carried across. Their vector ids were recorded rather than
+-- leaked, on the assumption that the points were live in Qdrant and would need
+-- deleting.
+--
+-- That assumption was wrong, and it was checked rather than believed. All 100
+-- ids were probed by retrieve-by-id against EVERY collection on the prod
+-- Qdrant (172.31.21.244:6333) on 2026-08-15:
+--
+--     amcu_bge_cls              0/100   (174 382 points)
+--     legal_sections            0/100   (0 points)
+--     legislation_full_bge      0/100   (1 518 262 points)
+--     legislation_full_bge_cls  0/100   (28 057 312 points)
+--     vault_documents           0/100   (1 434 points)
+--
+-- An all-zero result is also what a broken probe returns, so the detector was
+-- verified first: the same call against two ids scrolled out of
+-- legislation_full_bge_cls returned 2/2. The zeros are real.
+--
+-- They were written by the in-app indexer into `legal_sections`, which now
+-- holds no points at all and which prod does not query (LEG_BGE_COLLECTION is
+-- legislation_full_bge). So there is nothing in any vector store to delete and
+-- nothing to keep a list for.
+--
+-- ---------------------------------------------------------------------------
+-- 2 & 3. lcl_number_repair (1 011 608 rows) and lcl_number_repair_bound
+--        (588 130 rows)
+--
+-- Working tables from repair-lcl-by-number.sql, the one-off that bound
+-- citations by act number before the citation builder could do it natively.
+-- The builder now carries that leg (PR #2282) and the script itself was
+-- deleted, so these describe a repair that no longer exists as a separate
+-- step. The rebuild has since run and its result is live, so they are not
+-- needed for comparison either.
+
+DROP TABLE IF EXISTS public.legislation_orphaned_vectors;
+DROP TABLE IF EXISTS public.lcl_number_repair;
+DROP TABLE IF EXISTS public.lcl_number_repair_bound;

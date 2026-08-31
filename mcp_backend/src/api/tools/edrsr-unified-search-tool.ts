@@ -21,6 +21,7 @@ import type { QueryReformulator } from '../../services/query-reformulator.js';
 import type { EdsrFtsService, EdsrFtsFilters, EdsrFtsSearchResponse } from '../../services/edrsr-fts-service.js';
 import { selectFtsTerms, sanitizeFtsToken, buildPrefixTsquery, isStatusVocabToken } from '../../services/edrsr-fts-service.js';
 import type { EdsrVectorizerService, EdrsrSearchFilters, EdrsrSearchResult } from '../../services/edrsr-vectorizer-service.js';
+import { formatCourtDate } from '../tool-utils.js';
 
 const DEFAULT_RRF_K = 60;
 const DEFAULT_OVERSAMPLE = 3;
@@ -324,15 +325,32 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     // Whitelisted slot → SQL mapping, assembled by the shared safe builder.
     // Field order preserved for param-index parity; scalar-vs-array branches
     // (court_code, category) and military→kupap→category precedence mirror the
-    // previous inline logic exactly. judge uses ILIKE (idx_edrsr_docs_judge is a
-    // plain b-tree, unusable under a leading-wildcard LIKE either way, so ILIKE
-    // is result-identical to the former LOWER(judge) LIKE LOWER()).
+    // previous inline logic exactly.
     const fields: FieldDef[] = [];
     const filters: Record<string, any> = {};
     const add = (def: FieldDef, value: any) => { fields.push(def); filters[def.name] = value; };
 
+    // judge was `match: 'ilike'`, and the comment here used to note that the b-tree
+    // is unusable under a leading wildcard "either way" — true, and the reason this
+    // seq-scanned all 26 partitions of edrsr_documents (135.8M rows) for 83 s. The
+    // fragment is now resolved to exact spellings against the distinct-judge lookup,
+    // so `eq_any` can use those b-trees. Matching semantics are unchanged.
+    let resolvedJudgeNames: string[] | null = null;
+    if (args.judge && this.ftsService) {
+      resolvedJudgeNames = await this.ftsService.resolveJudgeNames(args.judge, this.db);
+    }
+
     if (args.cause_num) add({ name: 'cause_num', match: 'exact', columns: ['d.cause_num'] }, args.cause_num);
-    if (args.judge) add({ name: 'judge', match: 'ilike', columns: ['d.judge'] }, args.judge);
+    if (args.judge) {
+      if (resolvedJudgeNames === null) {
+        // Lookup unavailable (no FTS service, or migration 183 not applied) — keep
+        // the old slow-but-correct predicate rather than returning unfiltered rows.
+        add({ name: 'judge', match: 'ilike', columns: ['d.judge'] }, args.judge);
+      } else {
+        // Empty array is deliberate: no judge matched, so match nothing.
+        add({ name: 'judge', match: 'eq_any', columns: ['d.judge'] }, resolvedJudgeNames);
+      }
+    }
     if (args.court_code) add({ name: 'court_code', match: 'exact', columns: ['d.court_code'] }, args.court_code);
     else if (resolvedCourtCodes?.length) add({ name: 'court_codes', match: 'eq_any', columns: ['d.court_code'] }, resolvedCourtCodes);
     if (args.justice_kind) add({ name: 'justice_kind', match: 'exact', columns: ['d.justice_kind'] }, args.justice_kind);
@@ -875,7 +893,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       const enriched = await this.enrichResults(topResults.map(r => ({
         doc_id: r.doc_id, cause_num: r.metadata.cause_num, judge: r.metadata.judge,
         court_code: r.metadata.court_code, justice_kind: r.metadata.justice_kind,
-        judgment_code: r.metadata.judgment_code, adjudication_date: r.metadata.adjudication_date,
+        judgment_code: r.metadata.judgment_code, adjudication_date: formatCourtDate(r.metadata.adjudication_date),
         rank: r.score,
       })));
 
@@ -932,7 +950,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
         doc_id: docId, rrf_score: 1 / (k + rank),
         fts_rank: Number(r.rank) || 0, fts_position: rank, fts_headline: r.headline || null,
         qdrant_score: null, qdrant_position: null, qdrant_best_chunk_text: null, qdrant_best_chunk_index: null,
-        metadata: { cause_num: r.cause_num, judge: r.judge, court_code: r.court_code, justice_kind: r.justice_kind, judgment_code: r.judgment_code, adjudication_date: r.adjudication_date },
+        metadata: { cause_num: r.cause_num, judge: r.judge, court_code: r.court_code, justice_kind: r.justice_kind, judgment_code: r.judgment_code, adjudication_date: formatCourtDate(r.adjudication_date) },
       });
     });
 
@@ -997,7 +1015,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       court_code: row.court_code, court_name: courtsMap.get(row.court_code) || null,
       justice_kind: row.justice_kind, justice_kind_name: justiceMap.get(row.justice_kind) || null,
       judgment_code: row.judgment_code, judgment_form: judgmentMap.get(row.judgment_code) || null,
-      adjudication_date: row.adjudication_date, receipt_date: row.receipt_date,
+      adjudication_date: formatCourtDate(row.adjudication_date), receipt_date: formatCourtDate(row.receipt_date),
       doc_url: row.doc_url, external_url: `https://reyestr.court.gov.ua/Review/${row.doc_id}`,
       ...(row.full_text ? { full_text: row.full_text } : {}),
       ...(row.headline ? { headline: row.headline } : {}),
@@ -1067,7 +1085,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       court_code: h.metadata.court_code ?? null, court_name: h.metadata.court_code ? courtsMap.get(h.metadata.court_code) || null : null,
       justice_kind: h.metadata.justice_kind ?? null, justice_kind_name: h.metadata.justice_kind ? justiceMap.get(h.metadata.justice_kind) || null : null,
       judgment_code: h.metadata.judgment_code ?? null, judgment_form: h.metadata.judgment_code ? judgmentMap.get(h.metadata.judgment_code) || null : null,
-      adjudication_date: h.metadata.adjudication_date || null,
+      adjudication_date: formatCourtDate(h.metadata.adjudication_date) || null,
       rrf_score: Number(h.rrf_score.toFixed(6)),
       fts_position: h.fts_position, fts_rank: h.fts_rank, fts_headline: h.fts_headline,
       qdrant_position: h.qdrant_position, qdrant_score: h.qdrant_score !== null ? Number(h.qdrant_score.toFixed(6)) : null,

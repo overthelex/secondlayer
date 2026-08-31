@@ -1,0 +1,106 @@
+<bulk:bulk-export xmlns:bulk="https://shab.ch/bulk-export">
+  <total>1095</total>
+  <pageRequest>
+    <page>0</page>
+    <size>3</size>
+  </pageRequest>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/0ef473fa-7ccb-428e-b4f6-2cf3fdde6e2f/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/HR02-export.xsd">
+    <meta>
+      <id>0ef473fa-7ccb-428e-b4f6-2cf3fdde6e2f</id>
+      <rubric>HR</rubric>
+      <subRubric>HR02</subRubric>
+      <language>de</language>
+      <registrationOffice>
+        <id>e15a629a-a08d-11e8-aa11-0050569d3c43</id>
+        <displayName>Bundesamt für Justiz (BJ), Eidgenössisches Amt für das Handelsregister</displayName>
+        <street>Bundesrain</street>
+        <streetNumber>20</streetNumber>
+        <swissZipCode>3003</swissZipCode>
+        <town>Bern</town>
+        <containsPostOfficeBox>false</containsPostOfficeBox>
+      </registrationOffice>
+      <publicationNumber>HR02-1006722419</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Die Mutation der aufgeführten Rechtseinheit wurde im Handelsregister vorgenommen. &lt;br />Publikation nach HRegV Art. 9 und Art. 35.</legalRemedy>
+      <cantons>ZG</cantons>
+      <secondaryTenants>
+        <tenantCode>kabzg</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Mutation PROTECTORSHIP COMPANY SA, Lugano, neu Protectorship Company SA, Zug</de>
+        <en>Change PROTECTORSHIP COMPANY SA, Lugano, new Protectorship Company SA, Zug</en>
+        <it>Cambiamenti PROTECTORSHIP COMPANY SA, Lugano, nuovo Protectorship Company SA, Zug</it>
+        <fr>Mutation PROTECTORSHIP COMPANY SA, Lugano, nouveau Protectorship Company SA, Zug</fr>
+      </title>
+    </meta>
+  </publication>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/c944dcf8-9f5c-4b43-9470-87203922ae51/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/HR02-export.xsd">
+    <meta>
+      <id>c944dcf8-9f5c-4b43-9470-87203922ae51</id>
+      <rubric>HR</rubric>
+      <subRubric>HR02</subRubric>
+      <language>de</language>
+      <registrationOffice>
+        <id>e15a629a-a08d-11e8-aa11-0050569d3c43</id>
+        <displayName>Bundesamt für Justiz (BJ), Eidgenössisches Amt für das Handelsregister</displayName>
+        <street>Bundesrain</street>
+        <streetNumber>20</streetNumber>
+        <swissZipCode>3003</swissZipCode>
+        <town>Bern</town>
+        <containsPostOfficeBox>false</containsPostOfficeBox>
+      </registrationOffice>
+      <publicationNumber>HR02-1006722431</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Die Mutation der aufgeführten Rechtseinheit wurde im Handelsregister vorgenommen. &lt;br />Publikation nach HRegV Art. 9 und Art. 35.</legalRemedy>
+      <cantons>ZG</cantons>
+      <secondaryTenants>
+        <tenantCode>kabzg</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Mutation Schnyder Ingenieure ZG AG, Hünenberg</de>
+        <en>Change Schnyder Ingenieure ZG AG, Hünenberg</en>
+        <it>Cambiamenti Schnyder Ingenieure ZG AG, Hünenberg</it>
+        <fr>Mutation Schnyder Ingenieure ZG AG, Hünenberg</fr>
+      </title>
+    </meta>
+  </publication>
+  <publication ref="https://amtsblattportal.ch/api/v1/publications/0941b44c-f7cc-48cb-9d79-ddb3297267aa/xml" schemaLocation="https://amtsblattportal.ch/api/v1/schemas/shab/1.26/HR02-export.xsd">
+    <meta>
+      <id>0941b44c-f7cc-48cb-9d79-ddb3297267aa</id>
+      <rubric>HR</rubric>
+      <subRubric>HR02</subRubric>
+      <language>de</language>
+      <registrationOffice>
+        <id>e15a629a-a08d-11e8-aa11-0050569d3c43</id>
+        <displayName>Bundesamt für Justiz (BJ), Eidgenössisches Amt für das Handelsregister</displayName>
+        <street>Bundesrain</street>
+        <streetNumber>20</streetNumber>
+        <swissZipCode>3003</swissZipCode>
+        <town>Bern</town>
+        <containsPostOfficeBox>false</containsPostOfficeBox>
+      </registrationOffice>
+      <publicationNumber>HR02-1006722414</publicationNumber>
+      <publicationState>PUBLISHED</publicationState>
+      <publicationDate>2026-08-03</publicationDate>
+      <primaryTenantCode>shab</primaryTenantCode>
+      <legalRemedy>Die Mutation der aufgeführten Rechtseinheit wurde im Handelsregister vorgenommen. &lt;br />Publikation nach HRegV Art. 9 und Art. 35.</legalRemedy>
+      <cantons>ZG</cantons>
+      <secondaryTenants>
+        <tenantCode>kabzg</tenantCode>
+        <publicationDate>2026-08-03</publicationDate>
+      </secondaryTenants>
+      <title>
+        <de>Mutation OneAgrix AG, Zug, neu OneAgrix AG in Liquidation</de>
+        <en>Change OneAgrix AG, Zug, new OneAgrix AG in Liquidation</en>
+        <it>Cambiamenti OneAgrix AG, Zug, nuovo OneAgrix AG in Liquidation</it>
+        <fr>Mutation OneAgrix AG, Zug, nouveau OneAgrix AG in Liquidation</fr>
+      </title>
+    </meta>
+  </publication>
+</bulk:bulk-export>

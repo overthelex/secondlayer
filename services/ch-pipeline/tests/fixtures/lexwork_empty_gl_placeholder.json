@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 726,
+   "title": "Vollziehungsverordnung zum Bundesgesetz über Mass und Gewicht",
+   "version_dates_str": "Version in Kraft von: 24.06.1909 bis: 31.12.2013 (Beschlussdatum: 24.06.1909)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  IX B/25/3\n</h1>\n<h1 class='title'>\n  Vollziehungsverordnung zum Bundesgesetz &uuml;ber Mass und Gewicht\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 24.06.1909 (Stand 24.06.1909)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'></div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'>\n  <p>\n    In Revision\n  </p>\n</div>\n<div class='egress_ags_source'>\n  LB 2 127\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

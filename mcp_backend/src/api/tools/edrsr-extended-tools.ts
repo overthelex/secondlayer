@@ -14,6 +14,7 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { logger } from '../../utils/logger.js';
 import { extractDispositiveFromText } from '../../utils/dispositive.js';
 import { cleanEdrsrTextSql } from '../../services/edrsr-fts-service.js';
+import { formatCourtDate } from '../tool-utils.js';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -318,7 +319,7 @@ export class EdsrExtendedTools extends BaseToolHandler {
     return rows.map((row) => ({
       doc_id: row.doc_id,
       cause_num: row.cause_num,
-      adjudication_date: row.adjudication_date,
+      adjudication_date: formatCourtDate(row.adjudication_date),
       judge: row.judge,
       court_code: row.court_code,
       court_name: courtName,

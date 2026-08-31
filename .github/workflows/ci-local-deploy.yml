@@ -1,15 +1,34 @@
 ##############################################################################
-# Pipeline: Local CI/CD
-# - Runs on self-hosted runner (local.legal.org.ua)
-# - Builds and tests all changed services in local Docker environment
-# - Deploys changed services to local environment for integration testing
-# - Triggered on merge to main
+# Pipeline: CI + deploy legal.org.ua (local.lex prod)
+#
+# Two-prod topology (2026-08): one codebase, two products, split by deploy
+# target and env, never by fork:
+#   - legal.org.ua = the local environment on cthulhu (local.lex), deployed
+#     by THIS workflow's deploy-local job after build-and-test succeeds.
+#     Now that the box serves real users, that deploy IS a prod deploy.
+#   - lawrider.ch  = AWS (deploy-lawrider.yml), blue-green over SSH,
+#     triggered by this workflow's success via workflow_run.
+# Which jurisdictions a target serves is env-side (.env.local / .env.prod).
+#
+# - Runs on self-hosted runners; deploy-local pins the `local-deploy` label
+#   (unique to cthulhu — `local` alone also matches the prod runner).
+# - Triggered on merge to main, or manually (deploy/no_cache inputs)
 ##############################################################################
 name: 'CI/CD: Local Build & Test'
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Развернуть локальное окружение (docker compose up на cthulhu)'
+        type: boolean
+        default: true
+      no_cache:
+        description: 'Полная пересборка образов (--no-cache)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -25,7 +44,9 @@ jobs:
   # ─── Step 1: Detect what changed ─────────────────────────────────────
   detect-changes:
     name: Detect Changes
-    runs-on: [self-hosted, local]
+    # `local` матчится и на prod-runner — весь конвейер нового прода держим
+    # на его собственной машине
+    runs-on: [self-hosted, local-deploy]
     outputs:
       shared: ${{ steps.changes.outputs.shared }}
       backend: ${{ steps.changes.outputs.backend }}
@@ -33,6 +54,7 @@ jobs:
       openreyestr: ${{ steps.changes.outputs.openreyestr }}
       frontend: ${{ steps.changes.outputs.frontend }}
       deployment: ${{ steps.changes.outputs.deployment }}
+      local_only: ${{ steps.changes.outputs.local_only }}
       any_backend: ${{ steps.changes.outputs.any_backend }}
       services_to_build: ${{ steps.changes.outputs.services_to_build }}
       services_to_deploy: ${{ steps.changes.outputs.services_to_deploy }}
@@ -54,7 +76,10 @@ jobs:
         run: |
           SERVICES='${{ steps.changes.outputs.services_to_build }}'
           MONITORING='${{ steps.changes.outputs.monitoring }}'
-          if [ "$SERVICES" = '[]' ] && [ "$MONITORING" != "true" ]; then
+          LOCAL_ONLY='${{ steps.changes.outputs.local_only }}'
+          # local_only — правка docker-compose.local.yml: прод её игнорирует
+          # (см. detect-changes), а локальное окружение обязано передеплоиться
+          if [ "$SERVICES" = '[]' ] && [ "$MONITORING" != "true" ] && [ "$LOCAL_ONLY" != "true" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
             echo "No services changed — skipping build/test/deploy"
           else
@@ -64,7 +89,13 @@ jobs:
   # ─── Step 2: Build & test on local environment ─────────────────────
   build-and-test:
     name: Build & Test on Local
-    runs-on: [self-hosted, local-build]
+    # Пин на cthulhu-vm — виртуалку на local.lex. Лейбл `local-build` до
+    # 26.08 висел ещё и на prod-runner, поэтому сборка нового прода регулярно
+    # уезжала собираться на старом: кто из двух раннеров освободился первым,
+    # тот её и брал. Лишний лейбл с prod-runner снят, но пин оставляем в коде —
+    # чтобы возврат лейбла не вернул лотерею.
+    # Та же ловушка, что была у deploy-local с лейблом `local`.
+    runs-on: [self-hosted, cthulhu-vm]
     needs: detect-changes
     if: needs.detect-changes.outputs.has_changes == 'true'
     env:
@@ -94,8 +125,16 @@ jobs:
       - name: Reset dist ownership (self-hosted runner)
         run: sudo chown -R "$(id -u):$(id -g)" packages/shared/dist mcp_backend/dist 2>/dev/null || true
 
+      # Одна установка на весь монорепозиторий. `package.json` в корне объявляет
+      # рабочие области (mcp_backend, mcp_rada, mcp_openreyestr, lexwebapp,
+      # packages/shared), поэтому npm из каталога пакета всё равно уходит в
+      # корень — шесть прежних `npm install` шесть раз ставили одно и то же.
+      # `ci` вместо `install`: ставится ровно то, что записано в lock-файле.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
       - name: Build shared package
-        run: cd packages/shared && npm install --legacy-peer-deps && npm run build
+        run: cd packages/shared && npm run build
 
       # Backend/RADA/OpenReyestr integration tests require running infrastructure (DB, Redis, MinIO).
       # CI runs TypeScript compilation + unit tests (mocked, no infra needed).
@@ -121,7 +160,7 @@ jobs:
       - name: Build backend
         if: needs.detect-changes.outputs.backend == 'true'
         run: |
-          cd mcp_backend && npm install && npm run build
+          cd mcp_backend && npm run build
 
       - name: Unit test backend
         if: needs.detect-changes.outputs.backend == 'true'
@@ -134,15 +173,11 @@ jobs:
 
       - name: Build RADA
         if: needs.detect-changes.outputs.rada == 'true'
-        run: cd mcp_rada && npm install && npm run build
+        run: cd mcp_rada && npm run build
 
       - name: Build OpenReyestr
         if: needs.detect-changes.outputs.openreyestr == 'true'
-        run: cd mcp_openreyestr && npm install && npm run build
-
-      - name: Install frontend deps
-        if: needs.detect-changes.outputs.frontend == 'true'
-        run: cd lexwebapp && npm install --legacy-peer-deps
+        run: cd mcp_openreyestr && npm run build
 
       - name: Test frontend
         if: needs.detect-changes.outputs.frontend_tests_needed == 'true'
@@ -176,12 +211,12 @@ jobs:
 
       - name: Build platform
         if: needs.detect-changes.outputs.platform == 'true'
-        run: cd platform && npm install --legacy-peer-deps && npm run build
+        run: cd platform && npm ci --legacy-peer-deps --no-audit --no-fund && npm run build
 
   # ─── Step 2b: Self-heal build failures with Claude Code (DISABLED) ──
   self-heal-build:
     name: Self-Heal Build Failures
-    runs-on: [self-hosted, local]
+    runs-on: [self-hosted, local-deploy]
     needs: [detect-changes, build-and-test]
     if: false  # temporarily disabled — not producing useful fixes
     env:
@@ -323,3 +358,333 @@ jobs:
             --base main \
             --head "$BRANCH"
 
+  # ─── Step 4: Deploy to the local environment ─────────────────────────
+  # Разворачивает стек на cthulhu (local.lex) тем же compose-файлом, что и
+  # ручной `manage-gateway.sh deploy local`, но под контролем пайплайна.
+  deploy-local:
+    name: Deploy Local Environment
+    # ВАЖНО: пин на `local-deploy` — единственный лейбл, уникальный для cthulhu.
+    # Лейбл `local` матчится и на prod-runner, и джоба уехала бы разворачивать
+    # локальный стек прямо на проде (см. deploy-preview note в deploy-prod.yml).
+    runs-on: [self-hosted, local-deploy]
+    needs: [detect-changes, build-and-test]
+    if: |
+      always() &&
+      needs.build-and-test.result != 'failure' &&
+      needs.build-and-test.result != 'cancelled' &&
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deploy) ||
+        (github.event_name == 'push' && needs.detect-changes.outputs.has_changes == 'true')
+      )
+    timeout-minutes: 120
+    steps:
+      - name: Sync deployment checkout
+        run: |
+          set -euo pipefail
+          REPO="$HOME/SecondLayer"
+          if [ ! -d "$REPO/.git" ]; then
+            echo "::error::$REPO не является git-репозиторием — деплой-чекаут не найден"
+            exit 1
+          fi
+          cd "$REPO"
+          git fetch --prune origin
+          git checkout main
+          git reset --hard "${{ github.sha }}"
+          echo "Развёрнутый коммит: $(git log --oneline -1)"
+
+      - name: Verify local env file
+        run: |
+          set -euo pipefail
+          ENV_FILE="$HOME/SecondLayer/deployment/.env.local"
+          if [ ! -s "$ENV_FILE" ]; then
+            echo "::error::$ENV_FILE отсутствует или пуст (секреты не в git — файл живёт на машине)"
+            exit 1
+          fi
+          echo "Переменных в .env.local: $(grep -cE '^[A-Z_]+=' "$ENV_FILE")"
+
+          # Значение переменной — ПОСЛЕДНЕЕ её определение: так читает docker compose.
+          # Файл переживал несколько переездов, ключи в нём дублируются, и
+          # смотреть на первое вхождение — верный способ обмануть самого себя.
+          # `|| true` внутри: при set -e и pipefail ненайденная переменная иначе
+          # роняет шаг на первом же присваивании, и до остальных проверок дело
+          # не доходит — проверка молчит ровно там, где должна ругаться.
+          val() { { grep -E "^$1=" "$ENV_FILE" || true; } | tail -1 | cut -d= -f2- ; }
+          cnt() { { grep -cE "^$1=" "$ENV_FILE" || true; } | tail -1 ; }
+
+          fail=0
+          bad() { echo "::error::$*"; fail=1; }
+
+          PUBLIC_URL=$(val PUBLIC_URL)
+          [ -n "$PUBLIC_URL" ] || bad "PUBLIC_URL не задан — не с чем сверять остальные адреса"
+          echo "Публичный адрес стенда: ${PUBLIC_URL:-<пусто>}"
+
+          # 1. Адреса. Всё, что уходит наружу (редирект OAuth, ссылки в письмах,
+          # ссылка на пополнение, публичные URL файлов), должно вести на тот же
+          # домен, на котором стенд реально отвечает. 27.08.2026 боевой домен
+          # переехал на этот хост, а FRONTEND_URL и GOOGLE_CALLBACK_URL остались
+          # на local.legal.org.ua — вход через Google уводил на чужой адрес.
+          if [ -n "$PUBLIC_URL" ]; then
+            for v in FRONTEND_URL GOOGLE_CALLBACK_URL MINIO_PUBLIC_URL; do
+              cur=$(val "$v")
+              if [ -z "$cur" ]; then
+                echo "::warning::$v не задан — возьмётся значение по умолчанию из compose"
+              elif [ "${cur#$PUBLIC_URL}" = "$cur" ]; then
+                bad "$v=$cur не начинается с PUBLIC_URL=$PUBLIC_URL"
+              fi
+            done
+
+            # 2. CORS. Бэкенд отдаёт заголовки только для перечисленных здесь
+            # источников; nginx их больше не дублирует. Домена нет в списке —
+            # браузер не увидит X-Total-Count и прочие exposed-заголовки.
+            ORIGINS=$(val ALLOWED_ORIGINS)
+            case ",$ORIGINS," in
+              *",$PUBLIC_URL,"*) : ;;
+              *) bad "ALLOWED_ORIGINS не содержит $PUBLIC_URL (сейчас: ${ORIGINS:-<пусто>})" ;;
+            esac
+          fi
+
+          # 3. Ключи межсервисных вызовов. Сервис принимает список *_API_KEYS,
+          # бэкенд стучится одиночным *_API_KEY. Разошлись — сервис отвечает
+          # 401, а чат молча теряет его инструменты: ровно так 27.08.2026
+          # пропали все 12 инструментов openreyestr, и заметно это было только
+          # по строчке "not registered in ToolRegistry" в логах.
+          for svc in OPENREYESTR RADA; do
+            one=$(val "${svc}_API_KEY"); many=$(val "${svc}_API_KEYS")
+            [ -n "$one" ] && [ -n "$many" ] || continue
+            case ",$many," in
+              *",$one,"*) echo "${svc}: ключ бэкенда есть в списке принимаемых" ;;
+              *) bad "${svc}_API_KEY не входит в ${svc}_API_KEYS — сервис ответит 401 и его инструменты выпадут из чата" ;;
+            esac
+          done
+
+          # 4. Режим. В development бэкенд отдаёт клиенту текст внутренней
+          # ошибки и пускает любой localhost-источник. На публичном домене это
+          # утечка, поэтому здесь только production.
+          NODE_ENV=$(val NODE_ENV)
+          case "$PUBLIC_URL" in
+            *localhost*|*local.legal.org.ua*) : ;;
+            *) [ "$NODE_ENV" = "production" ] || bad "NODE_ENV=${NODE_ENV:-<пусто>} на публичном домене $PUBLIC_URL — нужен production" ;;
+          esac
+
+          # Дубли сами по себе не ошибка (файл так устроен), но именно из-за них
+          # правка «в нужной строке» может не подействовать — печатаем явно.
+          for v in PUBLIC_URL FRONTEND_URL ALLOWED_ORIGINS NODE_ENV GOOGLE_CALLBACK_URL MINIO_PUBLIC_URL OPENREYESTR_API_KEY OPENREYESTR_API_KEYS; do
+            n=$(cnt "$v")
+            [ "${n:-0}" -gt 1 ] && echo "::warning::$v определён $n раз — действует последний"
+          done
+
+          [ "$fail" = "0" ] || { echo "::error::.env.local рассогласован — деплой остановлен до правки файла на машине"; exit 1; }
+          echo "Проверка .env.local пройдена"
+
+      - name: Guard against unreadable paths in the checkout
+        run: |
+          set -euo pipefail
+          cd "$HOME/SecondLayer"
+          UNREADABLE=$(find . -type d ! -readable 2>/dev/null || true)
+          if [ -n "$UNREADABLE" ]; then
+            echo "::error::каталоги, которые не прочитает сборщик контекста (обычно pgdata под uid postgres):"
+            echo "$UNREADABLE"
+            echo "Их надо вынести из репозитория: .dockerignore не спасает, из-за !-паттернов сборщик всё равно обходит дерево."
+            exit 1
+          fi
+          echo "нечитаемых путей нет"
+
+      - name: Overlay proprietary source
+        env:
+          CORE_REPO_SSH_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          REPO="$HOME/SecondLayer"
+          CORE_TMP=$(mktemp -d)
+          KEY_FILE=$(mktemp)
+          trap 'shred -u "$KEY_FILE" 2>/dev/null || rm -f "$KEY_FILE"; rm -rf "$CORE_TMP"' EXIT
+          printf '%s\n' "$CORE_REPO_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          GIT_SSH_COMMAND="ssh -i $KEY_FILE -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes" \
+            git clone --depth 1 git@github.com:overthelex/secondlayer-core.git "$CORE_TMP"
+          test -s "$CORE_TMP/src/services/chat-execution-loop.ts" && test -s "$CORE_TMP/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core clone incomplete — key files missing in $CORE_TMP"; exit 1; }
+          find "$CORE_TMP"/src/services -maxdepth 1 -name '*.ts' -exec cp -f {} "$REPO/mcp_backend/src/services/" \;
+          cp -rf "$CORE_TMP"/src/prompts/* "$REPO/mcp_backend/src/prompts/"
+          test -s "$REPO/mcp_backend/src/services/chat-execution-loop.ts" && test -s "$REPO/mcp_backend/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core overlay failed — key files missing after copy"; exit 1; }
+          echo "Оверлей на месте: $(find "$REPO/mcp_backend/src/services" -maxdepth 1 -name '*.ts' | wc -l) файлов в services"
+
+      - name: Deploy stack (blue-green)
+        run: |
+          set -euo pipefail
+          cd "$HOME/SecondLayer/deployment"
+          DC="docker compose -f docker-compose.local.yml --env-file .env.local"
+          COLORS=.active-colors-local
+          INC=nginx/includes/local-upstreams.conf
+
+          # Активный цвет: файл — подсказка, docker — истина.
+          CUR=$(grep '^app=' "$COLORS" 2>/dev/null | cut -d= -f2 || echo blue)
+          if docker inspect secondlayer-app-local-green --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+            CUR=green
+          elif docker inspect secondlayer-app-local --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
+            CUR=blue
+          fi
+          [ "$CUR" = "green" ] && NEW=blue || NEW=green
+          echo "активен: $CUR, выкатываем: $NEW"
+
+          # Апстримы приводим к ТЕКУЩЕМУ цвету до того, как что-либо коснётся
+          # nginx. Файл не в git (см. .gitignore) именно потому, что раньше он
+          # там был: `git reset --hard` возвращал в него цвет времён коммита,
+          # и nginx, пересозданный следом, падал в цикле — `host not found in
+          # upstream`. 27.08.2026 это стоило 79 секунд простоя боевого домена.
+          # На чистой машине файла может не быть вовсе, поэтому пишем всегда.
+          if [ "$CUR" = "green" ]; then CUR_BE=secondlayer-app-local-green; CUR_FE=lexwebapp-local-green
+          else CUR_BE=secondlayer-app-local; CUR_FE=lexwebapp-local; fi
+          printf '# Активные апстримы — переписывает джоба деплоя, руками не править\n\nupstream local_mcp_backend {\n    server %s:3000;\n    keepalive 128;\n}\n\nupstream local_frontend {\n    server %s:80;\n    keepalive 32;\n}\n' "$CUR_BE" "$CUR_FE" > "$INC"
+          echo "апстримы указывают на работающий цвет: $CUR_BE / $CUR_FE"
+
+          if [ "${{ inputs.no_cache }}" = "true" ]; then
+            $DC build --no-cache
+          fi
+
+          # Сначала собираем образы — сборка ничего не трогает в работающем.
+          $DC build
+
+          # Обновляем ВСЁ, КРОМЕ цветных сервисов. Это ключевой момент: обычный
+          # `up -d` пересоздал бы и активный цвет, а значит уронил бы сайт на
+          # время пересоздания — ровно то, ради чего затевался blue-green.
+          # Список считаем динамически, чтобы новый сервис не пришлось
+          # вписывать сюда руками.
+          # Без --remove-orphans: рядом крутятся qdrant-edrsr-local и
+          # qdrant-general-local, которые обслуживают ПРОД.
+          OTHERS=$($DC config --services | grep -vE '^(app-local|app-local-green|lexwebapp-local|lexwebapp-local-green)$' | tr '\n' ' ')
+          echo "обновляю вне blue-green: $(echo $OTHERS | wc -w) сервисов"
+          # --no-deps обязателен: nginx-local объявлен зависящим от app-local и
+          # lexwebapp-local, и без этого флага compose поднимет их как
+          # зависимости — то есть пересоздаст активный цвет. Так и вышло
+          # 26.08: 10 секунд 502 у пользователей ещё до переключения цвета.
+          $DC up -d --no-deps $OTHERS
+
+          # Конфиг монтируется КАТАЛОГОМ (см. compose), поэтому правка из git
+          # видна контейнеру сразу и пересоздавать nginx не нужно: reload
+          # достаточно. Пересоздание здесь стоило бы секунд простоя на каждом
+          # деплое, трогающем конфиг.
+          #
+          # После пересоздания сервисов выше их IP меняются, а nginx резолвит
+          # имена апстримов один раз при старте — та самая причина 502 из
+          # #2325. Перечитываем конфиг сразу, не дожидаясь переключения цвета:
+          # если выкатка нового цвета сорвётся, старый останется доступен.
+          # Сверяем содержимое, а не inode: с каталогом они и так совпадают,
+          # а расхождение содержимого поймает любой будущий возврат к файловому
+          # монтированию. md5 вместо diff — не нужен stdin в контейнер.
+          HOST_MD5=$(md5sum nginx/conf.d/local-docker.conf | cut -d' ' -f1)
+          CTR_MD5=$(docker exec nginx-local md5sum /etc/nginx/conf.d/local-docker.conf 2>/dev/null | cut -d' ' -f1 || echo нет)
+          if [ "$HOST_MD5" != "$CTR_MD5" ]; then
+            echo "::warning::контейнер видит не тот конфиг, что лежит на машине — пересоздаю nginx"
+            $DC up -d --no-deps --force-recreate nginx-local
+            for i in $(seq 1 12); do
+              docker exec nginx-local nginx -t >/dev/null 2>&1 && break
+              echo "  ждём nginx... ($i/12)"; sleep 5
+            done
+          fi
+          docker exec nginx-local nginx -t && docker exec nginx-local nginx -s reload 2>/dev/null || true
+
+          # Новый цвет
+          if [ "$NEW" = "green" ]; then
+            # висяк от прошлой сорвавшейся выкатки не должен мешать
+            docker rm -f secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
+            $DC --profile green up -d app-local-green lexwebapp-local-green
+            BE=secondlayer-app-local-green; FE=lexwebapp-local-green
+          else
+            docker rm -f secondlayer-app-local lexwebapp-local >/dev/null 2>&1 || true
+            $DC up -d app-local lexwebapp-local
+            BE=secondlayer-app-local; FE=lexwebapp-local
+          fi
+
+          # Здоровье проверяем ДО переключения трафика: если новый цвет не
+          # поднялся, старый продолжает обслуживать пользователей.
+          ok=false
+          for i in $(seq 1 30); do
+            if docker exec "$BE" wget -q -O /dev/null --timeout=5 http://127.0.0.1:3000/health 2>/dev/null \
+               && docker exec "$FE" wget -q -O /dev/null --timeout=5 http://127.0.0.1/ 2>/dev/null; then
+              ok=true; break
+            fi
+            echo "  ждём $NEW... ($i/30)"
+            sleep 10
+          done
+          if [ "$ok" != "true" ]; then
+            echo "::error::$NEW не поднялся — трафик НЕ переключён, работает $CUR"
+            docker logs --tail 60 "$BE" || true
+            exit 1
+          fi
+          echo "$NEW здоров"
+
+          # Переключение. `nginx -s reload` перечитывает конфиг и заново
+          # резолвит имена апстримов — именно эта однократность резолва дала
+          # 502 на весь local.legal.org.ua после мержа #2325 (app healthy,
+          # nginx "Up 26 hours", публичный /health -> 502). Раньше лечилось
+          # пересозданием nginx, теперь достаточно reload: соединения живы.
+          printf '# Активные апстримы — переписывает джоба деплоя, руками не править\n\nupstream local_mcp_backend {\n    server %s:3000;\n    keepalive 128;\n}\n\nupstream local_frontend {\n    server %s:80;\n    keepalive 32;\n}\n' "$BE" "$FE" > "$INC"
+          docker exec nginx-local nginx -t
+          docker exec nginx-local nginx -s reload
+          printf 'app=%s\n' "$NEW" > "$COLORS"
+          echo "трафик переключён на $NEW"
+
+          # Старый цвет гасим только теперь
+          if [ "$CUR" = "green" ]; then
+            docker stop secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
+          else
+            docker stop secondlayer-app-local lexwebapp-local >/dev/null 2>&1 || true
+          fi
+          echo "старый цвет ($CUR) остановлен"
+          $DC ps
+
+      - name: Verify through nginx
+        run: |
+          set -euo pipefail
+
+          # TLS проверяем ОТДЕЛЬНО и по имени публичного домена. 27.08.2026
+          # деплой вернул конфиг из git, где путь к сертификату остался от
+          # local-имён: nginx поднялся, /health отдавал 200, а снаружи
+          # Cloudflare 79 секунд отвечал 526, потому что сертификат не покрывал
+          # legal.org.ua. Проверка ниже смотрела на 127.0.0.1 по http и этого
+          # не видела — отказ был виден только тому, кто ходит с проверкой цепочки.
+          PUB=$({ grep -E '^PUBLIC_URL=' "$HOME/SecondLayer/deployment/.env.local" || true; } | tail -1 | cut -d= -f2-)
+          HOST=$(printf '%s' "$PUB" | sed -E 's#^https?://##; s#/.*##')
+          if [ -n "$HOST" ]; then
+            SAN=$(echo | openssl s_client -servername "$HOST" -connect 127.0.0.1:443 2>/dev/null \
+                  | openssl x509 -noout -ext subjectAltName 2>/dev/null || true)
+            PARENT=$(printf '%s' "$HOST" | cut -d. -f2-)
+            if printf '%s' "$SAN" | grep -qF "DNS:$HOST" || printf '%s' "$SAN" | grep -qF "DNS:*.$PARENT"; then
+              echo "сертификат покрывает $HOST"
+            else
+              echo "::error::сертификат, отдаваемый на имя $HOST, его не покрывает — снаружи это Cloudflare 526"
+              echo "SAN: ${SAN:-<не получен>}"
+              grep -n 'ssl_certificate ' "$HOME/SecondLayer/deployment/nginx/conf.d/local-docker.conf" | head -4
+              exit 1
+            fi
+          else
+            echo "::warning::PUBLIC_URL пуст — проверку сертификата пропускаю"
+          fi
+
+          # Проверяем не контейнер, а путь целиком — так же, как его видит пользователь
+          for i in $(seq 1 12); do
+            code=$(docker exec nginx-local wget -q -O /dev/null -S --header="Host: local.legal.org.ua" http://127.0.0.1/health 2>&1 | grep -oE "HTTP/1.[01] [0-9]+" | tail -1 | awk '{print $2}' || true)
+            if [ "$code" = "200" ]; then echo "nginx отдаёт /health: 200"; exit 0; fi
+            echo "  ждём nginx... ($i/12, последний код: ${code:-нет ответа})"
+            sleep 5
+          done
+          echo "::error::nginx не отдаёт /health после переключения цвета"
+          docker exec nginx-local cat /etc/nginx/includes/local-upstreams.conf || true
+          exit 1
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Локальное окружение развёрнуто"
+            echo ""
+            echo "- Коммит: \`${{ github.sha }}\`"
+            echo "- URL: https://local.legal.org.ua"
+            echo ""
+            echo '```'
+            cd "$HOME/SecondLayer/deployment"
+            docker compose -f docker-compose.local.yml --env-file .env.local ps --format '{{.Name}}\t{{.Status}}' 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

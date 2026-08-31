@@ -73,8 +73,13 @@ describe('DueDiligenceTools - Stage 5 Integration', () => {
 
       (documentService.getDocumentById as jest.Mock).mockResolvedValue(mockDocument);
 
-      // Mock pattern store to return risk patterns
-      jest.spyOn(patternStore, 'findPatterns').mockResolvedValue([
+      // Mock pattern store to return risk patterns.
+      // The fixture models the FULL LegalPattern from types/index.ts (decision_outcome,
+      // frequency, example_cases, anti_patterns…). In this repo LegalPatternStore is a stub
+      // for the proprietary core service and declares a narrower LegalPattern, so the literal
+      // is cast at the mock boundary rather than trimmed — trimming it would stop the test
+      // exercising the shape the real store returns.
+      jest.spyOn(patternStore, 'findPatterns').mockResolvedValue([(
         {
           id: 'pattern-1',
           intent: 'contract',
@@ -88,7 +93,7 @@ describe('DueDiligenceTools - Stage 5 Integration', () => {
           anti_patterns: [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        },
+        } as any),
       ]);
 
       // Run bulk review
@@ -324,7 +329,10 @@ describe('DueDiligenceTools - Stage 5 Integration', () => {
 
       // Expected score: 25 + 15 + 8 = 48
       expect(riskScore.score).toBe(48);
-      expect(riskScore.overallRisk).toBe('medium'); // 48 is in 25-50 range
+      // A single critical finding escalates the document to 'critical' regardless of the
+      // numeric score (due-diligence-service.ts: `criticalCount > 0 || normalizedScore >= 75`).
+      // This assertion predates that rule, when banding was purely score-based.
+      expect(riskScore.overallRisk).toBe('critical');
       expect(riskScore.criticalFindingsCount).toBe(1);
       expect(riskScore.highFindingsCount).toBe(1);
       expect(riskScore.mediumFindingsCount).toBe(1);

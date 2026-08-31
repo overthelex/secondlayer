@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dualAuth, AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { createBalanceCheckMiddleware } from '../middleware/balance-check.js';
 import { logger } from '../utils/logger.js';
+import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess } from '../services/uk-judgment-access.js';
 import { requestContext } from '../utils/openai-client.js';
 import { ToolRegistry } from '../api/tool-registry.js';
 import { ServiceProxy } from '../services/service-proxy.js';
@@ -223,6 +224,8 @@ async function handleStreamingToolCall(
 
 export function createToolExecutionRoutes(deps: {
   toolRegistry: ToolRegistry;
+  // Needed only by the Find Case Law licence gate; see services/uk-judgment-access.
+  db: any;
   serviceProxy: ServiceProxy;
   billingService: BillingService;
   costTracker: CostTracker;
@@ -303,6 +306,17 @@ export function createToolExecutionRoutes(deps: {
 
       const results = await Promise.all(
         calls.map(async (call: { name: string; arguments?: any }) => {
+          // Same licence gate as the single-tool route: a batch must not be a way
+          // around it.
+          const batchGated = gatedRegistryOf(call.name, call.arguments || {});
+          if (batchGated) {
+            const decision = await checkJudgmentAccess(deps.db, req.user?.id);
+            if (!decision.allowed) {
+              return { name: call.name, error: 'Forbidden', message: decision.message };
+            }
+            await logJudgmentAccess(deps.db, req.user?.id, batchGated,
+                                    (call.arguments || {}).filters);
+          }
           const callRequestId = `batch-${uuidv4()}`;
           const callStartTime = Date.now();
 
@@ -450,6 +464,26 @@ export function createToolExecutionRoutes(deps: {
       }
       const args = req.body.arguments || req.body;
       const acceptHeader = req.headers.accept || '';
+
+      // Find Case Law licence gate. Question 13 of TNA ref CAS-349914-B9P5B8 says
+      // the judgments are restricted to legal professionals and researchers, so
+      // authentication alone is not enough here — the account has to be one we
+      // have granted. Costs a Set lookup on every other tool call.
+      const gatedRegistry = gatedRegistryOf(toolName, args);
+      if (gatedRegistry) {
+        const decision = await checkJudgmentAccess(deps.db, req.user?.id);
+        if (!decision.allowed) {
+          logger.info('UK judgment access denied', {
+            requestId, userId: req.user?.id, registry: gatedRegistry,
+          });
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: decision.message,
+          });
+        }
+        await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, args?.filters);
+      }
 
       logger.info('Tool call request', {
         requestId,

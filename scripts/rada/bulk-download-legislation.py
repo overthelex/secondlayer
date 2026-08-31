@@ -334,7 +334,11 @@ def download_one(rada_id, source_ip, resume=True):
             stats["skipped"] += 1
         return True
 
-    encoded = url_quote(rada_id, safe="")
+    # safe="/" — the slash in a registry id is a PATH SEPARATOR to zakon.rada,
+    # not data. Percent-encoding it 404s every act whose number contains one:
+    # 52 278 acts, 15% of the corpus, the Constitution and every presidential
+    # decree among them. This exact line, with safe="", is how that happened.
+    encoded = url_quote(rada_id, safe="/")
     path = f"/laws/show/{encoded}/print"
     status, body = fetch_with_retry(path, source_ip=source_ip, label=rada_id)
 
@@ -526,7 +530,7 @@ def import_all(db_url, db_concurrency=20):
             if abbr_match:
                 law_alias = abbr_match.group(1)
 
-            full_url = f"{BASE_URL}/laws/show/{url_quote(law_number, safe='')}"
+            full_url = f"{BASE_URL}/laws/show/{url_quote(law_number, safe='/')}"
 
             # Extract plain text (strip tags)
             text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)

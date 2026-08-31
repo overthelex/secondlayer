@@ -1,0 +1,123 @@
+##############################################################################
+# EDRSR Daily Fulltext Harvest: od.reyestr.court.gov.ua → prod PostgreSQL
+# - Companion to cron-edrsr-sync.yml, which imports METADATA only. Until this
+#   workflow existed the texts were fetched by hand: the last manual run was
+#   2026-07-15, so by 2026-08-13 the corpus had metadata for 680K documents it
+#   had no text for — July at 32% coverage, August at 0%, while every earlier
+#   month sat at 97-99%.
+# - Runs on the prod self-hosted runner, 02:30 UTC — after the 01:00 UTC
+#   metadata sync, so the documents it harvests are already in edrsr_documents.
+# - Trailing window, not "yesterday": a decision's metadata and its text can
+#   both land days late, and the harvester only fetches what is missing, so an
+#   overlapping window is cheap and closes gaps the previous runs left.
+##############################################################################
+name: 'Cron: EDRSR Fulltext Harvest'
+
+on:
+  schedule:
+    # 02:30 UTC = 05:30 Kyiv, 90 min after the metadata sync starts
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'How many days back to harvest (default 10)'
+        required: false
+        default: '10'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edrsr-fulltext
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    name: Harvest missing fulltexts
+    runs-on: [self-hosted, prod-deploy]
+    timeout-minutes: 300
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure the egress IP is configured
+        run: |
+          # Secondary private IPs are added with `ip addr add`, which does not
+          # survive a reboot. Best-effort: re-add the ones the ENI already owns.
+          # If none can egress the harvester exits non-zero below — loudly, rather
+          # than reporting a successful run that fetched nothing.
+          TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+            -H "X-aws-ec2-metadata-token-ttl-seconds: 120")
+          META="http://169.254.169.254/latest/meta-data"
+          MAC=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$META/network/interfaces/macs/" | head -1)
+          PRIMARY=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$META/local-ipv4")
+          # Only private IPs that actually have an EIP behind them are worth
+          # configuring — the rest have no route out and would just slow the probe.
+          for pub in $(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              "$META/network/interfaces/macs/${MAC}public-ipv4s"); do
+            priv=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+              "$META/network/interfaces/macs/${MAC}ipv4-associations/$pub")
+            [ -z "$priv" ] && continue
+            [ "$priv" = "$PRIMARY" ] && continue
+            ip -4 addr show dev ens5 | grep -q "inet $priv/" || sudo -n ip addr add "$priv/20" dev ens5 || true
+            echo "  egress $priv -> $pub"
+          done
+          ip -4 -o addr show dev ens5 | awk '{print "  configured:", $4}'
+
+      - name: Harvest (recent window)
+        run: |
+          DAYS="${{ inputs.days_back || '10' }}"
+          FROM=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
+          TO=$(date -u -d "+1 day" +%Y-%m-%d)
+          echo "Harvesting $FROM .. $TO (exclusive)"
+          # --threads 2 is not a default worth trusting: at 5 threads x 14 IPs (~1200
+          # docs/s) the registry answers HTTP 200 with an overload page instead of the
+          # decision, which is how 3.8M rows came to hold that page. 2 threads measured
+          # 287-650 docs/s with zero overload responses across 1.3M documents.
+          python3 scripts/edrsr/download-fulltext-prod.py \
+            --from "$FROM" --to "$TO" --threads 2 \
+            --rtf-dir "/home/ubuntu/edrsr-rtf-daily"
+
+      - name: Sweep the late-URL tail (Mondays)
+        if: github.event_name == 'schedule'
+        run: |
+          # data.gov.ua publishes a decision first WITHOUT a doc_url and adds the link in
+          # a later re-publication, so a document whose link arrives more than `days_back`
+          # after its adjudication date falls out of the daily window and is never
+          # harvested. Measured 2026-08-14: 7,411 such documents for 2023-2026 alone,
+          # every sampled one still served by the registry. A weekly pass over the last
+          # year closes that tail; it fetches only what is missing, so a quiet week costs
+          # one query.
+          if [ "$(date -u +%u)" != "1" ]; then echo "not Monday — skipping the sweep"; exit 0; fi
+          FROM=$(date -u -d "-1 year" +%Y-%m-%d)
+          TO=$(date -u -d "+1 day" +%Y-%m-%d)
+          echo "Sweeping $FROM .. $TO for documents whose URL arrived late"
+          python3 scripts/edrsr/download-fulltext-prod.py \
+            --from "$FROM" --to "$TO" --threads 2 \
+            --rtf-dir "/home/ubuntu/edrsr-rtf-sweep"
+
+      - name: Coverage report
+        if: always()
+        run: |
+          docker exec secondlayer-postgres-prod psql -U secondlayer -d secondlayer_prod -A -F'|' -c "
+            SELECT d.adjudication_date::date AS day,
+                   count(*) AS docs,
+                   count(f.doc_id) AS with_text,
+                   round(100.0 * count(f.doc_id) / count(*), 1) AS pct
+            FROM edrsr_documents d
+            LEFT JOIN edrsr_fulltext f ON f.doc_id = d.doc_id
+            WHERE d.adjudication_date >= current_date - interval '10 days'
+              AND d.adjudication_date < current_date + interval '1 day'
+            GROUP BY 1 ORDER BY 1;"
+
+      - name: Prune harvested RTFs older than 3 days
+        if: always()
+        run: |
+          # The RTFs are a download scratch area — the text lives in Postgres
+          # once imported. Keeping them lets a re-run skip re-downloading, but
+          # they accumulate at ~30GB per million documents.
+          for d in /home/ubuntu/edrsr-rtf-daily /home/ubuntu/edrsr-rtf-sweep; do
+            find "$d" -type f -mtime +3 -delete 2>/dev/null || true
+            du -sh "$d" 2>/dev/null || true
+          done

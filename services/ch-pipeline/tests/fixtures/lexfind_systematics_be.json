@@ -1,0 +1,146 @@
+{
+ "": {
+  "children": [
+   633
+  ]
+ },
+ "633": {
+  "identifier": "1",
+  "title": "Staat, Volk, Behörden",
+  "parent": null,
+  "children": [
+   634
+  ],
+  "tols": []
+ },
+ "634": {
+  "identifier": "10",
+  "title": "Grundlagen",
+  "parent": 633,
+  "children": [
+   635,
+   636
+  ],
+  "tols": []
+ },
+ "635": {
+  "identifier": "101",
+  "title": "Verfassung",
+  "parent": 634,
+  "children": [],
+  "tols": [
+   {
+    "id": 23149,
+    "title": "Verfassung des Kantons Bern",
+    "keywords": "KV",
+    "systematic_number": "101.1",
+    "is_active": true,
+    "category_id": 3
+   },
+   {
+    "id": 32335,
+    "title": "Verordnung über Sofortmassnahmen zur Bewältigung der Coronavirus-Krise",
+    "keywords": "CKV",
+    "systematic_number": "101.2",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 32422,
+    "title": "Verordnung über Massnahmen zur Bewältigung der Coronavirus-Krise im Gesundheitswesen",
+    "keywords": "CKGV",
+    "systematic_number": "101.3",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 32452,
+    "title": "Verordnung über den Fristenstillstand bei kantonalen und kommunalen Volksbegehren wegen der Coronavirus-Krise",
+    "keywords": null,
+    "systematic_number": "101.4",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 32453,
+    "title": "Verordnung über die Unterstützungsmassnahmen zur Abfederung der wirtschaftlichen Auswirkungen des Coronavirus (COVID-19) im Kultursektor",
+    "keywords": "CKKV",
+    "systematic_number": "101.5",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 32579,
+    "title": "Verordnung über Massnahmen zur Bewältigung der Coronavirus-Krise im Bereich der familienergänzenden Kinderbetreuung",
+    "keywords": "CKKBV",
+    "systematic_number": "101.6",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 32580,
+    "title": "Verordnung über Sofortmassnahmen zur Bewältigung der Coronavirus-Krise im Lotteriebereich",
+    "keywords": "CKLV",
+    "systematic_number": "101.7",
+    "is_active": false,
+    "category_id": 6
+   }
+  ]
+ },
+ "636": {
+  "identifier": "102",
+  "title": "Französischsprachige Minderheiten",
+  "parent": 634,
+  "children": [],
+  "tols": [
+   {
+    "id": 23121,
+    "title": "Gesetz über das Sonderstatut des Berner Juras und über die französischsprachige Minderheit des Verwaltungskreises Biel/Bienne",
+    "keywords": "Sonderstatutsgesetz, SStG",
+    "systematic_number": "102.1",
+    "is_active": true,
+    "category_id": 4
+   },
+   {
+    "id": 23135,
+    "title": "Verordnung über das Sonderstatut des Berner Juras und über die französischsprachige Minderheit des Verwaltungskreises Biel/Bienne",
+    "keywords": "Sonderstatutsverordnung, SStV",
+    "systematic_number": "102.111",
+    "is_active": true,
+    "category_id": 6
+   },
+   {
+    "id": 24088,
+    "title": "Geschäftsordnung des Bernjurassischen Rats",
+    "keywords": "GO BJR",
+    "systematic_number": "102.111.1",
+    "is_active": true,
+    "category_id": 7
+   },
+   {
+    "id": 24096,
+    "title": "Geschäftsordnung des Rats für französischsprachige Angelegenheiten des Verwaltungskreises Biel/Bienne",
+    "keywords": "GO RFB",
+    "systematic_number": "102.111.2",
+    "is_active": true,
+    "category_id": 7
+   },
+   {
+    "id": 24111,
+    "title": "Versuchsverordnung über die Erweiterung des Wirkungskreises des Rats für französischsprachige Angelegenheiten des zweisprachigen Amtsbezirks Biel auf den Verwaltungskreis Biel/Bienne",
+    "keywords": "RFB VV",
+    "systematic_number": "102.111.20",
+    "is_active": false,
+    "category_id": 6
+   },
+   {
+    "id": 24084,
+    "title": "Gemeinsames Reglement des Bernjurassischen Rats und des Rats für französischsprachige Angelegenheiten des Verwaltungskreises Biel/Bienne",
+    "keywords": "R BJR-RFB",
+    "systematic_number": "102.111.3",
+    "is_active": true,
+    "category_id": 7
+   }
+  ]
+ }
+}

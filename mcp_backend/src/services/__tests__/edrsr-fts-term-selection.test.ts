@@ -194,6 +194,63 @@ describe('EdsrFtsService.snapTokensToStems (LEXAI Cause-A.2)', () => {
     const errDb = { query: jest.fn().mockRejectedValue(new Error('boom')) };
     expect((await svc.snapTokensToStems(['окупована'], errDb)).size).toBe(0);
   });
+  /**
+   * The prefix-df lookup must be written so Postgres can use
+   * edrsr_lexeme_df_lexeme_prefix (btree text_pattern_ops).
+   *
+   * A correlated `lexeme LIKE u.cand || '%'` CANNOT: the planner only derives range
+   * bounds from a LIKE whose pattern is known at plan time, so a pattern built from
+   * an unnest column falls back to a Seq Scan of the whole 987k-row table — once per
+   * candidate. Measured on prod 2026-08-20 for one chat search (46 candidates):
+   * 398,544 shared-buffer hits and 4.0s warm, 90-120s cold, which is what pushed
+   * search_court_decisions / find_similar_fact_pattern_cases into the 120s tool
+   * timeout. Rewritten as an explicit range: Bitmap Index Scan, 18 buffers, 0.5ms.
+   *
+   * The LIKE stays as a redundant filter so results are provably identical
+   * (verified against prod data: 20 candidates, 0 mismatches).
+   */
+  describe('prefix-df lookup is index-usable', () => {
+    function capturingDb() {
+      const sqls: string[] = [];
+      return {
+        sqls,
+        query: jest.fn().mockImplementation((sql: string) => {
+          sqls.push(sql);
+          if (/LIMIT 1/.test(sql)) return Promise.resolve({ rows: [{ sample_docs: 3_000_000 }] });
+          return Promise.resolve({ rows: [] });
+        }),
+      };
+    }
+
+    function candidateSql(db: { sqls: string[] }) {
+      return db.sqls.find(s => /unnest/i.test(s) && !/LIMIT 1/.test(s)) || '';
+    }
+
+    it('bounds lexeme by a range against the candidate, not by a bare correlated LIKE', async () => {
+      const db = capturingDb();
+      await svc.snapTokensToStems(['нерухомість'], db);
+      const sql = candidateSql(db);
+      expect(sql).toMatch(/~>=~/);
+      expect(sql).toMatch(/~<~/);
+    });
+
+    it('keeps the LIKE filter so the rewrite cannot change which lexemes match', async () => {
+      const db = capturingDb();
+      await svc.snapTokensToStems(['нерухомість'], db);
+      expect(candidateSql(db)).toMatch(/LIKE/i);
+    });
+
+    it('still snaps correctly through the rewritten query', async () => {
+      // Behaviour must be untouched: shortest above-floor prefix still wins.
+      const db = {
+        query: jest.fn().mockImplementation((sql: string) => {
+          if (/LIMIT 1/.test(sql)) return Promise.resolve({ rows: [{ sample_docs: 3_000_000 }] });
+          return Promise.resolve({ rows: [{ cand: 'нерух', df: 193320 }, { cand: 'нерухом', df: 193000 }] });
+        }),
+      };
+      expect((await svc.snapTokensToStems(['нерухомість'], db)).get('нерухомість')).toBe('нерух');
+    });
+  });
 });
 
 describe('selectFtsTerms — status-vocabulary demotion + geo promotion (CORE-106)', () => {

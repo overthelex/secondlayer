@@ -11,6 +11,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { EDRSR_METADATA_SEARCH_ORDER } from '../../services/search-ranking-config.js';
+import { formatCourtDate } from '../tool-utils.js';
 
 export class EdsrSearchTools extends BaseToolHandler {
   constructor(private db: any) {
@@ -431,7 +432,7 @@ export class EdsrSearchTools extends BaseToolHandler {
       justice_kind_name: justiceMap.get(row.justice_kind) || null,
       judgment_code: row.judgment_code,
       judgment_form: judgmentMap.get(row.judgment_code) || null,
-      adjudication_date: row.adjudication_date,
+      adjudication_date: formatCourtDate(row.adjudication_date),
       receipt_date: row.receipt_date,
       doc_url: row.doc_url,
       external_url: `https://reyestr.court.gov.ua/Review/${row.doc_id}`,

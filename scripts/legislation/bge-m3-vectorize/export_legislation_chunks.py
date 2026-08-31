@@ -23,7 +23,18 @@ import psycopg2, psycopg2.extras
 CHUNK_SIZE, CHUNK_OVERLAP = 500, 100
 TS_SENTINEL = 99991231
 _EPOCH0 = _dt.datetime(1900, 1, 1)
-DEFAULT_EXCLUDE = {"254к/96-ВР", "4651-vi", "5073-VI", "4173-IX"}
+# Formerly DEFAULT_EXCLUDE = {"254к/96-ВР", "4651-vi", "5073-VI", "4173-IX"}.
+#
+# Those were not act ids at all — they are OFFICIAL numbers that had been stored
+# in legislation.rada_id, creating a second row for the Constitution, the КПК
+# and two more acts. The exclusion existed to stop the same act being vectorised
+# twice under both spellings.
+#
+# Migration 188 merged those duplicates away, so the strings match nothing and
+# the workaround is dead. Verified on prod: 0 rows remain under any of the four,
+# and legislation now holds 651 rows with 651 distinct lower(rada_id), enforced
+# by a unique index plus a CHECK that refuses upper case and Roman suffixes.
+DEFAULT_EXCLUDE: set[str] = set()
 
 
 def log(m): print(f"[{time.strftime('%H:%M:%S')}] {m}", flush=True)

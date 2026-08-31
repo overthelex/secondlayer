@@ -54,9 +54,20 @@ print('ok=%s rows=%s last_page=%s stopped_early=%s err=%s%s' % (
     d.get('err'), d.get('errorMessage','')))
 " 2>&1)
         say "$S" "chunk $n returned: $summary"
-        if ! $AWS s3 ls "s3://$B/$ck" >/dev/null 2>&1; then
-            say "$S" "chunk $n wrote no object - aborting chain"; return 1
-        fi
+        # a chunk can fail on a transient network error; retry it before giving up
+        local tries=1
+        while ! $AWS s3 ls "s3://$B/$ck" >/dev/null 2>&1; do
+            if [ $tries -ge 4 ]; then
+                say "$S" "chunk $n wrote no object after $tries tries - aborting chain"; return 1
+            fi
+            say "$S" "chunk $n wrote no object - retry $tries in 120s"
+            sleep 120
+            rm -f "$out"
+            $AWS lambda invoke --function-name uae-fetch \
+                 --cli-read-timeout 0 --cli-connect-timeout 60 \
+                 --cli-binary-format raw-in-base64-out --payload "$pay" "$out" >/dev/null 2>&1
+            tries=$((tries+1))
+        done
         local sz=$($AWS s3 ls "s3://$B/$ck" | awk '{print $3}')
         say "$S" "chunk $n stored (${sz} bytes)"
         sleep 60   # COOLDOWN between chunks, be gentle with the portal

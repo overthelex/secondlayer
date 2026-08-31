@@ -48,6 +48,10 @@ function makeEmbeddingService(overrides: any = {}) {
     generateEmbeddingsBatch: jest.fn().mockResolvedValue([new Array(1024).fill(0)]),
     splitIntoChunks: jest.fn().mockReturnValue([]),
     storeChunk: jest.fn().mockResolvedValue('vec-id-1'),
+    // Vault writes go to the dedicated vault collection (embedding-service.ts:494), not the
+    // shared one; without this the storeDocument tests died on "storeVaultChunk is not a
+    // function" instead of exercising the chunking behaviour they assert.
+    storeVaultChunk: jest.fn().mockResolvedValue('vault-vec-id-1'),
     searchSimilar: jest.fn().mockResolvedValue([]),
     initialize: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -187,7 +191,10 @@ describe('VaultTools.listDocuments — text search', () => {
     const params: any[] = mockDb.query.mock.calls[0][1];
 
     expect(sql).toContain("metadata::jsonb ->> 'folderPath' LIKE");
-    expect(params).toContain('/legal/contracts%');
+    // Exact folder OR its sub-paths, not a bare prefix — a plain '/legal/contracts%' also
+    // matched sibling folders like '/legal/contracts-old' (vault-tools.ts:955).
+    expect(params).toContain('/legal/contracts');
+    expect(params).toContain('/legal/contracts/%');
   });
 
   it('applies type filter', async () => {
@@ -327,11 +334,11 @@ describe('VaultTools.storeDocument — chunked embeddings', () => {
     const batchCall = embeddingService.generateEmbeddingsBatch.mock.calls[0][0];
     expect(batchCall).toHaveLength(5);
 
-    // storeChunk should be called: 1 (full doc) + 1 (section) + 3 (chunks) = 5
-    expect(embeddingService.storeChunk).toHaveBeenCalledTimes(5);
+    // 1 (full doc) + 1 (section) + 3 (chunks) = 5, via the vault-specific collection
+    expect(embeddingService.storeVaultChunk).toHaveBeenCalledTimes(5);
 
     // Verify chunk embeddings have section_type 'CHUNK'
-    const chunkCalls = embeddingService.storeChunk.mock.calls.filter(
+    const chunkCalls = embeddingService.storeVaultChunk.mock.calls.filter(
       (call: any[]) => call[0].section_type === 'CHUNK'
     );
     expect(chunkCalls).toHaveLength(3);

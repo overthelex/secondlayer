@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "Parity fixture for act-number normalisation. Read by BOTH",
+    "mcp_backend/src/services/__tests__/act-number.test.ts (the TypeScript port)",
+    "and, when DATABASE_URL is set, by the same suite against npa.norm_number()",
+    "in Postgres. The SQL function is the definition; the TS port exists for",
+    "offline use. A change to one that is not made to the other fails here.",
+    "",
+    "'norm' is the expected npa.norm_number() output. 'note' says why the case",
+    "is in the list, so a future edit cannot quietly delete a regression guard."
+  ],
+  "cases": [
+    { "in": "2755-17",      "norm": "2755-17",      "note": "registry id passes through" },
+    { "in": "2755-VI",      "norm": "2755-vi",      "note": "official number, Latin Roman" },
+    { "in": "№ 2755-VI",    "norm": "2755-vi",      "note": "№ stripped BEFORE NFKC, which would rewrite it to the letters No" },
+    { "in": "№2755-VI",     "norm": "2755-vi",      "note": "no space after №" },
+    { "in": " 2755-vi ",    "norm": "2755-vi",      "note": "surrounding whitespace" },
+    { "in": "2755 -VI","norm": "2755-vi",      "note": "NBSP is whitespace after NFKC" },
+
+    { "in": "2262-XII",     "norm": "2262-xii",     "note": "Latin Roman XII" },
+    { "in": "2262-ХІІ",     "norm": "2262-xii",     "note": "SAME number typed in Cyrillic Х and І — must meet the Latin form" },
+    { "in": "996-XIV",      "norm": "996-xiv",      "note": "the УРСР-continued form; 996-14 also answers to 996-III" },
+    { "in": "8073-X",       "norm": "8073-x",       "note": "КУпАП; resolves to three registry ids, ambiguity handled by the caller" },
+
+    { "in": "254к/96-вр",   "norm": "254k/96-vr",   "note": "Constitution, canonical id; slash is data and is never percent-encoded here" },
+    { "in": "254к/96-ВР",   "norm": "254k/96-vr",   "note": "upper-case suffix, the legacy spelling that duplicated the row" },
+    { "in": "254K/96-VR",   "norm": "254k/96-vr",   "note": "fully Latin retype" },
+    { "in": "254k/96-bp",   "norm": "254k/96-bp",   "note": "VISUAL retype (в as B, р as P) — a distinct key, stored as its own homoglyph alias, NOT folded here" },
+
+    { "in": "154-2022-п",   "norm": "154-2022-p",   "note": "постанова КМУ; п transliterates to p" },
+    { "in": "154-2022-р",   "norm": "154-2022-r",   "note": "розпорядження; р to r. A VISUAL fold would send both to p and merge two different acts" },
+
+    { "in": "007",          "norm": "7",            "note": "leading zeros stripped on an all-digit token so «7» finds «007» in edrnpa" },
+    { "in": "0",            "norm": "0",            "note": "all-zero token must not strip to the empty string" },
+    { "in": "0007",         "norm": "7",            "note": "several leading zeros" },
+    { "in": "n0001001-01",  "norm": "n0001001-01",  "note": "NOT stripped: doing so corpus-wide would collide with n1001-01 across 47 997 ministry acts" },
+    { "in": "z0001-00",     "norm": "z0001-00",     "note": "Мін'юст registration number, its own identifier" },
+    { "in": "995_004",      "norm": "995_004",      "note": "treaty; underscore passes through" },
+
+    { "in": "2993е-12",     "norm": "2993e-12",     "note": "letter-indexed act" },
+    { "in": "2993є-12",     "norm": "2993ye-12",    "note": "must NOT equal 2993е-12 — a 1:1 fold merged these two real acts" },
+    { "in": "2993і-12",     "norm": "2993i-12",     "note": "distinct from 2993й / 2993ї below" },
+    { "in": "2993й-12",     "norm": "2993j-12",     "note": "й to j" },
+    { "in": "2993ї-12",     "norm": "2993yi-12",    "note": "ї to yi" },
+    { "in": "2993ж-12",     "norm": "2993zh-12",    "note": "ж to zh; mapping it to j collided with 2993й" },
+
+    { "in": "ь",            "norm": "ь",            "note": "never occurs in an nreg, so it passes through UNCHANGED. Mapping it to q collided with the Latin q in 997_q01" },
+    { "in": "2993ь",        "norm": "2993ь",        "note": "must not collapse onto 2993" },
+    { "in": "997_q01",      "norm": "997_q01",      "note": "Latin q really does occur in 12 registry ids" },
+    { "in": "ц",            "norm": "ц",            "note": "passes through; mapping it to ts collided with the sequence т+с" },
+    { "in": "тс",           "norm": "ts",           "note": "the sequence that collision would have hit" },
+
+    { "in": "1030а-12",     "norm": "1030a-12",     "note": "Cyrillic а index on a law-shaped id" },
+    { "in": "12-92",        "norm": "12-92",        "note": "Декрет КМУ; its official number IS the registry id" },
+    { "in": "1/2023-рп",    "norm": "1/2023-rp",    "note": "розпорядження Президента" },
+    { "in": "08-а",         "norm": "08-a",         "note": "edrnpa card number; not all-digit, so zeros are kept" },
+    { "in": "10-VII",       "norm": "10-vii",       "note": "edrnpa card carrying a Roman numeral" }
+  ]
+}

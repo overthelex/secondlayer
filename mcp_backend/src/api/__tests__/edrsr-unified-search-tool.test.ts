@@ -47,6 +47,20 @@ describe('EdsrUnifiedSearchTool', () => {
       // Default: pass-through (keep every candidate). Tests override to assert dropping.
       filterDocIdsByConstraints: jest.fn((docIds: number[]) =>
         Promise.resolve(new Set(docIds.map(Number)))),
+      // The fulltext path weights terms by IDF via lexemeStats (edrsr-fts-service.ts:606).
+      // Without it every fulltext test died on "lexemeStats is not a function" rather than
+      // exercising the behaviour under test. Neutral stats: no term is rarer than another.
+      lexemeStats: jest.fn((tokens: string[]) => Promise.resolve({
+        idf: new Map(tokens.map((t) => [t.toLowerCase(), 1])),
+        df: new Map(tokens.map((t) => [t.toLowerCase(), 1000])),
+        sampleDocs: 100000,
+      })),
+      // Empty stem map = fall back to the plain token string, which is the behaviour these
+      // tests were written against. Without the method the fulltext path threw before ever
+      // reaching searchFulltext, so every assertion about it failed for the wrong reason.
+      snapTokensToStems: jest.fn(() => Promise.resolve(new Map<string, string>())),
+      // null = no judge-name expansion, i.e. use the fragment as given.
+      resolveJudgeNames: jest.fn(() => Promise.resolve(null)),
     };
     mockVectorizer = {
       semanticSearch: jest.fn(() => Promise.resolve([])),
@@ -63,12 +77,15 @@ describe('EdsrUnifiedSearchTool', () => {
       expect(defs[0].name).toBe('search_court_decisions');
     });
 
-    it('mode enum has 4 values', () => {
+    it('advertises all five modes, and the runtime validator accepts each', () => {
       db = makeDb(() => ({ rows: [] }));
       tool = new EdsrUnifiedSearchTool(db);
       const defs = tool.getToolDefinitions();
       const modeEnum = defs[0].inputSchema.properties.mode.enum;
-      expect(modeEnum).toEqual(['structured', 'fulltext', 'hybrid', 'semantic']);
+      // 'exact' was added for deterministic token lookup (m200604929-style app numbers).
+      // The advertised enum and the zod validator in @secondlayer/shared must agree — when
+      // they drifted, the schema offered a mode the validator then rejected at runtime.
+      expect(modeEnum).toEqual(['structured', 'exact', 'fulltext', 'hybrid', 'semantic']);
     });
   });
 
@@ -79,7 +96,10 @@ describe('EdsrUnifiedSearchTool', () => {
 
       const result = await tool.executeTool('search_court_decisions', { mode: 'unknown' });
       expect(result?.isError).toBe(true);
-      expect(result?.content[0].text).toContain('Невідомий режим');
+      // Rejection now comes from the shared zod schema, which names the valid options
+      // rather than emitting the old generic 'Невідомий режим'.
+      expect(result?.content[0].text).toContain('Невалідні параметри пошуку');
+      expect(result?.content[0].text).toContain('mode');
     });
 
     it('returns null for unknown tool name', async () => {
@@ -435,6 +455,15 @@ describe('EdsrUnifiedSearchTool', () => {
           }],
         })),
         filterDocIdsByConstraints: jest.fn((ids: number[]) => Promise.resolve(new Set(ids.map(Number)))),
+        // Same two methods the shared mock needs — this test builds its own FTS double, so
+        // without them the fulltext leg throws and there is no hit left to backfill.
+        lexemeStats: jest.fn((tokens: string[]) => Promise.resolve({
+          idf: new Map(tokens.map((t) => [t.toLowerCase(), 1])),
+          df: new Map(tokens.map((t) => [t.toLowerCase(), 1000])),
+          sampleDocs: 100000,
+        })),
+        snapTokensToStems: jest.fn(() => Promise.resolve(new Map<string, string>())),
+        resolveJudgeNames: jest.fn(() => Promise.resolve(null)),
       };
       const vectorizer = {
         semanticSearch: jest.fn(() => Promise.resolve([{

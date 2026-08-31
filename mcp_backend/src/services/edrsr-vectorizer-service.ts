@@ -18,15 +18,16 @@ import { v4 as uuidv4 } from 'uuid';
 
 const EMBEDDING_DIM = 1024;
 const EMBEDDING_MODEL = 'bge-m3';
-// Default to the live unified collection. The old `edrsr_decisions` collection
-// was deleted at the edrsr_serving cutover (2026-06-21); defaulting to it would
-// make semantic search silently return nothing if the env var is ever missing.
-const COLLECTION_NAME = process.env.QDRANT_EDRSR_COLLECTION || 'edrsr_serving';
+// Default to the live collection. `edrsr_serving` — the previous default — has
+// not existed since the qdrant.lex node was terminated (2026-07-05); leaving it
+// as the fallback meant a missing env var sent every search at a collection that
+// is gone, and semantic search silently returned nothing.
+const COLLECTION_NAME = process.env.QDRANT_EDRSR_COLLECTION || 'edrsr_decisions';
 const EMBED_BATCH_SIZE = 64; // TEI supports larger batches than VoyageAI
 const QDRANT_UPSERT_BATCH = 100; // Qdrant upsert sub-batch
 const DEFAULT_CONCURRENCY = 5;
-// Cap concurrent Qdrant searches against edrsr_serving (LEXAI-1758). Each search
-// fans across ~293 on-disk-graph segments; more than ~2 in flight saturates the
+// Cap concurrent Qdrant searches against the serving collection (LEXAI-1758). Each
+// search fans across every segment (44 as of 2026-08-11); too many in flight saturates the
 // serving node's cores and blows the request timeout (aborts → hybrid loses its
 // vector leg). Tunable via env.
 const QDRANT_SEARCH_CONCURRENCY = Math.max(1, Number(process.env.QDRANT_EDRSR_MAX_CONCURRENCY || 2));
@@ -240,20 +241,52 @@ export class EdsrVectorizerService {
     logger.info(`[EdsrVectorizer] Created Qdrant collection: ${COLLECTION_NAME}`);
   }
 
+  /**
+   * Declare every payload field `semanticSearch` filters on.
+   *
+   * Every field listed here MUST have an index, and the index type must match how
+   * the field is queried — an unindexed (or wrongly-typed) filter field does not
+   * fail loudly, it makes Qdrant fall back to scanning the payload store. Measured
+   * on the 189M-point serving collection on 2026-08-11, with `adjudication_date`
+   * and `judge` missing: an indexed `court_code` filter answered in 4.5 ms, an
+   * `adjudication_date` range took 20-60 s, and a `judge` match hit Qdrant's 60 s
+   * internal timeout and returned nothing at all. The backend's own
+   * QDRANT_EDRSR_TIMEOUT_MS is 20 s, so those searches simply failed in prod.
+   *
+   * `adjudication_date` is `datetime`, not `keyword`: it is queried with `range`,
+   * and a keyword index cannot serve a range filter at all. Verified that Qdrant
+   * parses both the stored form ("2012-12-27 22:00:00+00") and the "YYYY-MM-DD"
+   * bounds the tools pass.
+   *
+   * `judge` is `text` with the word tokenizer, because the tools advertise partial
+   * names — see the filter construction in `semanticSearch` for why an exact-match
+   * index is the wrong shape here.
+   *
+   * Schemas are sent as given. The integer fields stay bare strings on purpose: the
+   * object form makes Qdrant apply only the sub-indexes named in it, so spelling out
+   * `{ lookup: true }` without `range: true` would quietly cost integer range
+   * filters. The string form keeps Qdrant's defaults, which enable both.
+   */
   private async _ensurePayloadIndexes(): Promise<void> {
     const indexes: Array<{ field: string; schema: any }> = [
-      { field: 'edrsr_doc_id', schema: { type: 'integer', lookup: true, is_principal: true } },
-      { field: 'court_code', schema: { type: 'integer', lookup: true } },
-      { field: 'justice_kind', schema: { type: 'integer', lookup: true } },
-      { field: 'adjudication_date', schema: { type: 'keyword', lookup: true } },
-      { field: 'judge', schema: { type: 'keyword', lookup: true } },
+      { field: 'edrsr_doc_id', schema: 'integer' },
+      { field: 'court_code', schema: 'integer' },
+      { field: 'justice_kind', schema: 'integer' },
+      { field: 'instance_code', schema: 'integer' },
+      { field: 'judgment_code', schema: 'integer' },
+      { field: 'chunk_index', schema: 'integer' },
+      { field: 'adjudication_date', schema: { type: 'datetime' } },
+      {
+        field: 'judge',
+        schema: { type: 'text', tokenizer: 'word', lowercase: true, min_token_len: 2, max_token_len: 30 },
+      },
     ];
 
     for (const idx of indexes) {
       try {
         await this.qdrant.createPayloadIndex(COLLECTION_NAME, {
           field_name: idx.field,
-          field_schema: idx.schema.type as any,
+          field_schema: idx.schema,
           wait: false,
         });
       } catch {
@@ -412,8 +445,26 @@ export class EdsrVectorizerService {
       must.push({ key: 'justice_kind', match: { value: Number(filters.justice_kind) } });
     }
 
+    // Full-text match against the `judge` text index (word tokenizer, lowercased).
+    // The index was missing entirely until 2026-08-11, so this filter degenerated into
+    // a payload scan and hit Qdrant's 60 s internal timeout, returning zero hits.
+    //
+    // Text match — not `match: { value }` — is deliberate: every tool that exposes this
+    // filter advertises partial names ("ПІБ судді або частина ПІБ" in
+    // edrsr-unified-search-tool / edrsr-search-tools / edrsr-hybrid-tools), so callers
+    // legitimately pass a surname alone. An exact-match index would have silently
+    // returned nothing for those and dropped the vector leg out of hybrid search, while
+    // the FTS leg (LOWER(d.judge) LIKE %v%) kept matching.
+    //
+    // Resolving a fragment to canonical names via Postgres was considered and rejected:
+    // `judges_current` holds only sitting judges (5 952 rows) and is missing judges from
+    // older decisions, so historical cases would lose the vector leg instead.
+    //
+    // Residual gap: the word tokenizer matches whole tokens, so "Писана" and "Таміла"
+    // both hit but a mid-word prefix ("Писан") does not, where the FTS leg would. A
+    // `prefix` tokenizer closes that at an index size that expands with every token.
     if (filters?.judge) {
-      must.push({ key: 'judge', match: { text: filters.judge } });
+      must.push({ key: 'judge', match: { text: filters.judge.trim() } });
     }
 
     if (filters?.date_from || filters?.date_to) {
@@ -433,12 +484,27 @@ export class EdsrVectorizerService {
         filter: qdrantFilter,
         with_payload: true,
         ...(threshold !== undefined && Number.isFinite(threshold) ? { score_threshold: threshold } : {}),
-        // `edrsr_serving` keeps full vectors on disk with binary quantization in
-        // RAM. Rescore re-reads full f32 vectors from the gp3 volume and stalls
-        // past the request timeout under concurrency, so it defaults OFF —
-        // scoring runs from the in-RAM quantized vectors with a wider hnsw_ef to
-        // recover recall. Set QDRANT_EDRSR_RESCORE=true to restore full-vector
-        // rescore with oversampling (higher recall, disk-bound under load).
+        // The collection keeps full f32 vectors on disk with binary quantization in
+        // RAM, so scoring can run either on the 1-bit codes alone (rescore off) or
+        // on the originals (rescore on). Prod sets QDRANT_EDRSR_RESCORE=true.
+        //
+        // This used to default off, on the grounds that rescore "stalls past the
+        // request timeout under concurrency". Re-measured on the current serving
+        // node (2026-08-11, 30 distinct queries at concurrency 6, LEXAI-1922) that
+        // is not true and the cost of leaving it off is severe:
+        //
+        //             p50    p95    p99    max      overlap@10   top-1 agreement
+        //   off      13ms   30ms   68ms   72ms        1.50/10           1/30
+        //   on       14ms   38ms   49ms   62ms        8.57/10          25/30
+        //
+        // (agreement measured against full-precision ranking at the same hnsw_ef,
+        // so only rescore differs; f32 originals are ~0% resident and stay that
+        // way — rescore reads ~20 vectors per segment, peaking at ~1.1k IOPS.)
+        //
+        // Scoring on 1-bit codes alone got the top result right in 1 query out of
+        // 30. Rescore costs no measurable latency here — the worst request was
+        // 62 ms against QDRANT_EDRSR_TIMEOUT_MS=20000. Turn it off only with a
+        // fresh measurement on the node you are actually serving from.
         params: {
           hnsw_ef: Number(process.env.QDRANT_EDRSR_HNSW_EF || 128),
           quantization:

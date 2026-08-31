@@ -1,0 +1,569 @@
+import asyncio
+import datetime
+import json
+import logging
+import os
+import pathlib
+import psycopg
+import pytest
+from chpipe import db, es_document
+from chpipe.stages import index_stage
+
+# Derive repo root from this file's location: services/ch-pipeline/tests/test_index_stage.py
+# is 3 levels down from the repo root
+_REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
+MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
+FIX = pathlib.Path(__file__).parent / "fixtures"
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set"
+)
+
+
+@pytest.fixture
+def conn():
+    with psycopg.connect(os.environ["CHPIPE_TEST_DSN"], autocommit=True) as c:
+        c.execute("DROP TABLE IF EXISTS ch_court_decisions")
+        c.execute("""
+            CREATE TABLE ch_court_decisions (
+                ecli text PRIMARY KEY, spider text NOT NULL,
+                court_code text, court_name text, chamber text,
+                decision_type text, decision_date date, docket_number text,
+                parties text, abstract text, full_text text,
+                pdf_url text, json_url text, languages text[], metadata_json jsonb,
+                imported_at timestamptz DEFAULT now(),
+                updated_at timestamptz DEFAULT now())
+        """)
+        c.execute(MIGRATION.read_text())
+        yield c
+
+
+def _fields():
+    data = json.loads((FIX / "doc_zg_og_001.json").read_text())
+    return es_document.parse("ZG_Obergericht", "ZG_OG_001_Z1-2020-5_2022-02-18", data)
+
+
+def test_inserts_a_new_document_at_stage_indexed(conn):
+    assert index_stage.upsert(conn, _fields(), {"json", "pdf"}) == "inserted"
+    row = conn.execute(
+        "SELECT doc_id, stage, decision_date, canton FROM ch_court_decisions"
+    ).fetchone()
+    assert row[0] == "ZG_OG_001_Z1-2020-5_2022-02-18"
+    assert row[1] == "indexed"
+    assert row[2] == datetime.date(2022, 2, 18)
+    assert row[3] == "ZG"
+
+
+def test_fills_the_date_on_a_row_that_predates_the_pipeline(conn):
+    """The 678,165 legacy rows are keyed by ecli and have no doc_id and no date."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) VALUES (%s,%s,'indexed')",
+        (f.ecli, f.spider),
+    )
+    assert index_stage.upsert(conn, f, {"json", "pdf"}) == "updated"
+    row = conn.execute(
+        "SELECT count(*), max(decision_date), max(doc_id) FROM ch_court_decisions"
+    ).fetchone()
+    assert row[0] == 1, "must update the legacy row, not create a duplicate"
+    assert row[1] == datetime.date(2022, 2, 18)
+    assert row[2] == "ZG_OG_001_Z1-2020-5_2022-02-18"
+
+
+def test_never_overwrites_text_that_is_already_there(conn):
+    """CH_BGer already has 165,363 good texts; re-indexing must not blank them."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text, stage) "
+        "VALUES (%s,%s,%s,'loaded')", (f.ecli, f.spider, "existing text " * 50),
+    )
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT full_text, stage FROM ch_court_decisions").fetchone()
+    assert row[0].startswith("existing text")
+    assert row[1] == "loaded", "a finished row must not be sent back through the queue"
+
+
+def test_records_which_formats_are_available(conn):
+    index_stage.upsert(conn, _fields(), {"json", "html"})
+    row = conn.execute(
+        "SELECT html_url, pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0].endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.html")
+
+
+def test_a_document_with_neither_html_nor_pdf_is_marked_failed(conn):
+    f = _fields()
+    index_stage.upsert(conn, f, {"json"})
+    row = conn.execute("SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "failed"
+    assert "no body" in row[1]
+
+
+def test_upsert_is_idempotent(conn):
+    index_stage.upsert(conn, _fields(), {"json", "pdf"})
+    index_stage.upsert(conn, _fields(), {"json", "pdf"})
+    assert conn.execute("SELECT count(*) FROM ch_court_decisions").fetchone()[0] == 1
+
+
+def test_a_loaded_row_reindexed_with_no_body_keeps_stage_and_clears_no_error(conn):
+    """Finding 1a: a finished row must not be stamped with a failure message
+    that describes a stage it never actually entered."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, full_text, stage) "
+        "VALUES (%s,%s,%s,'loaded')", (f.ecli, f.spider, "existing text " * 50),
+    )
+    assert index_stage.upsert(conn, f, set()) == "updated"
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "loaded"
+    assert row[1] is None
+
+
+def test_a_failed_row_recovering_a_body_clears_its_stale_error(conn):
+    """Finding 1b: a row coming back from 'failed' must not keep carrying the
+    error message that put it there."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage, last_error) "
+        "VALUES (%s,%s,'failed','no body: listing offers neither html nor pdf')",
+        (f.ecli, f.spider),
+    )
+    assert index_stage.upsert(conn, f, {"json", "pdf"}) == "updated"
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] is None
+
+
+def test_html_url_survives_a_reindex_where_the_listing_transiently_drops_html(conn):
+    """Finding 2: a transient listing gap must not null out a WORKING URL --
+    one this row has fetched before (text_source = 'html' is the receipt).
+    A URL that was never fetched gets no such protection: see the
+    phantom-pdf tests below for why."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    before = conn.execute(
+        "SELECT html_url FROM ch_court_decisions").fetchone()[0]
+    assert before.endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.html")
+    conn.execute("UPDATE ch_court_decisions SET text_source = 'html', stage = 'fetched'")
+
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT html_url, pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] == before, "html_url must not be nulled by a body-bearing re-index"
+    assert row[1].endswith("/ZG_Obergericht/ZG_OG_001_Z1-2020-5_2022-02-18.pdf")
+
+
+def test_one_bad_document_does_not_abort_the_rest_of_the_batch(conn, monkeypatch):
+    """Finding 3: a raise from parse() or upsert() for one document must not
+    cancel the sibling tasks in the same asyncio.gather slice."""
+    listing_html = (
+        '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.json">a</a>'
+        '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.pdf">a</a>'
+        '<a href="BAD_DOC.json">b</a>'
+        '<a href="BAD_DOC.pdf">b</a>'
+    )
+    good_data = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    class FakeFetcher:
+        async def stream_text(self, url, chunk_size=1 << 16):
+            # Deliberately handed over in small pieces: the real listing is
+            # streamed, so a double that returns it whole would not exercise
+            # the boundary handling the parser depends on.
+            for start in range(0, len(listing_html), 17):
+                yield listing_html[start:start + 17]
+
+        async def json(self, url):
+            return good_data
+
+    real_upsert = index_stage.upsert
+
+    def flaky_upsert(conn, fields, available):
+        if fields.doc_id == "BAD_DOC":
+            raise RuntimeError("simulated write failure")
+        return real_upsert(conn, fields, available)
+
+    monkeypatch.setattr(index_stage, "upsert", flaky_upsert)
+
+    report = index_stage.IndexReport()
+    asyncio.run(
+        index_stage._index_spider(FakeFetcher(), conn, "ZG_Obergericht", report))
+
+    doc_ids = {
+        row[0] for row in
+        conn.execute("SELECT doc_id FROM ch_court_decisions").fetchall()
+    }
+    assert "ZG_OG_001_Z1-2020-5_2022-02-18" in doc_ids, \
+        "the good document in the same slice must still be written"
+    assert "BAD_DOC" not in doc_ids
+    assert report.failed == 1
+
+
+# --- One failed listing must not discard the other 53 spiders ---
+#
+# _index_spider's listing fetch was bare and the `for spider in spiders` loop
+# had no try/except, so a single FetchError aborted the whole run. That is
+# expensive in a way the other failure paths are not: the CH_BGer listing is
+# 116,000,062 bytes and takes 132.9 s, and a retry starts again from byte
+# zero. Losing 53 spiders' progress to one flaky listing is not acceptable.
+
+def test_one_failed_listing_does_not_abort_the_other_spiders(conn, monkeypatch):
+    from chpipe.config import Settings
+    from chpipe.http import FetchError
+
+    listing_html = ('<a href="ZG_OG_001_Z1-2020-5_2022-02-18.json">a</a>'
+                    '<a href="ZG_OG_001_Z1-2020-5_2022-02-18.pdf">a</a>')
+    good_data = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    class Fetcher:
+        async def stream_text(self, url, chunk_size=1 << 16):
+            if "BROKEN" in url:
+                raise FetchError("500 for the listing")
+            yield listing_html
+
+        async def json(self, url):
+            return good_data
+
+    class FetcherContext:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return Fetcher()
+
+        async def __aexit__(self, *exc):
+            return None
+
+    monkeypatch.setattr(index_stage, "Fetcher", FetcherContext)
+    monkeypatch.setattr(index_stage.db, "connect", lambda s: conn)
+    monkeypatch.setattr(conn, "close", lambda: None, raising=False)
+
+    settings = Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
+                        http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                        load_ceiling=0.0, max_attempts=3)
+
+    report = index_stage.run(settings, ["BROKEN_Spider", "ZG_Obergericht"])
+
+    assert report.failed_spiders == ["BROKEN_Spider"]
+    assert report.inserted == 1, "the healthy spider must still have been indexed"
+    assert conn.execute(
+        "SELECT count(*) FROM ch_court_decisions").fetchone()[0] == 1
+
+
+def test_a_failed_spider_is_counted_apart_from_failed_documents(conn, monkeypatch):
+    """"3 documents failed" and "a whole court was never enumerated" are not
+    the same finding, and folding them together hides the second."""
+    report = index_stage.IndexReport()
+    assert report.failed == 0
+    assert report.failed_spiders == []
+
+
+# --- Re-running index must not rewind work in progress ---
+#
+# Spec section 10 makes delta runs of `index` the normal ongoing operation, so
+# this is a live path, not a corner case. Only 'loaded' was protected: a row
+# sitting at 'fetched', 'extracted' or 'ocr_pending' was thrown back to
+# 'indexed' and re-downloaded in full. write_body short-circuits the WRITE on
+# a matching sha256 but never the fetch, so the bytes come off the
+# volunteer-run mirror again either way.
+
+@pytest.mark.parametrize("stage", ["fetched", "extracted", "ocr_pending"])
+def test_reindexing_does_not_rewind_a_row_that_has_already_done_work(conn, stage):
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) VALUES (%s,%s,%s)",
+        (f.ecli, f.spider, stage))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    assert conn.execute(
+        "SELECT stage FROM ch_court_decisions").fetchone()[0] == stage
+
+
+def test_reindexing_still_fills_the_metadata_of_a_row_it_does_not_rewind(conn):
+    """Protecting the stage must not stop `index` doing the job it exists
+    for: filling in decision_date and doc_id on the legacy rows."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) "
+        "VALUES (%s,%s,'ocr_pending')", (f.ecli, f.spider))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, decision_date, doc_id FROM ch_court_decisions").fetchone()
+    assert row[0] == "ocr_pending"
+    assert row[1] == datetime.date(2022, 2, 18)
+    assert row[2] == "ZG_OG_001_Z1-2020-5_2022-02-18"
+
+
+@pytest.mark.parametrize("stage", ["indexed", "failed"])
+def test_reindexing_does_requeue_a_row_that_has_done_no_work(conn, stage):
+    """'failed' and 'indexed' are deliberately not protected: a re-index is
+    exactly the event that can give a failed row a body it did not have."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage, last_error) "
+        "VALUES (%s,%s,%s,'no body: listing offers neither html nor pdf')",
+        (f.ecli, f.spider, stage))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] is None
+
+
+def test_reindexing_a_failed_row_clears_its_exhausted_attempt_budget(conn):
+    """A row retired by db.fail() carries attempts >= max_attempts and a
+    failed_stage recording where it died. If the upsert returns such a row
+    to 'indexed' without resetting attempts and failed_stage, the row is
+    invisible to every recovery path at once: db.claim filters it out on
+    attempts < max_attempts, unkeyed_count skips it because it now has a
+    doc_id, and failed_by_stage/retry_failed skip it because its stage is
+    no longer 'failed' -- while its diagnosis has already been wiped.
+    Claimability, not just attempts == 0, is the property that matters."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions "
+        "(ecli, spider, stage, attempts, failed_stage, last_error) "
+        "VALUES (%s,%s,'failed',3,'fetched','boom')",
+        (f.ecli, f.spider))
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    row = conn.execute(
+        "SELECT stage, attempts, failed_stage, last_error "
+        "FROM ch_court_decisions").fetchone()
+    assert row[0] == "indexed"
+    assert row[1] == 0
+    assert row[2] is None
+    assert row[3] is None
+    claimed = db.claim(conn, "indexed", 10, max_attempts=3)
+    assert len(claimed) == 1
+    assert claimed[0]["ecli"] == f.ecli
+
+
+def test_a_protected_row_is_not_stamped_with_an_error_it_never_hit(conn):
+    """The same rule finding 1a established for 'loaded', now for the other
+    protected stages: a row whose listing transiently loses its body must
+    not be labelled with a failure it never experienced."""
+    f = _fields()
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, stage) "
+        "VALUES (%s,%s,'extracted')", (f.ecli, f.spider))
+    index_stage.upsert(conn, f, set())
+    row = conn.execute(
+        "SELECT stage, last_error FROM ch_court_decisions").fetchone()
+    assert row[0] == "extracted"
+    assert row[1] is None
+
+
+# --- One bad file must not cost a court, and an unreadable listing must not
+# read as a healthy empty one ---
+#
+# These go through the REAL Fetcher over an httpx.MockTransport rather than a
+# hand-written double: the defect in the first test is that Fetcher.json()
+# raises json.JSONDecodeError rather than FetchError, so a double that
+# chooses its own exception type cannot prove anything about it.
+
+import httpx                                                   # noqa: E402
+from chpipe.config import Settings as _Settings                 # noqa: E402
+from chpipe.http import Fetcher as _RealFetcher                 # noqa: E402
+
+_GOOD_ID = "ZG_OG_001_Z1-2020-5_2022-02-18"
+_LISTING = (f'<html><head><title>Index of /docs/ZG_Obergericht</title></head>'
+            f'<body><h1>Index of /docs/ZG_Obergericht</h1>'
+            f'<a href="/docs/">Parent Directory</a>'
+            f'<a href="{_GOOD_ID}.json">a</a><a href="{_GOOD_ID}.pdf">a</a>'
+            f'<a href="BAD_DOC.json">b</a><a href="BAD_DOC.pdf">b</a>'
+            f'</body></html>')
+_EMPTY_LISTING = ('<html><head><title>Index of /docs/ZG_Obergericht</title></head>'
+                  '<body><h1>Index of /docs/ZG_Obergericht</h1>'
+                  '<a href="/docs/">Parent Directory</a></body></html>')
+_NOT_A_LISTING = "<html><body><h1>503 Service Unavailable</h1></body></html>"
+
+
+def _mock_transport(conn, monkeypatch, handler):
+    transport = httpx.MockTransport(handler)
+    real = _RealFetcher
+
+    class Injected:
+        def __init__(self, *a, **kw):
+            kw.setdefault("concurrency", 1)
+            self._f = real(retries=1, backoff=0.0, transport=transport,
+                           **{k: v for k, v in kw.items() if k == "concurrency"})
+
+        async def __aenter__(self):
+            return await self._f.__aenter__()
+
+        async def __aexit__(self, *exc):
+            return await self._f.__aexit__(*exc)
+
+    monkeypatch.setattr(index_stage, "Fetcher", Injected)
+    monkeypatch.setattr(index_stage.db, "connect", lambda s: conn)
+    monkeypatch.setattr(conn, "close", lambda: None, raising=False)
+    return _Settings(dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
+                     http_concurrency=1, cpu_workers=1, ocr_workers=1,
+                     load_ceiling=0.0, max_attempts=3)
+
+
+def test_one_malformed_document_json_does_not_cost_the_whole_spider(conn, monkeypatch):
+    """Fetcher.json() hands the body to json.loads, so a single truncated
+    file raises json.JSONDecodeError -- not FetchError. That escaped the
+    per-document handler, escaped the gather and landed in the spider-level
+    guard, so one bad file put the entire court into failed_spiders and
+    every other document of it went unindexed."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING)
+        if "BAD_DOC" in url:
+            return httpx.Response(200, text='{"Signatur": "ZG_OG_001", ')
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == [], \
+        "one malformed document must not retire the whole court"
+    assert report.inserted == 1
+    assert report.failed == 1
+    assert {r[0] for r in conn.execute(
+        "SELECT doc_id FROM ch_court_decisions").fetchall()} == {_GOOD_ID}
+
+
+def test_a_failed_document_is_attributed_to_its_own_spider(conn, monkeypatch):
+    """`failed` alone is a corpus total, and delta.py cannot hold a baseline
+    back with a total -- it has to know WHOSE documents did not land."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING)
+        if "BAD_DOC" in url:
+            return httpx.Response(404)
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_per_spider == {"ZG_Obergericht": 1}
+    assert report.inserted == 1
+
+
+def test_a_listing_that_names_no_documents_is_a_failed_spider(conn, monkeypatch):
+    """An HTTP 200 matching zero entries used to read as a healthy court that
+    publishes nothing, so delta.py advanced its baseline and retired its real
+    growth unwalked. Every spider in ALL_SPIDERS is an established court, so
+    for any of them this is a parse or layout failure, never an empty
+    court."""
+    def handler(request):
+        return httpx.Response(200, text=_EMPTY_LISTING)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == ["ZG_Obergericht"]
+    assert report.inserted == 0
+
+
+def test_an_unrecognised_listing_body_is_named_as_such(conn, monkeypatch, caplog):
+    """Both shapes fail -- an empty Apache index and a body that is not a
+    listing at all -- but the operator has to be told which one, because the
+    two need different fixes. The Apache marker is the only cheap signal that
+    separates them, and it decides the sentence, not the outcome."""
+    def handler(request):
+        return httpx.Response(200, text=_NOT_A_LISTING)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    with caplog.at_level(logging.ERROR, logger="chpipe.stages.index_stage"):
+        report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == ["ZG_Obergericht"]
+    assert "NOT an Apache directory index" in caplog.text
+
+
+def test_a_populated_listing_is_not_treated_as_empty(conn, monkeypatch):
+    """The guard must fire on zero entries only -- a court that IS enumerable
+    must never land in failed_spiders."""
+    good = json.loads((FIX / "doc_zg_og_001.json").read_text())
+
+    def handler(request):
+        url = str(request.url)
+        if url.endswith("/ZG_Obergericht/"):
+            return httpx.Response(200, text=_LISTING.replace(
+                '<a href="BAD_DOC.json">b</a><a href="BAD_DOC.pdf">b</a>', ""))
+        return httpx.Response(200, json=good)
+
+    settings = _mock_transport(conn, monkeypatch, handler)
+    report = index_stage.run(settings, ["ZG_Obergericht"])
+
+    assert report.failed_spiders == []
+    assert report.failed_per_spider == {}
+    assert report.inserted == 1
+
+
+def test_a_reindex_keeps_the_pdf_preference_extract_recorded(conn):
+    """db.requeue_for_pdf() records "this document's HTML is a card" as
+    text_source = 'pdf'. It cannot live in a cleared html_url: this upsert
+    restores html_url from the listing (COALESCE(EXCLUDED.html_url, ...)),
+    and the nightly delta runs index before fetch -- the row would fetch the
+    card again every night. text_source is not in the SET list."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})
+    conn.execute("UPDATE ch_court_decisions SET text_source = 'pdf', stage = 'indexed'")
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})
+    row = conn.execute(
+        "SELECT text_source, html_url, pdf_url, stage FROM ch_court_decisions").fetchone()
+    assert row[0] == "pdf", "the preference must survive a re-index"
+    assert row[1] and row[2], "both URLs restored from the listing, as before"
+    assert row[3] == "indexed"
+
+
+# --- a body URL the listing does not offer and this row never fetched is dropped ---
+
+def test_a_never_fetched_pdf_url_is_dropped_when_the_listing_has_no_pdf(conn):
+    """The old importer built pdf_urls by pattern. On the first prod backfill
+    2,521 documents carried one although their listing had only .html and
+    .json; every one answered 404, and `pdf_url IS NOT NULL` sent them
+    round a re-queue loop. A URL that was never fetched (no receipt in
+    text_source or pdf_sha256) and is not on offer now is not kept."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf'")
+    index_stage.upsert(conn, f, {"json", "html"})
+    row = conn.execute("SELECT pdf_url, html_url FROM ch_court_decisions").fetchone()
+    assert row[0] is None, "a phantom pdf_url must not survive a re-index"
+    assert row[1], "the html the listing offers is still there"
+
+
+def test_a_fetched_pdf_url_survives_a_transient_listing_gap(conn):
+    """pdf_sha256 alone is the receipt (text_source is deliberately NOT set
+    here, so the test cannot pass on the wrong half of the CASE)."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "pdf"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_sha256 = 'abc', stage = 'loaded'")
+    index_stage.upsert(conn, f, {"json"})
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] and row[0].endswith(".pdf"), "a PDF this row has fetched keeps its URL through a gap"
+
+
+def test_a_url_the_listing_offers_again_comes_straight_back(conn):
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf'")
+    index_stage.upsert(conn, f, {"json", "html"})          # dropped
+    index_stage.upsert(conn, f, {"json", "html", "pdf"})   # listing now offers it
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] and row[0].endswith("/ZG_OG_001_Z1-2020-5_2022-02-18.pdf")
+
+
+def test_a_requeued_card_does_not_keep_a_phantom_pdf_url_through_a_gap(conn):
+    """The shape db.requeue_for_pdf() produces: text_source = 'pdf' asked
+    for, nothing fetched yet, pdf_sha256 NULL. If the listing has no PDF the
+    stored URL is a phantom and must go -- cubic's P1 on #2335."""
+    f = _fields()
+    index_stage.upsert(conn, f, {"json", "html"})
+    conn.execute("UPDATE ch_court_decisions SET pdf_url = 'https://legacy/pattern.pdf', "
+                 "text_source = 'pdf', stage = 'indexed'")
+    index_stage.upsert(conn, f, {"json", "html"})
+    row = conn.execute("SELECT pdf_url FROM ch_court_decisions").fetchone()
+    assert row[0] is None

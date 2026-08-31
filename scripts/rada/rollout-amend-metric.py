@@ -179,10 +179,14 @@ CREATE TABLE IF NOT EXISTS legislation_article_amendments (
   article_number VARCHAR(50) NOT NULL,
   change_type VARCHAR(20) NOT NULL CHECK (change_type IN ('added','modified','removed')),
   basis_act VARCHAR(50), act_date DATE, note_text TEXT, source_edition DATE,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE (legislation_id, article_number, change_type, basis_act, note_text)
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_law_art_amend ON legislation_article_amendments(legislation_id, article_number);
+-- Must match migration 188 and prod exactly. A plain UNIQUE(... note_text) is
+-- wrong twice: note_text is TEXT and can overflow a btree key, and it treats
+-- NULL and '' as different rows while the live index folds them together.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_law_art_amend ON legislation_article_amendments
+  (legislation_id, article_number, change_type, basis_act, md5(coalesce(note_text, '')));
 """]
 for r in recs:
     lid = r["id"]; src = f"{r['ed'][:4]}-{r['ed'][4:6]}-{r['ed'][6:8]}"

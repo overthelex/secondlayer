@@ -1,0 +1,51 @@
+{
+ "text_of_law": {
+  "systematic_number": "1",
+  "title": "Verfassung des Kantons Luzern",
+  "abbreviation": "KV",
+  "abrogated": false,
+  "abrogated_dates_str": null,
+  "enactment": "2008-01-01",
+  "date_of_decision": "2007-06-17",
+  "text_of_law_type_id": 3,
+  "version_uid": "da601a301e70d7a9bdbc44e4887f2c18",
+  "canonical_link": "https://srl.lu.ch/app/de/texts_of_law/1",
+  "current_version": {
+   "id": 3784,
+   "version_dates_str": "Aktuelle Version in Kraft seit: 01.07.2014 (Beschlussdatum: 17.06.2013)",
+   "structured_document_id": 16624,
+   "title": "Verfassung des Kantons Luzern",
+   "abbreviation": "KV"
+  },
+  "old_versions": [],
+  "future_versions": [],
+  "change_documents": [
+   {
+    "id": 34,
+    "date_title_string": "G-Lieferung vom 14.12.2013",
+    "number": "2013-94",
+    "pdf_link": "https://srl.lu.ch/api/de/change_documents/file_dictionaries/34/pdf_file",
+    "for_selected_version": true,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "14.12.2013",
+    "date_string": "14.12.2013",
+    "document_title": "Verfassung des Kantons Luzern",
+    "identifier_1": "14.12.2013",
+    "identifier_2": "2013-94"
+   },
+   {
+    "id": 805,
+    "date_title_string": "G-Lieferung vom 14.07.2007",
+    "number": "2007-30",
+    "pdf_link": "https://srl.lu.ch/api/de/change_documents/file_dictionaries/805/pdf_file",
+    "for_selected_version": false,
+    "date_of_decision_string": "????",
+    "date_of_publication_string": "14.07.2007",
+    "date_string": "14.07.2007",
+    "document_title": "Verfassung des Kantons Luzern (KV)",
+    "identifier_1": "14.07.2007",
+    "identifier_2": "2007-30"
+   }
+  ]
+ }
+}

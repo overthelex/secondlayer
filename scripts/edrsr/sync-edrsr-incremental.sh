@@ -264,6 +264,39 @@ log "New records imported: $NEW_RECORDS"
 LATEST=$(run_sql "SELECT max(receipt_date)::date FROM edrsr_documents WHERE EXTRACT(YEAR FROM receipt_date) = $YEAR;" 2>/dev/null | grep -oP '\d{4}-\d{2}-\d{2}' | head -1 || echo "unknown")
 log "Latest receipt_date for $YEAR: $LATEST"
 
+# ── Step 7: Refresh the distinct-judge lookup ─────────────────────────
+# The judge filter in search_court_decisions resolves a name fragment against
+# edrsr_judges_distinct rather than substring-scanning edrsr_documents (135.8M rows
+# over 26 partitions — 83-120s before, 33ms after; migration 183).
+#
+# That view is materialised, so a judge whose first decision arrives in THIS sync
+# stays invisible to the filter until it is refreshed. The failure mode is silent:
+# a search for that judge returns "nothing found" rather than an error, so nobody
+# notices until someone wonders why a real judge has no decisions.
+#
+# CONCURRENTLY keeps readers unblocked; it requires the unique index idx_ejd_judge,
+# which migration 183 creates for precisely this. Measured on prod at 13.1s over
+# 135.8M rows, so there is nothing to optimise by doing it incrementally.
+#
+# This is auxiliary to the import: a failure here warns loudly but must not fail the
+# sync, and a missing view (migration not yet applied) is not an error at all —
+# resolveJudgeNames falls back to the old substring predicate in that case.
+if [ "$NEW_RECORDS" -gt 0 ]; then
+  if [ "$(count_sql "SELECT count(*) FROM pg_matviews WHERE matviewname = 'edrsr_judges_distinct';")" -gt 0 ]; then
+    log "Refreshing edrsr_judges_distinct (judge lookup)..."
+    if run_sql "REFRESH MATERIALIZED VIEW CONCURRENTLY edrsr_judges_distinct;" >/dev/null 2>&1; then
+      JUDGES=$(count_sql "SELECT count(*) FROM edrsr_judges_distinct;")
+      log "Judge lookup refreshed: $JUDGES distinct judges"
+    else
+      log "WARNING: REFRESH of edrsr_judges_distinct failed — the judge filter will not see judges added by this sync"
+    fi
+  else
+    log "edrsr_judges_distinct absent (migration 183 not applied) — skipping judge lookup refresh"
+  fi
+else
+  log "No new records — judge lookup refresh not needed"
+fi
+
 log "========================================"
 
 # Cleanup ZIP (keep for cache, delete after 7 days)

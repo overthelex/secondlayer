@@ -63,9 +63,13 @@ describe('WorkflowMemoryTools', () => {
   // ── getToolDefinitions ─────────────────────────────────────────────────────
 
   describe('getToolDefinitions', () => {
-    it('returns exactly 4 tool definitions', () => {
+    it('returns exactly 6 tool definitions', () => {
       const defs = handler.getToolDefinitions();
-      expect(defs).toHaveLength(4);
+      // Grew from 4 to 6 with the push tools (push_refresh, push_sync_tasks).
+      expect(defs).toHaveLength(6);
+      expect(defs.map((d: any) => d.name)).toEqual(expect.arrayContaining([
+        'workflow_memory_push_refresh', 'workflow_memory_push_sync_tasks',
+      ]));
     });
 
     it('returns workflow_memory_query with required "query" field', () => {

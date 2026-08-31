@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { consultationService, type Consultation } from '../services/api/ConsultationService';
+import { API_BASE } from '../utils/api/base';
 
 /** Dedup set for recent SSE event IDs (prevents duplicate processing on reconnect) */
 const recentEventIds = new Set<string>();
@@ -50,7 +51,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     const token = localStorage.getItem('auth_token');
     if (!token) return;
 
-    const baseURL = import.meta.env.VITE_API_URL || '';
+    const baseURL = API_BASE;
     const url = `${baseURL}/api/consultations/user-stream?token=${encodeURIComponent(token)}`;
     const es = new EventSource(url);
 

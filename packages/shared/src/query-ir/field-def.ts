@@ -31,4 +31,20 @@ export interface FieldDef {
   columns: string[];
   type?: 'string' | 'number' | 'boolean';
   transform?: 'uppercase';
+  /**
+   * For 'fts' / 'fts_simple' only: the exact expression to build the tsvector
+   * from, replacing the default `columns[0]`.
+   *
+   * A GIN index on a tsvector expression is only used when the query repeats
+   * that expression character for character. Several corpora index a
+   * concatenation rather than one column — `uk_court_decisions` has
+   * `to_tsvector('english', COALESCE(parties,'') || ' ' || COALESCE(abstract,'')
+   * || ' ' || COALESCE(full_text,''))` — so searching `full_text` alone silently
+   * drops to a sequential scan over gigabytes. Name the indexed expression here
+   * instead of duplicating the index.
+   *
+   * Trusted, code-authored SQL like `columns` and `RegistryDef.baseWhere`; it is
+   * never built from user input.
+   */
+  ftsExpression?: string;
 }

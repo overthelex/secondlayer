@@ -70,10 +70,35 @@ export class MCPSSEServer {
    * Get all available tools in MCP format
    */
   getAllTools(): MCPToolDefinition[] {
-    const allTools = this.toolRegistry.getLocalToolDefinitions();
+    return this.toMcpFormat(this.toolRegistry.getLocalToolDefinitions());
+  }
 
-    // Convert to MCP format
-    return allTools.map((tool: any) => ({
+  /**
+   * Local tools PLUS the proxied rada_* / openreyestr_* definitions.
+   *
+   * /sse could always EXECUTE prefixed tools — handleToolCall goes through
+   * toolRegistry.executeTool, which proxies them — but it advertised only the local ones, so a
+   * ChatGPT client never saw 23 of the 54 curated tools: the whole ЄДР surface (companies,
+   * beneficiaries, debtors, Prozorro, РНБО, ФОП, tax/ЄСВ debt) and every parliament tool.
+   * A client cannot call what it cannot see, so the endpoint looked like it lacked the
+   * registries entirely.
+   *
+   * Falls back to the local list if the remote fetch fails, matching how the Streamable-HTTP
+   * transport handles the same call (mcp-sse-routes.ts).
+   */
+  private async getAllToolsIncludingRemote(): Promise<MCPToolDefinition[]> {
+    try {
+      return this.toMcpFormat(await this.toolRegistry.getAllToolDefinitions());
+    } catch (error: any) {
+      logger.warn('[MCP SSE] Remote tool definitions unavailable; advertising local only', {
+        error: error?.message,
+      });
+      return this.getAllTools();
+    }
+  }
+
+  private toMcpFormat(tools: any[]): MCPToolDefinition[] {
+    return tools.map((tool: any) => ({
       name: tool.name,
       description: tool.description || '',
       inputSchema: tool.inputSchema || {
@@ -318,7 +343,7 @@ export class MCPSSEServer {
    * Handle tools/list request
    */
   private async handleToolsList(res: Response, request: MCPRequest): Promise<void> {
-    const allTools = this.getAllTools();
+    const allTools = await this.getAllToolsIncludingRemote();
 
     // Advertise the curated v2 tool set — same whitelist as /api/v2/mcp — instead of
     // a blind slice(0, N). The previous slice kept only the first 15 tools by registration

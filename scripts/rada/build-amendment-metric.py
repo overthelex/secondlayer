@@ -118,11 +118,15 @@ CREATE TABLE IF NOT EXISTS legislation_article_amendments (
   act_date DATE,
   note_text TEXT,
   source_edition DATE,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE (legislation_id, article_number, change_type, basis_act, note_text)
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_law_art_amend
   ON legislation_article_amendments(legislation_id, article_number);
+-- Must match migration 188 and prod exactly. A plain UNIQUE(... note_text) is
+-- wrong twice: note_text is TEXT and can overflow a btree key, and it treats
+-- NULL and '' as different rows while the live index folds them together.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_law_art_amend ON legislation_article_amendments
+  (legislation_id, article_number, change_type, basis_act, md5(coalesce(note_text, '')));
 """)
     f.write(f"DELETE FROM legislation_article_amendments WHERE legislation_id={LEG_ID};\n")
     for art, ct, act, dt, note in rows:

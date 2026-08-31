@@ -1,0 +1,45 @@
+{
+ "text_of_law": {
+  "selected_version": {
+   "id": 3016,
+   "title": "Konkordat über die Schulkoordination",
+   "version_dates_str": "Aktuelle Version in Kraft seit: 09.07.1971 (Beschlussdatum: 29.10.1970)",
+   "available_languages": [
+    {
+     "language": {
+      "id": 2,
+      "iso639_1_code": "de",
+      "iso639_2_code": "deu",
+      "name_native": "Deutsch",
+      "priority": 0,
+      "position": 1,
+      "name": "Deutsch"
+     }
+    }
+   ],
+   "annex_documents": [],
+   "json_content": {
+    "modification_table": [],
+    "footnotes": [],
+    "document": {
+     "header": {
+      "de": "<h1 class='systematic_number'>\n  411.1\n</h1>\n<h1 class='title'>\n  Konkordat &uuml;ber die Schulkoordination\n</h1>\n<h2 class='abbreviation'></h2>\n<div class='enactment'>\n  Vom 29. Oktober 1970 (Stand 9. Juli 1971)\n</div>\n<div class='ingress_author'></div>\n<div class='ingress_foundation'>\n  <p>\n    Dieser Erlass wird nur noch &uuml;ber die interkantonale Publikationsplattform Intlex publiziert und dort nachgef&uuml;hrt.\n  </p>\n  <p>\n    Er ist abrufbar in Intlex unter der Nummer <strong>iSR&nbsp;<a class=\"law_link\" href=\"https://db.clex.ch/link/IntLex/4.2-1/de\" target=\"_blank\">4.2-1</a></strong>.\n  </p>\n</div>\n<div class='ingress_action'></div>"
+     },
+     "footer": {
+      "de": "<div class='egress_sign_off_date'></div>\n<div class='egress_sign_off_signature'></div>\n<div class='egress_sign_off_remarks'></div>\n<div class='egress_ags_source'>\n  GS 20, 90\n</div>"
+     },
+     "content": {
+      "uid": "t-0",
+      "type": "title",
+      "number": {},
+      "text": {},
+      "html_content": {
+       "de": ""
+      },
+      "children": []
+     }
+    }
+   }
+  }
+ }
+}

@@ -223,7 +223,7 @@ function makeCoreServices() {
     },
     reyestrDownloadService: { download: jest.fn() },
     importTaskService: { create: jest.fn() },
-    mcpAPI: { getTools: jest.fn().mockReturnValue([]) },
+    mcpAPI: { getTools: jest.fn().mockReturnValue([]), setEdsrFtsService: jest.fn() },
   } as any;
 }
 

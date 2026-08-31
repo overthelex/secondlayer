@@ -30,7 +30,7 @@ export class RegistrySearchTool extends BaseToolHandler {
     return [{
       name: 'search_registry',
       annotations: { title: 'Пошук у реєстрах відкритих даних', readOnlyHint: true },
-      description: `Єдиний інструмент для пошуку в ${REGISTRY_KEYS.length} реєстрах відкритих даних України.
+      description: `Єдиний інструмент для пошуку в ${REGISTRY_KEYS.length} реєстрах відкритих даних. Переважно Україна; реєстри з префіксом us_ та uk_ — це США і Велика Британія, їхні описи англійською.
 
 Обов'язковий параметр: registry (назва реєстру).
 Фільтри передаються в об'єкті filters — набір полів залежить від реєстру.
@@ -123,11 +123,23 @@ ${registryDescriptions}
     const countValues = [...values];
     values.push(lim);
 
-    const dataSql = `SELECT ${def.selectColumns}
+    const innerSql = `SELECT ${def.selectColumns}
       FROM ${def.table}
       WHERE ${fullWhere}
       ORDER BY ${def.orderBy}
       LIMIT $${paramIndex}`;
+
+    // outerColumns defers expensive per-row expressions until after the LIMIT.
+    // Without it a document snippet is computed for every matching row and only
+    // then thrown away by the sort — see RegistryDef.outerColumns for the
+    // measurement.
+    // The outer ORDER BY is not decoration: SQL does not carry a subquery's
+    // ordering into the enclosing query, so without it the page could come back
+    // in executor order. It sorts at most `limit` rows.
+    const dataSql = def.outerColumns
+      ? `SELECT ${def.outerColumns} FROM (${innerSql}) t`
+        + (def.outerOrderBy ? `\n      ORDER BY ${def.outerOrderBy}` : '')
+      : innerSql;
 
     const countSql = `SELECT COUNT(*) AS total FROM ${def.table} WHERE ${fullWhere}`;
 

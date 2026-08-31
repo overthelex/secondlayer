@@ -50,7 +50,11 @@ embedding stack across the platform.
 
 - Run **inside the prod docker network** — `tei-bge-m3` and `secondlayer-qdrant-prod` are internal.
 - Env: `DATABASE_URL`, `BGE_M3_URL`, `QDRANT_URL`, `QDRANT_API_KEY`. Deps: `psycopg2-binary qdrant-client requests`.
-- **Duplicate acts skipped by default** (`--exclude`): `254к/96-ВР`, `4651-vi`, `5073-VI`, `4173-IX`.
+- **No acts are skipped by default.** `--exclude` still exists but is empty. It used to hold
+  `254к/96-ВР`, `4651-vi`, `5073-VI`, `4173-IX` — official NUMBERS that had been stored in
+  `legislation.rada_id`, giving the Constitution, the КПК and two more acts a second row each.
+  Migration 188 merged those duplicates away and a unique index on `lower(rada_id)` plus a CHECK
+  now prevent the shape, so the list matched nothing and was removed.
 - **289 NO_CONTENT acts** are not handled here — they need article import first (separate task).
 - Chunking is a byte-exact port of `createArticleChunks` (500/100). Genuinely-long articles (e.g.
   ПКУ ст.14 ~215K) chunk into many pieces — that's expected, not the LEXAI-1805 blob bug.

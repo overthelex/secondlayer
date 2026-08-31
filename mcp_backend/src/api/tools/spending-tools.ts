@@ -15,6 +15,12 @@ const TABLE_MAP: Record<string, string> = {
   contracts: 'spending_contracts',
 };
 
+// `parent_id` links a child document back to its contract, so the contracts table itself does
+// not have the column. Selecting it unconditionally made EVERY contracts query throw
+// (`column "parent_id" does not exist`), and the per-table catch turned that into a silent
+// zero — contracts were invisible even under the default doc_type 'all'.
+const TABLES_WITHOUT_PARENT_ID = new Set(['spending_contracts']);
+
 const DOC_TYPE_LABELS: Record<string, string> = {
   acts: 'Акт виконаних робіт',
   addendums: 'Додаткова угода',
@@ -131,13 +137,17 @@ export class SpendingTools extends BaseToolHandler {
         : Object.entries(TABLE_MAP);
 
     const allResults: any[] = [];
+    const tableErrors: Array<{ table: string; error: string }> = [];
     const QUERY_TIMEOUT_MS = 15000;
 
     for (const [dtype, tableName] of tables) {
       try {
+        const parentIdCol = TABLES_WITHOUT_PARENT_ID.has(tableName)
+          ? 'NULL::bigint AS parent_id'
+          : 'parent_id';
         const sql = `SELECT id, edrpou, document_number, document_date, sign_date,
           amount, currency, pdv_include, pdv_amount,
-          contractors, parent_id
+          contractors, ${parentIdCol}
           FROM ${tableName}
           WHERE ${whereClause}
           ORDER BY sign_date DESC NULLS LAST
@@ -158,6 +168,9 @@ export class SpendingTools extends BaseToolHandler {
           });
         }
       } catch (err: any) {
+        // Record it as well as logging: swallowing this silently is what let a broken
+        // contracts query read as "no results" for as long as it did.
+        tableErrors.push({ table: tableName, error: String(err.message).slice(0, 200) });
         logger.warn(`[SpendingTools] Error querying ${tableName}`, { error: err.message });
       }
     }
@@ -177,7 +190,10 @@ export class SpendingTools extends BaseToolHandler {
         total: 0,
         returned: 0,
         results: [],
-        note: 'Результатів не знайдено. Можливо, запит був надто широким і перевищив timeout. Спробуйте уточнити параметри (вказати edrpou, звузити діапазон дат).',
+        ...(tableErrors.length ? { failed_tables: tableErrors } : {}),
+        note: tableErrors.length
+          ? `Запит до ${tableErrors.length} таблиць(і) завершився помилкою — це НЕ означає, що даних немає. Див. failed_tables.`
+          : 'Результатів не знайдено. Можливо, запит був надто широким і перевищив timeout. Спробуйте уточнити параметри (вказати edrpou, звузити діапазон дат).',
       }, null, 2));
     }
 
@@ -185,6 +201,7 @@ export class SpendingTools extends BaseToolHandler {
       query: { edrpou, contractor_name, contractor_edrpou, date_from, date_to, min_amount, max_amount, doc_type },
       total: allResults.length,
       returned: trimmed.length,
+      ...(tableErrors.length ? { failed_tables: tableErrors, partial: true } : {}),
       results: trimmed,
     }, null, 2));
   }

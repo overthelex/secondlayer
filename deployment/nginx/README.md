@@ -7,7 +7,7 @@ Nginx configs for SecondLayer environments.
 | File | Environment | Purpose |
 |------|-------------|---------|
 | `prod.legal.org.ua.conf` | Production | Main prod config (legal.org.ua, preview.legal.org.ua, plane.legal.org.ua) |
-| `local-docker.conf` | Local | Local dev config (local.legal.org.ua with self-signed TLS) |
+| `conf.d/local-docker.conf` | Local | Local dev config (local.legal.org.ua with self-signed TLS) |
 | `localdev.legal.org.ua.conf` | Local | Alternative local config |
 | `stage.legal.org.ua.conf` | Legacy | Stage config (not actively used) |
 

@@ -5,6 +5,7 @@ import type { IEmbeddingPort, ICachePort } from '../domain/ports/index.js';
 import { requestContext } from '../utils/openai-client.js';
 import type { CostTracker } from '../services/cost-tracker.js';
 import { SectionType } from '../types/index.js';
+import { formatCourtDate } from '../api/tool-utils.js';
 import {
   type ZakonOnlineDomainName,
   type DomainConfig,
@@ -311,7 +312,7 @@ export class EdsrLocalAdapter {
           const chamber = doc.chamber || this.extractChamberFromText(doc.full_text || doc.resolution || null);
 
           const title = doc.title || doc.name || doc.cause_num || doc.caption || undefined;
-          const date = doc.adjudication_date || doc.date || doc.published_at || undefined;
+          const date = formatCourtDate(doc.adjudication_date || doc.date || doc.published_at);
           const caseNumber = doc.cause_num || doc.case_number || doc.metadata?.cause_num || undefined;
 
           return {
@@ -378,7 +379,7 @@ export class EdsrLocalAdapter {
         zakononline_id: String(doc.doc_id),
         type: 'court_decision',
         title: doc.title || doc.cause_num || undefined,
-        date: doc.adjudication_date || doc.date || undefined,
+        date: formatCourtDate(doc.adjudication_date || doc.date),
         case_number: doc.cause_num || undefined,
         court: (doc.court || doc.court_name) ? String(doc.court || doc.court_name) : (doc.court_code != null ? String(doc.court_code) : undefined),
         chamber: chamber,

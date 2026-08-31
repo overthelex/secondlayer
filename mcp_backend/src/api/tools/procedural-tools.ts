@@ -34,6 +34,7 @@ import {
   searchWithInstanceCascade,
   mapProcedureCodeToJusticeKind,
   safeParseJsonFromToolResult,
+  formatCourtDate,
 } from '../tool-utils.js';
 
 /**
@@ -470,7 +471,7 @@ export class ProceduralTools extends BaseToolHandler {
     const results = rows.slice(0, limit).map((r) => ({
       doc_id: r.doc_id,
       court_code: r.court_code,
-      date: r.adjudication_date,
+      date: formatCourtDate(r.adjudication_date),
       case_number: r.cause_num,
       url: `https://reyestr.court.gov.ua/Review/${r.doc_id}`,
       section_focus: sectionFocus,
@@ -785,7 +786,7 @@ export class ProceduralTools extends BaseToolHandler {
           semanticHits.push({
             doc_id: h.doc_id,
             court_code: h.metadata.court_code,
-            date: h.metadata.adjudication_date,
+            date: formatCourtDate(h.metadata.adjudication_date),
             case_number: h.metadata.cause_num,
             fragment: (h.text || '').slice(0, 900),
           });
@@ -1091,7 +1092,7 @@ export class ProceduralTools extends BaseToolHandler {
           results.push({
             doc_id: h.doc_id,
             court_code: h.metadata.court_code,
-            date: h.metadata.adjudication_date,
+            date: formatCourtDate(h.metadata.adjudication_date),
             case_number: h.metadata.cause_num,
             snippet: (h.text || '').slice(0, 600) + ((h.text || '').length > 600 ? '…' : ''),
             score: typeof h.score === 'number' ? Number(h.score.toFixed(4)) : undefined,

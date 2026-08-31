@@ -6,7 +6,9 @@
  * and error paths.
  */
 
-const mockGetCollections = jest.fn().mockResolvedValue({ collections: [{ name: 'edrsr_serving' }] });
+// `edrsr_decisions` is the live collection and the service's default. The fixture
+// used to name `edrsr_serving`, which has not existed since 2026-07-05.
+const mockGetCollections = jest.fn().mockResolvedValue({ collections: [{ name: 'edrsr_decisions' }] });
 const mockGetCollection = jest.fn().mockResolvedValue({ points_count: 5000 });
 const mockCollectionExists = jest.fn().mockResolvedValue(true);
 const mockSearch = jest.fn().mockResolvedValue([]);
@@ -107,7 +109,7 @@ describe('EdsrVectorizerService', () => {
     it('should return stats when collection exists', async () => {
       const service = new EdsrVectorizerService();
       mockGetCollections.mockResolvedValueOnce({
-        collections: [{ name: 'edrsr_serving' }],
+        collections: [{ name: 'edrsr_decisions' }],
       });
       mockGetCollection.mockResolvedValueOnce({ points_count: 5000 });
 
