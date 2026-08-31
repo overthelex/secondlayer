@@ -265,3 +265,97 @@ def test_a_low_quality_text_layer_fails_with_its_score_in_last_error(
     assert stage == "discovered" and attempts == 1
     assert len(db.claim_versions(conn, "discovered", 10, backoff_minutes=(),
                                  source="fedlex_pdf")) == 1
+
+
+# --- CHPIPE_RESPLIT: articles from the stored full_text (phase B) ---
+
+# The col0 pdf-a shape with a glued heading footnote ("Art. 12" = article 1
+# + note 2) and a footnote block; see tests/test_fedlex_split.py for the
+# splitter itself -- here only the walk, the write and the idempotency.
+RESPLIT_TEXT = """\
+101
+Bundesgesetz
+über etwas
+
+vom 1. Januar 1950
+
+
+Art. 12
+Der Bund sorgt für die Sache.
+
+Art. 2
+Die Kantone vollziehen dieses Gesetz.
+
+AS 1950 1
+1   Fassung gemäss Ziff. I des BG vom 1. Jan. 1950 (AS 1950 1).
+"""
+
+STUB_TEXT = "412.1\nOrdinanza\nsulla formazione\n\nEntrata in vigore: 1° febbraio 2008\n"
+
+
+def _parsed_pdf_row(conn, text, count=None, consolidation=None, lang="de"):
+    vid = _row(conn, consolidation=consolidation or URL, lang=lang)
+    conn.execute(
+        "UPDATE ch_act_version SET stage='parsed', full_text=%s, article_count=%s "
+        "WHERE version_id=%s", (text, count, vid))
+    return vid
+
+
+def test_resplit_gives_articles_and_keeps_full_text_unchanged(conn, settings):
+    vid = _parsed_pdf_row(conn, RESPLIT_TEXT)
+    stub = _parsed_pdf_row(conn, STUB_TEXT, consolidation=URL + "#stub", lang="it")
+
+    report = fedlex_pdf_text_stage.resplit(settings)
+
+    assert (report.resplit, report.recovered, report.articles) == (2, 1, 2)
+    assert report.empty == 1 and report.failed == 0
+    full_text, count = conn.execute(
+        "SELECT full_text, article_count FROM ch_act_version WHERE version_id=%s",
+        (vid,)).fetchone()
+    assert full_text == RESPLIT_TEXT            # byte for byte what the backfill wrote
+    assert count == 2
+    rows = conn.execute(
+        "SELECT e_id, article_number, text FROM ch_act_article "
+        "WHERE version_id=%s ORDER BY ordinal", (vid,)).fetchall()
+    assert [(r[0], r[1]) for r in rows] == [("art_1", "1"), ("art_2", "2")]
+    assert "sorgt für die Sache" in rows[0][2]
+    assert "AS 1950 1" not in rows[0][2] and "AS 1950 1" not in rows[1][2]
+    # the stub gained nothing and stays selectable (article_count still NULL)
+    assert conn.execute("SELECT article_count FROM ch_act_version WHERE version_id=%s",
+                        (stub,)).fetchone()[0] is None
+
+    # idempotent: the recovered row has left the selection, the stub is
+    # walked again and still yields nothing
+    again = fedlex_pdf_text_stage.resplit(settings)
+    assert (again.resplit, again.recovered, again.empty) == (1, 0, 1)
+
+
+def test_resplit_walks_only_parsed_article_less_fedlex_pdf_rows(conn, settings):
+    # already has articles -- not selected
+    done = _parsed_pdf_row(conn, RESPLIT_TEXT, count=3, consolidation=URL + "#done")
+    # an AKN row of another source -- never selected
+    akn_row = _row(conn, source="fedlex", url="https://fedlex.data.admin.ch/x.xml",
+                   consolidation="fedlex/x")
+    conn.execute("UPDATE ch_act_version SET stage='parsed', full_text='Art. 1  x', "
+                 "article_count=0 WHERE version_id=%s", (akn_row,))
+    # still queued -- not selected either
+    _row(conn, consolidation=URL + "#queued")
+
+    report = fedlex_pdf_text_stage.resplit(settings)
+
+    assert report.resplit == 0 and report.recovered == 0
+    assert conn.execute("SELECT article_count FROM ch_act_version WHERE version_id=%s",
+                        (done,)).fetchone()[0] == 3
+
+
+def test_resplit_honours_the_limit_across_batches(conn, settings, monkeypatch):
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    monkeypatch.setattr(mod, "RESPLIT_BATCH", 2)
+    for i in range(5):
+        _parsed_pdf_row(conn, RESPLIT_TEXT, consolidation=f"{URL}#r{i}")
+    report = fedlex_pdf_text_stage.resplit(settings, limit=3)
+    assert report.resplit == 3 and report.recovered == 3
+    left = conn.execute(
+        "SELECT count(*) FROM ch_act_version WHERE source='fedlex_pdf' "
+        "AND stage='parsed' AND article_count IS NULL").fetchone()[0]
+    assert left == 2

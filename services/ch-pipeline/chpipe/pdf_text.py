@@ -62,9 +62,12 @@ _NOT_A_MARGINAL = (r"(?!(?:Abs|Absatz|Absätze|al|alinéa|cpv|capoverso|Ziff|Zif
 # "Art. 1. Ziele" -- the number carries a dot on SO's concordats and
 # foundation deeds of the 1960s-90s (38 of 389 article-less editions on
 # 2026-08-27); "\.?" before the marginal admits it. Not "Art. 1.1": the
-# dot must be followed by a space or the line end.
+# dot must be followed by a space or the line end. \s{0,6}, not \s?: GR's
+# lexfind PDFs (427.240 it, phase B sample) set the number a tab-stop away
+# ("Art.     1    Condizione di ammissione") -- a superset of the old \s?,
+# so every heading matched before still matches.
 _HEADING = re.compile(
-    r"^(?:Art\.|Artikel|Article|Articolo|Artitgel|§)\s?([A-Z]?\d+[a-zA-Z]*(?:-\d+[a-zA-Z]*)?)"
+    r"^(?:Art\.|Artikel|Article|Articolo|Artitgel|§)\s{0,6}([A-Z]?\d+[a-zA-Z]*(?:-\d+[a-zA-Z]*)?)"
     r"\.?(?=[\s*]|$)\s?\*?(?:\s+" + _NOT_A_MARGINAL + r"(\S.*))?$")
 # A heading centred on its own indented line ("§1", "Art. 2", "Art. 1
 # Geltungsbereich" 20 spaces in): ZG's and AI's accession decrees and SG's
@@ -129,6 +132,35 @@ _SECTION_WORD = re.compile(
 # "und Gemeindesteuern" keeps the hyphen and the space.
 _CONJUNCTION = re.compile(r"^(?:und|oder|bzw\.|sowie|et|ou|e|ed|o|od|u|ni)\b", re.IGNORECASE)
 _HYPHEN_END = re.compile(r"\s?-$")
+
+# --- clause mode (phase B): decisions in numbered clauses -----------------
+# "1. Der Kanton Solothurn tritt ... bei." / "2. Der Regierungsrat wird
+# beauftragt ..." -- government and parliament decisions with no Art./§
+# structure at all, ~half of the article-less cantonal editions (measured
+# 2026-08-31, 205 article-less rows over 17 hosts: 107 clause-shaped).
+# A clause starts at column 0, "N." with N continuing a chain that begins
+# at 1, followed by prose on the same line.
+_CLAUSE_START = re.compile(r"^(\d{1,3})\.\s+(\S.*)$")
+# "§ 5." opening a line ANYWHERE (any indent: BS's old EG ZGB puts them at
+# the body column with the marginal titles numbered "1. Namensschutz" in
+# the left column -- exactly the chain clause mode must not eat).
+_CLAUSE_PARAGRAPH_SIGN = re.compile(r"^\s*§\s?\d")
+# The Roman variant (SZ's concession decisions on lexfind: "beschliesst:" /
+# "I." / prose / "II." ...): the numeral may stand alone on its line, the
+# clause text following below.
+_CLAUSE_START_ROMAN = re.compile(r"^([IVX]{1,4})\.(?:\s+(\S.*))?$")
+_ROMAN_VALUES = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6,
+                 "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12,
+                 "XIII": 13, "XIV": 14, "XV": 15, "XVI": 16}
+# "1. Januar 2008" is a date, not a clause -- the month names of the four
+# text languages (incl. the Romansh idioms' spellings seen on gr-lex).
+_MONTH_WORD = re.compile(
+    r"^(?:Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|"
+    r"November|Dezember|janvier|février|mars|avril|mai|juin|juillet|août|"
+    r"septembre|octobre|novembre|décembre|gennaio|febbraio|marzo|aprile|"
+    r"maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|"
+    r"schaner|favrer|mars|avrigl|matg|zercladur|fanadur|avust|settember|"
+    r"october|november|december)\b", re.IGNORECASE)
 
 
 class PdfTextError(RuntimeError):
@@ -505,6 +537,79 @@ def _in_order(number: str, last: int) -> bool:
     return _int_prefix(number) >= last
 
 
+def _clause_articles(blocks: list[_Block]) -> tuple[list[akn.Article], list[str]] | None:
+    """The clause fallback: when a document has no Art./§ headings at all
+    but IS a decision in numbered clauses, each top-level clause becomes an
+    article ("1", "2", ..., e_id "cl_1"...). Only the whole-document shape
+    fires it: the chain must start at 1 at column 0 and count up, a lone
+    enumeration inside prose never reaches the >= 2 chained clauses this
+    demands because ordinary enumerations are indented (clean_pages keeps
+    the body's indentation) or restart at 1. Dates ("1. Januar 2008") and
+    section headings ("1. Kapitel: ...") never open a clause. Returns None
+    when the document is not clause-shaped, which is decided by two more
+    guards measured on the 205-row sample (2026-08-31):
+
+    * heading-shaped lines: a document with "§ 5." or "Art. 3" lines that
+      the main split nevertheless got nothing from (BS's left-column EG ZGB
+      layout, a Ticino regulation whose enumeration cites "Art. 15") has
+      article structure -- clause mode would carve it along its
+      enumerations, so it declines
+    * unreachable higher numbers: a column-0 "N." line with N ABOVE the
+      chain's expectation is a numbered registry or tariff whose labels do
+      not chain (AR's road-class register: "1."/"2." then jumps), not a
+      decision; numbers BELOW the expectation are fine -- they are a quoted
+      annex's own numbering restarting inside a clause (GL's accession
+      decrees quote the whole concordat under clause 2)."""
+    def scan(roman: bool) -> tuple[list[str], list[list[str]]] | None:
+        expect = 1
+        stray_high = 0
+        preamble: list[str] = []
+        clauses: list[list[str]] = []
+        for block in blocks:
+            for line in block.lines:
+                if _HEADING.match(line) or _LEFT_COLUMN_HEADING.match(line) \
+                        or _CLAUSE_PARAGRAPH_SIGN.match(line):
+                    return None
+                if roman:
+                    m = _CLAUSE_START_ROMAN.match(line)
+                    n = _ROMAN_VALUES.get(m.group(1), 0) if m else 0
+                else:
+                    m = _CLAUSE_START.match(line)
+                    n = int(m.group(1)) if m else 0
+                rest = m.group(2) if m else None
+                if (m and not (rest and (_MONTH_WORD.match(rest)
+                                         or _SECTION_WORD.match(rest)))):
+                    if n == expect:
+                        clauses.append([rest] if rest else [])
+                        expect += 1
+                        continue
+                    if n > expect:
+                        stray_high += 1
+                if clauses:
+                    clauses[-1].append(line)
+                else:
+                    preamble.append(line)
+        if len(clauses) < 2 or stray_high or not all(any(
+                l and l.strip() for l in c) for c in clauses):
+            return None
+        return preamble, clauses
+
+    result = scan(roman=False) or scan(roman=True)
+    if result is None:
+        return None
+    preamble, clauses = result
+    articles = [akn.Article(
+        e_id=f"cl_{index}",
+        article_number=str(index),
+        marginal_note=None,
+        text=_tidy(_join(lines)),
+        ordinal=index - 1,
+        parent_e_id=None) for index, lines in enumerate(clauses, start=1)]
+    text_lines = [_tidy(_join([l])) for l in preamble if l.strip()]
+    text_lines.extend(f"{a.article_number}. {a.text}" for a in articles)
+    return articles, text_lines
+
+
 def split_text(raw: str) -> tuple[list[akn.Article], str]:
     """pdftotext -layout output -> (articles, full_text). The offline half
     of extract(): what pdf_text_stage stores in akn_xml is `raw`, so a
@@ -634,6 +739,12 @@ def split_text(raw: str) -> tuple[list[akn.Article], str]:
             current["paragraphs"].extend(paragraphs)
         lines.extend(paragraphs)
     close()
+    if not articles:
+        # no Art./§ structure anywhere -- a decision in numbered clauses?
+        clause_split = _clause_articles(blocks)
+        if clause_split is not None:
+            clause_articles, clause_lines = clause_split
+            return clause_articles, "\n".join(l for l in clause_lines if l)
     return articles, "\n".join(l for l in lines if l)
 
 
