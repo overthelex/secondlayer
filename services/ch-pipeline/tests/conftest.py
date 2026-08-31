@@ -23,6 +23,7 @@ import pathlib
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 MIGRATION_200 = _REPO_ROOT / "mcp_backend/src/migrations/200_ch_citation_state.sql"
+MIGRATION_206 = _REPO_ROOT / "mcp_backend/src/migrations/206_ch_cantonal_aliases.sql"
 
 _CH_ACT_ARTICLE = """
 CREATE TABLE IF NOT EXISTS ch_act_article (
@@ -107,6 +108,10 @@ def apply_migration_200(conn) -> None:
     """
     apply_migration_199(conn)
     conn.execute(MIGRATION_200.read_text())
+    # 206 (cantonal aliases) alters two tables 199 creates -- ch_act_alias
+    # gains jurisdiction, ch_legislation_citations a partial index -- so the
+    # citation stack a test stands up is 199 + 200 + 206, in order.
+    conn.execute(MIGRATION_206.read_text())
 
 
 # --- migration 202 (ch_zefix_* / ch_shab_*) --------------------------------
