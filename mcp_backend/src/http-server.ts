@@ -19,6 +19,7 @@ import { createChatInlineRoutes } from './routes/chat-inline-routes.js';
 import { createMiscInlineRoutes } from './routes/misc-inline-routes.js';
 import { createMCPSSERoutes } from './routes/mcp-sse-routes.js';
 import { createToolExecutionRoutes } from './routes/tool-execution-routes.js';
+import { createUKJudgmentAccessRoutes } from './routes/uk-judgment-access-routes.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
 import { createBillingRoutes } from './routes/billing-routes.js';
 import { createAdminRoutes } from './routes/admin-routes.js';
@@ -415,6 +416,7 @@ class HTTPMCPServer {
     // MCP SSE routes (SSE endpoints, OAuth discovery, redirects)
     this.app.use(createMCPSSERoutes({
       mcpSSEServer: this.app_.mcpSSEServer,
+      db: this.services.db,
       toolRegistry: this.tools.toolRegistry,
       chatService: this.app_.chatService,
       oauthService: this.app_.oauthService,
@@ -974,12 +976,20 @@ class HTTPMCPServer {
     // Mount at /api/v1/tools (canonical) and /api/tools (backward compat alias)
     const toolRouter = createToolExecutionRoutes({
       toolRegistry: this.tools.toolRegistry,
+      db: this.services.db,
       serviceProxy: this.tools.serviceProxy,
       billingService: this.billing.billingService,
       costTracker: this.billing.costTracker,
       creditService: this.billing.creditService,
       batchDocumentTools: this.tools.batchDocumentTools,
     });
+    // Applying for and deciding access to the UK judgment corpus. The gate that
+    // uses these records lives in services/uk-judgment-access.ts.
+    this.app.use('/api/uk-judgments', createUKJudgmentAccessRoutes({
+      db: this.services.db,
+      dualAuth: dualAuth as any,
+    }));
+
     this.app.use('/api/v1/tools', toolRouter);
     this.app.use('/api/tools', toolRouter);
     logger.info('Tool routes registered at /api/v1/tools and /api/tools (backward compat)');

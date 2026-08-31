@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { mcpDiscoveryRateLimit } from '../middleware/rate-limit.js';
 import { logger } from '../utils/logger.js';
+import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess } from '../services/uk-judgment-access.js';
 import { sanitizeId, maskSensitive } from '../utils/sanitize-log.js';
 import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
@@ -31,6 +32,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema, isInitializeRequest } fr
 
 export function createMCPSSERoutes(deps: {
   mcpSSEServer: MCPSSEServer;
+  // Needed only by the Find Case Law licence gate; see services/uk-judgment-access.
+  db: any;
   toolRegistry: ToolRegistry;
   chatService: ChatService;
   oauthService: OAuthService;
@@ -258,6 +261,20 @@ export function createMCPSSERoutes(deps: {
           userQuery: String(args.query || JSON.stringify(args)),
           queryParams: args,
         });
+
+        // Find Case Law licence gate. This is the path MCP clients actually take,
+        // so leaving it ungated would make the HTTP-route check decorative.
+        const gatedRegistry = gatedRegistryOf(toolName, args);
+        if (gatedRegistry) {
+          const decision = await checkJudgmentAccess(deps.db, userId);
+          if (!decision.allowed) {
+            logger.info('[MCP] UK judgment access denied', {
+              userId: safeUserId, registry: gatedRegistry,
+            });
+            return { content: [{ type: 'text', text: decision.message }], isError: true };
+          }
+          await logJudgmentAccess(deps.db, userId, gatedRegistry, args?.filters);
+        }
 
         const result = await requestContext.run(
           { requestId, task: toolName },
