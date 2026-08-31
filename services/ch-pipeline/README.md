@@ -834,26 +834,43 @@ against the old flag column took 22+ minutes and bloated the full-text GIN.
 of the whole sequence (aliases → reset → citations → resolve-all → report).
 
 **`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
-writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
-corpus keys on — from three additive, idempotent sources: `ch_act`'s own
-German `abbreviation` column, the abbreviation Fedlex puts in parentheses at
-the end of each language's title, and a hand-curated map for the acts whose
+writes ("OR", "CO", "Cst.", "StGB", "LPA-VD") mapped to the systematic
+number the legislation corpus keys on — from four idempotent sources, each
+row under the jurisdiction it belongs to (migration 206: `'CH'` for
+federal, the two-letter canton code otherwise): `ch_act`'s own German
+`abbreviation` column on the FEDERAL acts (`fedlex_abbreviation`), the
+abbreviation the source puts in parentheses at the end of each language's
+title for federal and cantonal acts alike (`title_paren`), the cantonal
+acts' own `abbreviation` column (`cantonal_abbreviation` — the Lexwork
+platforms supply it), and a hand-curated map for the federal acts whose
 title carries no parenthesised abbreviation at all (the big codes: OR, ZGB,
 StGB, Cst. …). Re-running it after `ch_act` gains new acts, or after the
-curated map grows, costs nothing beyond what actually changed.
+curated map grows, costs nothing beyond what actually changed; the derived
+sources are also reconciled per (jurisdiction, lang) on every run, so a row
+whose act no longer claims the abbreviation is deleted, not kept forever.
+The `jurisdiction = 'CH'` filter on the federal pass is load-bearing:
+before migration 206 it read the cantonal rows migration 201 had put into
+`ch_act` too, and leaked 5,934 cantonal abbreviations into the federal
+alias set — 87,082 citations resolved through them to whatever federal act
+happened to share the systematic number.
 
-**A title-derived abbreviation two acts both claim is not seeded at all.**
+**A title-derived abbreviation two acts of the same jurisdiction both claim
+is not seeded at all.**
 "(KV)" ends the title of every cantonal constitution filed under SR 131.xxx,
 so seeding it maps one abbreviation onto 26 acts — and a Uri court's
 "Art. 12 KV" then resolves to whichever of them step 1's ranking reaches
 first (it resolved to Appenzell's). An alias that names 26 acts identifies
 none of them, and a citation left at `unresolved_abbr` is visible in
 `reports_cit`'s top-unresolved list while a citation resolved to the wrong
-act is visible nowhere. The skip is per (abbr, lang) and per SR number — two
-`ch_act` rows of the same act are one act — and it applies to `title_paren`
-only: `curated` is hand-checked and `fedlex_abbreviation` is Fedlex's own
-assertion about one act. Each run logs how many abbreviations it skipped per
-language.
+act is visible nowhere. The skip is per (jurisdiction, abbr, lang) and per
+systematic number — two `ch_act` rows of the same act are one act, and the
+same abbreviation in two CANTONS is two independent aliases, because the
+resolver never offers a citation another canton's — and it applies to
+`title_paren` and `cantonal_abbreviation` (pooled per canton: within-canton
+duplicates are real — AG carries 26 abbreviations claimed by two acts each),
+but not to `curated` (hand-checked) or `fedlex_abbreviation` (Fedlex's own
+assertion about one act). Each run logs how many abbreviations it skipped
+per jurisdiction and language.
 
 **What `citations` deliberately does not extract.** A 200-row judged sample
 of resolved statute citations from the first full backfill measured 98%
@@ -862,10 +879,11 @@ four rules in `chpipe/citations.py`, each trading a handful of real
 citations for a much larger number of invented ones:
 
 - A **cantonal suffix** stays on the abbreviation (`LPA-VD`, `LPA-GE`, and
-  the other 24 canton codes). `ch_act_alias` carries federal acts only, so
-  these stay at `unresolved_abbr` — which is right: cut down to "LPA" they
-  resolved to the *federal* animal-protection act (SR 455) the court never
-  mentioned.
+  the other 24 canton codes). Cut down to "LPA" they resolved to the
+  *federal* animal-protection act (SR 455) the court never mentioned; kept
+  whole, they resolve through the citing canton's own aliases when the
+  canton's collection carries the abbreviation (migration 206), and stay at
+  the truthful `unresolved_abbr` when it does not.
 - A **single-digit ordinance suffix** stays too (`OPP 2`, `BVV 2`) — "OPP"
   alone resolved to an unrelated aviation ordinance. Bounded to an
   abbreviation of at least three letters followed by one space, one digit
@@ -934,8 +952,19 @@ from forever.
 order because each one's input is the previous one's output, over the
 raw edges `citations` wrote:
 
-1. **act** — `abbr_raw` → `ch_act_alias` → `sr_number`/`act_id`. Among the
-   acts `ch_act_alias` names for that abbreviation, prefer the one whose
+1. **act** — `abbr_raw` → `ch_act_alias` → `sr_number`/`act_id`. The
+   candidate aliases are the FEDERAL ones plus the CITING canton's, never
+   another canton's: the citing decision's canton comes from
+   `ch_court_decisions.canton` via a LEFT JOIN on `from_ecli` (a citation
+   whose decision row is gone gets federal aliases only), and a federal
+   alias outranks the citing canton's — an abbreviation existing both
+   federally and cantonally resolves federally, the status quo, so the
+   canton's act only wins when no federal alias carries the abbreviation at
+   all, which is exactly the population that used to sit at
+   `unresolved_abbr`. The join also pins `a.jurisdiction =
+   al.jurisdiction`, so a cantonal alias can never resolve to a federal act
+   that merely shares the systematic number. Among the remaining
+   candidates, prefer the one whose
    alias is written in the citation's own language, then the one whose
    `[date_entry_force, date_no_longer_in_force)` actually contains the
    citation's `from_date`; failing that (no `from_date`, or none covers it),
@@ -1019,6 +1048,21 @@ the same four statements, which recompute everything now that
 `match_method` is `NULL` again everywhere.
 
     CHPIPE_CIT_RESOLVE_ALL=1 ./run-stage.sh citations-resolve
+
+**`CHPIPE_CIT_RETRY_UNRESOLVED=1`** is the cheaper of the two: it revisits
+ONLY the rows already stamped `unresolved_abbr`, in id-ordered batches
+(`CHPIPE_CIT_BATCH`, default 100000, walks
+`idx_ch_leg_cit_unresolved_abbr` from migration 206), against the alias map
+as it stands today — the right tool when the alias map grew (the cantonal
+aliases, a new curated entry) and the ~15.7M already-resolved rows have no
+reason to be rewritten. Resolved rows are never touched, a row that fails
+again is not even rewritten in place (no dead-tuple churn through a
+17.6M-row table), and progress is by id cursor rather than re-claiming, so
+one sweep terminates. Steps 2 and 3 then run as always and chase the rows
+the sweep just promoted to `act_only`; case citations are not touched at
+all. Mutually exclusive with `CHPIPE_CIT_RESOLVE_ALL`.
+
+    CHPIPE_CIT_RETRY_UNRESOLVED=1 ./run-stage.sh citations-resolve
 
 **The `2021-01-01` placeholder.** `decision_date` on the CH_BGer rows
 migration 196 enrolled is `2021-01-01` for every one of them — the source's

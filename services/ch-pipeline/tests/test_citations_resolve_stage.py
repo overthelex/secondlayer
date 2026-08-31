@@ -52,7 +52,8 @@ def conn(settings):
                 spider text,
                 doc_id text,
                 docket_number text,
-                stage text
+                stage text,
+                canton text
             )
         """)
         c.execute(MIGRATION_197.read_text())
@@ -406,3 +407,222 @@ def test_a_cantonal_act_with_a_federal_sr_number_is_not_a_resolution_target(seed
     leg = _leg_rows(seeded)
     assert leg["ECLI:A"]["act_id"] == 1
     assert leg["ECLI:B"]["act_id"] == 1
+
+
+def _alias_j(conn, abbr, lang, sr_number, jurisdiction, source="title_paren"):
+    conn.execute(
+        "INSERT INTO ch_act_alias (abbr, lang, sr_number, source, jurisdiction) "
+        "VALUES (%s, %s, %s, %s, %s)", (abbr, lang, sr_number, source, jurisdiction))
+
+
+def _cantonal_act(conn, act_id, sr_number, jurisdiction, date_entry_force=None):
+    conn.execute(
+        "INSERT INTO ch_act (act_id, eli_work_uri, sr_number, jurisdiction, "
+        "enforcement_status, date_entry_force, stage) "
+        "VALUES (%s, %s, %s, %s, 0, %s, 'discovered')",
+        (act_id, f"https://x/{jurisdiction}/{act_id}", sr_number, jurisdiction,
+         date_entry_force))
+
+
+def _decision_c(conn, ecli, spider, canton):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, canton, stage) "
+        "VALUES (%s, %s, %s, 'loaded')", (ecli, spider, canton))
+
+
+def test_a_cantonal_citation_resolves_via_its_own_cantons_alias(conn, settings):
+    """The whole point of migration 206: a VD court citing "LPA-VD" gets
+    Vaud's act -- via ch_court_decisions.canton -- where before there was no
+    alias to find and the row went terminally to unresolved_abbr."""
+    _cantonal_act(conn, 100, "173.36", "VD", date(2018, 1, 1))
+    _alias_j(conn, "LPA-VD", "fr", "173.36", "VD")
+    _decision_c(conn, "ECLI:CH:VD1:X", "VD_FindInfo", "VD")
+    _leg_citation(conn, "ECLI:CH:VD1:X", "LPA-VD", "75", None, "fr", date(2020, 1, 1))
+
+    report = citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT sr_number, act_id, match_method FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:VD1:X'").fetchone()
+    assert row["act_id"] == 100
+    assert row["sr_number"] == "173.36"
+    assert row["match_method"] == "act_only"
+    assert report.acts == 1
+
+
+def test_never_another_cantons_alias(conn, settings):
+    """A BE court citing "LPJA" must not get Vaud's LPJA-lookalike: an
+    abbreviation is only meaningful within its own canton, so with no BE (or
+    federal) alias the truthful outcome is unresolved_abbr."""
+    _cantonal_act(conn, 101, "173.36", "VD")
+    _alias_j(conn, "LPJA", "fr", "173.36", "VD")
+    _decision_c(conn, "ECLI:CH:BE1:X", "BE_Verwaltungsgericht", "BE")
+    _leg_citation(conn, "ECLI:CH:BE1:X", "LPJA", "1", None, "de", None)
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT act_id, match_method FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:BE1:X'").fetchone()
+    assert row["act_id"] is None
+    assert row["match_method"] == "unresolved_abbr"
+
+
+def test_a_federal_alias_outranks_the_citing_cantons(conn, settings):
+    """Precedence: an abbreviation existing both federally and in the citing
+    canton resolves federally -- the status quo for every citation a federal
+    alias already resolved. The cantonal alias only wins when no federal
+    alias carries the abbreviation at all (the next test)."""
+    _act(conn, 102, "455", enforcement_status=0, date_entry_force=date(2008, 9, 1))
+    _cantonal_act(conn, 103, "K 1 03", "GE", date(2010, 1, 1))
+    _alias_j(conn, "LPA", "fr", "455", "CH")
+    _alias_j(conn, "LPA", "fr", "K 1 03", "GE")
+    _decision_c(conn, "ECLI:CH:GE1:X", "GE_Cour", "GE")
+    _leg_citation(conn, "ECLI:CH:GE1:X", "LPA", "3", None, "fr", date(2020, 1, 1))
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT act_id FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:GE1:X'").fetchone()
+    assert row["act_id"] == 102, "federal first, even for a cantonal court"
+
+
+def test_the_cantons_alias_wins_when_no_federal_one_exists(conn, settings):
+    _cantonal_act(conn, 104, "E 5 10", "GE", date(2010, 1, 1))
+    _alias_j(conn, "LPA-GE", "fr", "E 5 10", "GE")
+    _decision_c(conn, "ECLI:CH:GE2:X", "GE_Cour", "GE")
+    _leg_citation(conn, "ECLI:CH:GE2:X", "LPA-GE", "3", None, "fr", None)
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT act_id, match_method FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:GE2:X'").fetchone()
+    assert row["act_id"] == 104
+    assert row["match_method"] == "act_only"
+
+
+def test_a_cantonal_alias_never_resolves_to_a_federal_act_sharing_the_number(
+        conn, settings):
+    """The join pins a.jurisdiction = al.jurisdiction: cantonal collections
+    reuse federal numbers, so sr_number alone let a canton's abbreviation
+    resolve to whatever FEDERAL act shared it (87,082 prod citations had,
+    2026-08-31, through the pre-206 leaked aliases)."""
+    _act(conn, 105, "220", enforcement_status=0, date_entry_force=date(1912, 1, 1))
+    _cantonal_act(conn, 106, "220", "ZG", date(2000, 1, 1))
+    _alias_j(conn, "EGZGB", "de", "220", "ZG", source="cantonal_abbreviation")
+    _decision_c(conn, "ECLI:CH:ZG1:X", "ZG_Verwaltungsgericht", "ZG")
+    _leg_citation(conn, "ECLI:CH:ZG1:X", "EGZGB", "1", None, "de", None)
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT act_id FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:ZG1:X'").fetchone()
+    assert row["act_id"] == 106, "the canton's own act, not federal act 220"
+
+
+def test_a_citation_without_a_decision_row_gets_federal_aliases_only(conn, settings):
+    """from_ecli is LEFT JOINed to ch_court_decisions: a citation whose
+    decision row is gone (or whose canton is NULL) is offered federal
+    aliases only, not some canton's by accident."""
+    _cantonal_act(conn, 107, "173.36", "VD")
+    _alias_j(conn, "TFJC", "fr", "173.36", "VD")
+    _leg_citation(conn, "ECLI:CH:GONE:X", "TFJC", "1", None, "fr", None)
+
+    citations_resolve_stage.run(settings)
+
+    row = conn.execute(
+        "SELECT act_id, match_method FROM ch_legislation_citations "
+        "WHERE from_ecli = 'ECLI:CH:GONE:X'").fetchone()
+    assert row["act_id"] is None
+    assert row["match_method"] == "unresolved_abbr"
+
+
+@pytest.fixture
+def retry_backlog(conn):
+    """A resolved federal citation, three unresolved cantonal ones (two of
+    which an alias can now fix), and a case citation -- the state prod is in
+    after a first full resolve, before a retry run."""
+    _act(conn, 1, "220", enforcement_status=0, date_entry_force=date(1912, 1, 1))
+    _alias(conn, "OR", "de", "220")
+    _version(conn, 10, 1, "de", date(2015, 1, 1))
+    _article(conn, 1001, 10, "art_336", "336", 50)
+    _cantonal_act(conn, 200, "173.36", "VD", date(2018, 1, 1))
+    _version(conn, 210, 200, "fr", date(2019, 1, 1))
+    _article(conn, 2101, 210, "art_75", "75", 75)
+    _decision_c(conn, "ECLI:CH:VD:A", "VD_FindInfo", "VD")
+    _decision_c(conn, "ECLI:CH:VD:B", "VD_FindInfo", "VD")
+    _leg_citation(conn, "ECLI:CH:VD:A", "OR", "336", None, "de", date(2020, 1, 1))
+    _leg_citation(conn, "ECLI:CH:VD:A", "LPA-VD", "75", None, "fr", date(2020, 1, 1))
+    _leg_citation(conn, "ECLI:CH:VD:B", "LPA-VD", "75", None, "fr", date(2020, 1, 1))
+    _leg_citation(conn, "ECLI:CH:VD:B", "TFJC", "4", None, "fr", None)
+    _case_citation(conn, "ECLI:CH:VD:A", "BGE 1 I 1", "bge")
+
+    citations_resolve_stage.run(settings=Settings(
+        dsn=os.environ["CHPIPE_TEST_DSN"], raw_dir=pathlib.Path("/tmp"),
+        http_concurrency=1, cpu_workers=1, ocr_workers=1,
+        load_ceiling=0.0, max_attempts=3))
+    # the state a grown alias map finds: OR resolved, the rest terminal.
+    rows = {r["from_ecli"]: r for r in conn.execute(
+        "SELECT * FROM ch_legislation_citations WHERE abbr_raw = 'LPA-VD'")}
+    assert all(r["match_method"] == "unresolved_abbr" for r in rows.values())
+    _alias_j(conn, "LPA-VD", "fr", "173.36", "VD")
+    return conn
+
+
+def test_retry_revisits_only_the_unresolved_backlog(retry_backlog, settings):
+    conn = retry_backlog
+    resolved_before = conn.execute(
+        "SELECT * FROM ch_legislation_citations WHERE abbr_raw = 'OR'").fetchall()
+    cases_before = conn.execute("SELECT * FROM ch_case_citations").fetchall()
+
+    report = citations_resolve_stage.run(settings, retry_unresolved=True)
+
+    assert report.acts == 2
+    assert report.editions == 2
+    assert report.articles == 2
+    assert report.cases == 0, "retry mode does not touch case citations"
+
+    rows = {r["from_ecli"]: r for r in conn.execute(
+        "SELECT * FROM ch_legislation_citations WHERE abbr_raw = 'LPA-VD'")}
+    for row in rows.values():
+        assert row["act_id"] == 200
+        assert row["version_id"] == 210
+        assert row["article_id"] == 2101
+        assert row["resolved"] is True
+        assert row["match_method"] == "edition_at_date"
+
+    tfjc = conn.execute(
+        "SELECT match_method, act_id FROM ch_legislation_citations "
+        "WHERE abbr_raw = 'TFJC'").fetchone()
+    assert tfjc["match_method"] == "unresolved_abbr", \
+        "a row no alias fixes keeps its terminal stamp"
+    assert tfjc["act_id"] is None
+
+    assert conn.execute(
+        "SELECT * FROM ch_legislation_citations WHERE abbr_raw = 'OR'"
+    ).fetchall() == resolved_before, "resolved rows are byte-identical"
+    assert conn.execute(
+        "SELECT * FROM ch_case_citations").fetchall() == cases_before
+
+
+def test_retry_batches_cross_the_backlog(retry_backlog, settings):
+    """batch=1 forces the id cursor through every unresolved row one at a
+    time -- same outcome as one big batch, and the loop terminates even
+    though the TFJC row stays unresolved_abbr (progress is by id, not by
+    re-claiming)."""
+    report = citations_resolve_stage.run(settings, retry_unresolved=True,
+                                         retry_batch=1)
+    assert report.acts == 2
+    n = retry_backlog.execute(
+        "SELECT count(*) AS n FROM ch_legislation_citations "
+        "WHERE abbr_raw = 'LPA-VD' AND resolved").fetchone()["n"]
+    assert n == 2
+
+
+def test_retry_and_resolve_all_are_mutually_exclusive(settings):
+    with pytest.raises(ValueError):
+        citations_resolve_stage.run(settings, resolve_all=True,
+                                    retry_unresolved=True)
