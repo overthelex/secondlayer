@@ -28,6 +28,7 @@ EMPTY = {
     "lexwork_empty_bl_by_reference": ("de", "published_by_reference", "in der Gesetzessammlung nicht publiziert"),
     "lexwork_empty_bl_unstructured": ("de", "unstructured_text", "basellandschaftlichen Standesfarbe"),
     "lexwork_empty_bs_annex_only": ("de", "annex_only", "siehe Anhang"),
+    "lexwork_bs_annex_834_420_v2939": ("de", "annex_only", "Pflegeheime für den Kanton Basel-Stadt gemäss Anhang"),
     "lexwork_empty_bs_unstructured": ("de", "unstructured_text", "Antragsberechtigte Behörden und Stellen"),
     "lexwork_empty_gl_placeholder": ("de", "placeholder", "In Revision"),
     "lexwork_empty_gl_unstructured": ("de", "unstructured_text", "Steuerbefreiung für Zuwendungen"),
@@ -91,3 +92,19 @@ def test_empty_reason_prefers_the_structural_annex_signal_over_vocabulary():
 def test_empty_reasons_are_a_closed_set():
     for lang, reason, _ in EMPTY.values():
         assert reason in lexwork.EMPTY_REASONS
+
+
+def test_annex_pdf_url_names_the_bundle_and_the_gaps():
+    """pdf_link_annexes first (one bundle URL per version), the annex list's
+    own url as fallback, '' for an annex list without any link, None when
+    there is no annex at all (the caller must not treat that as annex_only)."""
+    with_link = _load("lexwork_bs_annex_834_420_v2939")
+    assert lexwork.annex_pdf_url(with_link) == \
+        "https://www.gesetzessammlung.bs.ch/api/de/versions/2939/annexes"
+    fallback = _load("lexwork_empty_bs_annex_only")     # trimmed payload has no pdf_link_annexes
+    assert lexwork.annex_pdf_url(fallback) == \
+        "https://www.gesetzessammlung.bs.ch/api/de/versions/4390/annexes"
+    abrogated_only = {"text_of_law": {"selected_version": {
+        "annex_documents": [{"url": None, "abrogated": True}]}}}
+    assert lexwork.annex_pdf_url(abrogated_only) == ""
+    assert lexwork.annex_pdf_url(_load("lexwork_empty_bs_unstructured")) is None

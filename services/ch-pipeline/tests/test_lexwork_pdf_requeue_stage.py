@@ -150,3 +150,46 @@ def test_versions_of_reads_all_three_lists():
                                 "future_versions": [{"id": 4, "structured_document_id": None}]})
     assert listed == {3: 9, 2: None, 4: None}
     assert stage.pdf_url("bgs.so.ch", "de", 839) == "https://bgs.so.ch/api/de/versions/839/pdf_file"
+
+
+GL_HOST = "https://gesetze.gl.ch"
+
+
+def test_a_gl_sysnr_with_spaces_and_slashes_is_recognised(conn, settings):
+    """All 114 leftovers of the first prod run (2026-08-31) are GL rows whose
+    systematic number contains spaces and slashes ('I A/1/1'): the sysnr
+    group of _VERSION_URL must span path segments."""
+    vid = _pdf_only(conn, sysnr="I A/1/1", vid=516)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 (f"{GL_HOST}/api/de/texts_of_law/I A/1/1/versions/516/show_as_json", vid))
+    calls = []
+
+    def host(request):
+        calls.append(str(request.url))
+        # httpx encodes the space; the tol endpoint for the multi-segment sysnr
+        assert str(request.url) == f"{GL_HOST}/api/de/texts_of_law/I%20A/1/1"
+        return httpx.Response(200, content=json.dumps({"text_of_law": {
+            "current_version": {"id": 2603, "structured_document_id": 10432},
+            "old_versions": [{"id": 516, "structured_document_id": None}],
+            "future_versions": []}}).encode())
+
+    report = stage.run(settings, transport=httpx.MockTransport(host))
+    assert report.requeued_pdf == 1 and report.unknown_url == 0
+    assert len(calls) == 1
+    assert _state(conn, vid) == ("lexwork_pdf", "discovered", 0, None,
+                                 f"{GL_HOST}/api/de/versions/516/pdf_file")
+
+
+def test_urls_that_still_cannot_be_resolved_get_a_precise_reason(conn, settings):
+    foreign_host = _pdf_only(conn, vid=901)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 ("https://example.ch/api/de/texts_of_law/1.1/versions/9/show_as_json",
+                  foreign_host))
+    no_shape = _pdf_only(conn, vid=902)
+    conn.execute("UPDATE ch_act_version SET xml_url=%s WHERE version_id=%s",
+                 ("https://www.belex.sites.be.ch/app/de/texts_of_law/1.1", no_shape))
+    report = stage.run(settings, transport=httpx.MockTransport(
+        lambda request: httpx.Response(404, content=b"")))
+    assert report.unknown_url == 2
+    assert _state(conn, foreign_host)[3] == "pdf_only: host example.ch is not a Lexwork host"
+    assert _state(conn, no_shape)[3] == "pdf_only: xml_url is not a Lexwork version URL"

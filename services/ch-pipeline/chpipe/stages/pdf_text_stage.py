@@ -38,6 +38,29 @@ pdf_text.split_text over their akn_xml and rewrites articles + full_text
 for the ones that now split. Rows that still yield no article are left
 as they are (their text is right; they have no articles).
 
+CHPIPE_ANNEX=1 is the third mode (LEXAI gap K7): the BS editions whose
+whole body is "siehe Anhang" plus a PDF annex (empty_reason 'annex_only',
+82 editions on 2026-08-26, 85 on 2026-08-31 -- BS only). Their payload is
+stored verbatim in akn_xml by cantonal-parse, and names the annex PDF once
+per version: selected_version.pdf_link_annexes =
+https://{host}/api/{lang}/versions/{id}/annexes (one bundle of all the
+version's annexes; every non-null annex_documents[].url repeats it,
+verified on all 85). The mode re-reads every parsed 'lexwork' row with
+article_count = 0, recomputes the annex signal from the payload
+(lexwork.annex_pdf_url -- the same structural check empty_reason makes),
+downloads the bundle, extracts with the same pdf_text machinery, and
+APPENDS the text to full_text after the ANNEX_MARKER line, keeping the
+header text cantonal-parse stored; when the annex splits into articles
+they are stored too. A mode of this stage, not a new stage, because it
+shares everything that matters here -- HostPacer, the %PDF check,
+MAX_PDF_BYTES, extract, store_articles/complete_version -- and, like
+CHPIPE_RESPLIT, walks parsed rows outside the claim queue, so run-stage.sh
+needs no new entry. Idempotent by construction: a row leaves the selection
+either by gaining articles or by carrying the marker; a failed row is left
+untouched (never re-failed: it IS parsed) and is selected again next run.
+The PDF is kept under raw_dir/pdf/{version_id}-annex.pdf; akn_xml keeps
+the payload, so the annex text is NOT re-splittable offline -- the file is.
+
 Before the first claim the stage retires 'shadow' rows -- LexFind lists
 a same-day replaced edition with date_end_applicability one day BEFORE
 date_applicability (~12.5K of the 55K) -- with last_error 'shadow_edition'
@@ -49,15 +72,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
-from psycopg.rows import tuple_row
+from psycopg.rows import dict_row, tuple_row
 
-from .. import db, pdf_text, throttle
+from .. import db, lexwork, pdf_text, throttle
 from ..config import Settings
 from ..http import FetchError, Fetcher
 from ..text_extract import PdfToolMissing
@@ -77,6 +101,9 @@ ZHLEX_PDF_PREFIX = "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/"
 # annexes ~1 MB. Anything past this is not an edition.
 MAX_PDF_BYTES = 60_000_000
 MIN_TEXT_CHARS = 200
+# Appended once between the header text and the annex text; its absence is
+# the idempotency predicate for the annex mode's article-less outcomes.
+ANNEX_MARKER = "[Anhang (PDF)]"
 
 
 @dataclass
@@ -92,10 +119,26 @@ class PdfTextReport:
     # resplit mode: rows re-read from akn_xml, and how many now have articles
     resplit: int = 0
     recovered: int = 0
+    # annex mode (CHPIPE_ANNEX=1): article-less parsed lexwork rows read,
+    # split by outcome; annex_skipped = no annex in the payload (the row is
+    # empty for another reason), annex_failed = fetch/extract trouble, row
+    # left untouched and selected again next run
+    annex_scanned: int = 0
+    annex_skipped: int = 0
+    annex_parsed: int = 0
+    annex_no_articles: int = 0
+    annex_failed: int = 0
 
 
 def pdf_path(settings: Settings, version_id: int):
     return settings.raw_dir / "pdf" / f"{version_id}.pdf"
+
+
+def annex_pdf_path(settings: Settings, version_id: int):
+    """The annex bundle's audit copy. '-annex' keeps it apart from the same
+    row's own edition PDF name, should the row ever take the lexwork_pdf
+    path too."""
+    return settings.raw_dir / "pdf" / f"{version_id}-annex.pdf"
 
 
 def is_pdf(body: bytes) -> bool:
@@ -226,6 +269,110 @@ async def _process(row: dict, conn, fetcher: Fetcher, pacer: HostPacer, cpu: asy
             log.error("version %s: also failed recording the failure: %s", version_id, fail_exc)
 
 
+_ANNEX_ROWS = (
+    "SELECT version_id, akn_xml, full_text FROM ch_act_version "
+    "WHERE source = 'lexwork' AND stage = 'parsed' AND article_count = 0 "
+    "AND akn_xml IS NOT NULL AND (full_text IS NULL OR strpos(full_text, %s) = 0)")
+
+
+async def _annex_one(row: dict, conn, fetcher: Fetcher, pacer: HostPacer,
+                     settings: Settings, report: PdfTextReport) -> None:
+    version_id = row["version_id"]
+
+    def failed(reason: str) -> None:
+        # The row is a legitimately parsed edition: never fail_version() it,
+        # count and log instead; without the marker it is selected again.
+        log.warning("version %s: annex: %s", version_id, reason)
+        report.annex_failed += 1
+
+    try:
+        payload = json.loads(row["akn_xml"])
+        url = lexwork.annex_pdf_url(payload)
+    except (ValueError, lexwork.LexworkParseError) as exc:
+        failed(f"payload unreadable: {exc}")
+        return
+    if url is None:                     # no annex: empty for another reason
+        report.annex_skipped += 1
+        return
+    if not url:
+        failed("annexes listed without a link")
+        return
+    host = urlsplit(url).hostname or ""
+    try:
+        async with pacer.slot(host):
+            body, content_type = await fetcher.body(url)
+    except FetchError as exc:
+        failed(str(exc))
+        return
+    if len(body) > MAX_PDF_BYTES:
+        failed(f"annex PDF is {len(body)} bytes")
+        return
+    if not is_pdf(body):
+        failed(f"annex is not a PDF ({content_type or 'no content-type'}, {len(body)} bytes)")
+        return
+    path = annex_pdf_path(settings, version_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+    report.bytes_written += len(body)
+    try:
+        extraction = await asyncio.to_thread(pdf_text.extract, path)
+    except pdf_text.PdfTextError as exc:
+        failed(f"pdftotext: {exc}")
+        return
+    if len(extraction.full_text) < MIN_TEXT_CHARS:
+        failed(f"annex text too short ({len(extraction.full_text)} chars)")
+        return
+    full_text = ((row["full_text"] or "").rstrip()
+                 + "\n\n" + ANNEX_MARKER + "\n" + extraction.full_text)
+    if extraction.articles:
+        with conn.transaction():
+            parse_akn_stage.store_articles(conn, version_id, extraction.articles)
+        report.annex_parsed += 1
+        report.articles += len(extraction.articles)
+    else:
+        report.annex_no_articles += 1
+    db.complete_version(conn, version_id, "parsed", full_text=full_text)
+
+
+async def _annex_async(settings: Settings, canton_code: str | None,
+                       limit: int | None, transport) -> PdfTextReport:
+    report = PdfTextReport()
+    prefix = cantonal_fetch_stage.url_prefix(canton_code)
+    conn = db.connect(settings)
+    try:
+        sql, params = _ANNEX_ROWS, [ANNEX_MARKER]
+        if prefix:
+            sql += " AND xml_url LIKE %s"
+            params.append(prefix.replace("%", "\\%").replace("_", "\\_") + "%")
+        sql += " ORDER BY version_id"
+        if limit is not None:
+            sql += " LIMIT %s"
+            params.append(limit)
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+        pacer = HostPacer(settings.cantonal_per_host, settings.pdf_rps)
+        async with Fetcher(concurrency=settings.http_concurrency, transport=transport) as fetcher:
+            for row in rows:            # 85 rows on one host: sequential is fine
+                report.annex_scanned += 1
+                await _annex_one(row, conn, fetcher, pacer, settings, report)
+        log.info("annex scanned=%d parsed=%d no_articles=%d skipped=%d failed=%d "
+                 "articles=%d bytes=%d", report.annex_scanned, report.annex_parsed,
+                 report.annex_no_articles, report.annex_skipped, report.annex_failed,
+                 report.articles, report.bytes_written)
+    finally:
+        conn.close()
+    return report
+
+
+def annex_text(settings: Settings, canton_code: str | None = None,
+               limit: int | None = None, transport=None) -> PdfTextReport:
+    """CHPIPE_ANNEX=1: append the annex bundle's text (and articles, when it
+    splits) to the article-less parsed lexwork editions whose payload lists
+    annex documents. See the module docstring."""
+    return asyncio.run(_annex_async(settings, canton_code, limit, transport))
+
+
 _RESPLIT_ROWS = (
     "SELECT version_id, akn_xml FROM ch_act_version "
     "WHERE source = ANY(%s) AND stage = 'parsed' AND article_count = 0 AND akn_xml IS NOT NULL")
@@ -328,6 +475,13 @@ def main() -> PdfTextReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
     limit = int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None
+    if os.environ.get("CHPIPE_ANNEX", "") not in ("", "0"):
+        result = annex_text(Settings.from_env(),
+                            canton_code=os.environ.get("CHPIPE_CANTON") or None, limit=limit)
+        log.info("ANNEX scanned=%d parsed=%d no_articles=%d skipped=%d failed=%d articles=%d",
+                 result.annex_scanned, result.annex_parsed, result.annex_no_articles,
+                 result.annex_skipped, result.annex_failed, result.articles)
+        return result
     if os.environ.get("CHPIPE_RESPLIT", "") not in ("", "0"):
         result = resplit(Settings.from_env(),
                          canton_code=os.environ.get("CHPIPE_CANTON") or None,

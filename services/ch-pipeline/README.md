@@ -1589,6 +1589,10 @@ cron:
     0 4 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh cantonal-acts
     0 5 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh lexfind-registry
 
+The Sunday phase2-weekly script also runs `lexfind-versions` and then
+`CHPIPE_SOURCE=lexfind pdf-text` after the registry re-walk, so editions
+LexFind lists between full walks get their PDFs the same week.
+
 Relink (one-off, after this code ships; 2026-08-26 prod had 993,939 of
 1,501,980 cantonal provenance rows unlinked because seven hosts ship an
 empty history map): `./run-stage.sh cantonal-relink BL` first (85K rows,
@@ -1858,6 +1862,28 @@ reads `akn_xml` of every `source IN ('lexwork_pdf','lexfind')` row at
 rewrites `ch_act_article` + `full_text` for the rows that now split
 (`recovered` in the log); nothing is fetched. Expected on the 389: ~60
 recovered (15%), the rest are genuinely article-less.
+
+Annex editions (`CHPIPE_ANNEX=1 ./run-stage.sh pdf-text`, or one canton:
+`... BS`): the BS editions whose whole body is "siehe Anhang" plus a PDF
+annex (`empty_reason` `annex_only`; 85 parsed lexwork rows with
+`article_count = 0` on 2026-08-31, 12 of them current -- BS only). Their
+payload sits verbatim in `akn_xml` and names the annex once per version:
+`selected_version.pdf_link_annexes =
+https://{host}/api/{lang}/versions/{id}/annexes` (ONE bundle of all the
+version's annexes; every non-null `annex_documents[].url` repeats the same
+URL on all 85; verified live on BS 834.420 v2939: 200 `application/pdf`,
+`%PDF-1.5`, exactly `pdf_link_annexes_size` bytes). The mode re-reads the
+article-less parsed `lexwork` rows, recomputes the annex signal from the
+payload (`lexwork.annex_pdf_url`), downloads the bundle, extracts with the
+same pdftotext path, APPENDS the text to `full_text` after an
+`[Anhang (PDF)]` marker line (the header text `cantonal-parse` stored is
+kept) and stores articles when the annex splits (`annex_parsed` /
+`annex_no_articles` / `annex_failed` in the log; ~29 MB over the 85, one
+host, under a minute at 2 req/s). Idempotent: a row leaves the selection by
+gaining articles or by carrying the marker; a failed row is left untouched
+and picked up again next run. The PDF is kept as
+`raw/pdf/{version_id}-annex.pdf` -- `akn_xml` keeps the payload, so
+re-extraction reads the file, not the database.
 
 Failure reasons: `not a PDF (...)` (the host answered HTML -- a login page
 or an error; retried within the attempt budget), `text too short`,

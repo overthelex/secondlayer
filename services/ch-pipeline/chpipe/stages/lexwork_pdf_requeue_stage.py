@@ -51,8 +51,12 @@ from . import cantonal_fetch_stage
 
 log = logging.getLogger(__name__)
 
+# The sysnr group spans path segments: GL numbers its acts 'I A/1/1' --
+# spaces AND slashes -- and the first prod run (2026-08-31) left exactly
+# those 114 rows behind when this group was a single segment ([^/]+). The
+# tail is anchored, so the greedy group cannot eat '/versions/{id}/...'.
 _VERSION_URL = re.compile(
-    r"^https://([^/]+)/api/[a-z]{2}/texts_of_law/([^/]+)/versions/(\d+)/show_as_json$")
+    r"^https://([^/]+)/api/[a-z]{2}/texts_of_law/(.+)/versions/(\d+)/show_as_json$")
 _BY_HOST = {c.host: c for c in cantons.LEXWORK.values()}
 
 
@@ -152,8 +156,12 @@ async def _run_async(settings: Settings, canton_code: str | None, current_only: 
         for row in rows:
             m = _VERSION_URL.match(row["xml_url"] or "")
             if not m or m.group(1) not in _BY_HOST:
-                conn.execute(_STAY_FAILED, ("pdf_only: xml_url is not a Lexwork version URL",
-                                            row["version_id"]))
+                # Precise reason per shape: a URL that parses but points at a
+                # host cantons.py does not know is a different defect (a config
+                # gap) than one that does not parse at all (a URL gap).
+                reason = (f"pdf_only: host {m.group(1)} is not a Lexwork host" if m
+                          else "pdf_only: xml_url is not a Lexwork version URL")
+                conn.execute(_STAY_FAILED, (reason, row["version_id"]))
                 report.unknown_url += 1
                 continue
             groups.setdefault((m.group(1), m.group(2)), []).append(row)

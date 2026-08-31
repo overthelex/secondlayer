@@ -247,3 +247,84 @@ def test_resplit_rewrites_article_less_rows_from_the_stored_text(conn, settings)
     assert numbers == ["1", "2"]
     # narrowed to one canton, nothing left to recover there
     assert pdf_text_stage.resplit(settings, canton_code="ZG").recovered == 0
+
+
+# --- BS annex editions ("siehe Anhang": the act's body is a PDF annex) ---
+
+ANNEX_PAYLOAD = (FIXTURES / "lexwork_bs_annex_834_420_v2939.json").read_text()
+ANNEX_PDF = (FIXTURES / "lexwork_bs_annex_834_420_v2939.pdf").read_bytes()
+ANNEX_URL = "https://www.gesetzessammlung.bs.ch/api/de/versions/2939/annexes"
+SHOW_URL = "https://www.gesetzessammlung.bs.ch/api/de/texts_of_law/834.420/versions/2939/show_as_json"
+HEADER_TEXT = "Pflegeheimliste: RRB\nFür den Text des RRB und die Liste siehe Anhang."
+
+
+def _annex_row(conn, payload=ANNEX_PAYLOAD, full_text=HEADER_TEXT, url=SHOW_URL, count=0):
+    vid = _row(conn, url=url, source="lexwork")
+    conn.execute("UPDATE ch_act_version SET stage='parsed', akn_xml=%s, article_count=%s, "
+                 "full_text=%s WHERE version_id=%s", (payload, count, full_text, vid))
+    return vid
+
+
+def _annex(settings, host, **kw):
+    return pdf_text_stage.annex_text(settings, transport=httpx.MockTransport(host), **kw)
+
+
+def test_the_annex_pdf_text_is_appended_after_the_header_text(conn, settings):
+    vid = _annex_row(conn)
+    host = Host({ANNEX_URL: ANNEX_PDF})
+    report = _annex(settings, host)
+    assert (report.annex_scanned, report.annex_no_articles, report.annex_parsed,
+            report.annex_failed) == (1, 1, 0, 0)
+    assert host.calls == [ANNEX_URL]
+    text = conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0]
+    assert text.startswith(HEADER_TEXT)                       # the header text is kept
+    assert pdf_text_stage.ANNEX_MARKER in text
+    assert "Liste der Pflegeheime für den Kanton Basel-Stadt 2014" in text
+    assert _state(conn, vid)[0] == "parsed" and _state(conn, vid)[2] == 0
+    # audit copy of the PDF, distinct from the lexwork_pdf path's name
+    assert pdf_text_stage.annex_pdf_path(settings, vid).read_bytes() == ANNEX_PDF
+    # idempotent: the marker keeps the row out of the next run
+    rerun = _annex(settings, Host({ANNEX_URL: ANNEX_PDF}))
+    assert rerun.annex_scanned == 0
+    assert conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0] == text
+
+
+def test_an_annex_that_splits_into_articles_stores_them(conn, settings):
+    vid = _annex_row(conn)
+    pdf = tiny_pdf(["Verordnung im Anhang", "",
+                    "Art. 1  Zweck", "Diese Verordnung regelt die Aufsicht ueber die",
+                    "Pflegeheime im Kanton und die Voraussetzungen der Aufnahme",
+                    "in die kantonale Liste nach dem Bundesgesetz.",
+                    "", "Art. 2  Geltung", "Sie gilt fuer alle Gemeinden des Kantons",
+                    "sowie fuer die anerkannten privaten Traegerschaften."])
+    report = _annex(settings, Host({ANNEX_URL: pdf}))
+    assert (report.annex_parsed, report.annex_no_articles, report.articles) == (1, 0, 2)
+    assert _state(conn, vid)[2] == 2
+    numbers = [r[0] for r in conn.execute(
+        "SELECT article_number FROM ch_act_article WHERE version_id=%s ORDER BY ordinal", (vid,))]
+    assert numbers == ["1", "2"]
+    text = conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0]
+    assert text.startswith(HEADER_TEXT) and "Zweck" in text
+    # article_count > 0 keeps the row out of the next run
+    assert _annex(settings, Host({ANNEX_URL: pdf})).annex_scanned == 0
+
+
+def test_article_less_rows_without_annexes_are_skipped_not_fetched(conn, settings):
+    payload = (FIXTURES / "lexwork_empty_bs_unstructured.json").read_text()
+    _annex_row(conn, payload=payload, url=SHOW_URL.replace("834.420", "153.700"))
+    host = Host({})
+    report = _annex(settings, host)
+    assert report.annex_scanned == 1 and report.annex_skipped == 1 and host.calls == []
+
+
+def test_a_failed_annex_download_leaves_the_row_untouched(conn, settings):
+    vid = _annex_row(conn)
+    report = _annex(settings, Host({}, status=404))
+    assert report.annex_failed == 1 and report.annex_no_articles == 0
+    text = conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0]
+    assert text == HEADER_TEXT                                # no marker: still selectable
+    assert _annex(settings, Host({ANNEX_URL: ANNEX_PDF})).annex_no_articles == 1
