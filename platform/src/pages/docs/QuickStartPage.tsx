@@ -16,12 +16,18 @@ export function QuickStartPage() {
 
       <h2>2. Claude Code (CLI)</h2>
       <CodeBlock
-        code={`claude mcp add secondlayer \\
-  --transport sse \\
-  --url https://mcp.legal.org.ua/v1/sse \\
+        code={`claude mcp add --transport http secondlayer \\
+  https://mcp.legal.org.ua/api/v2/mcp \\
   --header "Authorization: Bearer YOUR_API_KEY"`}
         title="Terminal"
       />
+      <p>
+        Крок 1 можна пропустити: якщо не передавати <code>--header</code>, Claude Code
+        авторизується через OAuth. Виконайте <code>/mcp</code>, оберіть secondlayer і
+        натисніть Authenticate, далі увійдіть своїм акаунтом у браузері. Зверніть увагу:
+        заданий <code>Authorization</code> вимикає OAuth, тож ці два способи
+        взаємовиключні.
+      </p>
       <p>Після додавання перезапустіть Claude Code. Тепер ви можете писати запити як:</p>
       <CodeBlock
         code={`> Знайди судові рішення про відшкодування моральної шкоди за 2024 рік
@@ -36,7 +42,8 @@ export function QuickStartPage() {
         code={`{
   "mcpServers": {
     "secondlayer": {
-      "url": "https://mcp.legal.org.ua/v1/sse",
+      "type": "http",
+      "url": "https://mcp.legal.org.ua/api/v2/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }

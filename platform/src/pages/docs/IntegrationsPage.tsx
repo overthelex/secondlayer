@@ -8,7 +8,7 @@ export function IntegrationsPage() {
         SecondLayer підтримує три транспортні протоколи для інтеграції.
       </p>
 
-      <h2>MCP SSE (рекомендований)</h2>
+      <h2>MCP Streamable HTTP (рекомендований)</h2>
       <p>
         Найкращий варіант для MCP-сумісних клієнтів. Підтримує стрімінг,
         автоматичне виявлення інструментів та двосторонню комунікацію.
@@ -16,9 +16,8 @@ export function IntegrationsPage() {
 
       <h3>Claude Code</h3>
       <CodeBlock
-        code={`claude mcp add secondlayer \\
-  --transport sse \\
-  --url https://mcp.legal.org.ua/v1/sse \\
+        code={`claude mcp add --transport http secondlayer \\
+  https://mcp.legal.org.ua/api/v2/mcp \\
   --header "Authorization: Bearer YOUR_API_KEY"`}
         title="Terminal"
       />
@@ -28,7 +27,8 @@ export function IntegrationsPage() {
         code={`{
   "mcpServers": {
     "secondlayer": {
-      "url": "https://mcp.legal.org.ua/v1/sse",
+      "type": "http",
+      "url": "https://mcp.legal.org.ua/api/v2/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -37,6 +37,14 @@ export function IntegrationsPage() {
 }`}
         title="claude_desktop_config.json"
       />
+
+      <h2>MCP SSE (застарілий)</h2>
+      <p>
+        Транспорт <code>/v1/sse</code> залишається робочим для вже підключених клієнтів,
+        але нові інтеграції варто робити на Streamable HTTP. Клієнти, які спершу пробують
+        POST без <code>sessionId</code>, отримують на цьому ендпоінті 400 і частина з них
+        не робить fallback на SSE.
+      </p>
 
       <h2>REST API</h2>
       <p>

@@ -74,16 +74,25 @@ Content-Type: application/json
         title="Batch Request"
       />
 
-      <h2>MCP SSE Endpoint</h2>
+      <h2>MCP Endpoint</h2>
       <div className="not-prose">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">GET</span>
-          <code className="text-sm">/v1/sse</code>
+          <span className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">POST</span>
+          <code className="text-sm">/api/v2/mcp</code>
         </div>
       </div>
       <p>
-        SSE-ендпоінт для MCP-клієнтів (Claude Code, Claude Desktop). Використовує
-        стандартний MCP протокол через Server-Sent Events.
+        Основний ендпоінт для MCP-клієнтів (Claude Code, Claude Desktop, ChatGPT).
+        Транспорт Streamable HTTP, автентифікація за API-ключем або через OAuth
+        (RFC 9728 discovery на <code>/.well-known/oauth-protected-resource/api/v2/mcp</code>).
+        Віддає кураторський набір інструментів, а не весь реєстр.
+      </p>
+
+      <h3>Застарілі ендпоінти</h3>
+      <p>
+        <code>GET /v1/sse</code> — транспорт SSE, і <code>POST /api/v1/mcp</code> —
+        Streamable HTTP з повним набором інструментів. Обидва працюють, але нові
+        інтеграції слід робити на <code>/api/v2/mcp</code>.
       </p>
 
       <h2>Health Check</h2>

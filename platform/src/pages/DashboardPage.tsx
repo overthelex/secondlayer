@@ -46,9 +46,8 @@ export function DashboardPage() {
     </div>;
   }
 
-  const connectionCode = `claude mcp add secondlayer \\
-  --transport sse \\
-  --url https://mcp.legal.org.ua/v1/sse \\
+  const connectionCode = `claude mcp add --transport http secondlayer \\
+  https://mcp.legal.org.ua/api/v2/mcp \\
   --header "Authorization: Bearer ${data.firstKey || 'YOUR_API_KEY'}"`;
 
   return (

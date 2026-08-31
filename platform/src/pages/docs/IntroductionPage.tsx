@@ -26,15 +26,14 @@ export function IntroductionPage() {
         <li><strong>Claude Code</strong> — CLI від Anthropic</li>
         <li><strong>Claude Desktop</strong> — десктопний додаток</li>
         <li><strong>REST API</strong> — пряме HTTP-підключення</li>
-        <li><strong>SSE</strong> — Server-Sent Events для стрімінгу</li>
+        <li><strong>SSE</strong> — Server-Sent Events, застарілий транспорт</li>
       </ul>
 
       <h2>Швидкий старт</h2>
       <p>Підключіть Claude Code до SecondLayer за 30 секунд:</p>
       <CodeBlock
-        code={`claude mcp add secondlayer \\
-  --transport sse \\
-  --url https://mcp.legal.org.ua/v1/sse \\
+        code={`claude mcp add --transport http secondlayer \\
+  https://mcp.legal.org.ua/api/v2/mcp \\
   --header "Authorization: Bearer YOUR_API_KEY"`}
         title="Terminal"
       />

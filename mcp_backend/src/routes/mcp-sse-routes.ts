@@ -322,14 +322,17 @@ export function createMCPSSERoutes(deps: {
     return mcpServer;
   }
 
-  // ========================= MCP v2 (curated 15-tool subset) =========================
-  // v2 exposes a curated subset of 15 tools — 6 legislation + 9 court-decision (ЄДРСР) —
-  // instead of the ~112 low-level tools that v1 surfaces. A small, focused toolset keeps
-  // tool selection tractable for external MCP clients (Claude Code/Desktop) while still
-  // letting them call the real handlers directly. Execution, billing and cost-tracking are
-  // identical to v1 (buildMcpServer); only the exposed set differs.
-  // The whitelist is shared with the legacy /sse transport (MCPSSEServer) — see
-  // curated-mcp-tools.ts — so both endpoints advertise the same curated set.
+  // ========================= MCP v2 (curated tool subset) =========================
+  // v2 exposes a curated subset instead of the ~112 low-level tools that v1 surfaces. A
+  // small, focused toolset keeps tool selection tractable for external MCP clients (Claude
+  // Code/Desktop) while still letting them call the real handlers directly. Execution,
+  // billing and cost-tracking are identical to v1 (buildMcpServer); only the exposed set
+  // differs.
+  // The whitelist is V2_TOOL_NAMES in curated-mcp-tools.ts — that Set is the only source of
+  // truth for the count, so do not restate a number here; it has drifted before.
+  // The same whitelist is shared with the legacy /sse transport (MCPSSEServer), but the two
+  // endpoints do NOT advertise identical lists: /sse lists local tools only, while
+  // /api/v2/mcp also resolves the proxied openreyestr_* tools via getAllToolDefinitions.
 
   // Build an MCP Server exposing only the curated v2 subset. Reuses the fully-wired v1
   // builder (tools/list + tools/call with billing) with the whitelist applied.
@@ -627,7 +630,7 @@ export function createMCPSSERoutes(deps: {
   // POST /v1/mcp - JSON-RPC requests (initialize + tool calls). Stateful via Mcp-Session-Id.
   router.post('/v1/mcp', (async (req: DualAuthRequest, res: Response) => {
     try {
-      // Deprecated in favour of /api/v2/mcp (curated 15-tool subset). v1 still serves the
+      // Deprecated in favour of /api/v2/mcp (curated tool subset). v1 still serves the
       // full ~112-tool surface for backward compatibility; advertise the successor to clients.
       res.setHeader('Deprecation', 'true');
       res.setHeader('Link', '</api/v2/mcp>; rel="successor-version"');
@@ -724,7 +727,7 @@ export function createMCPSSERoutes(deps: {
 
   // ========================= /v2/mcp (Streamable HTTP, curated subset) =========================
   // Canonical transport. Same OAuth/session mechanics as /v1/mcp, but the wired MCP server
-  // exposes only the curated 15-tool subset (see buildMcpServerV2). Publicly reached at /api/v2/mcp.
+  // exposes only the curated subset (see buildMcpServerV2). Publicly reached at /api/v2/mcp.
   const MCP_V2_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource/api/v2/mcp';
 
   router.post('/v2/mcp', (async (req: DualAuthRequest, res: Response) => {
@@ -838,7 +841,7 @@ export function createMCPSSERoutes(deps: {
         'sse-standard': '/v1/sse',
         http: '/api/tools',
         'streamable-http-v1': '/api/v1/mcp',
-        // Canonical: curated 15-tool subset (6 legislation + 9 ЄДРСР).
+        // Canonical: curated subset (legislation + ЄДРСР + registries), see V2_TOOL_NAMES.
         'streamable-http-v2': '/api/v2/mcp',
       },
       tools: tools.map(t => ({
