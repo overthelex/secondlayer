@@ -200,3 +200,103 @@ def test_a_citation_in_an_indented_line_is_still_not_a_heading():
         "   Kantonsrates nicht begründen.\n\n"
         "          Art. 24 FV92  . . . . . . . . . . . . . . . . . . . 12\n"))
     assert [a.article_number for a in articles] == ["1"]
+
+
+# --- clause mode (phase B): decisions in numbered clauses -----------------
+# Gate, 2026-08-31: 41 clause-splitting editions over 17 hosts (2-3 per
+# host, from 380 article-less prod rows sampled), emitted clause count vs
+# the visible top-level numbering chain of the cleaned text -- 41/41 equal.
+# The table (host, version_id, emitted=chain):
+#   ai.clex.ch 87676=5 87678=3 88476=20 | ar.clex.ch 88132=15 96108=2 99830=2
+#   bdlf.fr.ch 125406=12 | bgs.so.ch 95103=3 98336=5 107792=3
+#   bgs.zg.ch 108288=4 108651=7 108662=3 | gdb.ow.ch 90281=5 98012=3 98196=3
+#   gesetze.gl.ch 88402=2 92178=3 92644=2 | gesetze.nw.ch 107434=3
+#   gesetzessammlungen.ag.ch 108417=6 108418=6 108439=6
+#   srl.lu.ch 86159=2 86208=2 100781=2 | gesetzessammlung.bs.ch 101513=3 111345=3
+#   gesetzessammlung.sg.ch 115110=4 121372=2 121373=2
+#   gr-lex.gr.ch 118536=4 121124=4 125372=4 | lexfind.ch 379938* 386050=2 400514=3
+#   notes.zh.ch 444977=3 | rechtsbuch.tg.ch 89739=7 90152=5 90625=2
+#   (* 379938 later split into 10 REAL articles by the wide-gap heading fix
+#      and left the clause set; its clause split had matched its enumeration)
+# Misfires found by the gate and closed by guards asserted below: BS's
+# left-column "§ 5." EG ZGB (93527, was 8 clause-articles from the numbered
+# marginal chain), AR's road-class register (96108's visible "30." was the
+# date "30. April 1972" -- month guard), GR lexfind ordinances with the
+# wide-gap "Art.     1" headings (379655/379938/380538: real articles now).
+
+CLAUSE_DECISION = """\
+Kantonsratsbeschluss
+betreffend den Beitritt zur Vereinbarung
+
+(Vom 24. September 1980)
+
+Der Kantonsrat des Kantons Schwyz beschliesst:
+
+1. Der Kanton Schwyz tritt der Vereinbarung über die Schulkoordination bei.
+
+2. Massgebend ist die Fassung vom 1. Januar 1980 der Vereinbarung.
+
+3. Dieser Beschluss tritt am 1. Januar 1981 in Kraft.
+"""
+
+
+def test_clause_decision_splits_into_clause_articles():
+    articles, text = pdf_text.split_text(CLAUSE_DECISION)
+    assert [a.e_id for a in articles] == ["cl_1", "cl_2", "cl_3"]
+    assert [a.article_number for a in articles] == ["1", "2", "3"]
+    assert articles[0].text.startswith("Der Kanton Schwyz tritt")
+    # "1. Januar 1980" mid-clause is a date, not clause 1 again; the
+    # in-force clause keeps its own date too
+    assert articles[1].text == "Massgebend ist die Fassung vom 1. Januar 1980 der Vereinbarung."
+    assert articles[2].text.endswith("1981 in Kraft.")
+    assert all(a.marginal_note is None for a in articles)
+    # the preamble stays in the full text, outside every article
+    assert "Kantonsratsbeschluss" in text
+    assert "Kantonsratsbeschluss" not in articles[0].text
+
+
+def test_clause_mode_never_fires_on_a_document_with_article_headings():
+    doc = ("Verordnung\n\nArt. 1\nDie Aufsicht regelt:\n"
+           "1. die Zulassung;\n2. die Gebühren.\n\nArt. 2\nSie tritt in Kraft.\n")
+    articles, _ = pdf_text.split_text(doc)
+    assert [a.article_number for a in articles] == ["1", "2"]
+    assert not any(a.e_id.startswith("cl_") for a in articles)
+    assert "1. die Zulassung" in articles[0].text
+
+
+def test_clause_mode_declines_paragraph_sign_layouts_and_broken_chains():
+    # BS's EG ZGB shape: numbered marginals at column 0, "§ 5." at the body
+    # column -- article structure the main split missed, never clauses
+    bs = ("1. Namensschutz\n                 § 5. Für Klagen ist das Gericht zuständig.\n"
+          "2. Namensänderung\n                 § 6. Die Regierung entscheidet.\n")
+    assert pdf_text.split_text(bs)[0] == []
+    # a numbered register whose labels do not chain ("1." then "5.")
+    register = ("Verzeichnis\n\n1. Klasse A der Strassen.\n\n5. Klasse B der Strassen.\n")
+    assert pdf_text.split_text(register)[0] == []
+    # a date is not a clause
+    dated = "Beschluss\n\n1. Januar 2008: Inkrafttreten.\n2. Januar 2008: Nachtrag.\n"
+    assert pdf_text.split_text(dated)[0] == []
+
+
+def test_roman_clause_decision_numbers_arabically():
+    doc = ("Kantonsratsbeschluss über die Wasserrechtskonzession\n\n"
+           "Der Kantonsrat beschliesst:\n\nI.\nDie vorliegende Konzession wird genehmigt.\n\n"
+           "II.\nDer Regierungsrat wird mit dem Vollzug beauftragt.\n")
+    articles, _ = pdf_text.split_text(doc)
+    assert [(a.e_id, a.article_number) for a in articles] == [("cl_1", "1"), ("cl_2", "2")]
+    assert articles[0].text == "Die vorliegende Konzession wird genehmigt."
+
+
+def test_wide_gap_heading_of_the_gr_lexfind_pdfs():
+    # "Art.     1    Condizione di ammissione" (427.240 it): the number a
+    # tab-stop away from the label, the marginal after it
+    doc = ("Ordinanza sulla formazione\n\n"
+           "Art.     1    Condizione di ammissione\n"
+           "1 È ammesso alle formazioni di base chi soddisfa i presupposti specifici"
+           " per i corsi secondo il regolamento.\n\n"
+           "Art.     2    Iscrizione\n"
+           "La direzione scolastica fissa un termine di iscrizione e lo rende noto"
+           " a tutte le persone interessate.\n")
+    articles, _ = pdf_text.split_text(doc)
+    assert [(a.article_number, a.marginal_note) for a in articles] == [
+        ("1", "Condizione di ammissione"), ("2", "Iscrizione")]

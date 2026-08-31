@@ -1863,6 +1863,58 @@ rewrites `ch_act_article` + `full_text` for the rows that now split
 (`recovered` in the log); nothing is fetched. Expected on the 389: ~60
 recovered (15%), the rest are genuinely article-less.
 
+### Phase B: articles for editions that have text but no split (LEXAI-2030)
+
+Two more recoveries ride the resplit machinery; both are offline walks of
+already-parsed rows, no downloads.
+
+**Cantonal clause mode.** `pdf_text.split_text` now has a clause fallback:
+when a document has no `Art.`/`§` structure at all but IS a decision in
+numbered clauses ("1. Der Kanton ... tritt ... bei", "2. ..."), each
+top-level clause becomes an article numbered `1`, `2`, ... with e_id
+`cl_1`, `cl_2`, ... (Roman-clause decisions -- SZ's concession decrees:
+"I." / "II." on their own lines -- number arabically the same way). Guards,
+each closing a misfire the 2026-08-31 gate found on 380 article-less prod
+rows over 17 hosts: dates ("1. Januar 2008"), section headings ("1.
+Kapitel"), heading-shaped lines the main split failed on (BS's left-column
+"§ 5." EG ZGB layout), and column-0 numbers that do not chain from 1 (a
+registry's labels). Gate: 41/41 clause-splitting editions matched the
+visible numbering chain exactly (the table sits atop the clause tests in
+`tests/test_pdf_text.py`). The same pass taught `_HEADING` the wide-gap
+`Art.     1    Marginal` shape of the GR lexfind PDFs, which turns ~20% of
+the article-less lexfind rows into REAL article splits. It runs through
+the existing resplit invocations, nothing new to start:
+
+    CHPIPE_RESPLIT=1 ./run-stage.sh pdf-text                    # lexwork_pdf + lexfind
+    CHPIPE_RESPLIT=1 CHPIPE_SOURCE=zhlex ./run-stage.sh pdf-text
+
+Measured on 380 sampled rows of the 9,170 article-less editions of these
+three sources: ~37% of lexfind (22% real articles + 15% clauses), ~57% of
+lexwork_pdf, ~10% of zhlex now split -- ~3.5K of the 9.2K expected; the
+rest are registers, tariffs, one-line notices.
+
+**Federal pdf-a resplit.** The 50,998 `source='fedlex_pdf'` editions
+(pre-2021 consolidations, 1910-2020, de/fr/it plus 590 en / 246 rm) were
+backfilled as full text only: `article_count IS NULL`, `akn_xml` NULL, the
+PDFs not kept -- the stored `full_text` (pdftotext -layout minus control
+characters; line structure survives, form feeds do not) is the only input.
+`chpipe/fedlex_split.py` splits that stream: AS layouts (column-0 `Art. N`
+with glued footnote references -- "Art. 12" is article 1 + note 2, the
+sequence disambiguates -- and the post-1997 marginal-column layout), Roman
+treaty articles (`article_number` NULL, e_id `art_I`, matching the AKN
+parse of the same acts), repealed runs ("Art. 47 à 64" -> one empty
+article per number), decimal ordinance numbers ("Art. 0.01"). Gate
+(`scripts/fedlex_pdf_gate.py`): article-number overlap vs the closest AKN
+edition of the same act, 63 pairs over 7 decades -- median 1.000, mean
+0.962, every pair under 0.90 explained by consolidation-date gaps, not the
+splitter; 199/203 random rows (98%) split into articles, ~54 articles/row.
+
+    CHPIPE_RESPLIT=1 ./run-stage.sh fedlex-pdf-text             # ~30-60 min, offline
+
+Rows that gain articles get `article_count` set by `store_articles` and
+leave the selection; `full_text` is never rewritten (the fetch-era text is
+kept byte for byte). Idempotent, `CHPIPE_LIMIT` honoured.
+
 Annex editions (`CHPIPE_ANNEX=1 ./run-stage.sh pdf-text`, or one canton:
 `... BS`): the BS editions whose whole body is "siehe Anhang" plus a PDF
 annex (`empty_reason` `annex_only`; 85 parsed lexwork rows with

@@ -13,13 +13,31 @@ document verbatim; this stage runs it through text_extract.from_pdf() and
 text_quality.score() and stores the resulting plain text, the same gate
 extract_stage applies to the decisions corpus's own PDFs.
 
-No article split happens here -- article_count stays NULL on every row this
-stage completes, PDF-era prose has no e_id structure to split on, and the
-plan's Task 2 scope is full text only. A pdf-a row that later gains a real
-XML manifestation is reclaimed by versions_stage's xml pass (source flips to
-'fedlex', stage resets to 'discovered', full_text/article_count are cleared)
-and is walked by fetch_xml_stage/parse_akn_stage from there -- this stage
-never has to notice that happened.
+No article split happens on the fetch path -- article_count stays NULL on
+every row this stage completes, PDF-era prose has no e_id structure to split
+on, and the plan's Task 2 scope was full text only. A pdf-a row that later
+gains a real XML manifestation is reclaimed by versions_stage's xml pass
+(source flips to 'fedlex', stage resets to 'discovered', full_text/
+article_count are cleared) and is walked by fetch_xml_stage/parse_akn_stage
+from there -- this stage never has to notice that happened.
+
+CHPIPE_RESPLIT=1 (phase B of the gap plan) is the offline second half the
+fetch path never had: no download, no claim -- it walks the rows already at
+'parsed' with no articles (article_count IS NULL from the 2026-08 backfill,
+or 0) and runs fedlex_split.split_fedlex_text over their STORED full_text.
+That is the whole input: the backfill kept no PDFs (NamedTemporaryFile) and
+wrote no akn_xml, so full_text -- pdftotext -layout minus the control
+characters, line structure intact -- is the only material there is, and the
+gate (scripts/fedlex_pdf_gate.py) measured it sufficient: article-number
+overlap vs the AKN parse of the same acts median 1.000 / mean 0.962 over 63
+pairs, 98% of a 203-row random sample splitting into articles. Rows that
+gain articles get them via parse_akn_stage.store_articles (which also sets
+article_count, taking the row out of the selection); full_text is NOT
+rewritten -- the split's text product is a byproduct, the stored text stays
+exactly what the backfill wrote. Rows that still split to nothing are left
+untouched and selected again next run, the same contract as
+pdf_text_stage's cantonal resplit. Batched by version_id keyset, CHPIPE_LIMIT
+honoured, mirroring that mode.
 
 SEQUENTIAL, NOT FANNED OUT (this is the one place this stage's structure
 differs from fetch_xml_stage's asyncio.gather-per-batch): text_extract.from_pdf()
@@ -44,10 +62,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .. import db, text_quality, throttle
+from .. import db, fedlex_split, text_quality, throttle
 from ..config import Settings
 from ..http import FetchError, Fetcher
 from ..text_extract import PdfToolMissing, from_pdf
+from . import parse_akn_stage
 
 log = logging.getLogger(__name__)
 
@@ -87,6 +106,12 @@ class FedlexPdfTextReport:
     empty: int = 0
     low_quality: int = 0
     bytes_downloaded: int = 0
+    # resplit mode (CHPIPE_RESPLIT=1): rows re-read from full_text, how many
+    # gained articles, and how many articles -- same counter names as
+    # pdf_text_stage.PdfTextReport's resplit half
+    resplit: int = 0
+    recovered: int = 0
+    articles: int = 0
 
 
 async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
@@ -199,6 +224,65 @@ def run(settings: Settings, limit: int | None = None, transport=None) -> FedlexP
     return asyncio.run(_run_async(settings, limit, transport))
 
 
+# Keyset pagination, not OFFSET: 51K rows at a median 41.5 KB of full_text
+# each is ~2 GB if fetched in one go, and OFFSET restarts the scan each
+# batch. COALESCE covers both shapes of "no articles": NULL (everything the
+# 2026-08 backfill wrote) and 0 (a future run that stored an empty split).
+_RESPLIT_ROWS = (
+    "SELECT version_id, full_text FROM ch_act_version "
+    "WHERE source = 'fedlex_pdf' AND stage = 'parsed' "
+    "AND COALESCE(article_count, 0) = 0 AND full_text IS NOT NULL "
+    "AND version_id > %s ORDER BY version_id LIMIT %s")
+
+RESPLIT_BATCH = 200
+
+
+def resplit(settings: Settings, limit: int | None = None) -> FedlexPdfTextReport:
+    """CHPIPE_RESPLIT=1: articles for the parsed fedlex_pdf editions, from
+    their stored full_text alone. See the module docstring. full_text is
+    left untouched; store_articles() writes the rows and article_count in
+    one transaction, which is the whole idempotency story -- a recovered
+    row leaves the selection, an unrecovered one is re-walked next run."""
+    report = FedlexPdfTextReport()
+    conn = db.connect(settings)
+    last_id = 0
+    remaining = limit
+    try:
+        while True:
+            size = RESPLIT_BATCH if remaining is None else min(RESPLIT_BATCH, remaining)
+            if size <= 0:
+                break
+            with conn.cursor() as cur:
+                cur.execute(_RESPLIT_ROWS, (last_id, size))
+                rows = cur.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                version_id, full_text = row["version_id"], row["full_text"]
+                last_id = version_id
+                report.resplit += 1
+                try:
+                    articles, _ = fedlex_split.split_fedlex_text(full_text)
+                except Exception as exc:                        # noqa: BLE001
+                    log.error("version %s: resplit failed: %s", version_id, exc)
+                    report.failed += 1
+                    continue
+                if not articles:
+                    report.empty += 1
+                    continue
+                parse_akn_stage.store_articles(conn, version_id, articles)
+                report.recovered += 1
+                report.articles += len(articles)
+            if remaining is not None:
+                remaining -= len(rows)
+            log.info("fedlex-resplit resplit=%d recovered=%d articles=%d "
+                     "empty=%d failed=%d", report.resplit, report.recovered,
+                     report.articles, report.empty, report.failed)
+    finally:
+        conn.close()
+    return report
+
+
 def main() -> FedlexPdfTextReport:
     """Entry point. A function, not an `if __name__` block -- see
     tests/test_entry_points.py. nice 10: the network download dominates
@@ -208,8 +292,15 @@ def main() -> FedlexPdfTextReport:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
-    result = run(Settings.from_env(),
-                 limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
+    limit = int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None
+    if os.environ.get("CHPIPE_RESPLIT", "") not in ("", "0"):
+        # offline CPU walk, not a download: renice already applied above
+        result = resplit(Settings.from_env(), limit=limit)
+        log.info("RESPLIT resplit=%d recovered=%d articles=%d empty=%d failed=%d",
+                 result.resplit, result.recovered, result.articles,
+                 result.empty, result.failed)
+        return result
+    result = run(Settings.from_env(), limit=limit)
     log.info("parsed=%d failed=%d (of which empty=%d low_quality=%d) bytes=%d",
              result.parsed, result.failed, result.empty, result.low_quality,
              result.bytes_downloaded)

@@ -227,24 +227,39 @@ def test_host_pacer_spaces_request_starts():
 
 def test_resplit_rewrites_article_less_rows_from_the_stored_text(conn, settings):
     zg = (FIXTURES / "pdftext_zg_centered_par.txt").read_text()
-    plain = "Kantonsratsbeschluss\n\nbeschliesst:\n\n1. Der Kanton tritt bei.\n2. Der Regierungsrat vollzieht.\n"
+    # phase B: a decision in numbered clauses now splits too (clause mode);
+    # an alphabetical register stays legitimately article-less
+    plain = ("Kantonsratsbeschluss\n\nbeschliesst:\n\n1. Der Kanton tritt bei.\n"
+             "2. Der Regierungsrat vollzieht.\n")
+    register = "Alphabetisches Register\n\nAbgaben, siehe 641.1\n\nZölle, siehe 631.0\n"
     a = _row(conn)
     b = _row(conn, url=LEXFIND_URL, source="lexfind")
     c = _row(conn, url="https://bgs.zg.ch/api/de/versions/7/pdf_file")
+    unsplittable = _row(conn, url=LEXFIND_URL + "?r", source="lexfind")
     untouched = _row(conn, url="https://bgs.zg.ch/api/de/versions/8/pdf_file")
-    for vid, raw, count in ((a, zg, 0), (b, plain, 0), (c, zg, 0), (untouched, zg, 4)):
+    for vid, raw, count in ((a, zg, 0), (b, plain, 0), (c, zg, 0),
+                            (unsplittable, register, 0), (untouched, zg, 4)):
         conn.execute("UPDATE ch_act_version SET stage='parsed', akn_xml=%s, article_count=%s, "
                      "full_text='old' WHERE version_id=%s", (raw, count, vid))
     report = pdf_text_stage.resplit(settings)
-    assert (report.resplit, report.recovered, report.articles) == (3, 2, 4)
+    assert (report.resplit, report.recovered, report.articles) == (4, 3, 6)
     assert _state(conn, a)[2] == 2 and _state(conn, c)[2] == 2
-    assert _state(conn, b)[2] == 0 and _state(conn, b)[3] == 3          # still 'old'
     assert _state(conn, untouched)[2] == 4
     assert conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
                         (a,)).fetchone()[0].startswith("Kantonsratsbeschluss betreffend den Beitritt")
     numbers = [r[0] for r in conn.execute(
         "SELECT article_number FROM ch_act_article WHERE version_id=%s ORDER BY ordinal", (a,))]
     assert numbers == ["1", "2"]
+    # the clause decision: clause-articles keyed cl_1/cl_2, numbers 1/2
+    clause_rows = conn.execute(
+        "SELECT e_id, article_number, text FROM ch_act_article "
+        "WHERE version_id=%s ORDER BY ordinal", (b,)).fetchall()
+    assert [(r[0], r[1]) for r in clause_rows] == [("cl_1", "1"), ("cl_2", "2")]
+    assert clause_rows[0][2] == "Der Kanton tritt bei."
+    assert _state(conn, b)[2] == 2
+    # the register stays untouched, full_text still what the fetch wrote
+    assert _state(conn, unsplittable)[2] == 0
+    assert _state(conn, unsplittable)[3] == 3                           # still 'old'
     # narrowed to one canton, nothing left to recover there
     assert pdf_text_stage.resplit(settings, canton_code="ZG").recovered == 0
 
