@@ -137,7 +137,7 @@ function prerenderDocsPlugin(): Plugin {
 
         const toolCount = toolEntries.length
         const title = `LEX AI API — документація MCP сервера | ${toolCount} юридичних інструментів`
-        const description = `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${toolCount} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, due diligence. REST API, MCP Streamable HTTP та SSE.`
+        const description = `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${toolCount} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, due diligence. REST API та MCP Streamable HTTP.`
         const ogDescription = `Підключіть Claude, Cursor або ChatGPT до ${toolCount} інструментів юридичного аналізу через MCP. Судова практика, законодавство, реєстри України.`
         const canonical = 'https://legal.org.ua/developer/docs'
 
@@ -154,11 +154,9 @@ function prerenderDocsPlugin(): Plugin {
       <p>${description}</p>
 
       <h2>Підключення MCP клієнта</h2>
-      <p>MCP Streamable HTTP: <code>https://mcp.legal.org.ua/api/v2/mcp</code> (куратований набір, 28 інструментів)</p>
-      <p>MCP SSE (legacy): <code>https://mcp.legal.org.ua/sse</code></p>
-      <p>MCP, повний набір: <code>https://mcp.legal.org.ua/api/v1/mcp</code> (${toolCount} інструментів)</p>
+      <p>MCP Streamable HTTP: <code>https://mcp.legal.org.ua/api/v2/mcp</code> (куратований набір)</p>
       <p>REST API: <code>https://platform.legal.org.ua/api/tools/:toolName</code> (${toolCount} інструментів)</p>
-      <p>Підтримувані клієнти: Claude Desktop, Claude Code, Cursor, VS Code, ChatGPT, Continue.dev</p>
+      <p>Підтримувані клієнти: Claude Desktop, Claude Code, Cursor, VS Code, ChatGPT</p>
       <pre><code>{
   "mcpServers": {
     "secondlayer": {
@@ -196,7 +194,7 @@ function prerenderDocsPlugin(): Plugin {
           "@context": "https://schema.org",
           "@type": "WebAPI",
           "name": "LEX AI MCP Server",
-          "description": `MCP сервер для юридичного аналізу: ${toolCount} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, due diligence. Підключається через Streamable HTTP або SSE до Claude Desktop, Cursor, VS Code, ChatGPT.`,
+          "description": `MCP сервер для юридичного аналізу: ${toolCount} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, due diligence. Підключається через MCP Streamable HTTP до Claude Desktop, Cursor, VS Code, ChatGPT.`,
           "url": "https://mcp.legal.org.ua/api/v2/mcp",
           "documentation": canonical,
           "provider": { "@type": "Organization", "name": "SecondLayer", "url": "https://legal.org.ua" },
