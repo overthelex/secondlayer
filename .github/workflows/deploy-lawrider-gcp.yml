@@ -1,0 +1,139 @@
+# Deploy lawrider.ch to the GCP box (lawrider-gcp, europe-west6-a).
+#
+# Standalone pipeline, independent of the cthulhu/AWS runners:
+# - runs on GitHub-hosted runners
+# - SSHes to the GCP VM with its own deploy key (secrets below)
+# - builds the backend image ON the box (4 vCPU) from the synced tree
+#
+# Secrets:
+#   LAWRIDER_GCP_HOST      public IP of the GCP VM
+#   LAWRIDER_GCP_SSH_KEY   private key authorized for ubuntu@<host>
+#   CORE_REPO_SSH_KEY      deploy key (read) for overthelex/secondlayer-core;
+#                          proprietary sources are overlaid before build,
+#                          same as deploy-prod.yml
+#
+# The migrate job is a ONE-OFF: dispatch with migrate=true to restore
+# the uk_*/ch_* data dump pushed from AWS prod into /data/pgdump and
+# verify it against its counts manifest (see
+# deployment/lawrider-gcp/migrate-from-aws.sh).
+
+name: Deploy lawrider.ch (GCP)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deployment/lawrider-gcp/**"
+      - "deployment/Dockerfile.mono-backend"
+      - "mcp_backend/**"
+      - "packages/shared/**"
+      - ".github/workflows/deploy-lawrider-gcp.yml"
+  workflow_dispatch:
+    inputs:
+      migrate:
+        description: "Run one-off uk_*/ch_* data migration from AWS after deploy"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-lawrider-gcp
+  cancel-in-progress: false
+
+env:
+  GCP_USER: ubuntu
+  REMOTE_REPO: /home/ubuntu/SecondLayer
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GCP_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          if [ -z "$GCP_HOST" ]; then
+            echo "::error::LAWRIDER_GCP_HOST secret is not set"; exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
+          chmod 600 ~/.ssh/gcp_deploy
+          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
+
+      - name: Overlay core sources
+        env:
+          CORE_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
+        run: |
+          if [ -z "$CORE_KEY" ]; then
+            echo "::error::CORE_REPO_SSH_KEY secret is not set — refusing to build without the proprietary overlay"; exit 1
+          fi
+          printf '%s\n' "$CORE_KEY" > ~/.ssh/core_deploy
+          chmod 600 ~/.ssh/core_deploy
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          CORE_TMP=$(mktemp -d)
+          GIT_SSH_COMMAND="ssh -i $HOME/.ssh/core_deploy" \
+            git clone --depth 1 git@github.com:overthelex/secondlayer-core "$CORE_TMP"
+          test -s "$CORE_TMP/src/services/chat-execution-loop.ts" && test -s "$CORE_TMP/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core clone incomplete — key files missing"; exit 1; }
+          find "$CORE_TMP"/src/services -maxdepth 1 -name '*.ts' -exec cp -f {} mcp_backend/src/services/ \;
+          cp -rf "$CORE_TMP"/src/prompts/* mcp_backend/src/prompts/
+          rm -rf "$CORE_TMP"
+
+      - name: Sync tree to GCP box
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude 'node_modules' \
+            --exclude 'deployment/.env.prod' \
+            -e "ssh -i $HOME/.ssh/gcp_deploy" \
+            ./ "${GCP_USER}@${GCP_HOST}:${REMOTE_REPO}/"
+          $SSH_CMD "test -s ${REMOTE_REPO}/mcp_backend/src/services/chat-execution-loop.ts" \
+            || { echo "::error::overlay missing on box after sync"; exit 1; }
+
+      - name: Build and start stack
+        run: |
+          $SSH_CMD "test -s ${REMOTE_REPO}/deployment/.env.prod" \
+            || { echo "::error::deployment/.env.prod missing on the box — provision it first"; exit 1; }
+          $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
+            docker compose --env-file ../.env.prod build migrate && \
+            docker compose --env-file ../.env.prod up -d --remove-orphans"
+
+      - name: Health checks
+        run: |
+          # app container must go healthy
+          for i in $(seq 1 30); do
+            state=$($SSH_CMD "docker inspect -f '{{.State.Health.Status}}' lawrider-app 2>/dev/null" || echo starting)
+            [ "$state" = "healthy" ] && break
+            sleep 10
+          done
+          [ "$state" = "healthy" ] || {
+            echo "::error::lawrider-app never went healthy (state=$state)"
+            $SSH_CMD "docker logs --tail 50 lawrider-app" || true
+            exit 1
+          }
+          # edge answers for both hosts (origin cert is Cloudflare-internal → -k)
+          curl -fsSk --resolve "lawrider.ch:443:${GCP_HOST}" https://lawrider.ch/ -o /dev/null
+          curl -fsSk --resolve "mcp.lawrider.ch:443:${GCP_HOST}" https://mcp.lawrider.ch/health/ready -o /dev/null
+          echo "deploy OK"
+
+  migrate:
+    if: github.event_name == 'workflow_dispatch' && inputs.migrate
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GCP_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
+          chmod 600 ~/.ssh/gcp_deploy
+          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Run migration on the box
+        run: |
+          ssh -i ~/.ssh/gcp_deploy -o ServerAliveInterval=30 "${GCP_USER}@${GCP_HOST}" \
+            "bash ${REMOTE_REPO}/deployment/lawrider-gcp/migrate-from-aws.sh"
