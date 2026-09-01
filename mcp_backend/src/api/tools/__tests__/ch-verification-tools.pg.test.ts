@@ -72,6 +72,18 @@ describe('extractChQuotedClaims', () => {
     expect(claims[0].quote).toContain('Beweiswürdigung');
   });
 
+  it('attributes by the nearest OCCURRENCE, not the first mention of a reference', () => {
+    // Live repro (2026-09-01): the quote sat right after a repeat mention of
+    // BGE 125 V 351, but dedup had kept only the FIRST occurrence — far away —
+    // so the nearest surviving reference was a different (invented) BGE from
+    // the previous sentence, and the quote was attributed to it.
+    const claims = extractChQuotedClaims(
+      'Прецедент BGE 125 V 351 підтверджує це; див. також BGE 999 V 999.\n' +
+      'У BGE 125 V 351 суд зазначив: «Die Beweiswürdigung ist frei, aber nicht willkürlich vorzunehmen».');
+    expect(claims).toHaveLength(1);
+    expect(claims[0].reference).toBe('BGE 125 V 351');
+  });
+
   it('ignores short quotes and quotes with no CH reference nearby', () => {
     expect(extractChQuotedClaims('Суд сказав «ні» у BGE 125 V 351.')).toEqual([]);
     expect(extractChQuotedClaims(
