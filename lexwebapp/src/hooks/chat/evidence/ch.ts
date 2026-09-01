@@ -24,6 +24,7 @@ const CH_LEGISLATION_TOOLS = new Set([
   'ch_get_act_text',
 ]);
 const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
+const CH_CITATION_TOOLS = new Set(['ch_get_citation_graph', 'ch_check_precedent_status']);
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
@@ -510,6 +511,79 @@ function extractChRegistryEvidence(toolName: string, parsed: ToolResultData): Ev
   return { decisions: [], citations: [], documents };
 }
 
+
+// ─── Citation graph / precedent status ───────────────────────────────
+
+const CH_PRECEDENT_STATUS_LABELS: Record<string, string> = {
+  actively_cited: 'активно цитується',
+  previously_cited: 'цитувалося раніше',
+  uncited: 'не цитується',
+};
+
+// A graph/status row names a decision only by ecli/docket/court code — there is no
+// court_name, abstract or URL on the edge, so the Decision card is deliberately
+// minimal: identity, date, and a one-line role summary.
+function citationRowToDecision(
+  id: string, court: string | null, docket: string | null,
+  date: string | null, summary: string
+): Decision {
+  return {
+    id,
+    number: [court, docket || id].filter(Boolean).join(' · '),
+    court: court || '',
+    date: date || '',
+    summary,
+    relevance: 100,
+    status: 'active',
+  };
+}
+
+function extractChCitationEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
+  const decisions: Decision[] = [];
+
+  if (toolName === 'ch_get_citation_graph') {
+    // Error payloads: { error: 'not_found' | 'not_loaded', ... }
+    if (parsed.error) return { decisions, citations: [], documents: [] };
+
+    const outbound = Array.isArray(parsed.outbound?.cases) ? parsed.outbound.cases : [];
+    for (const row of outbound) {
+      // An unresolved reference has no target decision to render — it is already
+      // summarised in outbound.unresolved_refs.
+      if (!row.resolved || !row.to_ecli) continue;
+      decisions.push(citationRowToDecision(
+        String(row.to_ecli), row.court_code ?? null, row.docket_number ?? row.to_raw ?? null,
+        row.decision_date ?? null, 'Цитується цим рішенням'));
+    }
+    const inbound = Array.isArray(parsed.inbound?.recent) ? parsed.inbound.recent : [];
+    for (const row of inbound) {
+      if (!row.from_ecli) continue;
+      decisions.push(citationRowToDecision(
+        String(row.from_ecli), row.from_court ?? null, null,
+        row.from_date ?? null, 'Цитує це рішення'));
+    }
+  } else if (toolName === 'ch_check_precedent_status') {
+    // { status: 'not_in_corpus', reference } and { error: ... } render nothing.
+    if (parsed.error || parsed.status === 'not_in_corpus' || !parsed.ecli) {
+      return { decisions, citations: [], documents: [] };
+    }
+    const statusLabel = CH_PRECEDENT_STATUS_LABELS[String(parsed.status)] || String(parsed.status);
+    const counts = `цитувань: ${parsed.cited_by_count ?? 0} (судів: ${parsed.citing_courts ?? 0})`;
+    const last = parsed.last_citing_date ? `, останнє: ${parsed.last_citing_date}` : '';
+    decisions.push(citationRowToDecision(
+      String(parsed.ecli), parsed.court_code ?? null, parsed.docket_number ?? null,
+      parsed.decision_date ?? null, `Статус прецеденту: ${statusLabel}; ${counts}${last}`));
+    const recent = Array.isArray(parsed.recent_citings) ? parsed.recent_citings : [];
+    for (const row of recent) {
+      if (!row.from_ecli) continue;
+      decisions.push(citationRowToDecision(
+        String(row.from_ecli), row.from_court ?? null, null,
+        row.from_date ?? null, 'Цитує це рішення'));
+    }
+  }
+
+  return { decisions, citations: [], documents: [] };
+}
+
 export function extractChEvidence(toolName: string, data: ToolResultData): EvidenceResult {
   if (!data || typeof data !== 'object') {
     return { decisions: [], citations: [], documents: [] };
@@ -523,6 +597,9 @@ export function extractChEvidence(toolName: string, data: ToolResultData): Evide
   }
   if (CH_REGISTRY_TOOLS.has(toolName)) {
     return extractChRegistryEvidence(toolName, data);
+  }
+  if (CH_CITATION_TOOLS.has(toolName)) {
+    return extractChCitationEvidence(toolName, data);
   }
 
   return { decisions: [], citations: [], documents: [] };

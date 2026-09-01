@@ -981,4 +981,90 @@ describe('extractChEvidence', () => {
       expect(result.documents).toHaveLength(0);
     });
   });
+
+  describe('ch_get_citation_graph', () => {
+    const graph = {
+      ecli: 'ECLI:CH:BGER:2024:8C.1.2024',
+      court_code: 'CH_BGer_008',
+      docket_number: '8C_1/2024',
+      decision_date: '2024-05-01',
+      outbound: {
+        cases: [
+          {
+            to_raw: 'BGE 125 V 351',
+            cite_kind: 'bge',
+            to_ecli: 'ECLI:CH:CH_BGE:CH_BGE_007_BGE-125-V-351_1999',
+            resolved: true,
+            court_code: 'CH_BGE_007',
+            docket_number: 'BGE 125 V 351',
+            decision_date: '1999-10-01',
+          },
+          { to_raw: '5A_999/2001', cite_kind: 'docket', to_ecli: null, resolved: false },
+        ],
+        total: 2,
+        resolved_count: 1,
+        unresolved_count: 1,
+        unresolved_refs: ['5A_999/2001'],
+      },
+      legislation: { total_citations: 4, total_acts: 2, unresolved_count: 1, top_acts: [], next: {} },
+      inbound: {
+        cited_by_count: 1,
+        citing_courts: 1,
+        first_citing_date: '2025-01-01',
+        last_citing_date: '2025-01-01',
+        recent: [
+          { from_ecli: 'ECLI:CH:BGER:2025:9C.9.2025', from_date: '2025-01-01', from_court: 'CH_BGer_009' },
+        ],
+      },
+    };
+
+    it('maps resolved outbound targets and inbound citers to Decision[], skipping unresolved', () => {
+      const result = extractChEvidence('ch_get_citation_graph', graph);
+
+      const ids = result.decisions.map((d) => d.id);
+      expect(ids).toContain('ECLI:CH:CH_BGE:CH_BGE_007_BGE-125-V-351_1999');
+      expect(ids).toContain('ECLI:CH:BGER:2025:9C.9.2025');
+      // The unresolved reference has no target decision to render.
+      expect(ids).not.toContain('5A_999/2001');
+      expect(result.citations).toHaveLength(0);
+    });
+
+    it('renders nothing for an error payload', () => {
+      const result = extractChEvidence('ch_get_citation_graph',
+        { error: 'not_found', ecli: 'ECLI:CH:NO:SUCH' });
+      expect(result.decisions).toHaveLength(0);
+    });
+  });
+
+  describe('ch_check_precedent_status', () => {
+    it('maps the target decision with a status summary plus its recent citers', () => {
+      const result = extractChEvidence('ch_check_precedent_status', {
+        ecli: 'ECLI:CH:CH_BGE:CH_BGE_007_BGE-125-V-351_1999',
+        docket_number: 'BGE 125 V 351',
+        court_code: 'CH_BGE_007',
+        decision_date: '1999-10-01',
+        variants: ['ECLI:CH:CH_BGE:CH_BGE_007_BGE-125-V-351_1999'],
+        status: 'actively_cited',
+        cited_by_count: 48441,
+        citing_courts: 120,
+        first_citing_date: '1999-12-01',
+        last_citing_date: '2026-08-01',
+        citations_last_5_years: 5000,
+        recent_citings: [
+          { from_ecli: 'ECLI:CH:BGER:2026:8C.5.2026', from_date: '2026-08-01', from_court: 'CH_BGer_008' },
+        ],
+      });
+
+      expect(result.decisions[0].id).toBe('ECLI:CH:CH_BGE:CH_BGE_007_BGE-125-V-351_1999');
+      expect(result.decisions[0].summary).toContain('48441');
+      expect(result.decisions[0].summary).toMatch(/активно цитується/);
+      expect(result.decisions.map((d) => d.id)).toContain('ECLI:CH:BGER:2026:8C.5.2026');
+    });
+
+    it('renders nothing when the reference is not in the corpus', () => {
+      const result = extractChEvidence('ch_check_precedent_status',
+        { status: 'not_in_corpus', reference: 'BGE 1 I 1' });
+      expect(result.decisions).toHaveLength(0);
+    });
+  });
 });
