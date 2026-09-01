@@ -10,6 +10,7 @@
  *   getLocalToolDefinitions().
  */
 
+import { ChCitationTools } from '../tools/ch-citation-tools.js';
 import { ChCourtTools } from '../tools/ch-court-tools.js';
 import { ChLegislationTools } from '../tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../tools/ch-registry-tools.js';
@@ -30,6 +31,8 @@ const CH_TOOL_NAMES = [
   'ch_get_decision_legislation',
   'ch_search_companies',
   'ch_get_company',
+  'ch_get_citation_graph',
+  'ch_check_precedent_status',
 ];
 
 // Stub is only for construction (constructor(private db: any)) — executeTool is never
@@ -90,6 +93,19 @@ describe('CH tool surface registration', () => {
       expect(doc).not.toMatch(/Société|Sàrl|Sagl|società|anonima/i);
     });
 
+    it('ChCitationTools exposes exactly its two tools with Ukrainian descriptions', () => {
+      const tool = new ChCitationTools(stubDb);
+      const defs = tool.getToolDefinitions();
+      expect(defs.map(d => d.name).sort()).toEqual(
+        ['ch_check_precedent_status', 'ch_get_citation_graph'].sort()
+      );
+      for (const def of defs) {
+        expect(def.description).toBeTruthy();
+        expect(isCyrillic(def.description)).toBe(true);
+        expect(def.inputSchema.type).toBe('object');
+      }
+    });
+
     it('ChLegislationTools exposes exactly its five tools with Ukrainian descriptions', () => {
       const tool = new ChLegislationTools(stubDb);
       const defs = tool.getToolDefinitions();
@@ -110,6 +126,7 @@ describe('CH tool surface registration', () => {
       registry.registerHandler(new ChCourtTools(stubDb));
       registry.registerHandler(new ChLegislationTools(stubDb));
       registry.registerHandler(new ChRegistryTools(stubDb));
+      registry.registerHandler(new ChCitationTools(stubDb));
 
       const names = registry.getLocalToolDefinitions().map(d => d.name);
       for (const name of CH_TOOL_NAMES) {
