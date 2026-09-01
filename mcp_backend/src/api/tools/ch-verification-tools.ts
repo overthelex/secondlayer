@@ -47,10 +47,12 @@ const BGE_RE = /\b(BGE|ATF|DTF)\s+(\d{1,3})\s+(I[ab]?|II|III|IV|V)\s+(\d{1,4})\b
 const DOCKET_RE = /\b\d{1,2}[A-Z][A-Za-z]{0,2}_\d{1,5}\/\d{4}\b/g;
 const ECLI_RE = /\bECLI:CH:[A-Za-z0-9_]+(?::[A-Za-z0-9._-]+)+/g;
 
-/** Extract CH case references in document order, deduplicated on the
- *  normalized form. ATF (fr) and DTF (it) are the same reporter as BGE (de)
- *  and normalise to the German form the corpus stores in docket_number. */
-export function extractChCaseReferences(text: string): ChCaseReference[] {
+/** Every occurrence, in document order, NOT deduplicated — quote attribution
+ *  must see repeat mentions, or the nearest reference to a quote can silently
+ *  become a farther, different one (live repro 2026-09-01: a quote right
+ *  after a repeat of BGE 125 V 351 got attributed to an invented BGE from the
+ *  previous sentence because dedup had dropped the nearby repeat). */
+function collectChReferenceOccurrences(text: string): ChCaseReference[] {
   const found: ChCaseReference[] = [];
 
   BGE_RE.lastIndex = 0;
@@ -77,8 +79,15 @@ export function extractChCaseReferences(text: string): ChCaseReference[] {
   }
 
   found.sort((a, b) => a.index - b.index);
+  return found;
+}
+
+/** Extract CH case references in document order, deduplicated on the
+ *  normalized form. ATF (fr) and DTF (it) are the same reporter as BGE (de)
+ *  and normalise to the German form the corpus stores in docket_number. */
+export function extractChCaseReferences(text: string): ChCaseReference[] {
   const seen = new Set<string>();
-  return found.filter(r => {
+  return collectChReferenceOccurrences(text).filter(r => {
     if (seen.has(r.normalized)) return false;
     seen.add(r.normalized);
     return true;
@@ -96,7 +105,7 @@ const QUOTE_RE = /«([^«»]+)»|“([^“”]+)”|"([^"]+)"/g;
  *  300 chars, else following within 150. Short quotes («ні») are emphasis,
  *  not holdings, and are skipped. */
 export function extractChQuotedClaims(text: string): ChQuotedClaim[] {
-  const refs = extractChCaseReferences(text);
+  const refs = collectChReferenceOccurrences(text);
   if (refs.length === 0) return [];
 
   const out: ChQuotedClaim[] = [];
