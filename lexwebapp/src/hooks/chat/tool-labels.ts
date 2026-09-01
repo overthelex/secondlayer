@@ -62,6 +62,7 @@ export const TOOL_LABELS: Record<string, string> = {
   ch_get_act_text: 'Текст акта на дату (Швейцарія)',
   ch_get_citation_graph: 'Граф цитувань рішення (Швейцарія)',
   ch_check_precedent_status: 'Статус прецеденту (Швейцарія)',
+  ch_verify_citations: 'Перевірка цитувань (Швейцарія)',
   ch_search_companies: 'Пошук компаній Швейцарії (Zefix)',
   ch_get_company: 'Компанія Швейцарії: реєстр, SHAB, FINMA, SECO',
 };
