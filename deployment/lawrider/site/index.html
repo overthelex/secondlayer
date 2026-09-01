@@ -97,6 +97,7 @@
   .specs td:first-child{color:var(--muted);padding-right:20px;hyphens:auto}
   .specs td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .note{font-size:13.5px;color:var(--muted);margin-top:14px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;word-break:break-all}
 
   .band{background:var(--band);color:var(--band-ink);padding:64px 0}
   .band .label{color:var(--band-muted)}
@@ -197,6 +198,7 @@
       <nav>
         <a href="#what" data-i18n="nav1">What it is</a><a href="#data" data-i18n="nav4">Data</a>
         <a href="#evidence" data-i18n="nav2">Evidence</a>
+        <a href="#mcp">MCP</a>
         <a href="#contact" data-i18n="nav3">Contact</a>
       </nav>
       <div class="lang" role="group" aria-label="Language">
@@ -528,6 +530,19 @@
     <p class="note" data-i18n="curNote">Corpus and scorer will be published openly, so the numbers can be re-run by anyone who doubts them.</p>
   </section>
 
+  <section id="mcp" class="wrap">
+    <p class="label" data-i18n="mcpLabel">MCP access</p>
+    <h2 data-i18n="mcpH2">The Swiss corpus, inside your AI assistant</h2>
+    <p data-i18n="mcpP1">The production database is exposed as a Model Context Protocol (MCP) server, so Claude, ChatGPT and other MCP-capable assistants can query it directly: full-text search over 1.2 million Swiss court decisions, the full text of any decision, the citation graph, and every federal act as it stood on any given date. Twelve tools, all read-only, all answering from the same database the figures on this page were counted on.</p>
+    <p data-i18n="mcpP2">A worked example: give the assistant a docket number such as 4A_299/2013 and it resolves the decision, loads its full text, lists every act the court cited — each in the consolidated version in force on the day of the decision — and can then read those versions article by article. It is the point-in-time guarantees above that make that last step honest.</p>
+    <table class="specs">
+      <tr><td data-i18n="mcpSpec1">Endpoint</td><td><code>https://mcp.lawrider.ch/v2/mcp</code></td></tr>
+      <tr><td data-i18n="mcpSpec2">Protocol</td><td data-i18n="mcpSpec2v">MCP over Streamable HTTP, Bearer key</td></tr>
+      <tr><td data-i18n="mcpSpec3">Tools</td><td data-i18n="mcpSpec3v">12, Swiss corpus only, read-only</td></tr>
+    </table>
+    <p data-i18n="mcpP3">Access is by request. Write to <a href="mailto:mcp@lawrider.ch">mcp@lawrider.ch</a> from your professional address, with a line on who you are and what you want to look up; we reply with a key and the connection instructions for your client. The access policy is the one stated below: legal professionals, in-house teams and academic researchers.</p>
+  </section>
+
   <section id="beyond" class="wrap">
     <p class="label" data-i18n="othLabel">Beyond Switzerland</p>
     <h2 data-i18n="othH2">The same database holds 22 further jurisdictions</h2>
@@ -714,6 +729,14 @@
       step2:"<b>Vergleichen.</b> Erledigt. Aufeinanderfolgende Fassungen werden zu einem maschinenlesbaren Änderungsjournal verglichen, sodass sich zu jedem Text nachvollziehen lässt, was er wann abgelöst hat: bisher rund 25'000 Änderungen auf Artikelebene je Sprache.",
       step3:"<b>Messen.</b> In Arbeit. Ein offener Benchmark samt Bewertungsprogramm für genau eine Frage: stützte sich die Antwort auf jene Fassung des Artikels, die am gefragten Stichtag galt?",
       curNote:"Korpus und Bewertungsprogramm werden offen veröffentlicht werden, damit die Zahlen von jedem nachgerechnet werden können, der ihnen misstraut.",
+      mcpLabel:"MCP-Zugang",
+      mcpH2:"Das Schweizer Korpus, direkt im KI-Assistenten",
+      mcpP1:"Die Produktionsdatenbank ist als Model-Context-Protocol-Server (MCP) verfügbar; Claude, ChatGPT und andere MCP-fähige Assistenten können sie direkt abfragen: Volltextsuche über 1,2 Millionen Schweizer Gerichtsentscheide, der Volltext jedes Entscheids, der Zitationsgraph und jeder Bundeserlass in der an einem beliebigen Stichtag geltenden Fassung. Zwölf Werkzeuge, alle nur lesend, alle auf derselben Datenbank, auf der die Zahlen dieser Seite gezählt wurden.",
+      mcpP2:"Ein Beispiel: Man gibt dem Assistenten eine Verfahrensnummer wie 4A_299/2013 — er findet den Entscheid, lädt den Volltext, listet jeden vom Gericht zitierten Erlass auf, jeweils in der am Tag des Entscheids geltenden konsolidierten Fassung, und kann diese Fassungen anschliessend Artikel für Artikel lesen. Erst die Punkt-in-der-Zeit-Garantien oben machen diesen letzten Schritt ehrlich.",
+      mcpSpec1:"Endpunkt",
+      mcpSpec2:"Protokoll", mcpSpec2v:"MCP über Streamable HTTP, Bearer-Schlüssel",
+      mcpSpec3:"Werkzeuge", mcpSpec3v:"12, nur Schweizer Korpus, nur lesend",
+      mcpP3:"Zugang auf Anfrage. Schreiben Sie an <a href=\"mailto:mcp@lawrider.ch\">mcp@lawrider.ch</a> von Ihrer beruflichen Adresse, mit einer Zeile dazu, wer Sie sind und was Sie nachschlagen möchten; wir antworten mit einem Schlüssel und der Verbindungsanleitung für Ihren Client. Es gilt die unten genannte Zugangsregel: Rechtsanwenderinnen und Rechtsanwender, Rechtsabteilungen und Forschende.",
       conLabel:"Kontakt", conH2:"Sprechen Sie mit uns",
       conP1:"Am nützlichsten sind wir für Menschen, die ohnehin vermuten, dass eine KI-Antwort zum Recht geprüft gehört, und die eine Zahl dafür wollen, wie oft sie danebenliegt.",
       conP2:"Lawrider richtet sich an Anwältinnen und Anwälte, Rechtsabteilungen und Forschende. Der Zugang ist auf verifizierte Nutzerinnen und Nutzer beschränkt. Das Angebot richtet sich nicht an die breite Öffentlichkeit oder an Personen, die ihren Rechtsstreit selbst führen, und es stellt keine Rechtsberatung dar.",
@@ -812,6 +835,14 @@
       step2:"<b>Comparer.</b> Fait. Les versions successives sont comparées en un journal des modifications lisible par machine, de sorte que tout texte se rattache à ce qu'il a remplacé et à quelle date : environ 25 000 modifications au niveau de l'article par langue à ce jour.",
       step3:"<b>Mesurer.</b> En cours. Un référentiel ouvert et son évaluateur, pour une seule question : la réponse s'appuyait-elle sur la version de l'article en vigueur à la date demandée ?",
       curNote:"Corpus et évaluateur seront publiés ouvertement, afin que les chiffres puissent être refaits par quiconque en doute.",
+      mcpLabel:"Accès MCP",
+      mcpH2:"Le corpus suisse, dans votre assistant IA",
+      mcpP1:"La base de production est exposée comme serveur Model Context Protocol (MCP) : Claude, ChatGPT et les autres assistants compatibles MCP peuvent l'interroger directement — recherche plein texte sur 1,2 million de décisions judiciaires suisses, texte intégral de chaque décision, graphe de citations, et chaque acte fédéral tel qu'il était en vigueur à une date donnée. Douze outils, tous en lecture seule, tous répondant depuis la même base sur laquelle les chiffres de cette page ont été comptés.",
+      mcpP2:"Un exemple : donnez à l'assistant un numéro de dossier comme 4A_299/2013 — il retrouve la décision, en charge le texte intégral, liste chaque acte cité par le tribunal, chacun dans la version consolidée en vigueur le jour de la décision, puis peut lire ces versions article par article. Ce sont les garanties point-dans-le-temps ci-dessus qui rendent ce dernier pas honnête.",
+      mcpSpec1:"Point d'accès",
+      mcpSpec2:"Protocole", mcpSpec2v:"MCP sur Streamable HTTP, clé Bearer",
+      mcpSpec3:"Outils", mcpSpec3v:"12, corpus suisse uniquement, lecture seule",
+      mcpP3:"L'accès se fait sur demande. Écrivez à <a href=\"mailto:mcp@lawrider.ch\">mcp@lawrider.ch</a> depuis votre adresse professionnelle, avec une ligne sur qui vous êtes et ce que vous souhaitez consulter ; nous répondons avec une clé et les instructions de connexion pour votre client. La règle d'accès est celle énoncée plus bas : professionnels du droit, équipes juridiques internes et chercheurs.",
       conLabel:"Contact", conH2:"Parlons-en",
       conP1:"Nous sommes surtout utiles à ceux qui soupçonnent déjà qu'une réponse d'IA sur le droit mérite d'être vérifiée, et qui veulent un chiffre sur la fréquence de ses erreurs.",
       conP2:"Lawrider s'adresse aux avocats, aux juristes d'entreprise et aux chercheurs. L'accès est réservé aux utilisateurs vérifiés. Le service ne s'adresse ni au grand public ni aux justiciables agissant sans avocat, et ne constitue pas un conseil juridique.",
