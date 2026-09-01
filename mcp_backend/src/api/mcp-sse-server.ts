@@ -17,6 +17,7 @@ import { CostTracker } from '../services/cost-tracker.js';
 import { CreditService } from '../services/credit-service.js';
 import { requestContext } from '../utils/openai-client.js';
 import { V2_TOOL_NAMES } from './curated-mcp-tools.js';
+import { isToolInToolset, filterToolsByToolset } from './mcp-toolset.js';
 
 export interface MCPToolDefinition {
   name: string;
@@ -350,9 +351,11 @@ export class MCPSSEServer {
     // order, which silently dropped the court-decision / ЄДРСР tools (registered later in
     // tool-services.ts) and made this endpoint unusable for case lookups. Filtering by an
     // explicit whitelist keeps the list small for ChatGPT while guaranteeing the right tools.
-    const tools = allTools.filter((t) => V2_TOOL_NAMES.has(t.name));
+    const tools = filterToolsByToolset(allTools.filter((t) => V2_TOOL_NAMES.has(t.name)));
 
-    const missing = [...V2_TOOL_NAMES].filter((n) => !tools.some((t) => t.name === n));
+    // Compare against the registry, not the toolset-filtered list: the toolset gate hides
+    // tools from this deployment, it does not make them missing from the registry.
+    const missing = [...V2_TOOL_NAMES].filter((n) => !allTools.some((t) => t.name === n));
     if (missing.length > 0) {
       logger.warn('[MCP SSE] Curated tools missing from local registry', { missing });
     }
@@ -388,6 +391,20 @@ export class MCPSSEServer {
         error: {
           code: -32602,
           message: 'Invalid params: tool name is required',
+        },
+      });
+      return;
+    }
+
+    // Enforce the deployment toolset on execution, not just on tools/list: a client must
+    // not be able to call a tool outside this deployment's jurisdiction by name.
+    if (!isToolInToolset(name)) {
+      this.sendSSEMessage(res, {
+        jsonrpc: '2.0',
+        id: request.id,
+        error: {
+          code: -32602,
+          message: `Tool '${name}' is not available on this endpoint`,
         },
       });
       return;

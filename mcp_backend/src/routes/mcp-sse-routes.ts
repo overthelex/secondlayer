@@ -19,6 +19,7 @@ import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { V2_TOOL_NAMES } from '../api/curated-mcp-tools.js';
+import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { ChatService } from '../services/chat-service.js';
 import { OAuthService } from '../services/oauth-service.js';
 import { ApiKeyService } from '../services/api-key-service.js';
@@ -188,7 +189,9 @@ export function createMCPSSERoutes(deps: {
         }
         tools = tools.filter((t) => opts.allowedTools!.has(t.name));
       }
-      return { tools };
+      // The missing-tools warning above intentionally runs against the full registry:
+      // the toolset gate hides tools from this deployment, it does not make them missing.
+      return { tools: filterToolsByToolset(tools) };
     });
 
     mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -199,6 +202,15 @@ export function createMCPSSERoutes(deps: {
 
       try {
         logger.info('[MCP] Tool call', { tool: toolName, userId: safeUserId });
+
+        // Enforce the deployment toolset in code (not just tools/list): a client must not
+        // be able to call a tool outside this deployment's jurisdiction by name.
+        if (!isToolInToolset(toolName)) {
+          return {
+            content: [{ type: 'text', text: `Error: tool '${toolName}' is not available on this endpoint.` }],
+            isError: true,
+          };
+        }
 
         // Enforce the v2 whitelist in code (not just tools/list): reject any tool outside
         // the exposed subset so a client can't call a hidden low-level tool by name.
@@ -820,7 +832,7 @@ export function createMCPSSERoutes(deps: {
 
   // GET /mcp - MCP discovery endpoint (public, rate limited)
   router.get('/mcp', mcpDiscoveryRateLimit as any, (_req: Request, res: Response) => {
-    const tools = deps.mcpSSEServer.getAllTools();
+    const tools = filterToolsByToolset(deps.mcpSSEServer.getAllTools());
     res.json({
       protocolVersion: '2024-11-05',
       serverInfo: {

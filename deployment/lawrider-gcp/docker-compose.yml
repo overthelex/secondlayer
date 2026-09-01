@@ -136,6 +136,9 @@ services:
       # closed instead of hitting a wrong host.
       ENABLE_UNIFIED_GATEWAY: "true"
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
+      # lawrider MCP is Swiss-only: every MCP transport advertises and accepts ch_* tools
+      # exclusively (see mcp_backend/src/api/mcp-toolset.ts). UA/UK tools stay on legal.org.ua.
+      MCP_TOOLSET: "ch"
 
       # Identity of this deployment
       PUBLIC_URL: https://lawrider.ch
