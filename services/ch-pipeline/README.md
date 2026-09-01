@@ -107,6 +107,9 @@ HTML documents are an order of magnitude cheaper: 0.16 ms to extract and
     citations          extract raw case/statute citations from `loaded` text
     citations-resolve  resolve those raw edges to acts, editions, articles
                        and court decisions -- no spider, no argument
+    decision-index     refresh ch_decision_index (migration 207), the
+                       inbound-citation aggregates per cited decision --
+                       differential, safe to re-run, no argument
 
 Re-running `index` is the normal ongoing operation (spec section 10) and is
 safe: a row already at `fetched`, `extracted`, `ocr_pending` or `loaded`
@@ -747,12 +750,19 @@ which is a deliberate change of meaning for that column.
 
 ## Citation graph
 
-Three stages, run in this order, that turn `ch_court_decisions.full_text`
+Four stages, run in this order, that turn `ch_court_decisions.full_text`
 into a graph of who cites what: `aliases` (act abbreviation → SR number),
 `citations` (raw edges, per decision), `citations-resolve` (raw edges →
-resolved rows). Migration 199 is the schema: `ch_act_alias`,
+resolved rows), `decision-index` (resolved case edges → per-decision
+inbound aggregates). Migration 199 is the schema: `ch_act_alias`,
 `ch_case_citations`, `ch_legislation_citations`. Migration 200 adds
-`ch_citation_state`, the per-decision queue.
+`ch_citation_state`, the per-decision queue; migration 207 adds
+`ch_decision_index`, the serving-side aggregate (`cited_by_count`,
+`citing_courts`, first/last citing date, keyed on the cited decision's
+ecli). `decision-index` is a differential refresh -- it writes only rows
+whose numbers changed and deletes rows whose inbound edges are gone -- so
+running it at any time is safe and a quiet run reports `upserted=0`. The
+nightly delta runs it automatically after `citations-resolve`.
 
 **The citation stages never write `ch_court_decisions`.** The bookkeeping —
 has this decision's text been scanned, when, how many times has it raised

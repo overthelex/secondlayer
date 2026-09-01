@@ -75,7 +75,8 @@ from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
 from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
-                     citations_stage, diff_stage, extract_stage,
+                     citations_stage, decision_index_stage, diff_stage,
+                     extract_stage,
                      fedlex_pdf_text_stage, fetch_stage, fetch_xml_stage,
                      index_stage, load_stage, parse_akn_stage,
                      project_legacy_stage, provenance_stage,
@@ -926,6 +927,21 @@ def main() -> DeltaReport:
     except Exception as exc:                    # noqa: BLE001 -- see above
         log.exception("delta: the citations-resolve half failed")
         failures.append(("citations-resolve", exc))
+
+    # decision_index_stage aggregates the to_ecli edges the resolve pass
+    # just wrote, so it comes strictly after it -- and it runs even on a
+    # night the resolve failed (its own guard, same shape as every other
+    # tail step): whatever edges are already resolved from earlier nights
+    # still deserve a correct inbound-citation index.
+    index_report = decision_index_stage.DecisionIndexReport()
+    try:
+        index_report = decision_index_stage.run(settings)
+        log.info("delta: decision-index upserted=%d removed=%d total=%d",
+                 index_report.upserted, index_report.removed,
+                 index_report.total)
+    except Exception as exc:                    # noqa: BLE001 -- see above
+        log.exception("delta: the decision-index refresh failed")
+        failures.append(("decision-index", exc))
 
     decisions, legislation = reports["decisions"], reports["legislation"]
     cantonal = reports["cantonal"]

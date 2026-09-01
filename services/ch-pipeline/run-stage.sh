@@ -2,7 +2,7 @@
 # One stage, under supervision, with a log. Usage:
 #
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
-#   citations:    ./run-stage.sh aliases|citations-resolve   (no argument)
+#   citations:    ./run-stage.sh aliases|citations-resolve|decision-index   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
 #                 ./run-stage.sh lexfind-versions [canton]   (CHPIPE_LEXFIND_SCOPE=all|gaps from the env)
@@ -20,8 +20,8 @@
 # `shab-list` it is a number of months to walk (CHPIPE_SHAB_MONTHS; unset
 # means the whole backfill), and for the cantonal stages it is a canton code
 # or a comma-separated list of them (CHPIPE_CANTON; unset means every canton
-# the stage knows). `aliases`, `citations-resolve`, `zefix` and
-# `shab-detail` take no second argument at all, same as the legislation stages
+# the stage knows). `aliases`, `citations-resolve`, `decision-index`, `zefix`
+# and `shab-detail` take no second argument at all, same as the legislation stages
 # below -- shab-detail is bounded by CHPIPE_LIMIT and CHPIPE_SHAB_BUDGET_SECONDS
 # from the environment, which is how the nightly delta stops on the clock.
 set -euo pipefail
@@ -100,7 +100,7 @@ case "$STAGE" in
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend)
+  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

@@ -29,6 +29,8 @@ import { NextcloudTools } from '../api/tools/nextcloud-tools.js';
 import { CourtStatusTools } from '../api/tools/court-status-tools.js';
 import { OpenDataTools } from '../api/tools/opendata-tools.js';
 import { NpaTools } from '../api/tools/npa-tools.js';
+import { ChCitationTools } from '../api/tools/ch-citation-tools.js';
+import { ChVerificationTools } from '../api/tools/ch-verification-tools.js';
 import { ChCourtTools } from '../api/tools/ch-court-tools.js';
 import { ChLegislationTools } from '../api/tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
@@ -184,6 +186,10 @@ export function createToolServices(
   toolRegistry.registerHandler(new NpaTools(coreServices.db));
   toolRegistry.registerHandler(new ChCourtTools(coreServices.db));
   toolRegistry.registerHandler(new ChLegislationTools(coreServices.db));
+  // Case-citation graph + precedent status over ch_case_citations / ch_decision_index
+  toolRegistry.registerHandler(new ChCitationTools(coreServices.db));
+  // Deterministic grounding self-check for external MCP agents (LEXAI-2036)
+  toolRegistry.registerHandler(new ChVerificationTools(coreServices.db));
   // Swiss company registers: Zefix + SHAB gazette + FINMA + SECO sanctions + Kantonsblatt
   toolRegistry.registerHandler(new ChRegistryTools(coreServices.db));
   // Semantic layer over АМКУ decisions (Qdrant amcu_bge_cls); keyword search stays in search_registry
