@@ -111,3 +111,70 @@ def test_only_sil_rows_are_claimed(conn, settings):
                  "source, stage, akn_xml) VALUES (1, 'lw/x', 'fr', '2020-01-01', 'lexwork', 'fetched', '{}')")
     report = sil_parse_stage.run(settings)
     assert report.parsed == 0 and report.failed == 0
+
+
+def test_parse_writes_amendment_provenance_and_change_documents(conn, settings):
+    _fetched(conn)
+    _fetched(conn, act_id=2, url=NE_URL, page=NE_PAGE, date="2026-08-26")
+    report = sil_parse_stage.run(settings)
+    assert report.parsed == 2
+    # GE (I 2 09): 7 notes -> 7 events; 5 distinct adoption dates = 5 documents.
+    ge_docs = dict(conn.execute(
+        "SELECT number, date_decision FROM ch_act_change_document "
+        "WHERE act_id=1 AND jurisdiction='GE'").fetchall())
+    assert len(ge_docs) == 5
+    assert ge_docs["03.05.2024"] == datetime.date(2024, 5, 3)
+    ge_rows = conn.execute(
+        "SELECT p.e_id, p.action, p.as_reference, p.effective_date, p.change_document_id "
+        "FROM ch_article_provenance p JOIN ch_act_version v USING (version_id) "
+        "WHERE v.act_id=1 ORDER BY p.provenance_id").fetchall()
+    assert len(ge_rows) == 7 and all(r[4] is not None for r in ge_rows)
+    art13 = [r for r in ge_rows if r[0] == "art_13"]
+    assert [r[1] for r in art13][:1] == ["repealed"]
+    # NE (916.510.1): 13 events over 12 notes, 5 FO issues.
+    ne_docs = [n for (n,) in conn.execute(
+        "SELECT number FROM ch_act_change_document WHERE act_id=2 ORDER BY number").fetchall()]
+    assert ne_docs == ["FO 1996 N° 32", "FO 2001 N° 16", "FO 2006 N° 45",
+                      "FO 2007 N° 30", "FO 2013 N° 31"]
+    ne_rows = conn.execute(
+        "SELECT p.e_id, p.action, p.as_reference, p.raw_note, p.change_document_id "
+        "FROM ch_article_provenance p JOIN ch_act_version v USING (version_id) "
+        "WHERE v.act_id=2 ORDER BY p.provenance_id").fetchall()
+    assert len(ne_rows) == 13 and all(r[4] is not None for r in ne_rows)
+    art8 = [r for r in ne_rows if r[0] == "art_8"]
+    assert art8 and art8[0][1] == "amended" and art8[0][3].startswith("Teneur selon")
+    assert report.provenance_rows == 7 + 13 and report.change_documents == 5 + 5
+    assert report.provenance_linked == 20
+
+
+def test_reprovenance_rebuilds_from_stored_pages_without_refetching(conn, settings):
+    _fetched(conn)
+    _fetched(conn, act_id=2, url=NE_URL, page=NE_PAGE, date="2026-08-26")
+    sil_parse_stage.run(settings)
+    conn.execute("DELETE FROM ch_article_provenance")
+    conn.execute("DELETE FROM ch_act_change_document")
+    report = sil_parse_stage.run_reprovenance(settings)
+    assert report.parsed == 2 and report.failed == 0
+    assert report.provenance_rows == 20 and report.change_documents == 10
+    # one canton only, via the same CHPIPE_CANTON prefix the fetch stage uses
+    conn.execute("DELETE FROM ch_article_provenance")
+    conn.execute("DELETE FROM ch_act_change_document")
+    ge_only = sil_parse_stage.run_reprovenance(settings, canton_code="GE")
+    assert ge_only.parsed == 1 and ge_only.provenance_rows == 7
+    assert conn.execute("SELECT count(*) FROM ch_act_change_document").fetchone()[0] == 5
+    # articles, text and dates are untouched by the rebuild
+    assert conn.execute("SELECT count(*) FROM ch_act_article").fetchone()[0] == 34
+
+
+def test_gate_f_amendment_counters_are_non_zero_for_ge_and_ne(conn, settings):
+    """Deliverable K3-SIL/TI: the two SIL cantons had ZERO change documents
+    and zero provenance; after one parse Gate F must say otherwise."""
+    from chpipe import reports_cantonal
+    _fetched(conn)
+    _fetched(conn, act_id=2, url=NE_URL, page=NE_PAGE, date="2026-08-26")
+    sil_parse_stage.run(settings)
+    for canton, docs, rows in (("GE", 5, 7), ("NE", 5, 13)):
+        row = reports_cantonal.gate_f(conn, canton)[0]
+        assert row["change_documents"] == docs, canton
+        assert row["provenance_rows"] == rows and row["provenance_linked"] == rows, canton
+        assert row["change_documents_unlinked"] == 0, canton

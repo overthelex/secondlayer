@@ -31,9 +31,13 @@ Steps 1 and 4 do not get that same second chance deliberately: ch_act_alias
 and ch_court_decisions both grow over time (a new alias, a newly indexed
 decision), and re-scanning the full unresolved_abbr/unresolved backlog on
 every run to catch that would turn a bounded set-based pass into an
-unbounded one. CHPIPE_CIT_RESOLVE_ALL=1 is the deliberate, operator-driven
-way to pay that cost when the alias map or the decision corpus has grown
-enough to be worth it.
+unbounded one. Two deliberate, operator-driven ways to pay that cost exist:
+CHPIPE_CIT_RESOLVE_ALL=1 recomputes everything from scratch, and
+CHPIPE_CIT_RETRY_UNRESOLVED=1 revisits ONLY the unresolved_abbr backlog in
+id-ordered batches (CHPIPE_CIT_BATCH, default 100000) without touching a
+single resolved row -- the right tool when the alias map grew (e.g. the
+cantonal aliases of migration 206) and the 15.7M already-resolved rows have
+no reason to be rewritten. See _RETRY_ACTS.
 
 CHPIPE_CIT_RESOLVE_ALL=1 (resolve_all=True): reset every column this stage
 owns back to NULL/false first (only on rows a previous run actually touched --
@@ -85,12 +89,35 @@ UPDATE ch_case_citations
 """
 
 # Step 1: abbr_raw -> act. Design rule 1 -- among the acts ch_act_alias names
-# for this abbreviation, prefer the one whose alias is written in the
-# citation's own language, then the one whose [date_entry_force,
+# for this abbreviation, prefer a FEDERAL alias over the citing canton's
+# (see below), then the one whose alias is written in the citation's own
+# language, then the one whose [date_entry_force,
 # date_no_longer_in_force) actually contains from_date; failing that (no
 # from_date, or none covers it), prefer the one currently in force
 # (enforcement_status = 0), then the one with the latest date_entry_force --
 # a deterministic tiebreak over a's act_id closes out any remaining tie.
+#
+# Jurisdiction (migration 206): a cantonal abbreviation is only meaningful
+# within its own canton -- a court decision cites its own canton's law, and
+# "LPJA" names a different act in BE, VS and JU. The citing decision's
+# canton comes from ch_court_decisions.canton (index_stage fills it from the
+# spider name; 1,222,921 of 1,222,924 prod rows carry it, 2026-08-31), via a
+# LEFT JOIN on from_ecli -- so a citation whose decision row is gone, or
+# whose canton is NULL, is offered federal aliases only. The candidate set
+# is the federal aliases plus the CITING canton's, never another canton's.
+#
+# Precedence: `(al.jurisdiction = 'CH') DESC` ranks every federal candidate
+# ahead of every cantonal one, so an abbreviation that exists both federally
+# and in the citing canton resolves federally -- the status quo, and
+# bit-identical for every citation a genuine federal alias already resolved
+# (for those, all previous candidates tie on the new first key). The
+# cantonal alias only wins when no federal alias carries the abbreviation at
+# all -- which is exactly the population that used to land at
+# unresolved_abbr. The join also pins a.jurisdiction = al.jurisdiction:
+# cantonal collections reuse each other's (and the federal) numbering plans,
+# so sr_number alone would let a canton's alias resolve to whatever federal
+# act happens to share the number (87,082 prod citations had resolved that
+# way through the pre-206 leaked aliases).
 #
 # Language RANKS the candidates, it does not filter them: a citation's `lang`
 # is what the extractor inferred, and it falls back to 'de' whenever no
@@ -110,21 +137,18 @@ UPDATE ch_case_citations
 # touches gets a terminal match_method, resolved or not, so a plain rowcount
 # here would count attempts while steps 2/3 count successes and the four
 # numbers in one report line would not be comparable.
-_RESOLVE_ACTS = """
-WITH updated AS (
-UPDATE ch_legislation_citations c
-   SET sr_number = best.sr_number,
-       act_id = best.act_id,
-       match_method = CASE WHEN best.act_id IS NULL
-                            THEN 'unresolved_abbr' ELSE 'act_only' END
-  FROM (SELECT * FROM ch_legislation_citations WHERE match_method IS NULL) c2
-  LEFT JOIN LATERAL (
+# The LATERAL body is shared verbatim between the first pass over
+# match_method IS NULL (_RESOLVE_ACTS) and the batched retry over
+# unresolved_abbr rows (_RETRY_ACTS): one copy of the ranking, two WHEREs.
+_BEST_ACT_LATERAL = """
        SELECT a.sr_number, a.act_id
          FROM ch_act_alias al
          JOIN ch_act a ON a.sr_number = al.sr_number
-                      AND a.jurisdiction = 'CH'
+                      AND a.jurisdiction = al.jurisdiction
         WHERE al.abbr = c2.abbr_raw
+          AND (al.jurisdiction = 'CH' OR al.jurisdiction = c2.from_canton)
         ORDER BY
+          (al.jurisdiction = 'CH') DESC,
           (al.lang = c2.lang) DESC,
           (c2.from_date IS NOT NULL
              AND a.date_entry_force IS NOT NULL
@@ -136,11 +160,60 @@ UPDATE ch_legislation_citations c
           a.date_entry_force DESC NULLS LAST,
           a.act_id
         LIMIT 1
-  ) best ON true
+"""
+
+_RESOLVE_ACTS = f"""
+WITH updated AS (
+UPDATE ch_legislation_citations c
+   SET sr_number = best.sr_number,
+       act_id = best.act_id,
+       match_method = CASE WHEN best.act_id IS NULL
+                            THEN 'unresolved_abbr' ELSE 'act_only' END
+  FROM (SELECT c0.*, d.canton AS from_canton
+          FROM ch_legislation_citations c0
+          LEFT JOIN ch_court_decisions d ON d.ecli = c0.from_ecli
+         WHERE c0.match_method IS NULL) c2
+  LEFT JOIN LATERAL ({_BEST_ACT_LATERAL}) best ON true
  WHERE c.id = c2.id
 RETURNING c.act_id
 )
 SELECT count(*) AS resolved FROM updated WHERE act_id IS NOT NULL
+"""
+
+# The batched retry pass (CHPIPE_CIT_RETRY_UNRESOLVED=1): revisit ONLY the
+# rows already stamped 'unresolved_abbr', in id-ordered batches, against the
+# alias map as it stands today. This is the operator-driven way to pay for a
+# grown alias map without _RESET_LEGISLATION's cost of recomputing the
+# 15.7M rows that already resolved -- those are never touched: the batch
+# SELECT's WHERE is the only row source, and a row that fails again is NOT
+# rewritten (the UPDATE requires best.act_id IS NOT NULL), so the pass
+# leaves 'unresolved_abbr' rows byte-identical instead of churning dead
+# tuples through a 17.6M-row table. Progress is by id cursor, not by
+# re-claiming: a still-unresolved row keeps its terminal stamp and the next
+# batch starts past it, so the loop terminates after one sweep.
+_RETRY_ACTS = f"""
+WITH batch AS (
+    SELECT c0.id, c0.abbr_raw, c0.lang, c0.from_date, d.canton AS from_canton
+      FROM ch_legislation_citations c0
+      LEFT JOIN ch_court_decisions d ON d.ecli = c0.from_ecli
+     WHERE c0.match_method = 'unresolved_abbr' AND c0.id > %(after)s
+     ORDER BY c0.id
+     LIMIT %(limit)s
+),
+updated AS (
+UPDATE ch_legislation_citations c
+   SET sr_number = best.sr_number,
+       act_id = best.act_id,
+       match_method = 'act_only'
+  FROM batch c2
+  JOIN LATERAL ({_BEST_ACT_LATERAL}) best ON true
+ WHERE c.id = c2.id
+   AND best.act_id IS NOT NULL
+RETURNING c.id
+)
+SELECT (SELECT max(id) FROM batch) AS last_id,
+       (SELECT count(*) FROM batch) AS attempted,
+       (SELECT count(*) FROM updated) AS resolved
 """
 
 # Step 2: act_id (+ lang, from_date) -> edition. Design rule 2 -- the parsed
@@ -263,29 +336,57 @@ SELECT count(*) AS resolved FROM updated WHERE to_ecli IS NOT NULL
 """
 
 
-def run(settings: Settings, resolve_all: bool = False) -> ResolveReport:
+def run(settings: Settings, resolve_all: bool = False,
+        retry_unresolved: bool = False, retry_batch: int = 100_000) -> ResolveReport:
+    if resolve_all and retry_unresolved:
+        raise ValueError(
+            "CHPIPE_CIT_RESOLVE_ALL and CHPIPE_CIT_RETRY_UNRESOLVED are "
+            "mutually exclusive: one recomputes everything, the other only "
+            "the unresolved_abbr backlog")
     report = ResolveReport()
     conn = db.connect(settings)
     try:
         with conn.cursor() as cur:
-            if resolve_all:
-                cur.execute(_RESET_LEGISLATION)
-                cur.execute(_RESET_CASES)
+            if retry_unresolved:
+                # Only the unresolved_abbr backlog, in id-ordered batches --
+                # see _RETRY_ACTS. Resolved rows are never touched, and rows
+                # that fail again are not rewritten, so the cursor (not a
+                # re-claim) is what guarantees termination.
+                after = 0
+                while True:
+                    cur.execute(_RETRY_ACTS,
+                                {"after": after, "limit": retry_batch})
+                    row = cur.fetchone()
+                    if row["last_id"] is None:
+                        break
+                    report.acts += row["resolved"]
+                    log.info("retry: attempted=%d resolved=%d through id %d",
+                             row["attempted"], row["resolved"], row["last_id"])
+                    after = row["last_id"]
+            else:
+                if resolve_all:
+                    cur.execute(_RESET_LEGISLATION)
+                    cur.execute(_RESET_CASES)
 
-            # fetchone(), not rowcount: both entry points are wrapped in a
-            # counting CTE (see _RESOLVE_ACTS) so all four counters report
-            # resolutions rather than attempts.
-            cur.execute(_RESOLVE_ACTS)
-            report.acts = cur.fetchone()["resolved"]
+                # fetchone(), not rowcount: both entry points are wrapped in
+                # a counting CTE (see _RESOLVE_ACTS) so all four counters
+                # report resolutions rather than attempts.
+                cur.execute(_RESOLVE_ACTS)
+                report.acts = cur.fetchone()["resolved"]
 
+            # Steps 2 and 3 run in every mode: their own WHEREs already
+            # select exactly the rows that deserve another look (act_only,
+            # and editions still missing an article) -- including the ones
+            # the retry loop above just promoted to act_only.
             cur.execute(_RESOLVE_EDITIONS)
             report.editions = cur.rowcount
 
             cur.execute(_RESOLVE_ARTICLES)
             report.articles = cur.rowcount
 
-            cur.execute(_RESOLVE_CASES)
-            report.cases = cur.fetchone()["resolved"]
+            if not retry_unresolved:
+                cur.execute(_RESOLVE_CASES)
+                report.cases = cur.fetchone()["resolved"]
     finally:
         conn.close()
     return report
@@ -307,7 +408,10 @@ def main() -> ResolveReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_IO)
     resolve_all = os.environ.get("CHPIPE_CIT_RESOLVE_ALL", "") not in ("", "0")
-    result = run(Settings.from_env(), resolve_all=resolve_all)
+    retry = os.environ.get("CHPIPE_CIT_RETRY_UNRESOLVED", "") not in ("", "0")
+    retry_batch = int(os.environ.get("CHPIPE_CIT_BATCH", "") or 100_000)
+    result = run(Settings.from_env(), resolve_all=resolve_all,
+                 retry_unresolved=retry, retry_batch=retry_batch)
     log.info("acts=%d editions=%d articles=%d cases=%d",
              result.acts, result.editions, result.articles, result.cases)
     return result

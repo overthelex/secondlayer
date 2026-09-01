@@ -1,14 +1,18 @@
-"""Ticino flat page -> ch_act_article rows and plain text -- the TI twin of
-cantonal_parse_stage, without the provenance half: the portal's footnotes
-name the amending decree ("Modifica dell'art. 4 cpv. 1 approvata con
-votazione popolare del 25.9.2016 ... in vigore dal 1.4.2018 - BU 2018, 81")
-but there is no change-document index to link them to, so they are kept
-as the article's notes (akn.Article.notes) and nothing else is claimed.
+"""Ticino flat page -> ch_act_article rows, plain text AND amendment
+provenance -- the TI twin of cantonal_parse_stage. The portal publishes no
+change-document index, but its footnotes name each amendment ("Modifica
+dell'art. 4 cpv. 1 approvata con votazione popolare del 25.9.2016 ... in
+vigore dal 1.4.2018 - BU 2018, 81"), and portal_amendments reads them: one
+ch_article_provenance row per parsed event, the act's distinct Bollettino
+ufficiale references upserted as its ch_act_change_document rows.
 
 Per claimed row (stage 'fetched', source 'ti_rl'):
   1. ti_rl.parse_act(page) -> articles, full_text, meta;
   2. parse_akn_stage.store_articles() -- the same replace-not-upsert
      write the federal and Lexwork sides use;
+  2b. portal_amendments.events_of() over the articles' notes -> store():
+     the version's provenance rows replaced and the act's change documents
+     upserted, in the same transaction as the articles;
   3. the act's date_document / date_entry_force from the page header and
      footer, COALESCE'd onto ch_act (the list gives date_document already;
      "Entrata in vigore" only the page has);
@@ -24,6 +28,11 @@ parsers on 2026-08-31 after the F3/K9 audit found 12 in-force TI acts
 empty_articles. A page the parser refuses outright (no content div) fails
 with the parser's message and the normal retry budget, since the fetch
 stage should not have stored it.
+
+CHPIPE_REPROVENANCE=1 is the offline backfill (the CHPIPE_RESPLIT pattern):
+no download, no claim -- it walks the rows already at 'parsed', re-parses
+the STORED page and rewrites only the provenance rows and change documents,
+leaving articles, full_text and dates exactly as they are.
 """
 from __future__ import annotations
 
@@ -31,7 +40,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 
-from .. import db, throttle, ti_rl
+from .. import db, portal_amendments, throttle, ti_rl
 from ..config import Settings
 from . import parse_akn_stage
 
@@ -47,6 +56,9 @@ class TiParseReport:
     failed: int = 0
     no_articles: int = 0
     short_text: int = 0
+    provenance_rows: int = 0
+    provenance_linked: int = 0
+    change_documents: int = 0
     # (act_id, lang) of every edition promoted to 'parsed' -- what the
     # nightly delta narrows diff and project-legacy on.
     acts: set[tuple[int, str]] = field(default_factory=set)
@@ -107,8 +119,12 @@ def run(settings: Settings, limit: int | None = None) -> TiParseReport:
                         report.parsed += 1
                         report.acts.add((row["act_id"], row["lang"]))
                         continue
+                    note_events = portal_amendments.events_of("TI", articles)
                     with conn.transaction():
                         parse_akn_stage.store_articles(conn, row["version_id"], articles)
+                        stored = portal_amendments.store(
+                            conn, row["version_id"], row["act_id"], "TI",
+                            note_events, platform="ti_rl")
                         conn.execute(_ACT_DATES, (meta.get("date_document"),
                                                   meta.get("date_entry_force"), row["act_id"]))
                     db.complete_version(conn, row["version_id"], "parsed", full_text=text)
@@ -124,11 +140,70 @@ def run(settings: Settings, limit: int | None = None) -> TiParseReport:
                 report.parsed += 1
                 report.acts.add((row["act_id"], row["lang"]))
                 report.articles += len(articles)
+                report.provenance_rows += stored.rows
+                report.provenance_linked += stored.linked
+                report.change_documents += stored.documents
             if remaining is not None:
                 remaining -= len(rows)
-            log.info("TI parsed=%d articles=%d failed=%d no_articles=%d short_text=%d",
+            log.info("TI parsed=%d articles=%d failed=%d no_articles=%d short_text=%d "
+                     "provenance=%d (linked=%d) documents=%d",
                      report.parsed, report.articles, report.failed, report.no_articles,
-                     report.short_text)
+                     report.short_text, report.provenance_rows, report.provenance_linked,
+                     report.change_documents)
+    finally:
+        conn.close()
+    return report
+
+
+# Keyset pagination, the CHPIPE_RESPLIT pattern (fedlex_pdf_text_stage).
+_REPROVENANCE_ROWS = (
+    "SELECT version_id, act_id, akn_xml FROM ch_act_version "
+    "WHERE source = 'ti_rl' AND stage = 'parsed' AND akn_xml IS NOT NULL "
+    "AND version_id > %s ORDER BY version_id LIMIT %s")
+
+REPROVENANCE_BATCH = 100
+
+
+def run_reprovenance(settings: Settings, limit: int | None = None) -> TiParseReport:
+    """CHPIPE_REPROVENANCE=1: provenance rows and change documents for the
+    editions already at 'parsed', from their stored pages alone -- no
+    download, no claim, no article or date rewrite. Idempotent the way
+    portal_amendments.store() is: rows replaced per version, documents
+    upserted on the stable reference hash."""
+    report = TiParseReport()
+    conn = db.connect(settings)
+    last_id = 0
+    remaining = limit
+    try:
+        while True:
+            size = REPROVENANCE_BATCH if remaining is None else min(REPROVENANCE_BATCH, remaining)
+            if size <= 0:
+                break
+            rows = conn.execute(_REPROVENANCE_ROWS, (last_id, size)).fetchall()
+            if not rows:
+                break
+            for row in rows:
+                last_id = row["version_id"]
+                try:
+                    articles, _, _ = ti_rl.parse_act(row["akn_xml"])
+                    note_events = portal_amendments.events_of("TI", articles)
+                    with conn.transaction():
+                        stored = portal_amendments.store(
+                            conn, row["version_id"], row["act_id"], "TI",
+                            note_events, platform="ti_rl")
+                except Exception as exc:                        # noqa: BLE001
+                    log.error("version %s: reprovenance failed: %s", row["version_id"], exc)
+                    report.failed += 1
+                    continue
+                report.parsed += 1
+                report.provenance_rows += stored.rows
+                report.provenance_linked += stored.linked
+                report.change_documents += stored.documents
+            if remaining is not None:
+                remaining -= len(rows)
+            log.info("TI reprovenance parsed=%d provenance=%d (linked=%d) documents=%d "
+                     "failed=%d", report.parsed, report.provenance_rows,
+                     report.provenance_linked, report.change_documents, report.failed)
     finally:
         conn.close()
     return report
@@ -141,10 +216,18 @@ def main() -> TiParseReport:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_CPU)
-    result = run(Settings.from_env(),
-                 limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None)
-    log.info("parsed=%d articles=%d failed=%d no_articles=%d short_text=%d", result.parsed,
-             result.articles, result.failed, result.no_articles, result.short_text)
+    limit = int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None
+    if os.environ.get("CHPIPE_REPROVENANCE") == "1":
+        result = run_reprovenance(Settings.from_env(), limit=limit)
+        log.info("reprovenance parsed=%d provenance=%d (linked=%d) documents=%d failed=%d",
+                 result.parsed, result.provenance_rows, result.provenance_linked,
+                 result.change_documents, result.failed)
+        return result
+    result = run(Settings.from_env(), limit=limit)
+    log.info("parsed=%d articles=%d failed=%d no_articles=%d short_text=%d "
+             "provenance=%d (linked=%d) documents=%d", result.parsed,
+             result.articles, result.failed, result.no_articles, result.short_text,
+             result.provenance_rows, result.provenance_linked, result.change_documents)
     if result.no_articles or result.short_text:
         log.warning("RETIRED: %d page(s) with no article and %d with under %d chars; "
                     "reasons in last_error, retry after fixing ti_rl.py",

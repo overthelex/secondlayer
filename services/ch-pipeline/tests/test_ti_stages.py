@@ -292,3 +292,63 @@ def test_limit_bounds_parse(conn, settings):
     _fetch(settings, Host(), limit=4)
     assert ti_parse_stage.run(settings, limit=1).parsed == 1
     assert conn.execute("SELECT count(*) FROM ch_act_version WHERE stage='fetched'").fetchone()[0] == 1
+
+
+def test_parse_writes_amendment_provenance_and_change_documents(conn, settings):
+    _acts(settings, Host())
+    _fetch(settings, Host(), limit=4)
+    report = ti_parse_stage.run(settings)
+    assert report.parsed == 2
+    # the trimmed constitution: 8 notes -> 8 events, every one carrying a
+    # "BU {year}, {page}" reference -> 6 distinct documents
+    act_id = conn.execute("SELECT act_id FROM ch_act WHERE sr_number='101.000'").fetchone()[0]
+    docs = dict(conn.execute(
+        "SELECT number, date_decision FROM ch_act_change_document WHERE act_id=%s",
+        (act_id,)).fetchall())
+    assert len(docs) == 6 and docs["BU 2018, 81"] == datetime.date(2016, 9, 25)
+    # BU 2016, 193 is cited by art. 9a and 96 with the same popular-vote date
+    assert docs["BU 2016, 193"] == datetime.date(2013, 9, 22)
+    rows = conn.execute(
+        "SELECT p.e_id, p.action, p.as_reference, p.effective_date, p.source_act_date, "
+        "p.raw_note, p.change_document_id FROM ch_article_provenance p "
+        "JOIN ch_act_version v USING (version_id) WHERE v.act_id=%s ORDER BY p.provenance_id",
+        (act_id,)).fetchall()
+    assert len(rows) == 8 and all(r[6] is not None for r in rows)
+    by_eid = {}
+    for r in rows:
+        by_eid.setdefault(r[0], []).append(r)
+    assert by_eid["art_67"][0][1] == "repealed"
+    assert by_eid["art_9a"][0][1] == "inserted"
+    art4 = by_eid["art_4"]
+    assert [r[2] for r in art4] == ["BU 2018, 81", "BU 2011, 345", "BU 2020, 63"]
+    assert art4[0][3] == datetime.date(2018, 4, 1)          # in vigore dal 1.4.2018
+    assert art4[0][5].startswith("Modifica dell’art. 4 cpv. 1")
+    assert report.provenance_rows >= 8 and report.change_documents >= 6
+    assert report.provenance_linked >= 8
+
+
+def test_reprovenance_rebuilds_from_stored_pages_without_refetching(conn, settings):
+    _acts(settings, Host())
+    _fetch(settings, Host(), limit=4)
+    ti_parse_stage.run(settings)
+    conn.execute("DELETE FROM ch_article_provenance")
+    conn.execute("DELETE FROM ch_act_change_document")
+    report = ti_parse_stage.run_reprovenance(settings)
+    assert report.parsed == 2 and report.failed == 0
+    assert conn.execute("SELECT count(*) FROM ch_article_provenance").fetchone()[0] == 8 + 1
+    assert conn.execute("SELECT count(*) FROM ch_act_change_document").fetchone()[0] == 6 + 1
+    # a second pass converges on the same rows
+    again = ti_parse_stage.run_reprovenance(settings)
+    assert again.provenance_rows == report.provenance_rows
+    assert conn.execute("SELECT count(*) FROM ch_article_provenance").fetchone()[0] == 8 + 1
+
+
+def test_gate_f_amendment_counters_are_non_zero_for_ti(conn, settings):
+    from chpipe import reports_cantonal
+    _acts(settings, Host())
+    _fetch(settings, Host(), limit=4)
+    ti_parse_stage.run(settings)
+    row = reports_cantonal.gate_f(conn, "TI")[0]
+    assert row["change_documents"] == 7
+    assert row["provenance_rows"] == 9 and row["provenance_linked"] == 9
+    assert row["change_documents_unlinked"] == 0

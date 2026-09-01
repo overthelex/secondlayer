@@ -844,26 +844,43 @@ against the old flag column took 22+ minutes and bloated the full-text GIN.
 of the whole sequence (aliases → reset → citations → resolve-all → report).
 
 **`aliases`** seeds `ch_act_alias` — the abbreviation a decision actually
-writes ("OR", "CO", "Cst.", "StGB") mapped to the SR number the legislation
-corpus keys on — from three additive, idempotent sources: `ch_act`'s own
-German `abbreviation` column, the abbreviation Fedlex puts in parentheses at
-the end of each language's title, and a hand-curated map for the acts whose
+writes ("OR", "CO", "Cst.", "StGB", "LPA-VD") mapped to the systematic
+number the legislation corpus keys on — from four idempotent sources, each
+row under the jurisdiction it belongs to (migration 206: `'CH'` for
+federal, the two-letter canton code otherwise): `ch_act`'s own German
+`abbreviation` column on the FEDERAL acts (`fedlex_abbreviation`), the
+abbreviation the source puts in parentheses at the end of each language's
+title for federal and cantonal acts alike (`title_paren`), the cantonal
+acts' own `abbreviation` column (`cantonal_abbreviation` — the Lexwork
+platforms supply it), and a hand-curated map for the federal acts whose
 title carries no parenthesised abbreviation at all (the big codes: OR, ZGB,
 StGB, Cst. …). Re-running it after `ch_act` gains new acts, or after the
-curated map grows, costs nothing beyond what actually changed.
+curated map grows, costs nothing beyond what actually changed; the derived
+sources are also reconciled per (jurisdiction, lang) on every run, so a row
+whose act no longer claims the abbreviation is deleted, not kept forever.
+The `jurisdiction = 'CH'` filter on the federal pass is load-bearing:
+before migration 206 it read the cantonal rows migration 201 had put into
+`ch_act` too, and leaked 5,934 cantonal abbreviations into the federal
+alias set — 87,082 citations resolved through them to whatever federal act
+happened to share the systematic number.
 
-**A title-derived abbreviation two acts both claim is not seeded at all.**
+**A title-derived abbreviation two acts of the same jurisdiction both claim
+is not seeded at all.**
 "(KV)" ends the title of every cantonal constitution filed under SR 131.xxx,
 so seeding it maps one abbreviation onto 26 acts — and a Uri court's
 "Art. 12 KV" then resolves to whichever of them step 1's ranking reaches
 first (it resolved to Appenzell's). An alias that names 26 acts identifies
 none of them, and a citation left at `unresolved_abbr` is visible in
 `reports_cit`'s top-unresolved list while a citation resolved to the wrong
-act is visible nowhere. The skip is per (abbr, lang) and per SR number — two
-`ch_act` rows of the same act are one act — and it applies to `title_paren`
-only: `curated` is hand-checked and `fedlex_abbreviation` is Fedlex's own
-assertion about one act. Each run logs how many abbreviations it skipped per
-language.
+act is visible nowhere. The skip is per (jurisdiction, abbr, lang) and per
+systematic number — two `ch_act` rows of the same act are one act, and the
+same abbreviation in two CANTONS is two independent aliases, because the
+resolver never offers a citation another canton's — and it applies to
+`title_paren` and `cantonal_abbreviation` (pooled per canton: within-canton
+duplicates are real — AG carries 26 abbreviations claimed by two acts each),
+but not to `curated` (hand-checked) or `fedlex_abbreviation` (Fedlex's own
+assertion about one act). Each run logs how many abbreviations it skipped
+per jurisdiction and language.
 
 **What `citations` deliberately does not extract.** A 200-row judged sample
 of resolved statute citations from the first full backfill measured 98%
@@ -872,10 +889,11 @@ four rules in `chpipe/citations.py`, each trading a handful of real
 citations for a much larger number of invented ones:
 
 - A **cantonal suffix** stays on the abbreviation (`LPA-VD`, `LPA-GE`, and
-  the other 24 canton codes). `ch_act_alias` carries federal acts only, so
-  these stay at `unresolved_abbr` — which is right: cut down to "LPA" they
-  resolved to the *federal* animal-protection act (SR 455) the court never
-  mentioned.
+  the other 24 canton codes). Cut down to "LPA" they resolved to the
+  *federal* animal-protection act (SR 455) the court never mentioned; kept
+  whole, they resolve through the citing canton's own aliases when the
+  canton's collection carries the abbreviation (migration 206), and stay at
+  the truthful `unresolved_abbr` when it does not.
 - A **single-digit ordinance suffix** stays too (`OPP 2`, `BVV 2`) — "OPP"
   alone resolved to an unrelated aviation ordinance. Bounded to an
   abbreviation of at least three letters followed by one space, one digit
@@ -944,8 +962,19 @@ from forever.
 order because each one's input is the previous one's output, over the
 raw edges `citations` wrote:
 
-1. **act** — `abbr_raw` → `ch_act_alias` → `sr_number`/`act_id`. Among the
-   acts `ch_act_alias` names for that abbreviation, prefer the one whose
+1. **act** — `abbr_raw` → `ch_act_alias` → `sr_number`/`act_id`. The
+   candidate aliases are the FEDERAL ones plus the CITING canton's, never
+   another canton's: the citing decision's canton comes from
+   `ch_court_decisions.canton` via a LEFT JOIN on `from_ecli` (a citation
+   whose decision row is gone gets federal aliases only), and a federal
+   alias outranks the citing canton's — an abbreviation existing both
+   federally and cantonally resolves federally, the status quo, so the
+   canton's act only wins when no federal alias carries the abbreviation at
+   all, which is exactly the population that used to sit at
+   `unresolved_abbr`. The join also pins `a.jurisdiction =
+   al.jurisdiction`, so a cantonal alias can never resolve to a federal act
+   that merely shares the systematic number. Among the remaining
+   candidates, prefer the one whose
    alias is written in the citation's own language, then the one whose
    `[date_entry_force, date_no_longer_in_force)` actually contains the
    citation's `from_date`; failing that (no `from_date`, or none covers it),
@@ -1029,6 +1058,21 @@ the same four statements, which recompute everything now that
 `match_method` is `NULL` again everywhere.
 
     CHPIPE_CIT_RESOLVE_ALL=1 ./run-stage.sh citations-resolve
+
+**`CHPIPE_CIT_RETRY_UNRESOLVED=1`** is the cheaper of the two: it revisits
+ONLY the rows already stamped `unresolved_abbr`, in id-ordered batches
+(`CHPIPE_CIT_BATCH`, default 100000, walks
+`idx_ch_leg_cit_unresolved_abbr` from migration 206), against the alias map
+as it stands today — the right tool when the alias map grew (the cantonal
+aliases, a new curated entry) and the ~15.7M already-resolved rows have no
+reason to be rewritten. Resolved rows are never touched, a row that fails
+again is not even rewritten in place (no dead-tuple churn through a
+17.6M-row table), and progress is by id cursor rather than re-claiming, so
+one sweep terminates. Steps 2 and 3 then run as always and chase the rows
+the sweep just promoted to `act_only`; case citations are not touched at
+all. Mutually exclusive with `CHPIPE_CIT_RESOLVE_ALL`.
+
+    CHPIPE_CIT_RETRY_UNRESOLVED=1 ./run-stage.sh citations-resolve
 
 **The `2021-01-01` placeholder.** `decision_date` on the CH_BGer rows
 migration 196 enrolled is `2021-01-01` for every one of them — the source's
@@ -1718,7 +1762,7 @@ Italian only.
 |---|---|
 | `ti-acts` | the list -> `ch_act` (jurisdiction TI, `title_it`, `in_force` from LexFind) + one `discovered` edition per act. One request; idempotent, a rerun creates no second row and reopens an edition only when LexFind's date moved |
 | `ti-fetch` | the flat page into `akn_xml` (+ audit copy `raw/ti_rl/{version_id}.html`), one request a second, sequential. The portal answers an unknown id with HTTP 200 and "L'atto normativo cercato non è presente!" -- that body fails the row with that reason (`not_present` in the report) |
-| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason |
+| `ti-parse` | articles (`Art. N`, `bis`/`ter` joined to the number, capoverso numbers spaced, footnotes as `notes`, marginal notes from the bold paragraph before the article), `full_text`, and the act's `date_document` / `date_entry_force` from the page. A page with no article or under 200 chars is retired at once with `no_articles:` / `short_text:` as the reason. Amendment provenance from the footnotes -- see "Portal amendments" below |
 | `reports-cantonal TI` | Gate F on `source = 'ti_rl'` (it filters by `cantons.version_source`) |
 
 Backfill order on prod, supervised: `lexfind-registry TI` (if the registry is
@@ -1758,7 +1802,7 @@ rows share the `ch_act_version` queue under `source = 'sil'`):
 |---|---|
 | `sil-acts [canton]` | one TOC request per canton: `ch_act` (in force, `title_fr`, `metadata_json.platform = 'sil'`) and exactly one open `ch_act_version` per act (`lang fr`, stage `discovered`, `xml_url` = the page). `date_applicability` = `version_active_since` of LexFind's current version for the number (`sil_date_source: lexfind` in the act's metadata) or today (`run`). Idempotent: an act with an open sil version keeps it |
 | `sil-fetch [canton]` | the page, decoded from its declared charset, into `akn_xml` (+ bytes under `raw/sil/{version_id}.htm`); 0.5 s between requests, `CHPIPE_CANTONAL_PER_HOST` in flight. A 404 retires the row at once with the URL in `last_error` |
-| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). No provenance rows (SIL has no structured modification table) |
+| `sil-parse [canton]` | `ch_act_article` + `full_text`; a page under 200 chars or without an `Art.` heading is retired with reason `short_text:` / `no_articles:`; a `run`-dated version takes the page's `Etat au` date (`sil_date_source: page`). Amendment provenance from the notes (GE's modification-table rows, NE's footnote prose) -- see "Portal amendments" below |
 | `reports-cantonal GE` / `NE` | Gate F, source filter from the canton's platform; GE and NE are in the default list |
 
 Backfill on prod, supervised, in this order (measured on the live smoke
@@ -1783,6 +1827,45 @@ Failure reasons worth knowing: `no_articles` is an act written without
 listed in Gate F, the text is not lost (it is in `akn_xml`), but there are
 no article rows; `404: act page gone` is a TOC entry the host does not
 serve, compare against the TOC of the day.
+
+## Portal amendments (GE, NE, TI)
+
+The SIL and Raccolta platforms publish no change-document index, but every
+page carries its amendment history in the notes the parsers already
+resolve onto each article, and `chpipe/portal_amendments.py` reads them
+(grammar and sample rates in its docstring; measured 2026-08-31 on 45
+random parsed prod pages):
+
+  * GE: one note per modification-table row, `"{body} | {adoption} |
+    {vigueur}"`. The table names no amending act, so the adoption date as
+    printed is the reference; the action (`n.`/`n.t.`/`a.` = inserted /
+    amended / repealed) is resolved per article from the body's group
+    lists. 137/137 sampled notes gave a full (decision, in-force, ref)
+    triple.
+  * NE: `"Teneur selon L du 5 novembre 2013 (FO 2013 N° 47) avec effet au
+    1er janvier 2014"`, several events per note; the reference is the
+    Feuille officielle issue. 139/168 notes yielded events (the rest are
+    `RS`/`RSN`/`RLN` cross-references, correctly nothing).
+  * TI: `"Art. modificato dal R 10.11.2021; in vigore dal 12.11.2021 -
+    BU 2021, 328."`; the reference is the Bollettino ufficiale page, and
+    trailing `precedenti modifiche:` refs become ref-only events. 137/152
+    notes yielded events.
+
+One parsed event = one `ch_article_provenance` row (raw_note = the whole
+original note); the distinct references of an act = its
+`ch_act_change_document` rows, `source_id` a stable 63-bit hash of the
+reference (the portals have no numeric ids), `date_publication` NULL
+(an FO issue or BU page says where, never when). Written by `sil-parse` /
+`ti-parse` in the same transaction as the articles, and recoverable for
+editions parsed before this existed without refetching a page:
+
+    CHPIPE_REPROVENANCE=1 ./run-stage.sh sil-parse       # or one canton: ... GE
+    CHPIPE_REPROVENANCE=1 ./run-stage.sh ti-parse
+    ./run-stage.sh reports-cantonal GE                   # amendments line now non-zero
+
+The rebuild touches only provenance and change documents -- articles,
+`full_text` and dates stay exactly as parsed -- and converges: rows are
+replaced per version, documents upserted on the stable hash.
 
 ## PDF editions (Lexwork PDF-only versions, LexFind PDFs)
 
@@ -1970,6 +2053,7 @@ carry. Everything was read out of the site's SPA bundle
 | `zh-acts` | enumerate every edition through the index JSON, fetch every edition page, upsert `ch_act` (jurisdiction `ZH`, `eli_work_uri` = `http://www.zhlex.zh.ch/Erlass.html?Open&Ordnr={nr}`) and one `ch_act_version` per edition (`zhlex:{nr}/{version}`, lang `de`, source `zhlex`, stage `discovered`, `xml_url` = the edition's text link). `CHPIPE_ZH_ONLY=101,131.1` narrows to numbers |
 | `zh-fetch` | Domino HTML rendering (`xml_url` under `https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/`) into `akn_xml`, decoded at fetch time (the pages declare ISO-8859-1), audit copy `raw/zhlex/{version_id}.html`. PDF editions (`OpenAttachment?...file=...pdf`) are never claimed here; the shared PDF path takes them by the same prefix rule |
 | `zh-parse` | `§`- / `Art.`-numbered articles (`e_id` `par_7` / `art_7`), section headings as marginal notes, page footnotes as `notes`, `full_text` |
+| `zh-amend` | one `ch_act_change_document` per Nachtrag edition after the act's first (jurisdiction `ZH`, `source_id` = numeric Nachtrag encoding: `129` → 12900, `008b` → 802, `number` = the Nachtrag number). Pure DB pass over what `zh-acts` stored (`metadata_json.editions` + the version rows), no network. `date_publication` = Publikationsdatum, falling back to the derived `date_applicability` (`metadata_json.date_source` says which); `date_decision` only at a re-enactment (the edition's Erlassdatum is strictly later than any seen so far in the act -- 101/051; merely *different* is not enough, 631.41 interleaves two series' dates), because within a series the page repeats the series' Erlassdatum. ZH prints no OS reference on any era of edition page (verified live 2026-08-31), so `os_ref` is an explicit null. Article-level linkage is `diff`'s `ch_act_change`; the document names its edition in `metadata_json.version_id`/`.consolidation` (edition-level linkage -- ZH publishes no per-article modification table, so no `ch_article_provenance` rows are written). `CHPIPE_ZH_ONLY` narrows to numbers |
 | `reports-cantonal ZH` | Gate F on source `zhlex` |
 
 The index (`.../lawcollectionsearch_312548694.zhweb-zhlex-ls.zhweb-cache.json`)
@@ -2004,10 +2088,13 @@ Backfill order, supervised, all three at 2 req/s to zh.ch and notes.zh.ch
 together (the client paces the whole process): `lexfind-registry ZH`,
 `zh-acts` (~400 index requests + ~5,100 edition pages: about 45 minutes),
 `zh-fetch` (the HTML editions: the loose-leaf ones before ~2005, a few
-minutes per thousand), `zh-parse`, `diff` (de), `reports-cantonal ZH`. Weekly
-re-walk alongside the cantonal cron:
+minutes per thousand), `zh-parse`, `diff` (de), `zh-amend` (a pure DB pass,
+under a minute), `reports-cantonal ZH`. Weekly re-walk alongside the
+cantonal cron (`zh-amend` after `zh-acts`, so a new Nachtrag gets its
+change document the same morning):
 
     0 6 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-acts
+    0 7 * * 0 PATH=... /home/ubuntu/SecondLayer/services/ch-pipeline/run-stage.sh zh-amend
 
 Counters worth knowing: `capped_slices` (a day+chapter slice still over
 150 rows: rows past the cap were not enumerated, zero on the whole

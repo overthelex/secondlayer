@@ -52,7 +52,8 @@ def conn(settings):
                 title_de text,
                 title_fr text,
                 title_it text,
-                enforcement_status int)
+                enforcement_status int,
+                jurisdiction text NOT NULL DEFAULT 'CH')
         """)
         # ch_act_article (migration 197's table, which 199 indexes but does
         # not create) and migrations 199 + 200 -- see tests/conftest.py.
@@ -64,11 +65,11 @@ def conn(settings):
 
 
 def _act(conn, sr_number, abbreviation=None, title_de=None, title_fr=None,
-        title_it=None):
+        title_it=None, jurisdiction="CH"):
     conn.execute(
         "INSERT INTO ch_act (sr_number, abbreviation, title_de, title_fr, "
-        "title_it) VALUES (%s,%s,%s,%s,%s)",
-        (sr_number, abbreviation, title_de, title_fr, title_it))
+        "title_it, jurisdiction) VALUES (%s,%s,%s,%s,%s,%s)",
+        (sr_number, abbreviation, title_de, title_fr, title_it, jurisdiction))
 
 
 def _aliases(conn):
@@ -240,3 +241,113 @@ def test_two_rows_of_the_same_act_are_not_ambiguous(conn, settings):
     aliases_stage.run(settings)
 
     assert ("LPA", "fr", "455", "title_paren") in _aliases(conn)
+
+
+def _aliases_j(conn):
+    return {(r["abbr"], r["lang"], r["sr_number"], r["source"], r["jurisdiction"])
+            for r in conn.execute(
+                "SELECT abbr, lang, sr_number, source, jurisdiction "
+                "FROM ch_act_alias").fetchall()}
+
+
+def test_cantonal_titles_seed_under_their_own_canton(conn, settings):
+    """A cantonal act's title_paren abbreviation lands under the canton's
+    jurisdiction, not 'CH' -- and the same abbreviation in two different
+    cantons is two independent aliases, not a collision (the resolver never
+    offers a citation another canton's aliases)."""
+    _act(conn, "E 2 05", jurisdiction="GE",
+        title_fr="Loi sur l'organisation judiciaire du 26 septembre 2010 (LOJ)")
+    _act(conn, "161.1", jurisdiction="VS",
+        title_fr="Loi sur l'organisation de la Justice (LOJ)")
+
+    aliases_stage.run(settings)
+
+    aliases = _aliases_j(conn)
+    assert ("LOJ", "fr", "E 2 05", "title_paren", "GE") in aliases
+    assert ("LOJ", "fr", "161.1", "title_paren", "VS") in aliases
+
+
+def test_cantonal_abbreviation_column_seeds_under_the_primary_language(conn, settings):
+    _act(conn, "721.0", abbreviation="BauG", jurisdiction="BE",
+        title_de="Baugesetz vom 9. Juni 1985")
+
+    aliases_stage.run(settings)
+
+    assert ("BauG", "de", "721.0", "cantonal_abbreviation", "BE") in _aliases_j(conn)
+
+
+def test_a_within_canton_duplicate_abbreviation_is_not_seeded(conn, settings):
+    """Unlike Fedlex's federal abbreviation column (one act's own assertion),
+    the cantonal abbreviation column is scraped and demonstrably duplicated
+    within a canton (AG carries 26 abbreviations claimed by two acts each on
+    prod, 2026-08-31). Both sources of a canton pool into one claim map: an
+    abbreviation two acts of the SAME canton claim -- whether via the
+    abbreviation column, the title parentheses, or one of each -- identifies
+    neither and is not seeded at all."""
+    _act(conn, "210.100", abbreviation="KBüG", jurisdiction="AG",
+        title_de="Einfuehrungsgesetz zum Schweizerischen Zivilgesetzbuch")
+    _act(conn, "210.200", jurisdiction="AG",
+        title_de="Gesetz ueber das Kantonsbürgerrecht (KBüG)")
+    # The same abbreviation in ANOTHER canton stays seedable -- ambiguity is
+    # per jurisdiction.
+    _act(conn, "121.3", abbreviation="KBüG", jurisdiction="ZG")
+
+    aliases_stage.run(settings)
+
+    seeded = [a for a in _aliases_j(conn) if a[0] == "KBüG"]
+    assert seeded == [("KBüG", "de", "121.3", "cantonal_abbreviation", "ZG")]
+
+
+def test_the_federal_pass_no_longer_reads_cantonal_acts(conn, settings):
+    """Before migration 206 the fedlex_abbreviation pass had no jurisdiction
+    filter, so a cantonal act's abbreviation column leaked into the federal
+    alias set (5,934 rows on prod, 2026-08-31) -- and resolved to whatever
+    FEDERAL act happened to share the sr_number. The pass now reads
+    jurisdiction='CH' only, and the reconcile evicts the leaked rows an
+    earlier run left behind so they can re-seed under their real canton."""
+    _act(conn, "220", abbreviation="OR")                       # genuine federal
+    _act(conn, "210.1", abbreviation="EG ZGB", jurisdiction="ZG")
+    # a pre-206 run's leaked row: cantonal abbreviation, pseudo-federal.
+    conn.execute(
+        "INSERT INTO ch_act_alias (abbr, lang, sr_number, source, jurisdiction) "
+        "VALUES ('EG ZGB', 'de', '210.1', 'fedlex_abbreviation', 'CH')")
+
+    aliases_stage.run(settings)
+
+    aliases = _aliases_j(conn)
+    assert ("OR", "de", "220", "fedlex_abbreviation", "CH") in aliases
+    assert ("EG ZGB", "de", "210.1", "fedlex_abbreviation", "CH") not in aliases, \
+        "the leaked pseudo-federal row is reconciled away"
+    assert ("EG ZGB", "de", "210.1", "cantonal_abbreviation", "ZG") in aliases, \
+        "and re-seeded under its real canton"
+
+
+def test_a_stale_cantonal_alias_is_reconciled_away(conn, settings):
+    _act(conn, "721.0", abbreviation="BauG", jurisdiction="BE")
+    aliases_stage.run(settings)
+    assert ("BauG", "de", "721.0", "cantonal_abbreviation", "BE") in _aliases_j(conn)
+
+    # The canton renames the act's abbreviation; the old alias must go.
+    conn.execute("UPDATE ch_act SET abbreviation = 'BauG-BE' WHERE sr_number = '721.0'")
+    aliases_stage.run(settings)
+
+    aliases = _aliases_j(conn)
+    assert ("BauG", "de", "721.0", "cantonal_abbreviation", "BE") not in aliases
+    assert ("BauG-BE", "de", "721.0", "cantonal_abbreviation", "BE") in aliases
+
+
+def test_federal_ambiguity_is_judged_without_the_cantons(conn, settings):
+    """Scoping the title pass by jurisdiction also repairs the other leak:
+    a cantonal title ending in the same abbreviation as a federal one used
+    to make the FEDERAL abbreviation ambiguous and suppress it. Ambiguity is
+    per (jurisdiction, lang) now, so each side seeds independently."""
+    _act(conn, "235.1",
+        title_fr="Loi federale sur la protection des donnees (LPD)")
+    _act(conn, "I 3 05", jurisdiction="GE",
+        title_fr="Loi genevoise sur la protection des donnees (LPD)")
+
+    aliases_stage.run(settings)
+
+    aliases = _aliases_j(conn)
+    assert ("LPD", "fr", "235.1", "title_paren", "CH") in aliases
+    assert ("LPD", "fr", "I 3 05", "title_paren", "GE") in aliases

@@ -9,7 +9,7 @@
 #                 ./run-stage.sh lexwork-pdf-requeue|pdf-text [canton]   (PDF editions; see README "PDF editions")
 #   SIL (GE, NE): ./run-stage.sh sil-acts|sil-fetch|sil-parse [canton]
 #   ticino:       ./run-stage.sh ti-acts|ti-fetch|ti-parse   (no argument; one canton, one host)
-#   zurich:       ./run-stage.sh zh-acts|zh-fetch|zh-parse   (no argument; CHPIPE_ZH_ONLY narrows zh-acts)
+#   zurich:       ./run-stage.sh zh-acts|zh-fetch|zh-parse|zh-amend   (no argument; CHPIPE_ZH_ONLY narrows zh-acts and zh-amend)
 #   registries:   ./run-stage.sh zefix|shab-detail   (no argument)
 #                 ./run-stage.sh shab-list [months]
 #
@@ -77,7 +77,10 @@ case "$STAGE" in
   lexfind-registry|lexfind-versions|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal|sil-acts|sil-fetch|sil-parse|lexwork-pdf-requeue|pdf-text)
     # A canton code (BE), a comma-separated list for the walks, or nothing
     # for every canton the stage knows. Same env-survives rule as the others.
-    # The sil-* stages accept GE, NE or nothing (both). pdf-text and
+    # The sil-* stages accept GE, NE or nothing (both); sil-parse also
+    # reads CHPIPE_REPROVENANCE=1 (rewrite provenance rows and change
+    # documents for the already-parsed editions from their stored pages,
+    # no download -- ti-parse reads the same flag). pdf-text and
     # lexwork-pdf-requeue take one canton or none; pdf-text also reads
     # CHPIPE_SOURCE (lexwork_pdf|lexfind), CHPIPE_RESPLIT=1 (re-split the
     # article-less parsed rows from akn_xml, no download) and CHPIPE_ANNEX=1
@@ -90,13 +93,14 @@ case "$STAGE" in
   ti-acts|ti-fetch|ti-parse)
     # Ticino's own text platform (chpipe/ti_rl.py): TI only, so no canton
     # argument; ti-fetch and ti-parse are bounded by CHPIPE_LIMIT like the
-    # other queue stages.
+    # other queue stages, and ti-parse reads CHPIPE_REPROVENANCE=1 (see
+    # sil-parse above).
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse)
+  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
