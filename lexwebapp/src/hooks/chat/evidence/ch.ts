@@ -684,7 +684,8 @@ function chMaterialSearchCitation(row: ToolResultData): Citation {
   const snippet = row.snippet ? ` ${String(row.snippet).replace(/<\/?b>/g, '')}` : '';
   const text = `${chMaterialTypeLabel(row.material_type)}${date ? ` від ${date}` : ''}.${snippet}`.trim();
   // A material without a Fedlex title still needs a name the panel can show
-  // next to the Gazette badge: the type, then the citation itself.
+  // next to the Gazette badge: the citation itself ("BBl 2010 5876") when
+  // there is one, the type label when there is not.
   const name = String(row.title || row.historical_id || chMaterialTypeLabel(row.material_type) || 'Bundesblatt');
   return {
     text,
