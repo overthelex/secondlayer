@@ -1252,6 +1252,93 @@ services:
     depends_on:
       - redis-local
 
+  # ==========================================
+  # Переехало с AWS-бокса (i-04e39a795576e33f0, выведен 09.2026).
+  # Прямые копии prod-определений, только имена и сеть локальные.
+  # ==========================================
+
+  # agents.legal.org.ua — Gradio-агенты (secondlayer-agents), ходят в Bedrock
+  lmaf-local:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.lmaf
+    image: lmaf-local:latest
+    container_name: lmaf-local
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - AWS_REGION=${AWS_REGION:-eu-central-1}
+      - AWS_ACCESS_KEY_ID=${LMAF_AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${LMAF_AWS_SECRET_ACCESS_KEY:-}
+      - SECONDLAYER_API_KEY=${SECONDLAYER_API_KEY:-}
+      - SECONDLAYER_API_URL=http://app-local:3000/api
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+
+  # Синхронизация открытых реестров через API бэкенда и openreyestr
+  opendata-sync-local:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.opendata-sync
+    image: opendata-sync-local:latest
+    container_name: opendata-sync-local
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    depends_on:
+      app-local:
+        condition: service_healthy
+      app-openreyestr-local:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      BACKEND_URL: http://app-local:3000
+      BACKEND_API_KEY: ${SECONDARY_LAYER_KEYS:-}
+      OPENREYESTR_URL: http://app-openreyestr-local:3004
+      OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEYS:-}
+      HEALTH_PORT: "3010"
+      TZ: Europe/Kiev
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3010/health', r => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - secondlayer-local
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+  # TURN/STUN для видеозвонков. host-сеть: релей-порты 49152-65535/udp.
+  # external-ip приходит аргументом, чтобы конфиг не содержал адрес машины.
+  coturn-local:
+    image: coturn/coturn:4.6
+    container_name: sl-coturn-local
+    network_mode: host
+    volumes:
+      - ./coturn/turnserver.local.conf:/etc/turnserver.conf:ro
+    command: ["-c", "/etc/turnserver.conf", "--static-auth-secret=${TURN_SHARED_SECRET:-}", "--external-ip=${TURN_EXTERNAL_IP:-178.150.37.146}"]
+    restart: unless-stopped
+
 volumes:
   postgres_local_data:
     driver: local
