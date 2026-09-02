@@ -597,4 +597,47 @@ describe('aggregate mode (LEXAI-1820)', () => {
       expect(calls[0].sql).not.toContain('FROM (SELECT');
     });
   });
+
+  // Both UK corpora are held under licences that REQUIRE acknowledgement, and we
+  // were carrying neither. This is a live term of the Open Justice Licence and of
+  // OGL v3.0, older than anything in the Find Case Law application.
+  describe('licence attribution', () => {
+    it('judgments carry the Open Justice acknowledgement, verbatim', () => {
+      expect(REGISTRY_CATALOG.uk_court_decisions.attribution)
+        .toContain('Contains information licensed under the Open Justice - Licence v2.0');
+    });
+
+    it('every UK legislation registry carries the OGL acknowledgement', () => {
+      for (const key of ['uk_legislation', 'uk_legislation_provisions',
+                         'uk_legislation_effects']) {
+        expect((REGISTRY_CATALOG as any)[key].attribution)
+          .toContain('Open Government Licence v3.0');
+      }
+    });
+
+    it('is returned once with the response, not repeated on every row', async () => {
+      db = makeDb(() => ({ rows: [{ id: 'a', _total_count: 2 }, { id: 'b', _total_count: 2 }] }));
+      tool = new RegistrySearchTool(db);
+
+      const res: any = await tool.executeTool('search_registry', {
+        registry: 'uk_legislation',
+        filters: { leg_type: 'ukpga' },
+      });
+      const payload = JSON.parse(res.content[0].text);
+      expect(payload.licence).toContain('Open Government Licence v3.0');
+      for (const row of payload.results) {
+        expect(row._licence).toBeUndefined();
+      }
+    });
+
+    it('a registry with no attribution does not grow a licence field', async () => {
+      db = makeDb(() => ({ rows: [{ name: 'x', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+      const res: any = await tool.executeTool('search_registry', {
+        registry: 'lawyers',
+        filters: { last_name: 'Іваненко' },
+      });
+      expect(JSON.parse(res.content[0].text).licence).toBeUndefined();
+    });
+  });
 });

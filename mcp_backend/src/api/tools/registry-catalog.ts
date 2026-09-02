@@ -59,6 +59,17 @@ export interface RegistryDef {
    * inner ORDER BY having already chosen which rows those are.
    */
   outerOrderBy?: string;
+  /**
+   * Licence attribution carried back with every result from this registry.
+   *
+   * Not decoration. The Open Justice Licence requires the acknowledgement
+   * "Contains information licensed under the Open Justice - Licence v2.0" on the
+   * information it covers, and OGL v3.0 requires attribution for
+   * legislation.gov.uk. We were relying on neither, which is a live breach of the
+   * terms the corpora are already held under — older than any of the commitments
+   * in the Find Case Law application.
+   */
+  attribution?: string;
 }
 
 export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
@@ -739,6 +750,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
   //    column and lets the btree index stay eligible.
 
   uk_legislation: {
+    attribution: 'Contains public sector information licensed under the Open Government Licence v3.0. Source: legislation.gov.uk, The National Archives.',
     title: 'UK Legislation Register (158K acts)',
     description: `The UK statute book from legislation.gov.uk: 158,317 items with 254,814 point-in-time versions. Acts of Parliament (ukpga), Statutory Instruments (uksi), Welsh SIs (wsi), Northern Ireland Orders in Council (nisi), Church Measures (ukcm), Local and Private Acts (ukla, ukppa), and pre-Union acts (aep, apgb). Open Government Licence v3.0.
 
@@ -762,6 +774,7 @@ unapplied_effects on a row is the editorial backlog: changes that are law but no
   },
 
   uk_legislation_provisions: {
+    attribution: 'Contains public sector information licensed under the Open Government Licence v3.0. Source: legislation.gov.uk, The National Archives.',
     title: 'UK Legislation Text (1.26M provisions)',
     description: `Full-text search over 1,262,603 provisions — sections, articles, regulations, schedule paragraphs — of UK legislation, with the version date each one belongs to.
 
@@ -791,6 +804,7 @@ Rows are per version, so one section can appear several times with different val
   },
 
   uk_legislation_effects: {
+    attribution: 'Contains public sector information licensed under the Open Government Licence v3.0. Source: legislation.gov.uk, The National Archives.',
     title: 'UK Changes to Legislation (1.21M amendments)',
     description: `Every amendment legislation.gov.uk publishes: 1,213,289 effects, stated by the source rather than inferred from diffs. Each row says which provision of which act was changed, by which provision of which other act, of what kind, and from when.
 
@@ -815,6 +829,7 @@ Search by the act that was changed (affected), by the act doing the changing (af
   },
 
   uk_court_decisions: {
+    attribution: 'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.',
     title: 'UK Court Judgments (54K decisions)',
     description: `54,453 judgments from Find Case Law (The National Archives), 2001-2026, full text on 99.95% of rows. UK Supreme Court, Court of Appeal (Civil), High Court (Chancery, Administrative, Commercial, Family), Privy Council and UK tribunals.
 
