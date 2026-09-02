@@ -1173,4 +1173,90 @@ describe('extractChEvidence', () => {
       expect(result.citations).toHaveLength(0);
     });
   });
+
+  describe('ch_search_materials', () => {
+    it('maps hits to Citation[] with the Gazette citation as the badge and the PDF as the link', () => {
+      const data = {
+        results: [{
+          material_id: 5, eli_work_uri: 'https://fedlex.data.admin.ch/eli/fga/2001/318', lang: 'de',
+          material_type: 'botschaft', title: 'Botschaft zum Embargogesetz', historical_id: 'BBl 2001 1433',
+          date_document: '2000-12-20', publication_date: '2001-04-17',
+          pdf_url: 'https://fedlex.data.admin.ch/filestore/x.pdf', stage: 'parsed', rank: 0.1,
+          snippet: 'Die <b>Sanktionen</b> werden',
+        }],
+        total_count: 1, has_more: false, limit: 10, offset: 0,
+      };
+      const [c] = extractChEvidence('ch_search_materials', data).citations;
+      expect(c.text).toContain('Botschaft');
+      expect(c.text).toContain('2000-12-20');
+      expect(c.text).toContain('Sanktionen');
+      expect(c.text).not.toContain('<b>');
+      expect(c.articleNumber).toBe('BBl 2001 1433');
+      expect(c.url).toBe('https://fedlex.data.admin.ch/filestore/x.pdf');
+      expect(c.npaTitle).toBe('Botschaft zum Embargogesetz');
+    });
+  });
+
+  describe('ch_get_material', () => {
+    const MATERIAL = {
+      material_id: 5, eli_work_uri: 'https://fedlex.data.admin.ch/eli/fga/2001/318', lang: 'de',
+      material_type: 'botschaft', title: 'Botschaft zum Embargogesetz', historical_id: 'BBl 2001 1433',
+      date_document: '2000-12-20', publication_date: '2001-04-17', pdf_url: 'https://fedlex.data.admin.ch/filestore/x.pdf',
+      stage: 'parsed', text: 'Botschaft ...', text_offset: 0, text_total_chars: 13, truncated: false, text_available: true,
+    };
+
+    it('builds one VaultDocument with the citation in the title', () => {
+      const doc = extractChEvidence('ch_get_material', MATERIAL).documents[0];
+      expect(doc.id).toBe('ch-material-5');
+      expect(doc.title).toContain('Botschaft zum Embargogesetz');
+      expect(doc.title).toContain('BBl 2001 1433');
+      expect(doc.metadata?.body).toBe('Botschaft ...');
+      expect(doc.metadata?.pdf_url).toBe(MATERIAL.pdf_url);
+    });
+
+    it('notes an unparsed edition and a truncated slice', () => {
+      const doc = extractChEvidence('ch_get_material', { ...MATERIAL, text: '', text_available: false, text_total_chars: 0 }).documents[0];
+      expect(doc.metadata?.snippet).toContain('ще не завантажено');
+      const cut = extractChEvidence('ch_get_material', { ...MATERIAL, text: 'Bots', truncated: true }).documents[0];
+      expect(cut.metadata?.snippet).toContain('показано 4 з 13 символів');
+    });
+
+    it('returns nothing for an error payload', () => {
+      expect(extractChEvidence('ch_get_material', { error: 'not_found', available_langs: [] }).documents).toHaveLength(0);
+    });
+  });
+
+  describe('ch_get_article_purpose', () => {
+    it('yields one Citation per paragraph, naming the act and article and linking the PDF', () => {
+      const data = {
+        sr_number: '946.231', act_title: 'Embargogesetz', abbreviation: 'EmbG', article: '2', lang: 'de',
+        link_method: 'provenance_bbl',
+        bbl_references: [{ bbl_reference: 'BBl 2001 1433', action: 'inserted', effective_date: '2003-01-01', material_found: true }],
+        unmatchable_references: [],
+        materials: [
+          { material_id: 5, title: 'Botschaft zum Embargogesetz', historical_id: 'BBl 2001 1433', material_type: 'botschaft',
+            pdf_url: 'https://fedlex.data.admin.ch/filestore/x.pdf', text_available: true, matched_via: ['BBl 2001 1433'],
+            paragraphs: [{ ordinal: 7, text: 'Art. 2 des Entwurfs überträgt ...' }, { ordinal: 9, text: 'Nach Artikel 2 Absatz 1 ...' }],
+            paragraphs_truncated: false },
+          { material_id: 6, title: 'Message', historical_id: 'FF 2001 1341', material_type: 'botschaft',
+            pdf_url: 'https://fedlex.data.admin.ch/filestore/y.pdf', text_available: false, matched_via: [], paragraphs: [], paragraphs_truncated: false },
+        ],
+        materials_truncated: false,
+      };
+      const { citations, documents } = extractChEvidence('ch_get_article_purpose', data);
+      expect(documents).toHaveLength(0);
+      expect(citations).toHaveLength(3);
+      expect(citations[0].text).toContain('Art. 2 des Entwurfs');
+      expect(citations[0].npaTitle).toBe('Art. 2 EmbG Embargogesetz (SR 946.231)');
+      expect(citations[0].articleNumber).toBe('2');
+      expect(citations[0].source).toBe('Botschaft zum Embargogesetz, BBl 2001 1433');
+      expect(citations[0].url).toBe('https://fedlex.data.admin.ch/filestore/x.pdf');
+      expect(citations[2].text).toContain('ще не завантажено');
+    });
+
+    it('yields nothing for no_materials_linked', () => {
+      const result = extractChEvidence('ch_get_article_purpose', { error: 'no_materials_linked', bbl_references: [] });
+      expect(result.citations).toHaveLength(0);
+    });
+  });
 });

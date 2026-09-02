@@ -55,6 +55,10 @@ export const V2_TOOL_NAMES = new Set<string>([
   // Швейцарія (CH) — відкриті коментарі до федеральних актів (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
   'ch_get_commentary',
   'ch_search_commentary',
+  // Швейцарія (CH) — матеріали законодавця з Bundesblatt: Botschaften, звіти, мета статті (LEXAI-2038)
+  'ch_search_materials',
+  'ch_get_material',
+  'ch_get_article_purpose',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',

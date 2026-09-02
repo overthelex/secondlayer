@@ -771,3 +771,80 @@ def retry_failed_versions(conn, stage: str | None = None,
         sql += " AND act_id = %s"
         params.append(act_id)
     return conn.execute(sql, params).rowcount
+
+
+# ---------------------------------------------------------------------------
+# The ch_material queue (migration 209): the same discipline as the version
+# queue above -- claim with the backoff predicate and SKIP LOCKED, complete
+# in one UPDATE that writes the produced fields with the stage move, fail
+# with an attempt count that retires the row on the last attempt -- against
+# its own table, because the materials carry their own stage machine and
+# their own text, not ch_act_version's.
+# ---------------------------------------------------------------------------
+
+_COMPLETE_MATERIAL_ALLOWED_COLUMNS = frozenset({
+    "full_text", "text_quality", "pdf_bytes", "fetched_at",
+})
+
+
+def claim_materials(conn, limit: int, max_attempts: int = 3,
+                    backoff_minutes: tuple[int, ...] | None = RETRY_BACKOFF_MINUTES) -> list[dict]:
+    sql = ("SELECT material_id, eli_work_uri, lang, material_type, pdf_url, attempts "
+           "FROM ch_material WHERE stage = 'discovered' AND attempts < %s")
+    params: list = [max_attempts]
+    if backoff_minutes:
+        sql += (" AND (attempts = 0 OR stage_updated_at IS NULL"
+                " OR stage_updated_at <= now() - make_interval("
+                "mins => (%s::int[])[least(attempts, %s)]))")
+        params.extend([list(backoff_minutes), len(backoff_minutes)])
+    sql += " ORDER BY publication_date, material_id LIMIT %s FOR UPDATE SKIP LOCKED"
+    params.append(limit)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def _require_one_material(cursor, material_id: int, operation: str) -> None:
+    if cursor.rowcount != 1:
+        raise QueueWriteMissed(
+            f"{operation} matched {cursor.rowcount} rows for "
+            f"material_id={material_id!r}; the row is gone or was never keyed")
+
+
+def complete_material(conn, material_id: int, **fields) -> None:
+    for column in fields:
+        if column not in _COMPLETE_MATERIAL_ALLOWED_COLUMNS:
+            raise ValueError(f"complete_material() does not allow column '{column}'")
+    assignments = ["stage = 'parsed'", "last_error = NULL", "attempts = 0",
+                   "stage_updated_at = now()", "updated_at = now()"]
+    params: list = []
+    for column, value in fields.items():
+        assignments.append(f"{column} = %s")
+        params.append(value)
+    params.append(material_id)
+    cursor = conn.execute(
+        f"UPDATE ch_material SET {', '.join(assignments)} WHERE material_id = %s", params)
+    _require_one_material(cursor, material_id, "complete_material()")
+
+
+def fail_material(conn, material_id: int, error: str, max_attempts: int) -> None:
+    cursor = conn.execute(
+        """
+        UPDATE ch_material
+           SET attempts = attempts + 1,
+               last_error = %s,
+               stage = CASE WHEN attempts + 1 >= %s THEN 'failed' ELSE stage END,
+               stage_updated_at = now(),
+               updated_at = now()
+         WHERE material_id = %s
+        """,
+        (error[:2000], max_attempts, material_id))
+    _require_one_material(cursor, material_id, "fail_material()")
+
+
+def retry_failed_materials(conn) -> int:
+    """Send every retired material back to the queue with a fresh budget."""
+    cursor = conn.execute(
+        "UPDATE ch_material SET stage = 'discovered', attempts = 0, last_error = NULL, "
+        "stage_updated_at = NULL, updated_at = now() WHERE stage = 'failed'")
+    return cursor.rowcount

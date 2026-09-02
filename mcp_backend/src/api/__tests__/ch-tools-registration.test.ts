@@ -16,6 +16,7 @@ import { ChCourtTools } from '../tools/ch-court-tools.js';
 import { ChLegislationTools } from '../tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../tools/ch-registry-tools.js';
 import { ChCommentaryTools } from '../tools/ch-commentary-tools.js';
+import { ChMaterialsTools } from '../tools/ch-materials-tools.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { V2_TOOL_NAMES } from '../curated-mcp-tools.js';
 
@@ -38,6 +39,9 @@ const CH_TOOL_NAMES = [
   'ch_verify_citations',
   'ch_get_commentary',
   'ch_search_commentary',
+  'ch_search_materials',
+  'ch_get_material',
+  'ch_get_article_purpose',
 ];
 
 // Stub is only for construction (constructor(private db: any)) — executeTool is never
@@ -137,6 +141,19 @@ describe('CH tool surface registration', () => {
       }
     });
 
+    it('ChMaterialsTools exposes exactly its three tools with Ukrainian descriptions', () => {
+      const tool = new ChMaterialsTools(stubDb);
+      const defs = tool.getToolDefinitions();
+      expect(defs.map(d => d.name).sort()).toEqual(
+        ['ch_get_article_purpose', 'ch_get_material', 'ch_search_materials'].sort()
+      );
+      for (const def of defs) {
+        expect(def.description).toBeTruthy();
+        expect(isCyrillic(def.description)).toBe(true);
+        expect(def.inputSchema.type).toBe('object');
+      }
+    });
+
     it('ChLegislationTools exposes exactly its five tools with Ukrainian descriptions', () => {
       const tool = new ChLegislationTools(stubDb);
       const defs = tool.getToolDefinitions();
@@ -160,6 +177,7 @@ describe('CH tool surface registration', () => {
       registry.registerHandler(new ChCitationTools(stubDb));
       registry.registerHandler(new ChVerificationTools(stubDb));
       registry.registerHandler(new ChCommentaryTools(stubDb));
+      registry.registerHandler(new ChMaterialsTools(stubDb));
 
       const names = registry.getLocalToolDefinitions().map(d => d.name);
       for (const name of CH_TOOL_NAMES) {

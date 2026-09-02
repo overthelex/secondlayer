@@ -38,11 +38,27 @@ from chpipe.stages import (acts_stage, aliases_stage, citations_resolve_stage,
                            fedlex_pdf_text_stage, fetch_stage, fetch_xml_stage,
                            index_stage, load_stage, parse_akn_stage,
                            project_legacy_stage, provenance_stage,
+                           materials_discover_stage, materials_text_stage,
                            shab_detail_stage, shab_list_stage, versions_stage,
                            zefix_stage)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
+
+
+@pytest.fixture(autouse=True)
+def _stub_materials(monkeypatch):
+    """run_legislation() also re-walks the Federal Gazette materials and
+    drains their text queue (migration 209). Every run_legislation test in
+    this file stubs the stages it is about and lets the rest run against
+    the fake DSN, which the two materials stages would then try to open --
+    so they are stubbed here for all of them, and the one test that is
+    about them (test_run_legislation_walks_and_caps_the_materials) replaces
+    these stubs with recording ones."""
+    monkeypatch.setattr(materials_discover_stage, "run",
+                        lambda settings, **kw: materials_discover_stage.MaterialsDiscoverReport())
+    monkeypatch.setattr(materials_text_stage, "run",
+                        lambda settings, limit=None, transport=None: materials_text_stage.MaterialsTextReport())
 
 
 def test_snapshot_url_uses_the_iso_date():
@@ -662,6 +678,43 @@ def test_run_legislation_caps_the_fedlex_pdf_text_drain(tmp_path, monkeypatch):
 
     assert seen_limits == [delta._FEDLEX_PDF_TEXT_NIGHTLY_CAP]
     assert delta._FEDLEX_PDF_TEXT_NIGHTLY_CAP == 2000
+
+
+# The Federal Gazette materials (migration 209) ride the same night: a full
+# rediscovery walk (cheap, ~20 s) so this week's Botschaft is queued, then a
+# capped drain -- the supervised backfill owns the ~10.5K-file first pass.
+def test_run_legislation_walks_and_caps_the_materials(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(acts_stage, "run",
+                        lambda settings: calls.append("acts") or acts_stage.ActsReport())
+    monkeypatch.setattr(versions_stage, "run",
+                        lambda settings: calls.append("versions") or versions_stage.VersionsReport())
+    monkeypatch.setattr(fetch_xml_stage, "run",
+                        lambda settings, limit=None: calls.append("fetch-xml") or fetch_xml_stage.FetchXmlReport())
+    monkeypatch.setattr(fedlex_pdf_text_stage, "run",
+                        lambda settings, limit=None, transport=None: calls.append("fedlex-pdf-text") or
+                        fedlex_pdf_text_stage.FedlexPdfTextReport())
+    seen_limits = []
+    monkeypatch.setattr(materials_discover_stage, "run",
+                        lambda settings, **kw: calls.append("materials-discover") or
+                        materials_discover_stage.MaterialsDiscoverReport())
+
+    def fake_materials_text(settings, limit=None, transport=None):
+        calls.append("materials-text")
+        seen_limits.append(limit)
+        return materials_text_stage.MaterialsTextReport()
+
+    monkeypatch.setattr(materials_text_stage, "run", fake_materials_text)
+    monkeypatch.setattr(parse_akn_stage, "run",
+                        lambda settings, limit=None: calls.append("parse-akn") or parse_akn_stage.ParseReport())
+    _stub_legislation_tail(monkeypatch, calls)
+
+    delta.run_legislation(_settings(tmp_path))
+
+    assert calls.index("materials-discover") < calls.index("materials-text") < calls.index("parse-akn")
+    assert calls.index("fedlex-pdf-text") < calls.index("materials-discover")
+    assert seen_limits == [delta._MATERIALS_TEXT_NIGHTLY_CAP]
+    assert delta._MATERIALS_TEXT_NIGHTLY_CAP == 300
 
 
 # --- N1: parsing an edition is not what makes it readable ---------------
