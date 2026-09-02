@@ -25,6 +25,7 @@ const CH_LEGISLATION_TOOLS = new Set([
 ]);
 const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
 const CH_CITATION_TOOLS = new Set(['ch_get_citation_graph', 'ch_check_precedent_status']);
+const CH_COMMENTARY_TOOLS = new Set(['ch_get_commentary', 'ch_search_commentary']);
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
@@ -584,6 +585,85 @@ function extractChCitationEvidence(toolName: string, parsed: ToolResultData): Ev
   return { decisions, citations: [], documents: [] };
 }
 
+// ch_get_commentary: one commentary → one VaultDocument, body = the text slice the tool
+// returned. The title names the authors and the source with its licence (CC BY requires
+// attribution wherever the text is re-served), the attribution line the tool built goes
+// into the snippet ahead of the text, and the truncation note follows the ch_get_act_text
+// convention so the panel shows a partial text as partial.
+function chCommentaryDocument(parsed: ToolResultData): VaultDocument {
+  const text = typeof parsed.text === 'string' ? parsed.text : '';
+  const totalChars = parsed.text_total_chars != null ? Number(parsed.text_total_chars) : text.length;
+  const truncationNote = parsed.truncated === true
+    ? `показано ${text.length} з ${totalChars} символів`
+    : undefined;
+  const authors = Array.isArray(parsed.authors) && parsed.authors.length > 0
+    ? parsed.authors.join(', ')
+    : undefined;
+  const provenance = [authors, parsed.source, parsed.licence ? `(${parsed.licence})` : undefined]
+    .filter(Boolean).join(' ');
+  const title = `${parsed.title || 'Коментар'} — ${provenance}`;
+
+  return {
+    id: `ch-commentary-${parsed.source}-${parsed.source_id}`,
+    title,
+    type: 'other',
+    metadata: {
+      body: text,
+      snippet: [truncationNote, parsed.attribution, text].filter(Boolean).join(' • '),
+      source: parsed.source,
+      source_url: parsed.source_url,
+      licence: parsed.licence,
+      attribution: parsed.attribution,
+      sr_number: parsed.sr_number,
+      article_number: parsed.article_number,
+      lang: parsed.lang,
+      version_date: parsed.version_date,
+      truncated: parsed.truncated === true,
+      text_offset: parsed.text_offset,
+      text_total_chars: parsed.text_total_chars,
+    },
+  };
+}
+
+// ch_search_commentary: one Citation per hit. The snippet is the tool's ts_headline
+// fragment; source names the site and licence so the attribution travels with the hit.
+function chCommentarySearchCitation(row: ToolResultData): Citation {
+  const authors = Array.isArray(row.authors) && row.authors.length > 0
+    ? ` ${row.authors.join(', ')}.`
+    : '';
+  const edition = row.version_date ? ` Редакція ${row.version_date}.` : '';
+  const snippet = row.snippet ? ` ${String(row.snippet).replace(/<\/?b>/g, '')}` : '';
+  const text = `${row.title || ''}.${authors}${edition}${snippet}`.trim();
+  const npaTitle = row.act_title
+    ? `${row.act_title}${row.sr_number ? ` (SR ${row.sr_number})` : ''}`
+    : (row.sr_number ? `SR ${row.sr_number}` : String(row.abbr || ''));
+
+  return {
+    text,
+    source: `${row.source || ''}${row.licence ? ` (${row.licence})` : ''}`.trim(),
+    npaTitle,
+    articleNumber: row.article_number ? String(row.article_number) : undefined,
+    url: row.source_url || undefined,
+  };
+}
+
+function extractChCommentaryEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
+  const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
+
+  if (toolName === 'ch_get_commentary') {
+    // Error payload: { error: 'not_found', sr_number, article, available_langs, available_articles }.
+    if (!parsed.error && parsed.source_id != null) {
+      documents.push(chCommentaryDocument(parsed));
+    }
+  } else if (toolName === 'ch_search_commentary') {
+    const rows = Array.isArray(parsed.results) ? parsed.results : [];
+    for (const row of rows) citations.push(chCommentarySearchCitation(row));
+  }
+
+  return { decisions: [], citations, documents };
+}
+
 export function extractChEvidence(toolName: string, data: ToolResultData): EvidenceResult {
   if (!data || typeof data !== 'object') {
     return { decisions: [], citations: [], documents: [] };
@@ -600,6 +680,9 @@ export function extractChEvidence(toolName: string, data: ToolResultData): Evide
   }
   if (CH_CITATION_TOOLS.has(toolName)) {
     return extractChCitationEvidence(toolName, data);
+  }
+  if (CH_COMMENTARY_TOOLS.has(toolName)) {
+    return extractChCommentaryEvidence(toolName, data);
   }
 
   return { decisions: [], citations: [], documents: [] };

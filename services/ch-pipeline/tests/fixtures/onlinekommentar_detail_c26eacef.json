@@ -1,0 +1,44 @@
+{
+ "data": {
+  "id": "c26eacef-0731-4f60-852f-e26ae0a26c66",
+  "title": "Art. 9 GwG",
+  "date": "2026-07-29",
+  "language": "de",
+  "authors": [
+   {
+    "id": "5d32a0f2-a0dc-4288-a24b-f6e3ff68daea",
+    "name": "Andrew Garbarski"
+   },
+   {
+    "id": "73d9b5c8-4aa9-4bf0-b191-47bb17e2ee3d",
+    "name": "Louis Muskens"
+   },
+   {
+    "id": "b7b0c4a9-4338-4054-9c0d-cf305b6a0d13",
+    "name": "Mattia Brugger"
+   }
+  ],
+  "editors": [
+   {
+    "id": "5b98419b-fe0f-4894-ae1e-4dab4b46dc61",
+    "name": "Damian K. Graf"
+   },
+   {
+    "id": "630f449b-8bbd-4909-b17e-63c7e1d40da3",
+    "name": "Doris Hutzler"
+   }
+  ],
+  "legislative_act": {
+   "id": "8cc7e9b6-eff3-4400-8463-ff14db576ca7",
+   "title": "Anti-Money Laundering Act"
+  },
+  "link": "https://onlinekommentar.ch/api/commentaries/c26eacef-0731-4f60-852f-e26ae0a26c66",
+  "html_link": "https://onlinekommentar.ch/de/kommentare/gwg9",
+  "pdf_link": "https://onlinekommentar.ch/de/kommentare/gwg9/print",
+  "additional_document_links": [],
+  "suggested_citation_long": "Andrew M. Garbarski/Louis Frédéric Muskens/Mattia Brugger, Kommentierung zu Art. 9 GwG in: Damian K. Graf/Doris Hutzler (Hrsg.),  Onlinekommentar zum Bundesgesetz über die Bekämpfung der Geldwäscherei und der Terrorismusfinanzierung",
+  "suggested_citation_short": "OK-Garbarski/Muskens/Brugger, Art. 9 GwG N. XXX",
+  "content": "<h2>I. Einleitung und Allgemeines</h2><h3>A. Gegenstand</h3><p id=\"p1\"><span class=\"paragraph-nr\">1 </span>Art. 9 des Bundesgesetzes gegen die Geldwäscherei (GwG) regelt die<strong>Pflicht</strong>, die Finanzintermediäre und Händler haben, ihre Verdachtsmeldungen – insbesondere im Zusammenhang mit Geldwäscherei – an die Meldestelle für Geldwäscherei (MROS) weiterzuleiten.</p><p id=\"p2\"><span class=\"paragraph-nr\">2</span> Auch wenn in der Randbemerkung zu Art. 9 GwG der Singular („Meldepflicht“) verwendet wird, sieht die Bestimmung in Wirklichkeit <strong>mehrere unterschiedliche Szenarien</strong> vor, die die Verpflichtung der Finanzintermediäre oder Händler auslösen können, ihren Verdacht der MROS zu melden.</p><p id=\"p3\"><span class=\"paragraph-nr\">3</span> <strong>Neben den Voraussetzungen</strong>, die diesen verschiedenen Szenarien zugrunde liegen (Art. 9 Abs. 1 Bst. a–c und Abs. 1<sup>bis</sup> GwG BA) enthält die Bestimmung des Art. 9 GwG eine gesetzliche Definition des Begriffs „begründeter Verdacht“ (Abs. 1<sup>quater</sup>) und enthält bestimmte Präzisierungen zum Datenschutz der Mitarbeiter im Rahmen der Meldung (Abs. 1<sup>ter</sup>). Schliesslich klärt Art. 9 GwG den Anwendungsbereich der Meldepflicht in Bezug auf Rechtsanwälte und Notare (Abs. 2).</p><h3>B. Zweck</h3><p id=\"p4\"><span class=\"paragraph-nr\">4</span> Die Meldepflicht spielt eine <strong>zentrale Rolle </strong>im Schweizer System zur Bekämpfung der Geldwäscherei. Dieses zielt darauf ab, ergänzend zu den einschlägigen Strafbestimmungen zu verhindern, dass Gelder krimineller Herkunft in den legalen Geldkreislauf gelangen, die von Geldwäsche betroffenen Vermögenswerte zu identifizieren und die verantwortlichen Personen strafrechtlich zu verfolgen, um die Integrität des Schweizer Finanzplatzes zu gewährleisten. Auch wenn es sich um ein Instrument des Verwaltungsrechts handelt, zielt die Meldepflicht in erster Linie darauf ab darauf ab, Gelder zu identifizieren, die Gegenstand von Geldwäscherei sind, und stellt eine Art „Bindeglied“ zwischen den Sorgfaltspflichten der Finanzintermediäre einerseits und der Strafverfolgung von Geldwäscherei durch die Strafverfolgungsbehörden andererseits dar andererseits.</p><p id=\"p5\"><span class=\"paragraph-nr\">5 </span>Somit zielt die Meldepflicht<strong> </strong>darauf ab, dem Staat die <strong>Verfolgung und Ahndung</strong> von Geldwäschereidelikten (Art. 305<sup>bis</sup> des Schweizerischen Strafgesetzbuches, StGB) sowie der Terrorismusfinanzierung (Art. 260<sup>quinquies </sup>StGB) zu verfolgen und zu ahnden und die betreffenden Vermögenswerte <strong>zu beschlagnahmen und anschliessend einzuziehen</strong> (Art. 70 ff. StGB). Ohne die von den Finanzintermediären und Händlern an die MROS übermittelten Informationen würden zahlreiche strafbare Handlungen und einziehbare Vermögenswerte der Aufmerksamkeit der Strafverfolgungsbehörden entgehen. Nach der Rechtsprechung dient Art. 9 GwG nebenbei auch der Verhinderung von Straftaten, der Verringerung der Risiken für Finanzintermediäre und schliesslich der <strong>Wahrung des Rufs des Schweizer Finanzplatzes</strong>. Somit zielt die Meldepflicht auf ein umfassenderes Ziel ab als der Art. 305<sup>bis</sup> StGB, der die Geldwäscherei unter Strafe stellt.</p><p id=\"p6\"><span class=\"paragraph-nr\">6</span> Dies bedeutet jedoch nicht, dass die Meldepflicht den Finanzintermediär oder Händler zu einem „<strong>Polizeihilfskraft</strong>“ macht, da es sich um eine reine administrative Verpflichtung handelt – die zwar mit strafrechtlichen Sanktionen geahndet werden kann –, die den Akteuren eines eines Sektors auferlegt wird, der ein gewisses Risiko der Geldwäsche und der Terrorismusfinanzierung birgt.</p><h3>C. Internationaler Rahmen</h3><p id=\"p7\"><span class=\"paragraph-nr\">7</span> Um das wachsende Problem der Geldwäsche auf internationaler Ebene zu bekämpfen, wurde 1989 eine internationale zwischenstaatliche Organisation gegründet. Es handelt sich um die <strong>Finanzaktionsgruppe zur Bekämpfung der Geldwäsche (FATF)</strong> , deren Hauptaufgabe darin besteht, internationale Standards im Bereich der Bekämpfung von Geldwäsche und Terrorismusfinanzierung festzulegen sowie deren Umsetzung in den verschiedenen Mitgliedsländern zu überwachen. Die Schweiz ist Gründungsmitglied der FATF.</p><p id=\"p8\"><span class=\"paragraph-nr\">8 </span>Eines der Hauptziele der Schweizer Geldwäschereigesetzgebung ist es, <strong>diese internationalen Empfehlungen in der Schweiz umzusetzen</strong>. Dies gilt auch für die Meldepflicht gemäss Art. 9 GwG.</p><p id=\"p9\"><span class=\"paragraph-nr\">9</span> Die <strong>ersten Empfehlungen der FATF</strong> <strong>aus dem Jahr</strong> <strong>1990</strong> sahen bereits vor, dass Finanzinstitute, die den Verdacht auf eine kriminelle Herkunft von Geldern hegen, „<em>berechtigt oder verpflichtet</em>“ sein sollten, ihren Verdacht unverzüglich den zuständigen Behörden zu melden.</p><p id=\"p10\"><span class=\"paragraph-nr\">10 </span>Heute ist die Meldepflicht in den <strong>FATF-Empfehlungen von 2012</strong> in Empfehlung 20 geregelt, die Folgendes vorsieht : „<em>Wenn ein Finanzinstitut den Verdacht hegt oder begründeten Anlass zu der Annahme hat, dass Gelder aus kriminellen Aktivitäten stammen oder mit der Terrorismusfinanzierung in Zusammenhang stehen, sollte es gesetzlich verpflichtet sein, unverzüglich eine Verdachtsmeldung an die Finanzermittlungsstelle zu erstatten.</em>“ Der dazugehörige Auslegungsvermerk stellt klar, dass die FATF diese Meldung als verbindliche Verpflichtung versteht. Er definiert zudem die Straftaten, deren Verdacht die Meldepflicht auslösen muss.</p><p id=\"p11\"><span class=\"paragraph-nr\">11 </span>Anlässlich der letzten umfassenden <strong>Bewertung</strong> der Schweiz durch die FATF im Jahr 2016 wurde ihr Meldesystem als weitgehend konform mit der Empfehlung 20 bewertet, auch wenn die FATF nicht versäumte, darauf hinzuweisen, dass das Nebeneinanderbestehen eines Melderechts und einer Meld",
+  "legal_text": "<h3><strong>2. Abschnitt: Pflichten bei Geldwäschereiverdacht</strong></h3><h3><strong>Art. 9 Meldepflicht</strong></h3><p><sup>1</sup> Ein Finanzintermediär muss der Meldestelle für Geldwäscherei nach Artikel 23 (Meldestelle) unverzüglich Meldung erstatten, wenn er:</p><p>a. weiss oder den begründeten Verdacht hat, dass die in die Geschäftsbeziehung involvierten Vermögenswerte:</p><ol start=\"1\"><li><p>1. im Zusammenhang mit einer strafbaren Handlung nach Artikel 260<sup>ter</sup> oder 305<sup>bis</sup> StGB<sup>50</sup> stehen,</p></li><li><p>aus einem Verbrechen oder aus einem qualifizierten Steuervergehen nach Artikel 305<sup>bis</sup> Ziffer 1<sup>bis</sup> StGB herrühren,</p></li><li><p>der Verfügungsmacht einer kriminellen oder terroristischen Organisation unterliegen, oder</p></li><li><p>der Terrorismusfinanzierung (Art. 260<sup>quinquies</sup> Abs. 1 StGB) dienen;</p></li></ol><p>b. Verhandlungen zur Aufnahme einer Geschäftsbeziehung wegen eines begründeten Verdachts nach Buchstabe a abbricht;</p><p>c.<sup> </sup>aufgrund der nach Artikel 6 Absatz 2 Buchstabe d durchgeführten Abklärungen weiss oder Grund zur Annahme hat, dass die aufgrund von Artikel 22<em>a</em> Absatz 2 oder 3 weitergeleiteten Daten einer Person oder Organisation den Daten eines Vertragspartners, einer wirtschaftlich berechtigten oder einer zeichnungsberechtigten Person einer Geschäftsbeziehung oder einer Transaktion entsprechen.</p><p><sup>1bis</sup> Eine Händlerin oder ein Händler muss der Meldest"
+ }
+}

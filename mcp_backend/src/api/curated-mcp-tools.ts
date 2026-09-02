@@ -52,6 +52,9 @@ export const V2_TOOL_NAMES = new Set<string>([
   // Швейцарія (CH) — реєстри компаній: Zefix + SHAB + FINMA + SECO + кантональні відомості.
   'ch_search_companies',
   'ch_get_company',
+  // Швейцарія (CH) — відкриті коментарі до федеральних актів (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
+  'ch_get_commentary',
+  'ch_search_commentary',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',

@@ -1067,4 +1067,110 @@ describe('extractChEvidence', () => {
       expect(result.decisions).toHaveLength(0);
     });
   });
+
+  describe('ch_get_commentary', () => {
+    const COMMENTARY = {
+      id: 7,
+      source: 'onlinekommentar',
+      source_id: 'abc-123',
+      lang: 'de',
+      kind: 'article',
+      sr_number: '952.0',
+      act_title: 'Banking Act',
+      abbr: 'BankG',
+      article_number: '1b',
+      title: 'Art. 1b BankG',
+      authors: ['Tamara Teves', 'David Meirich'],
+      editors: ['Nina Reiser'],
+      version_date: '2026-08-23',
+      suggested_citation: 'OK-Teves/Meirich, Art. 1b BankG N. XXX.',
+      licence: 'CC-BY-4.0',
+      source_url: 'https://onlinekommentar.ch/de/kommentare/bankg1b',
+      pdf_url: 'https://onlinekommentar.ch/de/kommentare/bankg1b/print',
+      legal_text: 'Art. 1b Innovationsförderung ...',
+      text: 'I. Einleitung\n1 Der vorliegende Art. 1b ...',
+      text_offset: 0,
+      text_total_chars: 43,
+      truncated: false,
+      attribution: 'OK-Teves/Meirich, Art. 1b BankG N. XXX. — https://onlinekommentar.ch/de/kommentare/bankg1b (CC-BY-4.0)',
+    };
+
+    it('builds one VaultDocument with authors, source and licence in the title and the text in the body', () => {
+      const result = extractChEvidence('ch_get_commentary', COMMENTARY);
+      expect(result.decisions).toHaveLength(0);
+      expect(result.citations).toHaveLength(0);
+      expect(result.documents).toHaveLength(1);
+      const doc = result.documents[0];
+      expect(doc.id).toBe('ch-commentary-onlinekommentar-abc-123');
+      expect(doc.title).toContain('Art. 1b BankG');
+      expect(doc.title).toContain('Tamara Teves, David Meirich');
+      expect(doc.title).toContain('onlinekommentar');
+      expect(doc.title).toContain('CC-BY-4.0');
+      expect(doc.metadata?.body).toBe(COMMENTARY.text);
+      expect(doc.metadata?.snippet).toContain('OK-Teves/Meirich');
+      expect(doc.metadata?.snippet).not.toContain('показано');
+      expect(doc.metadata?.source_url).toBe(COMMENTARY.source_url);
+      expect(doc.metadata?.licence).toBe('CC-BY-4.0');
+      expect(doc.metadata?.truncated).toBe(false);
+    });
+
+    it('adds the truncation note when the slice is partial', () => {
+      const data = { ...COMMENTARY, text: 'I. Einl', text_total_chars: 43, truncated: true };
+      const doc = extractChEvidence('ch_get_commentary', data).documents[0];
+      expect(doc.metadata?.snippet).toContain('показано 7 з 43 символів');
+      expect(doc.metadata?.truncated).toBe(true);
+    });
+
+    it('returns no document for a not_found payload', () => {
+      const result = extractChEvidence('ch_get_commentary', {
+        error: 'not_found', sr_number: '952.0', article: '7', lang: 'de', available_langs: [], available_articles: ['1b'],
+      });
+      expect(result.documents).toHaveLength(0);
+    });
+  });
+
+  describe('ch_search_commentary', () => {
+    it('maps hits to Citation[] with the source and licence as the source, and the site URL', () => {
+      const data = {
+        results: [
+          {
+            id: 7, source: 'onlinekommentar', source_id: 'abc-123', lang: 'de', kind: 'article',
+            sr_number: '952.0', act_title: 'Banking Act', abbr: 'BankG', article_number: '1b',
+            title: 'Art. 1b BankG', authors: ['Tamara Teves'], editors: [], version_date: '2026-08-23',
+            suggested_citation: null, licence: 'CC-BY-4.0',
+            source_url: 'https://onlinekommentar.ch/de/kommentare/bankg1b', pdf_url: null,
+            rank: 0.1, snippet: 'Die <b>Fintech-Lizenz</b> nach Art. 1b',
+          },
+          {
+            id: 8, source: 'onlinekommentar', source_id: 'def-456', lang: 'de', kind: 'preliminary',
+            sr_number: null, act_title: null, abbr: 'StHG', article_number: null,
+            title: 'Vorb. zu Art. 13-14a StHG', authors: [], editors: [], version_date: null,
+            suggested_citation: null, licence: 'CC-BY-4.0', source_url: 'https://onlinekommentar.ch/de/kommentare/sthg13',
+            pdf_url: null, rank: 0.05, snippet: null,
+          },
+        ],
+        total_count: 2, has_more: false, limit: 10, offset: 0,
+      };
+      const result = extractChEvidence('ch_search_commentary', data);
+      expect(result.documents).toHaveLength(0);
+      expect(result.citations).toHaveLength(2);
+      const [first, second] = result.citations;
+      expect(first.text).toContain('Art. 1b BankG');
+      expect(first.text).toContain('Tamara Teves');
+      expect(first.text).toContain('Редакція 2026-08-23');
+      expect(first.text).toContain('Fintech-Lizenz');
+      expect(first.text).not.toContain('<b>');
+      expect(first.source).toBe('onlinekommentar (CC-BY-4.0)');
+      expect(first.npaTitle).toBe('Banking Act (SR 952.0)');
+      expect(first.articleNumber).toBe('1b');
+      expect(first.url).toBe('https://onlinekommentar.ch/de/kommentare/bankg1b');
+      expect(second.npaTitle).toBe('StHG');
+      expect(second.articleNumber).toBeUndefined();
+    });
+
+    it('yields nothing for an empty page', () => {
+      const result = extractChEvidence('ch_search_commentary', { results: [], total_count: 0, has_more: false, limit: 10, offset: 0 });
+      expect(result.citations).toHaveLength(0);
+    });
+  });
 });
