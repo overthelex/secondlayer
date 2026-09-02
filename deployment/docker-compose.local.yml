@@ -1098,6 +1098,9 @@ services:
       - ./nginx/includes:/etc/nginx/includes:ro
       - ./nginx/certs:/etc/nginx/certs:ro
       - certbot_webroot:/var/www/certbot:ro
+      # статические сайты, переехали с AWS (conf.d/aws-migrated.conf)
+      - ./static/opendata:/var/www/opendata:ro
+      - ./static/defectradar:/var/www/defectradar:ro
     depends_on:
       app-local:
         condition: service_healthy
