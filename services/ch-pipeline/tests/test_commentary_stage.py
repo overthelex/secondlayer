@@ -183,7 +183,12 @@ def test_language_specific_alias_wins_over_fedlex_fallback(settings, conn):
     assert commentary_stage.resolve_sr(conn, None, None, "de") is None
     assert commentary_stage.resolve_sr(conn, "d673263a-b469-42eb-af67-7c01a19779d7", None, "en") == "952.0"
     # The English abbreviation of the one act-less record: not in the alias
-    # table (de/fr/it only), so the curated fallback places it.
+    # table (de/fr/it only), so the curated fallback places it -- and it
+    # places it BEFORE the alias lookup, so a later alias row that spells
+    # IMAC differently cannot move the record.
+    assert commentary_stage.resolve_sr(conn, None, "IMAC", "en") == "351.1"
+    conn.execute("INSERT INTO ch_act_alias (abbr, lang, sr_number, source, jurisdiction) VALUES "
+                 "('IMAC', 'en', '999.9', 'curated', 'CH')")
     assert commentary_stage.resolve_sr(conn, None, "IMAC", "en") == "351.1"
 
 
