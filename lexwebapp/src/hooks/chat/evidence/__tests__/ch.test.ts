@@ -1195,6 +1195,15 @@ describe('extractChEvidence', () => {
       expect(c.url).toBe('https://fedlex.data.admin.ch/filestore/x.pdf');
       expect(c.npaTitle).toBe('Botschaft zum Embargogesetz');
     });
+
+    it('names an untitled material by its citation so the panel never shows an empty source', () => {
+      const data = { results: [{ material_id: 6, material_type: 'bericht_br', title: null, historical_id: 'BBl 2010 5876', pdf_url: 'https://x/y.pdf' }], total_count: 1, has_more: false, limit: 10, offset: 0 };
+      const [c] = extractChEvidence('ch_search_materials', data).citations;
+      expect(c.npaTitle).toBe('BBl 2010 5876');
+      expect(c.source).toBe('BBl 2010 5876');
+      const untitled = { results: [{ material_id: 7, material_type: 'bericht_br', title: null, historical_id: null, pdf_url: 'https://x/z.pdf' }], total_count: 1, has_more: false, limit: 10, offset: 0 };
+      expect(extractChEvidence('ch_search_materials', untitled).citations[0].npaTitle).toBe('Звіт Федеральної ради');
+    });
   });
 
   describe('ch_get_material', () => {

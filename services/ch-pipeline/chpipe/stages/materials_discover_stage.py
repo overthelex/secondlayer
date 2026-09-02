@@ -44,7 +44,13 @@ class MaterialsDiscoverReport:
     by_type: dict[str, int] = field(default_factory=dict)
 
 
+# `old` reads the row as it was before this statement (a data-modifying
+# statement's CTE sees the pre-statement snapshot), which is how RETURNING
+# can say whether the pdf_url changed -- the new row alone cannot.
 _UPSERT = """
+WITH old AS (
+    SELECT pdf_url FROM ch_material WHERE eli_work_uri = %(eli)s AND lang = %(lang)s
+)
 INSERT INTO ch_material
     (eli_work_uri, lang, material_type, type_uri, title, historical_id, bbl_key,
      memorial_year, memorial_page, date_document, publication_date, pdf_url, as_id,
@@ -65,16 +71,28 @@ ON CONFLICT (eli_work_uri, lang) DO UPDATE SET
     date_document    = COALESCE(EXCLUDED.date_document, ch_material.date_document),
     publication_date = COALESCE(EXCLUDED.publication_date, ch_material.publication_date),
     as_id            = COALESCE(EXCLUDED.as_id, ch_material.as_id),
-    -- A new file means new text: back to the queue. Everything else keeps
-    -- its stage, attempts and full_text.
+    -- A new file means new text: back to the queue, and the text, score
+    -- and receipt of the OLD file go with it -- ch_get_material must not
+    -- serve yesterday's text under today's URL. Everything else keeps its
+    -- stage, attempts and full_text.
     stage            = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
                             THEN 'discovered' ELSE ch_material.stage END,
     attempts         = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
                             THEN 0 ELSE ch_material.attempts END,
+    full_text        = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                            THEN NULL ELSE ch_material.full_text END,
+    text_quality     = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                            THEN NULL ELSE ch_material.text_quality END,
+    pdf_bytes        = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                            THEN NULL ELSE ch_material.pdf_bytes END,
+    fetched_at       = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                            THEN NULL ELSE ch_material.fetched_at END,
+    last_error       = CASE WHEN ch_material.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                            THEN NULL ELSE ch_material.last_error END,
     pdf_url          = EXCLUDED.pdf_url,
     updated_at       = now()
 RETURNING (xmax = 0) AS inserted,
-          (xmax <> 0 AND stage = 'discovered' AND full_text IS NOT NULL) AS requeued
+          (xmax <> 0 AND (SELECT pdf_url FROM old) IS DISTINCT FROM ch_material.pdf_url) AS requeued
 """
 
 

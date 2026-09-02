@@ -182,6 +182,7 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
       expect(m.material_id).toBe(materialDe);
       expect(m.matched_via).toEqual(['BBl 2001 1433']);
       expect(m.text_available).toBe(true);
+      expect(m.stage).toBe('parsed');
       const texts = m.paragraphs.map((p: any) => p.text);
       expect(texts).toHaveLength(2);
       expect(texts[0]).toContain('Art. 2 des Entwurfs');

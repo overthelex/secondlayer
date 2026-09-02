@@ -683,10 +683,13 @@ function chMaterialSearchCitation(row: ToolResultData): Citation {
   const date = row.date_document || row.publication_date;
   const snippet = row.snippet ? ` ${String(row.snippet).replace(/<\/?b>/g, '')}` : '';
   const text = `${chMaterialTypeLabel(row.material_type)}${date ? ` від ${date}` : ''}.${snippet}`.trim();
+  // A material without a Fedlex title still needs a name the panel can show
+  // next to the Gazette badge: the type, then the citation itself.
+  const name = String(row.title || row.historical_id || chMaterialTypeLabel(row.material_type) || 'Bundesblatt');
   return {
     text,
-    source: String(row.title || row.historical_id || 'Bundesblatt'),
-    npaTitle: String(row.title || ''),
+    source: name,
+    npaTitle: name,
     articleNumber: row.historical_id ? String(row.historical_id) : undefined,
     url: row.pdf_url || undefined,
   };

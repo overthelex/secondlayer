@@ -843,8 +843,10 @@ def fail_material(conn, material_id: int, error: str, max_attempts: int) -> None
 
 
 def retry_failed_materials(conn) -> int:
-    """Send every retired material back to the queue with a fresh budget."""
+    """Send every retired material back to the queue with a fresh budget.
+    last_error is kept -- it is the diagnosis the operator retries against,
+    and complete_material() clears it on the first success."""
     cursor = conn.execute(
-        "UPDATE ch_material SET stage = 'discovered', attempts = 0, last_error = NULL, "
+        "UPDATE ch_material SET stage = 'discovered', attempts = 0, "
         "stage_updated_at = NULL, updated_at = now() WHERE stage = 'failed'")
     return cursor.rowcount

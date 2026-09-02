@@ -105,7 +105,34 @@ def test_an_empty_text_layer_fails_and_retires_after_max_attempts(settings, conn
     assert _state(conn, mid)[:2] == ("failed", 3)
     assert _run(settings, Host(body=EMPTY_PDF)).claimed == 0
     assert db.retry_failed_materials(conn) == 1
-    assert _state(conn, mid)[:2] == ("discovered", 0)
+    # back in the queue with a fresh budget, the diagnosis kept for the operator
+    assert _state(conn, mid)[:3] == ("discovered", 0, "empty_text_layer")
+
+
+def test_a_row_that_failed_normally_is_reclaimed_when_its_backoff_has_passed(settings, conn):
+    """The re-claim guard must not mistake a legitimate retry for a lost
+    write-back: monkeypatched claim returns the same failed row twice in
+    one run (as a long run past the 1-minute back-off would), and the stage
+    processes it both times."""
+    mid = _row(conn)
+    real_claim = db.claim_materials
+    served = []
+
+    def claim_twice(conn_, limit, **kw):
+        rows = real_claim(conn_, limit, backoff_minutes=None, **{k: v for k, v in kw.items() if k != "backoff_minutes"})
+        out = rows if len(served) < 2 else []
+        served.append(len(out))
+        return out
+
+    import chpipe.stages.materials_text_stage as mod
+    orig = mod.db.claim_materials
+    mod.db.claim_materials = claim_twice
+    try:
+        report = _run(settings, Host(status=404))
+    finally:
+        mod.db.claim_materials = orig
+    assert served == [1, 1, 0] and report.claimed == 2 and report.failed == 2
+    assert _state(conn, mid)[:2] == ("discovered", 2)
 
 
 def test_a_fetch_error_is_a_failed_attempt_not_a_crash(settings, conn):

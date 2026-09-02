@@ -287,6 +287,15 @@ export class ChMaterialsTools extends BaseToolHandler {
         });
       }
 
+      // Which citations have a material at all is answered over the WHOLE set of
+      // linked keys; the response below is capped, and a citation whose material
+      // fell past the cap is still found.
+      const matchedKeys = new Set(
+        (await this.db.query(
+          `SELECT DISTINCT bbl_key FROM ch_material WHERE bbl_key = ANY($1::text[]) AND lang = $2`,
+          [keys, language]
+        )).rows.map((r: any) => String(r.bbl_key))
+      );
       const materials = (await this.db.query(
         `SELECT ${ROW_COLUMNS}, bbl_key
            FROM ch_material
@@ -297,14 +306,14 @@ export class ChMaterialsTools extends BaseToolHandler {
       )).rows;
       const truncated = materials.length > MAX_MATERIALS_PER_ARTICLE;
       const kept = materials.slice(0, MAX_MATERIALS_PER_ARTICLE);
-      const matchedKeys = new Set(kept.map((m: any) => m.bbl_key));
 
       // "Art. 25a", "Artikel 25a", "art. 25a", "article 25a", "articolo 25a" — the article
       // token must not be followed by a letter or digit ('25a' is not '25ab', '25' is not '250').
       const pattern = `(^|[^0-9A-Za-z])(Art\\.|Artikel|Article|Articolo|Articles|Articoli|Artikeln)\\s*${escapeRegex(art)}(?![0-9A-Za-z])`;
       const out: any[] = [];
       for (const m of kept) {
-        const { bbl_key: _k, stage, ...meta } = m;
+        const { bbl_key: _k, ...meta } = m;
+        const stage = m.stage;
         let paragraphs: any[] = [];
         if (stage === 'parsed') {
           paragraphs = (await this.db.query(

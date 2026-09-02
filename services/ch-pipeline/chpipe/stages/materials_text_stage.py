@@ -63,7 +63,11 @@ class MaterialsTextReport:
 
 
 async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
-                       report: MaterialsTextReport, tmp_dir: Path) -> None:
+                       report: MaterialsTextReport, tmp_dir: Path) -> bool:
+    """One row through fetch, pdftotext, gate, store. Returns whether the
+    outcome was WRITTEN BACK (complete_material or fail_material landed);
+    False only when recording a failure itself failed -- the one case the
+    caller must not let the claim hand out again."""
     material_id = row["material_id"]
     try:
         try:
@@ -72,11 +76,11 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
             log.warning("material %s: fetch failed: %s", material_id, exc)
             db.fail_material(conn, material_id, str(exc), settings.max_attempts)
             report.failed += 1
-            return
+            return True
         if len(payload) > MAX_PDF_BYTES:
             db.fail_material(conn, material_id, "pdf_too_large", settings.max_attempts)
             report.failed += 1
-            return
+            return True
         report.bytes_downloaded += len(payload)
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", dir=str(tmp_dir)) as tmp:
@@ -88,7 +92,7 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
             db.fail_material(conn, material_id, "empty_text_layer", settings.max_attempts)
             report.failed += 1
             report.empty += 1
-            return
+            return True
 
         quality = text_quality.score(text, [row["lang"]])
         if quality < text_quality.ACCEPT_THRESHOLD:
@@ -96,22 +100,25 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
                              settings.max_attempts)
             report.failed += 1
             report.low_quality += 1
-            return
+            return True
 
         db.complete_material(conn, material_id, full_text=text, text_quality=quality,
                              pdf_bytes=len(payload),
                              fetched_at=datetime.now(timezone.utc))
         report.parsed += 1
+        return True
     except PdfToolMissing:
         raise
     except Exception as exc:                            # noqa: BLE001
         log.error("material %s: %s", material_id, exc)
+        report.failed += 1
         try:
             db.fail_material(conn, material_id, str(exc), settings.max_attempts)
         except Exception as fail_exc:                   # noqa: BLE001
             log.error("material %s: also failed recording the failure: %s",
                       material_id, fail_exc)
-        report.failed += 1
+            return False
+        return True
 
 
 async def _run_async(settings: Settings, limit: int | None, transport) -> MaterialsTextReport:
@@ -119,14 +126,15 @@ async def _run_async(settings: Settings, limit: int | None, transport) -> Materi
     conn = db.connect(settings)
     remaining = limit
     processed = 0
-    # Every material_id this run has claimed. A row that comes back from
-    # the claim a second time means neither complete_material() nor
-    # fail_material() wrote it (a database error in the failure path, say),
-    # and without this guard the loop would re-claim it forever -- the walk
-    # stops and says so instead. The version-queue stages share the shape
-    # of this loop without the guard; the first run of THIS stage's test
-    # suite found the hang in under a minute, which is why it is here.
-    seen: set[int] = set()
+    # material_ids whose failure could not be recorded (fail_material()
+    # itself raised). Such a row is still 'discovered' with attempts
+    # unchanged, so the very next claim hands it out again, and without this
+    # guard the loop would re-claim it forever -- the walk stops and says
+    # so instead. The first run of this stage's test suite found that hang
+    # in under a minute. Only THOSE rows are guarded: a row that failed
+    # normally and whose back-off (1 min after the first attempt) elapsed
+    # during a long run is a legitimate re-claim and goes round again.
+    unwritten: set[int] = set()
     tmp_dir = settings.raw_dir / PDF_TMP_DIRNAME
     tmp_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -140,15 +148,15 @@ async def _run_async(settings: Settings, limit: int | None, transport) -> Materi
                                           backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
-                stuck = [r["material_id"] for r in rows if r["material_id"] in seen]
+                stuck = [r["material_id"] for r in rows if r["material_id"] in unwritten]
                 if stuck:
-                    log.error("materials-text: %d rows re-claimed without a write-back "
-                              "(first: %s); stopping this run", len(stuck), stuck[0])
+                    log.error("materials-text: %d rows re-claimed whose failure could not "
+                              "be recorded (first: %s); stopping this run", len(stuck), stuck[0])
                     break
-                seen.update(r["material_id"] for r in rows)
                 report.claimed += len(rows)
                 for row in rows:
-                    await _process_one(fetcher, conn, row, settings, report, tmp_dir)
+                    if not await _process_one(fetcher, conn, row, settings, report, tmp_dir):
+                        unwritten.add(row["material_id"])
                     processed += 1
                     if processed % PROGRESS_EVERY == 0:
                         log.info("materials-text progress: claimed=%d parsed=%d failed=%d",

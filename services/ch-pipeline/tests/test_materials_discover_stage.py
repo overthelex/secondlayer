@@ -168,11 +168,18 @@ def test_a_changed_pdf_url_requeues_a_parsed_row(settings, conn):
     for r in sparql.rows:
         if r["act"] == BOTSCHAFT and r["lang"].endswith("DEU"):
             r["fileUrl"] = r["fileUrl"].replace("pdf-a.pdf", "pdf-a-v2.pdf")
+    conn.execute("UPDATE ch_material SET text_quality = 0.9, pdf_bytes = 10, fetched_at = now() "
+                 " WHERE lang = 'de' AND eli_work_uri = %s", (BOTSCHAFT,))
     report = _run(settings, sparql)
     assert report.requeued == 1
     de = _rows(conn)[(BOTSCHAFT, "de")]
     assert de[12] == "discovered" and de[13] == 0 and de[10].endswith("pdf-a-v2.pdf")
     assert _rows(conn)[(BOTSCHAFT, "fr")][12] == "discovered"
+    # The old file's text and receipt went with it: nothing of the old PDF is served.
+    assert conn.execute("SELECT full_text, text_quality, pdf_bytes, fetched_at FROM ch_material "
+                        " WHERE lang = 'de' AND eli_work_uri = %s", (BOTSCHAFT,)).fetchone() == (None, None, None, None)
+    # A third walk with the same URL is not a requeue.
+    assert _run(settings, sparql).requeued == 0
 
 
 def test_metadata_is_refreshed_but_never_blanked(settings, conn):
