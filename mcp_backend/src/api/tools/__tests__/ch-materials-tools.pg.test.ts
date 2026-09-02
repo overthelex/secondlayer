@@ -61,6 +61,8 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
   let client: Client;
   let tools: ChMaterialsTools;
   let materialDe: number;
+  // Every SQL the tools issue, so a test can pin WHICH expression ranks a search.
+  const issued: string[] = [];
 
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
@@ -114,7 +116,9 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
        VALUES ('https://fedlex.data.admin.ch/eli/fga/2010/999', 'de', 'bericht_kommission', 't', 'Bericht der Kommission', '2010-10-12',
                'https://fedlex.data.admin.ch/filestore/k.pdf', 'parsed', 'Die Kommission prüfte die Umsetzung der Sanktionen.')`);
 
-    tools = new ChMaterialsTools({ query: (sql: string, params?: any[]) => client.query(sql, params) });
+    tools = new ChMaterialsTools({
+      query: (sql: string, params?: any[]) => { issued.push(sql); return client.query(sql, params); },
+    });
   });
 
   afterAll(async () => {
@@ -206,13 +210,20 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
       expect(out.materials[0].paragraphs_truncated).toBe(true);
     });
 
-    it('search ranks on the stored tsvector and still returns a headline', async () => {
+    it('search ranks on the stored tsvector, never on a re-parsed expression, and still returns a headline', async () => {
       const cols = (await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'ch_material' AND column_name = 'tsv'`)).rows;
       expect(cols).toHaveLength(1);
+      issued.length = 0;
       const out = parse(await tools.executeTool('ch_search_materials', { query: 'Zwangsmassnahmen' }) as any);
       expect(out.total_count).toBe(1);
       expect(out.results[0].snippet).toMatch(/Zwangsmassnahmen/);
       expect(out.results[0].tsv).toBeUndefined();
+      const search = issued.find((q) => q.includes('ts_rank('))!;
+      expect(search).toBeDefined();
+      expect(search).toMatch(/ts_rank\(tsv,/);
+      expect(search).toMatch(/WHERE[\s\S]*\btsv @@ plainto_tsquery/);
+      // The expression form would re-parse every hit; only the headline may touch full_text.
+      expect(search).not.toMatch(/to_tsvector\(/);
     });
 
     it('returns the linked material without paragraphs when its text is not parsed yet', async () => {

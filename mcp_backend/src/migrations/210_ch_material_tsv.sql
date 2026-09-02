@@ -10,10 +10,17 @@
 -- read; the index moves onto the column, the expression index goes.
 --
 -- GENERATED ALWAYS ... STORED rewrites the table once when added (10.5K
--- rows, ~700 MB of text), so this must run after the first backfill, not
--- during it -- the migration runner applies it at deploy, which is fine
--- once ch_material is populated and idle. Idempotent: ADD COLUMN IF NOT
--- EXISTS, CREATE/DROP INDEX IF (NOT) EXISTS.
+-- rows, ~700 MB of text: about a minute) under ACCESS EXCLUSIVE, which
+-- blocks the two readers (ch_search_materials, ch_get_*) and the text
+-- stage's writes for that minute. That is the deliberate trade against an
+-- online path (nullable column + trigger + batched backfill + CONCURRENTLY
+-- index, which the migration runner's single transaction cannot host):
+-- the table is small, and the tools it serves are days old with no traffic
+-- to speak of. The operating rule: merge this AFTER the first materials
+-- backfill has finished and the tmux session is gone -- lock_timeout = 3s
+-- makes the ALTER fail fast (and the deploy with it, to be re-run) rather
+-- than queue behind a running stage and block everything behind itself.
+-- Idempotent: ADD COLUMN IF NOT EXISTS, CREATE/DROP INDEX IF (NOT) EXISTS.
 
 SET lock_timeout = '3s';
 

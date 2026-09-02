@@ -22,9 +22,17 @@ def conn():
 
 def test_applies_twice_and_swaps_the_index(conn):
     conn.execute(MIGRATION_210.read_text())
-    names = {r["indexname"] for r in conn.execute(
-        "SELECT indexname FROM pg_indexes WHERE tablename = 'ch_material'").fetchall()}
-    assert "idx_ch_material_tsv" in names and "idx_ch_material_fts" not in names
+    defs = {r["indexname"]: r["indexdef"] for r in conn.execute(
+        "SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'ch_material'").fetchall()}
+    assert "idx_ch_material_fts" not in defs
+    # The index is a GIN over the column itself -- not a btree, not an expression.
+    assert defs["idx_ch_material_tsv"].lower().endswith("using gin (tsv)")
+    # And the column is generated AND stored ('s'); a virtual one would put the
+    # parse back on every rank.
+    generated = conn.execute(
+        "SELECT attgenerated FROM pg_attribute WHERE attrelid = 'ch_material'::regclass AND attname = 'tsv'"
+    ).fetchone()["attgenerated"]
+    assert generated == "s"
 
 
 def test_tsv_follows_the_text_without_a_write_from_the_stage(conn):
