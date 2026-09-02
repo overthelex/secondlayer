@@ -428,3 +428,56 @@ def status_code(uri: str | None) -> int | None:
 
 def language_code(uri: str | None) -> str | None:
     return LANGUAGE_MAP.get(uri or "")
+
+
+# ---------------------------------------------------------------------------
+# Federal Gazette materials (migration 209, materials_discover_stage).
+#
+# jolux:typeDocument is a resource-type IRI; the labels below are the
+# vocabulary's own German skos:prefLabel, read live on 2026-09-02
+# (resource-type/23 "Botschaft des Bundesrates", 24 "Bericht des
+# Bundesrates", 25 "Stellungnahme des Bundesrates", 30 "Bericht
+# parlamentarische Kommission"). 63 "Bericht (oder Stellungnahme) des
+# Bundesrates" exists in the vocabulary but has no /eli/fga/ work.
+# ---------------------------------------------------------------------------
+_RESOURCE_TYPE = "https://fedlex.data.admin.ch/vocabulary/resource-type/"
+MATERIAL_TYPES: dict[str, str] = {
+    _RESOURCE_TYPE + "23": "botschaft",
+    _RESOURCE_TYPE + "24": "bericht_br",
+    _RESOURCE_TYPE + "25": "stellungnahme_br",
+    _RESOURCE_TYPE + "30": "bericht_kommission",
+}
+
+# One row per (work, language) -- the pdf-a manifestation is what makes a
+# row, so a work without one (4 of 3,527 on 2026-09-02) yields nothing and
+# an ENG/ROH expression is filtered by LANGUAGE_MAP at the caller. ?lang and
+# ?manifestation hang off the SAME ?expr for the reason VERSIONS documents
+# above: two independent paths off the work would join a French file to a
+# German title. Keyset on ?act (see sparql.py); a page of 2,000 rows holds
+# ~660 works.
+MATERIALS = _PREFIXES + """
+SELECT DISTINCT ?act ?typeDocument ?dateDocument ?publicationDate ?lang ?title
+                ?historicalId ?memorialYear ?memorialPage ?fileUrl WHERE {
+  ?act a jolux:Act ;
+       jolux:typeDocument ?typeDocument .
+  FILTER(STR(?act) >= "%(after)s")
+  FILTER(STRSTARTS(STR(?act), "https://fedlex.data.admin.ch/eli/fga/"))
+  FILTER(?typeDocument IN (<https://fedlex.data.admin.ch/vocabulary/resource-type/23>,
+                           <https://fedlex.data.admin.ch/vocabulary/resource-type/24>,
+                           <https://fedlex.data.admin.ch/vocabulary/resource-type/25>,
+                           <https://fedlex.data.admin.ch/vocabulary/resource-type/30>))
+  OPTIONAL { ?act jolux:dateDocument ?dateDocument }
+  OPTIONAL { ?act jolux:publicationDate ?publicationDate }
+  ?act jolux:isRealizedBy ?expr .
+  ?expr jolux:language ?lang ;
+        jolux:isEmbodiedBy ?manifestation .
+  ?manifestation jolux:userFormat <https://fedlex.data.admin.ch/vocabulary/user-format/pdf-a> ;
+                 jolux:isExemplifiedBy ?fileUrl .
+  OPTIONAL { ?expr jolux:title ?title }
+  OPTIONAL { ?expr jolux:historicalLegalId ?historicalId }
+  OPTIONAL { ?expr jolux:memorialYear ?memorialYear }
+  OPTIONAL { ?expr jolux:memorialPage ?memorialPage }
+}
+ORDER BY ?act ?lang
+LIMIT %(limit)d
+"""

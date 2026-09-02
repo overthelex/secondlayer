@@ -26,6 +26,7 @@ const CH_LEGISLATION_TOOLS = new Set([
 const CH_REGISTRY_TOOLS = new Set(['ch_search_companies', 'ch_get_company']);
 const CH_CITATION_TOOLS = new Set(['ch_get_citation_graph', 'ch_check_precedent_status']);
 const CH_COMMENTARY_TOOLS = new Set(['ch_get_commentary', 'ch_search_commentary']);
+const CH_MATERIALS_TOOLS = new Set(['ch_search_materials', 'ch_get_material', 'ch_get_article_purpose']);
 
 const MAX_HISTORY_CITATIONS = 50;
 const SUMMARY_FULL_TEXT_CHARS = 500;
@@ -664,6 +665,120 @@ function extractChCommentaryEvidence(toolName: string, parsed: ToolResultData): 
   return { decisions: [], citations, documents };
 }
 
+const CH_MATERIAL_TYPE_LABELS: Record<string, string> = {
+  botschaft: 'Botschaft (послання Федеральної ради)',
+  bericht_br: 'Звіт Федеральної ради',
+  stellungnahme_br: 'Позиція Федеральної ради',
+  bericht_kommission: 'Звіт парламентської комісії',
+};
+
+function chMaterialTypeLabel(kind: unknown): string {
+  const key = String(kind || '');
+  return CH_MATERIAL_TYPE_LABELS[key] || key;
+}
+
+// ch_search_materials: one Citation per hit — the Gazette citation is the article
+// number badge (the thing a lawyer writes), the Fedlex PDF is the link.
+function chMaterialSearchCitation(row: ToolResultData): Citation {
+  const date = row.date_document || row.publication_date;
+  const snippet = row.snippet ? ` ${String(row.snippet).replace(/<\/?b>/g, '')}` : '';
+  const text = `${chMaterialTypeLabel(row.material_type)}${date ? ` від ${date}` : ''}.${snippet}`.trim();
+  // A material without a Fedlex title still needs a name the panel can show
+  // next to the Gazette badge: the citation itself ("BBl 2010 5876") when
+  // there is one, the type label when there is not.
+  const name = String(row.title || row.historical_id || chMaterialTypeLabel(row.material_type) || 'Bundesblatt');
+  return {
+    text,
+    source: name,
+    npaTitle: name,
+    articleNumber: row.historical_id ? String(row.historical_id) : undefined,
+    url: row.pdf_url || undefined,
+  };
+}
+
+// ch_get_material: the text slice → one VaultDocument, truncation note as elsewhere.
+function chMaterialDocument(parsed: ToolResultData): VaultDocument {
+  const text = typeof parsed.text === 'string' ? parsed.text : '';
+  const totalChars = parsed.text_total_chars != null ? Number(parsed.text_total_chars) : text.length;
+  const truncationNote = parsed.truncated === true
+    ? `показано ${text.length} з ${totalChars} символів`
+    : undefined;
+  const unavailable = parsed.text_available === false ? 'текст ще не завантажено' : undefined;
+  const title = `${parsed.title || chMaterialTypeLabel(parsed.material_type)}${parsed.historical_id ? ` (${parsed.historical_id})` : ''}`;
+  return {
+    id: `ch-material-${parsed.material_id}`,
+    title,
+    type: 'other',
+    metadata: {
+      body: text,
+      snippet: [unavailable, truncationNote, text].filter(Boolean).join(' • '),
+      material_id: parsed.material_id,
+      eli_work_uri: parsed.eli_work_uri,
+      material_type: parsed.material_type,
+      historical_id: parsed.historical_id,
+      pdf_url: parsed.pdf_url,
+      lang: parsed.lang,
+      date_document: parsed.date_document,
+      publication_date: parsed.publication_date,
+      truncated: parsed.truncated === true,
+      text_offset: parsed.text_offset,
+      text_total_chars: parsed.text_total_chars,
+    },
+  };
+}
+
+// ch_get_article_purpose: one Citation per paragraph of every linked material, each
+// naming the act and article it explains and linking to the Fedlex PDF.
+function chArticlePurposeCitations(parsed: ToolResultData): Citation[] {
+  const out: Citation[] = [];
+  const npaTitle = [
+    parsed.article ? `Art. ${parsed.article}` : undefined,
+    parsed.abbreviation ? String(parsed.abbreviation) : undefined,
+    parsed.act_title ? String(parsed.act_title) : undefined,
+    parsed.sr_number ? `(SR ${parsed.sr_number})` : undefined,
+  ].filter(Boolean).join(' ');
+  const materials = Array.isArray(parsed.materials) ? parsed.materials : [];
+  for (const m of materials) {
+    const label = `${m.title || chMaterialTypeLabel(m.material_type)}${m.historical_id ? `, ${m.historical_id}` : ''}`;
+    const paragraphs = Array.isArray(m.paragraphs) ? m.paragraphs : [];
+    if (paragraphs.length === 0) {
+      out.push({
+        text: m.text_available === false ? `${label}: текст ще не завантажено.` : `${label}: абзаців зі згадкою статті не знайдено.`,
+        source: label,
+        npaTitle,
+        articleNumber: parsed.article ? String(parsed.article) : undefined,
+        url: m.pdf_url || undefined,
+      });
+      continue;
+    }
+    for (const p of paragraphs) {
+      out.push({
+        text: String(p.text || ''),
+        source: label,
+        npaTitle,
+        articleNumber: parsed.article ? String(parsed.article) : undefined,
+        url: m.pdf_url || undefined,
+      });
+    }
+  }
+  return out;
+}
+
+function extractChMaterialsEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
+  const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
+  if (toolName === 'ch_search_materials') {
+    const rows = Array.isArray(parsed.results) ? parsed.results : [];
+    for (const row of rows) citations.push(chMaterialSearchCitation(row));
+  } else if (toolName === 'ch_get_material') {
+    if (!parsed.error && parsed.material_id != null) documents.push(chMaterialDocument(parsed));
+  } else if (toolName === 'ch_get_article_purpose') {
+    // Error payloads: { error: 'not_found', entity: 'act' } | { error: 'no_materials_linked', bbl_references }
+    if (!parsed.error) citations.push(...chArticlePurposeCitations(parsed));
+  }
+  return { decisions: [], citations, documents };
+}
+
 export function extractChEvidence(toolName: string, data: ToolResultData): EvidenceResult {
   if (!data || typeof data !== 'object') {
     return { decisions: [], citations: [], documents: [] };
@@ -683,6 +798,9 @@ export function extractChEvidence(toolName: string, data: ToolResultData): Evide
   }
   if (CH_COMMENTARY_TOOLS.has(toolName)) {
     return extractChCommentaryEvidence(toolName, data);
+  }
+  if (CH_MATERIALS_TOOLS.has(toolName)) {
+    return extractChMaterialsEvidence(toolName, data);
   }
 
   return { decisions: [], citations: [], documents: [] };

@@ -81,7 +81,8 @@ from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
                      index_stage, load_stage, parse_akn_stage,
                      project_legacy_stage, provenance_stage,
                      shab_detail_stage, shab_list_stage, versions_stage,
-                     zefix_stage)
+                     zefix_stage,
+                     materials_discover_stage, materials_text_stage)
 
 log = logging.getLogger(__name__)
 
@@ -542,6 +543,10 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
 # One night's ceiling for the fedlex-pdf-text drain -- see the comment at its
 # call site in run_legislation().
 _FEDLEX_PDF_TEXT_NIGHTLY_CAP = 2000
+# Same shape for the Federal Gazette materials (migration 209): the
+# supervised backfill owns the ~10.5K-file first pass, a night drains what
+# materials-discover found new (a few dozen a week) plus retries.
+_MATERIALS_TEXT_NIGHTLY_CAP = 300
 
 
 def run_legislation(settings: Settings) -> DeltaReport:
@@ -564,6 +569,11 @@ def run_legislation(settings: Settings) -> DeltaReport:
     # only drains stragglers. A capped night leaves the rest claimable for
     # the next one -- nothing is lost, only deferred.
     fedlex_pdf_text_stage.run(settings, limit=_FEDLEX_PDF_TEXT_NIGHTLY_CAP)
+    # Federal Gazette materials: a full (cheap, ~20 s) rediscovery walk so a
+    # Botschaft published this week is queued tonight, then a capped drain of
+    # the queue. Return values discarded for the same reason as above.
+    materials_discover_stage.run(settings)
+    materials_text_stage.run(settings, limit=_MATERIALS_TEXT_NIGHTLY_CAP)
     parsed = parse_akn_stage.run(settings)
 
     # Parsing is not where a new edition becomes readable. `diff` is what

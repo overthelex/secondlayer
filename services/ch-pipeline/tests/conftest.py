@@ -211,3 +211,15 @@ def apply_migration_208(conn) -> None:
     """ch_act_alias stand-in, then 208. Idempotent: IF NOT EXISTS throughout."""
     conn.execute(_CH_ACT_ALIAS)
     conn.execute(MIGRATION_208.read_text())
+
+
+# --- migration 209 (ch_material) -------------------------------------------
+# 209 references ch_as_act (198), which in turn needs 197: the whole
+# legislation schema, so the helper is reset_legislation_schema() + 209.
+MIGRATION_209 = _REPO_ROOT / "mcp_backend/src/migrations/209_ch_material.sql"
+
+
+def apply_migration_209(conn) -> None:
+    reset_legislation_schema(conn)
+    conn.execute("DROP TABLE IF EXISTS ch_material CASCADE")
+    conn.execute(MIGRATION_209.read_text())
