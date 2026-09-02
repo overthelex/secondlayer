@@ -71,6 +71,17 @@ ACT_BY_UUID: dict[str, str] = {
 }
 
 
+# Abbreviations the title fallback cannot find in ch_act_alias, because the
+# alias table only knows the de/fr/it forms and onlinekommentar also
+# publishes in English. Needed only for a record WITHOUT a legislative_act
+# (one on the whole site: Art. 80c, whose de/fr/it versions resolve through
+# IRSG / EIMP / AIMP and whose English version says "IMAC"). The first prod
+# walk (2026-09-02) left exactly that one row with sr_number NULL.
+ABBR_FALLBACK: dict[str, str] = {
+    "IMAC": "351.1",     # International Mutual Assistance in Criminal Matters (IRSG)
+}
+
+
 @dataclass(frozen=True)
 class ParsedTitle:
     kind: str                       # article | preliminary | introduction | other
