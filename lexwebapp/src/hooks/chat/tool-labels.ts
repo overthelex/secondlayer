@@ -58,6 +58,8 @@ export const TOOL_LABELS: Record<string, string> = {
   ch_search_legislation: 'Пошук законодавства Швейцарії (SR)',
   ch_get_act_article: 'Стаття акта Швейцарії на дату',
   ch_get_act_history: 'Історія змін акта Швейцарії',
+  ch_get_commentary: 'Коментар до статті закону Швейцарії',
+  ch_search_commentary: 'Пошук у коментарях до законів Швейцарії',
   ch_get_decision_legislation: 'Законодавство до рішення (Швейцарія)',
   ch_get_act_text: 'Текст акта на дату (Швейцарія)',
   ch_get_citation_graph: 'Граф цитувань рішення (Швейцарія)',

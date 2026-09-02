@@ -401,7 +401,8 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "cantonal-fetch", "cantonal-parse", "cantonal-relink", "reports-cantonal",
                 "sil-acts", "sil-fetch", "sil-parse", "ti-acts", "ti-fetch", "ti-parse",
                 "lexwork-pdf-requeue", "pdf-text",
-                "zh-acts", "zh-fetch", "zh-parse", "zh-amend"}
+                "zh-acts", "zh-fetch", "zh-parse", "zh-amend",
+                    "commentary"}
     assert _accepted_stage_names() == expected
 
 

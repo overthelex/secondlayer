@@ -15,6 +15,7 @@ import { ChVerificationTools } from '../tools/ch-verification-tools.js';
 import { ChCourtTools } from '../tools/ch-court-tools.js';
 import { ChLegislationTools } from '../tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../tools/ch-registry-tools.js';
+import { ChCommentaryTools } from '../tools/ch-commentary-tools.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { V2_TOOL_NAMES } from '../curated-mcp-tools.js';
 
@@ -35,6 +36,8 @@ const CH_TOOL_NAMES = [
   'ch_get_citation_graph',
   'ch_check_precedent_status',
   'ch_verify_citations',
+  'ch_get_commentary',
+  'ch_search_commentary',
 ];
 
 // Stub is only for construction (constructor(private db: any)) — executeTool is never
@@ -119,6 +122,21 @@ describe('CH tool surface registration', () => {
       }
     });
 
+    it('ChCommentaryTools exposes exactly its two tools with Ukrainian descriptions', () => {
+      const tool = new ChCommentaryTools(stubDb);
+      const defs = tool.getToolDefinitions();
+      expect(defs.map(d => d.name).sort()).toEqual(
+        ['ch_get_commentary', 'ch_search_commentary'].sort()
+      );
+      for (const def of defs) {
+        expect(def.description).toBeTruthy();
+        expect(isCyrillic(def.description)).toBe(true);
+        expect(def.inputSchema.type).toBe('object');
+        // CC BY: the description must tell the caller the text is attributed and licensed.
+        expect(def.description).toContain('CC BY 4.0');
+      }
+    });
+
     it('ChLegislationTools exposes exactly its five tools with Ukrainian descriptions', () => {
       const tool = new ChLegislationTools(stubDb);
       const defs = tool.getToolDefinitions();
@@ -141,6 +159,7 @@ describe('CH tool surface registration', () => {
       registry.registerHandler(new ChRegistryTools(stubDb));
       registry.registerHandler(new ChCitationTools(stubDb));
       registry.registerHandler(new ChVerificationTools(stubDb));
+      registry.registerHandler(new ChCommentaryTools(stubDb));
 
       const names = registry.getLocalToolDefinitions().map(d => d.name);
       for (const name of CH_TOOL_NAMES) {

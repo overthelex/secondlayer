@@ -1,0 +1,116 @@
+{
+ "data": [
+  {
+   "id": "18dfbfd2-e939-4e98-8d26-ac202f51d8d5",
+   "title": "Art. 1b BankG",
+   "date": "2026-08-23",
+   "language": "de",
+   "authors": [
+    {
+     "id": "89ccbc90-6121-462d-b33d-fcb0fa119bf2",
+     "name": "Tamara Teves"
+    },
+    {
+     "id": "1a3cd678-920d-4763-bcc4-24d2a08b2971",
+     "name": "David Meirich"
+    }
+   ],
+   "editors": [
+    {
+     "id": "f9d58327-6321-497f-822f-49aa2ce9e347",
+     "name": "Nina Reiser"
+    },
+    {
+     "id": "d3a995d8-5622-4f44-822f-15908972b7cb",
+     "name": "Beat Brändli"
+    }
+   ],
+   "legislative_act": {
+    "id": "d673263a-b469-42eb-af67-7c01a19779d7",
+    "title": "Banking Act"
+   },
+   "link": "https://onlinekommentar.ch/api/commentaries/18dfbfd2-e939-4e98-8d26-ac202f51d8d5",
+   "html_link": "https://onlinekommentar.ch/de/kommentare/bankg1b",
+   "pdf_link": "https://onlinekommentar.ch/de/kommentare/bankg1b/print",
+   "additional_document_links": []
+  },
+  {
+   "id": "c26eacef-0731-4f60-852f-e26ae0a26c66",
+   "title": "Art. 9 GwG",
+   "date": "2026-07-29",
+   "language": "de",
+   "authors": [
+    {
+     "id": "5d32a0f2-a0dc-4288-a24b-f6e3ff68daea",
+     "name": "Andrew Garbarski"
+    },
+    {
+     "id": "73d9b5c8-4aa9-4bf0-b191-47bb17e2ee3d",
+     "name": "Louis Muskens"
+    },
+    {
+     "id": "b7b0c4a9-4338-4054-9c0d-cf305b6a0d13",
+     "name": "Mattia Brugger"
+    }
+   ],
+   "editors": [
+    {
+     "id": "5b98419b-fe0f-4894-ae1e-4dab4b46dc61",
+     "name": "Damian K. Graf"
+    },
+    {
+     "id": "630f449b-8bbd-4909-b17e-63c7e1d40da3",
+     "name": "Doris Hutzler"
+    }
+   ],
+   "legislative_act": {
+    "id": "8cc7e9b6-eff3-4400-8463-ff14db576ca7",
+    "title": "Anti-Money Laundering Act"
+   },
+   "link": "https://onlinekommentar.ch/api/commentaries/c26eacef-0731-4f60-852f-e26ae0a26c66",
+   "html_link": "https://onlinekommentar.ch/de/kommentare/gwg9",
+   "pdf_link": "https://onlinekommentar.ch/de/kommentare/gwg9/print",
+   "additional_document_links": []
+  },
+  {
+   "id": "494b1462-6481-4c61-99ab-a5346efe7b26",
+   "title": "Art. 1 CCC (Übereinkommen über die Cyberkriminalität [Cybercrime Convention])",
+   "date": "2026-07-29",
+   "language": "de",
+   "authors": [
+    {
+     "id": "3f2ab9bc-6708-437a-9361-06ca20bb766e",
+     "name": "Jérémie Müller"
+    }
+   ],
+   "editors": [
+    {
+     "id": "5b98419b-fe0f-4894-ae1e-4dab4b46dc61",
+     "name": "Damian K. Graf"
+    }
+   ],
+   "legislative_act": {
+    "id": "cf0dd38c-fb3a-4090-8794-b3a5e2fea1b3",
+    "title": "Cybercrime Convention"
+   },
+   "link": "https://onlinekommentar.ch/api/commentaries/494b1462-6481-4c61-99ab-a5346efe7b26",
+   "html_link": "https://onlinekommentar.ch/de/kommentare/ccc1",
+   "pdf_link": "https://onlinekommentar.ch/de/kommentare/ccc1/print",
+   "additional_document_links": []
+  }
+ ],
+ "links": {
+  "first": "https://onlinekommentar.ch/api/commentaries?page=1",
+  "last": "https://onlinekommentar.ch/api/commentaries?page=8",
+  "prev": null,
+  "next": null
+ },
+ "meta": {
+  "current_page": 1,
+  "from": 1,
+  "last_page": 1,
+  "per_page": 50,
+  "to": 3,
+  "total": 3
+ }
+}

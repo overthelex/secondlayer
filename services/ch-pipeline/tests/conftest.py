@@ -186,3 +186,28 @@ def apply_migration_202(conn) -> None:
     conn.execute(_CH_ZEFIX_COMPANIES)
     conn.execute(_CH_SHAB_PUBLICATIONS)
     conn.execute(MIGRATION_202.read_text())
+
+
+# --- migration 208 (ch_commentary) -----------------------------------------
+# 208 creates one table and two indexes and depends on nothing; what
+# commentary_stage ALSO reads is ch_act_alias (199 + 206's jurisdiction
+# column), so the stand-in below is that table in its 206 shape -- the same
+# reasoning as _CH_ACT_ARTICLE above: the real columns, not a narrower set.
+MIGRATION_208 = _REPO_ROOT / "mcp_backend/src/migrations/208_ch_commentary.sql"
+
+_CH_ACT_ALIAS = """
+CREATE TABLE IF NOT EXISTS ch_act_alias (
+    abbr         text NOT NULL,
+    lang         text NOT NULL,
+    sr_number    text NOT NULL,
+    source       text NOT NULL,
+    jurisdiction text NOT NULL DEFAULT 'CH',
+    PRIMARY KEY (abbr, lang, sr_number, jurisdiction)
+)
+"""
+
+
+def apply_migration_208(conn) -> None:
+    """ch_act_alias stand-in, then 208. Idempotent: IF NOT EXISTS throughout."""
+    conn.execute(_CH_ACT_ALIAS)
+    conn.execute(MIGRATION_208.read_text())
