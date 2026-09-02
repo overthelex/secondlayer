@@ -223,3 +223,11 @@ def apply_migration_209(conn) -> None:
     reset_legislation_schema(conn)
     conn.execute("DROP TABLE IF EXISTS ch_material CASCADE")
     conn.execute(MIGRATION_209.read_text())
+
+MIGRATION_210 = _REPO_ROOT / "mcp_backend/src/migrations/210_ch_material_tsv.sql"
+
+
+def apply_migration_210(conn) -> None:
+    """209 then 210: the stored tsvector replaces 209's expression index."""
+    apply_migration_209(conn)
+    conn.execute(MIGRATION_210.read_text())
