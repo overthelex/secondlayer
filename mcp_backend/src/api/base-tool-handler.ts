@@ -71,7 +71,14 @@ export abstract class BaseToolHandler {
    * Wrap search results with pagination metadata.
    * Expects rows from a query using COUNT(*) OVER() AS _total_count.
    */
-  protected wrapSearchResults(rows: any[], limit: number, offset = 0): ToolResult {
+  protected wrapSearchResults(
+    rows: any[],
+    limit: number,
+    offset = 0,
+    /** Licence acknowledgement required by the source, carried once per response
+     *  rather than repeated on every row. */
+    attribution?: string
+  ): ToolResult {
     const totalCount = rows.length > 0 ? Number(rows[0]._total_count ?? rows.length) : 0;
     const cleaned = rows.map(({ _total_count, ...rest }) => rest);
     return this.wrapResponse({
@@ -80,6 +87,7 @@ export abstract class BaseToolHandler {
       has_more: offset + cleaned.length < totalCount,
       limit,
       offset,
+      ...(attribution ? { licence: attribution } : {}),
     });
   }
 

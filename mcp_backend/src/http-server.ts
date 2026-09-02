@@ -436,6 +436,17 @@ class HTTPMCPServer {
 
     // Global API rate limiter — baseline protection for all /api/ routes (120 req/min per IP).
     // More specific per-endpoint limiters (auth, chat, upload, etc.) still apply additionally.
+    // Principle 7 of the Find Case Law licence: licence holders must not index the
+    // contents of judgments on search engines, and must consider how they prevent
+    // third parties crawling the records or the data extracted from them. Every /api
+    // route needs a bearer token, so a crawler is already turned away — this header
+    // says so explicitly rather than relying on the 401, and covers anything that
+    // proxies or mirrors a response.
+    this.app.use('/api', (_req, res, next) => {
+      res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+      next();
+    });
+
     this.app.use('/api', globalApiRateLimit as any);
 
     // Document classification routes - must come before /api/documents generic REST route

@@ -58,4 +58,14 @@ Disallow: /decisions
 Disallow: /case-analysis
 Disallow: /partner-onepager.html
 
+# The API. Everything here needs a bearer token and answers 401 without one, so a
+# crawler gets nothing either way — but principle 7 of the Find Case Law licence
+# asks what we do to prevent third parties crawling the records or the data we
+# extract from them, and "the routes are disallowed" is a better answer than "they
+# happen to fail". Judgment text is served from /api only.
+Disallow: /api/
+Disallow: /api/*
+Disallow: /sse
+Disallow: /mcp
+
 Sitemap: https://legal.org.ua/sitemap.xml
