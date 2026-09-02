@@ -19,7 +19,7 @@ opencaselaw.ch (Jonas Hertner, MIT-код на github.com/jonashertner/opencasel
 | Botschaften (материалы) | **6,157 Botschaften, 421K абзацев полного текста**; 83,958 ссылок поправка→BBl | `ch_as_act` 211,641 строк AS/BBl, **только метаданные**, `ch_bundesblatt` пуст | **Пробел** (полный текст) |
 | Административная практика | FINMA-Rundschreiben 1,133; ESTV Kreisschreiben 285 + MWST-Info; SECO ArG 1,102; BAFU 297; ARE; SEM Weisungen; EPA; SSK; VPB 23K | VPB есть (CH_VB 32.7K), остального нет | **Пробел ≈ 3–4K документов** |
 | Научные публикации | **44,495** из 24 источников (ZORA 14K, BORIS 7.3K, UNIGE 6.5K, e-periodica 7K, ZHAW 3K, LIBRA 2K, ETH 1.8K, …), в основном OAI-PMH | нет | **Пробел** |
-| Комментарии | onlinekommentar.ch 1,173 по 23 законам (CC-BY 4.0) + openlegalcommentary.ch (CC-BY-SA) | нет | **Пробел** (дешёвый) |
+| Комментарии | onlinekommentar.ch (у них 1,173 по 23 законам; измерено у источника 02.09: 391 × 4 языка = 1,564 записи, 24 акта, CC BY 4.0) + openlegalcommentary.ch (CC BY-SA; **генерируется ИИ** по их же странице методики) | нет → **1a сделано, PR #2398** | **Пробел** (дешёвый) |
 | Граф цитирований | 9.86M решение→решение (92.9% резолв), 12.5M решение→статья | 9.05M case (84.3%), 21.6M legislation (act 90.9%, article-at-date 81.9%) | Паритет |
 | Реестры | нет | Zefix 787,706 + SHAB 2,511,033 + FINMA 15,660 + SECO 8,563 | Мы впереди |
 | Доступ | MCP + REST без ключа, HF parquet CC0, Word add-in, CLI/ECLI-идентификаторы, JSON-LD | MCP по ключу с кредитами, 12 ch_* тулз | Не данные, вне этого плана; см. «Открытые вопросы» |
@@ -38,7 +38,7 @@ opencaselaw.ch (Jonas Hertner, MIT-код на github.com/jonashertner/opencasel
 
 ## План: 6 фаз, по убыванию ценность/стоимость
 
-Все фазы строятся по существующему паттерну `services/ch-pipeline`: стадия в `chpipe/stages/<name>_stage.py`, регистрация в `run-stage.sh`, хвост в `chpipe/delta.py`, миграция в `mcp_backend/src/migrations/` (последняя занятая 207), тулза в `mcp_backend/src/api/tools/ch-*.ts` + `curated-mcp-tools.ts` + список `ch` в `mcp-toolset.ts`. Лицензия хранится per-row (колонка `licence`), как это делает opencaselaw в `scrapers/scholarship/sources.py`.
+Все фазы строятся по существующему паттерну `services/ch-pipeline`: стадия в `chpipe/stages/<name>_stage.py`, регистрация в `run-stage.sh`, хвост в `chpipe/delta.py`, миграция в `mcp_backend/src/migrations/` (последняя занятая 208, этот PR), тулза в `mcp_backend/src/api/tools/ch-*.ts` + `curated-mcp-tools.ts` + список `ch` в `mcp-toolset.ts`. Лицензия хранится per-row (колонка `licence`), как это делает opencaselaw в `scrapers/scholarship/sources.py`.
 
 ### Фаза 1. Комментарии + Botschaften (самая высокая ценность для юриста)
 
@@ -46,7 +46,7 @@ opencaselaw.ch (Jonas Hertner, MIT-код на github.com/jonashertner/opencasel
 - Источник: сайт onlinekommentar.ch (структура: закон → статья → комментарий, версии), у opencaselaw есть готовые `scrapers/onlinekommentar.py`, `openlegalcommentary.py` как подсказка по эндпоинтам.
 - Таблица `ch_commentary(id, source, act_sr_number, article_number, lang, title, authors, version_date, full_text, licence, source_url, content_hash)`; линк на `ch_act` через существующий резолвер алиасов `chpipe/ch_aliases.py`.
 - Тулза `ch_get_commentary(act, article)` + вход в `ch_search_legislation` (флаг `include_commentary`).
-- Объём ≈ 1.2K документов, один вечер.
+- Объём: 391 × 4 языка = 1,564 записи (измерено 02.09), один вечер. openlegalcommentary.ch отложен: комментарии там генерируются ИИ (их страница /de/methodology), решение за Ваттом.
 
 **1b. Botschaften полный текст.**
 - У нас уже есть 162K BBl-строк с ELI в `ch_as_act`. Fedlex отдаёт PDF/HTML манифестации по `eli/fga/...` через тот же SPARQL/filestore, что и pdf-a редакции (стадия `fedlex_pdf_text_stage.py` переиспользуется почти целиком: клейм, 80MB cap, quality gate, OCR-хвост).
@@ -109,7 +109,7 @@ FINMA-Rundschreiben (1,133), ESTV Kreisschreiben (285) + MWST-Info/Branchen-Info
 
 | Фаза | Документов | Оценка | Зависимости |
 |---|---|---|---|
-| 1a комментарии | 1.2K | 1 день | нет |
+| 1a комментарии | 1,564 | 1 день, сделано (PR #2398) | нет |
 | 1b Botschaften | 7K | 2 дня + ночь на GCP | fedlex_pdf_text_stage |
 | 2 регуляторы + MKG | 8K | 3 дня | нет |
 | 3 ЕСПЧ | 10K | 1 день (копия с legal_prod) | dump-push AWS→GCP |
