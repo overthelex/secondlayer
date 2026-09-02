@@ -182,6 +182,9 @@ def test_language_specific_alias_wins_over_fedlex_fallback(settings, conn):
     assert commentary_stage.resolve_sr(conn, None, "OR", "fr") == "220"     # fedlex fallback
     assert commentary_stage.resolve_sr(conn, None, None, "de") is None
     assert commentary_stage.resolve_sr(conn, "d673263a-b469-42eb-af67-7c01a19779d7", None, "en") == "952.0"
+    # The English abbreviation of the one act-less record: not in the alias
+    # table (de/fr/it only), so the curated fallback places it.
+    assert commentary_stage.resolve_sr(conn, None, "IMAC", "en") == "351.1"
 
 
 def test_rows_missing_from_the_listing_are_kept_and_counted_stale(settings, conn):

@@ -122,6 +122,8 @@ def resolve_sr(conn, act_uuid: str | None, abbr: str | None, lang: str) -> str |
         return onlinekommentar.ACT_BY_UUID[act_uuid]
     if not abbr:
         return None
+    if abbr in onlinekommentar.ABBR_FALLBACK:
+        return onlinekommentar.ABBR_FALLBACK[abbr]
     # An explicit tuple cursor: db.connect() hands out dict rows, the test
     # suite's plain psycopg.connect() tuples, and this must read the same
     # either way.
