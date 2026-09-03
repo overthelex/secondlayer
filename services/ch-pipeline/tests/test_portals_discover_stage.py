@@ -155,8 +155,11 @@ def test_all_portals_and_an_unknown_spider(settings, conn):
     site = Site()
     with pytest.raises(ValueError):
         _discover(settings, site, "CH_NOPE")
-    # every portal against a site that 404s everything but ESchK/ElCom/FINMA: no crash, errors counted only on exceptions
+    # every portal against a site that 404s everything but ESchK/ElCom/FINMA: no crash; a portal whose
+    # listing came back empty is an error (the outage cron must see), EMARK's incremental walk is not
     report = _discover(settings, site, None)
     assert set(report.spiders) == set(portals_discover_stage.PORTALS)
+    assert report.errors == len(portals_discover_stage.PORTALS) - 3 - 1 and report.doc_errors == 0
+    assert "CH_EMARK" not in report.by_spider or report.by_spider["CH_EMARK"] == 0
     assert report.by_spider["CH_ESCHK"] == 2 and report.by_spider["CH_ELCOM"] > 0 and report.by_spider["CH_FINMA"] == 4
     assert db.unkeyed_count(conn, "indexed") == 0

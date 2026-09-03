@@ -47,7 +47,8 @@ class PortalsDiscoverReport:
     inserted: int = 0
     requeued: int = 0
     stale: int = 0
-    errors: int = 0
+    errors: int = 0              # portals that could not be listed (an outage: exit status 1)
+    doc_errors: int = 0          # single rows that failed to upsert (logged, the spider goes on)
     by_spider: dict[str, int] = field(default_factory=dict)
 
 
@@ -166,6 +167,14 @@ async def _run_async(settings: Settings, spiders: list[str], transport, delay: f
                     log.error("%s: discover failed: %s", name, exc)
                     report.errors += 1
                     continue
+                # A portal's discover() logs and swallows a FetchError; nothing
+                # back from a listing that always has rows is that outage. An
+                # incremental walk (EMARK) returns only what is new: empty is fine.
+                incremental = getattr(portal, "INCREMENTAL", False)
+                if not docs and not incremental:
+                    log.error("%s: listing returned nothing", name)
+                    report.errors += 1
+                    continue
                 seen: set[str] = set()
                 for doc in docs:
                     if doc.doc_id in seen:
@@ -176,14 +185,14 @@ async def _run_async(settings: Settings, spiders: list[str], transport, delay: f
                         inserted, requeued = upsert(conn, portal, doc)
                     except Exception as exc:              # noqa: BLE001
                         log.error("%s %s: upsert failed: %s", name, doc.doc_id, exc)
-                        report.errors += 1
+                        report.doc_errors += 1
                         continue
                     report.upserted += 1
                     report.inserted += int(inserted)
                     report.requeued += int(requeued)
                 report.by_spider[name] = len(seen)
-                # A frozen archive (EMARK) returns nothing once known: not stale.
-                if docs:
+                # An incremental walk never re-lists what it knows: no stale accounting.
+                if not incremental:
                     report.stale += len(known - seen)
                 log.info("%s: discovered=%d new=%d known=%d", name, len(seen),
                          sum(1 for d in seen if d not in known), len(known))
@@ -213,13 +222,14 @@ def main() -> PortalsDiscoverReport:
     throttle.renice(throttle.NICE_IO)
     result = run(Settings.from_env(), spider=os.environ.get("CHPIPE_SPIDER") or None)
     log.info("portals-discover spiders=%s discovered=%d upserted=%d inserted=%d requeued=%d "
-             "stale=%d errors=%d by_spider=%s",
+             "stale=%d errors=%d doc_errors=%d by_spider=%s",
              ",".join(result.spiders), result.discovered, result.upserted, result.inserted,
-             result.requeued, result.stale, result.errors, result.by_spider)
+             result.requeued, result.stale, result.errors, result.doc_errors, result.by_spider)
     return result
 
 
 if __name__ == "__main__":
     # A portal that could not be listed is an outage cron must see: the exit
-    # status says so, and run-portals.sh carries it to its own status.
+    # status says so, and run-portals.sh carries it to its own status. A row
+    # that failed to upsert is logged and does not hold the spider back.
     sys.exit(1 if main().errors else 0)

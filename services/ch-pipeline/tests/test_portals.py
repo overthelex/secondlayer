@@ -5,6 +5,7 @@ fixtures, so what is under test is that each portal turns its page shape
 into PortalDocs the queue can carry."""
 import asyncio
 import datetime
+import re
 import json
 import pathlib
 
@@ -150,7 +151,8 @@ def test_ubi_reads_rows_and_follows_the_next_link_once():
     # the description cell is the title; the other cells land in the metadata
     assert docs[0].title.startswith("UBI b.1111: ") and len(docs[0].title) > len("UBI b.1111: ")
     assert "b.1111" not in docs[0].title[len("UBI b.1111"):]
-    assert docs[0].extra["broadcaster"] and docs[0].extra["complaint"]
+    assert docs[0].extra["broadcaster"] == "Schweizer Radio und Fernsehen (SRF)" and docs[0].extra["complaint"]
+    assert docs[0].extra["programme"] is None                      # the cell's second label is empty here
     assert len(site.calls) == 2                      # page 1, then the (empty) page 2
 
 
@@ -181,13 +183,28 @@ def test_ubi_joined_decisions_in_one_pdf_are_one_row_each():
     assert all(d.lang == "de" for d in docs)
 
 
+def test_safe_doc_id_refuses_a_cap_with_no_room_for_the_digest():
+    with pytest.raises(ValueError):
+        safe_doc_id("x" * 50, max_len=8)
+
+
+def test_ubi_marker_with_a_letter_is_the_number_and_leaves_the_title():
+    docs, _ = ubi.parse_page(fx("ubi_joined.html").replace(">b.998</a>", ">B_998a</a>", 1))
+    assert docs[0].doc_id == "b.998a" and "pdf)" not in docs[0].title and docs[0].lang == "de"   # Deutsch in the beschluss cell wins
+    docs, _ = ubi.parse_page(fx("ubi_joined.html").replace(">b.1017</a>", ">b.1017 1018</a>", 1))
+    assert docs[1].doc_id == "b.1017" and "pdf)" not in docs[1].title and "1018" not in docs[1].title
+
+
 def test_ubi_two_complaints_under_one_number_become_one_row_and_rumantsch_is_a_language():
-    docs, _ = ubi.parse_page(fx("ubi_same_number.html"))
-    assert [d.doc_id for d in docs] == ["b.750", "b.750", "b.454"]
-    merged = ubi.merge(docs)
+    page = fx("ubi_same_number.html")
+    docs, _ = ubi.parse_page(page)
+    # the site's own letter keeps the two complaints apart: b.750 and b.750a share one PDF
+    assert [d.doc_id for d in docs] == ["b.750", "b.750a", "b.454"]
+    assert len(ubi.merge(docs)) == 3 and docs[2].lang == "rm" and docs[2].extra["programme"] == "Novitads"
+    # without the letter (older rows) the second description joins the first row's title
+    merged = ubi.merge(ubi.parse_page(page.replace(">b.750a</a>", ">b.750</a>"))[0])
     assert [d.doc_id for d in merged] == ["b.750", "b.454"]
     assert "Islamzentrum" in merged[0].title and "Teletext" in merged[0].title
-    assert merged[1].lang == "rm"
 
 
 def test_ubi_stops_after_two_pages_without_a_pdf():
@@ -238,7 +255,7 @@ def test_postcom_reads_the_record_from_the_filename():
     assert a.doc_id.startswith("VFG-8-2026_") and a.lang == "de"
     # an annex or a translation sharing the docket keeps its own id (the file's uuid)
     assert postcom.doc_from_file({"url": "https://x/files/2026/07/09/deadbeef-1.pdf", "filename": "Décision 8-2026 concernant.pdf"}).lang == "fr"
-    assert postcom.doc_from_file({"url": "https://x/files/2026/07/09/deadbeef-1.pdf", "filename": "Verfügung 8-2026 Anhang.pdf"}).doc_id == "VFG-8-2026_deadbeef"
+    assert postcom.doc_from_file({"url": "https://x/files/2026/07/09/deadbeef-1.pdf", "filename": "Verfügung 8-2026 Anhang.pdf"}).doc_id == "VFG-8-2026_deadbeef-1"
     b = next(d for d in docs if d.docket_number == "VFG-6-2026")
     assert b.decision_date == D(2026, 5, 13)             # from the trailing _20260513
     assert len({d.doc_id for d in docs}) == len(docs)
@@ -274,6 +291,7 @@ def test_mkg_takes_single_decisions_not_the_bound_volumes():
     assert docs and all(d.docket_number.startswith("MKGE ") for d in docs)
     assert docs[0].doc_id == "MKGE-16-1" and docs[0].title == "MKGE 16 Nr. 1"
     assert not any("Band" in (d.title or "") for d in docs)
+    assert len(docs) == 6 and any("Band" in t for t in re.findall(r'download-item__title[^>]*>([^<]*)<', fx("mkg_index.html")))
 
 
 def test_emark_enumerates_a_year_and_stops_after_a_run_of_misses(monkeypatch):

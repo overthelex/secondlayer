@@ -37,6 +37,7 @@ BASE = "https://ark-cra.rekurskommissionen.ch/assets/resources/ark/emark"
 YEARS = range(1993, 2007)
 MAX_NR = 60
 MISSES_TO_STOP = 6
+INCREMENTAL = True      # returns only what is new: the stage neither treats empty as an outage nor counts stale
 _TAGS = re.compile(r"<[^>]+>")
 
 

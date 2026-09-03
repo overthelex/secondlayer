@@ -47,10 +47,10 @@ def doc_from_file(f: dict) -> PortalDoc | None:
     title = re.sub(r"^\d{1,2}\.\d{2}\.\d{4}\s*-\s*", "", stem)
     title = re.sub(r"\s*-\s*(nicht\s+|teilweise\s+)?rechtskr[äa]ftig\s*$", "", title, flags=re.I)
     title = re.sub(r"_", " ", title).strip()
-    # The file's own uuid (the url's stem) keeps an annex apart from the decision
-    # it shares a docket with; the docket in front keeps the id readable.
+    # The file's own uuid (the url's stem, whole) keeps an annex apart from the
+    # decision it shares a docket with; the docket in front keeps the id readable.
     return PortalDoc(
-        doc_id=safe_doc_id(docket or "VFG", stem_of(url).split("-")[0][:8]),
+        doc_id=safe_doc_id(docket or "VFG", stem_of(url)),
         url=url,
         text_source=TEXT_SOURCE,
         title=title or stem,

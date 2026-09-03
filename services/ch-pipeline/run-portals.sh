@@ -14,7 +14,7 @@
 # copies would download the same rows twice. A portal whose discovery
 # failed (its stage exits non-zero) is skipped for the rest of this run and
 # the script's own exit status reports it, so cron sees the outage.
-set -uo pipefail
+set -euo pipefail
 cd "$(dirname "$0")"
 LOG_DIR=/data/ch-corpus/logs
 mkdir -p "$LOG_DIR"
@@ -29,13 +29,14 @@ if [ -z "$SPIDERS" ]; then
 fi
 failed=0
 for s in $SPIDERS; do
-  if ! ./run-stage.sh portals-discover "$s"; then
+  # 9>&-: the lock fd stays with this script, not with the stage's python (run-delta.sh's discipline).
+  if ! ./run-stage.sh portals-discover "$s" 9>&-; then
     echo "=== $(date -Is) $s: discovery failed; stages skipped ===" >> "$LOG_DIR/portals.log"
     failed=1
     continue
   fi
   for stage in fetch extract ocr load citations; do
-    ./run-stage.sh "$stage" "$s" || { echo "=== $(date -Is) $s: $stage failed ===" >> "$LOG_DIR/portals.log"; failed=1; break; }
+    ./run-stage.sh "$stage" "$s" 9>&- || { echo "=== $(date -Is) $s: $stage failed ===" >> "$LOG_DIR/portals.log"; failed=1; break; }
   done
 done
 exit $failed

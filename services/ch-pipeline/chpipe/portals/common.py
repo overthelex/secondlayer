@@ -134,6 +134,8 @@ def safe_doc_id(*parts: str, max_len: int = 120) -> str:
     spaces is a shell hazard for the operator), runs collapsed, length
     capped. Deterministic, so the same document yields the same id on every
     walk."""
+    if max_len < 24:
+        raise ValueError(f"max_len {max_len} leaves no room for a name and its digest")
     raw = "_".join(p for p in parts if p)
     folded = unicodedata.normalize("NFKD", unquote(raw)).encode("ascii", "ignore").decode()
     folded = _ID_CHARS.sub("_", folded).strip("_ .")

@@ -32,7 +32,9 @@ _ROW = re.compile(r"<tr\b.*?</tr>", re.S)
 # One PDF may carry several joined decisions: b_998_1017_1021_1026.pdf is
 # four rows, each with its own "b.998 (de, pdf)" marker in the description.
 _PDF = re.compile(r'href="([^"]*/(?:inhalte/entscheide|fileadmin/user_upload)/(b[._]\d{3,4}(?:[._]\d{3,4})*)\.pdf)"', re.I)
-_OWN = re.compile(r"\b(b\.\d{3,4})\s*\((\w+),\s*pdf\)", re.I)
+# "b.998 (de, pdf)", "b.750a (de, pdf)", and the joined "b.701 702 (de, pdf)": the first number is the row's.
+_OWN = re.compile(r"\b(b[._]\d{3,4}[a-z]?)(?:[\s/]+\d{3,4})*\s*\((\w+),\s*pdf\)", re.I)
+_LABELLED = re.compile(r'<b class="tablesaw-cell-label">(.*?)</b>(.*?)(?=<b class="tablesaw-cell-label">|$)', re.S)
 _CELL = re.compile(r'<td class="column-([a-z]+)"[^>]*>(.*?)</td>', re.S)
 _NEXT = re.compile(r'<a[^>]*href="([^"]+)"[^>]*>\s*N(?:ä|&auml;|a)chster\s*</a>')
 _TAGS = re.compile(r"<[^>]+>")
@@ -43,20 +45,28 @@ def _text(s: str) -> str:
     return re.sub(r"\s+", " ", htmllib.unescape(_TAGS.sub(" ", _CELL_LABEL.sub("", s)))).strip()
 
 
+def _labelled(cell_html: str) -> dict[str, str]:
+    """A cell that stacks several labelled values ("Veranstalter" and
+    "Sendung/ Publikation" share one td) by label."""
+    return {re.sub(r"\s+", " ", _TAGS.sub("", k)).strip(): _text(v) for k, v in _LABELLED.findall(cell_html)}
+
+
 def parse_page(page_html: str) -> tuple[list[PortalDoc], str | None]:
     docs = []
     for row in _ROW.findall(page_html):
         m = _PDF.search(row)
         if not m:
             continue
-        cells = {k: _text(v) for k, v in _CELL.findall(row)}
+        raw = dict(_CELL.findall(row))
+        cells = {k: _text(v) for k, v in raw.items()}
         own = _OWN.search(cells.get("beschreibung", ""))
         href = m.group(1)
-        number = own.group(1).lower() if own else re.match(r"b[._]\d{3,4}", m.group(2), re.I).group(0).lower().replace("_", ".")
+        number = (own.group(1) if own else re.match(r"b[._]\d{3,4}", m.group(2), re.I).group(0)).lower().replace("_", ".")
         beschluss = cells.get("beschluss", "")
-        lang = lang_from_name(beschluss) or (lang_from_name(own.group(2)) if own else None)
+        lang = lang_from_name(beschluss) or (own.group(2).lower() if own else None)
         outcome = re.split(r"\s+\d{1,2}\.\d{1,2}\.\d{4}", beschluss, 1)[0].strip() or None
-        description = re.sub(r"\s*b\.\d{3,4}\s*\(\w+, pdf\)\s*$", "", cells.get("beschreibung", "")).strip()
+        description = _OWN.sub("", cells.get("beschreibung", "")).strip()
+        who = _labelled(raw.get("veranstalter", ""))
         docs.append(PortalDoc(
             doc_id=safe_doc_id(number),
             url=urljoin(BASE, htmllib.unescape(href)),
@@ -66,7 +76,9 @@ def parse_page(page_html: str) -> tuple[list[PortalDoc], str | None]:
             docket_number=number,
             lang=lang,
             extra={"outcome": outcome, "medium": cells.get("medium"),
-                   "broadcaster": cells.get("veranstalter"), "complaint": cells.get("beschwerdetyp"),
+                   "broadcaster": who.get("Veranstalter") or cells.get("veranstalter"),
+                   "programme": who.get("Sendung/ Publikation") or None,
+                   "complaint": cells.get("beschwerdetyp"),
                    "provisions": cells.get("bestimmungen"), "keywords": cells.get("schluesselwoerter")},
         ))
     n = _NEXT.search(page_html)
@@ -78,11 +90,11 @@ EMPTY_PAGES_TO_STOP = 2     # the tail of the list (before 1998) has rows withou
 
 
 def merge(docs: list[PortalDoc]) -> list[PortalDoc]:
-    """One row per decision number. The site lists a decision that settled
-    two complaints twice (b.750: the news article and the teletext item),
-    same number, same PDF: the second description joins the title. A
-    second row with another file (b.701 next to b_701_702.pdf) is the
-    site's inconsistency; the first row wins."""
+    """One row per decision number. Two complaints settled together are
+    usually lettered (b.750 and b.750a, one PDF) and stay two rows; where
+    the site repeats a number, same PDF, the second description joins the
+    title. A second row with another file (b.701 next to b_701_702.pdf)
+    is the site's inconsistency; the first row wins."""
     by_id: dict[str, PortalDoc] = {}
     for d in docs:
         first = by_id.get(d.doc_id)
