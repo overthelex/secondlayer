@@ -140,6 +140,12 @@ services:
       # exclusively (see mcp_backend/src/api/mcp-toolset.ts). UA/UK tools stay on legal.org.ua.
       MCP_TOOLSET: "ch"
 
+      # ch_semantic_search: local Qdrant (ch_corpus_bge_cls) + local TEI embedder.
+      # The MCP_TOOLSET gate keeps UA qdrant-backed tools out, so a plain QDRANT_URL is safe.
+      QDRANT_URL: http://qdrant:6333
+      BGE_M3_URL: http://tei-bge-m3:80
+      CH_BGE_COLLECTION: ${CH_BGE_COLLECTION:-ch_corpus_bge_cls}
+
       # Identity of this deployment
       PUBLIC_URL: https://lawrider.ch
       FRONTEND_URL: https://lawrider.ch
@@ -182,11 +188,10 @@ services:
     image: qdrant/qdrant:v1.19.0
     container_name: qdrant-lawrider
     restart: unless-stopped
-    # Vector store for the CH corpus (decisions + legislation, bge-m3 CLS).
-    # Loaded by the embedding pipeline; the app is NOT pointed here yet —
-    # QDRANT_URL stays unset on `app` until the collections exist, so the
-    # qdrant-backed tools keep failing closed instead of querying an empty
-    # instance.
+    # Vector store for the CH corpus: ch_corpus_bge_cls, 22.3M points
+    # (1.22M decisions + 7.5M current+historical legislation articles),
+    # bge-m3 CLS, float16 on disk + binary quantization in RAM.
+    # Served by ch_semantic_search through QDRANT_URL on `app`.
     volumes:
       - /data/qdrant:/qdrant/storage
     ports:
@@ -201,6 +206,31 @@ services:
     deploy:
       resources:
         limits:
+          memory: 8G
+    networks: [lawrider]
+
+  # Query embedder for ch_semantic_search. Same image+flags as the UA prod
+  # container (docker-compose.local.yml is the canonical definition); bge-m3
+  # serves CLS pooling by default, which is the space ch_corpus_bge_cls was
+  # built in — do not add a --pooling flag.
+  tei-bge-m3:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    container_name: tei-bge-m3-lawrider
+    restart: unless-stopped
+    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "65536", "--max-client-batch-size", "128"]
+    volumes:
+      - tei_cache:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      # first start downloads the 2.3GB model
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          cpus: "3"
           memory: 8G
     networks: [lawrider]
 
@@ -233,6 +263,7 @@ services:
 
 volumes:
   app_data:
+  tei_cache:
 
 networks:
   lawrider:

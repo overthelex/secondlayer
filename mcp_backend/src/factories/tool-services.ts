@@ -37,6 +37,7 @@ import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
 import { ChCommentaryTools } from '../api/tools/ch-commentary-tools.js';
 import { ChMaterialsTools } from '../api/tools/ch-materials-tools.js';
 import { AmcuPracticeTools } from '../api/tools/amcu-practice-tools.js';
+import { ChSemanticTools } from '../api/tools/ch-semantic-tools.js';
 import { SpendingTools } from '../api/tools/spending-tools.js';
 import { OpenDataRegistriesTools } from '../api/tools/opendata-registries-tools.js';
 import { Tier1OpenDataTools } from '../api/tools/tier1-opendata-tools.js';
@@ -198,6 +199,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new ChCommentaryTools(coreServices.db));
   // Federal Gazette materials: Botschaften, reports, article purpose via provenance (LEXAI-2038)
   toolRegistry.registerHandler(new ChMaterialsTools(coreServices.db));
+  // Semantic layer over the whole CH corpus (Qdrant ch_corpus_bge_cls, LEXAI-2004)
+  toolRegistry.registerHandler(new ChSemanticTools(coreServices.db));
   // Semantic layer over АМКУ decisions (Qdrant amcu_bge_cls); keyword search stays in search_registry
   toolRegistry.registerHandler(new AmcuPracticeTools(coreServices.db));
   toolRegistry.registerHandler(new SpendingTools(coreServices.db));
