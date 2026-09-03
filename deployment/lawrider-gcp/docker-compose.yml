@@ -206,7 +206,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          # measured after the full load: anon RSS 11.7G — the HNSW graph over
+          # 22.3M points lives in RAM (binary quant 2.9G + links); 8G would
+          # OOM-loop on the next recreate
+          memory: 14G
     networks: [lawrider]
 
   # Query embedder for ch_semantic_search. Same image+flags as the UA prod
