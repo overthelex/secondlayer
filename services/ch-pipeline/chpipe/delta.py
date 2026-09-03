@@ -74,6 +74,7 @@ from dataclasses import dataclass, field
 from . import db
 from .config import Settings
 from .http import Fetcher, FetchError
+from .portals import PORTAL_SPIDERS
 from .stages import (acts_stage, aliases_stage, citations_resolve_stage,
                      citations_stage, decision_index_stage, diff_stage,
                      extract_stage,
@@ -366,6 +367,11 @@ def court_code_spider_map(conn) -> dict[str, tuple[str, ...]]:
         spider, court_code = ((row["spider"], row["court_code"])
                               if isinstance(row, dict) else (row[0], row[1]))
         root = _CHAMBER_SUFFIX.sub("", court_code)
+        if spider in PORTAL_SPIDERS:
+            # A regulator or court that publishes on its own site (chpipe/portals):
+            # walked by run-portals.sh, never from an entscheidsuche listing, so it
+            # has no place in this map and is not a misconfiguration worth a warning.
+            continue
         if spider not in known:
             log.warning("court_code_spider_map: %r names spider %r, which is "
                         "not one of the %d spider directories this pipeline "

@@ -1,0 +1,368 @@
+{
+ "Items": [
+  {
+   "Extension": "pdf",
+   "WatchlistUrl": "/api/watchlist/PostWatchListDocument/{3E67A260-DFFA-418D-8B11-FB2864EFE4BE}",
+   "DeleteOneWatchlistUrl": "/api/watchlist/DeleteDocument?id={3E67A260-DFFA-418D-8B11-FB2864EFE4BE}",
+   "FileType": "application/pdf",
+   "Size": "1.15",
+   "OtherLanguageLinks": null,
+   "IsBeingWatched": false,
+   "Title": "21. Oktober 2024 Tessin Italienisch",
+   "Description": "",
+   "Link": "/~/media/finma/dokumente/dokumentencenter/myfinma/versicherungsrecht/2024/20241021_i_ti_o_01.pdf",
+   "Category": null,
+   "Type": "Doc",
+   "Date": "21.10.2024",
+   "DateMobile": "21.10.2024",
+   "Timestamp": 0,
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Extension": "pdf",
+   "WatchlistUrl": "/api/watchlist/PostWatchListDocument/{16BAB7B3-D7F4-4C46-B622-E9301B82ADC6}",
+   "DeleteOneWatchlistUrl": "/api/watchlist/DeleteDocument?id={16BAB7B3-D7F4-4C46-B622-E9301B82ADC6}",
+   "FileType": "application/pdf",
+   "Size": "0.68",
+   "OtherLanguageLinks": null,
+   "IsBeingWatched": false,
+   "Title": "18. Oktober 2024 Tessin Italienisch",
+   "Description": "",
+   "Link": "/~/media/finma/dokumente/dokumentencenter/myfinma/versicherungsrecht/2024/20241018_i_ti_o_01.pdf",
+   "Category": null,
+   "Type": "Doc",
+   "Date": "18.10.2024",
+   "DateMobile": "18.10.2024",
+   "Timestamp": 0,
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Extension": "pdf",
+   "WatchlistUrl": "/api/watchlist/PostWatchListDocument/{D5A4BF38-27F7-44CB-BEFD-44C0871D29EA}",
+   "DeleteOneWatchlistUrl": "/api/watchlist/DeleteDocument?id={D5A4BF38-27F7-44CB-BEFD-44C0871D29EA}",
+   "FileType": "application/pdf",
+   "Size": "0.09",
+   "OtherLanguageLinks": null,
+   "IsBeingWatched": false,
+   "Title": "10. September 2024 Bundesgericht Deutsch",
+   "Description": "",
+   "Link": "/~/media/finma/dokumente/dokumentencenter/myfinma/versicherungsrecht/2024/20240910_d_ch_o_01.pdf",
+   "Category": null,
+   "Type": "Doc",
+   "Date": "10.09.2024",
+   "DateMobile": "10.09.2024",
+   "Timestamp": 0,
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Extension": "pdf",
+   "WatchlistUrl": "/api/watchlist/PostWatchListDocument/{ADE7BA73-11FD-40A9-9CA9-0831C1551ED9}",
+   "DeleteOneWatchlistUrl": "/api/watchlist/DeleteDocument?id={ADE7BA73-11FD-40A9-9CA9-0831C1551ED9}",
+   "FileType": "application/pdf",
+   "Size": "0.09",
+   "OtherLanguageLinks": null,
+   "IsBeingWatched": false,
+   "Title": "05. August 2024 Bundesgericht Deutsch",
+   "Description": "",
+   "Link": "/~/media/finma/dokumente/dokumentencenter/myfinma/versicherungsrecht/2024/20240805_d_ch_o_01.pdf",
+   "Category": null,
+   "Type": "Doc",
+   "Date": "05.08.2024",
+   "DateMobile": "05.08.2024",
+   "Timestamp": 0,
+   "Tab": "tab1",
+   "Panel": "panel1"
+  }
+ ],
+ "Groups": null,
+ "Searchstring": "*",
+ "Searchroot": "{17EDDA7F-36EA-4F96-BC32-7CC6B791CDC1}",
+ "Facets": [
+  {
+   "Name": "Dokumentenart",
+   "Values": [
+    {
+     "id": "{3306FB72-4DC2-4268-A4C4-3C777C0FD4C6}",
+     "Name": "{3306FB72-4DC2-4268-A4C4-3C777C0FD4C6}",
+     "category": "Dokumentenart",
+     "AggregateCount": 2607,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Versicherungsrecht Instanz",
+   "Values": [
+    {
+     "id": "{EF1EE2A6-2261-48B3-AFFA-EA3F92B35343}",
+     "Name": "{EF1EE2A6-2261-48B3-AFFA-EA3F92B35343}",
+     "category": "Versicherungsrecht Instanz",
+     "AggregateCount": 1631,
+     "selected": false
+    },
+    {
+     "id": "{9280A5C5-C24B-419D-B325-1B23C53AB29F}",
+     "Name": "{9280A5C5-C24B-419D-B325-1B23C53AB29F}",
+     "category": "Versicherungsrecht Instanz",
+     "AggregateCount": 550,
+     "selected": false
+    },
+    {
+     "id": "{EB2BF3C5-550B-478C-A39D-0B9C5D818F61}",
+     "Name": "{EB2BF3C5-550B-478C-A39D-0B9C5D818F61}",
+     "category": "Versicherungsrecht Instanz",
+     "AggregateCount": 371,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Urteilssprache",
+   "Values": [
+    {
+     "id": "{3DB73D1C-6CAD-4731-B1D5-CAD63D9A7C33}",
+     "Name": "{3DB73D1C-6CAD-4731-B1D5-CAD63D9A7C33}",
+     "category": "Urteilssprache",
+     "AggregateCount": 1268,
+     "selected": false
+    },
+    {
+     "id": "{44F01F92-8C22-437F-B440-6DAAAF2DE597}",
+     "Name": "{44F01F92-8C22-437F-B440-6DAAAF2DE597}",
+     "category": "Urteilssprache",
+     "AggregateCount": 1014,
+     "selected": false
+    },
+    {
+     "id": "{BDAA7ED7-09B5-4556-A271-DB0EAA9DFBC8}",
+     "Name": "{BDAA7ED7-09B5-4556-A271-DB0EAA9DFBC8}",
+     "category": "Urteilssprache",
+     "AggregateCount": 317,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Versicherungsrecht Ort",
+   "Values": [
+    {
+     "id": "{E42C6727-AFF2-4953-86D5-5EEDF720CEE0}",
+     "Name": "{E42C6727-AFF2-4953-86D5-5EEDF720CEE0}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 558,
+     "selected": false
+    },
+    {
+     "id": "{6C9BD938-ABC3-4517-A4D3-70EA2E2773DD}",
+     "Name": "{6C9BD938-ABC3-4517-A4D3-70EA2E2773DD}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 330,
+     "selected": false
+    },
+    {
+     "id": "{D586AB70-FF54-4141-B973-27B7CFF2EC4A}",
+     "Name": "{D586AB70-FF54-4141-B973-27B7CFF2EC4A}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 315,
+     "selected": false
+    },
+    {
+     "id": "{4227511C-3C71-4F17-ADAF-AE889B19ED1A}",
+     "Name": "{4227511C-3C71-4F17-ADAF-AE889B19ED1A}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 284,
+     "selected": false
+    },
+    {
+     "id": "{3AF0FF5E-D048-48B5-B0E7-FEDF57F23DED}",
+     "Name": "{3AF0FF5E-D048-48B5-B0E7-FEDF57F23DED}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 259,
+     "selected": false
+    },
+    {
+     "id": "{722AADFA-33F0-4809-B7D1-92E500176B41}",
+     "Name": "{722AADFA-33F0-4809-B7D1-92E500176B41}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 119,
+     "selected": false
+    },
+    {
+     "id": "{A4177821-B733-429E-96EC-9A21636C7D24}",
+     "Name": "{A4177821-B733-429E-96EC-9A21636C7D24}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 111,
+     "selected": false
+    },
+    {
+     "id": "{FD7BCEC3-72F9-45E7-B862-E075715F74E9}",
+     "Name": "{FD7BCEC3-72F9-45E7-B862-E075715F74E9}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 107,
+     "selected": false
+    },
+    {
+     "id": "{382A5160-2DCE-498B-A17A-36AB4655CF8B}",
+     "Name": "{382A5160-2DCE-498B-A17A-36AB4655CF8B}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 72,
+     "selected": false
+    },
+    {
+     "id": "{FB184E36-7AB1-4632-AE88-0BB61D04C470}",
+     "Name": "{FB184E36-7AB1-4632-AE88-0BB61D04C470}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 62,
+     "selected": false
+    },
+    {
+     "id": "{2365833B-BEEC-482C-B816-591A69838A4F}",
+     "Name": "{2365833B-BEEC-482C-B816-591A69838A4F}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 46,
+     "selected": false
+    },
+    {
+     "id": "{565D1D03-9F55-489D-8F59-144B2196E1FB}",
+     "Name": "{565D1D03-9F55-489D-8F59-144B2196E1FB}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 45,
+     "selected": false
+    },
+    {
+     "id": "{98A3FB28-7DD2-4F1B-BFD7-E279E59C23A7}",
+     "Name": "{98A3FB28-7DD2-4F1B-BFD7-E279E59C23A7}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 37,
+     "selected": false
+    },
+    {
+     "id": "{73B39844-263F-45A9-9BFE-36FBB96F0C7B}",
+     "Name": "{73B39844-263F-45A9-9BFE-36FBB96F0C7B}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 36,
+     "selected": false
+    },
+    {
+     "id": "{09CF21BD-51BC-4BEF-9D08-B3CC6FEBAD1B}",
+     "Name": "{09CF21BD-51BC-4BEF-9D08-B3CC6FEBAD1B}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 35,
+     "selected": false
+    },
+    {
+     "id": "{2C6C8822-C6AB-45E4-BCB4-82D592EE5840}",
+     "Name": "{2C6C8822-C6AB-45E4-BCB4-82D592EE5840}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 34,
+     "selected": false
+    },
+    {
+     "id": "{BB24CA0A-259B-4460-AABB-E83D84AF12A9}",
+     "Name": "{BB24CA0A-259B-4460-AABB-E83D84AF12A9}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 34,
+     "selected": false
+    },
+    {
+     "id": "{2CC59A9B-BF7E-443A-A0E1-7047089FB854}",
+     "Name": "{2CC59A9B-BF7E-443A-A0E1-7047089FB854}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 33,
+     "selected": false
+    },
+    {
+     "id": "{73450374-9713-4BF8-861C-E4ECDCC2D298}",
+     "Name": "{73450374-9713-4BF8-861C-E4ECDCC2D298}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 32,
+     "selected": false
+    },
+    {
+     "id": "{EFDC0DB5-39D5-45D2-9A81-89FCE0108C38}",
+     "Name": "{EFDC0DB5-39D5-45D2-9A81-89FCE0108C38}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 22,
+     "selected": false
+    },
+    {
+     "id": "{D57A9880-89F6-4EAC-81BD-5F8A1991100B}",
+     "Name": "{D57A9880-89F6-4EAC-81BD-5F8A1991100B}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 10,
+     "selected": false
+    },
+    {
+     "id": "{DF677811-206D-4274-AEDE-7C15CBD3B01C}",
+     "Name": "{DF677811-206D-4274-AEDE-7C15CBD3B01C}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 5,
+     "selected": false
+    },
+    {
+     "id": "{6ACBD446-F67B-4537-8D5E-AE059043C224}",
+     "Name": "{6ACBD446-F67B-4537-8D5E-AE059043C224}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 4,
+     "selected": false
+    },
+    {
+     "id": "{E6A5C281-34CD-40D3-BA40-E177DBD09F14}",
+     "Name": "{E6A5C281-34CD-40D3-BA40-E177DBD09F14}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 3,
+     "selected": false
+    },
+    {
+     "id": "{F33F01B6-D15C-4717-AB25-F5E96265731A}",
+     "Name": "{F33F01B6-D15C-4717-AB25-F5E96265731A}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 3,
+     "selected": false
+    },
+    {
+     "id": "{15EF8102-1223-457F-89F9-803D542B2D96}",
+     "Name": "{15EF8102-1223-457F-89F9-803D542B2D96}",
+     "category": "Versicherungsrecht Ort",
+     "AggregateCount": 1,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Finanzmarktrecht Instanz",
+   "Values": [
+    {
+     "id": "{BAEA8549-B076-4DBC-99F9-F6EB242BE097}",
+     "Name": "{BAEA8549-B076-4DBC-99F9-F6EB242BE097}",
+     "category": "Finanzmarktrecht Instanz",
+     "AggregateCount": 4,
+     "selected": false
+    }
+   ]
+  }
+ ],
+ "SearchFacets": [],
+ "SearchFacetGroups": [],
+ "Count": 2610,
+ "Resultstring": null,
+ "NextPageLink": null,
+ "LastPageLink": null,
+ "ResultsPerPage": 9999,
+ "Skip": 0,
+ "SkipNext": 0,
+ "SkipLast": 0,
+ "MaxResultCount": 1000,
+ "FixCount": 0,
+ "Archive": false,
+ "IsGrouped": false,
+ "UseLanguageFallback": false,
+ "IsExclusiveFacetSearch": false,
+ "Bankruptcy": {
+  "Finishedcount": 0,
+  "Pendingcount": 0
+ }
+}

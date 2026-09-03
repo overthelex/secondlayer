@@ -14,6 +14,7 @@
 #                 ./run-stage.sh shab-list [months]
 #   commentaries: ./run-stage.sh commentary   (no argument; CHPIPE_COMMENTARY_LANGS / _DELAY from the env)
 #   materials:    ./run-stage.sh materials-discover|materials-text   (no argument; materials-text reads CHPIPE_LIMIT)
+#   portals:      ./run-stage.sh portals-discover [spider]   (regulators / MKG, not on entscheidsuche; CHPIPE_SPIDER family)
 #
 # The optional second argument means different things to each family, so it is
 # dispatched explicitly rather than exported to all of them at once: for the decisions
@@ -60,7 +61,7 @@ export CHPIPE_RAW_DIR=/data/ch-corpus/raw
 MODULE="chpipe.stages.${STAGE//-/_}_stage"
 
 case "$STAGE" in
-  index|fetch|extract|ocr|load|citations)
+  index|fetch|extract|ocr|load|citations|portals-discover)
     ARG="${POS:-${CHPIPE_SPIDER:-}}"
     export CHPIPE_SPIDER="$ARG"
     ;;

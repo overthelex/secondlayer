@@ -9,6 +9,7 @@ so the caller must hand in a connection whose row_factory is dict_row.
 """
 from __future__ import annotations
 
+from .portals import PORTAL_SPIDERS
 from .stages.index_stage import ALL_SPIDERS
 
 
@@ -145,8 +146,11 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
                       tells you how much of the raw snapshot dict this gate
                       cannot currently place against a spider.
     """
+    # The portal spiders (chpipe/portals) are not on entscheidsuche, so they
+    # are no part of the comparison against its snapshot on either side.
     ours_total = conn.execute(
-        "SELECT count(*) AS n FROM ch_court_decisions").fetchone()["n"]
+        "SELECT count(*) AS n FROM ch_court_decisions WHERE spider <> ALL(%s)",
+        (sorted(PORTAL_SPIDERS),)).fetchone()["n"]
     # A snapshot whose grand total is zero or absent while we hold documents
     # is a MALFORMED SNAPSHOT, not a gap-free corpus. `if total_alle else
     # 0.0` used to make that case report gap_pct 0.0 and

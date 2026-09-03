@@ -1,0 +1,278 @@
+{
+ "Items": [
+  {
+   "Id": "{60B681EA-F85D-4F87-B6A2-CE496E732175}",
+   "Title": "2025-35",
+   "Link": "/de/dokumentation/enforcementberichterstattung/kasuistik/2025-35/",
+   "Category": null,
+   "Type": "Page",
+   "Date": "19.12.2025",
+   "DateMobile": "19.12.2025",
+   "Timestamp": 639016956000000000,
+   "FacetColumn": "Bewilligte",
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Id": "{D5813879-6CEF-4836-BAE3-DEFBAB830446}",
+   "Title": "2025-47",
+   "Link": "/de/dokumentation/enforcementberichterstattung/kasuistik/2025-47/",
+   "Category": null,
+   "Type": "Page",
+   "Date": "16.12.2025",
+   "DateMobile": "16.12.2025",
+   "Timestamp": 639014364000000000,
+   "FacetColumn": "Unerlaubt tätige Finanzdienstleister",
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Id": "{C13729B5-70C2-4BCA-8DDC-3A6449B86E1B}",
+   "Title": "2025-34",
+   "Link": "/de/dokumentation/enforcementberichterstattung/kasuistik/2025-34/",
+   "Category": null,
+   "Type": "Page",
+   "Date": "16.12.2025",
+   "DateMobile": "16.12.2025",
+   "Timestamp": 639014364000000000,
+   "FacetColumn": "Bewilligte",
+   "Tab": "tab1",
+   "Panel": "panel1"
+  },
+  {
+   "Id": "{239B5D23-FBA7-4CBE-92FB-2184215DB3BD}",
+   "Title": "2025-36",
+   "Link": "/de/dokumentation/enforcementberichterstattung/kasuistik/2025-36/",
+   "Category": null,
+   "Type": "Page",
+   "Date": "12.12.2025",
+   "DateMobile": "12.12.2025",
+   "Timestamp": 639010908000000000,
+   "FacetColumn": "Marktaufsicht",
+   "Tab": "tab1",
+   "Panel": "panel1"
+  }
+ ],
+ "Groups": null,
+ "Searchstring": "*",
+ "Searchroot": "{CFAD28DA-5FC9-43E1-B1EA-ABBB1FC73BBE}",
+ "Facets": [
+  {
+   "Name": "Entscheide Bereich",
+   "Values": [
+    {
+     "id": "{C0D00AE6-8176-4C2F-A985-40A3DB098EA4}",
+     "Name": "{C0D00AE6-8176-4C2F-A985-40A3DB098EA4}",
+     "category": "Entscheide Bereich",
+     "AggregateCount": 218,
+     "selected": false
+    },
+    {
+     "id": "{26D40EFB-4C71-48B5-B56C-7326692E0489}",
+     "Name": "{26D40EFB-4C71-48B5-B56C-7326692E0489}",
+     "category": "Entscheide Bereich",
+     "AggregateCount": 133,
+     "selected": false
+    },
+    {
+     "id": "{990BD6A7-2FBF-4B39-AE08-C94D7163DDF8}",
+     "Name": "{990BD6A7-2FBF-4B39-AE08-C94D7163DDF8}",
+     "category": "Entscheide Bereich",
+     "AggregateCount": 50,
+     "selected": false
+    },
+    {
+     "id": "{FFECF820-F221-43A1-8929-1B7C86213D1C}",
+     "Name": "{FFECF820-F221-43A1-8929-1B7C86213D1C}",
+     "category": "Entscheide Bereich",
+     "AggregateCount": 29,
+     "selected": false
+    },
+    {
+     "id": "{B9A8AD5A-F754-4A39-A09C-BAF47641F4EA}",
+     "Name": "{B9A8AD5A-F754-4A39-A09C-BAF47641F4EA}",
+     "category": "Entscheide Bereich",
+     "AggregateCount": 24,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Entscheide Thema",
+   "Values": [
+    {
+     "id": "{049410F4-1D38-4ABC-8E93-0BCB19CC867F}",
+     "Name": "{049410F4-1D38-4ABC-8E93-0BCB19CC867F}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 175,
+     "selected": false
+    },
+    {
+     "id": "{EA689823-2091-42A7-B08D-4EA5A76855E4}",
+     "Name": "{EA689823-2091-42A7-B08D-4EA5A76855E4}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 85,
+     "selected": false
+    },
+    {
+     "id": "{3E1BB4E1-2F8F-473D-A599-26547F7DA6DE}",
+     "Name": "{3E1BB4E1-2F8F-473D-A599-26547F7DA6DE}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 74,
+     "selected": false
+    },
+    {
+     "id": "{75E1B7F8-378F-4093-910A-17CFC4496291}",
+     "Name": "{75E1B7F8-378F-4093-910A-17CFC4496291}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 50,
+     "selected": false
+    },
+    {
+     "id": "{8D6A3A12-F7A4-434D-A31D-8616CDF50994}",
+     "Name": "{8D6A3A12-F7A4-434D-A31D-8616CDF50994}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 42,
+     "selected": false
+    },
+    {
+     "id": "{9AF3E185-A480-45C3-8040-BC40C4973ACF}",
+     "Name": "{9AF3E185-A480-45C3-8040-BC40C4973ACF}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 31,
+     "selected": false
+    },
+    {
+     "id": "{B3F3C17F-6FF1-4167-B429-CA58B4448458}",
+     "Name": "{B3F3C17F-6FF1-4167-B429-CA58B4448458}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 31,
+     "selected": false
+    },
+    {
+     "id": "{45D27816-628E-4176-B84E-C45E94FB1793}",
+     "Name": "{45D27816-628E-4176-B84E-C45E94FB1793}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 13,
+     "selected": false
+    },
+    {
+     "id": "{FB4715A2-98C7-4132-BB80-0A330B229663}",
+     "Name": "{FB4715A2-98C7-4132-BB80-0A330B229663}",
+     "category": "Entscheide Thema",
+     "AggregateCount": 11,
+     "selected": false
+    }
+   ]
+  },
+  {
+   "Name": "Jahr",
+   "Values": [
+    {
+     "id": "{92D1AF79-03A6-45AA-A55A-554D5406D93A}",
+     "Name": "{92D1AF79-03A6-45AA-A55A-554D5406D93A}",
+     "category": "Jahr",
+     "AggregateCount": 56,
+     "selected": false
+    },
+    {
+     "id": "{9076B66B-03FC-4680-BEB1-69FDE009FD21}",
+     "Name": "{9076B66B-03FC-4680-BEB1-69FDE009FD21}",
+     "category": "Jahr",
+     "AggregateCount": 50,
+     "selected": false
+    },
+    {
+     "id": "{963D5DE6-2772-40A6-B111-17F881906CDD}",
+     "Name": "{963D5DE6-2772-40A6-B111-17F881906CDD}",
+     "category": "Jahr",
+     "AggregateCount": 50,
+     "selected": false
+    },
+    {
+     "id": "{11927AA0-B857-4758-9165-95DD640471EE}",
+     "Name": "{11927AA0-B857-4758-9165-95DD640471EE}",
+     "category": "Jahr",
+     "AggregateCount": 40,
+     "selected": false
+    },
+    {
+     "id": "{DA84AAEF-A0F0-4D3F-98A8-40FF511B94EA}",
+     "Name": "{DA84AAEF-A0F0-4D3F-98A8-40FF511B94EA}",
+     "category": "Jahr",
+     "AggregateCount": 39,
+     "selected": false
+    },
+    {
+     "id": "{AD70F793-6F76-4331-9B02-F977C199731D}",
+     "Name": "{AD70F793-6F76-4331-9B02-F977C199731D}",
+     "category": "Jahr",
+     "AggregateCount": 38,
+     "selected": false
+    },
+    {
+     "id": "{5D641577-5377-4304-ADE3-0FF60C5B7B3C}",
+     "Name": "{5D641577-5377-4304-ADE3-0FF60C5B7B3C}",
+     "category": "Jahr",
+     "AggregateCount": 34,
+     "selected": false
+    },
+    {
+     "id": "{94925637-F6F6-4915-9C75-4DBD3162F160}",
+     "Name": "{94925637-F6F6-4915-9C75-4DBD3162F160}",
+     "category": "Jahr",
+     "AggregateCount": 33,
+     "selected": false
+    },
+    {
+     "id": "{C6603128-AEA8-4712-B0C9-F590DC760DAE}",
+     "Name": "{C6603128-AEA8-4712-B0C9-F590DC760DAE}",
+     "category": "Jahr",
+     "AggregateCount": 31,
+     "selected": false
+    },
+    {
+     "id": "{EF0C43D3-3B20-403D-BCD2-44A64D14C702}",
+     "Name": "{EF0C43D3-3B20-403D-BCD2-44A64D14C702}",
+     "category": "Jahr",
+     "AggregateCount": 30,
+     "selected": false
+    },
+    {
+     "id": "{6136F708-E41A-44CB-BDA9-876491E589C0}",
+     "Name": "{6136F708-E41A-44CB-BDA9-876491E589C0}",
+     "category": "Jahr",
+     "AggregateCount": 29,
+     "selected": false
+    },
+    {
+     "id": "{1B4327AE-9664-465A-A7D3-97055B2B80E7}",
+     "Name": "{1B4327AE-9664-465A-A7D3-97055B2B80E7}",
+     "category": "Jahr",
+     "AggregateCount": 24,
+     "selected": false
+    }
+   ]
+  }
+ ],
+ "SearchFacets": [],
+ "SearchFacetGroups": [],
+ "Count": 455,
+ "Resultstring": null,
+ "NextPageLink": null,
+ "LastPageLink": null,
+ "ResultsPerPage": 500,
+ "Skip": 0,
+ "SkipNext": 0,
+ "SkipLast": 0,
+ "MaxResultCount": 1000,
+ "FixCount": 0,
+ "Archive": false,
+ "IsGrouped": false,
+ "UseLanguageFallback": false,
+ "IsExclusiveFacetSearch": false,
+ "Bankruptcy": {
+  "Finishedcount": 0,
+  "Pendingcount": 0
+ }
+}

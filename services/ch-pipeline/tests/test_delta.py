@@ -206,6 +206,18 @@ def test_court_code_spider_map_drops_a_spider_that_is_no_longer_a_directory(
     assert "ZH_Handelsgericht_alt" in caplog.text
 
 
+def test_court_code_spider_map_skips_a_portal_spider_without_a_warning(conn, caplog):
+    """A regulator that publishes on its own site (chpipe/portals) is a real
+    spider of ours but never an entscheidsuche directory: it must neither
+    enter the map nor be shouted about every night."""
+    _seed(conn, "ECLI:1", "ZG_Obergericht", "ZG_OG_001")
+    _seed(conn, "ECLI:CH:CH_ELCOM:211-00500_x", "CH_ELCOM", "CH_ELCOM")
+    with caplog.at_level(logging.WARNING):
+        mapping = delta.court_code_spider_map(conn)
+    assert mapping == {"ZG_OG": ("ZG_Obergericht",)}
+    assert "CH_ELCOM" not in caplog.text
+
+
 def test_a_grown_key_whose_only_spider_is_stale_is_reported_as_unmapped(
         tmp_path, monkeypatch, conn, caplog):
     """The end-to-end consequence: nothing is dispatched, and the night is
