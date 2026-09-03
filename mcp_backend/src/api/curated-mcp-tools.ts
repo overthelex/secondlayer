@@ -59,6 +59,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'ch_search_materials',
   'ch_get_material',
   'ch_get_article_purpose',
+  // Швейцарія (CH) — семантичний пошук по всьому корпусу (Qdrant ch_corpus_bge_cls; LEXAI-2004)
+  'ch_semantic_search',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',

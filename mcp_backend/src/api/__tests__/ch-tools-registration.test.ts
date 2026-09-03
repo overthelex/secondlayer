@@ -17,6 +17,7 @@ import { ChLegislationTools } from '../tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../tools/ch-registry-tools.js';
 import { ChCommentaryTools } from '../tools/ch-commentary-tools.js';
 import { ChMaterialsTools } from '../tools/ch-materials-tools.js';
+import { ChSemanticTools } from '../tools/ch-semantic-tools.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { V2_TOOL_NAMES } from '../curated-mcp-tools.js';
 
@@ -42,6 +43,7 @@ const CH_TOOL_NAMES = [
   'ch_search_materials',
   'ch_get_material',
   'ch_get_article_purpose',
+  'ch_semantic_search',
 ];
 
 // Stub is only for construction (constructor(private db: any)) — executeTool is never
@@ -168,6 +170,20 @@ describe('CH tool surface registration', () => {
     });
   });
 
+  describe('handler tool definitions (semantic)', () => {
+    it('ChSemanticTools exposes ch_semantic_search with an English description', () => {
+      const tool = new ChSemanticTools(stubDb);
+      const defs = tool.getToolDefinitions();
+      expect(defs.map(d => d.name)).toEqual(['ch_semantic_search']);
+      const def = defs[0];
+      expect(def.description).toBeTruthy();
+      // Swiss tools are documented in English (user ruling 2026-09-03).
+      expect(isCyrillic(def.description)).toBe(false);
+      expect(def.inputSchema.type).toBe('object');
+      expect(def.inputSchema.required).toEqual(['query']);
+    });
+  });
+
   describe('ToolRegistry registration', () => {
     it('getLocalToolDefinitions includes all eight ch_* tools after registering the handlers', () => {
       const registry = new ToolRegistry();
@@ -178,6 +194,7 @@ describe('CH tool surface registration', () => {
       registry.registerHandler(new ChVerificationTools(stubDb));
       registry.registerHandler(new ChCommentaryTools(stubDb));
       registry.registerHandler(new ChMaterialsTools(stubDb));
+      registry.registerHandler(new ChSemanticTools(stubDb));
 
       const names = registry.getLocalToolDefinitions().map(d => d.name);
       for (const name of CH_TOOL_NAMES) {
