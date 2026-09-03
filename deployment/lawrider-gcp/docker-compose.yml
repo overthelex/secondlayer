@@ -217,7 +217,11 @@ services:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
     container_name: tei-bge-m3-lawrider
     restart: unless-stopped
-    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "65536", "--max-client-batch-size", "128"]
+    # Query workload: single short texts. The UA container's bulk config
+    # (--max-batch-tokens 65536) made onnxruntime pre-size its arenas to
+    # 11.1G RSS; 4096 serves the same fp32 model at 6.4G steady / 60-110ms
+    # per query (measured on this box 03.09).
+    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "4096", "--max-client-batch-size", "16"]
     volumes:
       - tei_cache:/data
     healthcheck:
@@ -232,9 +236,9 @@ services:
       resources:
         limits:
           cpus: "3"
-          # measured steady RSS is 11.1G (fp32 onnx + ORT arenas); 8G OOM-killed
-          # the model load in a 90-restart crash loop
-          memory: 14G
+          # steady RSS 6.4G at --max-batch-tokens 4096; the model-load peak
+          # needs more (dies under a 6G cap), so keep headroom
+          memory: 10G
     networks: [lawrider]
 
   site:
