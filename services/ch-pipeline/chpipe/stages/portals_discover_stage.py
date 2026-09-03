@@ -28,6 +28,8 @@ import os
 import sys
 from dataclasses import dataclass, field
 
+import psycopg
+
 from .. import db, throttle
 from ..config import Settings
 from ..http import Fetcher
@@ -176,6 +178,7 @@ async def _run_async(settings: Settings, spiders: list[str], transport, delay: f
                     report.errors += 1
                     continue
                 seen: set[str] = set()
+                wrote = 0
                 for doc in docs:
                     if doc.doc_id in seen:
                         continue
@@ -183,14 +186,23 @@ async def _run_async(settings: Settings, spiders: list[str], transport, delay: f
                     report.discovered += 1
                     try:
                         inserted, requeued = upsert(conn, portal, doc)
-                    except Exception as exc:              # noqa: BLE001
+                    except (psycopg.DataError, psycopg.IntegrityError) as exc:
+                        # This row's values (a date the column refuses, an ecli
+                        # clash): logged, the spider goes on. A lost connection
+                        # or a missing column is not a row's fault and propagates.
                         log.error("%s %s: upsert failed: %s", name, doc.doc_id, exc)
                         report.doc_errors += 1
                         continue
                     report.upserted += 1
+                    wrote += 1
                     report.inserted += int(inserted)
                     report.requeued += int(requeued)
                 report.by_spider[name] = len(seen)
+                if seen and not wrote:
+                    # Every row refused: not a row's fault either, and fetch must not run on nothing.
+                    log.error("%s: none of %d rows could be written", name, len(seen))
+                    report.errors += 1
+                    continue
                 # An incremental walk never re-lists what it knows: no stale accounting.
                 if not incremental:
                     report.stale += len(known - seen)

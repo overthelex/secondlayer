@@ -185,7 +185,8 @@ def test_ubi_joined_decisions_in_one_pdf_are_one_row_each():
 
 def test_safe_doc_id_refuses_a_cap_with_no_room_for_the_digest():
     with pytest.raises(ValueError):
-        safe_doc_id("x" * 50, max_len=8)
+        safe_doc_id("x" * 50, max_len=9)
+    assert len(safe_doc_id("x" * 50, max_len=10)) == 10
 
 
 def test_ubi_marker_with_a_letter_is_the_number_and_leaves_the_title():

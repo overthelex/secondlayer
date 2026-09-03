@@ -163,3 +163,30 @@ def test_all_portals_and_an_unknown_spider(settings, conn):
     assert "CH_EMARK" not in report.by_spider or report.by_spider["CH_EMARK"] == 0
     assert report.by_spider["CH_ESCHK"] == 2 and report.by_spider["CH_ELCOM"] > 0 and report.by_spider["CH_FINMA"] == 4
     assert db.unkeyed_count(conn, "indexed") == 0
+
+
+def test_a_refused_row_is_a_doc_error_but_a_dead_connection_propagates(settings, conn, monkeypatch):
+    site = Site()
+    real = portals_discover_stage.upsert
+    calls = {"n": 0}
+
+    def refuse_first(c, portal, doc):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise psycopg.DataError("value too long")
+        return real(c, portal, doc)
+    monkeypatch.setattr(portals_discover_stage, "upsert", refuse_first)
+    report = _discover(settings, site, "CH_ESCHK")
+    assert (report.discovered, report.upserted, report.doc_errors, report.errors) == (2, 1, 1, 0)
+
+    def refuse_all(c, portal, doc):
+        raise psycopg.IntegrityError("duplicate")
+    monkeypatch.setattr(portals_discover_stage, "upsert", refuse_all)
+    report = _discover(settings, site, "CH_ESCHK")
+    assert (report.upserted, report.doc_errors, report.errors) == (0, 2, 1)
+
+    def dead(c, portal, doc):
+        raise psycopg.OperationalError("server closed the connection")
+    monkeypatch.setattr(portals_discover_stage, "upsert", dead)
+    with pytest.raises(psycopg.OperationalError):
+        _discover(settings, site, "CH_ESCHK")
