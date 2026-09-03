@@ -42,7 +42,7 @@ def parse_page(page_html: str) -> list[PortalDoc]:
             url=it.href,
             text_source=TEXT_SOURCE,
             title=it.title,
-            decision_date=last_date(it.title) or it.meta_date,
+            decision_date=last_date(it.title),      # the meta date is the publication date, not the decision's
             docket_number=docket,
             lang=lang_from_dam(it.href),
             extra={"status": it.description or None, "published": " ".join(it.meta) or None},

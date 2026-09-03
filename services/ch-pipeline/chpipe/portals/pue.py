@@ -26,7 +26,7 @@ PAGES = (
     ("/pue/de/home/dokumentation/publikationen/einvernehmliche-regelungen.html", "Einvernehmliche Regelung"),
     ("/pue/de/home/dokumentation/publikationen/empfehlungen.html", "Empfehlung"),
 )
-_COURT_RULING = re.compile(r"(Bundesverwaltungsgericht|Bundesgericht|Verwaltungsgericht)s?urteil|Urteil des", re.I)
+_COURT_RULING = re.compile(r"(Bundesverwaltungsgericht|Bundesgericht|Verwaltungsgericht)s?(urteil|entscheid)|Urteil des", re.I)
 _SIZE = re.compile(r"\s*\((PDF|DOCX?)[^)]*\)\s*$", re.I)
 
 

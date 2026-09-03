@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass, field
 
 from .. import db, throttle
@@ -79,6 +80,12 @@ ON CONFLICT (ecli) DO UPDATE SET
     attempts       = CASE WHEN ch_court_decisions.html_url IS DISTINCT FROM EXCLUDED.html_url
                             OR ch_court_decisions.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
                           THEN 0 ELSE ch_court_decisions.attempts END,
+    last_error     = CASE WHEN ch_court_decisions.html_url IS DISTINCT FROM EXCLUDED.html_url
+                            OR ch_court_decisions.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                          THEN NULL ELSE ch_court_decisions.last_error END,
+    failed_stage   = CASE WHEN ch_court_decisions.html_url IS DISTINCT FROM EXCLUDED.html_url
+                            OR ch_court_decisions.pdf_url IS DISTINCT FROM EXCLUDED.pdf_url
+                          THEN NULL ELSE ch_court_decisions.failed_stage END,
     html_url       = EXCLUDED.html_url,
     pdf_url        = EXCLUDED.pdf_url,
     text_source    = EXCLUDED.text_source,
@@ -99,7 +106,7 @@ def row_for(portal, doc: PortalDoc) -> dict:
         "court_code": portal.SPIDER,
         "court_name": portal.COURT_NAME,
         "chamber": doc.chamber,
-        "decision_type": portal.DECISION_TYPE,
+        "decision_type": doc.decision_type or portal.DECISION_TYPE,
         "decision_date": doc.decision_date,
         "docket_number": doc.docket_number,
         "abstract": doc.title,
@@ -136,6 +143,10 @@ class _PacedFetcher:
     async def post_json(self, url, data, headers=None):
         await asyncio.sleep(self._delay)
         return await self._f.post_json(url, data, headers)
+
+    async def body(self, url):
+        await asyncio.sleep(self._delay)
+        return await self._f.body(url)
 
 
 async def _run_async(settings: Settings, spiders: list[str], transport, delay: float) -> PortalsDiscoverReport:
@@ -209,4 +220,6 @@ def main() -> PortalsDiscoverReport:
 
 
 if __name__ == "__main__":
-    main()
+    # A portal that could not be listed is an outage cron must see: the exit
+    # status says so, and run-portals.sh carries it to its own status.
+    sys.exit(1 if main().errors else 0)

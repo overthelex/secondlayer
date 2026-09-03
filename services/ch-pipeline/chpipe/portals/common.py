@@ -30,6 +30,7 @@ Page shapes:
 """
 from __future__ import annotations
 
+import hashlib
 import html as htmllib
 import json
 import re
@@ -90,27 +91,37 @@ def parse_date(text: str | None) -> date | None:
 
 
 def last_date(text: str | None) -> date | None:
-    """The LAST date in `text` -- ElCom titles end in the decision date
-    ("211-00500 Anrechenbarkeit ..., 2.6.2026") while an earlier number
-    in the title can look like one."""
+    """The LAST date in `text`, whatever grammar it is written in -- ElCom
+    titles end in the decision date ("211-00500 Anrechenbarkeit ..., 2.6.2026")
+    while an earlier number in the title can look like one."""
     if not text:
         return None
-    found = None
+    best: tuple[int, date] | None = None
     for m in _NUMERIC.finditer(text):
         try:
-            found = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            d = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
         except ValueError:
-            pass
-    if found:
-        return found
+            continue
+        if best is None or m.start() > best[0]:
+            best = (m.start(), d)
+    for m in _ISO.finditer(text):
+        try:
+            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            continue
+        if best is None or m.start() > best[0]:
+            best = (m.start(), d)
     for m in _WORDY.finditer(text):
         mo = _MONTHS.get(m.group(2).lower().rstrip("."))
-        if mo:
-            try:
-                found = date(int(m.group(3)), mo, int(m.group(1)))
-            except ValueError:
-                pass
-    return found
+        if not mo:
+            continue
+        try:
+            d = date(int(m.group(3)), mo, int(m.group(1)))
+        except ValueError:
+            continue
+        if best is None or m.start() > best[0]:
+            best = (m.start(), d)
+    return best[1] if best else None
 
 
 _SAFE = re.compile(r"[^\w.\- ]+")        # what fetch_stage._SAFE_NAME refuses
@@ -124,10 +135,15 @@ def safe_doc_id(*parts: str, max_len: int = 120) -> str:
     capped. Deterministic, so the same document yields the same id on every
     walk."""
     raw = "_".join(p for p in parts if p)
-    raw = unicodedata.normalize("NFKD", unquote(raw)).encode("ascii", "ignore").decode()
-    raw = _ID_CHARS.sub("_", raw).strip("_ .")
-    raw = re.sub(r"_+", "_", raw)
-    return raw[:max_len].rstrip("_ .") or "doc"
+    folded = unicodedata.normalize("NFKD", unquote(raw)).encode("ascii", "ignore").decode()
+    folded = _ID_CHARS.sub("_", folded).strip("_ .")
+    folded = re.sub(r"_+", "_", folded)
+    if len(folded) > max_len:
+        # Two names that differ only past the cap must not become one id: the
+        # digest of the whole (pre-fold) input rides along.
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        folded = folded[: max_len - 9].rstrip("_ .") + "_" + digest
+    return folded or "doc"
 
 
 def lang_from_dam(url: str | None) -> str | None:
@@ -145,7 +161,9 @@ def lang_from_name(name: str | None) -> str | None:
     low = name.lower()
     for word, code in (("deutsch", "de"), ("allemand", "de"), ("tedesco", "de"),
                        ("französisch", "fr"), ("français", "fr"), ("francais", "fr"), ("francese", "fr"),
-                       ("italienisch", "it"), ("italien", "it"), ("italiano", "it")):
+                       ("italienisch", "it"), ("italien", "it"), ("italiano", "it"),
+                       # the document's own language, as a title word (PostCom's fr/it files on the de page)
+                       ("décision", "fr"), ("decisione", "it"), ("verfügung", "de"), ("verfuegung", "de")):
         if word in low:
             return code
     m = re.search(r"[-_](d|f|i)(?:\.pdf)?$", low)
@@ -164,6 +182,7 @@ class PortalDoc:
     docket_number: str | None = None
     lang: str | None = None
     chamber: str | None = None
+    decision_type: str | None = None            # overrides the portal's DECISION_TYPE (ESBK: Strafbescheid vs Verfügung)
     extra: dict = field(default_factory=dict)   # goes into metadata_json['portal']
 
     def __post_init__(self):

@@ -23,7 +23,8 @@ DECISION_TYPE = "Verfügung"
 TEXT_SOURCE = "pdf"
 BASE = "https://www.esbk.admin.ch"
 PAGES = (("/de/strafrecht", "Strafbescheid"), ("/de/verwaltungsrecht", "Verfügung"))
-_DOCKET = re.compile(r"(\d{2}-\d{4}-\d{2,4}(?:-\d{1,2})?)", re.I)
+# "62-2023-016-01" (current) and the legacy "81-07-046-01" (strafbescheid-81-07-046-01.pdf).
+_DOCKET = re.compile(r"(\d{2}-\d{2,4}-\d{2,4}(?:-\d{1,2})?)", re.I)
 
 
 def parse_page(page_html: str, kind: str) -> list[PortalDoc]:
@@ -49,6 +50,7 @@ def parse_page(page_html: str, kind: str) -> list[PortalDoc]:
             docket_number=docket,
             lang=lang_from_name(name) or "de",
             chamber=kind,
+            decision_type=kind,
             extra={"kind": kind, "filename": name},
         ))
     return out

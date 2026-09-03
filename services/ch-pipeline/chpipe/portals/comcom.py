@@ -48,9 +48,12 @@ def parse_page(page_html: str, span: tuple[int, int]) -> list[PortalDoc]:
         if key in seen:
             continue
         seen.add(key)
-        decided = parse_date(filename_of(it.href)) or parse_date(it.title) or it.meta_date
+        decided = (parse_date(filename_of(it.href)) or parse_date(it.title)
+                   or parse_date(it.description) or it.meta_date)
+        # The id is the filename, not the DAM hash: a re-uploaded file keeps its
+        # identity and re-queues instead of appearing twice.
         out.append(PortalDoc(
-            doc_id=safe_doc_id("COMCOM", decided.isoformat() if decided else str(span[0]), key),
+            doc_id=safe_doc_id("COMCOM", filename_of(it.href)),
             url=it.href,
             text_source=TEXT_SOURCE,
             title=it.title or filename_of(it.href),
@@ -64,12 +67,19 @@ def parse_page(page_html: str, span: tuple[int, int]) -> list[PortalDoc]:
 
 
 async def discover(fetcher: Fetcher, known: set[str]) -> list[PortalDoc]:
+    # A decision the site files under two ranges (the 2000-2003 LRIC cases sit
+    # on both 2002-2003 and 2004-2005, as two DAM copies) is one document:
+    # the newest range's copy wins.
     out: list[PortalDoc] = []
+    seen: set[str] = set()
     for span in ranges():
         try:
             page = await fetcher.text(f"{BASE}/de/entscheide-{span[0]}-{span[1]}")
         except FetchError as exc:
             log.info("%s: %s: %s", SPIDER, span, exc)
             continue
-        out.extend(parse_page(page, span))
+        for doc in parse_page(page, span):
+            if doc.doc_id not in seen:
+                seen.add(doc.doc_id)
+                out.append(doc)
     return out

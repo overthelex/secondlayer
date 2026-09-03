@@ -7,9 +7,15 @@ the year, a 404 inside the run is a gap). 237 decisions on 2026-09-03.
 The pages are ISO-8859-1 HTML; fetch_stage keeps the Content-Type charset
 with the body, which is what makes the umlauts survive extraction.
 
-The archive is closed, so a walk that already knows every decision of a
-year is not repeated: discover() probes only years with no known doc, or
-everything when CHPIPE_PORTAL_FULL=1.
+The archive is closed, so a full re-walk is pointless -- but a walk can be
+interrupted, so "known" must not mean "complete". Each year is probed from
+the number after the highest one already known (from 1 when nothing is
+known): a complete year costs MISSES_TO_STOP probes, an interrupted one
+picks up where it stopped. CHPIPE_PORTAL_FULL=1 probes every year from 1.
+
+The pages say charset=ISO-8859-1 in a <meta> and the server sends no
+charset header, so httpx would decode them as UTF-8 and turn every umlaut
+into U+FFFD; the bytes are decoded here by the declared charset.
 """
 from __future__ import annotations
 
@@ -38,6 +44,24 @@ def url_for(year: int, nr: int) -> str:
     return f"{BASE}/{year}/{nr:02d}.htm"
 
 
+_CHARSET = re.compile(r"charset=([\w-]+)", re.I)
+
+
+def decode(body: bytes, content_type: str | None) -> str:
+    """The page text by the charset the server or the page declares;
+    UTF-8 when it decodes cleanly, Latin-1 otherwise (never U+FFFD)."""
+    m = _CHARSET.search(content_type or "") or _CHARSET.search(body[:2048].decode("ascii", "ignore"))
+    if m:
+        try:
+            return body.decode(m.group(1))
+        except (LookupError, UnicodeDecodeError):
+            pass
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        return body.decode("latin-1")
+
+
 def doc_for(year: int, nr: int, page_html: str | None) -> PortalDoc:
     text = re.sub(r"\s+", " ", _TAGS.sub(" ", page_html or ""))[:3000]
     m = re.search(r"(?:Urteil|Entscheid|arrêt|décision|sentenza|decisione)\s+(?:vom|du|del|dell')\s+([^,;]{6,40})", text, flags=re.I)
@@ -59,22 +83,30 @@ def doc_for(year: int, nr: int, page_html: str | None) -> PortalDoc:
     )
 
 
+def _known_max(known: set[str]) -> dict[int, int]:
+    out: dict[int, int] = {}
+    for d in known:
+        m = re.fullmatch(r"EMARK-(\d{4})-(\d+)", d)
+        if m:
+            y, n = int(m.group(1)), int(m.group(2))
+            out[y] = max(out.get(y, 0), n)
+    return out
+
+
 async def discover(fetcher: Fetcher, known: set[str]) -> list[PortalDoc]:
     full = os.environ.get("CHPIPE_PORTAL_FULL", "") not in ("", "0")
-    known_years = {int(d.split("-")[1]) for d in known if d.startswith("EMARK-")}
+    known_max = {} if full else _known_max(known)
     out: list[PortalDoc] = []
     for year in YEARS:
-        if year in known_years and not full:
-            continue
         misses = 0
-        for nr in range(1, MAX_NR + 1):
+        for nr in range(known_max.get(year, 0) + 1, MAX_NR + 1):
             try:
-                page = await fetcher.text(url_for(year, nr))
+                body, ctype = await fetcher.body(url_for(year, nr))
             except FetchError:
                 misses += 1
                 if misses >= MISSES_TO_STOP:
                     break
                 continue
             misses = 0
-            out.append(doc_for(year, nr, page))
+            out.append(doc_for(year, nr, decode(body, ctype)))
     return out

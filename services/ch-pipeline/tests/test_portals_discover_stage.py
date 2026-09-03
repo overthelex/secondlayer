@@ -22,8 +22,7 @@ pytestmark = pytest.mark.skipif(
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
 FIX = pathlib.Path(__file__).parent / "fixtures" / "portals"
-PDF = (pathlib.Path(__file__).parent / "fixtures" / "decision_zg.pdf")
-PDF_BYTES = PDF.read_bytes() if PDF.exists() else b"%PDF-1.4\n%%EOF"
+PDF_BYTES = (pathlib.Path(__file__).parent / "fixtures" / "decision_zg.pdf").read_bytes()
 
 
 @pytest.fixture
@@ -106,16 +105,19 @@ def test_discovery_writes_rows_at_stage_indexed_in_the_queue_shape(settings, con
 def test_a_second_walk_is_idempotent_and_a_new_url_requeues(settings, conn):
     site = Site()
     _discover(settings, site, "CH_ESCHK")
-    conn.execute("UPDATE ch_court_decisions SET stage = 'loaded', full_text = 'x', attempts = 2 WHERE doc_id = '2024_gtk-dfi-2024'")
+    conn.execute("UPDATE ch_court_decisions SET stage = 'failed', failed_stage = 'fetched', last_error = 'boom', "
+                 "full_text = 'x', attempts = 3 WHERE doc_id = '2024_gtk-dfi-2024'")
     report = _discover(settings, site, "CH_ESCHK")
     assert (report.inserted, report.requeued, report.stale) == (0, 0, 0)
-    assert _rows(conn, "CH_ESCHK")["2024_gtk-dfi-2024"][13] == "loaded"
+    assert _rows(conn, "CH_ESCHK")["2024_gtk-dfi-2024"][13] == "failed"
     site.routes["eschk.admin.ch/de/beschluesse-2024"] = site.routes["eschk.admin.ch/de/beschluesse-2024"].replace(
         "WczDveCpZFab/gtk-dfi-2024.pdf", "NEWHASH/gtk-dfi-2024.pdf")
     report = _discover(settings, site, "CH_ESCHK")
     assert report.requeued == 1
     r = _rows(conn, "CH_ESCHK")["2024_gtk-dfi-2024"]
     assert r[13] == "indexed" and r[14] == 0 and "NEWHASH" in r[11]
+    # the old failure's diagnosis went with it
+    assert conn.execute("SELECT last_error, failed_stage FROM ch_court_decisions WHERE doc_id = '2024_gtk-dfi-2024'").fetchone() == (None, None)
 
 
 def test_an_html_portal_row_carries_html_url_not_pdf_url(settings, conn):

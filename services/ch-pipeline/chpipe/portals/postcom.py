@@ -15,7 +15,7 @@ import logging
 import re
 
 from ..http import FetchError, Fetcher
-from .common import PortalDoc, nuxt_files, nuxt_payload, parse_date, safe_doc_id, stem_of
+from .common import PortalDoc, lang_from_name, nuxt_files, nuxt_payload, parse_date, safe_doc_id, stem_of
 
 log = logging.getLogger(__name__)
 
@@ -47,14 +47,16 @@ def doc_from_file(f: dict) -> PortalDoc | None:
     title = re.sub(r"^\d{1,2}\.\d{2}\.\d{4}\s*-\s*", "", stem)
     title = re.sub(r"\s*-\s*(nicht\s+|teilweise\s+)?rechtskr[äa]ftig\s*$", "", title, flags=re.I)
     title = re.sub(r"_", " ", title).strip()
+    # The file's own uuid (the url's stem) keeps an annex apart from the decision
+    # it shares a docket with; the docket in front keeps the id readable.
     return PortalDoc(
-        doc_id=safe_doc_id(docket or "postcom", stem_of(url).split("-")[0][:8] if not docket else ""),
+        doc_id=safe_doc_id(docket or "VFG", stem_of(url).split("-")[0][:8]),
         url=url,
         text_source=TEXT_SOURCE,
         title=title or stem,
         decision_date=decided,
         docket_number=docket,
-        lang="de",
+        lang=lang_from_name(name) or "de",
         extra={"status": s.group(1).lower() if s else None, "filename": name},
     )
 

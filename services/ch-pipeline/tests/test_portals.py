@@ -102,6 +102,8 @@ class Site:
                     return httpx.Response(body, text="")
                 if isinstance(body, dict):
                     return httpx.Response(200, json=body)
+                if isinstance(body, bytes):          # the site's raw bytes, no charset header
+                    return httpx.Response(200, content=body, headers={"content-type": "text/html"})
                 return httpx.Response(200, text=body)
         return httpx.Response(404, text=url)
 
@@ -145,6 +147,10 @@ def test_ubi_reads_rows_and_follows_the_next_link_once():
     assert docs[0].url == "https://www.ubi.admin.ch/inhalte/entscheide/b.1111.pdf"
     assert docs[0].decision_date == D(2026, 7, 13) and docs[0].lang == "de"
     assert docs[0].extra["outcome"] == "Nicht eintreten"
+    # the description cell is the title; the other cells land in the metadata
+    assert docs[0].title.startswith("UBI b.1111: ") and len(docs[0].title) > len("UBI b.1111: ")
+    assert "b.1111" not in docs[0].title[len("UBI b.1111"):]
+    assert docs[0].extra["broadcaster"] and docs[0].extra["complaint"]
     assert len(site.calls) == 2                      # page 1, then the (empty) page 2
 
 
@@ -172,7 +178,16 @@ def test_comcom_reads_the_decision_date_from_the_filename():
     docs = discover(comcom, site)
     assert docs and docs[0].decision_date == D(2024, 12, 19)
     assert docs[0].title.startswith("Interconnect Peering") and docs[0].lang == "de"
-    assert docs[0].doc_id.startswith("COMCOM_2024-12-19_")
+    # the id is the filename, so a re-uploaded file (new DAM hash) keeps its identity
+    assert docs[0].doc_id == "COMCOM_offVF_2024-12-19._Entscheid_ComCom_i.S._Init7_vs._Swisscom_Interconnect_Pering.pdf"
+
+
+def test_comcom_keeps_one_copy_of_a_decision_filed_under_two_ranges():
+    page = fx("comcom_2024_2025.html")
+    site = Site({"entscheide-2024-2025": page, "entscheide-2022-2023": page.replace("/sd-web/", "/sd-web/older-")})
+    docs = discover(comcom, site)
+    ids = [d.doc_id for d in docs]
+    assert len(ids) == len(set(ids)) and all("/sd-web/older-" not in d.url for d in docs)
 
 
 def test_esbk_reads_docket_and_language_from_the_filename():
@@ -182,6 +197,8 @@ def test_esbk_reads_docket_and_language_from_the_filename():
     by = {d.docket_number: d for d in docs}
     assert by["62-2023-016-01"].lang == "fr" and by["62-2023-002-03"].lang == "de"
     assert by["62-2023-016-01"].chamber == "Strafbescheid" and by["62-2023-016-01"].decision_date is None
+    assert by["62-2023-016-01"].decision_type == "Strafbescheid"
+    assert esbk._DOCKET.search("strafbescheid-81-07-046-01.pdf").group(1) == "81-07-046-01"
     assert by["62-2023-016-01"].url.startswith("https://backend.esbk.admin.ch/fileservice/")
 
 
@@ -191,6 +208,10 @@ def test_postcom_reads_the_record_from_the_filename():
     a = next(d for d in docs if d.docket_number == "VFG-8-2026")
     assert a.decision_date == D(2026, 5, 13) and a.extra["status"] == "rechtskräftig"
     assert a.title.startswith("Verfügung 8-2026 betreffend")
+    assert a.doc_id.startswith("VFG-8-2026_") and a.lang == "de"
+    # an annex or a translation sharing the docket keeps its own id (the file's uuid)
+    assert postcom.doc_from_file({"url": "https://x/files/2026/07/09/deadbeef-1.pdf", "filename": "Décision 8-2026 concernant.pdf"}).lang == "fr"
+    assert postcom.doc_from_file({"url": "https://x/files/2026/07/09/deadbeef-1.pdf", "filename": "Verfügung 8-2026 Anhang.pdf"}).doc_id == "VFG-8-2026_deadbeef"
     b = next(d for d in docs if d.docket_number == "VFG-6-2026")
     assert b.decision_date == D(2026, 5, 13)             # from the trailing _20260513
     assert len({d.doc_id for d in docs}) == len(docs)
@@ -202,7 +223,9 @@ def test_pue_skips_republished_court_rulings():
     assert docs
     titles = [d.title for d in docs]
     assert any("Booking.com" in t for t in titles)
-    assert not any("Bundesverwaltungsgerichtsurteil" in t for t in titles)
+    assert not any("Bundesverwaltungsgerichts" in t for t in titles)
+    assert pue._COURT_RULING.search("10.11.2023 - Bundesverwaltungsgerichtsentscheid betr. X")
+    assert pue._COURT_RULING.search("Bundesgerichtsurteil") and not pue._COURT_RULING.search("Verfügung gegen Booking.com")
     booking = next(d for d in docs if "Booking.com" in d.title)
     assert booking.decision_date == D(2025, 5, 20) and booking.chamber == "Verfügung"
 
@@ -226,20 +249,33 @@ def test_mkg_takes_single_decisions_not_the_bound_volumes():
     assert not any("Band" in (d.title or "") for d in docs)
 
 
-def test_emark_enumerates_a_year_and_stops_after_a_run_of_misses():
-    page = fx("emark_2005_12.htm")
+def test_emark_enumerates_a_year_and_stops_after_a_run_of_misses(monkeypatch):
+    monkeypatch.delenv("CHPIPE_PORTAL_FULL", raising=False)
+    page = fx("emark_2005_12.htm").encode("latin-1")     # the site's bytes, no charset header
     routes = {f"/emark/2005/{n:02d}.htm": page for n in range(1, 13)}
     site = Site(routes)
-    known = {f"EMARK-{y}-01" for y in emark.YEARS if y != 2005}     # every other year known
+    # every other year "complete" at a high number: each costs MISSES_TO_STOP probes and nothing more
+    known = {f"EMARK-{y}-{emark.MAX_NR}" for y in emark.YEARS if y != 2005}
     docs = discover(emark, site, known)
     assert len(docs) == 12
     assert docs[0].doc_id == "EMARK-2005-01" and docs[0].text_source == "html"
     assert docs[11].decision_date == D(2005, 5, 18) and docs[11].lang == "de"
-    # 12 hits + MISSES_TO_STOP misses for 2005, nothing for the known years
     assert len(site.calls) == 12 + emark.MISSES_TO_STOP
 
 
-def test_emark_frozen_archive_is_not_rewalked_once_known():
-    site = Site({})
-    assert discover(emark, site, {f"EMARK-{y}-01" for y in emark.YEARS}) == []
-    assert site.calls == []
+def test_emark_resumes_an_interrupted_year_after_its_highest_known_number(monkeypatch):
+    monkeypatch.delenv("CHPIPE_PORTAL_FULL", raising=False)
+    page = fx("emark_2005_12.htm").encode("latin-1")
+    site = Site({f"/emark/2005/{n:02d}.htm": page for n in range(1, 13)})
+    known = {f"EMARK-{y}-{emark.MAX_NR}" for y in emark.YEARS if y != 2005} | {"EMARK-2005-07"}
+    docs = discover(emark, site, known)
+    assert [d.doc_id for d in docs] == [f"EMARK-2005-{n:02d}" for n in range(8, 13)]
+    assert not any("/2005/07.htm" in c or "/2005/01.htm" in c for c in site.calls)
+
+
+def test_emark_decodes_the_declared_latin1_charset():
+    raw = "<html><head><meta charset=ISO-8859-1></head><body>Urteil vom 18. Mai 2005 Wegweisung Äthiopien</body></html>".encode("latin-1")
+    text = emark.decode(raw, "text/html")
+    assert "Äthiopien" in text and "\ufffd" not in text
+    assert emark.decode("ü".encode("utf-8"), None) == "ü"
+    assert emark.decode(b"\xfc", None) == "ü"

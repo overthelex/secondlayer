@@ -148,6 +148,8 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
     """
     # The portal spiders (chpipe/portals) are not on entscheidsuche, so they
     # are no part of the comparison against its snapshot on either side.
+    # `spider` is NOT NULL (migration 134), so the predicate drops nothing
+    # else: this is still count(*) over every entscheidsuche row.
     ours_total = conn.execute(
         "SELECT count(*) AS n FROM ch_court_decisions WHERE spider <> ALL(%s)",
         (sorted(PORTAL_SPIDERS),)).fetchone()["n"]

@@ -51,16 +51,18 @@ def parse_page(page_html: str) -> tuple[list[PortalDoc], str | None]:
         beschluss = cells.get("beschluss", "")
         lang = lang_from_name(beschluss)
         outcome = re.split(r"\s+\d{1,2}\.\d{1,2}\.\d{4}", beschluss, 1)[0].strip() or None
+        description = re.sub(r"\s*b\.\d{3,4}\s*\(\w+, pdf\)\s*$", "", cells.get("beschreibung", "")).strip()
         docs.append(PortalDoc(
             doc_id=safe_doc_id(number),
             url=urljoin(BASE, htmllib.unescape(href)),
             text_source=TEXT_SOURCE,
-            title=f"UBI {number}: {cells.get('sendung') or cells.get('beschwerde') or ''}".strip(": "),
+            title=f"UBI {number}: {description}".strip(": "),
             decision_date=parse_date(beschluss),
             docket_number=number,
             lang=lang,
             extra={"outcome": outcome, "medium": cells.get("medium"),
-                   "programme": cells.get("sendung"), "complaint": cells.get("beschwerde")},
+                   "broadcaster": cells.get("veranstalter"), "complaint": cells.get("beschwerdetyp"),
+                   "provisions": cells.get("bestimmungen"), "keywords": cells.get("schluesselwoerter")},
         ))
     n = _NEXT.search(page_html)
     nxt = urljoin(BASE, htmllib.unescape(n.group(1))) if n else None
