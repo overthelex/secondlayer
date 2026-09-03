@@ -41,7 +41,7 @@ const BOTSCHAFT_DE = [
   '2.3 Art. 2 Zuständigkeit',
   'Art. 2 des Entwurfs überträgt dem Bundesrat die Kompetenz, Zwangsmassnahmen zu erlassen.',
   '',
-  'Nach Artikel 2 Absatz 1 kann der Bundesrat Massnahmen anordnen; Art. 20 bleibt vorbehalten.',
+  'Nach Artikel 2 Absatz 1 EmbG kann der Bundesrat Massnahmen anordnen; Art. 20 bleibt vorbehalten.',
   '',
   'Art. 3 regelt die Aufhebung.',
 ].join('\n');
@@ -61,21 +61,28 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
   let client: Client;
   let tools: ChMaterialsTools;
   let materialDe: number;
+  // Every SQL the tools issue, so a test can pin WHICH expression ranks a search.
+  const issued: string[] = [];
 
   beforeAll(async () => {
     client = new Client({ connectionString: DSN });
     await client.connect();
     const migrations = join(__dirname, '../../../migrations');
-    for (const t of ['ch_material', 'ch_article_provenance', 'ch_act_as_link', 'ch_as_act', 'ch_act_change',
+    for (const t of ['ch_material', 'ch_act_alias', 'ch_article_provenance', 'ch_act_as_link', 'ch_as_act', 'ch_act_change',
                      'ch_act_article', 'ch_act_version', 'ch_act']) {
       await client.query(`DROP TABLE IF EXISTS ${t} CASCADE`);
     }
     await client.query('DROP TABLE IF EXISTS ch_legislation CASCADE');
     await client.query('CREATE TABLE ch_legislation (eli_uri text, lang text, PRIMARY KEY (eli_uri, lang))');
     for (const file of ['197_ch_legislation_corpus.sql', '198_ch_as_bbl.sql', '201_ch_cantonal_legislation.sql',
-                        '204_ch_fedlex_pdf.sql', '209_ch_material.sql']) {
+                        '204_ch_fedlex_pdf.sql', '209_ch_material.sql', '210_ch_material_tsv.sql']) {
       await client.query(readFileSync(join(migrations, file), 'utf-8'));
     }
+    // The alias lookup ch_get_article_purpose uses for the act-mention ranking (199/206 shape).
+    await client.query(`CREATE TABLE ch_act_alias (abbr text NOT NULL, lang text NOT NULL, sr_number text NOT NULL,
+                        source text NOT NULL, jurisdiction text NOT NULL DEFAULT 'CH')`);
+    await client.query(`INSERT INTO ch_act_alias VALUES ('EmbG', 'de', '946.231', 'fedlex_abbreviation', 'CH'),
+                                                        ('LEmb', 'fr', '946.231', 'title_paren', 'CH')`);
 
     // SR 946.231 (EmbG): one de edition with Art. 2, whose provenance footnote cites the dispatch.
     const act = (await client.query(
@@ -109,7 +116,9 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
        VALUES ('https://fedlex.data.admin.ch/eli/fga/2010/999', 'de', 'bericht_kommission', 't', 'Bericht der Kommission', '2010-10-12',
                'https://fedlex.data.admin.ch/filestore/k.pdf', 'parsed', 'Die Kommission prüfte die Umsetzung der Sanktionen.')`);
 
-    tools = new ChMaterialsTools({ query: (sql: string, params?: any[]) => client.query(sql, params) });
+    tools = new ChMaterialsTools({
+      query: (sql: string, params?: any[]) => { issued.push(sql); return client.query(sql, params); },
+    });
   });
 
   afterAll(async () => {
@@ -185,16 +194,36 @@ describeIfPg('ChMaterialsTools (real PostgreSQL)', () => {
       expect(m.stage).toBe('parsed');
       const texts = m.paragraphs.map((p: any) => p.text);
       expect(texts).toHaveLength(2);
-      expect(texts[0]).toContain('Art. 2 des Entwurfs');
-      expect(texts[1]).toContain('Artikel 2 Absatz 1');
+      // The paragraph that names the act (EmbG) comes first and is flagged; the other follows.
+      expect(texts[0]).toContain('Artikel 2 Absatz 1 EmbG');
+      expect(m.paragraphs[0].mentions_act).toBe(true);
+      expect(texts[1]).toContain('Art. 2 des Entwurfs');
+      expect(m.paragraphs[1].mentions_act).toBe(false);
       // "Art. 20" and "Art. 3" must not match article 2.
       expect(texts.some((t: string) => t.startsWith('Art. 3'))).toBe(false);
     });
 
-    it('caps paragraphs per material and flags the cut', async () => {
+    it('caps paragraphs per material and flags the cut, keeping the act-naming paragraph', async () => {
       const out = parse(await tools.executeTool('ch_get_article_purpose', { sr_number: '946.231', article: '2', max_paragraphs: 1 }) as any);
       expect(out.materials[0].paragraphs).toHaveLength(1);
+      expect(out.materials[0].paragraphs[0].mentions_act).toBe(true);
       expect(out.materials[0].paragraphs_truncated).toBe(true);
+    });
+
+    it('search ranks on the stored tsvector, never on a re-parsed expression, and still returns a headline', async () => {
+      const cols = (await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'ch_material' AND column_name = 'tsv'`)).rows;
+      expect(cols).toHaveLength(1);
+      issued.length = 0;
+      const out = parse(await tools.executeTool('ch_search_materials', { query: 'Zwangsmassnahmen' }) as any);
+      expect(out.total_count).toBe(1);
+      expect(out.results[0].snippet).toMatch(/Zwangsmassnahmen/);
+      expect(out.results[0].tsv).toBeUndefined();
+      const search = issued.find((q) => q.includes('ts_rank('))!;
+      expect(search).toBeDefined();
+      expect(search).toMatch(/ts_rank\(tsv,/);
+      expect(search).toMatch(/WHERE[\s\S]*\btsv @@ plainto_tsquery/);
+      // The expression form would re-parse every hit; only the headline may touch full_text.
+      expect(search).not.toMatch(/to_tsvector\(/);
     });
 
     it('returns the linked material without paragraphs when its text is not parsed yet', async () => {

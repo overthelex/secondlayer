@@ -42,7 +42,9 @@ const ROW_COLUMNS = `
   to_char(publication_date, 'YYYY-MM-DD') AS publication_date,
   pdf_url, stage`;
 
-const FTS_EXPR = `to_tsvector('simple', left(coalesce(title, '') || ' ' || coalesce(full_text, ''), 900000))`;
+// The stored tsvector of migration 210. Ranking on a column instead of re-parsing
+// each hit's text: measured 5.3 s -> the index lookup alone for 122 hits (2026-09-02).
+const TSV = 'tsv';
 
 // Twin of chpipe/bbl.py::bbl_key — same regex, same key shape.
 const BBL_RE = /^\s*(?:BBl|FF|BBI)\s+(\d{4})\s+(?:([IVX]{1,4})\s+)?(\d+)\b/i;
@@ -111,6 +113,7 @@ export class ChMaterialsTools extends BaseToolHandler {
         description: `Що законодавець мав на увазі під статтею швейцарського федерального акта: уривки з послань Федеральної ради (Botschaft) та інших матеріалів Bundesblatt, які цю статтю обговорюють.
 
 Зв'язок статті з матеріалом — не здогад: примітки до консолідованих редакцій (ch_article_provenance) називають цитату BBl/FF послання за кожною поправкою статті; матеріал несе цитату свого видання; збіг нормалізованих цитат у межах мови і є зв'язком (link_method 'provenance_bbl'). Потрібні sr_number та article; lang типово 'de'. Повертає для кожного пов'язаного матеріалу заголовок, дату, historical_id, pdf_url і до max_paragraphs абзаців, у яких згадано "Art. N". Якщо примітки не називають жодної цитати BBl — { error: 'no_materials_linked', bbl_references }; якщо цитати є, але матеріал ще не завантажено — materials з stage <> 'parsed' і paragraphs: [].
+Абзаци, що згадують і сам акт (його абревіатуру), йдуть першими з mentions_act: true — послання має власну нумерацію статей, і "Art. 10" у посланні до ZPO частіше про ZPO, ніж про ZGB, який воно змінює в додатку.
 Стеля: примітки Fedlex до 1999 р. цитують багатотомний BBl ("FF 1986 II 360"), для якого у Fedlex немає тексту.`,
         inputSchema: {
           type: 'object',
@@ -150,7 +153,7 @@ export class ChMaterialsTools extends BaseToolHandler {
     const offset = clampInt(args.offset, 0, 0, 100000);
 
     const params: unknown[] = [String(query).trim()];
-    const where = [`${FTS_EXPR} @@ plainto_tsquery('simple', $1)`, `stage = 'parsed'`];
+    const where = [`${TSV} @@ plainto_tsquery('simple', $1)`, `stage = 'parsed'`];
     if (material_type) { params.push(String(material_type)); where.push(`material_type = $${params.length}`); }
     if (lang) { params.push(String(lang)); where.push(`lang = $${params.length}`); }
     const yearFrom = Number(args.year_from);
@@ -160,16 +163,23 @@ export class ChMaterialsTools extends BaseToolHandler {
     params.push(limit, offset);
 
     try {
+      // The headline is built in an OUTER query over the page only: inside the
+      // ranked query it would be computed for every hit before the sort.
       const rows = (await this.db.query(
-        `SELECT ${ROW_COLUMNS},
-                ts_rank(${FTS_EXPR}, plainto_tsquery('simple', $1)) AS rank,
-                ts_headline('simple', left(full_text, 900000), plainto_tsquery('simple', $1),
-                            'MaxWords=40, MinWords=15, MaxFragments=2, FragmentDelimiter=" … "') AS snippet,
-                COUNT(*) OVER() AS _total_count
-           FROM ch_material
-          WHERE ${where.join(' AND ')}
-          ORDER BY rank DESC, publication_date DESC NULLS LAST, material_id
-          LIMIT $${params.length - 1} OFFSET $${params.length}`,
+        `SELECT page.*,
+                ts_headline('simple', left(m.full_text, 900000), plainto_tsquery('simple', $1),
+                            'MaxWords=40, MinWords=15, MaxFragments=2, FragmentDelimiter=" … "') AS snippet
+           FROM (
+             SELECT ${ROW_COLUMNS},
+                    ts_rank(${TSV}, plainto_tsquery('simple', $1)) AS rank,
+                    COUNT(*) OVER() AS _total_count
+               FROM ch_material
+              WHERE ${where.join(' AND ')}
+              ORDER BY rank DESC, publication_date DESC NULLS LAST, material_id
+              LIMIT $${params.length - 1} OFFSET $${params.length}
+           ) AS page
+           JOIN ch_material m ON m.material_id = page.material_id
+          ORDER BY page.rank DESC, page.publication_date DESC NULLS LAST, page.material_id`,
         params
       )).rows;
       return this.wrapSearchResults(rows, limit, offset);
@@ -310,6 +320,18 @@ export class ChMaterialsTools extends BaseToolHandler {
       // "Art. 25a", "Artikel 25a", "art. 25a", "article 25a", "articolo 25a" — the article
       // token must not be followed by a letter or digit ('25a' is not '25ab', '25' is not '250').
       const pattern = `(^|[^0-9A-Za-z])(Art\\.|Artikel|Article|Articolo|Articles|Articoli|Artikeln)\\s*${escapeRegex(art)}(?![0-9A-Za-z])`;
+      // A dispatch has its own article numbering: the Botschaft to the ZPO amends ZGB Art. 10
+      // in its annex, but most of its "Art. 10" paragraphs are about the ZPO's own Art. 10
+      // (seen live on 2026-09-02). Paragraphs that also name the act — its abbreviation, or
+      // the abbreviation the footnote's own language uses — come first and carry a flag; the
+      // rest follow in document order.
+      const abbrs = [act.abbreviation, ...(await this.db.query(
+        `SELECT DISTINCT abbr FROM ch_act_alias WHERE jurisdiction = 'CH' AND sr_number = $1 AND lang IN ($2, 'any')`,
+        [sr, language]
+      )).rows.map((r: any) => r.abbr)].filter((a): a is string => typeof a === 'string' && a.length > 0);
+      const actPattern = abbrs.length
+        ? `(^|[^A-Za-z])(${[...new Set(abbrs)].map(escapeRegex).join('|')})(?![A-Za-z])`
+        : null;
       const out: any[] = [];
       for (const m of kept) {
         const { bbl_key: _k, ...meta } = m;
@@ -317,20 +339,23 @@ export class ChMaterialsTools extends BaseToolHandler {
         let paragraphs: any[] = [];
         if (stage === 'parsed') {
           paragraphs = (await this.db.query(
-            `SELECT ordinal, left(btrim(paragraph), $3::int) AS text
+            `SELECT ordinal, left(btrim(paragraph), $3::int) AS text,
+                    ($5::text IS NOT NULL AND paragraph ~ $5::text) AS mentions_act
                FROM ch_material,
                     regexp_split_to_table(full_text, E'\\n[ \\t]*\\n') WITH ORDINALITY AS t(paragraph, ordinal)
               WHERE material_id = $1 AND paragraph ~* $2
-              ORDER BY ordinal
+              ORDER BY ($5::text IS NOT NULL AND paragraph ~ $5::text) DESC, ordinal
               LIMIT $4::int`,
-            [m.material_id, pattern, PARAGRAPH_CHARS, maxParagraphs + 1]
+            [m.material_id, pattern, PARAGRAPH_CHARS, maxParagraphs + 1, actPattern]
           )).rows;
         }
         out.push({
           ...meta,
           text_available: stage === 'parsed',
           matched_via: [...keyByRef.entries()].filter(([, k]) => k === m.bbl_key).map(([ref]) => ref),
-          paragraphs: paragraphs.slice(0, maxParagraphs).map((p: any) => ({ ordinal: Number(p.ordinal), text: p.text })),
+          paragraphs: paragraphs.slice(0, maxParagraphs).map((p: any) => ({
+            ordinal: Number(p.ordinal), text: p.text, mentions_act: p.mentions_act === true,
+          })),
           paragraphs_truncated: paragraphs.length > maxParagraphs,
         });
       }

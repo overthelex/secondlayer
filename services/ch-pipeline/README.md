@@ -2217,7 +2217,12 @@ supervised in tmux:
     ./run-stage.sh materials-discover
     ./run-stage.sh materials-text        # ~10.5K files, a few hours at ~1.5 s each
 
-Serving: `ch_search_materials`, `ch_get_material`, `ch_get_article_purpose`
+Serving: `ch_search_materials` (ranks on the stored tsvector of migration 210 --
+ranking on the expression re-parsed every hit's text and took 5.3 s for 122
+hits on 2026-09-02), `ch_get_material`, `ch_get_article_purpose` (paragraphs
+that also name the act come first with `mentions_act: true` -- a dispatch has
+its own article numbering, and "Art. 10" in the Botschaft to the ZPO is
+usually the ZPO's, not the ZGB's it amends in an annex)
 in `mcp_backend/src/api/tools/ch-materials-tools.ts` (`bblKey()` there is
 the twin of `bbl.bbl_key` and must stay identical -- both test files pin
 the same examples).
