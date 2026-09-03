@@ -55,7 +55,7 @@ def test_safe_doc_id_is_a_filename_and_deterministic():
         PortalDoc(doc_id="has/slash", url="u")
     with pytest.raises(ValueError):
         PortalDoc(doc_id="x", url="u", text_source="docx")
-    assert PortalDoc(doc_id="x", url="u", lang="rm").lang is None
+    assert PortalDoc(doc_id="x", url="u", lang="xx").lang is None
 
 
 def test_registry_names_are_safe_spider_names():
@@ -171,6 +171,33 @@ def test_eschk_walks_years_and_skips_missing_ones():
     assert docs[0].docket_number == "gtk-dfi-2024" and docs[0].lang == "de"
     # every year from this one back to 1991 was asked for, the 404s skipped
     assert sum("beschluesse-" in c for c in site.calls) == datetime.date.today().year - 1991 + 1
+
+
+def test_ubi_joined_decisions_in_one_pdf_are_one_row_each():
+    docs, nxt = ubi.parse_page(fx("ubi_joined.html"))
+    assert [d.doc_id for d in docs] == ["b.998", "b.1017", "b.1021"] and nxt is None
+    assert len({d.url for d in docs}) == 1 and docs[0].url.endswith("/b_998_1017_1021_1026.pdf")
+    assert docs[2].extra["outcome"] == "Gutgeheissen" and docs[0].decision_date == D(2025, 4, 4)
+    assert all(d.lang == "de" for d in docs)
+
+
+def test_ubi_two_complaints_under_one_number_become_one_row_and_rumantsch_is_a_language():
+    docs, _ = ubi.parse_page(fx("ubi_same_number.html"))
+    assert [d.doc_id for d in docs] == ["b.750", "b.750", "b.454"]
+    merged = ubi.merge(docs)
+    assert [d.doc_id for d in merged] == ["b.750", "b.454"]
+    assert "Islamzentrum" in merged[0].title and "Teletext" in merged[0].title
+    assert merged[1].lang == "rm"
+
+
+def test_ubi_stops_after_two_pages_without_a_pdf():
+    page = fx("ubi_p1.html")
+    nopdf = "<html><table><tr><td class=\"column-beschreibung\">alt b.325</td></tr></table>" \
+            "<a href=\"/de/entscheide/entscheide-suchen-sie-mit-suchkriterien?p=NEXT\">Nächster</a></html>"
+    site = Site({"currentPage%5D=2": nopdf.replace("NEXT", "3"), "p=3": nopdf.replace("NEXT", "4"),
+                 "p=4": page, "entscheide-suchen": page})
+    docs = discover(ubi, site)
+    assert len(docs) == len(ubi.parse_page(page)[0]) and len(site.calls) == 3   # page 1, two empty pages, stop
 
 
 def test_comcom_reads_the_decision_date_from_the_filename():

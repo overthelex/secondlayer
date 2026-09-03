@@ -1,7 +1,7 @@
 """UBI -- Unabhängige Beschwerdeinstanz für Radio und Fernsehen.
 
 A TYPO3 table at /de/entscheide/entscheide-suchen-sie-mit-suchkriterien,
-21 rows a page, paged by a "Nächster" link that carries the extension's
+10 rows a page (each ~9 s server-side, ~11 min for the whole archive), paged by a "Nächster" link that carries the extension's
 cHash (so the next-page URL must be taken from the page, not built). Each
 row has the decision number as a PDF link ("b.1111" -> /inhalte/entscheide/b.1111.pdf),
 the medium, a cell "Beschluss / Datum / Sprache" (outcome, dd.mm.yyyy,
@@ -29,7 +29,10 @@ START = BASE + "/de/entscheide/entscheide-suchen-sie-mit-suchkriterien"
 MAX_PAGES = 200
 
 _ROW = re.compile(r"<tr\b.*?</tr>", re.S)
-_PDF = re.compile(r'href="([^"]*/(?:inhalte/entscheide|fileadmin/user_upload)/(b[._]\d{3,4})\.pdf)"', re.I)
+# One PDF may carry several joined decisions: b_998_1017_1021_1026.pdf is
+# four rows, each with its own "b.998 (de, pdf)" marker in the description.
+_PDF = re.compile(r'href="([^"]*/(?:inhalte/entscheide|fileadmin/user_upload)/(b[._]\d{3,4}(?:[._]\d{3,4})*)\.pdf)"', re.I)
+_OWN = re.compile(r"\b(b\.\d{3,4})\s*\((\w+),\s*pdf\)", re.I)
 _CELL = re.compile(r'<td class="column-([a-z]+)"[^>]*>(.*?)</td>', re.S)
 _NEXT = re.compile(r'<a[^>]*href="([^"]+)"[^>]*>\s*N(?:ä|&auml;|a)chster\s*</a>')
 _TAGS = re.compile(r"<[^>]+>")
@@ -46,10 +49,12 @@ def parse_page(page_html: str) -> tuple[list[PortalDoc], str | None]:
         m = _PDF.search(row)
         if not m:
             continue
-        href, number = m.group(1), m.group(2).replace("_", ".")
         cells = {k: _text(v) for k, v in _CELL.findall(row)}
+        own = _OWN.search(cells.get("beschreibung", ""))
+        href = m.group(1)
+        number = own.group(1).lower() if own else re.match(r"b[._]\d{3,4}", m.group(2), re.I).group(0).lower().replace("_", ".")
         beschluss = cells.get("beschluss", "")
-        lang = lang_from_name(beschluss)
+        lang = lang_from_name(beschluss) or (lang_from_name(own.group(2)) if own else None)
         outcome = re.split(r"\s+\d{1,2}\.\d{1,2}\.\d{4}", beschluss, 1)[0].strip() or None
         description = re.sub(r"\s*b\.\d{3,4}\s*\(\w+, pdf\)\s*$", "", cells.get("beschreibung", "")).strip()
         docs.append(PortalDoc(
@@ -69,10 +74,32 @@ def parse_page(page_html: str) -> tuple[list[PortalDoc], str | None]:
     return docs, nxt
 
 
+EMPTY_PAGES_TO_STOP = 2     # the tail of the list (before 1998) has rows without a PDF
+
+
+def merge(docs: list[PortalDoc]) -> list[PortalDoc]:
+    """One row per decision number. The site lists a decision that settled
+    two complaints twice (b.750: the news article and the teletext item),
+    same number, same PDF: the second description joins the title. A
+    second row with another file (b.701 next to b_701_702.pdf) is the
+    site's inconsistency; the first row wins."""
+    by_id: dict[str, PortalDoc] = {}
+    for d in docs:
+        first = by_id.get(d.doc_id)
+        if first is None:
+            by_id[d.doc_id] = d
+        elif first.url == d.url and d.title and d.title not in first.title:
+            first.title = f"{first.title}; {d.title.split(': ', 1)[-1]}"
+        else:
+            log.info("%s: %s listed twice (%s, %s), keeping the first", SPIDER, d.doc_id, first.url, d.url)
+    return list(by_id.values())
+
+
 async def discover(fetcher: Fetcher, known: set[str]) -> list[PortalDoc]:
     out: list[PortalDoc] = []
     url: str | None = START
     seen_urls: set[str] = set()
+    empty = 0
     for _ in range(MAX_PAGES):
         if not url or url in seen_urls:
             break
@@ -83,7 +110,8 @@ async def discover(fetcher: Fetcher, known: set[str]) -> list[PortalDoc]:
             log.error("%s: %s: %s", SPIDER, url, exc)
             break
         docs, url = parse_page(page)
-        if not docs:
+        empty = 0 if docs else empty + 1
+        if empty >= EMPTY_PAGES_TO_STOP:
             break
         out.extend(docs)
-    return out
+    return merge(out)

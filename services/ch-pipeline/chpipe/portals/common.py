@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from urllib.parse import unquote, urljoin
 
-LANGS = ("de", "fr", "it")
+LANGS = ("de", "fr", "it", "rm")   # rm: UBI decides on Radio Rumantsch complaints
 
 _MONTHS = {
     # de
@@ -162,6 +162,7 @@ def lang_from_name(name: str | None) -> str | None:
     for word, code in (("deutsch", "de"), ("allemand", "de"), ("tedesco", "de"),
                        ("französisch", "fr"), ("français", "fr"), ("francais", "fr"), ("francese", "fr"),
                        ("italienisch", "it"), ("italien", "it"), ("italiano", "it"),
+                       ("rumantsch", "rm"), ("rätoromanisch", "rm"), ("romanche", "rm"), ("romancio", "rm"),
                        # the document's own language, as a title word (PostCom's fr/it files on the de page)
                        ("décision", "fr"), ("decisione", "it"), ("verfügung", "de"), ("verfuegung", "de")):
         if word in low:
