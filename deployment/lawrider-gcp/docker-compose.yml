@@ -221,7 +221,8 @@ services:
     volumes:
       - tei_cache:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/health || exit 1"]
+      # the cpu image ships curl, not wget
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -231,7 +232,9 @@ services:
       resources:
         limits:
           cpus: "3"
-          memory: 8G
+          # measured steady RSS is 11.1G (fp32 onnx + ORT arenas); 8G OOM-killed
+          # the model load in a 90-restart crash loop
+          memory: 14G
     networks: [lawrider]
 
   site:
