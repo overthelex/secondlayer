@@ -16,7 +16,8 @@ from psycopg.rows import dict_row
 from chpipe.bench import build
 from chpipe.config import Settings
 
-from conftest import apply_migration_200
+from conftest import (MIGRATION_198, MIGRATION_201, MIGRATION_203,
+                      MIGRATION_204, apply_migration_200)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
@@ -84,6 +85,11 @@ def conn(settings):
         # scratch DB that already has these tables (from an earlier test
         # module in the same session) is a no-op.
         c.execute(MIGRATION_197.read_text())
+        # 201 adds ch_act.jurisdiction and 204 ch_act_version.source, both
+        # of which _CHANGE_FROM now filters on; apply the same chain
+        # conftest.reset_legislation_schema() does so the shape is prod's.
+        for migration in (MIGRATION_198, MIGRATION_201, MIGRATION_203, MIGRATION_204):
+            c.execute(migration.read_text())
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
         # TRUNCATE rather than DROP: this file's fixtures own exactly these
@@ -276,7 +282,8 @@ def test_build_report_json_matches_the_returned_report(settings, seeded, tmp_pat
     on_disk = json.loads((tmp_path / "build-report.json").read_text())
 
     assert on_disk["seed"] == 12345
-    assert on_disk["caps"] == {"per_lang_cap": 5000, "per_act_cap": 50}
+    assert on_disk["caps"] == {"per_lang_cap": 5000, "per_act_cap": 50, "core_per_lang": 0}
+    assert on_disk["sources"] == ["fedlex"] and on_disk["build"] is None
     assert on_disk["built_at"] == "2026-08-25T12:00:00+00:00"
     assert on_disk["de"] == report.per_lang["de"]
     assert on_disk["fr"] == report.per_lang["fr"]

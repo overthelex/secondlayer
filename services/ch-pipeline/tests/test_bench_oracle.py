@@ -19,7 +19,8 @@ from psycopg.rows import dict_row
 from chpipe.bench import build, report, run_oracle
 from chpipe.config import Settings
 
-from conftest import apply_migration_200
+from conftest import (MIGRATION_198, MIGRATION_201, MIGRATION_203,
+                      MIGRATION_204, apply_migration_200)
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_197 = _REPO_ROOT / "mcp_backend/src/migrations/197_ch_legislation_corpus.sql"
@@ -70,6 +71,11 @@ def conn(settings):
             )
         """)
         c.execute(MIGRATION_197.read_text())
+        # 201 adds ch_act.jurisdiction and 204 ch_act_version.source, both
+        # of which _CHANGE_FROM now filters on; apply the same chain
+        # conftest.reset_legislation_schema() does so the shape is prod's.
+        for migration in (MIGRATION_198, MIGRATION_201, MIGRATION_203, MIGRATION_204):
+            c.execute(migration.read_text())
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
         c.execute("TRUNCATE ch_act_change, ch_act_alias, ch_act_article, "

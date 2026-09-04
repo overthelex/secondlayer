@@ -49,6 +49,7 @@ OLD_ROW = {
     "date_applicability": datetime.date(2015, 1, 1),
     "date_end_applicability": datetime.date(2020, 12, 31),
     "eli_consolidation_uri": "https://fedlex.data.admin.ch/eli/cc/27/317_321_377/20150101",
+    "source": "fedlex",
     "text": OLD_TEXT,
 }
 
@@ -57,6 +58,7 @@ NEW_ROW = {
     "date_applicability": datetime.date(2021, 1, 1),
     "date_end_applicability": None,
     "eli_consolidation_uri": "https://fedlex.data.admin.ch/eli/cc/27/317_321_377/20210101",
+    "source": "fedlex",
     "text": NEW_TEXT,
 }
 
@@ -405,11 +407,13 @@ def _row(act_id: int, e_id: str, old_text: str, new_text: str) -> dict:
         "old_date_applicability": datetime.date(2015, 1, 1),
         "old_date_end_applicability": datetime.date(2020, 12, 31),
         "old_eli": f"https://x/{act_id}/old",
+        "old_source": "fedlex",
         "old_text": old_text,
         "new_version_id": 200 + act_id,
         "new_date_applicability": datetime.date(2021, 1, 1),
         "new_date_end_applicability": None,
         "new_eli": f"https://x/{act_id}/new",
+        "new_source": "fedlex",
         "new_text": new_text,
     }
 
@@ -482,3 +486,35 @@ def test_item_id_distinguishes_two_acts_sharing_one_sr_number():
     b = build.item_id("de", 2, "220", "art_336", datetime.date(2021, 1, 1))
     assert a != b
     assert len(a) == len(b) == 16
+
+
+# --- v3: edition source, build stamp, federal XML-era selection -----------
+
+
+def test_make_items_stamps_the_edition_source_on_gold_and_distractor():
+    old_row = dict(OLD_ROW, source="fedlex_pdf")
+    items, _ = build.make_items(CHANGE_ROW, old_row, NEW_ROW, "OR", "de")
+    by_kind = {item["kind"]: item for item in items}
+    assert by_kind["before"]["gold"]["source"] == "fedlex_pdf"
+    assert by_kind["before"]["distractor"]["source"] == "fedlex"
+    assert by_kind["after"]["gold"]["source"] == "fedlex"
+    assert by_kind["after"]["distractor"]["source"] == "fedlex_pdf"
+
+
+def test_build_lang_stamps_the_build_label_on_every_item():
+    rows = [_two_item_row(i) for i in (1, 2)]
+    items, _ = build._build_lang(rows, "de", per_lang_cap=0, per_act_cap=50,
+                                 rng=random.Random(0), build="v2026.09")
+    assert items and all(item["build"] == "v2026.09" for item in items)
+
+
+def test_change_sql_selects_federal_acts_and_xml_editions_only():
+    # ch_act now also holds cantonal acts (jurisdiction <> 'CH') and
+    # ch_act_version holds PDF-era editions whose article text carries
+    # footnote noise; v3 asks about neither.
+    assert "a.jurisdiction = 'CH'" in build._CHANGE_FROM
+    assert "old_ver.source = ANY(%(sources)s)" in build._CHANGE_FROM
+    assert "new_ver.source = ANY(%(sources)s)" in build._CHANGE_FROM
+    assert "old_ver.source AS old_source" in build._CHANGE_SQL
+    assert "new_ver.source AS new_source" in build._CHANGE_SQL
+    assert build.DEFAULT_SOURCES == ("fedlex",)

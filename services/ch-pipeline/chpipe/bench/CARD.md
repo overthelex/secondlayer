@@ -31,7 +31,9 @@ answer is the adjacent edition's text, and it ships a deterministic scorer
 that tells the two apart from a free-text answer, not from a multiple-choice
 label.
 
-Built by Lawrider, Zurich. First build: 2026-08-25.
+Built by Lawrider, Zurich. First build: 2026-08-25 (v2). Current build:
+**v2026.09** (2026-09-04, v3): federal acts only, Fedlex XML editions
+only, plus the fixed `core` subset every published baseline runs on.
 
 ## Source and licence
 
@@ -59,6 +61,16 @@ Source table: `ch_act_change`, one row per (act, article, language) pair of
 consecutive parsed editions that differ. A change becomes a benchmark item
 pair only if all of the following hold:
 
+- **A federal act.** `ch_act.jurisdiction = 'CH'`. The same tables now
+  also hold the 26 cantons' legislation; CH-PiT asks about the federal SR
+  collection only.
+- **Both editions are Fedlex XML.** `ch_act_version.source = 'fedlex'` on
+  both sides of the change (the `--sources` flag; `build-report.json`
+  records what was used). The pipeline also holds Fedlex's pdf-a
+  consolidations for roughly 1995-2020 (`source = 'fedlex_pdf'`), whose
+  article text still carries footnote apparatus -- see Known limits. Every
+  item records the source of each edition in `gold.source` /
+  `distractor.source`.
 - **Modified, not added or removed.** Only `change_type = 'modified'` rows
   are used — an article that appears for the first time or disappears has no
   "before" or "after" counterpart to ask about.
@@ -169,6 +181,25 @@ the same run or in what order. This makes `bench-fr.jsonl` byte-identical
 regardless of whether French was built alongside German and Italian or on
 its own.
 
+**The `core` subset.** The full build is 5,000 items per language; the
+scorer is free, so the only cost a baseline has is its model calls, and
+without one fixed sample every reproduction picks its own subset and the
+numbers stop being comparable. `core` is the sample every published
+baseline runs on: **500 items per language**, chosen by
+`chpipe/bench/core_split.py` with `random.Random(f"{seed}:{lang}:core")`.
+It takes an equal share of each `as_of` year present in that language's
+items (remainder to the earliest years), and within a year fills the four
+(`kind`, `gold_is_current`) cells round-robin, so `before`/`after` and
+current/superseded gold are each as even as the year's pool allows. A year
+too thin for its share (2011 has a few dozen items, only in French and
+Italian) keeps what it has and the shortfall is filled from the other
+years, again round-robin. Note that a `before` item's gold is the edition
+the change replaced, which is current only in the rare case where the old
+edition never received an end date, so the current/superseded balance is
+really an `after` property. `core-{lang}.jsonl` holds the subset and every
+item in `bench-{lang}.jsonl` carries `core: true/false`. Per-year and
+per-cell counts are in `build-report.json` under `{lang}.core`.
+
 Every skip reason above (`no_abbreviation`, `identical_or_short`,
 `ambiguous_article`, `overlapping_editions`, `no_discriminating_unit`, plus
 `capped` for anything left unused by the two caps) is counted in `build-report.json`, per
@@ -183,6 +214,8 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 
 | field | type | meaning |
 |---|---|---|
+| `build` | string | the build this item was first published in, e.g. `"v2026.09"` -- items are frozen at publication and later builds only add |
+| `core` | boolean | true for the 500-per-language `core` subset every published baseline runs on (see Construction) |
 | `id` | string | stable id, first 16 hex chars of `sha1(f"{lang}\|{act_id}\|{sr_number}\|{e_id}\|{as_of}")` — `act_id` is in the payload because more than one act can share an SR number, and two such acts amended in the same article on the same date would otherwise collide on one id |
 | `lang` | string | `de`, `fr`, or `it` |
 | `act_id` | integer | the exact `ch_act` row this item's editions come from — resolve editions by this, not by `sr_number` alone, since more than one act can share a SR number (a predecessor act and its successor filed under the same number) |
@@ -208,6 +241,7 @@ Each line of `bench-{lang}.jsonl` is one JSON object:
 | `date_applicability` | string (ISO date) | the date this edition took effect |
 | `date_end_applicability` | string (ISO date) or null | the LAST DAY this edition was in force (inclusive), or null if still current -- the next edition's `date_applicability` is this date + 1 day |
 | `eli` | string | the edition's `eli_consolidation_uri`, Fedlex's own permanent identifier for it |
+| `source` | string | where the edition's text came from: `fedlex` (Akoma Ntoso XML) -- the only value in this build; `fedlex_pdf` (pdf-a consolidation) is reserved for a later build |
 | `text` | string | the article's text in this edition, verbatim from `ch_act_article.text` — no normalisation applied at build time |
 
 ## Scorer
@@ -421,7 +455,14 @@ headline `score`, as the point-in-time grounding number.
 
 ## Results
 
-Current build and run: 2026-08-25 23:24 UTC, commit `28618f7d` (v2 --
+Current build: **v2026.09**, 2026-09-04 10:22 UTC -- federal acts, Fedlex
+XML editions, 5,000 items per language plus the 500-per-language `core`
+subset. Oracle on all 15,000 items: 1.000 in German, French and Italian,
+0 errors (see `RESULTS.md`, "v2026.09"). Model baselines on `core` are
+run via OpenRouter and reported there as they land. The paragraph below
+describes the v2 run of 2026-08-25, kept for history.
+
+Previous build and run: 2026-08-25 23:24 UTC, commit `28618f7d` (v2 --
 item ids include the source act's `act_id`, parsed editions only, adds the
 `no_article_number` skip). A first run on the previous build (v1, item ids
 without `act_id`, 2026-08-25 19:56 UTC) gave identical headline numbers.
@@ -455,12 +496,21 @@ benchmark was built. See `RESULTS.md` for the full year-by-year table.
 
 ## Known limits
 
-- **Machine-readable Fedlex editions only, mostly from 2020 onward.**
-  CH-PiT can only ask about a change where both adjacent editions exist as
-  parsed Akoma Ntoso XML. Fedlex's XML consolidations do not go back
+- **Fedlex XML editions only, mostly from 2021 onward.** CH-PiT asks
+  only about changes where both adjacent editions are parsed Akoma Ntoso
+  XML (`source = 'fedlex'`). Fedlex's XML consolidations do not go back
   further than roughly 2020 for most acts (SR 220's earliest German XML
-  edition, for example, is dated 2021-01-01) — earlier amendment history
-  exists on Fedlex only as PDF/HTML and is invisible to this benchmark.
+  edition is dated 2021-01-01). The pipeline does hold Fedlex's pdf-a
+  consolidations for roughly 1995-2020, split into articles, and
+  `ch_act_change` has ~166K federal German "modified" changes for
+  2000-2019 built from them -- but on a 100-pair hand-read sample of those
+  changes that pass this builder's filters, about 85% were footnote
+  apparatus surviving in the article text (three-digit footnote
+  references glued to words, footnote bodies where no running header
+  marked the page), not amendments. Until the PDF splitter strips that
+  apparatus (tracked as LEXAI-2046), the pre-2021 history stays out; the
+  `--sources` flag and the per-edition `source` field are how it comes
+  back in a later build without changing the item shape.
 - **Three languages, no Romansh.** German, French and Italian only — Fedlex
   does not publish Romansh consolidations for these acts.
 - **In-force acts only.** An act with `enforcement_status != 0` (repealed
@@ -488,10 +538,11 @@ benchmark was built. See `RESULTS.md` for the full year-by-year table.
   system's score on them reflects verbatim recall more than date
   resolution, and a per-item length breakdown is worth looking at before
   reading a headline number as a grounding measurement.
-- **Roughly half the items have a still-current gold edition.** The `after`
-  half of a pair whose change is the most recent one asks for wording that
-  is also today's wording, and reciting the current text answers it
-  correctly with no date reasoning at all. This is why every item carries
+- **Some items have a still-current gold edition** (11% of v2026.09:
+  1,657 of 15,000; a third of `core`'s `after` items by construction). The
+  `after` half of a pair whose change is the most recent one asks for
+  wording that is also today's wording, and reciting the current text
+  answers it correctly with no date reasoning at all. This is why every item carries
   `gold_is_current` and the report splits the correct-answer share on it;
   the `gold_is_current = false` share is the one that measures what the
   benchmark is named after.
@@ -529,8 +580,9 @@ benchmark was built. See `RESULTS.md` for the full year-by-year table.
 From `services/ch-pipeline`:
 
 ```
-# 1. Build the items.
-python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
+# 1. Build the items (v2026.09: federal acts, XML editions, 500-per-language core).
+python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench-v3 \
+    --build v2026.09 --core-per-lang 500        # --sources fedlex is the default
 
 # 2. Oracle. Must come back 100% grounded_correct before step 3 spends anything.
 python -m chpipe.bench.run_oracle --items /data/ch-corpus/bench --out /data/ch-corpus/bench

@@ -2250,7 +2250,18 @@ Run each step from `services/ch-pipeline`.
 
 **1. Build the item files.**
 
-    python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench
+    python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench-v3 \
+        --build v2026.09 --core-per-lang 500
+
+`--build` stamps the label on every item (`build` field); `--core-per-lang N`
+also writes `core-{lang}.jsonl`, the fixed stratified subset every published
+baseline runs on (see `chpipe/bench/core_split.py` and CARD.md, "The `core`
+subset"), and marks each item in `bench-{lang}.jsonl` with `core: true/false`.
+`--sources` (default `fedlex`) restricts both editions of a change to those
+`ch_act_version.source` values -- the pdf-a era (`fedlex_pdf`) stays out
+until LEXAI-2046 strips the footnote apparatus from its article text.
+Federal acts only (`ch_act.jurisdiction = 'CH'`); cantonal law is never
+selected.
 
 Reads `ch_act_change` per language, applies the selection rules (modified
 rows only, both texts >= 200 normalised chars and not the same string once
