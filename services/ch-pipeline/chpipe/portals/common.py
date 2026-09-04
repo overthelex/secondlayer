@@ -158,13 +158,14 @@ def lang_from_dam(url: str | None) -> str | None:
 # and "decision" is not "decisione". German first: a German title always
 # carries its Verfügung / Entscheid, a French one its décision / requête.
 _LANG_WORDS = (
+    # a German title's own word first: "Verfügung betreffend Italienisch..." is German
+    (r"verfügung|verfuegung|entscheide?|beschluss|urteil", "de"),
     (r"deutsch|allemand|tedesco", "de"),
     (r"französisch|français|francais|francese", "fr"),
     (r"italienisch|italiano", "it"),
     (r"rumantsch|rätoromanisch|romanche|romancio", "rm"),
     # the document's own language as a title word (PostCom's fr/it files on the de
     # page; ComCom's and ElCom's fr/it decisions listed under /dam/de/)
-    (r"verfügung|verfuegung|entscheide?|beschluss|urteil", "de"),
     (r"décision|decision|requête|requete|interconnexion|concession de|recours|prestations", "fr"),
     (r"decisione|ricorso|richiesta|concessione", "it"),
 )

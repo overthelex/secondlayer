@@ -237,6 +237,7 @@ def test_comcom_and_elcom_take_the_language_from_the_title_not_the_dam_path():
     assert lang_from_name("Netzanschluss Italien. Verfügung") == "de"                       # a place, not a language
     assert lang_from_name("Decision.pdf") == "fr" and lang_from_name("Decisione_2.pdf") == "it"
     assert lang_from_name("Verfügung betreffend prestations") == "de"                      # the German word wins
+    assert lang_from_name("Verfügung betreffend italienisch") == "de" and lang_from_name("Tessin Italienisch") == "it"
     docs = elcom.parse_page(fx("elcom.html").replace("Anrechenbarkeit", "Décision sur la requête"))
     assert docs[0].lang == "fr"
 
