@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from chpipe import db
-from chpipe.bench import core_split, score, templates
+from chpit import core_split, score, templates
 from chpipe.config import Settings
 
 log = logging.getLogger(__name__)

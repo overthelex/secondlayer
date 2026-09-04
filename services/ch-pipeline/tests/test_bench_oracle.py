@@ -16,7 +16,8 @@ import psycopg
 import pytest
 from psycopg.rows import dict_row
 
-from chpipe.bench import build, report, run_oracle
+from chpipe.bench import build, run_oracle
+from chpit import report
 from chpipe.config import Settings
 
 from conftest import (MIGRATION_198, MIGRATION_201, MIGRATION_203,
