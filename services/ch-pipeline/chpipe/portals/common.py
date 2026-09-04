@@ -154,24 +154,33 @@ def lang_from_dam(url: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+# Whole words, so "Italien" (the country, in a German title) is not "italiano"
+# and "decision" is not "decisione". German first: a German title always
+# carries its Verfügung / Entscheid, a French one its décision / requête.
+_LANG_WORDS = (
+    (r"deutsch|allemand|tedesco", "de"),
+    (r"französisch|français|francais|francese", "fr"),
+    (r"italienisch|italiano", "it"),
+    (r"rumantsch|rätoromanisch|romanche|romancio", "rm"),
+    # the document's own language as a title word (PostCom's fr/it files on the de
+    # page; ComCom's and ElCom's fr/it decisions listed under /dam/de/)
+    (r"verfügung|verfuegung|entscheide?|beschluss|urteil", "de"),
+    (r"décision|decision|requête|requete|interconnexion|concession de|recours|prestations", "fr"),
+    (r"decisione|ricorso|richiesta|concessione", "it"),
+)
+_LANG_RES = tuple((re.compile(rf"(?<![^\W_])(?:{words})(?![^\W_])"), code) for words, code in _LANG_WORDS)   # letters/digits bound the word; "_" does not
+
+
 def lang_from_name(name: str | None) -> str | None:
     """Language words and one-letter suffixes as the portals write them:
     'Deutsch' / 'Französisch' / 'Italienisch', 'Deutsch|Français|Italiano',
-    a trailing '-d' / '-f' / '-i' before the extension (ESBK)."""
+    the document's own title words, a trailing '-d' / '-f' / '-i' before
+    the extension (ESBK)."""
     if not name:
         return None
     low = name.lower()
-    for word, code in (("deutsch", "de"), ("allemand", "de"), ("tedesco", "de"),
-                       ("französisch", "fr"), ("français", "fr"), ("francais", "fr"), ("francese", "fr"),
-                       ("italienisch", "it"), ("italien", "it"), ("italiano", "it"),
-                       ("rumantsch", "rm"), ("rätoromanisch", "rm"), ("romanche", "rm"), ("romancio", "rm"),
-                       # the document's own language, as a title word (PostCom's fr/it files on the de
-                       # page; ComCom's and ElCom's fr/it decisions listed on the de page under /dam/de/)
-                       ("décision", "fr"), ("decision ", "fr"), ("requête", "fr"), ("requete", "fr"),
-                       ("interconnexion", "fr"), ("concession de", "fr"), ("recours", "fr"), ("prestations", "fr"),
-                       ("decisione", "it"), ("ricorso", "it"), ("richiesta", "it"), ("concessione", "it"),
-                       ("verfügung", "de"), ("verfuegung", "de"), ("entscheid", "de")):
-        if word in low:
+    for rx, code in _LANG_RES:
+        if rx.search(low):
             return code
     m = re.search(r"[-_](d|f|i)(?:\.pdf)?$", low)
     if m:
