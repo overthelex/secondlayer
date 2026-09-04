@@ -43,12 +43,15 @@ class OcrReport:
 OCR_TMP_DIRNAME = ".ocr-tmp"
 
 
-def _ocr_one(settings: Settings, row) -> tuple[str, float]:
+def _ocr_one(settings: Settings, row) -> tuple[str, float, list[str] | None]:
+    """The text, its score, and the language to write when the text reads
+    in another language than the row's label (see score_with_relabel)."""
     path = raw_path(settings.raw_dir, row["spider"], row["doc_id"], "pdf")
     languages = list(row.get("languages") or [])
     text = ocr.ocr_pdf(path, languages,
                        tmp_root=settings.raw_dir / OCR_TMP_DIRNAME)
-    return text, text_quality.score(text, languages)
+    quality, relabel = text_quality.score_with_relabel(text, languages)
+    return text, quality, relabel
 
 
 def run(settings: Settings, limit: int | None = None,
@@ -91,11 +94,15 @@ def run(settings: Settings, limit: int | None = None,
                 for future in concurrent.futures.as_completed(futures):
                     row = futures[future]
                     try:
-                        text, quality = future.result()
+                        text, quality, relabel = future.result()
                         if quality >= text_quality.ACCEPT_THRESHOLD:
+                            if relabel:
+                                log.info("%s/%s: reads as %s, labelled %s; relabelled",
+                                         row["spider"], row["doc_id"], relabel, row.get("languages"))
                             db.complete(conn, row["doc_id"], "extracted",
                                         full_text=text, text_quality=quality,
-                                        text_source="ocr")
+                                        text_source="ocr",
+                                        **({"languages": relabel} if relabel else {}))
                             report.recovered += 1
                         else:
                             # OCR had its turn and the result is still

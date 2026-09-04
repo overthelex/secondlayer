@@ -45,7 +45,9 @@ class ExtractReport:
     failed: int = 0
 
 
-def extract_one(settings: Settings, row) -> tuple[str, float, str]:
+def extract_one(settings: Settings, row) -> tuple[str, float, str, list[str] | None]:
+    """The text, its score, the next stage, and -- when the text reads in
+    another language than the row's label -- the language to write."""
     source = row["text_source"] or "pdf"
     path = raw_path(settings.raw_dir, row["spider"], row["doc_id"], source)
     if not path.exists():
@@ -57,13 +59,13 @@ def extract_one(settings: Settings, row) -> tuple[str, float, str]:
         text = text_extract.from_pdf(path)
 
     languages = list(row.get("languages") or [])
-    quality = text_quality.score(text, languages)
+    quality, relabel = text_quality.score_with_relabel(text, languages)
 
     if quality >= text_quality.ACCEPT_THRESHOLD:
-        return text, quality, "extracted"
+        return text, quality, "extracted", relabel
     if source == "pdf":
-        return text, quality, "ocr_pending"
-    return text, quality, "failed"
+        return text, quality, "ocr_pending", None
+    return text, quality, "failed", None
 
 
 def discard_extracted_pdf(settings: Settings, row, source: str) -> None:
@@ -131,7 +133,7 @@ def run(settings: Settings, limit: int | None = None,
                 for future in concurrent.futures.as_completed(futures):
                     row = futures[future]
                     try:
-                        text, quality, next_stage = future.result()
+                        text, quality, next_stage, relabel = future.result()
                         if next_stage == "failed" and row.get("pdf_url"):
                             # Bad HTML, but the listing also offered a PDF:
                             # GE_TAPI's and AG_Gerichte's HTML pages are
@@ -164,6 +166,10 @@ def run(settings: Settings, limit: int | None = None,
                             fields = {"text_quality": quality}
                             if next_stage == "extracted":
                                 fields["full_text"] = text
+                            if relabel:
+                                log.info("%s/%s: reads as %s, labelled %s; relabelled",
+                                         row["spider"], row["doc_id"], relabel, row.get("languages"))
+                                fields["languages"] = relabel
                             db.complete(conn, row["doc_id"], next_stage, **fields)
                             if next_stage == "extracted":
                                 # After the write, never before: a failed
