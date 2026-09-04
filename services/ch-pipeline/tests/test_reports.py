@@ -127,6 +127,19 @@ def test_completeness_reports_the_corpus_level_gap(conn):
     assert result["corpus"]["needs_investigation"] is True
 
 
+def test_completeness_leaves_the_portal_spiders_out_of_the_corpus_gap(conn):
+    """Regulator rows (chpipe/portals) are not on entscheidsuche; counting
+    them as 'ours' would report a corpus larger than the snapshot's total
+    and read as a gap in entscheidsuche's favour that does not exist."""
+    for i in range(100):
+        _row(conn, f"g{i}", "GE_Gerichte", "html", 0.9, "loaded")
+    for i in range(30):
+        _row(conn, f"e{i}", "CH_ELCOM", "pdf", 0.9, "loaded")
+    result = reports.completeness(conn, {"GE_Gerichte": 100}, total_alle=100)
+    assert result["corpus"]["ours"] == 100
+    assert result["corpus"]["needs_investigation"] is False
+
+
 def test_completeness_reports_snapshot_keys_that_match_no_spider_as_uncovered(conn):
     """The gate must state its own blind spot instead of silently dropping a
     snapshot key that names no spider we know about (entscheidsuche's

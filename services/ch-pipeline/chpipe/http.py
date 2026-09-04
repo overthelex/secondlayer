@@ -116,6 +116,31 @@ class Fetcher:
                 await asyncio.sleep(self._backoff * (2 ** attempt))
         raise FetchError(f"{url} failed after {self._retries} attempts: {last}")
 
+    async def _post(self, url: str, data: dict, headers: dict | None = None) -> httpx.Response:
+        """The POST twin of _get(), for the one portal (finma.ch) whose
+        listing is a form-encoded search call. Same retry and no-retry
+        discipline; `headers` are merged over the client's (a Referer,
+        which that API insists on)."""
+        last: Exception | None = None
+        for attempt in range(self._retries):
+            async with self._sem:
+                try:
+                    response = await self._client.post(url, data=data, headers=headers)
+                except httpx.HTTPError as exc:
+                    last = exc
+                else:
+                    if response.status_code == 200:
+                        return response
+                    if response.status_code in _NO_RETRY:
+                        raise FetchError(f"{response.status_code} for {url}")
+                    last = FetchError(f"{response.status_code} for {url}")
+            if attempt + 1 < self._retries and self._backoff:
+                await asyncio.sleep(self._backoff * (2 ** attempt))
+        raise FetchError(f"{url} failed after {self._retries} attempts: {last}")
+
+    async def post_json(self, url: str, data: dict, headers: dict | None = None) -> dict:
+        return (await self._post(url, data, headers)).json()
+
     async def text(self, url: str) -> str:
         return (await self._get(url)).text
 

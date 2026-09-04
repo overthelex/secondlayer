@@ -2227,6 +2227,55 @@ in `mcp_backend/src/api/tools/ch-materials-tools.ts` (`bblKey()` there is
 the twin of `bbl.bbl_key` and must stay identical -- both test files pin
 the same examples).
 
+## Portal spiders: regulators and the MKG (chpipe/portals)
+
+Decision sources that are NOT on entscheidsuche.ch, walked from their own
+sites (LEXAI-2039, gap plan phase 2). Their rows live in `ch_court_decisions`
+like everyone else's -- `spider` = the portal name, `canton` = 'CH',
+`court_code` = the spider, the title in `abstract` (what the search ranks
+on) -- and the ordinary stages take them from `stage = 'indexed'`:
+fetch_stage reads `html_url` / `pdf_url` off the row and has never known
+where a row came from.
+
+    ./run-stage.sh portals-discover [CH_ELCOM]     # listing -> rows at stage 'indexed'
+    ./run-portals.sh [CH_ELCOM]                     # discover + fetch + extract + ocr + load + citations, per spider
+
+| spider | body | how the listing is read | live 2026-09-03 |
+|---|---|---|---|
+| CH_FINMA | FINMA enforcement case reports | finma.ch search API (POST, one JSON), text = the HTML detail page | 455 |
+| CH_FINMA_VR | FINMA's collection of insurance-law court decisions | same API, other dataset, PDFs; language and origin court in the title | 2,610 |
+| CH_UBI | Unabhängige Beschwerdeinstanz für Radio und Fernsehen | TYPO3 table, "Nächster" paging with cHash, PDFs | ~667 |
+| CH_ELCOM | ElCom Verfügungen | admin.ch download-items, one page, deduplicated by DAM hash | 433 |
+| CH_ESCHK | ESchK tariff decisions | admin.ch download-items, one page per year since 1991 | ~415 |
+| CH_EMARK | Asylrekurskommission 1993–2006 (closed) | enumerated /{year}/{nr}.htm, ISO-8859-1 HTML; not re-walked once known (CHPIPE_PORTAL_FULL=1 forces) | 237 |
+| CH_POSTCOM | PostCom Verfügungen | Nuxt `__NUXT_DATA__` payload, the filename is the record | ~282 files |
+| CH_COMCOM | ComCom decisions | admin.ch download-items per two-year range since 1998 | 64 |
+| CH_ESBK | ESBK Verfügungen / Strafbescheide | Nuxt payload of /de/strafrecht + /de/verwaltungsrecht; docket + language in the filename | ~43 |
+| CH_PUE | Preisüberwacher | three static pages; republished court rulings skipped | ~27 |
+| CH_RAB | Revisionsaufsichtsbehörde | paged download tiles | 5 |
+| CH_MKG | Militärkassationsgericht | admin.ch download-items; single decisions only, the bound volumes are a later pass | 58 |
+
+Left out on purpose: BAZG (publications and leaflets, not decisions) and
+SAV (links to other courts' decisions).
+
+Identity: `doc_id` is minted by `portals/common.py::safe_doc_id` (ASCII,
+`[A-Za-z0-9_.-]`, deterministic) and the ECLI is `ECLI:CH:{spider}:{doc_id}`
+-- the shape every non-ECLI entscheidsuche document already has. Discovery
+upserts on ecli; a changed URL sends the row back to 'indexed' with a fresh
+attempt budget, a document that vanished from the listing is left alone and
+counted `stale`.
+
+What the rest of the pipeline knows about them: `delta.court_code_spider_map`
+skips `PORTAL_SPIDERS` silently (they are not entscheidsuche directories and
+must not be warned about nightly), and `reports.completeness` leaves them out
+of the corpus-vs-snapshot comparison on our side. Nothing else changed.
+
+Pace: one request per second per portal (`_PacedFetcher`), the pace the other
+open re-user of these sites runs at. Weekly from cron, after the Sunday
+cantonal runs:
+
+    0 10 * * 0 PATH=/home/ubuntu/ch-pipeline-venv/bin:$PATH /home/ubuntu/SecondLayer/services/ch-pipeline/run-portals.sh
+
 ## Point-in-time benchmark (chpipe.bench)
 
 `chpipe/bench` is a separate package from the two pipelines above. It does
