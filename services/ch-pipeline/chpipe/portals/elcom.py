@@ -13,7 +13,7 @@ import logging
 import re
 
 from ..http import FetchError, Fetcher
-from .common import PortalDoc, download_items, lang_from_dam, last_date, safe_doc_id
+from .common import PortalDoc, download_items, lang_from_dam, lang_from_name, last_date, safe_doc_id
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def parse_page(page_html: str) -> list[PortalDoc]:
             title=it.title,
             decision_date=last_date(it.title),      # the meta date is the publication date, not the decision's
             docket_number=docket,
-            lang=lang_from_dam(it.href),
+            lang=lang_from_name(it.title) or lang_from_name(it.href.rsplit("/", 1)[-1]) or lang_from_dam(it.href),
             extra={"status": it.description or None, "published": " ".join(it.meta) or None},
         ))
     return out

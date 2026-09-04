@@ -165,8 +165,12 @@ def lang_from_name(name: str | None) -> str | None:
                        ("französisch", "fr"), ("français", "fr"), ("francais", "fr"), ("francese", "fr"),
                        ("italienisch", "it"), ("italien", "it"), ("italiano", "it"),
                        ("rumantsch", "rm"), ("rätoromanisch", "rm"), ("romanche", "rm"), ("romancio", "rm"),
-                       # the document's own language, as a title word (PostCom's fr/it files on the de page)
-                       ("décision", "fr"), ("decisione", "it"), ("verfügung", "de"), ("verfuegung", "de")):
+                       # the document's own language, as a title word (PostCom's fr/it files on the de
+                       # page; ComCom's and ElCom's fr/it decisions listed on the de page under /dam/de/)
+                       ("décision", "fr"), ("decision ", "fr"), ("requête", "fr"), ("requete", "fr"),
+                       ("interconnexion", "fr"), ("concession de", "fr"), ("recours", "fr"), ("prestations", "fr"),
+                       ("decisione", "it"), ("ricorso", "it"), ("richiesta", "it"), ("concessione", "it"),
+                       ("verfügung", "de"), ("verfuegung", "de"), ("entscheid", "de")):
         if word in low:
             return code
     m = re.search(r"[-_](d|f|i)(?:\.pdf)?$", low)

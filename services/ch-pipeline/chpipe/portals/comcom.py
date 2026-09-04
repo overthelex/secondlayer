@@ -14,8 +14,8 @@ import logging
 import re
 
 from ..http import FetchError, Fetcher
-from .common import (PortalDoc, download_items, filename_of, lang_from_dam, parse_date,
-                     safe_doc_id)
+from .common import (PortalDoc, download_items, filename_of, lang_from_dam, lang_from_name,
+                     parse_date, safe_doc_id)
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +59,10 @@ def parse_page(page_html: str, span: tuple[int, int]) -> list[PortalDoc]:
             title=it.title or filename_of(it.href),
             decision_date=decided,
             docket_number=None,
-            lang=lang_from_dam(it.href),
+            # The DAM path says which page listed the file (/dam/de/ for everything on
+            # the German page); the title and the filename say what language the
+            # decision is in, and the OCR gate scores against that language's words.
+            lang=lang_from_name(it.title) or lang_from_name(filename_of(it.href)) or lang_from_dam(it.href),
             extra={"status": it.description or None, "range": f"{span[0]}-{span[1]}",
                    "published": " ".join(it.meta) or None},
         ))
