@@ -56,7 +56,7 @@ import pathlib
 from typing import Any
 
 from chpipe import db
-from chpipe.bench import score
+from chpit import score
 from chpipe.config import Settings
 
 log = logging.getLogger(__name__)

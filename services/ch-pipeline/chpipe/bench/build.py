@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from chpipe import db
-from chpipe.bench import score, templates
+from chpit import core_split, score, templates
 from chpipe.config import Settings
 
 log = logging.getLogger(__name__)
@@ -45,6 +45,14 @@ SKIP_OVERLAPPING_EDITIONS = "overlapping_editions"
 # Provenance fields stamped on every item -- see the plan's item schema.
 SOURCE = "Fedlex (fedlex.admin.ch)"
 LICENCE = "Fedlex data may be reused free of charge with source attribution"
+# Edition sources a build draws from. v3 (2026-09) asks only about
+# Fedlex Akoma Ntoso XML editions: the pdf-a consolidations backfilled
+# for 1995-2020 (source `fedlex_pdf`) carry footnote apparatus inside the
+# article text (3-digit note references glued to words, footnote bodies
+# where no running header marked the page), and on a 100-pair hand-read
+# sample ~85% of their "modified" changes were that noise, not amendments.
+# They come back once fedlex_split strips it (see the CARD, "Known limits").
+DEFAULT_SOURCES: tuple[str, ...] = ("fedlex",)
 
 
 def select_change(old_text: str, new_text: str) -> bool:
@@ -112,6 +120,7 @@ def _edition(row: Mapping[str, Any]) -> dict[str, Any]:
         "date_applicability": _iso(row["date_applicability"]),
         "date_end_applicability": _iso(row["date_end_applicability"]),
         "eli": row["eli_consolidation_uri"],
+        "source": row["source"],
         "text": row["text"],
     }
 
@@ -347,10 +356,13 @@ _CHANGE_FROM = """
 FROM ch_act_change ch
 JOIN ch_act a
     ON a.act_id = ch.act_id AND a.enforcement_status = 0
+   AND a.jurisdiction = 'CH'
 JOIN ch_act_version old_ver
     ON old_ver.version_id = ch.from_version_id AND old_ver.stage = 'parsed'
+   AND old_ver.source = ANY(%(sources)s)
 JOIN ch_act_version new_ver
     ON new_ver.version_id = ch.to_version_id AND new_ver.stage = 'parsed'
+   AND new_ver.source = ANY(%(sources)s)
 JOIN ch_act_article old_art
     ON old_art.version_id = ch.from_version_id AND old_art.e_id = ch.e_id
 JOIN ch_act_article new_art
@@ -369,11 +381,13 @@ SELECT
     old_ver.date_applicability AS old_date_applicability,
     old_ver.date_end_applicability AS old_date_end_applicability,
     old_ver.eli_consolidation_uri AS old_eli,
+    old_ver.source AS old_source,
     old_art.text AS old_text,
     new_ver.version_id AS new_version_id,
     new_ver.date_applicability AS new_date_applicability,
     new_ver.date_end_applicability AS new_date_end_applicability,
     new_ver.eli_consolidation_uri AS new_eli,
+    new_ver.source AS new_source,
     new_art.text AS new_text
 """ + _CHANGE_FROM + """
 LEFT JOIN LATERAL (
@@ -436,18 +450,23 @@ class BuildReport:
     seed: int
     caps: dict[str, int]
     built_at: str
+    sources: tuple[str, ...] = DEFAULT_SOURCES
+    build_label: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = dict(self.per_lang)
         result["seed"] = self.seed
         result["caps"] = dict(self.caps)
         result["built_at"] = self.built_at
+        result["sources"] = list(self.sources)
+        result["build"] = self.build_label
         return result
 
 
 def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
                 per_act_cap: int, rng: random.Random,
                 ambiguous: int = 0, no_article_number: int = 0,
+                build: str | None = None,
                 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """No I/O: given the rows _CHANGE_SQL already fetched for one language,
     run the full selection pipeline and return (items, lang_report).
@@ -533,6 +552,7 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
             "date_applicability": row["old_date_applicability"],
             "date_end_applicability": row["old_date_end_applicability"],
             "eli_consolidation_uri": row["old_eli"],
+            "source": row["old_source"],
             "text": row["old_text"],
         }
         new_row = {
@@ -540,9 +560,13 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
             "date_applicability": row["new_date_applicability"],
             "date_end_applicability": row["new_date_end_applicability"],
             "eli_consolidation_uri": row["new_eli"],
+            "source": row["new_source"],
             "text": row["new_text"],
         }
         row_items, row_skipped = make_items(change_row, old_row, new_row, row["abbreviation"], lang)
+        if build is not None:
+            for item in row_items:
+                item["build"] = build
         items.extend(row_items)
         for s in row_skipped:
             _bump(s["reason"])
@@ -571,7 +595,10 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
 def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
           per_lang_cap: int = 5000, per_act_cap: int = 50,
           seed: int = 20260825, out_dir: str | pathlib.Path = "/data/ch-corpus/bench",
-          now: datetime.datetime | None = None) -> BuildReport:
+          now: datetime.datetime | None = None,
+          sources: tuple[str, ...] = DEFAULT_SOURCES,
+          build_label: str | None = None,
+          core_per_lang: int = 0) -> BuildReport:
     """Build bench-{lang}.jsonl for each of LANGS plus build-report.json, in
     OUT_DIR, against the database SETTINGS points to.
 
@@ -579,6 +606,13 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
     language's sample depends only on (seed, lang), never on which other
     languages were requested or in what order: bench-fr.jsonl is byte
     identical whether langs is ("de", "fr") or ("fr", "de").
+
+    SOURCES restricts both editions of a change to those ch_act_version
+    sources (default DEFAULT_SOURCES, see there). BUILD_LABEL, when given,
+    is stamped on every item as `build` (e.g. "v2026.09"). CORE_PER_LANG >
+    0 also writes core-{lang}.jsonl -- the stratified subset from
+    core_split.select_core(), seeded random.Random(f"{seed}:{lang}:core") --
+    and marks each item in bench-{lang}.jsonl with `core: true/false`.
 
     NOW is accepted explicitly (rather than build() and its callees calling
     datetime.now() wherever built_at is needed) so the report's timestamp
@@ -598,16 +632,26 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
     try:
         for lang in langs:
             with conn.cursor() as cur:
-                cur.execute(_CHANGE_SQL, {"lang": lang})
+                params = {"lang": lang, "sources": list(sources)}
+                cur.execute(_CHANGE_SQL, params)
                 rows = cur.fetchall()
-                cur.execute(_AMBIGUOUS_COUNT_SQL, {"lang": lang})
+                cur.execute(_AMBIGUOUS_COUNT_SQL, params)
                 ambiguous = cur.fetchone()["n"]
-                cur.execute(_NO_ARTICLE_NUMBER_COUNT_SQL, {"lang": lang})
+                cur.execute(_NO_ARTICLE_NUMBER_COUNT_SQL, params)
                 no_article_number = cur.fetchone()["n"]
             rng = random.Random(f"{seed}:{lang}")
             items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng,
                                              ambiguous=ambiguous,
-                                             no_article_number=no_article_number)
+                                             no_article_number=no_article_number,
+                                             build=build_label)
+            core_items: list[dict[str, Any]] = []
+            if core_per_lang > 0:
+                core_items, core_report = core_split.select_core(
+                    items, core_per_lang, random.Random(f"{seed}:{lang}:core"))
+                core_ids = {item["id"] for item in core_items}
+                for item in items:
+                    item["core"] = item["id"] in core_ids
+                lang_report["core"] = core_report
             per_lang_report[lang] = lang_report
 
             # Ids are the join key every consumer uses -- report.py builds
@@ -630,14 +674,24 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
                 for item in items:
                     f.write(json.dumps(item, ensure_ascii=False))
                     f.write("\n")
+            if core_per_lang > 0:
+                core_file = out_path / f"core-{lang}.jsonl"
+                with core_file.open("w", encoding="utf-8") as f:
+                    for item in core_items:
+                        item["core"] = True
+                        f.write(json.dumps(item, ensure_ascii=False))
+                        f.write("\n")
     finally:
         conn.close()
 
     report = BuildReport(
         per_lang=per_lang_report,
         seed=seed,
-        caps={"per_lang_cap": per_lang_cap, "per_act_cap": per_act_cap},
+        caps={"per_lang_cap": per_lang_cap, "per_act_cap": per_act_cap,
+              "core_per_lang": core_per_lang},
         built_at=built_at,
+        sources=tuple(sources),
+        build_label=build_label,
     )
     (out_path / "build-report.json").write_text(
         json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
@@ -663,7 +717,16 @@ def main(argv: list[str] | None = None) -> BuildReport:
     parser.add_argument("--per-lang-cap", type=int, default=5000)
     parser.add_argument("--per-act-cap", type=int, default=50)
     parser.add_argument("--seed", type=int, default=20260825)
+    parser.add_argument("--sources", default=",".join(DEFAULT_SOURCES),
+                        help="comma-separated ch_act_version.source values both "
+                             "editions must have (default: fedlex)")
+    parser.add_argument("--build", default=None,
+                        help="build label stamped on every item, e.g. v2026.09")
+    parser.add_argument("--core-per-lang", type=int, default=0,
+                        help="also write core-{lang}.jsonl with this many "
+                             "stratified items per language (0 = off)")
     args = parser.parse_args(argv)
+    sources = tuple(part.strip() for part in args.sources.split(",") if part.strip())
 
     langs = tuple(part.strip() for part in args.langs.split(",") if part.strip())
 
@@ -671,7 +734,9 @@ def main(argv: list[str] | None = None) -> BuildReport:
                         format="%(asctime)s %(levelname)s %(message)s")
     settings = Settings.from_env()
     report = build(settings, langs=langs, per_lang_cap=args.per_lang_cap,
-                   per_act_cap=args.per_act_cap, seed=args.seed, out_dir=args.out)
+                   per_act_cap=args.per_act_cap, seed=args.seed, out_dir=args.out,
+                   sources=sources, build_label=args.build,
+                   core_per_lang=args.core_per_lang)
     for lang, stats in report.per_lang.items():
         log.info("bench-%s: changes_considered=%d selected=%d items=%d skipped=%s",
                  lang, stats["changes_considered"], stats["selected"],
