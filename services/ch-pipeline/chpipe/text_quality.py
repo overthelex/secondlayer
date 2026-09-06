@@ -218,3 +218,35 @@ def breakdown(text: str, languages: list[str]) -> dict[str, float]:
 
 def score(text: str, languages: list[str]) -> float:
     return breakdown(text, languages)["score"]
+
+
+CH_LANGUAGES = ("de", "fr", "it")
+
+
+def score_with_relabel(text: str, languages: list[str]) -> tuple[float, list[str] | None]:
+    """The score against the labelled language -- or, when that fails and
+    the text reads cleanly in another of the three, the better score and
+    the language it reads in.
+
+    A label can be the page's, not the document's: ElCom and ComCom list
+    their French and Italian decisions on the German page, under /dam/de/,
+    and a French text scored against the German list lands under
+    MIN_RAW_HIT_RATE and at NO_DICTIONARY_SCORE_CAP, a perfectly good text
+    layer sent to OCR and then retired (30 of ElCom's first 75 "scans").
+    The relabel is returned, not applied: the stage writes it with the
+    text, so the row's `languages` says what the words say. Nothing
+    changes for a text that passes under its own label, and nothing for
+    an unlabelled row (already scored against all three lists)."""
+    s = score(text, languages)
+    if s >= ACCEPT_THRESHOLD or not languages:
+        return s, None
+    best, best_lang = s, None
+    for lang in CH_LANGUAGES:
+        if lang in languages:
+            continue
+        other = score(text, [lang])
+        if other > best:
+            best, best_lang = other, lang
+    if best_lang is not None and best >= ACCEPT_THRESHOLD:
+        return best, [best_lang]
+    return s, None

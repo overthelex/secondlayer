@@ -166,3 +166,21 @@ def test_the_real_fixture_scores_high_clean_and_is_refused_as_mojibake():
     assert text_quality.mojibake_density(clean) == 0.0
     assert text_quality.mojibake_density(damaged) > text_quality.MOJIBAKE_DENSITY
     assert text_quality.score(damaged, ["de"]) < text_quality.ACCEPT_THRESHOLD
+
+
+def test_a_french_text_labelled_german_is_relabelled_not_retired():
+    # ElCom lists its French decisions on the German page: label de, words fr
+    assert text_quality.score(LEGIT_FR, ["de"]) <= text_quality.NO_DICTIONARY_SCORE_CAP
+    quality, relabel = text_quality.score_with_relabel(LEGIT_FR, ["de"])
+    assert quality > text_quality.ACCEPT_THRESHOLD and relabel == ["fr"]
+    quality, relabel = text_quality.score_with_relabel(LEGIT_IT, ["de"])
+    assert quality > text_quality.ACCEPT_THRESHOLD and relabel == ["it"]
+
+
+def test_relabel_leaves_a_text_that_passes_under_its_own_label_alone():
+    assert text_quality.score_with_relabel(GOOD_DE, ["de"])[1] is None
+    assert text_quality.score_with_relabel(GOOD_DE, [])[1] is None          # unlabelled: all lists already
+    # noise reads in no language: the labelled score comes back, no relabel
+    noise = " ".join("".join(random.Random(i).choices("bcdfghjklmnpqrstvwxz", k=6)) for i in range(300))
+    quality, relabel = text_quality.score_with_relabel(noise, ["de"])
+    assert relabel is None and quality <= text_quality.NO_DICTIONARY_SCORE_CAP

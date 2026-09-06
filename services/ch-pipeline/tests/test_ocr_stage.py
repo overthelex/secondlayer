@@ -97,7 +97,7 @@ def test_one_document_raising_does_not_abort_the_rest_of_the_batch(
     def flaky_ocr_one(settings, row):
         if row["doc_id"] == "boom":
             raise RuntimeError("simulated tesseract crash")
-        return "genuinely usable recovered text " * 40, 0.9
+        return "genuinely usable recovered text " * 40, 0.9, None
 
     monkeypatch.setattr(ocr_stage, "_ocr_one", flaky_ocr_one)
 
@@ -179,7 +179,7 @@ def test_an_unreadable_scan_keeps_its_diagnosis_and_its_origin(
     (tmp_path / spider / "d.pdf").write_bytes(b"%PDF-1.4 fake")
     _seed_ocr_pending(conn, "d", spider)
 
-    monkeypatch.setattr(ocr_stage, "_ocr_one", lambda s, r: ("noise", 0.11))
+    monkeypatch.setattr(ocr_stage, "_ocr_one", lambda s, r: ("noise", 0.11, None))
 
     report = ocr_stage.run(_settings(os.environ["CHPIPE_TEST_DSN"], tmp_path),
                            spider=spider, limit=1)

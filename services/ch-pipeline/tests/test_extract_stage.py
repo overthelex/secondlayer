@@ -26,7 +26,7 @@ def test_html_body_extracts_and_goes_straight_to_extracted(tmp_path):
     s = _settings(tmp_path)
     (tmp_path / "S").mkdir()
     (tmp_path / "S" / "d.html").write_text(GOOD_DE_HTML)
-    text, quality, nxt = extract_stage.extract_one(
+    text, quality, nxt, _ = extract_stage.extract_one(
         s, {"doc_id": "d", "spider": "S", "text_source": "html", "languages": ["de"]})
     assert "Bundesgericht" in text
     # The accented characters are the point. "Bundesgericht" alone is pure
@@ -45,7 +45,7 @@ def test_a_pdf_with_no_text_layer_is_queued_for_ocr(tmp_path, monkeypatch):
     (tmp_path / "S").mkdir()
     (tmp_path / "S" / "d.pdf").write_bytes(b"%PDF-1.4 scan")
     monkeypatch.setattr(extract_stage.text_extract, "from_pdf", lambda p: "")
-    text, quality, nxt = extract_stage.extract_one(
+    text, quality, nxt, _ = extract_stage.extract_one(
         s, {"doc_id": "d", "spider": "S", "text_source": "pdf", "languages": ["de"]})
     assert text == ""
     assert quality == 0.0
@@ -59,7 +59,7 @@ def test_a_pdf_whose_text_layer_is_junk_is_queued_for_ocr(tmp_path, monkeypatch)
     (tmp_path / "S" / "d.pdf").write_bytes(b"%PDF-1.4")
     monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
                         lambda p: "B u n d e s g e r i c h t " * 40)
-    _, quality, nxt = extract_stage.extract_one(
+    _, quality, nxt, _ = extract_stage.extract_one(
         s, {"doc_id": "d", "spider": "S", "text_source": "pdf", "languages": ["de"]})
     assert quality < text_quality.ACCEPT_THRESHOLD
     assert nxt == "ocr_pending"
@@ -70,7 +70,7 @@ def test_html_that_extracts_to_junk_is_not_sent_to_ocr(tmp_path):
     s = _settings(tmp_path)
     (tmp_path / "S").mkdir()
     (tmp_path / "S" / "d.html").write_text("<html><body>...</body></html>")
-    _, _, nxt = extract_stage.extract_one(
+    _, _, nxt, _ = extract_stage.extract_one(
         s, {"doc_id": "d", "spider": "S", "text_source": "html", "languages": ["de"]})
     assert nxt == "failed"
 

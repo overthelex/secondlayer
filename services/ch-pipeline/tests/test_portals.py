@@ -15,7 +15,7 @@ import pytest
 from chpipe.http import Fetcher
 from chpipe.portals import PORTALS, PORTAL_SPIDERS, comcom, elcom, emark, esbk, eschk, finma, finma_vr, mkg, postcom, pue, rab, ubi
 from chpipe.portals import common
-from chpipe.portals.common import PortalDoc, parse_date, last_date, safe_doc_id
+from chpipe.portals.common import PortalDoc, lang_from_name, parse_date, last_date, safe_doc_id
 
 FIX = pathlib.Path(__file__).parent / "fixtures" / "portals"
 D = datetime.date
@@ -225,6 +225,21 @@ def test_comcom_reads_the_decision_date_from_the_filename():
     assert docs[0].title.startswith("Interconnect Peering") and docs[0].lang == "de"
     # the id is the filename, so a re-uploaded file (new DAM hash) keeps its identity
     assert docs[0].doc_id == "COMCOM_offVF_2024-12-19._Entscheid_ComCom_i.S._Init7_vs._Swisscom_Interconnect_Pering.pdf"
+
+
+def test_comcom_and_elcom_take_the_language_from_the_title_not_the_dam_path():
+    page = fx("comcom_2024_2025.html").replace("Verfügung", "Décision sur la requête")
+    docs = discover(comcom, Site({"entscheide-2024-2025": page}))
+    assert docs[0].lang == "fr" and "/dam/de/" in docs[0].url
+    assert lang_from_name("Concession de service universel. Mesures de surveillance") == "fr"
+    assert lang_from_name("Richiesta di accesso. VTX c. Swisscom") == "it"
+    assert lang_from_name("211-00500 Anrechenbarkeit der Mehrkosten, 2.6.2026") is None    # ElCom's de titles fall back to the DAM
+    assert lang_from_name("Netzanschluss Italien. Verfügung") == "de"                       # a place, not a language
+    assert lang_from_name("Decision.pdf") == "fr" and lang_from_name("Decisione_2.pdf") == "it"
+    assert lang_from_name("Verfügung betreffend prestations") == "de"                      # the German word wins
+    assert lang_from_name("Verfügung betreffend italienisch") == "de" and lang_from_name("Tessin Italienisch") == "it"
+    docs = elcom.parse_page(fx("elcom.html").replace("Anrechenbarkeit", "Décision sur la requête"))
+    assert docs[0].lang == "fr"
 
 
 def test_comcom_keeps_one_copy_of_a_decision_filed_under_two_ranges():
