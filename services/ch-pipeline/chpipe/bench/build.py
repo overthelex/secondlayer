@@ -21,7 +21,7 @@ import logging
 import pathlib
 import random
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Collection, Iterable, Mapping
 
 from chpipe import db
 from chpit import core_split, score, templates
@@ -433,6 +433,10 @@ _SKIP_IDENTICAL = "identical_or_short"
 _SKIP_AMBIGUOUS = "ambiguous_article"
 _SKIP_NO_ARTICLE_NUMBER = "no_article_number"
 _SKIP_CAPPED = "capped"
+# Incremental builds (see read_published_ids / --since): an item already in
+# an earlier published build, and a change older than the --since date.
+_SKIP_ALREADY_PUBLISHED = "already_published"
+_SKIP_BEFORE_SINCE = "before_since"
 
 
 @dataclass(frozen=True)
@@ -452,6 +456,8 @@ class BuildReport:
     built_at: str
     sources: tuple[str, ...] = DEFAULT_SOURCES
     build_label: str | None = None
+    excluded_ids: int = 0
+    since: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = dict(self.per_lang)
@@ -460,6 +466,8 @@ class BuildReport:
         result["built_at"] = self.built_at
         result["sources"] = list(self.sources)
         result["build"] = self.build_label
+        result["excluded_ids"] = self.excluded_ids
+        result["since"] = self.since
         return result
 
 
@@ -467,6 +475,8 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
                 per_act_cap: int, rng: random.Random,
                 ambiguous: int = 0, no_article_number: int = 0,
                 build: str | None = None,
+                exclude_ids: Collection[str] = frozenset(),
+                since: datetime.date | None = None,
                 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """No I/O: given the rows _CHANGE_SQL already fetched for one language,
     run the full selection pipeline and return (items, lang_report).
@@ -513,6 +523,9 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
         abbr = row["abbreviation"]
         if not abbr:
             _bump(_SKIP_NO_ABBREVIATION)
+            continue
+        if since is not None and row["date_applicability"] < since:
+            _bump(_SKIP_BEFORE_SINCE)
             continue
         if not select_change(row["old_text"], row["new_text"]):
             _bump(_SKIP_IDENTICAL)
@@ -564,6 +577,11 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
             "text": row["new_text"],
         }
         row_items, row_skipped = make_items(change_row, old_row, new_row, row["abbreviation"], lang)
+        if exclude_ids:
+            kept = [item for item in row_items if item["id"] not in exclude_ids]
+            if len(kept) < len(row_items):
+                _bump(_SKIP_ALREADY_PUBLISHED, len(row_items) - len(kept))
+            row_items = kept
         if build is not None:
             for item in row_items:
                 item["build"] = build
@@ -592,13 +610,44 @@ def _build_lang(rows: list[Mapping[str, Any]], lang: str, per_lang_cap: int,
     return items, lang_report
 
 
+def read_published_ids(paths: Iterable[str | pathlib.Path]) -> set[str]:
+    """Item ids already published, from any mix of: a build directory
+    (every bench-*.jsonl / core-*.jsonl in it), a JSONL file with an `id`
+    per line, or a text file with one id per line. Passed to build() as
+    `exclude_ids`, this is what makes a later build an increment: the
+    items it writes are exactly the ones an earlier build did not."""
+    ids: set[str] = set()
+
+    def _read_file(f: pathlib.Path) -> None:
+        with f.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    ids.add(json.loads(line)["id"])
+                else:
+                    ids.add(line)
+
+    for p in paths:
+        p = pathlib.Path(p)
+        if p.is_dir():
+            for f in sorted(list(p.glob("bench-*.jsonl")) + list(p.glob("core-*.jsonl"))):
+                _read_file(f)
+        else:
+            _read_file(p)
+    return ids
+
+
 def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
           per_lang_cap: int = 5000, per_act_cap: int = 50,
           seed: int = 20260825, out_dir: str | pathlib.Path = "/data/ch-corpus/bench",
           now: datetime.datetime | None = None,
           sources: tuple[str, ...] = DEFAULT_SOURCES,
           build_label: str | None = None,
-          core_per_lang: int = 0) -> BuildReport:
+          core_per_lang: int = 0,
+          exclude_ids: Collection[str] = frozenset(),
+          since: datetime.date | None = None) -> BuildReport:
     """Build bench-{lang}.jsonl for each of LANGS plus build-report.json, in
     OUT_DIR, against the database SETTINGS points to.
 
@@ -643,7 +692,8 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
             items, lang_report = _build_lang(rows, lang, per_lang_cap, per_act_cap, rng,
                                              ambiguous=ambiguous,
                                              no_article_number=no_article_number,
-                                             build=build_label)
+                                             build=build_label,
+                                             exclude_ids=exclude_ids, since=since)
             core_items: list[dict[str, Any]] = []
             if core_per_lang > 0:
                 core_items, core_report = core_split.select_core(
@@ -692,6 +742,8 @@ def build(settings: Settings, langs: tuple[str, ...] = ("de", "fr", "it"),
         built_at=built_at,
         sources=tuple(sources),
         build_label=build_label,
+        excluded_ids=len(exclude_ids),
+        since=_iso(since),
     )
     (out_path / "build-report.json").write_text(
         json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
@@ -725,7 +777,15 @@ def main(argv: list[str] | None = None) -> BuildReport:
     parser.add_argument("--core-per-lang", type=int, default=0,
                         help="also write core-{lang}.jsonl with this many "
                              "stratified items per language (0 = off)")
+    parser.add_argument("--exclude-ids", action="append", default=[], metavar="PATH",
+                        help="a published build directory, a JSONL file with an id per "
+                             "line, or a text file of ids; items already there are skipped "
+                             "(repeatable). Makes this build an increment.")
+    parser.add_argument("--since", default=None, metavar="YYYY-MM-DD",
+                        help="only changes whose date_applicability is on or after this date")
     args = parser.parse_args(argv)
+    exclude_ids = read_published_ids(args.exclude_ids) if args.exclude_ids else frozenset()
+    since = datetime.date.fromisoformat(args.since) if args.since else None
     sources = tuple(part.strip() for part in args.sources.split(",") if part.strip())
 
     langs = tuple(part.strip() for part in args.langs.split(",") if part.strip())
@@ -736,7 +796,8 @@ def main(argv: list[str] | None = None) -> BuildReport:
     report = build(settings, langs=langs, per_lang_cap=args.per_lang_cap,
                    per_act_cap=args.per_act_cap, seed=args.seed, out_dir=args.out,
                    sources=sources, build_label=args.build,
-                   core_per_lang=args.core_per_lang)
+                   core_per_lang=args.core_per_lang,
+                   exclude_ids=exclude_ids, since=since)
     for lang, stats in report.per_lang.items():
         log.info("bench-%s: changes_considered=%d selected=%d items=%d skipped=%s",
                  lang, stats["changes_considered"], stats["selected"],
