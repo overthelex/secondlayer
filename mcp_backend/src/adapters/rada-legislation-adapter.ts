@@ -261,7 +261,15 @@ export class RadaLegislationAdapter {
     // Parse articles: handles both <span class=rvts9>Стаття N. Title</span> and <span class=rvts9>Стаття N.</span>.
     // A body also terminates at the next structural header (Розділ/Підрозділ/Глава/Книга) so an article
     // never swallows a following section that has no "Стаття N." of its own.
-    const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?\s*([^<]*)<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9["']?>Стаття\s+\d|<span\s+class=["']?rvts15["']?>\s*(?:Розділ|Підрозділ|Глава|Книга)\b|$)/gs;
+    //
+    // The header alternative ends in a lookahead for whitespace-or-tag, NOT \b: JavaScript
+    // defines \b over [A-Za-z0-9_] only, so after the Cyrillic "л" of «Розділ» it sits
+    // between two non-word characters and never matches. The alternative was dead from the
+    // day it was written, which is why ЦК ст. 625 kept «Розділ II ЗАГАЛЬНІ ПОЛОЖЕННЯ ПРО
+    // ДОГОВІР Глава 52 ПОНЯТТЯ ТА УМОВИ ДОГОВОРУ» glued to its own text — it ran on to the
+    // next «Стаття N.» instead of stopping at the heading. A heading is always followed by
+    // a space («Розділ II ») or closes immediately («Розділ</span>»), so [\s<] covers both.
+    const articleRegex = /<span\s+class=["']?rvts9["']?>Стаття\s+(\d+(?:-\d+)?)\.?\s*([^<]*)<\/span>\s*(.*?)(?=<span\s+class=["']?rvts9["']?>Стаття\s+\d|<span\s+class=["']?rvts15["']?>\s*(?:Розділ|Підрозділ|Глава|Книга)(?=[\s<])|$)/gs;
 
     let match;
     while ((match = articleRegex.exec(scanHtml)) !== null) {

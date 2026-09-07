@@ -112,7 +112,20 @@ export interface EdsrFtsResult {
 
 export interface EdsrFtsSearchResponse {
   query: string;
+  /**
+   * Matching DOCUMENTS, counted over the candidate set the search actually resolved.
+   * Exact below FTS_CANDIDATE_CAP; at the cap it is a floor and `total_is_floor` is set.
+   *
+   * This used to be `safeLimit * 10` whenever there was more than a page of results, so
+   * the same query answered "30" at limit 3 and "1000" at limit 100 — a number that
+   * described the request, not the registry, and that an LLM reading the response has no
+   * way to tell apart from a real count.
+   */
   total: number;
+  /** True when `total` hit FTS_CANDIDATE_CAP: read it as "at least", not "exactly". */
+  total_is_floor?: boolean;
+  /** The cap that produced the floor, present only alongside `total_is_floor`. */
+  candidate_cap?: number;
   returned: number;
   offset: number;
   has_more: boolean;
@@ -950,7 +963,11 @@ export class EdsrFtsService {
         : `edrsr_fulltext f
            JOIN cand ON cand.doc_id = f.doc_id`;
 
-      // Skip expensive COUNT(*) — use LIMIT+1 to detect has_more instead
+      // A COUNT(*) over the base table is what the cap-before-rank shape exists to avoid,
+      // but counting `cand` is free: it is already materialized and holds at most
+      // FTS_CANDIDATE_CAP rows. That yields an exact count below the cap and an honest
+      // floor at it — as opposed to the `safeLimit * 10` this used to report, which made
+      // `total` a function of the caller's own limit.
       const dataSql = `
         WITH cand AS MATERIALIZED (
           SELECT f.doc_id
@@ -958,13 +975,17 @@ export class EdsrFtsService {
           WHERE ${whereClause}
           LIMIT ${FTS_CANDIDATE_CAP}
         )
-        SELECT ${selectFields}
+        SELECT ${selectFields}, (SELECT count(*)::int FROM cand) AS cand_total
         FROM ${outerFrom}
         ORDER BY ${EDRSR_FTS_SEARCH_ORDER}
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
 
       const dataResult = await queryWithTimeout(dataSql, [...params, safeLimit + 1, safeOffset]);
-      const total = dataResult.rows.length > safeLimit ? safeLimit * 10 : dataResult.rows.length;
+      // An offset past the end returns no rows and so no cand_total; the page is empty
+      // either way, and rows.length is then the only defensible answer.
+      const total = dataResult.rows.length > 0
+        ? Number(dataResult.rows[0].cand_total)
+        : dataResult.rows.length;
       if (dataResult.rows.length > safeLimit) {
         dataResult.rows = dataResult.rows.slice(0, safeLimit);
       }
@@ -1006,6 +1027,7 @@ export class EdsrFtsService {
       const response = {
         query,
         total,
+        ...(total >= FTS_CANDIDATE_CAP ? { total_is_floor: true, candidate_cap: FTS_CANDIDATE_CAP } : {}),
         returned: dataResult.rows.length,
         offset: safeOffset,
         has_more: safeOffset + dataResult.rows.length < total,
