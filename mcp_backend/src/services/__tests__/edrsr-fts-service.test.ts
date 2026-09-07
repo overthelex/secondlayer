@@ -107,6 +107,64 @@ describe('EdsrFtsService.searchFulltext party filters', () => {
   });
 });
 
+describe('EdsrFtsService.searchFulltext total', () => {
+  // `total` used to be `safeLimit * 10` as soon as there was more than one page, so the
+  // same query reported 30 at limit 3 and 1000 at limit 100 — a number describing the
+  // request rather than the registry, which a reading model cannot tell from a real count.
+  const makeDbWithRows = (rowCount: number, candTotal: number) => {
+    const calls: { sql: string; params: any[] }[] = [];
+    const rows = Array.from({ length: rowCount }, (_v, i) => ({
+      doc_id: i + 1, headline: 'x', rank: 0.5, cand_total: candTotal,
+    }));
+    return {
+      calls,
+      query: jest.fn((sql: string, params: any[]) => {
+        calls.push({ sql, params });
+        return Promise.resolve({ rows });
+      }),
+    };
+  };
+
+  it('counts the candidate set instead of scaling with the caller\'s limit', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(4, 137);
+
+    const res = await svc.searchFulltext('іпотека', db as any, {}, 3, 0);
+
+    expect(db.calls[0].sql).toContain('(SELECT count(*)::int FROM cand) AS cand_total');
+    expect(res.total).toBe(137);        // not 3 * 10
+    expect(res.returned).toBe(3);       // the extra probe row is trimmed
+    expect(res.has_more).toBe(true);
+    expect(res.total_is_floor).toBeUndefined();
+  });
+
+  it('reports the same total whatever limit the caller asked for', async () => {
+    const svc = new EdsrFtsService();
+    const small = await svc.searchFulltext('іпотека', makeDbWithRows(4, 137) as any, {}, 3, 0);
+    const large = await svc.searchFulltext('іпотека', makeDbWithRows(101, 137) as any, {}, 100, 0);
+
+    expect(small.total).toBe(large.total);
+  });
+
+  it('flags a total that hit the candidate cap as a floor, not an exact count', async () => {
+    const svc = new EdsrFtsService();
+    const res = await svc.searchFulltext('договір', makeDbWithRows(21, 2000) as any, {}, 20, 0);
+
+    expect(res.total).toBe(2000);
+    expect(res.total_is_floor).toBe(true);
+    expect(res.candidate_cap).toBe(2000);
+  });
+
+  it('reports 0 for a page past the end rather than inventing one', async () => {
+    const svc = new EdsrFtsService();
+    const res = await svc.searchFulltext('іпотека', makeDbWithRows(0, 137) as any, {}, 20, 100000);
+
+    expect(res.total).toBe(0);
+    expect(res.returned).toBe(0);
+    expect(res.has_more).toBe(false);
+  });
+});
+
 describe('buildPartyRoleRegex', () => {
   it('anchors the defendant on the respondent slot and requires a closing quote', () => {
     const rx = buildPartyRoleRegex('Нова Пошта', 'defendant');
