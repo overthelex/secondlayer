@@ -16,6 +16,13 @@
  * getAllToolDefinitions and advertises the full Set. Both filter by this whitelist,
  * so neither can ever exceed it.
  *
+ * The list is split by jurisdiction because the deployments are. legal.org.ua holds
+ * the Ukrainian corpora and empty ch_* tables; lawrider holds the Swiss ones. A
+ * deployment that advertises tools it has no data for spends the client's tool
+ * budget on handlers that can only answer "no results" — which is what legal.org.ua
+ * did with all 18 ch_* tools. MCP_TOOL_JURISDICTIONS picks the slices to serve;
+ * leaving it unset serves every slice, the behaviour that predates the flag.
+ *
  * IMPORTANT: keep this in sync with the actual handler names registered in
  * factories/tool-services.ts (local tools) and with the remote routes in
  * tool-registry.ts (rada_* / openreyestr_*). A local name that does not resolve is
@@ -24,7 +31,12 @@
  * Do not restate the tool count in prose anywhere. This Set is the count; comments
  * that hardcoded "15" drifted and stayed wrong for weeks.
  */
-export const V2_TOOL_NAMES = new Set<string>([
+export type ToolJurisdiction = 'ua' | 'ch';
+
+const ALL_JURISDICTIONS: readonly ToolJurisdiction[] = ['ua', 'ch'];
+
+/** Українські корпуси: ЄДРСР, законодавство, ЄДР, парламент, відкриті дані, ІВ. */
+const UA_TOOL_NAMES: readonly string[] = [
   // Legislation (6)
   'search_legislation',
   'get_legislation_section',
@@ -35,32 +47,6 @@ export const V2_TOOL_NAMES = new Set<string>([
   // Повний корпус НПА (schema `npa`) — 293K актів / 439K редакцій, поза кураторськими ~655
   'search_npa',
   'get_npa_act',
-  // Швейцарія (CH) — судові рішення (entscheidsuche.ch) та федеральне законодавство
-  // (Fedlex): пошук, точковий у часі текст статті або повного акта, історія змін акта.
-  'ch_search_court_decisions',
-  'ch_get_court_decision',
-  'ch_search_legislation',
-  'ch_get_act_article',
-  'ch_get_act_history',
-  'ch_get_act_text',
-  'ch_get_decision_legislation',
-  // Case-citation graph over ch_case_citations/ch_decision_index (LEXAI-2035)
-  'ch_get_citation_graph',
-  'ch_check_precedent_status',
-  // Deterministic grounding self-check for external agents (LEXAI-2036)
-  'ch_verify_citations',
-  // Швейцарія (CH) — реєстри компаній: Zefix + SHAB + FINMA + SECO + кантональні відомості.
-  'ch_search_companies',
-  'ch_get_company',
-  // Швейцарія (CH) — відкриті коментарі до федеральних актів (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
-  'ch_get_commentary',
-  'ch_search_commentary',
-  // Швейцарія (CH) — матеріали законодавця з Bundesblatt: Botschaften, звіти, мета статті (LEXAI-2038)
-  'ch_search_materials',
-  'ch_get_material',
-  'ch_get_article_purpose',
-  // Швейцарія (CH) — семантичний пошук по всьому корпусу (Qdrant ch_corpus_bge_cls; LEXAI-2004)
-  'ch_semantic_search',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',
@@ -120,4 +106,61 @@ export const V2_TOOL_NAMES = new Set<string>([
   'get_ip_object',
   'get_trademark_dossier',
   'find_similar_trademarks',
-]);
+];
+
+/** Швейцарські корпуси: entscheidsuche.ch, Fedlex, Zefix/SHAB, onlinekommentar, Bundesblatt. */
+const CH_TOOL_NAMES: readonly string[] = [
+  // Швейцарія (CH) — судові рішення (entscheidsuche.ch) та федеральне законодавство
+  // (Fedlex): пошук, точковий у часі текст статті або повного акта, історія змін акта.
+  'ch_search_court_decisions',
+  'ch_get_court_decision',
+  'ch_search_legislation',
+  'ch_get_act_article',
+  'ch_get_act_history',
+  'ch_get_act_text',
+  'ch_get_decision_legislation',
+  // Case-citation graph over ch_case_citations/ch_decision_index (LEXAI-2035)
+  'ch_get_citation_graph',
+  'ch_check_precedent_status',
+  // Deterministic grounding self-check for external agents (LEXAI-2036)
+  'ch_verify_citations',
+  // Швейцарія (CH) — реєстри компаній: Zefix + SHAB + FINMA + SECO + кантональні відомості.
+  'ch_search_companies',
+  'ch_get_company',
+  // Швейцарія (CH) — відкриті коментарі до федеральних актів (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
+  'ch_get_commentary',
+  'ch_search_commentary',
+  // Швейцарія (CH) — матеріали законодавця з Bundesblatt: Botschaften, звіти, мета статті (LEXAI-2038)
+  'ch_search_materials',
+  'ch_get_material',
+  'ch_get_article_purpose',
+  // Швейцарія (CH) — семантичний пошук по всьому корпусу (Qdrant ch_corpus_bge_cls; LEXAI-2004)
+  'ch_semantic_search',
+];
+
+const TOOLS_BY_JURISDICTION: Record<ToolJurisdiction, readonly string[]> = {
+  ua: UA_TOOL_NAMES,
+  ch: CH_TOOL_NAMES,
+};
+
+/**
+ * Reads MCP_TOOL_JURISDICTIONS: a comma-separated list of `ua` / `ch`.
+ * Unset, blank, or naming nothing recognised → every jurisdiction, so a typo
+ * degrades to the pre-flag behaviour instead of serving an empty tool list.
+ */
+export function parseToolJurisdictions(raw: string | undefined): ToolJurisdiction[] {
+  const named = (raw ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is ToolJurisdiction => (ALL_JURISDICTIONS as readonly string[]).includes(s));
+
+  return named.length > 0 ? [...new Set(named)] : [...ALL_JURISDICTIONS];
+}
+
+export function buildV2ToolNames(jurisdictions: readonly ToolJurisdiction[]): Set<string> {
+  return new Set(jurisdictions.flatMap((j) => TOOLS_BY_JURISDICTION[j]));
+}
+
+export const V2_TOOL_NAMES = buildV2ToolNames(
+  parseToolJurisdictions(process.env.MCP_TOOL_JURISDICTIONS),
+);
