@@ -45,6 +45,36 @@ describe('isToolInToolset', () => {
     expect(isToolInToolset('search_ch_things')).toBe(false);
   });
 
+  it('serves everything except ch_* when MCP_TOOLSET=ua', () => {
+    process.env.MCP_TOOLSET = 'ua';
+    expect(isToolInToolset('search_court_decisions')).toBe(true);
+    expect(isToolInToolset('get_npa_act')).toBe(true);
+    expect(isToolInToolset('openreyestr_search_entities')).toBe(true);
+    expect(isToolInToolset('rada_search_parliament_bills')).toBe(true);
+    // The Swiss corpus lives on lawrider; ch_* tables here are empty.
+    expect(isToolInToolset('ch_get_act_text')).toBe(false);
+    expect(isToolInToolset('ch_semantic_search')).toBe(false);
+    // Complement of the same prefix rule: 'ch_' mid-name is still a UA tool.
+    expect(isToolInToolset('search_ch_things')).toBe(true);
+  });
+
+  it('ua and ch partition the registry between the two deployments', () => {
+    const names = [
+      'search_court_decisions',
+      'get_npa_act',
+      'openreyestr_search_entities',
+      'ch_get_act_text',
+      'ch_semantic_search',
+    ];
+    process.env.MCP_TOOLSET = 'ua';
+    const ua = names.filter(isToolInToolset);
+    process.env.MCP_TOOLSET = 'ch';
+    const ch = names.filter(isToolInToolset);
+
+    expect(ua.filter((n) => ch.includes(n))).toEqual([]);
+    expect([...ua, ...ch].sort()).toEqual([...names].sort());
+  });
+
   it('fails closed on an unknown toolset value', () => {
     process.env.MCP_TOOLSET = 'hc';
     expect(isToolInToolset('ch_get_act_text')).toBe(false);

@@ -74,10 +74,10 @@ x-app-local-base: &app_local_base
     # Security (relaxed for local dev)
     SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
 
-    # Кураторський набір інструментів MCP v2 — лише українські юрисдикції.
-    # Швейцарські ch_* обслуговує lawrider; тут таблиці ch_* порожні, і кожен
-    # такий інструмент лише витрачав ліміт клієнта на відповідь «немає даних».
-    MCP_TOOL_JURISDICTIONS: ${MCP_TOOL_JURISDICTIONS:-ua}
+    # Дзеркало lawrider'івського MCP_TOOLSET=ch: цей деплой віддає і приймає все,
+    # крім швейцарських ch_*. Таблиці ch_* тут порожні, тож раніше кожен такий
+    # інструмент лише витрачав ліміт клієнта на відповідь «немає даних».
+    MCP_TOOLSET: ${MCP_TOOLSET:-ua}
 
     # Unified Gateway Configuration
     ENABLE_UNIFIED_GATEWAY: ${ENABLE_UNIFIED_GATEWAY:-true}
