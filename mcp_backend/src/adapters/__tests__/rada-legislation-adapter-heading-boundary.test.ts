@@ -69,3 +69,19 @@ describe('article bodies stop at a structural heading', () => {
     expect(arts.find((a) => a.article_number === '624')!.full_text).not.toContain('Боржник');
   });
 });
+
+describe('fetchLegislation rejects an id that would fetch the wrong page', () => {
+  const adapter = () => new RadaLegislationAdapter(db);
+
+  it.each(['', '   '])('refuses %p instead of fetching /laws/show//print', async (id) => {
+    // RADA answers that URL 200 with its search homepage, the parser reads one "article"
+    // out of it, and the caller stores «Універсальний пошук» as a law with an empty
+    // rada_id — a row nothing downstream can tell from a real act.
+    await expect(adapter().fetchLegislation(id)).rejects.toThrow(/empty id/i);
+  });
+
+  it('still rejects ids with characters a law id cannot contain', async () => {
+    await expect(adapter().fetchLegislation('435-15?x=1')).rejects.toThrow(/Invalid legislation ID/);
+    await expect(adapter().fetchLegislation('../etc/passwd')).rejects.toThrow(/Invalid legislation ID/);
+  });
+});

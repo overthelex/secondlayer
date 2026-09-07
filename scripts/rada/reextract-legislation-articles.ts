@@ -123,7 +123,14 @@ async function main() {
 
   let work: string[];
   if (only) {
-    work = only;
+    // A --only list built from a shell pipeline can come through empty (a mis-quoted
+    // psql call yields ['']), and an empty id used to fetch and save the RADA homepage
+    // as a law. Drop blanks and refuse the run if that leaves nothing.
+    work = only.filter((id) => id.trim().length > 0);
+    if (work.length === 0) {
+      console.error('--only resolved to no usable ids — refusing to run');
+      process.exit(1);
+    }
   } else {
     const r = await db.query<{ rada_id: string }>(DAMAGED_ACTS_SQL);
     work = r.rows.map((x) => x.rada_id);
