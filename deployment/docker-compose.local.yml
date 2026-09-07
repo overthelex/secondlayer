@@ -74,6 +74,11 @@ x-app-local-base: &app_local_base
     # Security (relaxed for local dev)
     SECONDARY_LAYER_KEYS: ${SECONDARY_LAYER_KEYS:-local-dev-key,test-key-123}
 
+    # Кураторський набір інструментів MCP v2 — лише українські юрисдикції.
+    # Швейцарські ch_* обслуговує lawrider; тут таблиці ch_* порожні, і кожен
+    # такий інструмент лише витрачав ліміт клієнта на відповідь «немає даних».
+    MCP_TOOL_JURISDICTIONS: ${MCP_TOOL_JURISDICTIONS:-ua}
+
     # Unified Gateway Configuration
     ENABLE_UNIFIED_GATEWAY: ${ENABLE_UNIFIED_GATEWAY:-true}
     RADA_MCP_URL: ${RADA_MCP_URL:-http://rada-mcp-app-local:3001}
