@@ -134,6 +134,14 @@ export class RadaLegislationAdapter {
   }
 
   async fetchLegislation(radaId: string): Promise<{ metadata: LegislationMetadata; articles: LegislationArticle[] }> {
+    // An empty id passes the character check (it has no bad characters) and builds
+    // /laws/show//print, which RADA answers 200 with its own search homepage. The parser
+    // then finds one "article" — «Універсальний пошук. Інформаційно-пошукова система
+    // "Законодавство України"…» — and the caller saves it as a law with an empty rada_id.
+    // Nothing downstream can tell that row from a real act.
+    if (!radaId || !radaId.trim()) {
+      throw new Error('Legislation ID is required — an empty id fetches the RADA homepage, not a law');
+    }
     // Validate radaId to prevent SSRF — Ukrainian law IDs contain alphanumeric, slashes, dashes, Cyrillic
     if (/[^\p{L}\p{N}\-_\/\.]/u.test(radaId) || radaId.includes('..')) {
       throw new Error(`Invalid legislation ID: ${radaId}`);
