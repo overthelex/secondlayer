@@ -109,10 +109,21 @@ export class SpendingTools extends BaseToolHandler {
     }
 
     // JSONB contractor search
-    let contractorCondition = '';
     if (contractor_name) {
-      contractorCondition = `EXISTS (SELECT 1 FROM jsonb_array_elements(contractors) AS c WHERE c->>'name' ILIKE $${pi})`;
-      conditions.push(contractorCondition);
+      // The EXISTS is the real predicate, but nothing can index it: the planner has to
+      // unnest `contractors` per row, so it fell back to a seq scan plus a sort of the
+      // whole table. spending_addendums (2.1M rows / 1.9 GB) never finished inside the
+      // budget below and was reported as a failed table, which read to the caller as
+      // "few results" for a contractor that has hundreds of rows there.
+      //
+      // idx_spending_*_contractor_names_trgm (migrations 211-214) is a trigram GIN over
+      // exactly the expression repeated here, so this half narrows the heap to the
+      // handful of candidate rows and the EXISTS then applies the precise per-element
+      // semantics on those. Both halves take the same parameter.
+      conditions.push(
+        `(jsonb_path_query_array(contractors, '$[*].name')::text ILIKE $${pi}` +
+        ` AND EXISTS (SELECT 1 FROM jsonb_array_elements(contractors) AS c WHERE c->>'name' ILIKE $${pi}))`
+      );
       values.push(`%${contractor_name}%`);
       pi++;
     }
@@ -139,6 +150,9 @@ export class SpendingTools extends BaseToolHandler {
     const allResults: any[] = [];
     const tableErrors: Array<{ table: string; error: string }> = [];
     const QUERY_TIMEOUT_MS = 15000;
+    // Backstop for a connection that never answers at all. The server-side timeout is
+    // the one that should fire; if this one does, something below Postgres is wedged.
+    const ABANDON_TIMEOUT_MS = QUERY_TIMEOUT_MS + 5000;
 
     for (const [dtype, tableName] of tables) {
       try {
@@ -153,12 +167,25 @@ export class SpendingTools extends BaseToolHandler {
           ORDER BY sign_date DESC NULLS LAST
           LIMIT ${maxRows}`;
 
+        // SET LOCAL makes Postgres cancel the query itself. The race alone only ever
+        // abandoned it: this handler stopped waiting while the scan kept a connection
+        // busy for as long as it took, and each retry stacked another one on top.
+        // The loser of a race keeps running; the old code left one of these timers
+        // pending per table per call, holding the event loop for 15s after the answer
+        // was already sent. Clear it as soon as the race settles either way.
+        let abandonTimer: ReturnType<typeof setTimeout> | undefined;
         const result = await Promise.race([
-          this.db.query(sql, values),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout: запит до ${tableName} перевищив ${QUERY_TIMEOUT_MS / 1000}с`)), QUERY_TIMEOUT_MS)
-          ),
-        ]);
+          this.db.transaction(async (client: any) => {
+            await client.query(`SET LOCAL statement_timeout = ${QUERY_TIMEOUT_MS}`);
+            return client.query(sql, values);
+          }),
+          new Promise<never>((_, reject) => {
+            abandonTimer = setTimeout(
+              () => reject(new Error(`Timeout: запит до ${tableName} перевищив ${ABANDON_TIMEOUT_MS / 1000}с`)),
+              ABANDON_TIMEOUT_MS,
+            );
+          }),
+        ]).finally(() => clearTimeout(abandonTimer));
         for (const row of result.rows) {
           allResults.push({
             ...row,
@@ -170,7 +197,12 @@ export class SpendingTools extends BaseToolHandler {
       } catch (err: any) {
         // Record it as well as logging: swallowing this silently is what let a broken
         // contracts query read as "no results" for as long as it did.
-        tableErrors.push({ table: tableName, error: String(err.message).slice(0, 200) });
+        // Postgres phrases its own cancellation as "canceling statement due to statement
+        // timeout"; keep the message the callers already know.
+        const message = /statement timeout/i.test(String(err.message))
+          ? `Timeout: запит до ${tableName} перевищив ${QUERY_TIMEOUT_MS / 1000}с`
+          : String(err.message).slice(0, 200);
+        tableErrors.push({ table: tableName, error: message });
         logger.warn(`[SpendingTools] Error querying ${tableName}`, { error: err.message });
       }
     }
