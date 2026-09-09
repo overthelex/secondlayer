@@ -234,10 +234,19 @@ _RESPLIT_ROWS = (
     "AND COALESCE(article_count, 0) = 0 AND full_text IS NOT NULL "
     "AND version_id > %s ORDER BY version_id LIMIT %s")
 
+# CHPIPE_RESPLIT=all: every parsed fedlex_pdf edition with a text, articles
+# or not -- the re-walk after a splitter fix (LEXAI-2046), when the rows
+# that already have articles are exactly the ones to redo.
+_RESPLIT_ROWS_ALL = (
+    "SELECT version_id, full_text FROM ch_act_version "
+    "WHERE source = 'fedlex_pdf' AND stage = 'parsed' AND full_text IS NOT NULL "
+    "AND version_id > %s ORDER BY version_id LIMIT %s")
+
 RESPLIT_BATCH = 200
 
 
-def resplit(settings: Settings, limit: int | None = None) -> FedlexPdfTextReport:
+def resplit(settings: Settings, limit: int | None = None,
+            everything: bool = False) -> FedlexPdfTextReport:
     """CHPIPE_RESPLIT=1: articles for the parsed fedlex_pdf editions, from
     their stored full_text alone. See the module docstring. full_text is
     left untouched; store_articles() writes the rows and article_count in
@@ -253,7 +262,7 @@ def resplit(settings: Settings, limit: int | None = None) -> FedlexPdfTextReport
             if size <= 0:
                 break
             with conn.cursor() as cur:
-                cur.execute(_RESPLIT_ROWS, (last_id, size))
+                cur.execute(_RESPLIT_ROWS_ALL if everything else _RESPLIT_ROWS, (last_id, size))
                 rows = cur.fetchall()
             if not rows:
                 break
@@ -295,7 +304,8 @@ def main() -> FedlexPdfTextReport:
     limit = int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None
     if os.environ.get("CHPIPE_RESPLIT", "") not in ("", "0"):
         # offline CPU walk, not a download: renice already applied above
-        result = resplit(Settings.from_env(), limit=limit)
+        result = resplit(Settings.from_env(), limit=limit,
+                         everything=os.environ.get("CHPIPE_RESPLIT") == "all")
         log.info("RESPLIT resplit=%d recovered=%d articles=%d empty=%d failed=%d",
                  result.resplit, result.recovered, result.articles,
                  result.empty, result.failed)
