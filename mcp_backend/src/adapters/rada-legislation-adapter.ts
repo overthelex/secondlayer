@@ -105,7 +105,35 @@ export class RadaLegislationAdapter {
     /<span\s+class=["']?rvts(?:15|23)["']?>[^<]{0,120}?ПЕРЕХІДНІ\s+ТА\s+ПРИКІНЦЕВІ\s+ПОЛОЖЕННЯ/i,
     /<span\s+class=["']?rvts(?:15|23)["']?>[^<]{0,120}?ПЕРЕХІДНІ\s+ПОЛОЖЕННЯ/i,
     /<span\s+class=["']?rvts(?:15|23)["']?>[^<]{0,120}?ПРИКІНЦЕВІ\s+ПОЛОЖЕННЯ/i,
+    // Not every act marks the heading with an rvts15/23 span. Two further shapes, each
+    // required to be STRUCTURALLY ISOLATED and ALL CAPS so an in-text citation of another
+    // act's section cannot pass for the document's own heading (see LEXAI-1821 above).
+    //
+    // (a) The heading is the whole paragraph, no span at all:
+    //     <p class=rvps2><a name="n2639"></a>\nII. ПРИКІНЦЕВІ ПОЛОЖЕННЯ</p>
+    // Anchoring on both <p …> and </p> is what makes it safe: a citation always shares
+    // its paragraph with other text.
+    /<p[^>]*>\s*(?:<a[^>]*>\s*<\/a>)?\s*(?:[IVXLC]+\s*\.\s*)?(?:ПРИКІНЦЕВІ|ПЕРЕХІДНІ)(?:\s+ТА\s+(?:ПЕРЕХІДНІ|ПРИКІНЦЕВІ))?\s+ПОЛОЖЕННЯ\s*<\/p>/,
+    // (b) Older acts render as fixed-width <pre> text, where the heading occupies its own
+    //     line:  <br>\n                ПРИКІНЦЕВІ ТА ПЕРЕХІДНІ ПОЛОЖЕННЯ <br>
+    // Requiring a <br> on both sides keeps it to a line of its own.
+    /<br>\s*(?:ПРИКІНЦЕВІ|ПЕРЕХІДНІ)(?:\s+ТА\s+(?:ПЕРЕХІДНІ|ПРИКІНЦЕВІ))?\s+ПОЛОЖЕННЯ\s*<br>/,
   ];
+  /**
+   * A transitional section is a tail. Every bound observed across the corpus falls at
+   * 89% of the document or later, while both historical misfires cut the body in half or
+   * worse: a «Перехідні положення» citation inside КУпАП ст.163 cut at 53%, and a
+   * «Про споживче кредитування» reference cut ПКУ at 2%. Ignore a candidate that early —
+   * the cost is one act keeping the old run-on behaviour, against losing most of its body.
+   */
+  private static readonly TRANSITIONAL_MIN_POSITION_RATIO = 0.6;
+  /**
+   * The same heading, seen by the fallback parser — which reads $('body').text(), so no
+   * markup survives to anchor on. A whole line, all caps, optionally numbered: an in-text
+   * citation is mixed case and shares its line with other words.
+   */
+  private static readonly TRANSITIONAL_TEXT_PATTERN =
+    /^[ \t]*(?:[IVXLC]+[ \t]*\.?[ \t]*)?(?:ПРИКІНЦЕВІ|ПЕРЕХІДНІ)(?:[ \t]+ТА[ \t]+(?:ПЕРЕХІДНІ|ПРИКІНЦЕВІ))?[ \t]+ПОЛОЖЕННЯ[ \t]*$/m;
   private externalApiMetrics: ((service: string, status: string, durationSec: number) => void) | null = null;
 
   /**
@@ -118,7 +146,28 @@ export class RadaLegislationAdapter {
       const m = pat.exec(html);
       if (m && (earliest < 0 || m.index < earliest)) earliest = m.index;
     }
-    return earliest;
+    return this.guardTransitionalPosition(earliest, html.length);
+  }
+
+  /**
+   * Same bound for the fallback parser, which works on plain text.
+   */
+  private findTransitionalSectionStartInText(text: string): number {
+    const m = RadaLegislationAdapter.TRANSITIONAL_TEXT_PATTERN.exec(text);
+    return this.guardTransitionalPosition(m ? m.index : -1, text.length);
+  }
+
+  private guardTransitionalPosition(index: number, total: number): number {
+    if (index < 0 || total <= 0) return index;
+    const ratio = index / total;
+    if (ratio < RadaLegislationAdapter.TRANSITIONAL_MIN_POSITION_RATIO) {
+      logger.warn(
+        `[legislation] transitional heading matched at ${(ratio * 100).toFixed(1)}% of the document — ` +
+        'too early to be the tail, ignoring the bound',
+      );
+      return -1;
+    }
+    return index;
   }
 
   constructor(db: IDatabase) {
@@ -692,7 +741,12 @@ export class RadaLegislationAdapter {
     $('p, div, br').each((_i, el) => {
       $(el).before('\n');
     });
-    const bodyText = $('body').text();
+    const fullBodyText = $('body').text();
+    // Older acts render as fixed-width <pre> text and reach this parser instead of the
+    // span-based one, which is why they kept the transitional block inside their last
+    // article long after the HTML-level bound was in place: this path never had one.
+    const transitionalStart = this.findTransitionalSectionStartInText(fullBodyText);
+    const bodyText = transitionalStart >= 0 ? fullBodyText.slice(0, transitionalStart) : fullBodyText;
 
     // Try Стаття pattern first (laws, codes)
     const articlePattern = /Стаття\s+(\d+(?:-\d+)?)\.\s*([^\n]+)/gi;
