@@ -2276,6 +2276,46 @@ cantonal runs:
 
     0 10 * * 0 PATH=/home/ubuntu/ch-pipeline-venv/bin:$PATH /home/ubuntu/SecondLayer/services/ch-pipeline/run-portals.sh
 
+## ECtHR practice for Switzerland (echr_cases, LEXAI-2040)
+
+Gap plan phase 3. opencaselaw.ch serves 9.6K Strasbourg documents; lawrider's
+`echr_cases` was empty because the HUDOC corpus lived only on the AWS box.
+The harvest itself survives on cthulhu, `/mnt/bulk_storage/home-offload/hudoc-storage/all`
+(`meta/metadata-ALL.ndjson`: 209,773 HUDOC records; `txt/`: 179,304 texts;
+harvested 2026-05-27 by scripts/hudoc). Two steps, no network:
+
+    # on cthulhu: cut the slice (stdlib only, ~3 min, ~200 MB gz)
+    python3 scripts/echr_export_subset.py \
+        --harvest /mnt/bulk_storage/home-offload/hudoc-storage/all \
+        --out /mnt/bulk_storage/home-offload/hudoc-storage/echr_ch_subset.ndjson.gz
+    scp .../echr_ch_subset.ndjson.gz gcp:/data/echr/
+    # on lawrider-gcp: load (migration 215 adds the stored tsvector the search ranks on)
+    CHPIPE_ECHR_FILE=/data/echr/echr_ch_subset.ndjson.gz ./run-stage.sh echr-import
+
+The slice (measured 2026-09-09): every record with CHE among the respondents
+-- 3,133 rows over 993 applications: judgments (HEJUD/HFJUD), admissibility
+decisions (HEDEC/HFDEC), communicated cases, execution resolutions (HERES54),
+Commission reports, Information Note summaries (CLIN/CLINF), and the German /
+Italian / Russian / ... translations HUDOC carries -- plus every Chamber and
+Grand Chamber judgment of importance 1-3 in English and French, 16,436 rows
+over 7,870 applications: the leading cases a Swiss court cites whatever the
+respondent. Exported 2026-09-09: 19,210 rows (3,133 respondent + 16,077
+importance, the overlap counted once): 12,936 with a text, 6,268 with no
+text file and 6 with a stub under 500 bytes (exported as NULL) --
+the harvest fetched texts for the Swiss records (185 missing, HUDOC 500s)
+and for the English importance-1/2 judgments, but most importance-3 and
+French leading judgments are metadata-only until a re-fetch
+(app/conversion/docx/html/body, ~95 s a document, see
+reference_hudoc_api_gotchas). The import upserts on item_id and
+never blanks a text a row already has.
+
+Tools (mcp_backend, `ch-echr-tools.ts`): `ch_search_echr` (respondent CHE
+by default, kind / lang / importance / article / date filters, snippets) and
+`ch_get_echr_case` (by item_id or application number, text in slices,
+siblings of the same application in `related`). Not yet: the EGMR citation
+pattern in chpipe/citations.py, so a BGE's "Urteil des EGMR ... Nr. 12345/06"
+does not resolve to the row -- a later pass.
+
 ## Point-in-time benchmark (chpipe.bench)
 
 `chpipe/bench` is the database-bound half of CH-PiT, the Swiss point-in-time

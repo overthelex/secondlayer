@@ -14,6 +14,7 @@
 #                 ./run-stage.sh shab-list [months]
 #   commentaries: ./run-stage.sh commentary   (no argument; CHPIPE_COMMENTARY_LANGS / _DELAY from the env)
 #   materials:    ./run-stage.sh materials-discover|materials-text   (no argument; materials-text reads CHPIPE_LIMIT)
+#   echr:         CHPIPE_ECHR_FILE=/data/echr/echr_ch_subset.ndjson.gz ./run-stage.sh echr-import
 #   portals:      ./run-stage.sh portals-discover [spider]   (regulators / MKG, not on entscheidsuche; CHPIPE_SPIDER family)
 #
 # The optional second argument means different things to each family, so it is
@@ -103,7 +104,7 @@ case "$STAGE" in
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend|commentary|materials-discover|materials-text)
+  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend|commentary|materials-discover|materials-text|echr-import)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2

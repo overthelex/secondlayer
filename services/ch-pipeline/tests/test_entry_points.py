@@ -402,7 +402,8 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "sil-acts", "sil-fetch", "sil-parse", "ti-acts", "ti-fetch", "ti-parse",
                 "lexwork-pdf-requeue", "pdf-text",
                 "zh-acts", "zh-fetch", "zh-parse", "zh-amend",
-                    "commentary", "materials-discover", "materials-text", "portals-discover"}
+                    "commentary", "materials-discover", "materials-text", "portals-discover",
+                    "echr-import"}
     assert _accepted_stage_names() == expected
 
 
