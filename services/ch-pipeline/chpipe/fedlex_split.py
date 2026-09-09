@@ -137,8 +137,14 @@ _SECTION_NUM = re.compile(r"^\s*(?:[IVXLCDM]+|[A-Z]|\d+(?:\.\d+)*)[.):]\s+\S")
 # (measured 2026-09-04 on a 400-pair sample: 187 of 340 differed by a
 # renumbered footnote or a layout slip, not an amendment).
 _NOTE_REF = re.compile(
-    r"(?:(?<=[a-zäöüéèàûîçñ»›\"'\)\]…])|(?<=[A-Za-zÄÖÜäöüéèàûîçñ\)\]]\.)|(?<=\.\.\.)"
-    r"|(?<=(?:19|20)\d{2})|(?<=[:;.]\s\d\.)|(?<=^\d\.))"
+    # never inside an SR / RS / RU number ("SR 173.110", "RS 0.211.230.02")
+    r"(?<!SR \d{3}\.)(?<!RS \d{3}\.)(?<!RU \d{3}\.)(?<![\d.]{5}\.)"
+    r"(?:(?<=[a-zäöüéèàûîçñ»›\"'\)\]…])|(?<=[A-Za-zÄÖÜäöüéèàûîçñ\)\]][.:;,])|(?<=\.\.\.)"
+    r"|(?<=(?:19|20)\d{2})"
+    # after an enumeration or article number: "1.223 Adoption", "10.180 i diritti",
+    # "Artikel 72.272 2 L'office" -- only when whitespace or the end follows
+    r"|(?<=\s\d\.)(?=\d{3}(?:\s|$))|(?<=\s\d\d\.)(?=\d{3}(?:\s|$))|(?<=\d{3}\.)(?=\d{3}(?:\s|$))"
+    r"|(?<=^\d\.))"
     r"(\d{1,3})(?:,\s?\d{1,3}|\s\d{3})*(?=[\s.,;:)\]]|$)", re.MULTILINE)
 
 # A footnote line anywhere in the stream: its number at column 0, two or
