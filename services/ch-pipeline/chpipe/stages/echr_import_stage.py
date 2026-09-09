@@ -137,36 +137,57 @@ def _batches(iterable, size: int):
         yield batch
 
 
-def _upsert_one(conn, record: dict, report: EchrImportReport) -> None:
-    # A savepoint per row inside the batch's transaction: a row the column
-    # refuses is rolled back alone, the batch goes on.
-    try:
-        row = row_for(record)
-        with conn.transaction():
-            result = conn.execute(_UPSERT, row).fetchone()
-    except (KeyError, psycopg.DataError, psycopg.IntegrityError) as exc:
-        log.error("record %d (%s): %s", report.read, (record.get("meta") or {}).get("itemid"), exc)
-        report.errors += 1
-        return
-    inserted = result["inserted"] if isinstance(result, dict) else result[0]
-    report.upserted += 1
-    report.inserted += int(bool(inserted))
-    report.with_text += int(row["full_text"] is not None)
-    why = record.get("why") or "?"
-    report.by_why[why] = report.by_why.get(why, 0) + 1
+_ROW_ERRORS = (KeyError, psycopg.DataError, psycopg.IntegrityError)
+
+
+def _apply(conn, batch: list[dict], isolate: bool) -> list[tuple[dict, dict | None, bool, Exception | None]]:
+    """Upsert a batch in one transaction. With isolate=False a bad row
+    raises and the whole batch rolls back (the fast path: no savepoints);
+    with isolate=True each row sits in its own savepoint and a bad row
+    is returned with its error instead."""
+    out = []
+    with conn.transaction():
+        for record in batch:
+            try:
+                row = row_for(record)
+                if isolate:
+                    with conn.transaction():
+                        result = conn.execute(_UPSERT, row).fetchone()
+                else:
+                    result = conn.execute(_UPSERT, row).fetchone()
+            except _ROW_ERRORS as exc:
+                if not isolate:
+                    raise
+                out.append((record, None, False, exc))
+                continue
+            inserted = result["inserted"] if isinstance(result, dict) else result[0]
+            out.append((record, row, bool(inserted), None))
+    return out
 
 
 def run(settings: Settings, path: pathlib.Path) -> EchrImportReport:
     report = EchrImportReport()
     conn = db.connect(settings)
     try:
-        # One commit per BATCH rows, not per row: 19K autocommitted upserts
-        # would be 19K round trips of their own.
+        # One commit per BATCH rows and no savepoints on the normal path;
+        # a batch with a refused row is rolled back and redone row by row
+        # under savepoints, so the bad row alone is lost.
         for batch in _batches(records(path), BATCH):
-            with conn.transaction():
-                for record in batch:
-                    report.read += 1
-                    _upsert_one(conn, record, report)
+            try:
+                results = _apply(conn, batch, isolate=False)
+            except _ROW_ERRORS:
+                results = _apply(conn, batch, isolate=True)
+            for record, row, inserted, exc in results:
+                report.read += 1
+                if exc is not None:
+                    log.error("record %d (%s): %s", report.read, (record.get("meta") or {}).get("itemid"), exc)
+                    report.errors += 1
+                    continue
+                report.upserted += 1
+                report.inserted += int(inserted)
+                report.with_text += int(row["full_text"] is not None)
+                why = record.get("why") or "?"
+                report.by_why[why] = report.by_why.get(why, 0) + 1
             if report.read % 1000 < BATCH:
                 log.info("read=%d upserted=%d inserted=%d errors=%d", report.read, report.upserted,
                          report.inserted, report.errors)

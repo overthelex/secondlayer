@@ -146,7 +146,7 @@ export class ChEchrTools extends BaseToolHandler {
     }
     if (kind) {
       if (kind === 'translation') {
-        where.push(`coalesce(language_iso, '') NOT IN ('ENG', 'FRE')`);
+        where.push(`language_iso IS NOT NULL AND language_iso NOT IN ('ENG', 'FRE')`);
       } else {
         params.push(KINDS[String(kind)]);
         where.push(`doc_type = ANY($${params.length}::text[])`);

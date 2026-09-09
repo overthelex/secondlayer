@@ -15,8 +15,9 @@ Selection (measured 2026-09-09 on the harvest):
   * respondent lists CHE: 3,133 rows over 993 applications -- judgments,
     decisions, communicated cases, execution resolutions, Commission
     reports, Information Note summaries, German/Italian/... translations;
-    2,948 have a text, 245 of those under 500 bytes (a stub the conversion
-    left), 185 have none (HUDOC answered 500 during the harvest).
+    2,948 have a text file -- 239 of them empty and 6 under 500 bytes (a
+    stub the conversion left) -- and 185 have none (HUDOC answered 500
+    during the harvest): 424 Swiss rows are metadata-only.
   * Chamber and Grand Chamber judgments of importance 1-3 in English and
     French (HEJUD / HFJUD): 16,436 rows over 7,870 applications, the
     leading cases a Swiss court cites regardless of respondent.
