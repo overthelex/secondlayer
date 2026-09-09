@@ -273,3 +273,77 @@ def test_citation_at_column_zero_is_not_a_heading():
     articles, _ = split_fedlex_text(text)
     assert [a.article_number for a in articles] == ["1"]
     assert "Art. 45" in articles[0].text
+
+
+# A page whose running header was NOT recognised: the footnote block of the
+# previous page sits mid-stream, between two articles, in the col0 layout;
+# a 3-digit reference is glued to a word; a table row and a two-space
+# paragraph number must survive.
+MIDSTREAM = """\
+                                                                              281.1
+
+Bundesgesetz
+über Schuldbetreibung und Konkurs
+
+Art. 1
+1 In der einem Erben für die Erklärung über den Erwerb der Erbschaft
+eingeräumten Überlegungsfrist besteht Rechtsstillstand.102
+2 Eine zu Lebzeiten des Erblassers angehobene Betreibung kann fortgesetzt
+werden.
+
+AS 1889 III 1
+99  Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+100 Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+101 Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+102 Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+
+Art. 2
+Wird ein Schuldner verhaftet, so kann er die Betreibung bestreiten.
+31  70,46 72,73 72,73
+2  Mann und Frau sind gleichberechtigt.
+Das gilt auch für Bürgschaften.
+"""
+
+
+def test_a_footnote_block_in_mid_stream_is_removed_and_three_digit_refs_stripped():
+    articles, _ = split_fedlex_text(MIDSTREAM)
+    assert [a.article_number for a in articles] == ["1", "2"]
+    art59, art60 = articles[0].text, articles[1].text
+    assert "Fassung gemäss" not in art59 and "Eingefügt durch" not in art59
+    assert "AS 1889" not in art59 and "BBl 1991" not in art59
+    assert "Rechtsstillstand." in art59 and "Rechtsstillstand.102" not in art59
+    assert "fortgesetzt werden." in art59
+    # a table row and a paragraph number set with two spaces are not footnotes
+    assert "31 70,46 72,73 72,73" in art60
+    assert "2 Mann und Frau sind gleichberechtigt." in art60
+
+
+MARGINAL_MIDSTREAM = """\
+Schweizerisches Zivilgesetzbuch                                             210
+
+                Art. 268a
+A. Adoption     1 Die Adoption darf erst nach umfassender Untersuchung aller
+                wesentlichen Umstände ausgesprochen werden.
+                2 Namentlich ist die Einstellung zur Adoption zu würdigen.
+
+61    Fassung gemäss Ziff. I 1 des BG vom 25. Juni 1976, in Kraft seit 1. Jan. 1978 (AS 1977
+      237 264; BBl 1974 II 1).
+62    Fassung gemäss Ziff. I 1 des BG vom 25. Juni 1976, in Kraft seit 1. Jan. 1978
+      (AS 1977 237 264; BBl 1974 II 1).
+
+                Art. 268b
+B. Wirkung      Das Kind erhält die Rechtsstellung eines Kindes der Adoptiv-
+                eltern.
+"""
+
+
+def test_marginal_layout_footnote_block_does_not_leak_into_the_body():
+    articles, _ = split_fedlex_text(MARGINAL_MIDSTREAM)
+    assert [a.article_number for a in articles] == ["268a", "268b"]
+    assert "gemäss" not in articles[0].text and "BBl" not in articles[0].text
+    assert "würdigen." in articles[0].text
+    assert articles[1].text.startswith("Das Kind erhält")

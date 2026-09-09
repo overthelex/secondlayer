@@ -62,7 +62,11 @@ _FOLIO_RIGHT = re.compile(r"^\s{8,}\d{1,4}$")
 # text ("9    Term in accordance with ..."). The two-space minimum is what
 # tells it from an inline paragraph number ("1 Alle Schweizer sind ..."),
 # which Fedlex glues with exactly one space.
-_FOOTNOTE_START = re.compile(r"^\d{1,3}\s{2,}\S")
+# The number column is four characters wide, so a three-digit footnote is
+# followed by ONE space ("100 Fassung gemäss ..."), a one- or two-digit one
+# by two or more; a paragraph number ("1 Alle Schweizer ...") never reaches
+# three digits, so the single space is safe there.
+_FOOTNOTE_START = re.compile(r"^(?:\d{1,2}\s{2,}|\d{3}\s+)[^\W\d_«»„\"'(\[]|^(?:\d{1,2}\s{2,}|\d{3}\s+)[«»„\"'(\[]")
 # The publication line above footnote 1: "AS 1952 1087", "RO 11 488 et
 # RS 3 3", "BS 11 469: BBl 1909 I 1", "CS 11 252", "RU 2005 4097".
 _PUBLICATION = re.compile(r"^(?:AS|BS|BBl|RO|RS|CS|RU|FF)\s+\d")
@@ -121,9 +125,112 @@ _SECTION_NUM = re.compile(r"^\s*(?:[IVXLCDM]+|[A-Z]|\d+(?:\.\d+)*)[.):]\s+\S")
 # "Constitution2,3", "19514" (the year 1951 + footnote 4), "…14". Digits
 # after a lowercase letter, a closing bracket/quote, an ellipsis or a
 # four-digit year, optionally a comma-chain, at a word end.
+# Also: after an enumeration number ("gefordert: 1.223 Adoption" is item 1
+# with footnote 223), after an abbreviation's full stop ("AHVG.309"), after
+# an ellipsis, and a space-separated chain of three-digit numbers
+# ("AHVG.309 310") -- a paragraph number never has three digits, so the
+# chain cannot eat one.
+# Up to three digits: the ZGB, SchKG and AHVV number their footnotes past
+# 100 ("Rechtsstillstand.102", "Tagessätzen102", "rententabellen201"), and a
+# two-digit cap left every one of those glued to the word in front of it --
+# the source of most "changes" between two pdf-a editions of those acts
+# (measured 2026-09-04 on a 400-pair sample: 187 of 340 differed by a
+# renumbered footnote or a layout slip, not an amendment).
 _NOTE_REF = re.compile(
-    r"(?:(?<=[a-zäöüéèàûîçñ»›\"'\)\]…])|(?<=[a-zäöüéèàûîçñ]\.)|(?<=(?:19|20)\d{2}))"
-    r"(\d{1,2})(?:,\s?\d{1,2})*(?=[\s.,;:)\]]|$)")
+    r"(?:(?<=[a-zäöüéèàûîçñ»›\"'\)\]…])|(?<=[A-Za-zÄÖÜäöüéèàûîçñ\)\]]\.)|(?<=\.\.\.)"
+    r"|(?<=(?:19|20)\d{2})|(?<=[:;.]\s\d\.)|(?<=^\d\.))"
+    r"(\d{1,3})(?:,\s?\d{1,3}|\s\d{3})*(?=[\s.,;:)\]]|$)", re.MULTILINE)
+
+# A footnote line anywhere in the stream: its number at column 0, two or
+# more spaces, then text that starts with a letter, a quote or a bracket --
+# never a digit, so a table row ("31  70,46 72,73") is not one. The text of
+# a real footnote almost always opens with the amendment / citation
+# vocabulary below; a lone numbered line without it is left in place (a
+# paragraph number set with two spaces would otherwise be eaten).
+_FOOTNOTE_LINE = re.compile(r"^(\d{1,2}(?=\s{2,})|\d{3}(?=\s))\s+(?=[^\W\d_«»„\"'(\[]|[«»„\"'(\[])")
+_FOOTNOTE_VOCAB = re.compile(
+    r"^(?:\d{1,2}\s{2,}|\d{3}\s+)(?:"
+    r"Fassung|Eingefügt|Aufgehoben|Bereinigt|Berichtigt|Ursprünglich|Angenommen|Siehe|"
+    r"Heute|Die Bezeichnung|Ausdruck|Term|Gemäss|Nach|Bis|Ab |Im |In Kraft|"
+    r"Nouvelle teneur|Introduit|Abrogé|Rectifi|Actuellement|Anciennement|Voir|"
+    r"Nuovo testo|Introdott|Abrogat|Correzione|Attualmente|Vedi|"
+    r"SR |AS |BS |BBl |RS |RO |FF |RU |CS |"
+    r"Verordnung|Règlement|Regolamento|Richtlinie|Directive|Direttiva"
+    r")", re.IGNORECASE)
+_FOOTNOTE_CONT_MAX_INDENT = 14
+
+
+def _strip_footnote_runs(lines: list[str]) -> list[str]:
+    """Remove footnote blocks WHEREVER they sit, not only at a page tail.
+
+    _strip_page_furniture reconstructs pages at running-header lines and
+    cuts the footnote block above each folio; where the header of a page
+    was not recognised (the marginal-column prints in particular), two
+    pages merge and the first page's footnotes end up mid-stream, glued
+    into the article they happen to interrupt -- and in the marginal
+    layout the column slice then splits each footnote line at the body
+    column, so its tail ("mäss Ziff. I des BG vom 16. Dez. 1994, in Kraft
+    seit ...") reads as article prose. Measured on the 2003 ZGB print:
+    56 of 1,093 articles carried footnote bodies, 73 a glued 3-digit
+    reference.
+
+    A block starts at a footnote line (see _FOOTNOTE_LINE) that follows a
+    blank line, a publication line or the start of the text, AND either
+    opens with footnote vocabulary or is followed by another footnote line
+    with the next number. It continues through indented continuation
+    lines (2-14 spaces, not a heading) and further footnote lines whose
+    numbers ascend, across blank lines when the next non-blank line is a
+    numbered continuation. A publication line ("AS 1952 1087") right
+    before the block goes with it.
+    """
+    out: list[str] = []
+    i, n = 0, len(lines)
+
+    def next_nonblank(k: int) -> int:
+        while k < n and not lines[k].strip():
+            k += 1
+        return k
+
+    while i < n:
+        line = lines[i]
+        m = _FOOTNOTE_LINE.match(line)
+        preceded = not out or not out[-1].strip() or bool(_PUBLICATION.match(out[-1]))
+        if m and preceded:
+            number = int(m.group(1))
+            k = next_nonblank(i + 1)
+            sibling = k < n and (m2 := _FOOTNOTE_LINE.match(lines[k])) and number < int(m2.group(1)) <= number + 3
+            if _FOOTNOTE_VOCAB.match(line) or sibling:
+                if out and _PUBLICATION.match(out[-1]):
+                    out.pop()
+                last = number
+                j = i + 1
+                while j < n:
+                    nxt = lines[j]
+                    if not nxt.strip():
+                        k = next_nonblank(j)
+                        m2 = _FOOTNOTE_LINE.match(lines[k]) if k < n else None
+                        if m2 and last < int(m2.group(1)) <= last + 3:
+                            j = k
+                            continue
+                        break
+                    m2 = _FOOTNOTE_LINE.match(nxt)
+                    if m2:
+                        num2 = int(m2.group(1))
+                        if last < num2 <= last + 3:
+                            last = num2
+                            j += 1
+                            continue
+                        break
+                    indent = len(nxt) - len(nxt.lstrip(" "))
+                    if 2 <= indent <= _FOOTNOTE_CONT_MAX_INDENT and not _HEADING.match(nxt):
+                        j += 1
+                        continue
+                    break
+                i = j
+                continue
+        out.append(line)
+        i += 1
+    return out
 
 
 def _strip_note_refs(text: str) -> str:
@@ -343,7 +450,7 @@ def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
     the article run re-joined (headings + prose); the caller keeps the
     stored full_text and discards it -- it exists so tests and the gate can
     see what the splitter read."""
-    lines = _strip_page_furniture(raw.splitlines())
+    lines = _strip_footnote_runs(_strip_page_furniture(raw.splitlines()))
 
     # layout: where do the headings sit? Column 0, or one indented body
     # column with a marginal column to its left?
