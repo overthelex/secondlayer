@@ -126,28 +126,50 @@ def records(path: pathlib.Path):
                 yield json.loads(line)
 
 
+def _batches(iterable, size: int):
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) >= size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def _upsert_one(conn, record: dict, report: EchrImportReport) -> None:
+    # A savepoint per row inside the batch's transaction: a row the column
+    # refuses is rolled back alone, the batch goes on.
+    try:
+        row = row_for(record)
+        with conn.transaction():
+            result = conn.execute(_UPSERT, row).fetchone()
+    except (KeyError, psycopg.DataError, psycopg.IntegrityError) as exc:
+        log.error("record %d (%s): %s", report.read, (record.get("meta") or {}).get("itemid"), exc)
+        report.errors += 1
+        return
+    inserted = result["inserted"] if isinstance(result, dict) else result[0]
+    report.upserted += 1
+    report.inserted += int(bool(inserted))
+    report.with_text += int(row["full_text"] is not None)
+    why = record.get("why") or "?"
+    report.by_why[why] = report.by_why.get(why, 0) + 1
+
+
 def run(settings: Settings, path: pathlib.Path) -> EchrImportReport:
     report = EchrImportReport()
     conn = db.connect(settings)
     try:
-        for record in records(path):
-            report.read += 1
-            try:
-                row = row_for(record)
-                result = conn.execute(_UPSERT, row).fetchone()
-            except (KeyError, psycopg.DataError, psycopg.IntegrityError) as exc:
-                log.error("record %d (%s): %s", report.read,
-                          (record.get("meta") or {}).get("itemid"), exc)
-                report.errors += 1
-                continue
-            inserted = result["inserted"] if isinstance(result, dict) else result[0]
-            report.upserted += 1
-            report.inserted += int(bool(inserted))
-            report.with_text += int(row["full_text"] is not None)
-            why = record.get("why") or "?"
-            report.by_why[why] = report.by_why.get(why, 0) + 1
-            if report.read % 1000 == 0:
-                log.info("read=%d upserted=%d inserted=%d", report.read, report.upserted, report.inserted)
+        # One commit per BATCH rows, not per row: 19K autocommitted upserts
+        # would be 19K round trips of their own.
+        for batch in _batches(records(path), BATCH):
+            with conn.transaction():
+                for record in batch:
+                    report.read += 1
+                    _upsert_one(conn, record, report)
+            if report.read % 1000 < BATCH:
+                log.info("read=%d upserted=%d inserted=%d errors=%d", report.read, report.upserted,
+                         report.inserted, report.errors)
     finally:
         conn.close()
     return report

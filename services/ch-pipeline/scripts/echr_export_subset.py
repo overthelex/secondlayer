@@ -36,7 +36,8 @@ import os
 import pathlib
 import sys
 
-JUDGMENT_TYPES = ("HEJUD", "HFJUD")
+JUDGMENT_TYPES = ("HEJUD", "HFJUD")     # the Court's own English / French judgments
+ORIGINAL_LANGS = ("ENG", "FRE")
 LEADING_IMPORTANCE = ("1", "2", "3")
 MIN_TEXT_BYTES = 500
 
@@ -46,8 +47,11 @@ def respondents(meta: dict) -> list[str]:
 
 
 def is_chamber_judgment(meta: dict) -> bool:
+    """A Chamber or Grand Chamber judgment in one of the Court's languages;
+    a translation (HJUDGER, HJUDITA, ...) is not a leading case on its own."""
     col = meta.get("documentcollectionid2") or ""
-    return meta.get("doctype") in JUDGMENT_TYPES and "CHAMBER" in col
+    return (meta.get("doctype") in JUDGMENT_TYPES and "CHAMBER" in col
+            and meta.get("languageisocode") in ORIGINAL_LANGS)
 
 
 def why(meta: dict, respondent: str) -> str | None:
@@ -85,8 +89,8 @@ def export(harvest: pathlib.Path, out: pathlib.Path, respondent: str = "CHE",
             seen.add(item)
             text = None
             path = txt_dir / f"{item}.txt"
-            size = path.stat().st_size if path.exists() else 0
-            if size >= min_text_bytes:
+            size = path.stat().st_size if path.is_file() else 0
+            if size and size >= min_text_bytes:
                 text = path.read_text(encoding="utf-8", errors="replace")
                 counts["with_text"] += 1
             elif size:

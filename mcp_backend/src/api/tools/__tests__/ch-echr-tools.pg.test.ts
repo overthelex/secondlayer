@@ -50,6 +50,8 @@ describeIfPg('ChEchrTools (real PostgreSQL)', () => {
       ['001-60000', '30210/96', 'CASE OF KUDLA v. POLAND', 'HEJUD', 'CASELAW;JUDGMENTS;GRANDCHAMBER;ENG', 1, '2000-10-26', 'Violation of Art. 13;No violation of Art. 3', 'POL', 'ENG', 'The applicant complained of the length of the proceedings and of the military service he did not do. ' + 'Article 13 requires an effective remedy. '.repeat(20)],
       ['001-50000', '1111/99', 'CASE OF X v. ITALY AND SWITZERLAND', 'HEJUD', 'CASELAW;JUDGMENTS;CHAMBER;ENG', 3, '2001-05-05', 'No violation of P1-1', 'ITA;CHE', 'ENG', 'Property and the exemption tax. '.repeat(20)],
       ['001-40000', '2222/99', 'CASE OF NOTEXT v. SWITZERLAND', 'HEJUD', 'CASELAW;JUDGMENTS;CHAMBER;ENG', 3, '2002-05-05', 'Violation of Art. 6-1', 'CHE', 'ENG', null],
+      ['001-30000', '3333/99;4444/99', 'CASE OF EIGHTEEN v. SWITZERLAND', 'HEJUD', 'CASELAW;JUDGMENTS;CHAMBER;ENG', 3, '2003-05-05', 'Violation of Art. 18', 'CHE', 'ENG', 'Exemption tax under Article 18 only. '.repeat(20)],
+      ['001-30001', '4444/99', 'EIGHTEEN v. SWITZERLAND (dec.) - [Italian Translation]', 'HDECITA', 'CASELAW;DECISIONS;CHAMBER;ITA', 4, '2001-01-01', 'Ammissibile', 'CHE', 'ITA', 'Tassa di esenzione. '.repeat(20)],
     ];
     for (const r of rows) {
       await client.query(
@@ -86,10 +88,14 @@ describeIfPg('ChEchrTools (real PostgreSQL)', () => {
       expect(out.results.map((r: any) => r.item_id)).toEqual(['001-92354']);
       out = parse(await tools.executeTool('ch_search_echr', { query: 'militärdienstuntauglich', kind: 'translation' }) as any);
       expect(out.results.map((r: any) => r.item_id)).toEqual(['001-92355']);
+      out = parse(await tools.executeTool('ch_search_echr', { query: 'esenzione', kind: 'translation' }) as any);
+      expect(out.results.map((r: any) => r.item_id)).toEqual(['001-30001']);      // a translated decision is a translation too
       out = parse(await tools.executeTool('ch_search_echr', { query: 'exemption tax', importance: 3 }) as any);
-      expect(out.results.map((r: any) => r.item_id)).toEqual(['001-50000']);
+      expect(out.results.map((r: any) => r.item_id).sort()).toEqual(['001-30000', '001-50000']);
       out = parse(await tools.executeTool('ch_search_echr', { query: 'exemption tax', article: '8' }) as any);
-      expect(out.results.map((r: any) => r.item_id).sort()).toEqual(['001-92353']);   // 14+8 yes; P1-1 no; "8" is not "18"
+      expect(out.results.map((r: any) => r.item_id).sort()).toEqual(['001-92353']);   // 14+8 yes; P1-1 no; Art. 18 no
+      out = parse(await tools.executeTool('ch_search_echr', { query: 'exemption tax', article: '18' }) as any);
+      expect(out.results.map((r: any) => r.item_id)).toEqual(['001-30000']);
       out = parse(await tools.executeTool('ch_search_echr', { query: 'exemption tax', article: 'P1-1' }) as any);
       expect(out.results.map((r: any) => r.item_id)).toEqual(['001-50000']);
       out = parse(await tools.executeTool('ch_search_echr', { query: 'exemption tax', date_from: '2005-01-01', date_to: '2008-12-31' }) as any);
@@ -106,6 +112,8 @@ describeIfPg('ChEchrTools (real PostgreSQL)', () => {
       expect((await tools.executeTool('ch_search_echr', { query: ' ' }) as any).content[0].text).toMatch(/query/);
       expect((await tools.executeTool('ch_search_echr', { query: 'x', kind: 'opinion' }) as any).content[0].text).toMatch(/kind/);
       expect((await tools.executeTool('ch_search_echr', { query: 'x', lang: 'ru' }) as any).content[0].text).toMatch(/lang/);
+      expect((await tools.executeTool('ch_search_echr', { query: 'x', date_from: '2024-1-1' }) as any).content[0].text).toMatch(/date_from/);
+      expect((await tools.executeTool('ch_search_echr', { query: 'x', date_to: '2024-02-31' }) as any).content[0].text).toMatch(/date_to/);
     });
   });
 
@@ -127,6 +135,11 @@ describeIfPg('ChEchrTools (real PostgreSQL)', () => {
       expect(out.item_id).toBe('001-92354');
       out = parse(await tools.executeTool('ch_get_echr_case', { app_no: '13444/04', text_offset: 10, text_chars: 5 }) as any);
       expect(out.text).toBe(GLOR.slice(10, 15));
+    });
+
+    it('lists the documents of every joined application in related', async () => {
+      const out = parse(await tools.executeTool('ch_get_echr_case', { item_id: '001-30000' }) as any);
+      expect(out.related.map((r: any) => r.item_id)).toEqual(['001-30001']);      // 4444/99, the second application
     });
 
     it('reports a missing text as null, not as an empty slice', async () => {

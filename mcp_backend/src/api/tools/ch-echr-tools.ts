@@ -22,6 +22,7 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { isValidIsoDate } from './ch-date-utils.js';
 
 const MAX_SEARCH_LIMIT = 50;
 const DEFAULT_SEARCH_LIMIT = 10;
@@ -30,14 +31,18 @@ const DEFAULT_TEXT_CHARS = 20000;
 const MAX_TEXT_CHARS = 200000;
 
 /** HUDOC doctype prefixes → what a lawyer calls the document. */
+// Measured on the harvest 2026-09-09: HEDEC 33K, HEJUD/HFJUD 29K each, HFDEC 22K,
+// HECOM 14K, HERES54/HFRES54 7.6K, CLIN/CLINF 6.5K, HFCOM 4.9K, HFREP 3.1K,
+// HERES32/HFRES32 3.1K, HEREP 1.1K; everything in another language is a
+// translation (HJUDGER, HDECRUS, ...), which is what `translation` selects by.
 const KINDS: Record<string, string[]> = {
   judgment: ['HEJUD', 'HFJUD'],
   decision: ['HEDEC', 'HFDEC'],
-  communicated: ['HECOM', 'HFCOM'],
-  resolution: ['HERES54', 'HFRES54', 'HERES', 'HFRES'],
+  communicated: ['HECOM', 'HFCOM', 'HECOMOLD', 'HFCOMOLD'],
+  resolution: ['HERES54', 'HFRES54', 'HERES32', 'HFRES32', 'HERES', 'HFRES'],
   report: ['HEREP', 'HFREP'],
   summary: ['CLIN', 'CLINF'],
-  translation: [], // any doctype ending in a language code other than ENG/FRE: HJUDGER, HJUDITA, ...
+  translation: [], // language_iso outside ENG/FRE: the Court publishes originals in those two only
 };
 const KIND_NAMES = Object.keys(KINDS);
 
@@ -53,11 +58,6 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(n)));
-}
-
-function isoDate(value: unknown): string | null {
-  const s = String(value ?? '').trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
 }
 
 export class ChEchrTools extends BaseToolHandler {
@@ -127,6 +127,12 @@ export class ChEchrTools extends BaseToolHandler {
     if (lang != null && !LANGS[String(lang)]) {
       return this.wrapResponse(`lang має бути одним з: ${Object.keys(LANGS).join(', ')}.`);
     }
+    if (date_from && !isValidIsoDate(String(date_from))) {
+      return this.wrapResponse('date_from має бути у форматі YYYY-MM-DD.');
+    }
+    if (date_to && !isValidIsoDate(String(date_to))) {
+      return this.wrapResponse('date_to має бути у форматі YYYY-MM-DD.');
+    }
     const respondent = args.respondent === undefined ? 'CHE' : String(args.respondent).trim().toUpperCase();
     const limit = clampInt(args.limit, DEFAULT_SEARCH_LIMIT, 1, MAX_SEARCH_LIMIT);
     const offset = clampInt(args.offset, 0, 0, 100000);
@@ -140,7 +146,7 @@ export class ChEchrTools extends BaseToolHandler {
     }
     if (kind) {
       if (kind === 'translation') {
-        where.push(`doc_type ~ '^H(JUD|DEC)[A-Z]{3}$' AND language_iso NOT IN ('ENG', 'FRE')`);
+        where.push(`coalesce(language_iso, '') NOT IN ('ENG', 'FRE')`);
       } else {
         params.push(KINDS[String(kind)]);
         where.push(`doc_type = ANY($${params.length}::text[])`);
@@ -159,10 +165,8 @@ export class ChEchrTools extends BaseToolHandler {
       params.push(`(^|[^0-9A-Z-])(Art\\. )?${String(article).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^0-9]|$)`);
       where.push(`coalesce(conclusion, '') ~ $${params.length}`);
     }
-    const from = isoDate(date_from);
-    if (from) { params.push(from); where.push(`judgment_date >= $${params.length}::date`); }
-    const to = isoDate(date_to);
-    if (to) { params.push(to); where.push(`judgment_date <= $${params.length}::date`); }
+    if (date_from) { params.push(String(date_from)); where.push(`judgment_date >= $${params.length}::date`); }
+    if (date_to) { params.push(String(date_to)); where.push(`judgment_date <= $${params.length}::date`); }
     params.push(limit, offset);
 
     try {
@@ -223,14 +227,15 @@ export class ChEchrTools extends BaseToolHandler {
       if (!row) {
         return this.wrapResponse({ error: 'not_found', item_id: itemId || null, app_no: appNo || null });
       }
-      const related = appNo || row.app_no
+      // every application the document belongs to ("1/01;2/01"), not just the first
+      const related = row.app_no
         ? (await this.db.query(
             `SELECT item_id, doc_type, language_iso, to_char(judgment_date, 'YYYY-MM-DD') AS judgment_date, doc_name
                FROM echr_cases
-              WHERE $1 = ANY(string_to_array(coalesce(app_no, ''), ';')) AND item_id <> $2
+              WHERE string_to_array(coalesce(app_no, ''), ';') && $1::text[] AND item_id <> $2
               ORDER BY judgment_date DESC NULLS LAST, item_id
               LIMIT 50`,
-            [appNo || String(row.app_no).split(';')[0], row.item_id]
+            [String(row.app_no).split(';').filter(Boolean), row.item_id]
           )).rows
         : [];
       const total = Number(row.text_total_chars) || 0;

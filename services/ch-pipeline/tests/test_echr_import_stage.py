@@ -11,7 +11,7 @@ from chpipe.config import Settings
 from chpipe.stages import echr_import_stage
 from tests.conftest import apply_migration_215
 
-pytestmark = pytest.mark.skipif(not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
+needs_pg = pytest.mark.skipif(not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
 
 
 @pytest.fixture
@@ -44,6 +44,7 @@ def _write(path, records):
             f.write(json.dumps(r) + "\n")
 
 
+@needs_pg
 def test_import_upserts_rows_and_keeps_an_earlier_text(settings, conn, tmp_path):
     f = tmp_path / "slice.ndjson.gz"
     _write(f, [_record("001-92353"), _record("001-92354", text=None, doctype="HFJUD", languageisocode="FRE",
@@ -68,11 +69,25 @@ def test_import_upserts_rows_and_keeps_an_earlier_text(settings, conn, tmp_path)
     assert conn.execute("SELECT count(*) FROM echr_cases WHERE tsv @@ plainto_tsquery('simple', 'applicant complained')").fetchone() == (1,)
 
 
-def test_a_record_without_itemid_is_counted_not_fatal(settings, conn, tmp_path):
+@needs_pg
+def test_a_bad_record_inside_a_batch_is_counted_and_the_rest_of_the_batch_lands(settings, conn, tmp_path):
     f = tmp_path / "slice.ndjson.gz"
-    _write(f, [{"meta": {"docname": "no id"}, "full_text": None}, _record("001-1")])
+    _write(f, [_record("001-0"), {"meta": {"docname": "no id"}, "full_text": None},
+               _record("001-x", importance="not a number"),          # importance -> None, fine
+               _record("001-y", kpdate="9999-99-99T00:00:00"),        # date -> None, fine
+               _record("001-z", appno="x" * 10),
+               _record("001-1")])
     report = echr_import_stage.run(settings, f)
-    assert (report.read, report.upserted, report.errors) == (2, 1, 1)
+    assert (report.read, report.upserted, report.errors) == (6, 5, 1)
+    assert conn.execute("SELECT count(*) FROM echr_cases").fetchone() == (5,)
+    # a refused row (a text where an integer goes) rolls back alone
+    _write(f, [_record("001-2"), {"meta": {"itemid": "001-3", "importance": "1", "kpdate": "2001-01-01T00:00:00",
+                                           "isplaceholder": "True", "appno": None}, "full_text": None},
+               _record("001-4")])
+    conn.execute("ALTER TABLE echr_cases ADD CONSTRAINT app_no_present CHECK (app_no IS NOT NULL)")
+    report = echr_import_stage.run(settings, f)
+    assert (report.read, report.upserted, report.errors) == (3, 2, 1)
+    assert conn.execute("SELECT count(*) FROM echr_cases").fetchone() == (7,)
 
 
 def test_main_needs_the_file_and_renices(monkeypatch):

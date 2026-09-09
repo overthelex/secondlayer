@@ -23,7 +23,10 @@ def test_why_selects_swiss_respondents_and_leading_chamber_judgments():
     assert exp.why(_meta("a", respondent="CHE"), "CHE") == "respondent"
     assert exp.why(_meta("b", respondent="ITA;CHE", doctype="HFDEC", importance="4"), "CHE") == "respondent"
     assert exp.why(_meta("c", importance="1"), "CHE") == "importance"
-    assert exp.why(_meta("d", importance="3", documentcollectionid2="CASELAW;JUDGMENTS;GRANDCHAMBER;FRE", doctype="HFJUD"), "CHE") == "importance"
+    assert exp.why(_meta("d", importance="3", documentcollectionid2="CASELAW;JUDGMENTS;GRANDCHAMBER;FRE", doctype="HFJUD", languageisocode="FRE"), "CHE") == "importance"
+    # a translation of a leading judgment is not a leading case on its own (it comes in only as a Swiss respondent's)
+    assert exp.why(_meta("d2", importance="1", doctype="HJUDGER", documentcollectionid2="CASELAW;JUDGMENTS;CHAMBER;GER", languageisocode="GER"), "CHE") is None
+    assert exp.why(_meta("d3", importance="1", doctype="HJUDGER", documentcollectionid2="CASELAW;JUDGMENTS;CHAMBER;GER", languageisocode="GER", respondent="CHE"), "CHE") == "respondent"
     # importance 4, a committee judgment, a decision of importance 1: not leading
     assert exp.why(_meta("e", importance="4"), "CHE") is None
     assert exp.why(_meta("f", importance="1", documentcollectionid2="CASELAW;JUDGMENTS;COMMITTEE;ENG"), "CHE") is None
@@ -51,3 +54,12 @@ def test_export_writes_the_slice_with_texts_and_counts(tmp_path):
     assert by["001-1"]["full_text"].startswith("PROCEDURE") and by["001-1"]["why"] == "respondent"
     assert by["001-4"]["full_text"] is None and by["001-4"]["text_bytes"] == 4
     assert by["001-2"]["full_text"] is None and by["001-2"]["why"] == "importance"
+
+
+def test_min_text_bytes_zero_still_treats_a_missing_file_as_no_text(tmp_path):
+    harvest = tmp_path / "all"
+    (harvest / "meta").mkdir(parents=True)
+    (harvest / "txt").mkdir()
+    (harvest / "meta" / "metadata-ALL.ndjson").write_text(json.dumps(_meta("001-9", respondent="CHE")) + "\n")
+    counts = exp.export(harvest, tmp_path / "s.gz", "CHE", min_text_bytes=0)
+    assert counts["rows"] == 1 and counts["no_text"] == 1
