@@ -521,3 +521,18 @@ def test_item_id_payload_includes_the_act_id(settings, seeded, tmp_path):
         "de", 1, "220", "art_336", datetime.date(2020, 12, 31))
     assert de_items["after"]["id"] == build.item_id(
         "de", 1, "220", "art_336", datetime.date(2021, 1, 1))
+
+
+def test_an_incremental_build_excludes_the_published_ids_and_records_it(settings, seeded, tmp_path):
+    first = tmp_path / "v1"
+    build.build(settings, langs=("de",), out_dir=first, seed=1, now=_NOW, build_label="v1")
+    published = build.read_published_ids([first])
+    assert published
+    second = tmp_path / "v2"
+    rep = build.build(settings, langs=("de",), out_dir=second, seed=1, now=_NOW, build_label="v2",
+                      exclude_ids=published)
+    ids = {json.loads(l)["id"] for l in (second / "bench-de.jsonl").read_text().splitlines() if l}
+    assert not ids & published
+    assert rep.per_lang["de"]["skipped"]["already_published"] == len(published)
+    on_disk = json.loads((second / "build-report.json").read_text())
+    assert on_disk["excluded_ids"] == len(published) and on_disk["since"] is None

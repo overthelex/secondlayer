@@ -2306,6 +2306,17 @@ until LEXAI-2046 strips the footnote apparatus from its article text.
 Cantonal acts are never selected. `build-report.json` records the skip
 counts, the core split's per-year / per-cell counts, sources and label.
 
+**Incremental builds.** Published items are frozen; a later build adds
+only what earlier builds did not have. `--exclude-ids PATH` (repeatable:
+a published build directory, a JSONL file with an `id` per line, or a
+text file of ids) skips those items, counted as `already_published`;
+`--since YYYY-MM-DD` keeps only changes on or after that date, counted as
+`before_since`. Use a new `--build` label and, by convention, the build
+number as `--seed`:
+
+    python -m chpipe.bench.build --langs de,fr,it --out /data/ch-corpus/bench-v4 \
+        --build v2026.12 --seed 20261201 --exclude-ids /data/ch-corpus/bench-v3 --core-per-lang 500
+
 **2. Oracle.** Must come back 1.000 `grounded_correct` per language before
 anything is published; anything less is a builder or scorer bug.
 

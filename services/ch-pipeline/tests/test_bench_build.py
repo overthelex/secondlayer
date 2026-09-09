@@ -476,3 +476,37 @@ def test_change_sql_selects_federal_acts_and_xml_editions_only():
     assert "old_ver.source AS old_source" in build._CHANGE_SQL
     assert "new_ver.source AS new_source" in build._CHANGE_SQL
     assert build.DEFAULT_SOURCES == ("fedlex",)
+
+
+# --- incremental builds: --exclude-ids and --since ------------------------
+
+
+def test_build_lang_drops_already_published_items_without_counting_them_toward_the_cap():
+    rows = [_two_item_row(i) for i in (1, 2, 3)]
+    full, _ = build._build_lang(rows, "de", per_lang_cap=0, per_act_cap=50, rng=random.Random(0))
+    published = {full[0]["id"], full[1]["id"]}
+    items, rep = build._build_lang(rows, "de", per_lang_cap=4, per_act_cap=50,
+                                   rng=random.Random(0), exclude_ids=published)
+    ids = {it["id"] for it in items}
+    assert not ids & published
+    assert len(items) == 4 and rep["items"] == 4
+    assert rep["skipped"]["already_published"] == 2
+
+
+def test_build_lang_since_skips_older_changes_and_counts_them():
+    rows = [_two_item_row(i) for i in (1, 2, 3)]
+    rows[1] = dict(rows[1], date_applicability=datetime.date(2019, 6, 1))
+    items, rep = build._build_lang(rows, "de", per_lang_cap=0, per_act_cap=50,
+                                   rng=random.Random(0), since=datetime.date(2020, 1, 1))
+    assert all(it["change_date"] >= "2020-01-01" for it in items)
+    assert rep["skipped"]["before_since"] == 1 and rep["selected"] == 2
+
+
+def test_read_published_ids_from_a_build_dir_and_from_id_files(tmp_path):
+    d = tmp_path / "v1"; d.mkdir()
+    (d / "bench-de.jsonl").write_text('{"id": "a1"}\n{"id": "a2"}\n')
+    (d / "core-de.jsonl").write_text('{"id": "a1"}\n')
+    (d / "bench-fr.jsonl").write_text('{"id": "b1"}\n')
+    f = tmp_path / "ids.txt"; f.write_text("c1\n\nc2\n")
+    j = tmp_path / "more.jsonl"; j.write_text('{"id": "d1", "x": 1}\n')
+    assert build.read_published_ids([d, f, j]) == {"a1", "a2", "b1", "c1", "c2", "d1"}
