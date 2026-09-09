@@ -969,13 +969,29 @@ export class RadaLegislationAdapter {
               full_text, full_text_html, part_number, paragraph_number, notes,
               version_date, is_current, byte_size, metadata)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+             -- Every column the parser produces has to be listed here. title, notes,
+             -- part_number, paragraph_number and metadata were missing, so re-extracting
+             -- an act rewrote its text and left the rest at whatever the first import
+             -- stored. A parser fix for any of them reached new rows only, which is how
+             -- a corpus pass could refresh 22,756 articles and move the count of titles
+             -- carrying a stray part number by zero, and how ЦК ст. 625 kept reporting
+             -- extraction_date 2026-06-09 months after being re-extracted.
+             --
+             -- is_current is deliberately absent: rows retired as superseded editions
+             -- keep their own version_date and are not touched by this upsert, and
+             -- setting it here would be a way to bring them back by accident.
              ON CONFLICT (legislation_id, article_number, version_date) DO UPDATE SET
+               title = EXCLUDED.title,
                full_text = EXCLUDED.full_text,
                full_text_html = EXCLUDED.full_text_html,
                section_number = EXCLUDED.section_number,
                section_title = EXCLUDED.section_title,
                chapter_number = EXCLUDED.chapter_number,
                chapter_title = EXCLUDED.chapter_title,
+               part_number = EXCLUDED.part_number,
+               paragraph_number = EXCLUDED.paragraph_number,
+               notes = EXCLUDED.notes,
+               metadata = EXCLUDED.metadata,
                byte_size = EXCLUDED.byte_size,
                updated_at = NOW()
              RETURNING id`,
