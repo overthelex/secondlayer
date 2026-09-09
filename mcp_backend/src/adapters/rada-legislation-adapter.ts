@@ -73,6 +73,8 @@ export class RadaLegislationAdapter {
    * alarm threshold. We keep the record but log an error so the anomaly is visible.
    */
   private readonly MEGA_ARTICLE_WARN_CHARS = 400_000;
+  /** legislation_articles.section_number / .chapter_number are varchar(50). */
+  private static readonly STRUCTURE_NUMBER_MAX_CHARS = 50;
   /**
    * Headings that begin the "Прикінцеві та перехідні положення" block. Article bodies
    * must stop here — the block is extracted separately by extractTransitionalProvisions,
@@ -343,6 +345,19 @@ export class RadaLegislationAdapter {
       // Find which section/chapter this article belongs to
       const structure = this.findStructureForPosition(structureMap, articlePosition);
 
+      // section_number / chapter_number are varchar(50). A header shape this parser has
+      // not seen can still overflow one, and the insert then rejects the whole act — 546
+      // parsed articles thrown away over one bad chapter label. Clamp and log instead.
+      const clampStructureNumber = (value: string | undefined, field: string): string | undefined => {
+        if (!value || value.length <= RadaLegislationAdapter.STRUCTURE_NUMBER_MAX_CHARS) return value;
+        logger.warn(
+          `[legislation] ${radaId} ст.${articleNumber}: ${field} is ${value.length} chars, ` +
+          `truncating to ${RadaLegislationAdapter.STRUCTURE_NUMBER_MAX_CHARS} — likely an unhandled header shape`,
+          { value: value.slice(0, 120) },
+        );
+        return value.slice(0, RadaLegislationAdapter.STRUCTURE_NUMBER_MAX_CHARS);
+      };
+
       // Build unique section number with book prefix to avoid duplication
       const sectionNumber = structure.bookNumber && structure.sectionNumber
         ? `${structure.bookNumber}.${structure.sectionNumber}`
@@ -355,9 +370,9 @@ export class RadaLegislationAdapter {
 
       articles.push({
         article_number: articleNumber,
-        section_number: sectionNumber,
+        section_number: clampStructureNumber(sectionNumber, 'section_number'),
         section_title: sectionTitle,
-        chapter_number: structure.chapterNumber,
+        chapter_number: clampStructureNumber(structure.chapterNumber, 'chapter_number'),
         chapter_title: structure.chapterTitle,
         title: title,
         full_text: fullText,
@@ -429,8 +444,21 @@ export class RadaLegislationAdapter {
       const type = keyword.startsWith('розділ') ? 'section' as const
         : keyword.startsWith('підрозділ') ? 'subsection' as const
         : 'chapter' as const;
-      const rawNumber = match[2].trim();
-      const title = match[3].trim();
+      let rawNumber = match[2].trim();
+      let title = match[3].trim();
+      // Some acts keep the number and the START of the title in one span and wrap the
+      // rest into the next one:
+      //   <span class=rvts15>Глава 14. Розгляд судом справ про розкриття інформації…</span>
+      //   <br><span class=rvts15>на ринках капіталу та організованих товарних ринках</span>
+      // Read plainly, that made the whole first span the chapter NUMBER — 82 characters
+      // into a varchar(50), which aborted the save of the entire act. ЦПК (1618-15) was
+      // the one act of 367 that failed the corpus re-extraction for exactly this reason,
+      // and the title was wrong too: it kept only the wrapped remainder.
+      const wrapped = /^([^\s.]+)\.\s*(\S.*)$/.exec(rawNumber);
+      if (wrapped) {
+        rawNumber = wrapped[1];
+        title = `${wrapped[2]} ${title}`.trim();
+      }
       const number = this.romanToArabic(rawNumber) || rawNumber;
       entries.push({ position: match.index, type, number, title });
     }
