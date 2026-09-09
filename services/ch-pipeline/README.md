@@ -2300,13 +2300,13 @@ Italian / Russian / ... translations HUDOC carries -- plus every Chamber and
 Grand Chamber judgment of importance 1-3 in English and French, 16,436 rows
 over 7,870 applications: the leading cases a Swiss court cites whatever the
 respondent. Exported 2026-09-09: 19,210 rows (3,133 respondent + 16,077
-importance, the overlap counted once), 12,936 with a text, 6,268 without --
+importance, the overlap counted once): 12,936 with a text, 6,268 with no
+text file and 6 with a stub under 500 bytes (exported as NULL) --
 the harvest fetched texts for the Swiss records (185 missing, HUDOC 500s)
 and for the English importance-1/2 judgments, but most importance-3 and
 French leading judgments are metadata-only until a re-fetch
 (app/conversion/docx/html/body, ~95 s a document, see
-reference_hudoc_api_gotchas). A text under 500 bytes (a stub the HTML
-conversion left) is exported as NULL. The import upserts on item_id and
+reference_hudoc_api_gotchas). The import upserts on item_id and
 never blanks a text a row already has.
 
 Tools (mcp_backend, `ch-echr-tools.ts`): `ch_search_echr` (respondent CHE
