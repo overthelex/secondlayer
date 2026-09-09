@@ -380,14 +380,38 @@ export class RadaLegislationAdapter {
         );
       }
 
-      // Use inline title from span if available, otherwise extract from body text
+      // Where the title lives depends on the act. Some keep it inside the header span:
+      //   <span class=rvts9>Стаття 14. Визначення понять</span>
+      // Most put it right after, as plain text closing the same paragraph:
+      //   <span class=rvts9>Стаття 625.</span> Відповідальність за порушення грошового зобов'язання</p>
+      //
+      // Only the first case was read from the markup. The second fell back to splitting
+      // the body on its first "." — and a body reads «НАЗВА 1. Текст частини першої», so
+      // the split handed back the title with the part number stuck to it: «Крадіжка 1»,
+      // «Відповідальність за порушення грошового зобов'язання 1». That was 11,549 of
+      // 25,383 stored articles. Where the first sentence ran past 200 characters the
+      // heuristic gave up and stored no title at all even though the markup had one
+      // (another 2,746), and in acts whose "articles" are numbered points with no titles
+      // it stored a sentence of body text instead.
+      //
+      // Read the paragraph instead of guessing: everything between the header span and
+      // the </p> that closes it is the title, and nothing is the honest answer when that
+      // is empty.
       let title: string | undefined;
       if (inlineTitle && inlineTitle.length > 2) {
         title = inlineTitle;
       } else {
-        const firstSentence = fullText.split(/[.;]/)[0];
-        if (firstSentence && firstSentence.length < 200) {
-          title = firstSentence.trim();
+        const afterSpan = /^([^<]*)<\/p>/.exec(articleHtml);
+        const fromMarkup = afterSpan?.[1]?.replace(/\s+/g, ' ').trim();
+        // The same paragraph slot holds a title in most acts and the first sentence of
+        // the body in acts whose articles are untitled — the Constitution among them,
+        // where ст. 1 would otherwise be titled «Україна є суверенна і незалежна…
+        // держава.» A title is a noun phrase and does not close with sentence
+        // punctuation; a body sentence does. That is the only signal in the markup, and
+        // it is the right way round: no title beats a title that is really the text.
+        const looksLikeASentence = /[.!?;:]$/.test(fromMarkup ?? '');
+        if (fromMarkup && fromMarkup.length > 2 && fromMarkup.length <= 300 && !looksLikeASentence) {
+          title = fromMarkup;
         }
       }
 
@@ -706,7 +730,12 @@ export class RadaLegislationAdapter {
       }
 
       const articleNumber = `п.${point.num}`;
-      const title = fullText.slice(0, Math.min(fullText.indexOf('.', 10) + 1 || 150, 150)).trim();
+      // A transitional point is a numbered paragraph and carries no title. This used to
+      // store fullText cut at 150 characters, which lands mid-word: «…цією Конституцією
+      // є чинними у частині, що не суперечить Конституції Укра», «…в останню неділю
+      // жовтня 1999 р», «…національної грошової одиниці - грив». A truncated sentence is
+      // not a title, and a reader shown one has no way to know it is not the real one.
+      const title = undefined;
 
       articles.push({
         article_number: articleNumber,
