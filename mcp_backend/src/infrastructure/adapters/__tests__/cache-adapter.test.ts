@@ -15,10 +15,13 @@ function makeClient(overrides: Partial<Record<string, any>> = {}) {
     setEx: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
     ping: jest.fn().mockResolvedValue('PONG'),
+    // Цепочка increment(): SET ... EX ttl NX, затем INCR. exec отдаёт ответы в
+    // том же порядке, и счётчик — второй.
     multi: jest.fn(() => ({
+      set: jest.fn().mockReturnThis(),
       incr: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([6, 1]),
+      exec: jest.fn().mockResolvedValue(['OK', 6]),
     })),
     ...overrides,
   } as any;
@@ -39,6 +42,7 @@ describe('CacheAdapter — fast-fail on a hung Redis client', () => {
 
   it('rejects increment() instead of hanging when multi.exec never resolves', async () => {
     const hangingMulti = {
+      set: jest.fn().mockReturnThis(),
       incr: jest.fn().mockReturnThis(),
       expire: jest.fn().mockReturnThis(),
       exec: jest.fn(() => new Promise(() => {})),
@@ -62,6 +66,47 @@ describe('CacheAdapter — fast-fail on a hung Redis client', () => {
  * does that, but any future silent socket death must not need a human or a kernel timer: after a
  * few consecutive timeouts the adapter drops the socket itself.
  */
+describe('CacheAdapter — increment() keeps a fixed window', () => {
+  /**
+   * Regression: increment() issued INCR followed by an unconditional EXPIRE, which re-armed
+   * the key's lifetime on every request. A client arriving more often than once per window
+   * therefore kept the key alive forever, the counter grew without bound, and once it passed
+   * the limit that client got 429 permanently — whatever its actual rate. Two requests a
+   * minute against a 60s/300 limiter took two and a half hours to wedge: that is how /health
+   * on legal.org.ua reached 489 with 31 seconds left on the key, and the deploy stopped
+   * passing its own check through nginx.
+   */
+  it('sets the expiry only when creating the key, and never calls EXPIRE', async () => {
+    const chain = {
+      set: jest.fn().mockReturnThis(),
+      incr: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(['OK', 7]),
+    };
+    const adapter = new CacheAdapter(makeClient({ multi: jest.fn(() => chain) }));
+
+    await expect(adapter.increment('ratelimit:health:10.0.0.1', 60)).resolves.toBe(7);
+
+    expect(chain.set).toHaveBeenCalledWith('ratelimit:health:10.0.0.1', '0', { EX: 60, NX: true });
+    expect(chain.incr).toHaveBeenCalledWith('ratelimit:health:10.0.0.1');
+    expect(chain.expire).not.toHaveBeenCalled();
+  });
+
+  it('returns the value after the increment, not the one before it', async () => {
+    // Счётчик берётся из ответа INCR (второй в цепочке), а не из ответа SET.
+    const adapter = new CacheAdapter(
+      makeClient({
+        multi: jest.fn(() => ({
+          set: jest.fn().mockReturnThis(),
+          incr: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([null, 301]),
+        })),
+      }),
+    );
+    await expect(adapter.increment('ratelimit:health:10.0.0.1', 60)).resolves.toBe(301);
+  });
+});
+
 describe('CacheAdapter — self-heal after repeated timeouts', () => {
   const hang = () => new Promise(() => {});
 

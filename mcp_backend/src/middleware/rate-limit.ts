@@ -66,10 +66,10 @@ export function createRateLimiter(options: RateLimitOptions) {
     if (useMemory) {
       currentCount = memoryIncrement(key, windowMs);
     } else {
-      const current = await rateCache!.get(key);
-      currentCount = current ? parseInt(current, 10) : 0;
-      await rateCache!.increment(key, Math.ceil(windowMs / 1000));
-      currentCount++; // after increment
+      // increment возвращает значение ПОСЛЕ инкремента, так что читать ключ
+      // отдельно не нужно: лишний round trip плюс гонка между GET и INCR, в
+      // которой параллельные запросы получали одно и то же число.
+      currentCount = await rateCache!.increment(key, Math.ceil(windowMs / 1000));
     }
 
     if (currentCount > maxRequests) {
