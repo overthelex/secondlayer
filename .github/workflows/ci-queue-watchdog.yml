@@ -1,0 +1,119 @@
+##############################################################################
+# Сторож очереди.
+#
+# У GitHub Actions нет отказа «раннера с такой меткой не существует». Джоба
+# просто ждёт, и её отменяют через сутки. На странице прогонов это выглядит как
+# `cancelled` — то есть почти как «ничего не случилось».
+#
+# 13.09.2026 выяснилось, чего это стоило: оба крона EDRSR стояли на метке
+# `prod-deploy`, которую никто не носит с 03.09, и ждали раннера каждую ночь.
+# В корпусе к этому дню было 757K решений за июль, 425K за август и ноль за
+# сентябрь, а пайплайны при этом никто не трогал — они и не падали.
+#
+# Отсюда сторож: раз в час смотрит, не висит ли что-то в очереди дольше порога,
+# и заводит issue. Это единственный сигнал, который в такой ситуации вообще
+# может появиться.
+##############################################################################
+name: 'CI: Queue Watchdog'
+
+on:
+  schedule:
+    - cron: '25 * * * *'
+  workflow_dispatch:
+    inputs:
+      threshold_minutes:
+        description: 'Сколько минут в очереди считать залипанием'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+concurrency:
+  group: ci-queue-watchdog
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Stuck in queue?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find runs waiting for a runner
+        id: scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THRESHOLD: ${{ inputs.threshold_minutes || '30' }}
+        run: |
+          set -euo pipefail
+
+          # queued И waiting: первое — ждёт раннера, второе — ждёт апрува
+          # окружения. Оба одинаково молчаливы.
+          # TAB-разделённые строки, а не JSON-объекты: у `gh api --jq` формат
+          # вывода объектов зависит от версии, а строка разбирается однозначно.
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status=="queued" or .status=="waiting")
+                  | [.name, .status, .created_at, .html_url] | @tsv' > runs.tsv || : > runs.tsv
+
+          python3 - <<'PY' > stuck.md
+          import os, datetime, pathlib
+          thr = int(os.environ["THRESHOLD"])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          stuck = []
+          for line in pathlib.Path("runs.tsv").read_text().splitlines():
+              if not line.strip():
+                  continue
+              name, status, created_at, url = line.split("\t")
+              created = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+              mins = int((now - created).total_seconds() // 60)
+              if mins >= thr:
+                  stuck.append((mins, name, status, created_at, url))
+          stuck.sort(reverse=True, key=lambda x: x[0])
+          for mins, name, status, created_at, url in stuck:
+              print(f"- [{name}]({url}) — `{status}` уже **{mins} мин** (с {created_at})")
+          with pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a") as fh:
+              fh.write(f"count={len(stuck)}\n")
+          PY
+
+          echo "--- залипшие прогоны ---"
+          cat stuck.md
+
+      - name: Report available runners
+        if: steps.scan.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Метки, которые реально кто-то носит: без них issue не объясняет
+          # причину, а она почти всегда именно в несуществующей метке.
+          {
+            echo ""
+            echo "Раннеры, зарегистрированные в репозитории:"
+            echo ""
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runners" \
+              --jq '.runners[] | "- `\(.name)` (\(.status)): \([.labels[].name] | join(", "))"' \
+              || echo "- не удалось получить список раннеров"
+          } >> stuck.md
+
+      - name: Open an issue
+        if: steps.scan.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TITLE="CI: прогоны висят в очереди без раннера"
+
+          # Один открытый issue на проблему, иначе сторож нафлудит по одному в час.
+          EXISTING=$(gh issue list --state open --search "\"$TITLE\" in:title" \
+                       --json number --jq '.[0].number // empty')
+
+          BODY=$'Сторож очереди нашёл прогоны, которые ждут дольше порога. Обычная причина — `runs-on` с меткой, которой не носит ни один раннер: GitHub в этом случае не падает, а ждёт сутки и отменяет.\n\n'"$(cat stuck.md)"
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "дописал в issue #$EXISTING"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
