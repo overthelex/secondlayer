@@ -1,8 +1,14 @@
 ##############################################################################
-# EDRSR Daily Sync: data.gov.ua → prod PostgreSQL
-# - Runs on the prod self-hosted runner (prod-deploy); downloads current year ZIP
-#   from data.gov.ua directly on the prod host, then imports into the local
-#   secondlayer-postgres-prod container via docker exec (no SSH round-trip).
+# EDRSR Daily Sync: data.gov.ua → legal.org.ua PostgreSQL
+# - Runs on the cthulhu runner; downloads the current year ZIP from data.gov.ua
+#   on the box itself, then imports into secondlayer-postgres-local via
+#   docker exec (no SSH round-trip).
+# - Ran on `prod-deploy` until 13.09.2026, a label no runner has carried since
+#   the AWS box was decommissioned on 03.09. Every scheduled run since then sat
+#   in the queue until GitHub cancelled it, and nothing said so: the corpus held
+#   zero decisions for September and 425K for August against 757K for July.
+#   data.gov.ua also Cloudflare-blocks the AWS ranges, so cthulhu is where this
+#   belongs regardless.
 # - Imports new records incrementally (NOT EXISTS dedup on partitioned table)
 # - Runs daily at 4:00 AM Kyiv time (1:00 AM UTC)
 # - Can also be triggered manually with year parameter
@@ -30,7 +36,7 @@ concurrency:
 jobs:
   sync-edrsr:
     name: Sync EDRSR ${{ inputs.year || 'current year' }}
-    runs-on: [self-hosted, prod-deploy]
+    runs-on: [self-hosted, cthulhu]
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -38,7 +44,12 @@ jobs:
 
       - name: Run incremental sync
         env:
-          PG_DOCKER_CONTAINER: secondlayer-postgres-prod
+          # The box is named prod but its database is not: connecting as
+          # secondlayer_prod on cthulhu fails outright with
+          # `FATAL: database "secondlayer_prod" does not exist`, and the script
+          # defaults to that name, so it has to be given explicitly.
+          PG_DOCKER_CONTAINER: secondlayer-postgres-local
+          PGDATABASE: secondlayer_local
         run: |
           YEAR="${{ inputs.year || '' }}"
           if [ -n "$YEAR" ]; then

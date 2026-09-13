@@ -11,12 +11,38 @@
 #   both land days late, and the harvester only fetches what is missing, so an
 #   overlapping window is cheap and closes gaps the previous runs left.
 ##############################################################################
-name: 'Cron: EDRSR Fulltext Harvest'
+#
+# ⚠ OFF SCHEDULE SINCE 13.09.2026, AND IT CANNOT SIMPLY BE RELABELLED.
+#
+# Everything below was written for the AWS box, which was decommissioned on
+# 03.09.2026: the egress step reads EC2 IMDS at 169.254.169.254 and adds
+# addresses to `ens5`, the harvester's throughput comes from fourteen secondary
+# private IPs each with its own EIP, the RTF scratch directories live under
+# /home/ubuntu, and the coverage report queries secondlayer-postgres-prod for
+# secondlayer_prod. None of that exists on cthulhu, where the corpus now lives.
+#
+# It kept its `prod-deploy` label and its schedule anyway, so every night it
+# queued for a runner that no longer exists and was cancelled hours later. Ten
+# days of that looked exactly like ten days of successful harvesting.
+#
+# Porting it is real work, not a label change (LEXAI-2048):
+#   - drop the IMDS/ens5 egress step; cthulhu has one uplink, so the pool
+#     collapses to a single source address
+#   - make CONTAINER/PGDB in scripts/edrsr/download-fulltext-prod.py
+#     environment-driven instead of hardcoded to the prod names
+#   - move the RTF scratch dirs off /home/ubuntu
+#   - re-measure the safe rate from one IP. The 2-threads-per-IP ceiling was
+#     measured across fourteen addresses; od.reyestr.court.gov.ua answers 200
+#     from cthulhu (checked 13.09), but the per-IP limit has not been retested,
+#     and exceeding it does not fail — it returns an overload page with HTTP 200
+#     that lands in the corpus as the decision text.
+#
+# Until then the workflow stays dispatch-only and fails immediately, so its
+# state is legible instead of looking like a harvest that runs every night.
+##############################################################################
+name: 'Cron: EDRSR Fulltext Harvest (NOT PORTED — see header)'
 
 on:
-  schedule:
-    # 02:30 UTC = 05:30 Kyiv, 90 min after the metadata sync starts
-    - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
       days_back:
@@ -35,9 +61,16 @@ concurrency:
 jobs:
   harvest:
     name: Harvest missing fulltexts
-    runs-on: [self-hosted, prod-deploy]
+    runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
+      - name: Refuse to run until the harvester is ported off AWS
+        run: |
+          echo "::error::EDRSR fulltext harvest is not ported to cthulhu — see the header of this file and LEXAI-2048."
+          echo "The steps below still assume the AWS box: EC2 IMDS egress on ens5, fourteen EIPs,"
+          echo "/home/ubuntu scratch dirs and the secondlayer-postgres-prod / secondlayer_prod names."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
 
