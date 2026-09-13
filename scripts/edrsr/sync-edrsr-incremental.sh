@@ -283,12 +283,36 @@ log "Latest receipt_date for $YEAR: $LATEST"
 # resolveJudgeNames falls back to the old substring predicate in that case.
 if [ "$NEW_RECORDS" -gt 0 ]; then
   if [ "$(count_sql "SELECT count(*) FROM pg_matviews WHERE matviewname = 'edrsr_judges_distinct';")" -gt 0 ]; then
+    # CONCURRENTLY отказывается работать по НЕЗАПОЛНЕННОЙ вьюхе: "CONCURRENTLY
+    # cannot be used when the materialized view is not populated". Незаполненной
+    # она оказывается после восстановления из schema-only дампа — pg_dump пишет
+    # матвьюхи как WITH NO DATA, а REFRESH кладёт в секцию данных, которой в
+    # таком дампе нет. Именно так она приехала на cthulhu и оставалась пустой,
+    # пока каждый прогон синка молча писал предупреждение.
+    #
+    # Поэтому первый раз заполняем обычным REFRESH. Он берёт ACCESS EXCLUSIVE на
+    # саму вьюху (не на edrsr_documents) и по 136M строк идёт минутами, так что
+    # снимаем statement_timeout. Дальше работает CONCURRENTLY и читатели не ждут.
+    POPULATED=$(count_sql "SELECT count(*) FROM pg_matviews WHERE matviewname = 'edrsr_judges_distinct' AND ispopulated;")
+    if [ "$POPULATED" -eq 0 ]; then
+      log "edrsr_judges_distinct never populated — first fill, without CONCURRENTLY"
+      if run_sql "SET statement_timeout = 0; REFRESH MATERIALIZED VIEW edrsr_judges_distinct;" >/dev/null 2>&1; then
+        log "Judge lookup populated"
+      else
+        log "WARNING: initial REFRESH of edrsr_judges_distinct failed — the judge filter stays blind"
+      fi
+    fi
+
     log "Refreshing edrsr_judges_distinct (judge lookup)..."
     if run_sql "REFRESH MATERIALIZED VIEW CONCURRENTLY edrsr_judges_distinct;" >/dev/null 2>&1; then
       JUDGES=$(count_sql "SELECT count(*) FROM edrsr_judges_distinct;")
       log "Judge lookup refreshed: $JUDGES distinct judges"
     else
+      # Причину надо видеть: предыдущая формулировка сообщала о факте отказа, но
+      # не о том, почему — из-за чего пустая вьюха прожила незамеченной.
+      REASON=$(run_sql "REFRESH MATERIALIZED VIEW CONCURRENTLY edrsr_judges_distinct;" 2>&1 | grep -m1 -i error || echo "причина не получена")
       log "WARNING: REFRESH of edrsr_judges_distinct failed — the judge filter will not see judges added by this sync"
+      log "WARNING: $REASON"
     fi
   else
     log "edrsr_judges_distinct absent (migration 183 not applied) — skipping judge lookup refresh"
