@@ -27,6 +27,7 @@ on:
       - "deployment/Dockerfile.mono-backend"
       - "mcp_backend/**"
       - "packages/shared/**"
+      - "services/ch-pipeline/**"
       - ".github/workflows/deploy-lawrider-gcp.yml"
   workflow_dispatch:
     inputs:
