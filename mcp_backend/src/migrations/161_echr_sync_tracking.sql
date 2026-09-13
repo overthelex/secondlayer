@@ -17,6 +17,14 @@ CREATE TABLE IF NOT EXISTS echr_sync_log (
 CREATE INDEX IF NOT EXISTS idx_echr_sync_log_country ON echr_sync_log(country_code);
 CREATE INDEX IF NOT EXISTS idx_echr_sync_log_status ON echr_sync_log(status);
 
--- 2. Performance indexes on echr_cases
-CREATE INDEX IF NOT EXISTS idx_echr_cases_respondent ON echr_cases(respondent);
-CREATE INDEX IF NOT EXISTS idx_echr_cases_kp_date ON echr_cases(kp_date);
+-- 2. Performance indexes on echr_cases. The table was created outside the
+-- runner (scripts/hudoc/import-echr-to-pg.ts); on a fresh database it does
+-- not exist yet -- migration 215 creates it, with these indexes -- so the
+-- statements are guarded rather than left to abort the whole chain.
+DO $$
+BEGIN
+  IF to_regclass('public.echr_cases') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_echr_cases_respondent ON echr_cases(respondent);
+    CREATE INDEX IF NOT EXISTS idx_echr_cases_kp_date ON echr_cases(kp_date);
+  END IF;
+END $$;

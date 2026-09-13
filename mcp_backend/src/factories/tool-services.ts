@@ -35,6 +35,7 @@ import { ChCourtTools } from '../api/tools/ch-court-tools.js';
 import { ChLegislationTools } from '../api/tools/ch-legislation-tools.js';
 import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
 import { ChCommentaryTools } from '../api/tools/ch-commentary-tools.js';
+import { ChEchrTools } from '../api/tools/ch-echr-tools.js';
 import { ChMaterialsTools } from '../api/tools/ch-materials-tools.js';
 import { AmcuPracticeTools } from '../api/tools/amcu-practice-tools.js';
 import { ChSemanticTools } from '../api/tools/ch-semantic-tools.js';
@@ -199,6 +200,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new ChCommentaryTools(coreServices.db));
   // Federal Gazette materials: Botschaften, reports, article purpose via provenance (LEXAI-2038)
   toolRegistry.registerHandler(new ChMaterialsTools(coreServices.db));
+  // ECtHR practice for Switzerland from the HUDOC harvest (echr_cases; LEXAI-2040)
+  toolRegistry.registerHandler(new ChEchrTools(coreServices.db));
   // Semantic layer over the whole CH corpus (Qdrant ch_corpus_bge_cls, LEXAI-2004)
   toolRegistry.registerHandler(new ChSemanticTools(coreServices.db));
   // Semantic layer over АМКУ decisions (Qdrant amcu_bge_cls); keyword search stays in search_registry

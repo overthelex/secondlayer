@@ -231,3 +231,12 @@ def apply_migration_210(conn) -> None:
     """209 then 210: the stored tsvector replaces 209's expression index."""
     apply_migration_209(conn)
     conn.execute(MIGRATION_210.read_text())
+
+
+# --- migration 215 (echr_cases) ----------------------------------------------
+MIGRATION_215 = _REPO_ROOT / "mcp_backend/src/migrations/215_echr_cases_ch.sql"
+
+
+def apply_migration_215(conn) -> None:
+    """echr_cases as lawrider has it, plus the stored tsvector. Idempotent."""
+    conn.execute(MIGRATION_215.read_text())
