@@ -1106,16 +1106,24 @@ services:
       # статические сайты, переехали с AWS (conf.d/aws-migrated.conf)
       - ./static/opendata:/var/www/opendata:ro
       - ./static/defectradar:/var/www/defectradar:ro
+      # тоже каталогом, а не файлом — по той же причине, что и conf.d выше
+      - ./nginx/bin:/etc/nginx/bin:ro
     depends_on:
       app-local:
         condition: service_healthy
       lexwebapp-local:
         condition: service_healthy
+    # `nginx -t` проверял только синтаксис и рапортовал healthy все двое суток,
+    # пока бэкенд отвечал 502: nginx резолвит имена апстримов один раз при
+    # загрузке конфига, и пересозданный контейнер бэкенда получает новый IP.
+    # Скрипт стучится в бэкенд через сам nginx и перезагружает его, когда адреса
+    # апстримов съехали. См. deployment/nginx/bin/healthcheck.sh.
     healthcheck:
-      test: ["CMD", "nginx", "-t"]
+      test: ["CMD", "/etc/nginx/bin/healthcheck.sh"]
       interval: 30s
-      timeout: 5s
+      timeout: 15s
       retries: 3
+      start_period: 30s
     restart: unless-stopped
     networks:
       - secondlayer-local
