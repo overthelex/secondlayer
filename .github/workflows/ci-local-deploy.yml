@@ -46,7 +46,7 @@ jobs:
     name: Detect Changes
     # `local` матчится и на prod-runner — весь конвейер нового прода держим
     # на его собственной машине
-    runs-on: [self-hosted, local-deploy]
+    runs-on: [self-hosted, cthulhu]
     outputs:
       shared: ${{ steps.changes.outputs.shared }}
       backend: ${{ steps.changes.outputs.backend }}
@@ -216,7 +216,7 @@ jobs:
   # ─── Step 2b: Self-heal build failures with Claude Code (DISABLED) ──
   self-heal-build:
     name: Self-Heal Build Failures
-    runs-on: [self-hosted, local-deploy]
+    runs-on: [self-hosted, cthulhu]
     needs: [detect-changes, build-and-test]
     if: false  # temporarily disabled — not producing useful fixes
     env:
@@ -366,7 +366,7 @@ jobs:
     # ВАЖНО: пин на `local-deploy` — единственный лейбл, уникальный для cthulhu.
     # Лейбл `local` матчится и на prod-runner, и джоба уехала бы разворачивать
     # локальный стек прямо на проде (см. deploy-preview note в deploy-prod.yml).
-    runs-on: [self-hosted, local-deploy]
+    runs-on: [self-hosted, cthulhu]
     needs: [detect-changes, build-and-test]
     if: |
       always() &&
@@ -583,7 +583,11 @@ jobs:
               echo "  ждём nginx... ($i/12)"; sleep 5
             done
           fi
-          docker exec nginx-local nginx -t && docker exec nginx-local nginx -s reload 2>/dev/null || true
+          # Без `|| true`: если reload здесь не прошёл, nginx продолжает держать
+          # адреса, которые только что перестали существовать, и деплой поедет
+          # дальше поверх уже сломанного прокси.
+          docker exec nginx-local nginx -t
+          docker exec nginx-local nginx -s reload
 
           # Новый цвет
           if [ "$NEW" = "green" ]; then
