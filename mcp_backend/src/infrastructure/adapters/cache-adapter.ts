@@ -125,12 +125,35 @@ export class CacheAdapter implements ICachePort {
     return this.withTimeout(this.client.del(keys), 'DEL');
   }
 
+  /**
+   * Счётчик с фиксированным окном: срок жизни выставляется при СОЗДАНИИ ключа и
+   * больше не трогается.
+   *
+   * До 13.09.2026 здесь был `INCR` + безусловный `EXPIRE`, то есть срок жизни
+   * переармировался на каждом запросе. Пока клиент приходит чаще, чем раз в
+   * окно, ключ не истекает никогда, счётчик растёт без предела и однажды
+   * пересекает лимит — после чего клиент получает 429 навсегда, каким бы низким
+   * ни был его реальный темп. Двух запросов в минуту при окне 60 с и лимите 300
+   * хватало за два с половиной часа: ровно так `/health` на legal.org.ua
+   * заклинило на 489 запросах с TTL 31 с, и деплой перестал проходить
+   * собственную проверку через nginx.
+   *
+   * `SET key 0 EX ttl NX` создаёт ключ со сроком жизни только если его ещё нет,
+   * а `INCR` следом возвращает значение в текущем окне. Обе команды идут одной
+   * транзакцией, так что параллельные запросы не могут проскочить между ними.
+   * Версия Redis роли не играет, в отличие от `EXPIRE ... NX`, который есть
+   * только с 7.0.
+   */
   async increment(key: string, ttlSeconds: number): Promise<number> {
     const results = await this.withTimeout(
-      this.client.multi().incr(key).expire(key, ttlSeconds).exec(),
+      this.client
+        .multi()
+        .set(key, '0', { EX: ttlSeconds, NX: true })
+        .incr(key)
+        .exec(),
       'INCR',
     );
-    return (results?.[0] as unknown as number) ?? 0;
+    return (results?.[1] as unknown as number) ?? 0;
   }
 
   async ping(): Promise<boolean> {

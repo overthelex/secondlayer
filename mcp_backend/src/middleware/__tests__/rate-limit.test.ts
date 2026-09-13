@@ -58,7 +58,7 @@ describe('createRateLimiter', () => {
   });
 
   test('should return 429 when rate limit exceeded', async () => {
-    mockCache.get.mockResolvedValue('10');
+    mockCache.increment.mockResolvedValue(11);
     const limiter = createRateLimiter({ windowMs: 60000, maxRequests: 10 });
     const req = createMockReq();
     const res = createMockRes();
@@ -80,7 +80,7 @@ describe('createRateLimiter', () => {
     await limiter(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(mockCache.get).not.toHaveBeenCalled();
+    expect(mockCache.increment).not.toHaveBeenCalled();
   });
 
   test('should skip rate limiting for IPv6 localhost', async () => {
@@ -91,7 +91,7 @@ describe('createRateLimiter', () => {
     await limiter(req, res, next);
 
     expect(next).toHaveBeenCalled();
-    expect(mockCache.get).not.toHaveBeenCalled();
+    expect(mockCache.increment).not.toHaveBeenCalled();
   });
 
   test('should skip rate limiting for IPv4-mapped IPv6 localhost', async () => {
@@ -115,7 +115,7 @@ describe('createRateLimiter', () => {
 
     await limiter(req, res, next);
 
-    expect(mockCache.get).toHaveBeenCalledWith('custom-prefix:192.168.1.1');
+    expect(mockCache.increment).toHaveBeenCalledWith('custom-prefix:192.168.1.1', expect.any(Number));
   });
 
   test('should use userId when keyByUserId is true', async () => {
@@ -130,7 +130,7 @@ describe('createRateLimiter', () => {
 
     await limiter(req, res, next);
 
-    expect(mockCache.get).toHaveBeenCalledWith('ratelimit:user:user-456');
+    expect(mockCache.increment).toHaveBeenCalledWith('ratelimit:user:user-456', expect.any(Number));
   });
 
   test('should fall back to IP when keyByUserId is true but no user', async () => {
@@ -144,7 +144,7 @@ describe('createRateLimiter', () => {
 
     await limiter(req, res, next);
 
-    expect(mockCache.get).toHaveBeenCalledWith('ratelimit:192.168.1.1');
+    expect(mockCache.increment).toHaveBeenCalledWith('ratelimit:192.168.1.1', expect.any(Number));
   });
 
   test('should allow request when cache is unavailable', async () => {
@@ -167,7 +167,7 @@ describe('createRateLimiter', () => {
   });
 
   test('should allow request on cache error (fail open)', async () => {
-    mockCache.get.mockRejectedValue(new Error('Redis connection lost'));
+    mockCache.increment.mockRejectedValue(new Error('Redis connection lost'));
     const limiter = createRateLimiter({ windowMs: 60000, maxRequests: 10 });
     const req = createMockReq();
     const res = createMockRes();
@@ -178,7 +178,7 @@ describe('createRateLimiter', () => {
   });
 
   test('should set correct remaining count', async () => {
-    mockCache.get.mockResolvedValue('7');
+    mockCache.increment.mockResolvedValue(8);
     const limiter = createRateLimiter({ windowMs: 60000, maxRequests: 10 });
     const req = createMockReq();
     const res = createMockRes();
