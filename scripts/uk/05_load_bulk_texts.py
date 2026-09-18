@@ -73,6 +73,77 @@ sys.argv = _saved_argv
 
 INS_PROV = stage3.INS_PROV
 
+# --- register metadata, for --with-register -------------------------------
+#
+# Every member carries the whole register record in its <ukm:Metadata> block, so
+# the weekly refresh does not need the Atom crawl stage 1 used. ⚠ That block is
+# NOT within the first few kilobytes for primary legislation: the source puts one
+# <ukm:UnappliedEffect> per outstanding editorial change inside it, and the Town
+# and Country Planning Act 1990 has enough of them to push the metadata past
+# 40 KB. Read the whole member — which this stage already does for the text.
+META = {
+    "title":             re.compile(rb"<dc:title>([^<]{1,1000})</dc:title>"),
+    "number":            re.compile(rb"<ukm:Number\s+Value=\"([^\"]*)\""),
+    "year":              re.compile(rb"<ukm:Year\s+Value=\"(\d{4})\""),
+    "made_date":         re.compile(rb"<ukm:Made\s+Date=\"(\d{4}-\d{2}-\d{2})\""),
+    "enactment_date":    re.compile(rb"<ukm:EnactmentDate\s+Date=\"(\d{4}-\d{2}-\d{2})\""),
+    "coming_into_force": re.compile(rb"<ukm:ComingIntoForce>\s*<ukm:DateTime\s+Date=\"(\d{4}-\d{2}-\d{2})\""),
+    "document_status":   re.compile(rb"<ukm:DocumentStatus\s+Value=\"([^\"]*)\""),
+    "valid_date":        re.compile(rb"<dct:valid>(\d{4}-\d{2}-\d{2})"),
+    "extent":            re.compile(rb"RestrictExtent=\"([^\"]*)\""),
+}
+
+
+def parse_meta(body, leg_id):
+    out = {k: None for k in META}
+    for k, rx in META.items():
+        m = rx.search(body)
+        if m:
+            out[k] = m.group(1).decode("utf-8", "replace").strip() or None
+    parts = leg_id.split("/")
+    out["leg_type"] = parts[0]
+    # Regnal citations put a session in the year slot (aep/Hen3/23), which is not
+    # an integer and must stay NULL rather than raise.
+    try:
+        out["year"] = int(out["year"] or parts[1])
+    except (ValueError, IndexError, TypeError):
+        out["year"] = None
+    out["number"] = out["number"] or (parts[2] if len(parts) > 2 else None)
+    out["source_url"] = "https://www.legislation.gov.uk/" + leg_id
+    return out
+
+
+# ⚠⚠ version_count, unapplied_effects, first_version and last_version are NOT in
+# this statement and must never be. They are stage 2's, computed from a complete
+# crawl, and a refresh that recomputed unapplied_effects from an incomplete
+# source once zeroed it on 33,434 acts.
+#
+# Everything else is fill-only — COALESCE keeps whatever the crawl established — with
+# two deliberate exceptions, because these two are the fields that MOVE:
+#   document_status: an item goes 'final' -> 'revised' as the editorial team works on
+#     it, so the bulk value is newer than the register's by construction;
+#   valid_date: GREATEST, because it is the date of the edition in hand and a refresh
+#     that left it behind would describe the text we just loaded with an older date.
+# year and number are filled when missing but never changed: they are identity.
+UPSERT_REG = """
+INSERT INTO uk_legislation
+    (id, leg_type, year, number, title, document_status, extent,
+     enactment_date, made_date, coming_into_force, valid_date, source_url)
+VALUES %s
+ON CONFLICT (id) DO UPDATE SET
+    title             = COALESCE(uk_legislation.title, EXCLUDED.title),
+    year              = COALESCE(uk_legislation.year, EXCLUDED.year),
+    number            = COALESCE(uk_legislation.number, EXCLUDED.number),
+    document_status   = COALESCE(EXCLUDED.document_status, uk_legislation.document_status),
+    extent            = COALESCE(uk_legislation.extent, EXCLUDED.extent),
+    enactment_date    = COALESCE(uk_legislation.enactment_date, EXCLUDED.enactment_date),
+    made_date         = COALESCE(uk_legislation.made_date, EXCLUDED.made_date),
+    coming_into_force = COALESCE(uk_legislation.coming_into_force, EXCLUDED.coming_into_force),
+    valid_date        = GREATEST(uk_legislation.valid_date, EXCLUDED.valid_date),
+    source_url        = COALESCE(uk_legislation.source_url, EXCLUDED.source_url),
+    updated_at        = now()
+"""
+
 # valid_from for a bulk row. Prefer the version the register already knows is
 # current, so crawled and bulk rows land on the same key instead of creating a
 # second, parallel version of the same text. Fall back to the item's own dates.
@@ -104,6 +175,25 @@ def main():
                     help="skip items that already have provisions")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--batch", type=int, default=2000)
+    ap.add_argument("--replace", action="store_true",
+                    help="delete an act's existing provisions before inserting "
+                         "the ones just parsed. uk_legislation_provisions is "
+                         "meant to hold CURRENT text, and on a refresh an act "
+                         "whose revision date moved would otherwise keep its old "
+                         "snapshot alongside the new one under a different "
+                         "valid_from — two 'current' versions, no way to tell "
+                         "which. Only ever deletes when the new parse actually "
+                         "produced provisions, so a malformed file cannot empty "
+                         "an act. History lives in stage 6, not here.")
+    ap.add_argument("--with-register", action="store_true",
+                    help="also upsert uk_legislation from each member's own "
+                         "<ukm:Metadata>. This is what makes the weekly refresh "
+                         "possible without the Atom crawl of stage 1, and it is "
+                         "how ids the register has never seen — retained EU law, "
+                         "anything published since the last harvest — get a row "
+                         "at all. Existing rows are only filled where they are "
+                         "empty; version_count and unapplied_effects are never "
+                         "touched.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -115,7 +205,11 @@ def main():
     have_text = set()
     if not args.dry_run:
         conn = psycopg2.connect(DB_URL)
-        conn.autocommit = True
+        # NOT autocommit. --replace deletes an act's provisions and then inserts the
+        # replacements; under autocommit the delete commits on its own, so a crash or a
+        # failed insert in between leaves the act with no text at all and nothing to say
+        # so. One transaction per flush makes the swap atomic.
+        conn.autocommit = False
         cur = conn.cursor()
         cur.execute(VALID_FROM)
         valid_from = {r[0]: r[1] for r in cur.fetchall()}
@@ -127,8 +221,11 @@ def main():
             print(f"already carrying text: {len(have_text)}", flush=True)
 
     rows = []
+    reg_rows = []
+    replaced = []
     stats = {"files": 0, "no_id": 0, "not_in_register": 0, "skipped": 0,
-             "parsed": 0, "empty": 0, "provisions": 0, "failed": 0}
+             "parsed": 0, "empty": 0, "provisions": 0, "failed": 0,
+             "registered": 0}
     seen_versions = []
     # Acts written earlier in this run. revised-current is processed first and is
     # the better text where both archives carry an act, so enacted-epublished must
@@ -141,8 +238,26 @@ def main():
         # same (leg_id, valid_from, ord) twice, which happens as soon as an act
         # appears in both archives — revised-current and enacted-epublished
         # overlap heavily — and aborts the whole batch rather than that one row.
-        if not rows or args.dry_run:
+        if args.dry_run:
             rows.clear()
+            reg_rows.clear()
+            replaced.clear()
+            seen_versions.clear()
+            return
+        if reg_rows:
+            # Same dedupe reason as below: one act appears in both archives, and
+            # two rows with the same id in one statement abort it entirely.
+            uniq_r = {r[0]: r for r in reg_rows}
+            execute_values(cur, UPSERT_REG, list(uniq_r.values()), page_size=1000)
+            reg_rows.clear()
+        if replaced:
+            cur.execute("DELETE FROM uk_legislation_provisions WHERE leg_id = ANY(%s)",
+                        (replaced,))
+            replaced.clear()
+        if not rows:
+            # The register upsert and any deletes above are still open work; commit
+            # them here or they sit in a transaction until some later flush decides to.
+            conn.commit()
             seen_versions.clear()
             return
         if seen_versions:
@@ -151,6 +266,7 @@ def main():
             seen_versions.clear()
         uniq = {(r[0], r[1], r[2]): r for r in rows}
         execute_values(cur, INS_PROV, list(uniq.values()), page_size=1000)
+        conn.commit()
         rows.clear()
 
     for zp in args.zip:
@@ -171,14 +287,31 @@ def main():
                 stats["no_id"] += 1
                 continue
             leg_id = m.group(1).decode().strip("/")
+            meta = parse_meta(body, leg_id) if args.with_register else None
             if leg_id not in valid_from and not args.dry_run:
-                # Retained EU law and anything else stage 1 never enumerated.
-                stats["not_in_register"] += 1
-                continue
+                if not args.with_register:
+                    # Retained EU law and anything else stage 1 never enumerated.
+                    stats["not_in_register"] += 1
+                    continue
+                stats["registered"] += 1
+            if meta:
+                # Recorded even when the text is skipped below: an act whose text
+                # we already hold can still be missing a title or a date.
+                reg_rows.append((
+                    leg_id, meta["leg_type"], meta["year"], meta["number"],
+                    meta["title"], meta["document_status"], meta["extent"],
+                    meta["enactment_date"], meta["made_date"],
+                    meta["coming_into_force"], meta["valid_date"],
+                    meta["source_url"]))
+                if len(reg_rows) >= args.batch:
+                    flush()
             if leg_id in have_text or leg_id in done:
                 stats["skipped"] += 1
                 continue
-            vf = valid_from.get(leg_id) or date(1900, 1, 1)
+            vf = (valid_from.get(leg_id)
+                  or (meta and (meta["valid_date"] or meta["made_date"]
+                                or meta["enactment_date"] or meta["coming_into_force"]))
+                  or date(1900, 1, 1))
             try:
                 provs = stage3.parse_provisions(body.decode("utf-8", "replace"), leg_id)
             except Exception:
@@ -188,6 +321,10 @@ def main():
             if not provs:
                 stats["empty"] += 1
                 continue
+            if args.replace:
+                # Safe because we are inside `if provs:` — an act is only cleared
+                # when there is something to put back.
+                replaced.append(leg_id)
             seen_versions.append((leg_id, vf, "bulk", None, False, 200))
             done.add(leg_id)
             for p in provs:
@@ -211,7 +348,7 @@ def main():
     flush()
     print("\n=== summary", flush=True)
     for k in ("files", "parsed", "provisions", "empty", "skipped",
-              "not_in_register", "no_id", "failed"):
+              "registered", "not_in_register", "no_id", "failed"):
         print(f"  {k:<16} {stats[k]}", flush=True)
 
 
