@@ -80,7 +80,26 @@ import psycopg2
 # curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
 # Source binding survives the switch — Session(interface=<ip>) replaces the
 # HTTPAdapter, verified 200 from three of the fleet's addresses.
-from curl_cffi import requests
+# Optional on purpose. Stages 5 and 6 import this module only for
+# parse_provisions — they read zip archives and never touch the network — and on
+# a box that has never run the crawl, curl_cffi is not installed. A hard import
+# here made `06_load_point_in_time.py` die on ModuleNotFoundError before it read
+# a single file. The crawl path below still needs it and says so.
+try:
+    from curl_cffi import requests
+except ImportError:                                     # pragma: no cover
+    class _NoCurlCffi:
+        class RequestsError(Exception):
+            pass
+
+        def __getattr__(self, name):
+            raise ImportError(
+                "curl_cffi is required for the crawl path of 03_harvest_texts.py; "
+                "pip install curl_cffi. Parsing-only callers (stages 5 and 6) do "
+                "not need it.")
+
+    requests = _NoCurlCffi()
+
 from psycopg2.extras import execute_values
 
 BASE = "https://www.legislation.gov.uk"
