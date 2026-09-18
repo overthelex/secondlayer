@@ -36,6 +36,20 @@ DB_URL = os.environ.get("DATABASE_URL")
 # percentage rather than strict monotonicity, and any drop at all is still reported.
 SHRINK_TOLERANCE = 0.005
 
+# Absolute floors. The shrink gate compares against the previous run, so on the FIRST
+# run — or after someone truncates the history table — an empty corpus would sail
+# through with "no baseline yet". These are deliberately far below the real figures
+# (238,926 / 129,897 / 1,637,159 on 2026-09-18): they are not a quality bar, they are
+# a "did the data survive at all" bar.
+FLOORS = {
+    "acts":           150_000,
+    "acts_with_text":  80_000,
+    "provisions":   1_000_000,
+    "pit_acts":        40_000,
+    "pit_rows":     1_000_000,
+    "effects":      1_000_000,
+}
+
 COUNTS = {
     "acts":           "SELECT count(*) FROM uk_legislation",
     "acts_with_text": "SELECT count(DISTINCT leg_id) FROM uk_legislation_provisions",
@@ -120,6 +134,19 @@ def main():
     for k, v in counts.items():
         print(f"  {k:<16} {v:>12,}")
 
+    print("=== floors")
+    for k, floor in FLOORS.items():
+        if counts[k] < floor:
+            failures.append({"check": f"{k} below floor", "value": counts[k],
+                             "floor": floor,
+                             "why": "the corpus is a fraction of its known size — this "
+                                    "passes the shrink gate on a first run, so the floor "
+                                    "is the only thing standing between an empty load "
+                                    "and a green tick"})
+            print(f"  FAIL  {k}: {counts[k]:,} < {floor:,}")
+        else:
+            print(f"  ok    {k} >= {floor:,}")
+
     print("=== invariants")
     for title, sql, why in INVARIANTS:
         cur.execute(sql)
@@ -152,6 +179,27 @@ def main():
         print(f"  FAIL  register freshness: {age} old")
     else:
         print("  ok    register freshness")
+
+    # Stage 6 has its own clock. The register check above passes on a run where stage 5
+    # worked and stage 6 died, because uk_legislation was written either way.
+    cur.execute("SELECT max(loaded_at), now() - max(loaded_at) FROM uk_pit_load_state")
+    pit_newest, pit_age = cur.fetchone()
+    print(f"  point-in-time last loaded {pit_newest} ({pit_age} ago)")
+    # A WARNING, not a failure, and deliberately so: stage 6 writes nothing in a week
+    # where no act gained a version, so an old loaded_at is ordinary quiet as often as
+    # it is a stalled stage. Sixty days of silence across 62,866 acts is worth a look
+    # without being worth a red build.
+    if pit_age is None or pit_age > timedelta(days=60):
+        warnings.append({
+            "check": "point-in-time freshness",
+            "age": None if pit_age is None else str(pit_age),
+            "why": "uk_pit_load_state has not been written in 60 days — either nothing "
+                   "was revised in that time, or stage 6 is failing while stage 5 keeps "
+                   "the register looking healthy",
+        })
+        print(f"  warn  point-in-time freshness: {pit_age} old")
+    else:
+        print("  ok    point-in-time freshness")
 
     # Regression against the previous run.
     print("=== against the previous run")

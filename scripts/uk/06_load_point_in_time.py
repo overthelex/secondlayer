@@ -238,14 +238,19 @@ def build_intervals(leg_id, versions, z):
     meta = {}                         # (key, hash) -> first-seen facets
     texts = {}                        # hash -> (text, n_chars)
     seen_keys = set()
-    n_parsed = n_empty = 0
+    n_parsed = n_empty = n_failed = 0
 
     for vdate, name in versions:
         try:
             body = z.open(name).read()
             provs = stage3.parse_provisions(body.decode("utf-8", "replace"), leg_id)
         except Exception:
-            n_empty += 1
+            # A member that cannot be read or parsed is NOT the same as a version with
+            # no provisions, and folding the two together was wrong in a way that hides:
+            # the act would checkpoint as fully loaded, and the version-count comparison
+            # would then skip it for ever. Counted separately and reported, so the act
+            # is retried rather than silently declared done.
+            n_failed += 1
             continue
         if not provs:
             # Not a repeal of the whole act — see the module docstring.
@@ -291,7 +296,7 @@ def build_intervals(leg_id, versions, z):
 
     used = {r[11] for r in rows}
     texts = {h: v for h, v in texts.items() if h in used}
-    return texts, rows, n_parsed, n_empty
+    return texts, rows, n_parsed, n_empty, n_failed
 
 
 def _row(leg_id, key, vfrom, vto, m, h):
@@ -304,9 +309,15 @@ def process_act(job):
     leg_id, versions = job
     z = _W["zip"]
     try:
-        texts, rows, n_parsed, n_empty = build_intervals(leg_id, versions, z)
+        texts, rows, n_parsed, n_empty, n_failed = build_intervals(leg_id, versions, z)
     except Exception as exc:                        # one bad act must not stop the run
         return (leg_id, 0, 0, 0, f"{type(exc).__name__}: {exc}")
+
+    if n_failed:
+        # Do not checkpoint a partially readable act: the skip on the next run compares
+        # version counts, so a checkpoint written now would make this act unreachable.
+        return (leg_id, 0, 0, 0,
+                f"{n_failed} of {len(versions)} members failed to read or parse")
 
     if _W["dry"]:
         return (leg_id, len(versions), n_empty, len(rows), None)

@@ -99,8 +99,19 @@ jobs:
 
       - name: Refresh
         if: ${{ !inputs.verify_only }}
+        env:
+          # Through the environment, never interpolated straight into the shell line:
+          # `${{ inputs.workers }}` inside a run: block is attacker-controlled text that
+          # lands in a command executed on the production box.
+          WORKERS_IN: ${{ inputs.workers }}
         run: |
-          $SSH_CMD "cd ${STAGE_DIR} && UK_WORKERS='${{ inputs.workers || 3 }}' \
+          workers="${WORKERS_IN:-3}"
+          case "$workers" in ''|*[!0-9]*) echo "::error::workers must be a whole number"; exit 1;; esac
+          if [ "$workers" -lt 1 ] || [ "$workers" -gt 8 ]; then
+            echo "::error::workers must be between 1 and 8 — the box has 4 vCPU and also serves lawrider.ch"
+            exit 1
+          fi
+          $SSH_CMD "cd ${STAGE_DIR} && UK_WORKERS=$workers \
             UK_PYTHON=/home/ubuntu/uk-venv/bin/python3 \
             ./run-uk-refresh.sh 2>&1 | tee /data/uk/refresh-ci.log | tail -60"
 

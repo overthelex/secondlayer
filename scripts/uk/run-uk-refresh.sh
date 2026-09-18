@@ -72,14 +72,19 @@ fetch() {
   remote=$(printf '%s' "$hdr" | awk 'tolower($1)=="last-modified:"{sub($1" ","");print}' | tr -d '\r')
   len=$(printf '%s' "$hdr" | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r')
 
-  if [ -f "$zip" ] && [ -f "$stamp" ] && [ "$remote" = "$(cat "$stamp")" ]; then
+  # A server that stops sending Last-Modified would otherwise compare "" to ""
+  # and report every archive unchanged for ever.
+  if [ -n "$remote" ] && [ -f "$zip" ] && [ -f "$stamp" ] && [ "$remote" = "$(cat "$stamp")" ]; then
     log "$coll unchanged ($remote), skipping download"
     return 1
   fi
 
   log "$coll changed (remote: ${remote:-unknown}, ${len:-?} bytes), downloading"
   rm -f "$part"
-  if ! curl -sS -L -u "$CREDS" -A "$UA" -o "$part" "$url"; then
+  # --fail: without it curl exits 0 on 401/404/500 and writes the error page to
+  # $part. The size and zip checks below would catch it, but failing at the
+  # request is clearer than failing two checks later on a 900-byte "archive".
+  if ! curl -sS -L --fail -u "$CREDS" -A "$UA" -o "$part" "$url"; then
     log "$coll download FAILED"; rm -f "$part"; return 2
   fi
 
@@ -95,7 +100,10 @@ fetch() {
     rm -f "$part"; return 2
   fi
 
-  mv -f "$part" "$zip"
+  if ! mv -f "$part" "$zip"; then
+    log "$coll verified but could not be installed at $zip — leaving the stamp alone"
+    rm -f "$part"; return 2
+  fi
   printf '%s' "$remote" > "$stamp"
   log "$coll downloaded and verified: $got bytes"
   return 0
@@ -118,16 +126,24 @@ fi
 # act whose revision date moved must not keep its old snapshot alongside the new
 # one under a different valid_from.
 log "--- stage 5: register + current text"
+rc=0
 "$PYTHON" "$HERE/05_load_bulk_texts.py" \
   --zip "$DATA_DIR/revised-current-xml.zip" \
   --zip "$DATA_DIR/enacted-epublished-xml.zip" \
-  --with-register --replace || log "stage 5 exited $?"
+  --with-register --replace || { rc=$?; log "stage 5 exited $rc"; failed=1; }
 
 # Point-in-time. Skips any act whose version count is unchanged, so a week where
 # nothing was revised costs one pass over the index and no writes.
 log "--- stage 6: point-in-time"
 "$PYTHON" "$HERE/06_load_point_in_time.py" \
   --zip "$DATA_DIR/revised-all-versions-xml.zip" \
-  --workers "$WORKERS" || log "stage 6 exited $?"
+  --workers "$WORKERS" || { rc=$?; log "stage 6 exited $rc"; failed=1; }
 
+# ⚠ Exit non-zero when a stage failed. The first version logged the failure and
+# still returned 0, so the scheduled job went green over a refresh that imported
+# nothing — the exact shape of silent staleness this whole thing exists to catch.
+if [ "${failed:-0}" = "1" ] || [ "$rc_cur" = "2" ] || [ "$rc_enacted" = "2" ] || [ "$rc_all" = "2" ]; then
+  log "=== UK refresh FAILED (downloads: current=$rc_cur enacted=$rc_enacted all=$rc_all; stages failed=${failed:-0})"
+  exit 1
+fi
 log "=== UK refresh done (downloads: current=$rc_cur enacted=$rc_enacted all=$rc_all; 0=fetched, 1=unchanged, 2=failed)"

@@ -65,6 +65,21 @@ function buildProvisionKey(legId: string, provision: string, kind?: string): str
   return `${legId}/${type}/${raw}`;
 }
 
+/**
+ * Sentinel for "the caller's number matched more than one provision". Returning the
+ * first row would be the wrong kind of helpful: `4` in an act can be section 4 and also
+ * paragraph 4 of a schedule, and a lawyer quoting the wrong one has no way to tell.
+ */
+const AMBIGUOUS = Symbol('ambiguous');
+
+function pickOne(rows: any[], key: string): any {
+  if (!rows.length) return null;
+  const exact = rows.find((r) => r.provision_key === key);
+  if (exact) return exact;
+  const keys = new Set(rows.map((r) => r.provision_key));
+  return keys.size === 1 ? rows[0] : AMBIGUOUS;
+}
+
 export class UkLegislationTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -238,7 +253,9 @@ offset/max_chars керують посторінковим читанням (max
       return this.wrapSearchResults(
         rows.map((r: any) => ({
           ...r,
-          point_in_time: r.versions > 1,
+          // One archived version is still point-in-time data: it says what the
+          // act looked like on that date. Only zero means none.
+          point_in_time: Number(r.versions) > 0,
         })),
         limit, offset,
         'Contains public sector information licensed under the Open Government Licence v3.0.'
@@ -326,14 +343,16 @@ offset/max_chars керують посторінковим читанням (max
 
     try {
       if (asOf) {
-        const row = (await this.db.query(
+        const candidates = (await this.db.query(
           `SELECT v.provision_key, v.provision_label, v.provision_type, v.ord, v.part, v.chapter,
                   v.schedule_no, v.title, v.valid_from, v.valid_to, t.text, t.n_chars
              FROM uk_provision_version v JOIN uk_provision_text t ON t.text_hash = v.text_hash
             WHERE v.leg_id = $1 AND (v.provision_key = $2 OR v.provision_label = $3)
               AND v.valid_from <= $4 AND (v.valid_to IS NULL OR v.valid_to > $4)
             ORDER BY (v.provision_key = $2) DESC, v.ord
-            LIMIT 1`, [legId, key, label, asOf])).rows[0];
+            LIMIT 10`, [legId, key, label, asOf])).rows;
+        const row = pickOne(candidates, key);
+        if (row === AMBIGUOUS) return this.ambiguous(legId, key, candidates, asOf);
         if (row) {
           return this.wrapResponse({
             leg_id: legId, as_of: asOf, source: 'point_in_time', provision: row,
@@ -348,6 +367,7 @@ offset/max_chars керують посторінковим читанням (max
              FROM uk_provision_version WHERE leg_id = $1`, [legId])).rows[0];
         if (!Number(span.rows)) {
           const current = await this.currentProvision(legId, key, label);
+          if (current === AMBIGUOUS) return this.ambiguous(legId, key, [], asOf);
           return this.wrapResponse({
             leg_id: legId, as_of: asOf, source: 'current_text_only',
             message: 'Для цього акта історії редакцій немає (point-in-time охоплює 62,866 актів). Нижче — чинний текст.',
@@ -362,6 +382,15 @@ offset/max_chars керують посторінковим читанням (max
       }
 
       const current = await this.currentProvision(legId, key, label);
+      if (current === AMBIGUOUS) {
+        const all = (await this.db.query(
+          `SELECT DISTINCT provision_type, schedule_no, title,
+                  regexp_replace(provision_uri, '^https?://(?:www\\.)?legislation\\.gov\\.uk/', '')
+                    AS provision_key
+             FROM uk_legislation_provisions
+            WHERE leg_id = $1 AND provision_label = $2 LIMIT 10`, [legId, label])).rows;
+        return this.ambiguous(legId, key, all);
+      }
       if (!current) {
         const hasAny = (await this.db.query(
           `SELECT count(*) AS n FROM uk_legislation_provisions WHERE leg_id = $1`, [legId])).rows[0];
@@ -384,14 +413,36 @@ offset/max_chars керують посторінковим читанням (max
     }
   }
 
+  private ambiguous(legId: string, key: string, rows: any[], asOf?: string | null): ToolResult {
+    const seen = new Map<string, any>();
+    for (const r of rows) if (!seen.has(r.provision_key)) seen.set(r.provision_key, r);
+    return this.wrapResponse({
+      error: 'ambiguous_provision',
+      leg_id: legId,
+      looked_for: key,
+      ...(asOf ? { as_of: asOf } : {}),
+      message: 'Цей номер у межах акта має кілька норм — уточніть provision повним ключем.',
+      matches: [...seen.values()].map((r) => ({
+        provision_key: r.provision_key,
+        provision_type: r.provision_type,
+        schedule_no: r.schedule_no,
+        title: r.title,
+      })),
+    });
+  }
+
   private async currentProvision(legId: string, key: string, label?: string) {
-    return (await this.db.query(
+    const suffix = key.slice(legId.length + 1);
+    const rows = (await this.db.query(
       `SELECT provision_label, provision_type, ord, part, chapter, schedule_no, title,
-              valid_from, text, n_chars
+              valid_from, text, n_chars,
+              regexp_replace(provision_uri, '^https?://(?:www\\.)?legislation\\.gov\\.uk/', '')
+                AS provision_key
          FROM uk_legislation_provisions
         WHERE leg_id = $1 AND (provision_uri LIKE $2 OR provision_label = $3)
         ORDER BY (provision_uri LIKE $2) DESC, ord
-        LIMIT 1`, [legId, `%${key.slice(legId.length + 1)}%`, label])).rows[0];
+        LIMIT 10`, [legId, `%${suffix}%`, label])).rows;
+    return pickOne(rows, key);
   }
 
   // ─── uk_get_provision_history ──────────────────────────────────────

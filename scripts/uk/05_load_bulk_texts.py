@@ -116,9 +116,15 @@ def parse_meta(body, leg_id):
 # ⚠⚠ version_count, unapplied_effects, first_version and last_version are NOT in
 # this statement and must never be. They are stage 2's, computed from a complete
 # crawl, and a refresh that recomputed unapplied_effects from an incomplete
-# source once zeroed it on 33,434 acts. Everything else is filled only where the
-# register is currently empty, so a bulk refresh can add what is missing without
-# overwriting anything the crawl established.
+# source once zeroed it on 33,434 acts.
+#
+# Everything else is fill-only — COALESCE keeps whatever the crawl established — with
+# two deliberate exceptions, because these two are the fields that MOVE:
+#   document_status: an item goes 'final' -> 'revised' as the editorial team works on
+#     it, so the bulk value is newer than the register's by construction;
+#   valid_date: GREATEST, because it is the date of the edition in hand and a refresh
+#     that left it behind would describe the text we just loaded with an older date.
+# year and number are filled when missing but never changed: they are identity.
 UPSERT_REG = """
 INSERT INTO uk_legislation
     (id, leg_type, year, number, title, document_status, extent,
@@ -126,6 +132,8 @@ INSERT INTO uk_legislation
 VALUES %s
 ON CONFLICT (id) DO UPDATE SET
     title             = COALESCE(uk_legislation.title, EXCLUDED.title),
+    year              = COALESCE(uk_legislation.year, EXCLUDED.year),
+    number            = COALESCE(uk_legislation.number, EXCLUDED.number),
     document_status   = COALESCE(EXCLUDED.document_status, uk_legislation.document_status),
     extent            = COALESCE(uk_legislation.extent, EXCLUDED.extent),
     enactment_date    = COALESCE(uk_legislation.enactment_date, EXCLUDED.enactment_date),
@@ -197,7 +205,11 @@ def main():
     have_text = set()
     if not args.dry_run:
         conn = psycopg2.connect(DB_URL)
-        conn.autocommit = True
+        # NOT autocommit. --replace deletes an act's provisions and then inserts the
+        # replacements; under autocommit the delete commits on its own, so a crash or a
+        # failed insert in between leaves the act with no text at all and nothing to say
+        # so. One transaction per flush makes the swap atomic.
+        conn.autocommit = False
         cur = conn.cursor()
         cur.execute(VALID_FROM)
         valid_from = {r[0]: r[1] for r in cur.fetchall()}
@@ -243,6 +255,9 @@ def main():
                         (replaced,))
             replaced.clear()
         if not rows:
+            # The register upsert and any deletes above are still open work; commit
+            # them here or they sit in a transaction until some later flush decides to.
+            conn.commit()
             seen_versions.clear()
             return
         if seen_versions:
@@ -251,6 +266,7 @@ def main():
             seen_versions.clear()
         uniq = {(r[0], r[1], r[2]): r for r in rows}
         execute_values(cur, INS_PROV, list(uniq.values()), page_size=1000)
+        conn.commit()
         rows.clear()
 
     for zp in args.zip:

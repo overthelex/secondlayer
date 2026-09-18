@@ -66,9 +66,11 @@ CREATE TABLE IF NOT EXISTS uk_provision_version (
 CREATE INDEX IF NOT EXISTS idx_uk_pv_asat
     ON uk_provision_version (leg_id, valid_from DESC, valid_to);
 
--- "how did section 55 change over time", which is the other half of the tool.
-CREATE INDEX IF NOT EXISTS idx_uk_pv_key
-    ON uk_provision_version (leg_id, provision_key, valid_from);
+-- "how did section 55 change over time" needs no index of its own: the primary key is
+-- already (leg_id, provision_key, valid_from), which serves that lookup exactly. An
+-- index on the same three columns was here briefly and was pure cost — dropped rather
+-- than left, since it had already been created on lawrider_prod by hand.
+DROP INDEX IF EXISTS idx_uk_pv_key;
 
 CREATE INDEX IF NOT EXISTS idx_uk_pv_label
     ON uk_provision_version (leg_id, provision_label);

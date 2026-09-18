@@ -150,6 +150,107 @@ describe('uk_get_provision', () => {
   });
 });
 
+describe('uk_get_provision — ambiguity', () => {
+  it('refuses to guess when a bare number matches a section and a schedule paragraph', async () => {
+    // `4` in the Human Rights Act is section 4 and also paragraph 4 of Schedule 1.
+    // Returning the first row would be the wrong kind of helpful: a lawyer quoting the
+    // schedule paragraph as "section 4" has no way to notice.
+    const db = mockDb([
+      {
+        match: /uk_provision_version v JOIN uk_provision_text/,
+        rows: [
+          { provision_key: 'ukpga/1998/42/section/4', provision_type: 'section', title: 'Declaration', valid_from: '2013-10-01', valid_to: null, text: 'a' },
+          { provision_key: 'ukpga/1998/42/schedule/1/paragraph/4', provision_type: 'paragraph', schedule_no: '1', title: 'Art 4', valid_from: '2013-10-01', valid_to: null, text: 'b' },
+        ],
+      },
+    ]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_provision', {
+      leg_id: 'ukpga/1998/42', provision: 'paragraph/4', as_of: '2020-01-01',
+    }));
+
+    expect(out.error).toBe('ambiguous_provision');
+    expect(out.matches.map((m: any) => m.provision_key).sort()).toEqual([
+      'ukpga/1998/42/schedule/1/paragraph/4', 'ukpga/1998/42/section/4',
+    ]);
+  });
+
+  it('still answers when the exact key is among the matches', async () => {
+    const db = mockDb([
+      {
+        match: /uk_provision_version v JOIN uk_provision_text/,
+        rows: [
+          { provision_key: 'ukpga/1998/42/section/4', provision_label: '4', valid_from: '2013-10-01', valid_to: null, text: 'the right one', n_chars: 13 },
+          { provision_key: 'ukpga/1998/42/schedule/1/paragraph/4', provision_label: '4', valid_from: '2013-10-01', valid_to: null, text: 'the other one', n_chars: 13 },
+        ],
+      },
+    ]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_provision', {
+      leg_id: 'ukpga/1998/42', provision: '4', as_of: '2020-01-01',
+    }));
+
+    expect(out.error).toBeUndefined();
+    expect(out.provision.text).toBe('the right one');
+  });
+
+  it('binds the act, the key and the date it was given', async () => {
+    const db = mockDb([{ match: /uk_provision_version v JOIN uk_provision_text/, rows: [] },
+                       { match: /count\(\*\) AS rows/, rows: [{ rows: '0', from_: null, to_: null }] },
+                       { match: /FROM uk_legislation_provisions/, rows: [] }]);
+    const tools = new UkLegislationTools(db);
+
+    await tools.executeTool('uk_get_provision', {
+      leg_id: 'ukpga/1990/8', provision: 'section/55', as_of: '2004-03-03',
+    });
+
+    expect(db.calls[0].params).toEqual(
+      ['ukpga/1990/8', 'ukpga/1990/8/section/55', '55', '2004-03-03']);
+  });
+});
+
+describe('uk_search_legislation', () => {
+  it('finds by title and reports coverage on every hit', async () => {
+    const db = mockDb([{
+      match: /FROM uk_legislation l/,
+      rows: [{ _total_count: '2', id: 'ukpga/2006/46', leg_type: 'ukpga', year: 2006,
+               title: 'Companies Act 2006', has_text: true, versions: '200',
+               unapplied_effects: 61 }],
+    }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_search_legislation', { query: 'Companies Act' }));
+    const hit = (out.results || out)[0] ?? out.results?.[0];
+    expect(JSON.stringify(out)).toContain('ukpga/2006/46');
+    expect(JSON.stringify(out)).toContain('"point_in_time":true');
+    expect(db.calls[0].params[0]).toBe('%Companies Act%');
+  });
+
+  it('treats an identifier as an identifier, not as a title fragment', async () => {
+    const db = mockDb([{ match: /FROM uk_legislation l/, rows: [] }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_search_legislation', { query: 'ukpga/2006/46' }));
+    expect(db.calls[0].params[0]).toBe('ukpga/2006/46');
+    expect(db.calls[0].sql).toContain('l.id = $1');
+    expect(out.note).toMatch(/відсутній у реєстрі/);
+  });
+
+  it('counts one archived version as point-in-time data', async () => {
+    // An act with a single archived version still says what it looked like on that
+    // date; only zero means there is no history to offer.
+    const db = mockDb([{
+      match: /FROM uk_legislation l/,
+      rows: [{ _total_count: '1', id: 'asp/2006/1', versions: '1', has_text: true }],
+    }]);
+    const tools = new UkLegislationTools(db);
+    const out = parse(await tools.executeTool('uk_search_legislation', { query: 'Housing' }));
+    expect(JSON.stringify(out)).toContain('"point_in_time":true');
+  });
+});
+
 describe('uk_get_provision_history', () => {
   it('groups intervals by provision_key so two provisions are not interleaved', async () => {
     const db = mockDb([
