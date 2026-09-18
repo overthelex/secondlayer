@@ -314,6 +314,14 @@ def process_act(job):
     conn = _W["conn"]
     try:
         with conn.cursor() as cur:
+            # Reloading an act that gained a version recomputes every interval in
+            # it, so clear the act first rather than relying on the upsert: a
+            # provision whose key changed between runs would otherwise leave a
+            # stale row behind that nothing ever closes. Orphaned rows in
+            # uk_provision_text are harmless — the text is shared by hash and
+            # costs a row, not a wrong answer.
+            cur.execute("DELETE FROM uk_provision_version WHERE leg_id = %s",
+                        (leg_id,))
             if texts:
                 execute_values(cur, INS_TEXT,
                                [(psycopg2.Binary(h), t, n) for h, (t, n) in texts.items()],
@@ -381,21 +389,29 @@ def main():
         skip = set(args.exclude_type)
         by_act = {k: v for k, v in by_act.items() if k.split("/")[0] not in skip}
 
-    done = set()
+    done = {}
     registered = set()
     if not args.dry_run:
         conn = psycopg2.connect(DB_URL)
         with conn.cursor() as cur:
             if not args.force:
-                cur.execute("SELECT leg_id FROM uk_pit_load_state")
-                done = {r[0] for r in cur.fetchall()}
+                # Skip on the VERSION COUNT, not on the act being present. The
+                # archive is refreshed daily, so on the next run an act that has
+                # gained a version is the whole point of running again — keying
+                # the skip on leg_id alone would make every refresh a no-op and
+                # the corpus would silently freeze at whatever the first load saw.
+                # versions + versions_empty is exactly the number of members the
+                # act had when it was loaded.
+                cur.execute("SELECT leg_id, versions + versions_empty "
+                            "FROM uk_pit_load_state")
+                done = dict(cur.fetchall())
             cur.execute("SELECT id FROM uk_legislation")
             registered = {r[0] for r in cur.fetchall()}
         conn.close()
         if done:
             print(f"already loaded, skipping: {len(done)}", flush=True)
 
-    jobs = [(k, v) for k, v in sorted(by_act.items()) if k not in done]
+    jobs = [(k, v) for k, v in sorted(by_act.items()) if done.get(k) != len(v)]
     if args.limit:
         jobs = jobs[:args.limit]
     outside = sum(1 for k, _ in jobs if registered and k not in registered)
