@@ -75,6 +75,44 @@ describe('isToolInToolset', () => {
     expect([...ua, ...ch].sort()).toEqual([...names].sort());
   });
 
+  it('serves only uk_* when MCP_TOOLSET=uk', () => {
+    process.env.MCP_TOOLSET = 'uk';
+    expect(isToolInToolset('uk_get_provision')).toBe(true);
+    expect(isToolInToolset('uk_search_legislation')).toBe(true);
+    expect(isToolInToolset('ch_get_act_text')).toBe(false);
+    expect(isToolInToolset('search_registry')).toBe(false);
+    // Prefix means prefix here too.
+    expect(isToolInToolset('search_uk_things')).toBe(false);
+  });
+
+  it('accepts a comma-separated list, which is what lawrider.ch needs', () => {
+    // The Swiss box holds both corpora: 238,926 UK acts alongside the CH ones, and the
+    // UK half is OGL-licensed and ungated. 'ch' alone hid all of it (LEXAI-2057).
+    process.env.MCP_TOOLSET = 'ch,uk';
+    expect(isToolInToolset('ch_get_act_text')).toBe(true);
+    expect(isToolInToolset('uk_get_act_as_at')).toBe(true);
+    expect(isToolInToolset('search_court_decisions')).toBe(false);
+    expect(isToolInToolset('rada_search_parliament_bills')).toBe(false);
+  });
+
+  it('excludes uk_* from the ua complement, because UK lives on lawrider', () => {
+    process.env.MCP_TOOLSET = 'ua';
+    expect(isToolInToolset('uk_get_provision')).toBe(false);
+    expect(isToolInToolset('search_court_decisions')).toBe(true);
+  });
+
+  it('honours the good members of a list that also contains a typo', () => {
+    // Dropping every tool because someone left a stray comma or misspelled one value
+    // would be its own outage; only a value with NO recognisable member fails closed.
+    process.env.MCP_TOOLSET = 'ch,uk,';
+    expect(isToolInToolset('ch_get_act_text')).toBe(true);
+    expect(isToolInToolset('uk_get_act')).toBe(true);
+
+    process.env.MCP_TOOLSET = 'ch,kh';
+    expect(isToolInToolset('ch_get_act_text')).toBe(true);
+    expect(isToolInToolset('uk_get_act')).toBe(false);
+  });
+
   it('fails closed on an unknown toolset value', () => {
     process.env.MCP_TOOLSET = 'hc';
     expect(isToolInToolset('ch_get_act_text')).toBe(false);

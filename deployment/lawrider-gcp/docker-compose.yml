@@ -136,9 +136,18 @@ services:
       # closed instead of hitting a wrong host.
       ENABLE_UNIFIED_GATEWAY: "true"
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      # lawrider MCP is Swiss-only: every MCP transport advertises and accepts ch_* tools
-      # exclusively (see mcp_backend/src/api/mcp-toolset.ts). UA/UK tools stay on legal.org.ua.
-      MCP_TOOLSET: "ch"
+      # This box holds two corpora, so it serves two prefixes (see
+      # mcp_backend/src/api/mcp-toolset.ts). The Ukrainian tools stay on legal.org.ua.
+      #
+      # 'uk' was added 2026-09-18: the UK statute book has been sitting here since the
+      # AWS move — 238,926 acts, 1.78M provisions of current text, 1.64M point-in-time
+      # intervals — and 'ch' alone meant nobody could reach any of it. legislation.gov.uk
+      # is OGL v3.0, so the legislation tools are ungated.
+      #
+      # ⚠ This does NOT open up uk_court_decisions. Those judgments are under the Find
+      # Case Law licence, whose application is still undecided, and they have no tool at
+      # all until it is — see services/uk-judgment-access.ts and LEXAI-2056.
+      MCP_TOOLSET: "ch,uk"
 
       # ch_semantic_search: local Qdrant (ch_corpus_bge_cls) + local TEI embedder.
       # The MCP_TOOLSET gate keeps UA qdrant-backed tools out, so a plain QDRANT_URL is safe.
