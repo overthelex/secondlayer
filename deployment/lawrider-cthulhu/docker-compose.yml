@@ -1,0 +1,324 @@
+# lawrider.ch stack on cthulhu (local.lex), next to legal.org.ua.
+# Serves: the static lawrider.ch site + the unified-gateway MCP API
+# (ch_* tools only, MCP_TOOLSET=ch) on mcp.lawrider.ch.
+#
+# Deployed by .github/workflows/deploy-lawrider-cthulhu.yml on its own runner
+# (label cthulhu-lawrider), from its own checkout ~/lawrider/repo.
+# Env file: ~/lawrider/.env.lawrider (never in git).
+#
+# Isolation from legal.org.ua on the same box (see README.md):
+#   - own compose project + network `lawrider`, no shared networks
+#   - no 80/443: traffic arrives through the Cloudflare tunnel (cloudflared)
+#   - the only host port is 127.0.0.1:5448 for the ch-pipeline crons
+#     (5432/5438/3000/6333 are taken by other stacks on this box)
+#   - memory/CPU caps on every service
+#
+# Host paths:
+#   /data/lawrider/pg       postgres data
+#   /data/lawrider/redis    redis data
+#   /data/lawrider/qdrant   qdrant storage (ch_corpus_bge_cls)
+#   /data/lawrider/site     static site
+
+name: lawrider
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pg-lawrider
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: >-
+      postgres -c shared_buffers=8GB -c effective_cache_size=22GB
+      -c maintenance_work_mem=2GB -c max_wal_size=8GB
+      -c wal_compression=on -c work_mem=64MB
+      -c max_connections=200
+    volumes:
+      - /data/lawrider/pg:/var/lib/postgresql/data
+    ports:
+      # ch-pipeline crons reach pg through CHPIPE_PG_PORT=5448
+      # (5432 and 5438 belong to other stacks on this box)
+      - "127.0.0.1:5448:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    shm_size: 1g
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          # shared_buffers 8G + work_mem headroom; keeps pg from eating
+          # the page cache legal.org.ua's own postgres relies on
+          memory: 16G
+    networks: [lawrider]
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-lawrider
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - /data/lawrider/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    networks: [lawrider]
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.mono-backend
+    image: lawrider-app:latest
+    container_name: lawrider-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-secondlayer_prod}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_prod}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+      TZ: Europe/Zurich
+    working_dir: /app/mcp_backend
+    command: ["node", "dist/migrations/migrate.js"]
+    restart: "no"
+    networks: [lawrider]
+
+  app:
+    image: lawrider-app:latest
+    container_name: lawrider-app
+    command: ["node", "--max-old-space-size=4096", "dist/http-server.js"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    environment:
+      NODE_ENV: production
+      HTTP_PORT: 3000
+      HTTP_HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET:-}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-secondlayer_prod}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-secondlayer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-secondlayer_prod}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # LLM providers (same keys as AWS prod; needed by consult/summarise paths)
+      LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-bedrock-first}
+      AWS_ACCESS_KEY_ID: ${BACKEND_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${BACKEND_AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      BEDROCK_MODEL_QUICK: ${BEDROCK_MODEL_QUICK:-eu.anthropic.claude-haiku-4-5-20251001-v1:0}
+      BEDROCK_MODEL_STANDARD: ${BEDROCK_MODEL_STANDARD:-eu.anthropic.claude-sonnet-4-6}
+      BEDROCK_MODEL_DEEP: ${BEDROCK_MODEL_DEEP:-eu.anthropic.claude-sonnet-4-6}
+      BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-eu.amazon.nova-micro-v1:0}
+      BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-eu.amazon.nova-pro-v1:0}
+      BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-eu.amazon.nova-pro-v1:0}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+      OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+      OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+      # Unified gateway: ch_* / uk_* tools are served locally from Postgres.
+      # RADA / OpenReyestr / Qdrant / Neo4j / MinIO / document-service stay on
+      # the UA prod — leave their endpoints unset here so those tools fail
+      # closed instead of hitting a wrong host.
+      ENABLE_UNIFIED_GATEWAY: "true"
+      CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
+      # lawrider MCP is Swiss-only: every MCP transport advertises and accepts ch_* tools
+      # exclusively (see mcp_backend/src/api/mcp-toolset.ts). UA/UK tools stay on legal.org.ua.
+      MCP_TOOLSET: "ch"
+
+      # ch_semantic_search: local Qdrant (ch_corpus_bge_cls) + local TEI embedder.
+      # The MCP_TOOLSET gate keeps UA qdrant-backed tools out, so a plain QDRANT_URL is safe.
+      QDRANT_URL: http://qdrant:6333
+      BGE_M3_URL: http://tei-bge-m3:80
+      CH_BGE_COLLECTION: ${CH_BGE_COLLECTION:-ch_corpus_bge_cls}
+
+      # Identity of this deployment
+      PUBLIC_URL: https://lawrider.ch
+      FRONTEND_URL: https://lawrider.ch
+      ALLOWED_ORIGINS: https://lawrider.ch,https://mcp.lawrider.ch
+      WEBAUTHN_RP_ID: lawrider.ch
+      WEBAUTHN_RP_NAME: LawRider
+      WEBAUTHN_ORIGIN: https://lawrider.ch
+
+      MOCK_PAYMENTS: "true"
+      UPLOAD_TEMP_DIR: /app/data/uploads
+      LOG_LEVEL: ${BACKEND_LOG_LEVEL:-info}
+      LOG_TO_FILE: "false"
+      TZ: Europe/Zurich
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - app_data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health/ready', r => { let d=''; r.on('data', c => d+=c); r.on('end', () => { if (r.statusCode !== 200) { process.stderr.write(d); process.exit(1); } process.exit(0); }); }).on('error', e => { process.stderr.write(e.message); process.exit(1); });"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.5"
+          memory: 6G
+    networks: [lawrider]
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    container_name: qdrant-lawrider
+    restart: unless-stopped
+    # Vector store for the CH corpus: ch_corpus_bge_cls, 22.3M points
+    # (1.22M decisions + 7.5M current+historical legislation articles),
+    # bge-m3 CLS, float16 on disk + binary quantization in RAM.
+    # Served by ch_semantic_search through QDRANT_URL on `app`.
+    volumes:
+      - /data/lawrider/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          # measured after the full load: anon RSS 11.7G — the HNSW graph over
+          # 22.3M points lives in RAM (binary quant 2.9G + links); 8G would
+          # OOM-loop on the next recreate
+          cpus: "2"
+          memory: 14G
+    networks: [lawrider]
+
+  # Query embedder for ch_semantic_search. Same image+flags as the UA prod
+  # container (docker-compose.local.yml is the canonical definition); bge-m3
+  # serves CLS pooling by default, which is the space ch_corpus_bge_cls was
+  # built in — do not add a --pooling flag.
+  tei-bge-m3:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    container_name: tei-bge-m3-lawrider
+    restart: unless-stopped
+    # Query workload: single short texts. The UA container's bulk config
+    # (--max-batch-tokens 65536) made onnxruntime pre-size its arenas to
+    # 11.1G RSS; 4096 serves the same fp32 model at 6.4G steady / 60-110ms
+    # per query (measured on this box 03.09).
+    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "4096", "--max-client-batch-size", "16"]
+    volumes:
+      - tei_cache:/data
+    healthcheck:
+      # the cpu image ships curl, not wget
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      # first start downloads the 2.3GB model
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          cpus: "3"
+          # steady RSS 6.4G at --max-batch-tokens 4096; the model-load peak
+          # needs more (dies under a 6G cap), so keep headroom
+          memory: 10G
+    networks: [lawrider]
+
+  site:
+    image: nginx:1.27-alpine
+    container_name: lawrider-site
+    restart: unless-stopped
+    volumes:
+      - /data/lawrider/site:/usr/share/nginx/html:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks: [lawrider]
+
+  # Internal edge: host routing for lawrider.ch / www / mcp / check.
+  # Plain HTTP on the lawrider network only; TLS ends at Cloudflare and the
+  # tunnel below is the only way in. No host ports.
+  edge:
+    image: nginx:1.27-alpine
+    container_name: lawrider-edge
+    restart: unless-stopped
+    volumes:
+      # directory mount, not a file: a file bind-mount pins the inode and
+      # misses edits the deploy rsync writes as new files
+      - ./nginx:/etc/nginx/conf.d:ro
+    depends_on:
+      - site
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks: [lawrider]
+
+  # Cloudflare tunnel `lawrider-on-cthulhu` (remotely managed; ingress rules
+  # live in Cloudflare and point every lawrider hostname at http://lawrider-edge:80).
+  # Separate from legal.org.ua's tunnel and from nginx-local's 80/443.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-lawrider
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      TUNNEL_TOKEN: ${LAWRIDER_TUNNEL_TOKEN:?LAWRIDER_TUNNEL_TOKEN is not set}
+    depends_on:
+      - edge
+    healthcheck:
+      test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:2000", "ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks: [lawrider]
+
+volumes:
+  app_data:
+  tei_cache:
+
+networks:
+  lawrider:
+    name: lawrider

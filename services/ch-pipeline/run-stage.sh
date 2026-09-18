@@ -54,8 +54,8 @@ mkdir -p "$LOG_DIR"
 # ~/SecondLayer/deployment/.env.prod has a line with an unquoted space that
 # breaks `set -a; . .env.prod`, so read only the one variable we need
 # instead of sourcing the whole file.
-PGPASS="$(grep -E '^POSTGRES_PASSWORD=' ~/SecondLayer/deployment/.env.prod | cut -d= -f2-)"
-export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:5438/secondlayer_prod"
+PGPASS="$(grep -E '^POSTGRES_PASSWORD=' "${CHPIPE_ENV_FILE:-$HOME/SecondLayer/deployment/.env.prod}" | cut -d= -f2-)"
+export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:${CHPIPE_PG_PORT:-5438}/secondlayer_prod"
 export CHPIPE_RAW_DIR=/data/ch-corpus/raw
 
 # `fetch-xml` on the command line, fetch_xml_stage as a module.

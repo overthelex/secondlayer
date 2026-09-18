@@ -69,8 +69,8 @@ LOG="$LOG_DIR/reextract-citations${SPIDER:+-$SPIDER}.log"
 
 # Same one-variable read as run-stage.sh: deployment/.env.prod has a line
 # with an unquoted space that breaks `set -a; . .env.prod`.
-PGPASS="$(grep -E '^POSTGRES_PASSWORD=' ~/SecondLayer/deployment/.env.prod | cut -d= -f2-)"
-export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:5438/secondlayer_prod"
+PGPASS="$(grep -E '^POSTGRES_PASSWORD=' "${CHPIPE_ENV_FILE:-$HOME/SecondLayer/deployment/.env.prod}" | cut -d= -f2-)"
+export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:${CHPIPE_PG_PORT:-5438}/secondlayer_prod"
 export CHPIPE_RAW_DIR=/data/ch-corpus/raw
 
 say() { echo "=== $(date -Is) $* ===" | tee -a "$LOG"; }

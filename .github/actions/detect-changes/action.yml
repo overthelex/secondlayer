@@ -144,6 +144,10 @@ runs:
             # не ставим: иначе правка docker-compose.local.yml выкатывает прод.
             deployment/docker-compose.local.yml|deployment/docker-compose.dev-vm.yml|deployment/docker-compose.stage.yml) LOCAL_ONLY=true; DEPLOYMENT=true ;;
             deployment/grafana/*|deployment/prometheus/*) DEPLOY_MONITORING=true; DEPLOYMENT=true ;;
+            # Стеки lawrider.ch деплоят свои воркфлоу (deploy-lawrider-cthulhu.yml,
+            # deploy-lawrider-gcp.yml); legal.org.ua эти файлы не читает, поэтому
+            # ни DEPLOY_INFRA, ни DEPLOYMENT: иначе правка lawrider пересобирает legal.
+            deployment/lawrider/*|deployment/lawrider-gcp/*|deployment/lawrider-cthulhu/*) ;;
             deployment/*) DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             mobile/*) MOBILE=true ;;
             platform/*) PLATFORM=true ;;

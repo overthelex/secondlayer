@@ -19,16 +19,10 @@
 
 name: Deploy lawrider.ch (GCP)
 
+# Dispatch only since the Swiss stack moved to cthulhu (deploy-lawrider-cthulhu.yml):
+# the GCP box keeps the UK data, and a push to main must no longer rebuild and
+# restart the old CH app here.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "deployment/lawrider-gcp/**"
-      - "deployment/Dockerfile.mono-backend"
-      - "mcp_backend/**"
-      - "packages/shared/**"
-      - "services/ch-pipeline/**"
-      - ".github/workflows/deploy-lawrider-gcp.yml"
   workflow_dispatch:
     inputs:
       migrate:

@@ -78,8 +78,8 @@ fi
   trap 'code=$?; echo "=== $(date -Is) delta finished: FAILED (exit $code) ==="' EXIT
   echo "=== $(date -Is) starting delta ==="
 
-  PGPASS="$(grep -E '^POSTGRES_PASSWORD=' ~/SecondLayer/deployment/.env.prod | cut -d= -f2-)"
-  export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:5438/secondlayer_prod"
+  PGPASS="$(grep -E '^POSTGRES_PASSWORD=' "${CHPIPE_ENV_FILE:-$HOME/SecondLayer/deployment/.env.prod}" | cut -d= -f2-)"
+  export CHPIPE_DSN="postgresql://secondlayer:${PGPASS}@127.0.0.1:${CHPIPE_PG_PORT:-5438}/secondlayer_prod"
   export CHPIPE_RAW_DIR=/data/ch-corpus/raw
   # The delta runs unattended alongside live traffic, so it is quieter than a
   # supervised backfill: fewer HTTP connections, and fewer CPU workers for
@@ -90,7 +90,7 @@ fi
   export CHPIPE_HTTP_CONCURRENCY=6
   export CHPIPE_CPU_WORKERS=2
 
-  cd ~/SecondLayer/services/ch-pipeline
+  cd "${CHPIPE_REPO:-$HOME/SecondLayer}/services/ch-pipeline"
   # 9>&- closes the lock fd for python specifically, so it is never
   # inherited into that process (verified: without this, `os.listdir
   # ('/dev/fd')` inside python includes fd 9). The wrapper shell above still

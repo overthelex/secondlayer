@@ -1,0 +1,20 @@
+# >>> lawrider CH pipeline (deployment/lawrider-cthulhu/cron/crontab.fragment) >>>
+# Same schedule the GCP box ran in UTC, written in the box's local time
+# (Europe/Kyiv): Debian cron ignores CRON_TZ. UTC+3 in summer, so in winter
+# every job runs an hour earlier in UTC terms; nothing depends on the exact hour.
+# Everything niced: the box also serves legal.org.ua.
+# Install: see deployment/lawrider-cthulhu/README.md ("Crons").
+CHPIPE_REPO=/home/vovkes/lawrider/repo
+CHPIPE_ENV_FILE=/home/vovkes/lawrider/.env.lawrider
+CHPIPE_PG_PORT=5448
+CHPIPE_SHAB_CONCURRENCY=12
+CHPIPE_SHAB_RPS=20
+PATH=/home/vovkes/lawrider/ch-pipeline-venv/bin:/usr/local/bin:/usr/bin:/bin
+15 10 * * * nice -n 10 ionice -c3 /home/vovkes/lawrider/repo/services/ch-pipeline/run-delta.sh
+0 6 * * 0 cd /home/vovkes/lawrider/repo/services/ch-pipeline && CHPIPE_OCR_WORKERS=2 CHPIPE_LOAD_CEILING=0 nice -n 10 ionice -c3 ./run-stage.sh ocr
+0 7 * * 0 cd /home/vovkes/lawrider/repo/services/ch-pipeline && CHPIPE_HTTP_CONCURRENCY=12 nice -n 10 ionice -c3 ./run-stage.sh cantonal-acts
+0 8 * * 0 cd /home/vovkes/lawrider/repo/services/ch-pipeline && nice -n 10 ionice -c3 ./run-stage.sh lexfind-registry
+0 9 * * 0 nice -n 10 ionice -c3 /home/vovkes/lawrider/repo/deployment/lawrider-cthulhu/cron/ch-cantonal-phase2-weekly.sh >> /data/ch-corpus/logs/cantonal-phase2-weekly.log 2>&1
+0 12 * * 0 cd /home/vovkes/lawrider/repo/services/ch-pipeline && nice -n 10 ionice -c3 ./run-stage.sh commentary
+0 13 * * 0 nice -n 10 ionice -c3 /home/vovkes/lawrider/repo/services/ch-pipeline/run-portals.sh
+# <<< lawrider CH pipeline <<<

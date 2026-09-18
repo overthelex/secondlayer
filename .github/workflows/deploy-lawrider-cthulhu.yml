@@ -1,0 +1,133 @@
+# Deploy lawrider.ch (Swiss product) to cthulhu (local.lex), next to legal.org.ua.
+#
+# Standalone pipeline. It shares the machine with legal.org.ua and nothing else:
+# - its own runner: label `cthulhu-lawrider` (~/actions-runner-lawrider), so it
+#   never picks up legal.org.ua jobs and they never pick up this one
+# - its own checkout ~/lawrider/repo; ~/SecondLayer belongs to deploy-local
+#   (ci-local-deploy.yml) and is never touched here
+# - its own compose project `lawrider` (deployment/lawrider-cthulhu), no host
+#   ports besides 127.0.0.1:5448, traffic via its own Cloudflare tunnel
+# - legal.org.ua health is checked before and after; if it got worse, the job
+#   fails loudly
+#
+# Secrets:
+#   CORE_REPO_SSH_KEY  deploy key (read) for overthelex/secondlayer-core;
+#                      proprietary sources are overlaid before build
+# Box state (not in git):
+#   ~/lawrider/.env.lawrider  env for compose (pg/redis passwords, LLM keys,
+#                             LAWRIDER_TUNNEL_TOKEN)
+
+name: Deploy lawrider.ch (cthulhu)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deployment/lawrider-cthulhu/**"
+      - "deployment/Dockerfile.mono-backend"
+      - "mcp_backend/**"
+      - "packages/shared/**"
+      - "services/ch-pipeline/**"
+      - ".github/workflows/deploy-lawrider-cthulhu.yml"
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: "Only build the image; do not (re)start the stack"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-lawrider-cthulhu
+  cancel-in-progress: false
+
+env:
+  LR_HOME: /home/vovkes/lawrider
+  LR_REPO: /home/vovkes/lawrider/repo
+  LR_ENV: /home/vovkes/lawrider/.env.lawrider
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, cthulhu-lawrider]
+    timeout-minutes: 60
+    steps:
+      - name: legal.org.ua health (before)
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://legal.org.ua/health || echo 000)
+          echo "legal.org.ua /health before: $code"
+          echo "LEGAL_BEFORE=$code" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - name: Overlay core sources
+        env:
+          CORE_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
+        run: |
+          if [ -z "$CORE_KEY" ]; then
+            echo "::error::CORE_REPO_SSH_KEY secret is not set, refusing to build without the proprietary overlay"; exit 1
+          fi
+          KEYFILE=$(mktemp)
+          trap 'rm -f "$KEYFILE"' EXIT
+          printf '%s\n' "$CORE_KEY" > "$KEYFILE"
+          chmod 600 "$KEYFILE"
+          CORE_TMP=$(mktemp -d)
+          GIT_SSH_COMMAND="ssh -i $KEYFILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new" \
+            git clone --depth 1 git@github.com:overthelex/secondlayer-core "$CORE_TMP"
+          test -s "$CORE_TMP/src/services/chat-execution-loop.ts" && test -s "$CORE_TMP/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core clone incomplete, key files missing"; exit 1; }
+          find "$CORE_TMP"/src/services -maxdepth 1 -name '*.ts' -exec cp -f {} mcp_backend/src/services/ \;
+          cp -rf "$CORE_TMP"/src/prompts/* mcp_backend/src/prompts/
+          rm -rf "$CORE_TMP"
+
+      - name: Sync tree to ~/lawrider/repo
+        run: |
+          test -s "$LR_ENV" || { echo "::error::$LR_ENV missing on the box, provision it first"; exit 1; }
+          mkdir -p "$LR_REPO"
+          rsync -a --delete --exclude '.git' --exclude 'node_modules' ./ "$LR_REPO/"
+          test -s "$LR_REPO/mcp_backend/src/services/chat-execution-loop.ts" \
+            || { echo "::error::overlay missing after sync"; exit 1; }
+
+      - name: Build image
+        working-directory: /home/vovkes/lawrider/repo/deployment/lawrider-cthulhu
+        run: |
+          # niced: the build shares 16 cores with legal.org.ua's live stack
+          nice -n 10 ionice -c3 docker compose -p lawrider --env-file "$LR_ENV" build migrate
+
+      - name: Start stack
+        if: ${{ !inputs.build_only }}
+        working-directory: /home/vovkes/lawrider/repo/deployment/lawrider-cthulhu
+        run: |
+          # project-scoped: --remove-orphans only ever sees containers of project `lawrider`
+          docker compose -p lawrider --env-file "$LR_ENV" up -d --remove-orphans
+
+      - name: Health checks
+        if: ${{ !inputs.build_only }}
+        run: |
+          for i in $(seq 1 40); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' lawrider-app 2>/dev/null || echo starting)
+            [ "$state" = "healthy" ] && break
+            sleep 15
+          done
+          [ "$state" = "healthy" ] || {
+            echo "::error::lawrider-app never went healthy (state=$state)"
+            docker logs --tail 50 lawrider-app || true
+            exit 1
+          }
+          # the edge routes both hosts (inside the lawrider network)
+          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.ch' http://127.0.0.1/
+          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.ch' http://127.0.0.1/health/ready
+          # public path through the tunnel: only meaningful once DNS points at it
+          if getent hosts mcp.lawrider.ch >/dev/null; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://mcp.lawrider.ch/health/ready || echo 000)
+            echo "public mcp.lawrider.ch/health/ready: $code"
+          fi
+          echo "lawrider deploy OK"
+
+      - name: legal.org.ua health (after)
+        if: always()
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://legal.org.ua/health || echo 000)
+          echo "legal.org.ua /health: before=$LEGAL_BEFORE after=$code"
+          if [ "$LEGAL_BEFORE" = "200" ] && [ "$code" != "200" ]; then
+            echo "::error::legal.org.ua went from 200 to $code during the lawrider deploy"
+            exit 1
+          fi
