@@ -344,6 +344,13 @@ def main():
     ap.add_argument("--only", action="append", help="load just these leg_ids")
     ap.add_argument("--only-type", action="append",
                     help="restrict to these types, e.g. --only-type ukpga")
+    ap.add_argument("--exclude-type", action="append",
+                    help="skip these types. The point of this is splitting one "
+                         "archive across two machines: ukpga alone is 120.4 GB of "
+                         "the 186.1 GB, so `--only-type ukpga` on the big box and "
+                         "`--exclude-type ukpga` on the small one is a real split "
+                         "rather than a cosmetic one. Both write the same tables "
+                         "and never touch the same act, so the keys cannot collide.")
     ap.add_argument("--force", action="store_true",
                     help="reload acts already in uk_pit_load_state")
     ap.add_argument("--include-welsh", action="store_true",
@@ -370,6 +377,9 @@ def main():
     if args.only_type:
         types = set(args.only_type)
         by_act = {k: v for k, v in by_act.items() if k.split("/")[0] in types}
+    if args.exclude_type:
+        skip = set(args.exclude_type)
+        by_act = {k: v for k, v in by_act.items() if k.split("/")[0] not in skip}
 
     done = set()
     registered = set()
