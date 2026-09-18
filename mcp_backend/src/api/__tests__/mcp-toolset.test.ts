@@ -113,6 +113,29 @@ describe('isToolInToolset', () => {
     expect(isToolInToolset('uk_get_act')).toBe(false);
   });
 
+  it('keeps every tool lawrider.ch serves today when uk is added to the list', () => {
+    // Captured from the live GET /mcp discovery on the GCP box on 2026-09-18, before the
+    // toolset change. Adding 'uk' must be purely additive: if any of these twenty stops
+    // being advertised, the Swiss product loses a tool on the next deploy.
+    const LIVE_ON_LAWRIDER = [
+      'ch_check_precedent_status', 'ch_get_act_article', 'ch_get_act_history',
+      'ch_get_act_text', 'ch_get_article_purpose', 'ch_get_citation_graph',
+      'ch_get_commentary', 'ch_get_company', 'ch_get_court_decision',
+      'ch_get_decision_legislation', 'ch_get_echr_case', 'ch_get_material',
+      'ch_search_commentary', 'ch_search_companies', 'ch_search_court_decisions',
+      'ch_search_echr', 'ch_search_legislation', 'ch_search_materials',
+      'ch_semantic_search', 'ch_verify_citations',
+    ];
+
+    process.env.MCP_TOOLSET = 'ch,uk';
+    expect(LIVE_ON_LAWRIDER.filter((n) => !isToolInToolset(n))).toEqual([]);
+
+    // And the old value keeps behaving exactly as it did, so a rollback is safe.
+    process.env.MCP_TOOLSET = 'ch';
+    expect(LIVE_ON_LAWRIDER.filter((n) => !isToolInToolset(n))).toEqual([]);
+    expect(isToolInToolset('uk_get_act')).toBe(false);
+  });
+
   it('fails closed on an unknown toolset value', () => {
     process.env.MCP_TOOLSET = 'hc';
     expect(isToolInToolset('ch_get_act_text')).toBe(false);
