@@ -136,6 +136,34 @@ describe('isToolInToolset', () => {
     expect(isToolInToolset('uk_get_act')).toBe(false);
   });
 
+  it('lets NOTHING Ukrainian through on the Swiss box, family by family', () => {
+    // The GCP box must serve no UA tool at all (user, 2026-09-18). 90 of the 115 tool
+    // names declared under api/tools are neither ch_ nor uk_, and they are not one
+    // family: alongside the obvious search_*/get_*/rada_*/openreyestr_* there are
+    // ab_*, osint-ish check_*, import control (start_import, cancel_import), a bare
+    // `query`, and per-jurisdiction one-offs like india_* and spain_*. One representative
+    // per naming family, so a new prefix cannot sneak past the ch_/uk_ rule unnoticed.
+    const UA_FAMILIES = [
+      'ab_create_experiment', 'analyze_case_pattern', 'build_legal_decision',
+      'bulk_ingest_court_decisions', 'calculate_monetary_claims', 'cancel_import',
+      'check_domain_reputation', 'compare_practice_pro_contra', 'count_cases_by_party',
+      'edrsr_court_decisions_by_court', 'extract_document_sections',
+      'find_similar_fact_pattern_cases', 'format_answer_pack', 'get_case_documents_chain',
+      'india_court_stats', 'list_import_sources', 'load_full_texts', 'nextcloud_share',
+      'query', 'search_amcu_practice', 'spain_aepd_get_resolution', 'start_import',
+      'vectorize_edrsr_results', 'workflow_memory_ingest',
+      'rada_search_parliament_bills', 'openreyestr_search_entities',
+    ];
+
+    process.env.MCP_TOOLSET = 'ch,uk';
+    expect(UA_FAMILIES.filter(isToolInToolset)).toEqual([]);
+
+    // The same must hold for the value the box runs today, so the guarantee does not
+    // depend on which of the two is deployed at any moment.
+    process.env.MCP_TOOLSET = 'ch';
+    expect(UA_FAMILIES.filter(isToolInToolset)).toEqual([]);
+  });
+
   it('fails closed on an unknown toolset value', () => {
     process.env.MCP_TOOLSET = 'hc';
     expect(isToolInToolset('ch_get_act_text')).toBe(false);
@@ -214,6 +242,41 @@ describe('MCPSSEServer under MCP_TOOLSET=ch', () => {
     expect(errEvent).toBeDefined();
     expect(errEvent!.data.error.message).toContain('not available');
     expect(fakeRegistry.executeTool).not.toHaveBeenCalled();
+  });
+
+  it('with the deployed ch,uk value, tools/call still refuses a UA tool and still runs a ch_ one', async () => {
+    // The list-level assertions above are about advertising. This is the one that matters
+    // for a box that must not serve UA at all: a caller who already knows the name gets
+    // refused before the registry is touched, under the value the GCP box will run.
+    process.env.MCP_TOOLSET = 'ch,uk';
+    const server = new MCPSSEServer(fakeRegistry as any, fakeCostTracker as any);
+
+    const denied = new MockSSEResponse();
+    await server.handleSSEConnection(
+      requestFor({
+        jsonrpc: '2.0', id: 10, method: 'tools/call',
+        params: { name: 'search_court_decisions', arguments: { query: 'x' } },
+      }) as Request,
+      denied as any,
+      'user-123'
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(denied.parseEvents().find((e) => e.data?.error)).toBeDefined();
+    expect(fakeRegistry.executeTool).not.toHaveBeenCalled();
+
+    const allowed = new MockSSEResponse();
+    await server.handleSSEConnection(
+      requestFor({
+        jsonrpc: '2.0', id: 11, method: 'tools/call',
+        params: { name: 'ch_get_act_text', arguments: { as_of: '2020-01-01' } },
+      }) as Request,
+      allowed as any,
+      'user-123'
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fakeRegistry.executeTool).toHaveBeenCalledWith(
+      'ch_get_act_text', { as_of: '2020-01-01' }
+    );
   });
 
   it('tools/call still executes a ch_* tool', async () => {
