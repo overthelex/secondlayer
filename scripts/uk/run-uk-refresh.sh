@@ -49,25 +49,56 @@ log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 # Download a collection only when the server says it changed. The archives are
 # rebuilt daily whether or not anything in them moved, so Last-Modified is the
 # cheap check that keeps this from pulling 28 GB every week for nothing.
+#
+# ⚠⚠ No `curl -C -` here, deliberately. Resuming looks right for a 21 GB file and
+# is actively unsafe for this source: the archives are REBUILT daily, so a partial
+# file from a failed run and today's rebuild are different objects, and appending
+# one to the other produces a file curl reports as a clean exit 0. Measured on
+# 2026-09-18: a resume grew revised-current from 2,726,999,910 to 2,727,081,130
+# bytes — exactly today's Content-Length — and the result was unreadable,
+# `BadZipFile: Bad magic number for central directory`. A full re-download costs
+# ten minutes on this box; a corrupt archive costs a silent bad load.
+#
+# Download into .part and rename only after the bytes are checked, so a run killed
+# mid-download can never leave something the next stage will happily open.
 fetch() {
-  local coll="$1" url zip stamp remote
+  local coll="$1" url zip part stamp hdr remote len got
   url="$BASE/$coll/xml/$coll-xml.zip"
   zip="$DATA_DIR/$coll-xml.zip"
+  part="$zip.part"
   stamp="$DATA_DIR/$coll.lastmod"
-  remote=$(curl -sS -I -u "$CREDS" -A "$UA" "$url" | awk 'tolower($1)=="last-modified:"{sub($1" ","");print}' | tr -d '\r')
+
+  hdr=$(curl -sS -I -u "$CREDS" -A "$UA" "$url") || { log "$coll HEAD failed"; return 2; }
+  remote=$(printf '%s' "$hdr" | awk 'tolower($1)=="last-modified:"{sub($1" ","");print}' | tr -d '\r')
+  len=$(printf '%s' "$hdr" | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r')
+
   if [ -f "$zip" ] && [ -f "$stamp" ] && [ "$remote" = "$(cat "$stamp")" ]; then
     log "$coll unchanged ($remote), skipping download"
     return 1
   fi
-  log "$coll changed (remote: ${remote:-unknown}), downloading"
-  # -C - resumes a partial file, which matters for the 21 GB one.
-  if curl -sS -L -C - -u "$CREDS" -A "$UA" -o "$zip" "$url"; then
-    printf '%s' "$remote" > "$stamp"
-    log "$coll downloaded: $(stat -c %s "$zip") bytes"
-    return 0
+
+  log "$coll changed (remote: ${remote:-unknown}, ${len:-?} bytes), downloading"
+  rm -f "$part"
+  if ! curl -sS -L -u "$CREDS" -A "$UA" -o "$part" "$url"; then
+    log "$coll download FAILED"; rm -f "$part"; return 2
   fi
-  log "$coll download FAILED"
-  return 2
+
+  got=$(stat -c %s "$part" 2>/dev/null || echo 0)
+  if [ -n "$len" ] && [ "$got" != "$len" ]; then
+    log "$coll size mismatch: got $got, expected $len — discarding"
+    rm -f "$part"; return 2
+  fi
+  # Opening the zip is what actually proves it: a truncated or spliced file passes a
+  # size check often enough to be worth one more second here.
+  if ! python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1]).namelist()' "$part" 2>/dev/null; then
+    log "$coll downloaded $got bytes but the archive does not open — discarding"
+    rm -f "$part"; return 2
+  fi
+
+  mv -f "$part" "$zip"
+  printf '%s' "$remote" > "$stamp"
+  log "$coll downloaded and verified: $got bytes"
+  return 0
 }
 
 log "=== UK refresh starting"
