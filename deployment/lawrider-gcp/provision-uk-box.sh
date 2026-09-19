@@ -102,6 +102,12 @@ if gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT"
   fi
 else
   say "creating $NAME"
+  # Scopes as full URIs, not aliases. The two spellings look interchangeable and
+  # are not — `logging.write` is the tail of the URI, while the alias is
+  # `logging-write`, and mixing them cost a run. The URIs are also what
+  # `instances describe` prints, so the script and the live box can be compared
+  # by eye.
+  #
   # -amd64 is not optional: Canonical arch-suffixed the image families at 24.04
   # and the unsuffixed name does not resolve at all. The Zurich box makes the
   # old name look right — its disk licence still reads ubuntu-2404-lts — but a
@@ -112,7 +118,7 @@ else
     --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
     --boot-disk-size="${DISK_GB}GB" --boot-disk-type=pd-balanced \
     --address="$IP" --network-tier=PREMIUM \
-    --scopes=logging.write,monitoring.write,trace \
+    --scopes=https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append \
     --labels=product=lawrider-uk,jurisdiction=uk \
     ${SSH_META[@]+"${SSH_META[@]}"}
 fi
