@@ -106,6 +106,36 @@ INVARIANTS = [
         "rows from a run that died before its checkpoint — they will never be refreshed, "
         "because the loader plans from the checkpoint",
     ),
+    (
+        "every act in the register can reach its text",
+        """SELECT count(*) FROM uk_legislation l
+            WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions v
+                               WHERE v.leg_id = l.id)
+              AND l.document_status IS NOT NULL
+              AND left(l.document_status, 6) <> 'fetch-'
+              AND l.year IS NOT NULL""",
+        "an act with no version row has no xml_url and no text pass, so it is invisible "
+        "to every later stage — 21,972 of them accumulated unnoticed before 2026-09-19 "
+        "(LEXAI-2052). The fetch-599 pair is excluded: those are a retry queue, not a "
+        "hole",
+    ),
+    (
+        "no act stranded between the version paths",
+        """SELECT count(*) FROM uk_legislation l
+            WHERE l.document_status IS NOT NULL
+              AND left(l.document_status, 6) <> 'fetch-'
+              AND EXISTS (SELECT 1 FROM uk_legislation_versions v
+                           WHERE v.leg_id = l.id)
+              AND NOT EXISTS (SELECT 1 FROM uk_legislation_versions v
+                               WHERE v.leg_id = l.id AND v.is_current)
+              AND NOT EXISTS (SELECT 1 FROM uk_legislation_provisions p
+                               WHERE p.leg_id = l.id)""",
+        "an act with versions, none current and no text falls through both paths: the "
+        "base-version insert skips it because it has versions, and the stage 3 worklist "
+        "never sees it because that requires is_current. Reported rather than repaired "
+        "automatically — promoting a version is irreversible, and picking the wrong one "
+        "labels the in-force text with a prospective date",
+    ),
 ]
 
 
