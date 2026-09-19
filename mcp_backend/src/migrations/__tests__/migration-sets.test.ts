@@ -95,7 +95,7 @@ describe('migration sets', () => {
     const offenders: string[] = [];
     for (const f of parseSet('uk')) {
       const sql = readFileSync(join(MIGRATIONS, f), 'utf-8');
-      for (const m of sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z]{2})_court_decisions/gi)) {
+      for (const m of sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z]{2,})_court_decisions/gi)) {
         if (!['uk', 'ie'].includes(m[1].toLowerCase())) offenders.push(`${f} -> ${m[1]}_court_decisions`);
       }
     }

@@ -1,6 +1,6 @@
 # Migration set: lawrider.uk — British law and UK court decisions, nothing else.
 #
-# 134 of the 220 migrations. What is here: the service schema the backend boots on
+# 132 of the 220 migrations. What is here: the service schema the backend boots on
 # (users, api_keys, billing, cost tracking, documents, oauth, consultations) and
 # uk_* — the register, provision text, point-in-time intervals, amendments,
 # judgments and the Find Case Law access gate. 14 uk_ tables out of 129 total.

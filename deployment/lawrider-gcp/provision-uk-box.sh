@@ -10,7 +10,7 @@
 # See the workflow header for the service account and the three roles.
 #
 # Everything after this is a pipeline: deploy-lawrider-uk.yml builds the image on
-# the box and runs the migrations (MIGRATION_SET=uk, 134 of 220 — the schema is
+# the box and runs the migrations (MIGRATION_SET=uk, 132 of 220 — the schema is
 # built here, not copied), and migrate-uk-data.yml moves the ~7 GB of uk_* rows
 # and verifies them table by table.
 #
@@ -57,7 +57,7 @@ SSH_USER_NAME="${SSH_USER:-ubuntu}"
 # inherits only the project-wide keys — which are personal keys for `vovkes`,
 # not the `ubuntu` key CI logs in with. That one lives in the Zurich box's own
 # instance metadata, so it would not have followed us to London: the ssh loop
-# further down would have retried for five minutes and failed with a timeout
+# further down would have retried for ten minutes and failed with a timeout
 # that reads like a machine which never booted.
 #
 # Derived from the private key rather than kept as a second secret, so the two
@@ -67,7 +67,13 @@ SSH_META=()
 if [ -n "${PROVISION_SSH_KEY:-}" ]; then
   KEYFILE=$(mktemp)
   trap 'rm -f "$KEYFILE"' EXIT
-  printf '%s:%s\n' "$SSH_USER_NAME" "$(ssh-keygen -y -f "$PROVISION_SSH_KEY")" > "$KEYFILE"
+  # On its own line, not inside printf's arguments: a command substitution that
+  # fails there is masked by printf's own success, and the box would be created
+  # carrying an empty or malformed key. That failure surfaces ten minutes later
+  # as a connection timeout, which reads like a machine that never booted.
+  PUBKEY=$(ssh-keygen -y -f "$PROVISION_SSH_KEY")
+  [ -n "$PUBKEY" ] || { echo "!!! could not derive a public key from $PROVISION_SSH_KEY" >&2; exit 1; }
+  printf '%s:%s\n' "$SSH_USER_NAME" "$PUBKEY" > "$KEYFILE"
   SSH_META=(--metadata-from-file "ssh-keys=$KEYFILE")
   say "deploy key for ${SSH_USER_NAME} will be placed in the instance metadata"
 fi
@@ -79,6 +85,18 @@ if gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT"
   # status, so under `set -e` the no-key case would end the script with a
   # failure precisely when nothing was wrong.
   if [ ${#SSH_META[@]} -gt 0 ]; then
+    # add-metadata merges *keys*, but replaces the whole value of the one it is
+    # given — so writing our single key here would silently evict anything an
+    # operator added from the console, and they would find themselves locked
+    # out of a box that is working fine. Keep what is there, drop only a stale
+    # entry for our own user, append ours.
+    EXISTING=$(gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT" \
+      --format='value(metadata.items.filter("key:ssh-keys").extract("value"))' 2>/dev/null \
+      | tr ',' '\n' | sed "s/^\['\?//; s/'\?\]$//" | grep -v "^${SSH_USER_NAME}:" || true)
+    if [ -n "$EXISTING" ]; then
+      printf '%s\n' "$EXISTING" >> "$KEYFILE"
+      say "preserving $(printf '%s\n' "$EXISTING" | grep -c . ) other key(s) already on the instance"
+    fi
     $DRY gcloud compute instances add-metadata "$NAME" \
       --zone="$ZONE" --project="$PROJECT" ${SSH_META[@]+"${SSH_META[@]}"}
   fi
@@ -123,10 +141,15 @@ SETUP='
     fi
   done
   # python for the refresh and export scripts (psycopg2, no build toolchain)
-  if [ ! -x /home/ubuntu/uk-venv/bin/python3 ]; then
+  # The test is that psycopg2 imports, not that the interpreter exists. A venv
+  # created moments before a failed pip leaves the executable in place, so the
+  # existence check would call it done and the weekly refresh would be the one
+  # to discover otherwise.
+  if ! /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2" 2>/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv >/dev/null
-    python3 -m venv /home/ubuntu/uk-venv
+    [ -x /home/ubuntu/uk-venv/bin/python3 ] || python3 -m venv /home/ubuntu/uk-venv
     /home/ubuntu/uk-venv/bin/pip -q install psycopg2-binary
+    /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2"
   fi
   echo "box ready: $(docker --version), python $(/home/ubuntu/uk-venv/bin/python3 -V)"
 '
@@ -139,7 +162,10 @@ if [ -n "${PROVISION_SSH_KEY:-}" ]; then
     for i in $(seq 1 30); do
       ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
           -o ConnectTimeout=10 "${SSH_USER_NAME}@${IP}" true 2>/dev/null && break
-      [ "$i" = 30 ] && { echo "!!! no ssh after 5 minutes — check the deploy key is in the instance metadata" >&2; exit 1; }
+      # 30 attempts of up to 10s connect plus 10s between them: ~10 minutes,
+      # not the 5 this used to claim. Someone watching the job should know
+      # when to stop waiting.
+      [ "$i" = 30 ] && { echo "!!! no ssh after 30 attempts (~10 minutes) — check the deploy key reached the instance metadata" >&2; exit 1; }
       sleep 10
     done
   fi
