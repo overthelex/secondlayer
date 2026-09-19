@@ -94,7 +94,16 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-secondlayer_prod}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: production
-      TZ: Europe/Zurich
+      TZ: Europe/London
+      # This box carries British law and UK court decisions, and builds its own
+      # schema from that set rather than from a dump of another box — 134 of the
+      # 220 migrations. See mcp_backend/src/migrations/sets/uk.txt for how the
+      # list was chosen and what it deliberately leaves out.
+      #
+      # ⚠ Without this the run stops at 126_spain_legal_data.sql, which ALTERs
+      # tables no migration creates: a fresh database cannot be built from the
+      # full history at all.
+      MIGRATION_SET: uk
     working_dir: /app/mcp_backend
     command: ["node", "dist/migrations/migrate.js"]
     restart: "no"
@@ -175,7 +184,7 @@ services:
       UPLOAD_TEMP_DIR: /app/data/uploads
       LOG_LEVEL: ${BACKEND_LOG_LEVEL:-info}
       LOG_TO_FILE: "false"
-      TZ: Europe/Zurich
+      TZ: Europe/London
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

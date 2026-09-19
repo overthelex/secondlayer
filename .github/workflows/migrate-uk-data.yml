@@ -1,0 +1,154 @@
+##############################################################################
+# Move the UK corpus from one box to another, and prove it arrived.
+#
+# The schema is NOT copied. The target builds its own from
+# mcp_backend/src/migrations/sets/uk.txt (MIGRATION_SET=uk, 134 of 220
+# migrations) when deploy-lawrider-uk.yml runs — so this workflow moves rows and
+# nothing else. Run the deploy first; this refuses to start if the tables are
+# not there.
+#
+# What moves: 14 uk_* tables, 6.9 GB. What does not: the bulk archives in
+# /data/uk — 28 GB of zips that re-download from research.legislation.gov.uk in
+# minutes, and the weekly refresh fetches them anyway — nor two uk_ tables that
+# are working residue rather than corpus (see the manifest step).
+#
+# The safety property is the manifest. A dump that half-arrives still looks like
+# a successful copy from the outside; here the source's row counts travel with
+# the data and the job fails on the first table that disagrees.
+#
+# ⚠ Dispatch only, and it TRUNCATES the target's uk_* tables before loading. It
+# is a move, not a merge: running it against a box that already has the corpus
+# replaces it.
+##############################################################################
+name: 'Migrate: UK corpus to another box'
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_host:
+        description: 'IP of the box to copy FROM (the target is LAWRIDER_GCP_HOST)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Take the manifest and compare, copy nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-uk-data
+  cancel-in-progress: false
+
+env:
+  GCP_USER: ubuntu
+  PG: pg-lawrider
+  DB: secondlayer_prod
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TARGET_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
+      SOURCE_HOST: ${{ inputs.source_host }}
+    steps:
+      - name: Set up SSH to both boxes
+        run: |
+          for v in TARGET_HOST SOURCE_HOST; do
+            [ -n "${!v}" ] || { echo "::error::$v is empty"; exit 1; }
+          done
+          if [ "$TARGET_HOST" = "$SOURCE_HOST" ]; then
+            echo "::error::source and target are the same box ($TARGET_HOST)"; exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp
+          chmod 600 ~/.ssh/gcp
+          ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H "$SOURCE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SRC=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ${GCP_USER}@${SOURCE_HOST}" >> "$GITHUB_ENV"
+          echo "DST=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ${GCP_USER}@${TARGET_HOST}" >> "$GITHUB_ENV"
+
+      - name: The target must already have the schema
+        run: |
+          # Built by the deploy, not by this job. If it is missing, the deploy has
+          # not run — loading data into nothing would fail halfway and leave a
+          # box that looks provisioned.
+          n=$($DST "docker exec $PG psql -U secondlayer -d $DB -Atc \"select count(*) from pg_tables where schemaname='public' and tablename like 'uk!_%' escape '!'\"" 2>/dev/null || echo 0)
+          echo "uk_ tables on the target: $n"
+          [ "$n" -ge 14 ] || { echo "::error::target has $n uk_ tables, expected at least 14 — run deploy-lawrider-uk.yml first"; exit 1; }
+
+      - name: Take the source manifest
+        run: |
+          # Counted per table on the source, and compared on the target after the
+          # load. This is the only thing that distinguishes "the dump ran" from
+          # "the data is there".
+          $SRC "docker exec $PG psql -U secondlayer -d $DB -Atc \"
+            select string_agg(t || ':' || n, ',' order by t) from (
+              select tablename t, (xpath('/row/c/text()',
+                     query_to_xml('select count(*) c from '||quote_ident(tablename), false, true, '')))[1]::text::bigint n
+                from pg_tables where schemaname='public' and tablename like 'uk!_%' escape '!'
+                 -- Not every uk_ table is the corpus. Left behind deliberately:
+                 --   *_repair_backup_*  a column backup from the August 2026
+                 --     metadata repair, 53,469 rows, kept on the old box while
+                 --     that repair was in doubt. It no longer is.
+                 --   uk_bulk_probe      130,026 rows of notes from working out
+                 --     what the bulk archives contain.
+                 -- Neither is British law or a UK judgment. Say so out loud if
+                 -- you want them: this is the moment they stop existing.
+                 and tablename !~ '_repair_backup_|^uk_bulk_probe$'
+            ) s\"" > manifest.txt
+          tr ',' '\n' < manifest.txt | sed 's/^/  /'
+          echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
+
+      - name: Copy
+        if: ${{ !inputs.dry_run }}
+        run: |
+          # Through the runner rather than box to box: the two have no SSH to each
+          # other, deliberately, and giving them one for a single move would
+          # outlive the move.
+          #
+          # --data-only because the schema is the target's own. pg_dump emits the
+          # tables in dependency order, which matters: uk_provision_version
+          # references uk_provision_text.
+          tables=$(tr ',' '\n' < manifest.txt | cut -d: -f1 | sed 's/^/-t /' | tr '\n' ' ')
+          echo "dumping: $(echo "$tables" | wc -w) table flags"
+          $DST "docker exec $PG psql -U secondlayer -d $DB -c \"
+            truncate $(tr ',' '\n' < manifest.txt | cut -d: -f1 | tr '\n' ',' | sed 's/,$//') cascade\""
+          $SRC "docker exec $PG pg_dump -U secondlayer -d $DB --data-only --no-owner $tables" \
+            | gzip -1 \
+            | $DST "gunzip | docker exec -i $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -q"
+          echo "load finished"
+
+      - name: Verify against the manifest
+        run: |
+          fail=0
+          for pair in $(tr ',' ' ' < manifest.txt); do
+            t=${pair%%:*}; want=${pair##*:}
+            got=$($DST "docker exec $PG psql -U secondlayer -d $DB -Atc 'select count(*) from $t'")
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              printf '  %-32s source %12s  target %12s\n' "$t" "$want" "$got"
+            elif [ "$want" != "$got" ]; then
+              echo "::error::$t: source $want, target $got"
+              fail=1
+            else
+              printf '  %-32s %12s ok\n' "$t" "$got"
+            fi
+          done
+          [ "$fail" = "0" ] || exit 1
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "dry run — nothing was copied; the columns above are what a real run would reconcile"
+          else
+            echo "every table matches the source"
+          fi
+
+      - name: What the corpus looks like on the target
+        if: ${{ !inputs.dry_run }}
+        run: |
+          $DST "docker exec $PG psql -U secondlayer -d $DB -c \"
+            select (select count(*) from uk_legislation) acts,
+                   (select count(distinct leg_id) from uk_legislation_provisions) acts_with_text,
+                   (select count(*) from uk_provision_version) point_in_time_rows,
+                   (select count(*) from uk_legislation_effects) effects,
+                   (select count(*) from uk_court_decisions) judgments\""
