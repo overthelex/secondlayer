@@ -37,6 +37,32 @@
 #                                   it, "converging" by discarding the core UK
 #                                   migration. It was failing on a missing
 #                                   pg_trgm, which is now 000_extensions.sql.
+#   152_hu_court_decisions.sql      DROPPED. Hungarian judgments. It survived the
+#                                   first pass because it applies cleanly on an
+#                                   empty database — "it works" was never the
+#                                   test; "is it British" is.
+#   159_singapore_court_decisions.sql
+#                                   DROPPED, same reason, and it would also have
+#                                   been broken: its trg_sg_court_stats writes to
+#                                   jurisdiction_fulltext_stats, which this set
+#                                   does not create. The trigger is created
+#                                   regardless — postgres does not resolve the
+#                                   body until it fires — so the failure would
+#                                   have waited for the first insert.
+#   156_jurisdiction_fulltext_stats.sql
+#                                   DROPPED deliberately, and this one costs
+#                                   something. It seeds counts from about twenty
+#                                   corpora — ch_, pl_, cz_, hu_, lt_, dk_, fr_
+#                                   and the rest — none of which exist here, so
+#                                   it cannot run on a UK-only schema without
+#                                   guarding every block. It is a table for
+#                                   comparing jurisdictions, and this box has
+#                                   one. The cost: dump-born boxes carry a
+#                                   trg_jstats trigger on uk_court_decisions that
+#                                   this box will not have. Nothing in
+#                                   mcp_backend/src reads the stats table today,
+#                                   so the drift is latent — if anything starts
+#                                   reading it, add 156 with its seed guarded.
 #
 # Verified: all 134 apply clean to an empty database, and the backend boots
 # against the result — /health/ready 200, five uk_* tools advertised, the
@@ -160,10 +186,8 @@
 145_workflow_memory_reconciliation.sql
 146_workflow_memory_push_mode.sql
 147_load_test_results.sql
-152_hu_court_decisions.sql
 153_ab_testing.sql
 155_uk_ie_court_decisions.sql
-159_singapore_court_decisions.sql
 161_echr_sync_tracking.sql
 163_conversation_shares.sql
 174_me_gov_datasets_tool_pricing.sql

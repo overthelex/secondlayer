@@ -83,8 +83,12 @@ jobs:
         run: |
           # Counted per table on the source, and compared on the target after the
           # load. This is the only thing that distinguishes "the dump ran" from
-          # "the data is there".
-          $SRC "docker exec $PG psql -U secondlayer -d $DB -Atc \"
+          # "the data is there" — so an empty manifest is not an empty result,
+          # it is the check itself having failed. Without ON_ERROR_STOP a psql
+          # error still exits 0 and writes nothing, and the verify step below
+          # would then loop over no tables and report success having compared
+          # nothing at all.
+          $SRC "docker exec $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -Atc \"
             select string_agg(t || ':' || n, ',' order by t) from (
               select tablename t, (xpath('/row/c/text()',
                      query_to_xml('select count(*) c from '||quote_ident(tablename), false, true, '')))[1]::text::bigint n
@@ -99,7 +103,13 @@ jobs:
                  -- you want them: this is the moment they stop existing.
                  and tablename !~ '_repair_backup_|^uk_bulk_probe$'
             ) s\"" > manifest.txt
+          n=$(tr ',' '\n' < manifest.txt | grep -c ':' || true)
+          echo "tables in the manifest: $n"
           tr ',' '\n' < manifest.txt | sed 's/^/  /'
+          # 14 is what the source has and what the target's schema check demands;
+          # fewer means the source lost tables or the query matched less than it
+          # should, and either way this is not a run to carry on with.
+          [ "$n" -ge 14 ] || { echo "::error::manifest has $n tables, expected at least 14 — the source query failed or the source is not the box you think it is"; exit 1; }
           echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
 
       - name: Copy

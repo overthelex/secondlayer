@@ -29,9 +29,10 @@ function parseSet(name: string): string[] {
 
 describe('migration sets', () => {
   it('lists only migrations that exist', () => {
-    // A name that matches no file is the failure mode with no symptom: the
-    // runner would silently apply one fewer migration than the deployment
-    // expects, and the gap would surface as a missing table months later.
+    // The runner does catch this — migrate.ts collects unmatched exact patterns
+    // and exits 1 naming them. So the cost of a typo is not a silent gap; it is
+    // a deployment that dies at boot, after the image is built and on the box.
+    // This moves that failure to the pull request.
     const missing = parseSet('uk').filter((f) => !existsSync(join(MIGRATIONS, f)));
     expect(missing).toEqual([]);
   });
@@ -75,9 +76,30 @@ describe('migration sets', () => {
       '137_es_boe_sumarios.sql',
       '153_baltic_court_decisions.sql',
       '126_spain_legal_data.sql',            // the one that cannot bootstrap
+      // Both shipped in the first version of this set and were caught in
+      // review. They apply cleanly to an empty database, which is why an
+      // automated pass kept them — it was asking whether a migration works,
+      // not whether it belongs on a British box.
+      '152_hu_court_decisions.sql',          // hu_court_decisions
+      '159_singapore_court_decisions.sql',   // sg_court_decisions
     ]) {
       expect(set).not.toContain(foreign);
     }
+  });
+
+  it('creates no court-decision table for a country other than the UK and Ireland', () => {
+    // The list above names files; this asks the question directly, so the next
+    // foreign corpus to arrive under a neutral filename fails here without
+    // anyone having to think of it. Ireland is the documented exception: it
+    // shares a migration with uk_court_decisions and stays empty.
+    const offenders: string[] = [];
+    for (const f of parseSet('uk')) {
+      const sql = readFileSync(join(MIGRATIONS, f), 'utf-8');
+      for (const m of sql.matchAll(/create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z]{2})_court_decisions/gi)) {
+        if (!['uk', 'ie'].includes(m[1].toLowerCase())) offenders.push(`${f} -> ${m[1]}_court_decisions`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('keeps the two migrations an automated prune would have taken', () => {
@@ -90,10 +112,15 @@ describe('migration sets', () => {
   });
 
   it('every set names a file the repository still has', () => {
-    // Guards the next set as much as this one.
+    // Guards the next set as much as this one — which it only does if it
+    // actually checks existence. It used to assert the set was non-empty, which
+    // is true of a set naming nothing but deleted migrations.
     for (const f of readdirSync(SETS).filter((f) => f.endsWith('.txt'))) {
       const name = f.replace(/\.txt$/, '');
-      expect(parseSet(name).length).toBeGreaterThan(0);
+      const set = parseSet(name);
+      expect(set.length).toBeGreaterThan(0);
+      const missing = set.filter((m) => !m.includes('*') && !existsSync(join(MIGRATIONS, m)));
+      expect({ set: name, missing }).toEqual({ set: name, missing: [] });
     }
   });
 });
