@@ -1,10 +1,13 @@
 #!/bin/bash
 # Create the lawrider.uk VM in London.
 #
-# ⚠ This is the one part of the move that CI cannot do. The repository has
-# LAWRIDER_GCP_HOST and LAWRIDER_GCP_SSH_KEY — enough to drive a box that exists
-# — but no GCP service-account credential, so no workflow can create one. Rather
-# than leave the machine's shape in somebody's shell history, it lives here.
+# Driven by .github/workflows/provision-lawrider-uk.yml, and runnable by hand
+# with gcloud if you would rather watch it. The logic lives here so the two
+# cannot drift: the workflow authenticates and calls this file.
+#
+# ⚠ The workflow needs a GCP credential the repository did not have — every
+# other lawrider workflow only ever needed SSH to a box that already existed.
+# See the workflow header for the service account and the three roles.
 #
 # Everything after this is a pipeline: deploy-lawrider-uk.yml builds the image on
 # the box and runs the migrations (MIGRATION_SET=uk, 134 of 220 — the schema is
@@ -19,6 +22,10 @@
 # Usage:
 #   ./provision-uk-box.sh              # create
 #   ./provision-uk-box.sh --dry-run    # print what it would do
+#
+# Environment: GCP_PROJECT, GCP_ZONE, VM_NAME, VM_MACHINE, VM_DISK_GB override
+# the defaults; PROVISION_SSH_KEY names a private key to configure the box with
+# instead of `gcloud compute ssh`.
 set -euo pipefail
 
 PROJECT="${GCP_PROJECT:-secondlayer-gpu}"
@@ -60,7 +67,14 @@ fi
 
 say "installing docker and the directories the stack expects"
 # Everything below is idempotent: re-running this script on a live box is safe.
-$DRY gcloud compute ssh "$NAME" --zone="$ZONE" --project="$PROJECT" --command='
+#
+# Two ways in. From a workstation, `gcloud compute ssh` is simplest — it pushes a
+# key into project metadata for you. From CI that is the wrong move: the runner
+# would leave a fresh key in the project's metadata on every run, so when
+# PROVISION_SSH_KEY names the deploy key we already have, use it directly and
+# leave the project's metadata alone.
+SETUP='
+
   set -e
   if ! command -v docker >/dev/null; then
     curl -fsSL https://get.docker.com | sudo sh
@@ -76,6 +90,20 @@ $DRY gcloud compute ssh "$NAME" --zone="$ZONE" --project="$PROJECT" --command='
   fi
   echo "box ready: $(docker --version), python $(/home/ubuntu/uk-venv/bin/python3 -V)"
 '
+
+if [ -n "${PROVISION_SSH_KEY:-}" ]; then
+  say "configuring over ssh with the deploy key"
+  for i in $(seq 1 30); do
+    ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
+        -o ConnectTimeout=10 "${SSH_USER:-ubuntu}@${IP}" true 2>/dev/null && break
+    sleep 10
+  done
+  $DRY ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
+      "${SSH_USER:-ubuntu}@${IP}" "$SETUP"
+else
+  say "configuring over gcloud compute ssh"
+  $DRY gcloud compute ssh "$NAME" --zone="$ZONE" --project="$PROJECT" --command="$SETUP"
+fi
 
 cat <<EOF
 
