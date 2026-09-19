@@ -25,6 +25,15 @@ jest.mock('../../utils/logger.js', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
 }));
 
+// ⚠ Cleared before every test. Without this the mock accumulates across the whole
+// file, so `loggedText()` would see what EARLIER tests logged and pass even if the
+// route under test stopped logging entirely — the same "green for the wrong reason"
+// failure this file is being repaired for. Only the logger is cleared: the service
+// doubles are configured per test and clearing them all would empty that setup.
+beforeEach(() => {
+  (logger.error as jest.Mock).mockClear();
+});
+
 const loggedText = () =>
   (logger.error as jest.Mock).mock.calls
     .map((c) => JSON.stringify(c))

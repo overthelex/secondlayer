@@ -13,12 +13,22 @@ import request from 'supertest';
 import { createPaymentRouter } from '../payment-routes';
 import { logger } from '../../utils/logger';
 
-// The route deliberately withholds internal error text from the caller and puts
-// it in the log instead. This suite asserted that text in the RESPONSE, which is
-// precisely what must not be there.
+// ⚠ The two error postures in payment-routes.ts differ, and only one end is
+// asserted here. The /nowpayments/:id/status catch withholds the internal text and
+// logs it, which is what the status test below now checks. The /nowpayments/create
+// catch still returns `message: error.message` (payment-routes.ts lines 94, 113 and
+// 127 are all of this shape), and its test still asserts that leak — deliberately
+// left alone, because tightening a payment API's error responses is a product call,
+// not a test repair. Someone should decide which posture wins.
 jest.mock('../../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
 }));
+
+// Same reason as payment-routes.test.ts: an uncleared mock would let one test's log
+// satisfy another test's assertion.
+beforeEach(() => {
+  (logger.error as jest.Mock).mockClear();
+});
 
 // ──────────────────────────────────────────────────────────────────────────
 // Mock services
