@@ -351,8 +351,23 @@ SELECT id,
          ELSE 'enacted'
        END,
        source_url, true, 200
-  FROM uk_legislation
- WHERE version_count = 0
+  FROM uk_legislation l
+ -- Ask the versions table, NOT uk_legislation.version_count.
+ --
+ -- ⚠ The counter was a fair proxy for "has no versions" while the Atom crawl was
+ -- the only thing writing versions, and it stopped being one the moment
+ -- 05_load_bulk_texts.py began inserting version rows without maintaining it —
+ -- deliberately, because recomputing it per act during a bulk load is a
+ -- full-table churn nobody asked for. Measured on the corpus 2026-09-19:
+ -- version_count is wrong for 194,781 of 238,926 acts, and 194,100 of those
+ -- claim zero while having rows.
+ --
+ -- Run as it was, this statement selected 216,070 acts instead of 21,970, and
+ -- for 66,297 of them the COALESCE date differs from any version they already
+ -- have — so ON CONFLICT would not catch it and each would gain a SECOND row
+ -- with is_current = true. Two current versions of one act, no way to tell which
+ -- the text belongs to. The guard has to read the table it is guarding.
+ WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions v WHERE v.leg_id = l.id)
    AND document_status IS NOT NULL
    AND left(document_status, 6) <> 'fetch-'
    AND year IS NOT NULL

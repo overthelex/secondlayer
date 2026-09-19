@@ -162,11 +162,14 @@ SETUP='
   # created moments before a failed pip leaves the executable in place, so the
   # existence check would call it done and the weekly refresh would be the one
   # to discover otherwise.
-  if ! /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2" 2>/dev/null; then
+  # curl_cffi as well as psycopg2: stage 3 refuses to start without it, and a
+  # box provisioned with only psycopg2 looks complete right up to the moment
+  # someone runs the crawl. Both are wheels, so still no build toolchain.
+  if ! /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2, curl_cffi" 2>/dev/null; then
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv >/dev/null
     [ -x /home/ubuntu/uk-venv/bin/python3 ] || python3 -m venv /home/ubuntu/uk-venv
-    /home/ubuntu/uk-venv/bin/pip -q install psycopg2-binary
-    /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2"
+    /home/ubuntu/uk-venv/bin/pip -q install psycopg2-binary curl_cffi
+    /home/ubuntu/uk-venv/bin/python3 -c "import psycopg2, curl_cffi"
   fi
   echo "box ready: $(docker --version), python $(/home/ubuntu/uk-venv/bin/python3 -V)"
 '
