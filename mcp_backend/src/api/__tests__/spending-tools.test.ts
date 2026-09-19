@@ -16,9 +16,40 @@ jest.mock('../../utils/logger.js', () => ({
 
 const parse = (r: any) => JSON.parse(r.content[0].text);
 
+/**
+ * A db double for SpendingTools.
+ *
+ * The tool runs each table query inside a transaction so it can `SET LOCAL
+ * statement_timeout` — Postgres then cancels the query itself instead of the
+ * handler merely walking away from it. A double with only `query` therefore
+ * threw "this.db.transaction is not a function" on every call, the per-table
+ * catch swallowed it, and three of these tests failed while the fourth passed
+ * for the wrong reason: it asserts that a failing table is reported, and got a
+ * failure — just not the SQL one it was written for.
+ *
+ * `calls` records the DATA queries only. The SET LOCAL is bookkeeping and
+ * recording it would shift every index the assertions below rely on.
+ */
+function makeDb(onQuery: (sql: string, n: number) => Promise<any>) {
+  const calls: string[] = [];
+  let n = 0;
+  const client = {
+    query: (sql: string, _values?: any[]) => {
+      if (/^\s*SET LOCAL/i.test(sql)) return Promise.resolve({ rows: [] });
+      calls.push(sql);
+      return onQuery(sql, ++n);
+    },
+  };
+  return {
+    calls,
+    query: client.query,
+    transaction: (fn: (c: any) => Promise<any>) => fn(client),
+  };
+}
+
 describe('search_public_spending', () => {
   it('does not select parent_id from the contracts table', async () => {
-    const db = { calls: [] as any[], query: jest.fn((sql: string) => { (db as any).calls.push(sql); return Promise.resolve({ rows: [] }); }) };
+    const db = makeDb(() => Promise.resolve({ rows: [] }));
     const tools = new SpendingTools(db);
 
     await tools.executeTool('search_public_spending', { doc_type: 'contracts', date_from: '2024-01-01' });
@@ -31,7 +62,7 @@ describe('search_public_spending', () => {
   });
 
   it('still selects the real parent_id for child-document tables', async () => {
-    const db = { calls: [] as any[], query: jest.fn((sql: string) => { (db as any).calls.push(sql); return Promise.resolve({ rows: [] }); }) };
+    const db = makeDb(() => Promise.resolve({ rows: [] }));
     const tools = new SpendingTools(db);
 
     await tools.executeTool('search_public_spending', { doc_type: 'acts', date_from: '2024-01-01' });
@@ -42,9 +73,7 @@ describe('search_public_spending', () => {
   });
 
   it('reports a failing table instead of passing it off as "no results"', async () => {
-    const db = {
-      query: jest.fn(() => Promise.reject(new Error('column "parent_id" does not exist'))),
-    };
+    const db = makeDb(() => Promise.reject(new Error('column "parent_id" does not exist')));
     const tools = new SpendingTools(db);
 
     const out = parse(await tools.executeTool('search_public_spending', { doc_type: 'contracts', date_from: '2024-01-01' }));
@@ -58,14 +87,10 @@ describe('search_public_spending', () => {
   });
 
   it('flags a partial result when one table of an "all" query fails', async () => {
-    let n = 0;
-    const db = {
-      query: jest.fn(() => {
-        n++;
-        if (n === 1) return Promise.resolve({ rows: [{ id: 1, sign_date: '2025-01-01', amount: 100 }] });
-        return Promise.reject(new Error('boom'));
-      }),
-    };
+    const db = makeDb((_sql, n) =>
+      n === 1
+        ? Promise.resolve({ rows: [{ id: 1, sign_date: '2025-01-01', amount: 100 }] })
+        : Promise.reject(new Error('boom')));
     const tools = new SpendingTools(db);
 
     const out = parse(await tools.executeTool('search_public_spending', { date_from: '2024-01-01' }));

@@ -13,6 +13,22 @@
 import express, { Request, Response, NextFunction } from 'express';
 import request from 'supertest';
 import { createPaymentRouter, createWebhookRouter } from '../payment-routes';
+import { logger } from '../../utils/logger.js';
+
+// The routes deliberately do not echo internal errors to the caller: a Monobank
+// 403, a failed signature check and a dropped database connection all come back
+// as "An unexpected error occurred" while the real text goes to the log. These
+// tests were written against the older, leaky behaviour and asserted the detail
+// in the RESPONSE, which is exactly what must not be there — so they now assert
+// both halves: the client learns nothing, the log learns everything.
+jest.mock('../../utils/logger.js', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
+}));
+
+const loggedText = () =>
+  (logger.error as jest.Mock).mock.calls
+    .map((c) => JSON.stringify(c))
+    .join(' ');
 
 // ──────────────────────────────────────────────────────────────────────────
 // Test helpers
@@ -174,7 +190,9 @@ describe('POST /api/billing/payment/monobank/create', () => {
       .send({ amount_uah: 100 });
 
     expect(res.status).toBe(500);
-    expect(res.body.message).toContain('403');
+    expect(res.body.message).toBe('An unexpected error occurred');
+    expect(JSON.stringify(res.body)).not.toContain('403');
+    expect(loggedText()).toContain('403');
   });
 
   it('passes redirect_url to service', async () => {
@@ -339,7 +357,8 @@ describe('POST /webhooks/monobank', () => {
       .send(body);
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('Invalid webhook signature');
+    expect(JSON.stringify(res.body)).not.toContain('Invalid webhook signature');
+    expect(loggedText()).toContain('Invalid webhook signature');
   });
 
   it('triggers consultation payment webhook on success', async () => {
@@ -391,7 +410,8 @@ describe('POST /webhooks/monobank', () => {
       .send(body);
 
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('Database connection lost');
+    expect(JSON.stringify(res.body)).not.toContain('Database connection lost');
+    expect(loggedText()).toContain('Database connection lost');
   });
 
   it('handles malformed JSON body gracefully', async () => {

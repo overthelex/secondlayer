@@ -13,6 +13,13 @@ import request from 'supertest';
 import { createPaymentRouter } from '../payment-routes';
 import { logger } from '../../utils/logger';
 
+// The route deliberately withholds internal error text from the caller and puts
+// it in the log instead. This suite asserted that text in the RESPONSE, which is
+// precisely what must not be there.
+jest.mock('../../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
+}));
+
 // ──────────────────────────────────────────────────────────────────────────
 // Mock services
 // ──────────────────────────────────────────────────────────────────────────
@@ -212,7 +219,11 @@ describe('GET /api/billing/payment/nowpayments/:id/status', () => {
     const res = await request(app).get('/api/billing/payment/nowpayments/unknown/status');
 
     expect(res.status).toBe(500);
-    expect(res.body.message).toBe('Payment intent not found');
+    expect(res.body.message).toBe('An unexpected error occurred');
+    expect(JSON.stringify(res.body)).not.toContain('Payment intent not found');
+    expect(
+      (logger.error as jest.Mock).mock.calls.map((c) => JSON.stringify(c)).join(' ')
+    ).toContain('Payment intent not found');
   });
 });
 
