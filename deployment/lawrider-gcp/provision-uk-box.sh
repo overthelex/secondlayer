@@ -102,10 +102,14 @@ if gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT"
   fi
 else
   say "creating $NAME"
+  # -amd64 is not optional: Canonical arch-suffixed the image families at 24.04
+  # and the unsuffixed name does not resolve at all. The Zurich box makes the
+  # old name look right — its disk licence still reads ubuntu-2404-lts — but a
+  # licence is not a family, and the first real run failed on exactly this.
   $DRY gcloud compute instances create "$NAME" \
     --project="$PROJECT" --zone="$ZONE" \
     --machine-type="$MACHINE" \
-    --image-family=ubuntu-2404-lts --image-project=ubuntu-os-cloud \
+    --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
     --boot-disk-size="${DISK_GB}GB" --boot-disk-type=pd-balanced \
     --address="$IP" --network-tier=PREMIUM \
     --scopes=logging.write,monitoring.write,trace \
