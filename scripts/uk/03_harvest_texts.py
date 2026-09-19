@@ -374,6 +374,34 @@ SELECT id,
 ON CONFLICT (leg_id, valid_from) DO NOTHING
 """
 
+# The gap between the two paths above and below: an act that HAS versions, has
+# none marked current, and has no text anywhere. The insert skips it (it has
+# versions) and WORKLIST never sees it (it requires is_current), so it falls
+# through both and can never be fetched. Three acts on the corpus today — small,
+# and the kind of hole that only grows.
+#
+# Promoting the latest version is the narrow fix. The obvious alternative — have
+# WORKLIST fall back to the latest version when none is current — looked
+# equivalent and is not: 52,518 acts have versions with none current, because
+# stage 6 writes historical rows that way, and all but three of them already
+# carry text under a different valid_from. That fallback would have scheduled
+# 52,518 fetches to resolve a counter on versions nothing was waiting for.
+PROMOTE_CURRENT = """
+UPDATE uk_legislation_versions v
+   SET is_current = true
+ WHERE v.ctid IN (
+   SELECT DISTINCT ON (x.leg_id) x.ctid
+     FROM uk_legislation_versions x
+     JOIN uk_legislation l ON l.id = x.leg_id
+    WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions c
+                       WHERE c.leg_id = x.leg_id AND c.is_current)
+      AND NOT EXISTS (SELECT 1 FROM uk_legislation_provisions p
+                       WHERE p.leg_id = x.leg_id)
+      AND l.document_status IS NOT NULL
+      AND left(l.document_status, 6) <> 'fetch-'
+    ORDER BY x.leg_id, x.valid_from DESC)
+"""
+
 WORKLIST = """
 SELECT l.id, v.valid_from
   FROM uk_legislation l
@@ -438,6 +466,9 @@ def main():
 
     cur.execute(BASE_VERSIONS)
     print(f"base versions created for unversioned items: {cur.rowcount}", flush=True)
+    cur.execute(PROMOTE_CURRENT)
+    print(f"latest version promoted to current for text-less acts: {cur.rowcount}",
+          flush=True)
     conn.commit()
 
     q = WORKLIST

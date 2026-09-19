@@ -32,7 +32,14 @@ Measured against the register on 2026-08-31, before loading anything:
 ⚠ The bulk does not supersede the crawl everywhere. nisro, uksro, gbla, ukmo and
 aosp are essentially absent from these two collections (1 of 8,792 nisro, 0 of
 307 uksro, 0 of 273 gbla), so the pre-1948 secondary and local material stays
-text-less. best-collection has not been checked yet and may hold some of it.
+text-less.
+
+best-collection HAS now been checked, on 2026-09-19, and it does not rescue them:
+of the 21,972 acts that had no version row at all it carries 167, none of them
+nisr or nisro. Its larger nisr and ssi holdings are the same items the other two
+collections already supply. All four collections are exhausted for that residue —
+what is left has no machine-readable text at source, only scanned PDFs, and is
+recorded as such rather than retried. See LEXAI-2052.
 
 Identity comes from IdURI inside each file, never from the filename: the archive
 names regnal items like `aep-Hen3c23-52-23-revised-data.xml`, which no sane rule
@@ -257,6 +264,12 @@ def main():
         sys.exit("DATABASE_URL is required")
 
     if args.reconcile_only:
+        if args.dry_run:
+            # The main load path honours --dry-run; this branch used to ignore it
+            # and write anyway, which is the worst possible reading of the flag.
+            print("dry run: would reconcile version_count, first_version and "
+                  "last_version from uk_legislation_versions; nothing written")
+            return
         conn = psycopg2.connect(DB_URL)
         with conn, conn.cursor() as cur:
             cur.execute(RECONCILE);       n1 = cur.rowcount
