@@ -405,6 +405,24 @@ UPDATE uk_legislation_versions SET provision_count = %s, char_len = %s,
  WHERE leg_id = %s AND valid_from = %s
 """
 
+# ⚠⚠ A refusal is not a verdict about the act.
+#
+# 900 (empty body), 901 (200 that is not the XML asked for) and 902 (over budget)
+# all mean the same thing: the transport was turned away and we learned nothing
+# about this act. 599 means we gave up retrying. None of them is evidence that
+# the act has no text.
+#
+# Writing provision_count = 0 for those is what this set exists to prevent,
+# because the worklist keys on provision_count IS NULL — so a refusal recorded
+# as zero removes the act from every future run permanently. On 2026-09-19 the
+# corpus carried 100,361 version rows in exactly that state, accumulated over
+# earlier runs, each one claiming an act has no text when what actually happened
+# is that legislation.gov.uk declined to answer. They were reverted to NULL.
+#
+# Genuine answers from the source — a real 404, a real 410 — DO belong in
+# provision_count = 0: those are facts about the act.
+REFUSAL_VERDICTS = {599, 900, 901, 902}
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -517,17 +535,49 @@ def main():
         for i in range(0, len(seq), n):
             yield seq[i:i + n]
 
+    # Stop when the source has clearly stopped answering. Without this the run
+    # keeps going at full rate learning nothing: on 2026-09-19 it spent an hour
+    # and 11,000 requests after the last successful fetch, and every one of them
+    # would have written a verdict. The refusal is not rate-tunable once
+    # triggered, so slowing down is not the answer either — the answer is to
+    # stop and come back later.
+    refused = 0
+    consecutive_refusals = 0
+    stopped_early = False
+    give_up_after = int(os.environ.get("UK_REFUSAL_LIMIT", "300"))
+
     with ThreadPoolExecutor(max_workers=args.threads) as pool:
         for block in chunks(work, args.chunk):
+            if stopped_early:
+                break
             for leg_id, valid_from, rows, verdict, nbytes in pool.map(one, block):
                 done += 1
                 stats["bytes"] += nbytes
                 if rows is None:
                     stats["failed"] += 1
                     verdicts[verdict] = verdicts.get(verdict, 0) + 1
+                    # A refusal leaves provision_count NULL so the act stays in
+                    # the worklist. Only a genuine answer from the source is
+                    # allowed to record zero provisions. See REFUSAL_VERDICTS.
+                    pc = None if verdict in REFUSAL_VERDICTS else 0
+                    cl = None if pc is None else 0
                     with lock:
-                        cur.execute(MARK_VER, (0, 0, None, verdict, leg_id, valid_from))
+                        cur.execute(MARK_VER, (pc, cl, None, verdict, leg_id, valid_from))
+                    if verdict in REFUSAL_VERDICTS:
+                        refused += 1
+                        consecutive_refusals += 1
+                        if consecutive_refusals >= give_up_after:
+                            print(f"\n!!! {consecutive_refusals} refusals in a row "
+                                  f"(last verdict {verdict}) — the source has stopped "
+                                  f"answering this transport. Stopping: every further "
+                                  f"request would learn nothing and spend budget. "
+                                  f"Nothing has been recorded as text-less; the "
+                                  f"outstanding acts stay in the worklist.",
+                                  flush=True)
+                            stopped_early = True
+                            break
                     continue
+                consecutive_refusals = 0
                 if not rows:
                     stats["empty"] += 1
                 stats["ok"] += 1
@@ -559,6 +609,10 @@ def main():
     print("\n=== summary ===")
     for k, v in stats.items():
         print(f"  {k:11s} {v if k != 'bytes' else f'{v / 1e9:.1f} GB'}")
+    if stopped_early:
+        print(f"\n!!! run stopped early after {refused} refusals; "
+              f"{len(work) - done} acts were not attempted and remain in the "
+              f"worklist. Re-run when the source is answering again.", flush=True)
     if verdicts:
         print("  failure verdicts:")
         for k, v in sorted(verdicts.items(), key=lambda x: -x[1]):

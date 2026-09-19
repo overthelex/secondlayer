@@ -210,3 +210,4 @@
 217_uk_point_in_time.sql
 218_uk_corpus_check_run.sql
 219_uk_provision_embedding.sql
+220_uk_clear_refusal_verdicts.sql
