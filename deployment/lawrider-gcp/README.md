@@ -71,4 +71,5 @@ To go live: register `lawrider.uk`, add the zone to Cloudflare, and point
 mode that is invisible, and the deploy's own check passes `-k`, so nothing will
 tell you — until the zone is set to Full (strict) and every request becomes a
 526. Issue a Cloudflare Origin CA cert for `lawrider.uk` + `*.lawrider.uk`,
-mount it, and update the two `ssl_certificate` paths in `nginx/edge.conf`.
+mount it, and repoint every `ssl_certificate` / `ssl_certificate_key` pair in
+`nginx/edge.conf` — there are four server blocks, not one.

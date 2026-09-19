@@ -36,6 +36,7 @@ on:
     paths:
       - "deployment/lawrider-gcp/**"
       - "deployment/Dockerfile.mono-backend"
+      - "deployment/scripts/**"
       - "mcp_backend/**"
       - "packages/shared/**"
       - ".github/workflows/deploy-lawrider-uk.yml"
@@ -48,9 +49,9 @@ concurrency:
 env:
   GCP_USER: ubuntu
   REMOTE_REPO: /home/ubuntu/SecondLayer
-  # Asks the app itself what it advertises. Runs inside the container because the
-  # gateway has no host port on either box — on cthulhu, host :3000 is legal.org.ua,
-  # so a curl from the host measures the wrong service entirely.
+  # Asks the app itself what it advertises, from inside the container. This box does
+  # publish 127.0.0.1:3000, but cthulhu does not and its host :3000 is legal.org.ua —
+  # so a host-level probe measures the wrong service there. Same command both sides.
   NODE_MCP_LIST: 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})'
 
 jobs:
@@ -109,6 +110,13 @@ jobs:
           $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
             docker compose --env-file ../.env.prod build migrate && \
             docker compose --env-file ../.env.prod up -d --remove-orphans"
+          # ⚠ nginx/edge.conf is a BIND MOUNT, so changing it changes nothing compose
+          # can see: same image, same service definition, no recreate, and the box
+          # keeps serving the old server_names while the deploy reports success. This
+          # is the staleness CLAUDE.md warns about; the rename to lawrider.uk would
+          # have been the first victim.
+          $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
+            docker compose --env-file ../.env.prod up -d --force-recreate edge"
 
       - name: Health checks
         run: |
@@ -127,8 +135,15 @@ jobs:
           # works before lawrider.uk has DNS at all and keeps testing the origin rather
           # than Cloudflare once it does. -k because the origin cert is
           # Cloudflare-internal and, for now, still the lawrider.ch one.
-          curl -fsSk --resolve "lawrider.uk:443:${GCP_HOST}" https://lawrider.uk/ -o /dev/null
-          curl -fsSk --resolve "mcp.lawrider.uk:443:${GCP_HOST}" https://mcp.lawrider.uk/health/ready -o /dev/null
+          # Assert 200 rather than trusting `curl -f`, which treats a 301 as success:
+          # a stale edge still holding the lawrider.ch config answers the new names
+          # from its catch-all redirect, and -f would call that a healthy deploy.
+          for url in "lawrider.uk:https://lawrider.uk/" "mcp.lawrider.uk:https://mcp.lawrider.uk/health/ready"; do
+            host="${url%%:*}"; target="${url#*:}"
+            code=$(curl -sSk -o /dev/null -w '%{http_code}' --resolve "${host}:443:${GCP_HOST}" "$target")
+            echo "$target -> $code"
+            [ "$code" = "200" ] || { echo "::error::$target answered $code, expected 200"; exit 1; }
+          done
 
           # And the toolset is what makes this box the UK one rather than a second
           # Swiss one. A deploy that quietly served ch_* or search_* here would be a
