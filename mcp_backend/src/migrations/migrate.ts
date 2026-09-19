@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
@@ -20,9 +20,58 @@ async function runMigrations() {
 
     // Get all migration files (*.sql) in sorted order
     const migrationsDir = join(process.cwd(), 'src/migrations');
-    const files = readdirSync(migrationsDir)
+    let files = readdirSync(migrationsDir)
       .filter(f => f.endsWith('.sql'))
       .sort();
+
+    // MIGRATION_SET narrows the history to one deployment's schema.
+    //
+    // The full history cannot build a database from zero: 126_spain_legal_data.sql
+    // opens with "Tables already exist from prior schema" and then ALTERs tables
+    // nothing ever created, so a run against an empty database stops there with
+    // `relation "spain_eurlex_legislation" does not exist` (verified 2026-09-19).
+    // Every deployment so far was therefore born from a dump of another box.
+    //
+    // Rather than back-fill twenty years of other jurisdictions' tables so that a
+    // UK-only box can reach its own seven, a deployment names the set it needs.
+    // lawrider.uk serves uk_* and nothing else; Spanish, Swiss, Polish and
+    // Ukrainian schema is not absent by accident there, it is absent on purpose.
+    //
+    // Unlisted migrations are NOT recorded as applied. The set is a filter on what
+    // runs, not a claim that the rest happened — so pointing a box at the full
+    // history later still works, and schema_migrations keeps meaning what it says.
+    const setName = (process.env.MIGRATION_SET || '').trim();
+    if (setName) {
+      const setPath = join(migrationsDir, 'sets', `${setName}.txt`);
+      if (!existsSync(setPath)) {
+        logger.error(`MIGRATION_SET=${setName} but ${setPath} does not exist`);
+        process.exit(1);
+      }
+      const patterns = readFileSync(setPath, 'utf-8')
+        .split('\n')
+        .map(l => l.replace(/#.*$/, '').trim())
+        .filter(Boolean);
+      const rx = (p: string) =>
+        new RegExp('^' + p.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
+      const matches1 = (p: string) => (f: string) => (p.includes('*') ? rx(p).test(f) : p === f);
+      const matches = (f: string) => patterns.some(p => matches1(p)(f));
+      const before = files.length;
+      files = files.filter(matches);
+      logger.info(`MIGRATION_SET=${setName}: ${files.length} of ${before} migrations selected`);
+      // Wildcards are checked too. A pattern that matches nothing used to be
+      // ignored here, so a set written entirely in wildcards — or one whose
+      // files were renamed — selected zero migrations and the runner reported
+      // success on a database it had not built.
+      const unmatched = patterns.filter(p => (p.includes('*') ? !files.some(matches1(p)) : !files.includes(p)));
+      if (unmatched.length) {
+        logger.error(`MIGRATION_SET=${setName} names migrations that match no file: ${unmatched.join(', ')}`);
+        process.exit(1);
+      }
+      if (!files.length) {
+        logger.error(`MIGRATION_SET=${setName} selected no migrations at all`);
+        process.exit(1);
+      }
+    }
 
     logger.info(`Found ${files.length} migration files`);
 
