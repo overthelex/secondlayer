@@ -51,8 +51,37 @@ fi
 IP=$(gcloud compute addresses describe "${NAME}-ip" --region="$REGION" --project="$PROJECT" --format='value(address)' 2>/dev/null || echo "<pending>")
 say "address: $IP"
 
+SSH_USER_NAME="${SSH_USER:-ubuntu}"
+
+# The deploy key has to be on the box before the first ssh, and a new instance
+# inherits only the project-wide keys — which are personal keys for `vovkes`,
+# not the `ubuntu` key CI logs in with. That one lives in the Zurich box's own
+# instance metadata, so it would not have followed us to London: the ssh loop
+# further down would have retried for five minutes and failed with a timeout
+# that reads like a machine which never booted.
+#
+# Derived from the private key rather than kept as a second secret, so the two
+# halves cannot disagree. Instance-level ssh-keys are additive here — the
+# project keys keep working, because nothing sets block-project-ssh-keys.
+SSH_META=()
+if [ -n "${PROVISION_SSH_KEY:-}" ]; then
+  KEYFILE=$(mktemp)
+  trap 'rm -f "$KEYFILE"' EXIT
+  printf '%s:%s\n' "$SSH_USER_NAME" "$(ssh-keygen -y -f "$PROVISION_SSH_KEY")" > "$KEYFILE"
+  SSH_META=(--metadata-from-file "ssh-keys=$KEYFILE")
+  say "deploy key for ${SSH_USER_NAME} will be placed in the instance metadata"
+fi
+
 if gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT" >/dev/null 2>&1; then
   say "instance $NAME already exists — nothing to create"
+  # Re-running after the key changed should fix the box, not skip past it.
+  # An `if` rather than `[ ... ] && ...`: the latter is the whole branch's exit
+  # status, so under `set -e` the no-key case would end the script with a
+  # failure precisely when nothing was wrong.
+  if [ ${#SSH_META[@]} -gt 0 ]; then
+    $DRY gcloud compute instances add-metadata "$NAME" \
+      --zone="$ZONE" --project="$PROJECT" ${SSH_META[@]+"${SSH_META[@]}"}
+  fi
 else
   say "creating $NAME"
   $DRY gcloud compute instances create "$NAME" \
@@ -62,7 +91,8 @@ else
     --boot-disk-size="${DISK_GB}GB" --boot-disk-type=pd-balanced \
     --address="$IP" --network-tier=PREMIUM \
     --scopes=devstorage.read_write,logging.write,monitoring.write,trace \
-    --labels=product=lawrider-uk,jurisdiction=uk
+    --labels=product=lawrider-uk,jurisdiction=uk \
+    ${SSH_META[@]+"${SSH_META[@]}"}
 fi
 
 say "installing docker and the directories the stack expects"
@@ -93,13 +123,18 @@ SETUP='
 
 if [ -n "${PROVISION_SSH_KEY:-}" ]; then
   say "configuring over ssh with the deploy key"
-  for i in $(seq 1 30); do
-    ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
-        -o ConnectTimeout=10 "${SSH_USER:-ubuntu}@${IP}" true 2>/dev/null && break
-    sleep 10
-  done
+  # Not under dry run: there is no machine to answer, and the wait is five
+  # minutes of a job that is supposed to print and exit.
+  if [ -z "$DRY" ]; then
+    for i in $(seq 1 30); do
+      ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
+          -o ConnectTimeout=10 "${SSH_USER_NAME}@${IP}" true 2>/dev/null && break
+      [ "$i" = 30 ] && { echo "!!! no ssh after 5 minutes — check the deploy key is in the instance metadata" >&2; exit 1; }
+      sleep 10
+    done
+  fi
   $DRY ssh -i "$PROVISION_SSH_KEY" -o StrictHostKeyChecking=accept-new \
-      "${SSH_USER:-ubuntu}@${IP}" "$SETUP"
+      "${SSH_USER_NAME}@${IP}" "$SETUP"
 else
   say "configuring over gcloud compute ssh"
   $DRY gcloud compute ssh "$NAME" --zone="$ZONE" --project="$PROJECT" --command="$SETUP"
