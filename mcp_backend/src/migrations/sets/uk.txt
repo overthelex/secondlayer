@@ -64,7 +64,12 @@
 #                                   so the drift is latent — if anything starts
 #                                   reading it, add 156 with its seed guarded.
 #
-# Verified: all 134 apply clean to an empty database, and the backend boots
+# Verified 2026-09-19: all 134 then in the set apply clean to an empty database,
+# and the backend boots against the result. Two were removed after that run —
+# 152 and 159, each a standalone CREATE TABLE nothing else refers to — so the
+# 132 here are a subset of a verified-clean set, not a re-verified one. Say so
+# rather than quietly restating the old number against a new list.
+# The original run: the backend boots
 # against the result — /health/ready 200, five uk_* tools advertised, the
 # point-in-time query planning on its index.
 #

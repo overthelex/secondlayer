@@ -28,6 +28,19 @@ rows with tags, 129 with entities, 20 with runaway whitespace out of 1.78M), and
 the 1,345 Welsh-looking rows are genuine bilingual SIs. The text is clean. The
 waste is repetition, and content-addressing is what removes it.
 
+⚠ KNOWN, NOT YET HANDLED — orphaned hashes after a refresh. When a weekly
+refresh rewords a provision, --populate-map re-hashes it, and if no other
+provision shared the old wording that hash is now referenced by nothing. The
+text row and, once embedding runs, its vector both survive with no provision
+behind them: a search would hit the vector, resolve it back through
+uk_provision_text_hash, and find nothing to show. Today this costs nothing
+because nothing is embedded yet. Before the first refresh AFTER the embedding
+run, either sweep hashes that no map row references, or teach the retrieval
+path to drop a hit that resolves to zero provisions. The sweep is the cheaper
+of the two and is a single anti-join; it is left undone deliberately rather
+than done blind, because how it interacts with qdrant deletion depends on the
+serving design that does not exist yet. Tracked with the embedding work.
+
 ⚠ The EU commencement boilerplate ("This Regulation shall enter into force…",
 34,259 rows) is deliberately NOT filtered. Deduplicated it is one vector per
 phrase, and a caller may legitimately search for that wording.
@@ -161,12 +174,18 @@ def main():
             cur.execute("SELECT count(*) FROM uk_provision_text_hash")
             before = cur.fetchone()[0]
             cur.execute(POPULATE)
+            # rowcount is inserts plus updates; the difference in the row count
+            # is inserts alone. Reporting only the latter as "new" would show a
+            # refresh that rewrote ten thousand provisions as "0 new", which is
+            # true and completely misleading.
+            touched = cur.rowcount
             conn.commit()
             cur.execute("SELECT count(*), count(DISTINCT text_hash) "
                         "FROM uk_provision_text_hash")
             rows, distinct = cur.fetchone()
-        print(f"map rows {before} -> {rows} ({rows - before} new), "
-              f"distinct texts {distinct}")
+        inserted = rows - before
+        print(f"map rows {before} -> {rows} ({inserted} inserted, "
+              f"{max(touched - inserted, 0)} re-hashed), distinct texts {distinct}")
         return
 
     out = sys.stdout if args.out == "-" else open(args.out, "w")

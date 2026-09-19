@@ -7,10 +7,11 @@
 # nothing else. Run the deploy first; this refuses to start if the tables are
 # not there.
 #
-# What moves: 14 uk_* tables, 6.9 GB. What does not: the bulk archives in
+# What moves: 12 uk_* tables, 6.9 GB. What does not: the bulk archives in
 # /data/uk — 28 GB of zips that re-download from research.legislation.gov.uk in
-# minutes, and the weekly refresh fetches them anyway — nor two uk_ tables that
-# are working residue rather than corpus (see the manifest step).
+# minutes, and the weekly refresh fetches them anyway — nor four of the source's
+# sixteen uk_ tables: two that are working residue, and the two judgment-access
+# tables, which are per-box grants keyed on users(id) (see the manifest step).
 #
 # The safety property is the manifest. A dump that half-arrives still looks like
 # a successful copy from the outside; here the source's row counts travel with
@@ -89,11 +90,18 @@ jobs:
           # The bracket is not decoration — pgrep -f matches its own command
           # line, so the unbracketed pattern finds this check and reports a
           # refresh that is not running.
-          if $SRC "pgrep -f '[r]un-uk-refresh' >/dev/null"; then
-            echo "::error::a UK refresh is running on the source — wait for it to finish, then re-run"
-            exit 1
-          fi
-          echo "no refresh running on the source"
+          # pgrep exits 1 for "found nothing" and the ssh itself exits 255 when
+          # it cannot reach the box at all. Collapsing those into one `if` reads
+          # an unreachable source as a quiet one, which is the wrong direction
+          # to be wrong in when the next step starts moving data.
+          set +e
+          $SRC "pgrep -f '[r]un-uk-refresh' >/dev/null"; rc=$?
+          set -e
+          case "$rc" in
+            0) echo "::error::a UK refresh is running on the source — wait for it to finish, then re-run"; exit 1 ;;
+            1) echo "no refresh running on the source" ;;
+            *) echo "::error::could not ask the source whether a refresh is running (ssh/pgrep exit $rc)"; exit 1 ;;
+          esac
 
       - name: Take the source manifest
         run: |
