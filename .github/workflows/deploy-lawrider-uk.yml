@@ -1,6 +1,17 @@
-# Deploy lawrider.ch to the GCP box (lawrider-gcp, europe-west6-a).
+# Deploy lawrider.uk — the British product — to the GCP box (lawrider-gcp,
+# europe-west6-a).
 #
-# Standalone pipeline, independent of the cthulhu/AWS runners:
+# One box, one corpus, one pipeline. lawrider.ch moved to cthulhu on 2026-09-18
+# (deploy-lawrider-cthulhu.yml) and legal.org.ua has its own (ci-local-deploy.yml);
+# this one owns the UK statute book and nothing else: 238,926 acts, 1.78M
+# provisions of current text, 1.64M point-in-time intervals, 1.21M amendments,
+# served as uk_* tools with MCP_TOOLSET=uk.
+#
+# ⚠ The judgments in uk_court_decisions are NOT part of the product. The Find
+# Case Law licence application is undecided, no tool reaches them, and nothing
+# here changes that (LEXAI-2056).
+#
+# Standalone pipeline, independent of the cthulhu runners:
 # - runs on GitHub-hosted runners
 # - SSHes to the GCP VM with its own deploy key (secrets below)
 # - builds the backend image ON the box (4 vCPU) from the synced tree
@@ -12,31 +23,35 @@
 #                          proprietary sources are overlaid before build,
 #                          same as deploy-prod.yml
 #
-# The migrate job is a ONE-OFF: dispatch with migrate=true to restore
-# the uk_*/ch_* data dump pushed from AWS prod into /data/pgdump and
-# verify it against its counts manifest (see
-# deployment/lawrider-gcp/migrate-from-aws.sh).
+# The one-off AWS restore job that used to live here is gone. It restored a dump
+# from /data/pgdump, which was deleted from the box on 2026-09-03 once the data
+# was verified, and the AWS instance it came from was terminated the same day —
+# so the job could only ever fail, while reading as a recovery path that existed.
 
-name: Deploy lawrider.ch (GCP)
+name: Deploy lawrider.uk (GCP)
 
-# Dispatch only since the Swiss stack moved to cthulhu (deploy-lawrider-cthulhu.yml):
-# the GCP box keeps the UK data, and a push to main must no longer rebuild and
-# restart the old CH app here.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "deployment/lawrider-gcp/**"
+      - "deployment/Dockerfile.mono-backend"
+      - "mcp_backend/**"
+      - "packages/shared/**"
+      - ".github/workflows/deploy-lawrider-uk.yml"
   workflow_dispatch:
-    inputs:
-      migrate:
-        description: "Run one-off uk_*/ch_* data migration from AWS after deploy"
-        type: boolean
-        default: false
 
 concurrency:
-  group: deploy-lawrider-gcp
+  group: deploy-lawrider-uk
   cancel-in-progress: false
 
 env:
   GCP_USER: ubuntu
   REMOTE_REPO: /home/ubuntu/SecondLayer
+  # Asks the app itself what it advertises. Runs inside the container because the
+  # gateway has no host port on either box — on cthulhu, host :3000 is legal.org.ua,
+  # so a curl from the host measures the wrong service entirely.
+  NODE_MCP_LIST: 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})'
 
 jobs:
   deploy:
@@ -108,32 +123,28 @@ jobs:
             $SSH_CMD "docker logs --tail 50 lawrider-app" || true
             exit 1
           }
-          # edge answers for both hosts (origin cert is Cloudflare-internal → -k)
-          curl -fsSk --resolve "lawrider.ch:443:${GCP_HOST}" https://lawrider.ch/ -o /dev/null
-          curl -fsSk --resolve "mcp.lawrider.ch:443:${GCP_HOST}" https://mcp.lawrider.ch/health/ready -o /dev/null
+          # The edge must answer for both names. --resolve pins the address, so this
+          # works before lawrider.uk has DNS at all and keeps testing the origin rather
+          # than Cloudflare once it does. -k because the origin cert is
+          # Cloudflare-internal and, for now, still the lawrider.ch one.
+          curl -fsSk --resolve "lawrider.uk:443:${GCP_HOST}" https://lawrider.uk/ -o /dev/null
+          curl -fsSk --resolve "mcp.lawrider.uk:443:${GCP_HOST}" https://mcp.lawrider.uk/health/ready -o /dev/null
+
+          # And the toolset is what makes this box the UK one rather than a second
+          # Swiss one. A deploy that quietly served ch_* or search_* here would be a
+          # jurisdiction leak, not a cosmetic slip.
+          #
+          # A whitelist, anchored per name — NOT a blocklist over the joined string.
+          # `ch_search_legislation` contains the substring `search_`, so a blocklist
+          # reports a clean CH box as leaking Ukrainian tools; that false positive was
+          # caught while testing this gate against the live boxes.
+          tools=$($SSH_CMD "docker exec lawrider-app node -e '$NODE_MCP_LIST'")
+          echo "advertised: $tools"
+          [ -n "$tools" ] || { echo "::error::no tools advertised at all"; exit 1; }
+          stray=$(printf '%s\n' $tools | grep -vE '^uk_' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::non-UK tools advertised on the UK box: $stray"
+            exit 1
+          fi
           echo "deploy OK"
 
-  migrate:
-    # always(): the first deploy on an empty database fails by design —
-    # migrations cannot bootstrap from zero (they assume tables created
-    # outside them, e.g. spain_eurlex_legislation in migration 121). The
-    # restore this job performs is exactly what unblocks deploy, so it
-    # must run even when the deploy job failed.
-    if: always() && github.event_name == 'workflow_dispatch' && inputs.migrate
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 350
-    env:
-      GCP_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
-    steps:
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
-          chmod 600 ~/.ssh/gcp_deploy
-          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Run migration on the box
-        run: |
-          ssh -i ~/.ssh/gcp_deploy -o ServerAliveInterval=30 "${GCP_USER}@${GCP_HOST}" \
-            "bash ${REMOTE_REPO}/deployment/lawrider-gcp/migrate-from-aws.sh"

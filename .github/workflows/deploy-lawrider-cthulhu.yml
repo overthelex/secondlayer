@@ -120,6 +120,25 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://mcp.lawrider.ch/health/ready || echo 000)
             echo "public mcp.lawrider.ch/health/ready: $code"
           fi
+
+          # Which tools this box advertises is what makes it the Swiss one. Since
+          # 2026-09-18 the same image also runs on GCP as lawrider.uk, and the two
+          # differ by exactly one environment variable (MCP_TOOLSET). A wrong value
+          # there is the single most likely way to serve one jurisdiction's corpus
+          # under another's name, and a healthcheck that only asks "is it up" reports
+          # that as a clean deploy.
+          #
+          # A whitelist anchored per name, not a blocklist over the joined string:
+          # `ch_search_legislation` contains `search_`, so a blocklist flags a healthy
+          # box. Measured against this very container while writing it.
+          tools=$(docker exec lawrider-app node -e 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})')
+          echo "advertised: $tools"
+          [ -n "$tools" ] || { echo "::error::no tools advertised at all"; exit 1; }
+          stray=$(printf '%s\n' $tools | grep -vE '^ch_' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::non-Swiss tools advertised on the CH box: $stray"
+            exit 1
+          fi
           echo "lawrider deploy OK"
 
       - name: legal.org.ua health (after)
