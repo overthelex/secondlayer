@@ -76,8 +76,16 @@ import psycopg2
 # grants higher limits, which is what the letter in UKENT-15 is for. Until then
 # run narrow and slow, and treat a 902 as "stop, you are over budget".
 #
-# ⚠ If you do reach for impersonation: do NOT pass impersonate="chrome" on
-# curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
+# ⚠ UPDATE 2026-09-20: impersonation is now REQUIRED, and the note below about
+# 437 is stale. curl_cffi's DEFAULT fingerprint gets a genuine 404 from the
+# origin — Apache, no cf-ray — for a URL that urllib fetches with 200. Every
+# versioned profile tried (chrome124, chrome131, safari17_0, firefox133,
+# edge101) answers 200. A run without a profile fails every fetch while looking
+# like the acts do not exist. See IMPERSONATE below and REFUSAL_VERDICTS.
+#
+# The older advice, kept because the failure mode it describes is real: do NOT
+# pass the bare impersonate="chrome" on curl_cffi 0.16, that alias mapped to a
+# blocked fingerprint and returned 437.
 # Source binding survives the switch — Session(interface=<ip>) replaces the
 # HTTPAdapter, verified 200 from three of the fleet's addresses.
 # Optional on purpose. Stages 5 and 6 import this module only for
@@ -109,6 +117,8 @@ UA = os.environ.get(
     "contact mcvovkes@gmail.com)",
 )
 DB_URL = os.environ.get("DATABASE_URL")
+# Empty string disables impersonation, for testing what the bare client gets.
+IMPERSONATE = os.environ.get("UK_IMPERSONATE", "chrome124")
 RAW_DIR = os.environ.get("UK_TEXT_RAW_DIR", "/home/ubuntu/opendata/uk/legislation/full")
 
 L = "{http://www.legislation.gov.uk/namespaces/legislation}"
@@ -500,7 +510,28 @@ def main():
         if not hasattr(local, "s"):
             idx = next(ip_counter)
             ip = source_ips[idx % len(source_ips)] if source_ips else None
-            s = requests.Session(interface=ip) if ip else requests.Session()
+            # ⚠ An impersonation profile is REQUIRED, not an optimisation.
+            #
+            # Measured 2026-09-20 on one act, same box, same minute:
+            #   no profile   -> 404, a 12 KB HTML error page from Apache
+            #   chrome124    -> 200, 2,199 bytes
+            #   chrome131 / safari17_0 / firefox133 / edge101 -> 200
+            #
+            # The origin serves a genuine 404 to curl_cffi's default fingerprint
+            # for a URL it serves happily to urllib. A run without a profile
+            # therefore fails every fetch while looking like the act does not
+            # exist — which is how 100,361 version rows came to claim their act
+            # has no text (see REFUSAL_VERDICTS and migration 220).
+            #
+            # The header's warning that impersonate="chrome" returns 437 is
+            # stale: the bare alias is gone from curl_cffi 0.16, and the
+            # versioned profiles above all answer 200 today. The User-Agent
+            # stays honest — it names the project and a contact address — and
+            # the rate limiter is unchanged.
+            kw = {"impersonate": IMPERSONATE} if IMPERSONATE else {}
+            if ip:
+                kw["interface"] = ip
+            s = requests.Session(**kw)
             s.headers["User-Agent"] = UA
             local.s = s
             local.lim = limiters[idx % len(limiters)]
@@ -595,7 +626,18 @@ def main():
                         batch.clear()
                     cur.execute(MARK_VER, (len(rows), len(full),
                                            hashlib.sha256(full.encode()).hexdigest(),
-                                           200 if rows else 900, leg_id, valid_from))
+                                           # 200, not 900. The fetch WAS a 200 —
+                                           # this act simply has no provisions,
+                                           # which is a fact about the act. Using
+                                           # 900 here overloaded the code that
+                                           # fetch() returns for an empty body,
+                                           # i.e. a refusal, so the two became
+                                           # indistinguishable in the column.
+                                           # They stayed distinguishable only by
+                                           # accident: the success path writes a
+                                           # text_hash and the refusal path does
+                                           # not. See migration 220.
+                                           200, leg_id, valid_from))
                 if done % 1000 == 0:
                     el = time.time() - t0
                     print(f"  {done}/{len(work)} ok={stats['ok']} "
