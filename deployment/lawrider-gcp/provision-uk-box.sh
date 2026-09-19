@@ -102,6 +102,12 @@ if gcloud compute instances describe "$NAME" --zone="$ZONE" --project="$PROJECT"
   fi
 else
   say "creating $NAME"
+  # The tags are what open ports 80 and 443. The project's firewall rules
+  # allow-http and allow-https are target-tagged, so an untagged instance is
+  # simply unreachable from the internet — it boots, serves happily on
+  # localhost, and every external request times out. The first deploy to this
+  # box died that way, at the health check, two minutes into a connect.
+  #
   # Scopes as full URIs, not aliases. The two spellings look interchangeable and
   # are not — `logging.write` is the tail of the URI, while the alias is
   # `logging-write`, and mixing them cost a run. The URIs are also what
@@ -120,6 +126,7 @@ else
     --address="$IP" --network-tier=PREMIUM \
     --scopes=https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write,https://www.googleapis.com/auth/trace.append \
     --labels=product=lawrider-uk,jurisdiction=uk \
+    --tags=http-server,https-server \
     ${SSH_META[@]+"${SSH_META[@]}"}
 fi
 
