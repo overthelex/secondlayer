@@ -1,0 +1,181 @@
+# Migration set: lawrider.uk — British law and UK court decisions, nothing else.
+#
+# 134 of the 220 migrations. What is here: the service schema the backend boots on
+# (users, api_keys, billing, cost tracking, documents, oauth, consultations) and
+# uk_* — the register, provision text, point-in-time intervals, amendments,
+# judgments and the Find Case Law access gate. 14 uk_ tables out of 129 total.
+#
+# ── Why this file exists ──────────────────────────────────────────────────
+# The full history cannot build a database from zero. 126_spain_legal_data.sql
+# opens with "Tables already exist from prior schema" and then ALTERs tables
+# nothing ever created, so a fresh run stops there with `relation
+# "spain_eurlex_legislation" does not exist`. Every box so far was therefore born
+# from a dump of another box, not from its own migrations. Verified 2026-09-19.
+#
+# ── How the list was chosen ───────────────────────────────────────────────
+# Not by filename. Each migration was applied alone to an empty database and
+# pg_tables diffed before and after, which is the only way to see that
+# 129_offshore_jurisdictions_data.sql carries Swiss registers, that
+# 102_ip_and_securities_tables.sql carries Ukrainian patents, or that
+# 137_es_boe_sumarios.sql creates four Spanish tables. Removed on that evidence:
+# Ukrainian legislation and its editions, the court-registry scraper, the bar
+# register, IP and securities, EU law, ICIJ offshore, Spain, and the Baltic,
+# Nordic and Western European court corpora — 54 tables in all.
+#
+# ⚠ Automation found the candidates; the calls below were made by hand:
+#   037_add_time_billing.sql        KEPT. Flagged only because its table is
+#                                   `active_timers`, which a prefix rule read as
+#                                   the Ukrainian `act`. It is billing.
+#   155_uk_ie_court_decisions.sql   KEPT. It also creates ie_court_decisions, but
+#                                   it is what creates uk_court_decisions. The
+#                                   Irish table stays empty.
+#   100_legislation_monitoring.sql  DROPPED, reluctantly: it needs the Ukrainian
+#                                   `legislation` table, and takes
+#                                   user_notifications with it. Nothing in
+#                                   mcp_backend/src reads that table.
+#   195_uk_legislation.sql          KEPT — and an earlier automated pass dropped
+#                                   it, "converging" by discarding the core UK
+#                                   migration. It was failing on a missing
+#                                   pg_trgm, which is now 000_extensions.sql.
+#
+# Verified: all 134 apply clean to an empty database, and the backend boots
+# against the result — /health/ready 200, five uk_* tools advertised, the
+# point-in-time query planning on its index.
+#
+# Listed by name, not by glob: adding a migration to a deployment should be a
+# decision someone makes, not something a pattern does on their behalf. A name
+# here that matches no file fails the run loudly.
+000_extensions.sql
+001_initial_schema.sql
+002_add_html_field.sql
+003_add_cost_tracking.sql
+004_add_secondlayer_tracking.sql
+005_convert_uah_to_usd.sql
+006_add_users_table.sql
+007_add_eula_acceptance.sql
+008_add_prompt_lifecycle_tables.sql
+009_add_document_structured_metadata.sql
+010_fix_cost_tracking_schema.sql
+013_add_user_billing.sql
+014_add_pricing_tiers.sql
+015_add_api_keys.sql
+016_add_user_request_preferences.sql
+017_payment_integration.sql
+018_add_password_auth.sql
+019_add_admin_role.sql
+020_add_credit_functions.sql
+021_migrate_billing_to_credits.sql
+022_fix_deduct_credits_id_type.sql
+023_add_email_notification_preferences.sql
+024_add_invoice_metadata.sql
+025_add_team_management.sql
+026_add_email_verification.sql
+027_add_upload_sessions.sql
+028_add_storage_columns.sql
+029_add_documents_user_id.sql
+030_add_conversations.sql
+031_add_gdpr_requests.sql
+032_add_client_matter_segregation.sql
+033_add_legal_holds.sql
+034_add_audit_log.sql
+035_add_upload_recovery_columns.sql
+036_add_folder_path_index.sql
+037_add_time_billing.sql
+038_add_webauthn_credentials.sql
+039_add_dictionaries.sql
+040_add_court_sessions.sql
+041_fix_gdpr_deletion_constraints.sql
+042_add_billing_management.sql
+043_add_anthropic_cost_tracking.sql
+045_add_crypto_payments.sql
+046_enhance_precedent_status.sql
+047_dynamic_chat_credits.sql
+048_add_system_config.sql
+049_add_service_pricing.sql
+050_add_documents_to_conversation_messages.sql
+051_add_voyage_cost_tracking.sql
+052_add_cost_summary_to_messages.sql
+053_add_tool_pricing.sql
+054_add_user_prompts.sql
+055_user_prompts_favorite.sql
+056_add_nowpayments.sql
+057_scraper_jobs.sql
+058_blog_comments.sql
+059_add_bedrock_pricing.sql
+060_add_document_text_search.sql
+061_bulk_scrape_jobs.sql
+062_add_workflows.sql
+063_add_document_soft_delete.sql
+064_attorney_consultation.sql
+065_add_attorney_pricing_tier.sql
+068_consultation_viewed_at.sql
+069_supreme_court_judges.sql
+070_judges_current.sql
+072_avatar_column_to_text.sql
+073_add_user_banner.sql
+074_search_history.sql
+076_conversations_request_id.sql
+077_attorney_offer_contract_number.sql
+078_contract_acceptance_system.sql
+079_referral_system.sql
+081_consultation_message_enhancements.sql
+082_judge_analytics.sql
+084_referral_verification_lifetime.sql
+086_billing_payment_methods.sql
+087_document_encryption.sql
+088_b2b_invoices.sql
+089_add_oauth_tables.sql
+090_add_user_role.sql
+091_remove_stripe_fondy.sql
+092_judge_efficiency.sql
+093_add_balance_uah_to_transactions.sql
+094_payment_methods_unique_constraint.sql
+095_billing_info_fields.sql
+096_news_articles.sql
+097_consultation_disputes_payouts.sql
+098_immutable_billing_transactions.sql
+099_safe_ts_headline_and_utf8_cleanup.sql
+104_developer_offer_contract_seq.sql
+105_workflow_sets_public.sql
+107_add_new_tool_pricing.sql
+109_session_replay.sql
+110_import_tasks.sql
+111_fix_fts_language.sql
+113_gdpr_user_deletion_fk_set_null.sql
+114_cleanup_duplicate_tables.sql
+115_video_call_sessions.sql
+116_video_call_fixes.sql
+117_consultation_e2ee_keys.sql
+118_consultation_message_encryption.sql
+119_call_transcript_encryption.sql
+120_consultation_e2ee_status.sql
+121_conversation_encryption.sql
+125_add_missing_sync_sources.sql
+139_reduce_non_llm_tool_pricing.sql
+140_add_user_beta_tester.sql
+141_user_aup_consents.sql
+142_abuse_reports.sql
+143_zero_inactive_user_balances.sql
+144_workflow_memory.sql
+145_workflow_memory_reconciliation.sql
+146_workflow_memory_push_mode.sql
+147_load_test_results.sql
+152_hu_court_decisions.sql
+153_ab_testing.sql
+155_uk_ie_court_decisions.sql
+159_singapore_court_decisions.sql
+161_echr_sync_tracking.sql
+163_conversation_shares.sql
+174_me_gov_datasets_tool_pricing.sql
+175_v2_chat_missing_tool_pricing.sql
+177_corporate_contracts.sql
+178_corporate_invoices.sql
+191_drop_numbering_work_tables.sql
+192_backfill_indexed_articles.sql
+195_uk_legislation.sql
+196_uk_legislation_effect_scopes.sql
+197_uk_court_decisions_licence.sql
+205_uk_judgment_access.sql
+217_uk_point_in_time.sql
+218_uk_corpus_check_run.sql
+219_uk_provision_embedding.sql
