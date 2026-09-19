@@ -13,6 +13,23 @@ import request from 'supertest';
 import { createPaymentRouter } from '../payment-routes';
 import { logger } from '../../utils/logger';
 
+// ⚠ The two error postures in payment-routes.ts differ, and only one end is
+// asserted here. The /nowpayments/:id/status catch withholds the internal text and
+// logs it, which is what the status test below now checks. The /nowpayments/create
+// catch still returns `message: error.message` (payment-routes.ts lines 94, 113 and
+// 127 are all of this shape), and its test still asserts that leak — deliberately
+// left alone, because tightening a payment API's error responses is a product call,
+// not a test repair. Someone should decide which posture wins.
+jest.mock('../../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() },
+}));
+
+// Same reason as payment-routes.test.ts: an uncleared mock would let one test's log
+// satisfy another test's assertion.
+beforeEach(() => {
+  (logger.error as jest.Mock).mockClear();
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 // Mock services
 // ──────────────────────────────────────────────────────────────────────────
@@ -212,7 +229,11 @@ describe('GET /api/billing/payment/nowpayments/:id/status', () => {
     const res = await request(app).get('/api/billing/payment/nowpayments/unknown/status');
 
     expect(res.status).toBe(500);
-    expect(res.body.message).toBe('Payment intent not found');
+    expect(res.body.message).toBe('An unexpected error occurred');
+    expect(JSON.stringify(res.body)).not.toContain('Payment intent not found');
+    expect(
+      (logger.error as jest.Mock).mock.calls.map((c) => JSON.stringify(c)).join(' ')
+    ).toContain('Payment intent not found');
   });
 });
 
