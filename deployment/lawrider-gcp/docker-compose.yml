@@ -23,11 +23,9 @@
 #   /data/uk                      bulk archives + refresh state (see scripts/uk)
 #   /data/qdrant                  CH vectors, kept but no longer served here
 #   /home/ubuntu/lawrider/site    static site
-#   /home/ubuntu/certs-lawrider.ch  Cloudflare Origin CA cert
-#     ⚠ still the .ch origin cert. It terminates TLS behind Cloudflare, so the
-#     name mismatch is invisible to browsers and to the deploy's own -k health
-#     check, but a lawrider.uk Origin CA cert has to replace it before the zone
-#     is set to Full (strict).
+#   /home/ubuntu/certs-lawrider.uk  Cloudflare Origin CA cert for lawrider.uk +
+#     *.lawrider.uk, issued 2026-09-19, valid to 2041-09-15. fullchain.pem +
+#     privkey.pem, key generated on the box and never copied off it.
 
 name: lawrider
 
@@ -227,7 +225,7 @@ services:
       - "443:443"
     volumes:
       - ./nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro
-      - /home/ubuntu/certs-lawrider.ch:/etc/nginx/certs/lawrider.ch:ro
+      - /home/ubuntu/certs-lawrider.uk:/etc/nginx/certs/lawrider.uk:ro
     depends_on:
       - site
     healthcheck:

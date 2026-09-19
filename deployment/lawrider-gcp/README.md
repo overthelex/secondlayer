@@ -57,19 +57,21 @@ same day, so the job could only fail while reading as a recovery path.
   `/home/ubuntu/certs-lawrider.ch`
 - ssh: GitHub Actions deploy key via instance metadata
 
-## Cutover to lawrider.uk
+## lawrider.uk: live since 2026-09-19
 
-Not done yet — the domain did not resolve at all when this was written, and the
-deploy is built to work anyway: its health checks pin the address with
-`curl --resolve`, so they test this origin with or without DNS.
+The zone is `lawrider.uk` in the **mcvovkes@gmail.com** Cloudflare account — not
+the `shepherdvovkes@icloud.com` one that holds lawrider.ch and legal.org.ua. It
+was registered there through Cloudflare Registrar on 18 Sep, which is why its
+nameserver pair differs from every other zone in the estate. A duplicate zone
+briefly created in the icloud account was deleted; do not recreate it, it can
+never activate.
 
-To go live: register `lawrider.uk`, add the zone to Cloudflare, and point
-`lawrider.uk`, `www` and `mcp` at the VM's static IP (proxied).
+`lawrider.uk`, `www` and `mcp` are proxied A records to the VM's static IP
+(34.65.12.234). SSL mode is **Full** and can now be Full (strict): the origin
+presents a Cloudflare Origin CA certificate for `lawrider.uk` + `*.lawrider.uk`,
+issued 2026-09-19 and valid to 2041-09-15, in `/home/ubuntu/certs-lawrider.uk`.
+The private key was generated on the box and has never left it.
 
-⚠ Then replace the origin certificate. `/home/ubuntu/certs-lawrider.ch` covers
-`*.lawrider.ch` and does **not** match the new names. Behind Cloudflare in Full
-mode that is invisible, and the deploy's own check passes `-k`, so nothing will
-tell you — until the zone is set to Full (strict) and every request becomes a
-526. Issue a Cloudflare Origin CA cert for `lawrider.uk` + `*.lawrider.uk`,
-mount it, and repoint every `ssl_certificate` / `ssl_certificate_key` pair in
-`nginx/edge.conf` — there are four server blocks, not one.
+API access for the zone is a scoped token on cthulhu at
+`/home/vovkes/SecondLayer/.env.cloudflare.lawrider-uk` (0600) — DNS Write, Zone
+Read, Zone Settings Write, SSL and Certificates Write, that zone only.
