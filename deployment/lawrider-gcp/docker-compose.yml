@@ -1,18 +1,33 @@
-# lawrider.ch stack on GCP (lawrider-gcp VM, europe-west6-a).
-# Serves: the static lawrider.ch site + the unified-gateway MCP API
-# (ch_* / uk_* tools) on mcp.lawrider.ch, backed by a Postgres subset
-# (full schema, data for uk_*/ch_* + service tables only).
+# lawrider.uk stack on GCP (lawrider-gcp VM, europe-west6-a).
+# Serves: the static site + the unified-gateway MCP API (uk_* tools only) on
+# mcp.lawrider.uk, backed by the UK corpus — 238,926 acts, 1.78M provisions of
+# current text, 1.64M point-in-time intervals, 1.21M amendments.
 #
-# Deployed by .github/workflows/deploy-lawrider-gcp.yml.
+# ⚠ This box used to be lawrider.ch. The Swiss product moved to cthulhu on
+# 2026-09-18 (deployment/lawrider-cthulhu, PR #2433): its stack, its crons and
+# its Cloudflare tunnel all run there now, and the GCP crontab holds nothing but
+# the UK refresh. What is left here is the British product, so this file stopped
+# describing the Swiss one.
+#
+# The ch_* tables and /data/qdrant are still on disk, deliberately: the data is
+# cheap to keep and expensive to rebuild, and it is the fastest rollback if the
+# cthulhu move has to be undone. Nothing here starts a container against it.
+#
+# Deployed by .github/workflows/deploy-lawrider-uk.yml.
 # Env file lives on the box at /home/ubuntu/SecondLayer/deployment/.env.prod
 # (same layout as the AWS prod box; rsync during deploy excludes it).
 #
 # Host paths:
 #   /data/pg                      postgres data
 #   /data/redis                   redis data
-#   /data/qdrant                  qdrant vector storage (CH corpus)
-#   /home/ubuntu/lawrider/site    static site (rsynced from AWS)
-#   /home/ubuntu/certs-lawrider.ch  Cloudflare Origin CA cert (*.lawrider.ch)
+#   /data/uk                      bulk archives + refresh state (see scripts/uk)
+#   /data/qdrant                  CH vectors, kept but no longer served here
+#   /home/ubuntu/lawrider/site    static site
+#   /home/ubuntu/certs-lawrider.ch  Cloudflare Origin CA cert
+#     ⚠ still the .ch origin cert. It terminates TLS behind Cloudflare, so the
+#     name mismatch is invisible to browsers and to the deploy's own -k health
+#     check, but a lawrider.uk Origin CA cert has to replace it before the zone
+#     is set to Full (strict).
 
 name: lawrider
 
@@ -34,9 +49,9 @@ services:
       - /data/pg:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
-      # ch-pipeline's run-delta.sh builds its DSN with the host port 5438
-      # (the mapping AWS prod used); expose the same port so the cron
-      # scripts run unmodified on this box.
+      # 5438 was the port ch-pipeline's run-delta.sh expected, inherited from
+      # AWS prod. That cron lives on cthulhu now, but the port stays: the UK
+      # refresh reads its DSN from /data/uk/db.env, which points here.
       - "127.0.0.1:5438:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-secondlayer} -d ${POSTGRES_DB:-secondlayer_prod}"]
@@ -130,38 +145,33 @@ services:
       OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
-      # Unified gateway: ch_* / uk_* tools are served locally from Postgres.
+      # Unified gateway: uk_* tools are served locally from Postgres.
       # RADA / OpenReyestr / Qdrant / Neo4j / MinIO / document-service stay on
       # the UA prod — leave their endpoints unset here so those tools fail
       # closed instead of hitting a wrong host.
       ENABLE_UNIFIED_GATEWAY: "true"
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      # This box holds two corpora, so it serves two prefixes (see
-      # mcp_backend/src/api/mcp-toolset.ts). The Ukrainian tools stay on legal.org.ua.
-      #
-      # 'uk' was added 2026-09-18: the UK statute book has been sitting here since the
-      # AWS move — 238,926 acts, 1.78M provisions of current text, 1.64M point-in-time
-      # intervals — and 'ch' alone meant nobody could reach any of it. legislation.gov.uk
-      # is OGL v3.0, so the legislation tools are ungated.
+      # UK only (see mcp_backend/src/api/mcp-toolset.ts). The Swiss tools answer from
+      # cthulhu now and the Ukrainian ones from legal.org.ua; one box, one corpus, and
+      # a typo in this value serves nothing rather than the wrong jurisdiction.
       #
       # ⚠ This does NOT open up uk_court_decisions. Those judgments are under the Find
       # Case Law licence, whose application is still undecided, and they have no tool at
       # all until it is — see services/uk-judgment-access.ts and LEXAI-2056.
-      MCP_TOOLSET: "ch,uk"
+      MCP_TOOLSET: "uk"
 
-      # ch_semantic_search: local Qdrant (ch_corpus_bge_cls) + local TEI embedder.
-      # The MCP_TOOLSET gate keeps UA qdrant-backed tools out, so a plain QDRANT_URL is safe.
-      QDRANT_URL: http://qdrant:6333
-      BGE_M3_URL: http://tei-bge-m3:80
-      CH_BGE_COLLECTION: ${CH_BGE_COLLECTION:-ch_corpus_bge_cls}
+      # No QDRANT_URL / BGE_M3_URL on purpose: the only vector-backed tool this
+      # image knows is ch_semantic_search, the toolset gate no longer admits it,
+      # and an endpoint pointing at a container that is not running would turn a
+      # clean "tool not available" into a connection error.
 
       # Identity of this deployment
-      PUBLIC_URL: https://lawrider.ch
-      FRONTEND_URL: https://lawrider.ch
-      ALLOWED_ORIGINS: https://lawrider.ch,https://mcp.lawrider.ch
-      WEBAUTHN_RP_ID: lawrider.ch
+      PUBLIC_URL: https://lawrider.uk
+      FRONTEND_URL: https://lawrider.uk
+      ALLOWED_ORIGINS: https://lawrider.uk,https://mcp.lawrider.uk
+      WEBAUTHN_RP_ID: lawrider.uk
       WEBAUTHN_RP_NAME: LawRider
-      WEBAUTHN_ORIGIN: https://lawrider.ch
+      WEBAUTHN_ORIGIN: https://lawrider.uk
 
       MOCK_PAYMENTS: "true"
       UPLOAD_TEMP_DIR: /app/data/uploads
@@ -193,65 +203,12 @@ services:
           memory: 6G
     networks: [lawrider]
 
-  qdrant:
-    image: qdrant/qdrant:v1.19.0
-    container_name: qdrant-lawrider
-    restart: unless-stopped
-    # Vector store for the CH corpus: ch_corpus_bge_cls, 22.3M points
-    # (1.22M decisions + 7.5M current+historical legislation articles),
-    # bge-m3 CLS, float16 on disk + binary quantization in RAM.
-    # Served by ch_semantic_search through QDRANT_URL on `app`.
-    volumes:
-      - /data/qdrant:/qdrant/storage
-    ports:
-      - "127.0.0.1:6333:6333"
-      - "127.0.0.1:6334:6334"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          # measured after the full load: anon RSS 11.7G — the HNSW graph over
-          # 22.3M points lives in RAM (binary quant 2.9G + links); 8G would
-          # OOM-loop on the next recreate
-          memory: 14G
-    networks: [lawrider]
-
-  # Query embedder for ch_semantic_search. Same image+flags as the UA prod
-  # container (docker-compose.local.yml is the canonical definition); bge-m3
-  # serves CLS pooling by default, which is the space ch_corpus_bge_cls was
-  # built in — do not add a --pooling flag.
-  tei-bge-m3:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
-    container_name: tei-bge-m3-lawrider
-    restart: unless-stopped
-    # Query workload: single short texts. The UA container's bulk config
-    # (--max-batch-tokens 65536) made onnxruntime pre-size its arenas to
-    # 11.1G RSS; 4096 serves the same fp32 model at 6.4G steady / 60-110ms
-    # per query (measured on this box 03.09).
-    command: ["--model-id", "BAAI/bge-m3", "--max-batch-tokens", "4096", "--max-client-batch-size", "16"]
-    volumes:
-      - tei_cache:/data
-    healthcheck:
-      # the cpu image ships curl, not wget
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      # first start downloads the 2.3GB model
-      start_period: 300s
-    deploy:
-      resources:
-        limits:
-          cpus: "3"
-          # steady RSS 6.4G at --max-batch-tokens 4096; the model-load peak
-          # needs more (dies under a 6G cap), so keep headroom
-          memory: 10G
-    networks: [lawrider]
+  # ⚠ qdrant and tei-bge-m3 used to live here. They served ch_semantic_search,
+  # which is a Swiss tool and now answers from cthulhu, so keeping them running
+  # cost 14G + 10G of memory limits and three CPUs for a corpus nobody queried
+  # on this box. The containers are gone; /data/qdrant is NOT — the 22.3M-point
+  # ch_corpus_bge_cls collection stays on disk as the cheap rollback. Restoring
+  # them is git history plus `compose up`, and needs no re-embedding.
 
   site:
     image: nginx:1.27-alpine
@@ -282,7 +239,6 @@ services:
 
 volumes:
   app_data:
-  tei_cache:
 
 networks:
   lawrider:

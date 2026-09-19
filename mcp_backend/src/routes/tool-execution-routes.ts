@@ -4,6 +4,7 @@ import { dualAuth, AuthenticatedRequest as DualAuthRequest } from '../middleware
 import { createBalanceCheckMiddleware } from '../middleware/balance-check.js';
 import { logger } from '../utils/logger.js';
 import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess } from '../services/uk-judgment-access.js';
+import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { requestContext } from '../utils/openai-client.js';
 import { ToolRegistry } from '../api/tool-registry.js';
 import { ServiceProxy } from '../services/service-proxy.js';
@@ -262,17 +263,21 @@ export function createToolExecutionRoutes(deps: {
         );
 
         const counts = deps.toolRegistry.getToolCounts();
+        // Advertise only what this deployment will actually execute — the routes
+        // below now refuse the rest, and a listing that still named them would
+        // hand every caller a list of 404s.
+        const visible = filterToolsByToolset(allTools);
 
         res.json({
-          tools: allTools,
-          count: allTools.length,
+          tools: visible,
+          count: visible.length,
           gateway: {
             enabled: true,
             services: counts,
           },
         });
       } else {
-        const tools = deps.toolRegistry.getLocalToolDefinitions();
+        const tools = filterToolsByToolset(deps.toolRegistry.getLocalToolDefinitions());
 
         res.json({
           tools,
@@ -306,6 +311,15 @@ export function createToolExecutionRoutes(deps: {
 
       const results = await Promise.all(
         calls.map(async (call: { name: string; arguments?: any }) => {
+          // Same deployment gate as the single-tool route: a batch must not be a
+          // way around it either.
+          if (!isToolInToolset(call.name)) {
+            return {
+              name: call.name,
+              error: 'Not available',
+              message: `Tool '${call.name}' is not available on this deployment`,
+            };
+          }
           // Same licence gate as the single-tool route: a batch must not be a way
           // around it.
           const batchGated = gatedRegistryOf(call.name, call.arguments || {});
@@ -400,6 +414,14 @@ export function createToolExecutionRoutes(deps: {
       if (!toolName) {
         return res.status(400).json({ error: 'Tool name is required' });
       }
+      // Same deployment gate as the non-streaming route below; a different Accept
+      // header must not be a way past a jurisdictional boundary.
+      if (!isToolInToolset(toolName)) {
+        return res.status(404).json({
+          success: false,
+          error: `Tool '${toolName}' is not available on this deployment`,
+        });
+      }
       const args = req.body.arguments || req.body;
 
       logger.info('Streaming tool call request', {
@@ -462,6 +484,18 @@ export function createToolExecutionRoutes(deps: {
       if (!toolName) {
         return res.status(400).json({ error: 'Tool name is required' });
       }
+      // Deployment toolset gate. MCP_TOOLSET narrows every MCP transport, but this
+      // REST route bypassed all of them: on the UK box an authenticated caller could
+      // POST /api/tools/ch_get_act_text and read the Swiss corpus, which is still on
+      // that disk. Same shape in reverse on cthulhu. The gate is jurisdictional, so
+      // it has to sit on every door into the registry, not just the MCP ones.
+      if (!isToolInToolset(toolName)) {
+        return res.status(404).json({
+          success: false,
+          error: `Tool '${toolName}' is not available on this deployment`,
+        });
+      }
+
       const args = req.body.arguments || req.body;
       const acceptHeader = req.headers.accept || '';
 

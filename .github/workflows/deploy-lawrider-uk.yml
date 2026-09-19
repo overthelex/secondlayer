@@ -1,0 +1,165 @@
+# Deploy lawrider.uk — the British product — to the GCP box (lawrider-gcp,
+# europe-west6-a).
+#
+# One box, one corpus, one pipeline. lawrider.ch moved to cthulhu on 2026-09-18
+# (deploy-lawrider-cthulhu.yml) and legal.org.ua has its own (ci-local-deploy.yml);
+# this one owns the UK statute book and nothing else: 238,926 acts, 1.78M
+# provisions of current text, 1.64M point-in-time intervals, 1.21M amendments,
+# served as uk_* tools with MCP_TOOLSET=uk.
+#
+# ⚠ The judgments in uk_court_decisions are NOT part of the product. The Find
+# Case Law licence application is undecided, no tool reaches them, and nothing
+# here changes that (LEXAI-2056).
+#
+# Standalone pipeline, independent of the cthulhu runners:
+# - runs on GitHub-hosted runners
+# - SSHes to the GCP VM with its own deploy key (secrets below)
+# - builds the backend image ON the box (4 vCPU) from the synced tree
+#
+# Secrets:
+#   LAWRIDER_GCP_HOST      public IP of the GCP VM
+#   LAWRIDER_GCP_SSH_KEY   private key authorized for ubuntu@<host>
+#   CORE_REPO_SSH_KEY      deploy key (read) for overthelex/secondlayer-core;
+#                          proprietary sources are overlaid before build,
+#                          same as deploy-prod.yml
+#
+# The one-off AWS restore job that used to live here is gone. It restored a dump
+# from /data/pgdump, which was deleted from the box on 2026-09-03 once the data
+# was verified, and the AWS instance it came from was terminated the same day —
+# so the job could only ever fail, while reading as a recovery path that existed.
+
+name: Deploy lawrider.uk (GCP)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deployment/lawrider-gcp/**"
+      - "deployment/Dockerfile.mono-backend"
+      - "deployment/scripts/**"
+      - "mcp_backend/**"
+      - "packages/shared/**"
+      - ".github/workflows/deploy-lawrider-uk.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-lawrider-uk
+  cancel-in-progress: false
+
+env:
+  GCP_USER: ubuntu
+  REMOTE_REPO: /home/ubuntu/SecondLayer
+  # Asks the app itself what it advertises, from inside the container. This box does
+  # publish 127.0.0.1:3000, but cthulhu does not and its host :3000 is legal.org.ua —
+  # so a host-level probe measures the wrong service there. Same command both sides.
+  NODE_MCP_LIST: 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GCP_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          if [ -z "$GCP_HOST" ]; then
+            echo "::error::LAWRIDER_GCP_HOST secret is not set"; exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
+          chmod 600 ~/.ssh/gcp_deploy
+          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
+
+      - name: Overlay core sources
+        env:
+          CORE_KEY: ${{ secrets.CORE_REPO_SSH_KEY }}
+        run: |
+          if [ -z "$CORE_KEY" ]; then
+            echo "::error::CORE_REPO_SSH_KEY secret is not set — refusing to build without the proprietary overlay"; exit 1
+          fi
+          printf '%s\n' "$CORE_KEY" > ~/.ssh/core_deploy
+          chmod 600 ~/.ssh/core_deploy
+          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+          CORE_TMP=$(mktemp -d)
+          GIT_SSH_COMMAND="ssh -i $HOME/.ssh/core_deploy" \
+            git clone --depth 1 git@github.com:overthelex/secondlayer-core "$CORE_TMP"
+          test -s "$CORE_TMP/src/services/chat-execution-loop.ts" && test -s "$CORE_TMP/src/prompts/chat-system-prompt.ts" \
+            || { echo "::error::core clone incomplete — key files missing"; exit 1; }
+          find "$CORE_TMP"/src/services -maxdepth 1 -name '*.ts' -exec cp -f {} mcp_backend/src/services/ \;
+          cp -rf "$CORE_TMP"/src/prompts/* mcp_backend/src/prompts/
+          rm -rf "$CORE_TMP"
+
+      - name: Sync tree to GCP box
+        run: |
+          rsync -az --delete \
+            --exclude '.git' --exclude 'node_modules' \
+            --exclude 'deployment/.env.prod' \
+            -e "ssh -i $HOME/.ssh/gcp_deploy" \
+            ./ "${GCP_USER}@${GCP_HOST}:${REMOTE_REPO}/"
+          $SSH_CMD "test -s ${REMOTE_REPO}/mcp_backend/src/services/chat-execution-loop.ts" \
+            || { echo "::error::overlay missing on box after sync"; exit 1; }
+
+      - name: Build and start stack
+        run: |
+          $SSH_CMD "test -s ${REMOTE_REPO}/deployment/.env.prod" \
+            || { echo "::error::deployment/.env.prod missing on the box — provision it first"; exit 1; }
+          $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
+            docker compose --env-file ../.env.prod build migrate && \
+            docker compose --env-file ../.env.prod up -d --remove-orphans"
+          # ⚠ nginx/edge.conf is a BIND MOUNT, so changing it changes nothing compose
+          # can see: same image, same service definition, no recreate, and the box
+          # keeps serving the old server_names while the deploy reports success. This
+          # is the staleness CLAUDE.md warns about; the rename to lawrider.uk would
+          # have been the first victim.
+          $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
+            docker compose --env-file ../.env.prod up -d --force-recreate edge"
+
+      - name: Health checks
+        run: |
+          # app container must go healthy
+          for i in $(seq 1 30); do
+            state=$($SSH_CMD "docker inspect -f '{{.State.Health.Status}}' lawrider-app 2>/dev/null" || echo starting)
+            [ "$state" = "healthy" ] && break
+            sleep 10
+          done
+          [ "$state" = "healthy" ] || {
+            echo "::error::lawrider-app never went healthy (state=$state)"
+            $SSH_CMD "docker logs --tail 50 lawrider-app" || true
+            exit 1
+          }
+          # The edge must answer for both names. --resolve pins the address, so this
+          # works before lawrider.uk has DNS at all and keeps testing the origin rather
+          # than Cloudflare once it does. -k because the origin cert is
+          # Cloudflare-internal and, for now, still the lawrider.ch one.
+          # Assert 200 rather than trusting `curl -f`, which treats a 301 as success:
+          # a stale edge still holding the lawrider.ch config answers the new names
+          # from its catch-all redirect, and -f would call that a healthy deploy.
+          for url in "lawrider.uk:https://lawrider.uk/" "mcp.lawrider.uk:https://mcp.lawrider.uk/health/ready"; do
+            host="${url%%:*}"; target="${url#*:}"
+            code=$(curl -sSk -o /dev/null -w '%{http_code}' --resolve "${host}:443:${GCP_HOST}" "$target")
+            echo "$target -> $code"
+            [ "$code" = "200" ] || { echo "::error::$target answered $code, expected 200"; exit 1; }
+          done
+
+          # And the toolset is what makes this box the UK one rather than a second
+          # Swiss one. A deploy that quietly served ch_* or search_* here would be a
+          # jurisdiction leak, not a cosmetic slip.
+          #
+          # A whitelist, anchored per name — NOT a blocklist over the joined string.
+          # `ch_search_legislation` contains the substring `search_`, so a blocklist
+          # reports a clean CH box as leaking Ukrainian tools; that false positive was
+          # caught while testing this gate against the live boxes.
+          tools=$($SSH_CMD "docker exec lawrider-app node -e '$NODE_MCP_LIST'")
+          echo "advertised: $tools"
+          [ -n "$tools" ] || { echo "::error::no tools advertised at all"; exit 1; }
+          stray=$(printf '%s\n' $tools | grep -vE '^uk_' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::non-UK tools advertised on the UK box: $stray"
+            exit 1
+          fi
+          echo "deploy OK"
+
