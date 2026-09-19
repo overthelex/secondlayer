@@ -53,9 +53,11 @@
 #                                   DROPPED deliberately, and this one costs
 #                                   something. It seeds counts from about twenty
 #                                   corpora — ch_, pl_, cz_, hu_, lt_, dk_, fr_
-#                                   and the rest — none of which exist here, so
-#                                   it cannot run on a UK-only schema without
-#                                   guarding every block. It is a table for
+#                                   and the rest. It seeds uk_ and ie_ too, and
+#                                   those this set does create; it is the other
+#                                   twenty that are absent, and one absent table
+#                                   is enough to stop it. So it cannot run on a
+#                                   UK-only schema without guarding every block. It is a table for
 #                                   comparing jurisdictions, and this box has
 #                                   one. The cost: dump-born boxes carry a
 #                                   trg_jstats trigger on uk_court_decisions that

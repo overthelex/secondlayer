@@ -30,16 +30,18 @@ waste is repetition, and content-addressing is what removes it.
 
 ⚠ KNOWN, NOT YET HANDLED — orphaned hashes after a refresh. When a weekly
 refresh rewords a provision, --populate-map re-hashes it, and if no other
-provision shared the old wording that hash is now referenced by nothing. The
-text row and, once embedding runs, its vector both survive with no provision
-behind them: a search would hit the vector, resolve it back through
-uk_provision_text_hash, and find nothing to show. Today this costs nothing
-because nothing is embedded yet. Before the first refresh AFTER the embedding
-run, either sweep hashes that no map row references, or teach the retrieval
-path to drop a hit that resolves to zero provisions. The sweep is the cheaper
-of the two and is a single anti-join; it is left undone deliberately rather
-than done blind, because how it interacts with qdrant deletion depends on the
-serving design that does not exist yet. Tracked with the embedding work.
+provision shared the old wording that hash is now referenced by nothing. There
+is no text row to strand — this path stores no copy, the wording lives in
+uk_legislation_provisions and is updated in place — but once embedding runs the
+vector under the old hash survives with no provision behind it: a search would
+hit it, resolve back through uk_provision_text_hash, and find nothing to show.
+Today this costs nothing because nothing is embedded yet. Before the first
+refresh AFTER the embedding run, either delete vectors whose hash no map row
+references, or teach the retrieval path to drop a hit that resolves to zero
+provisions. The first is cheaper and is a single anti-join; it is left undone
+deliberately rather than done blind, because how it interacts with qdrant
+deletion depends on a serving design that does not exist yet. Tracked with the
+embedding work.
 
 ⚠ The EU commencement boilerplate ("This Regulation shall enter into force…",
 34,259 rows) is deliberately NOT filtered. Deduplicated it is one vector per

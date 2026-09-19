@@ -75,10 +75,11 @@ jobs:
             echo "::error::GCP_SA_KEY is not set. Create a service account in secondlayer-gpu with roles/compute.instanceAdmin.v1, roles/compute.networkAdmin and roles/iam.serviceAccountUser, then add its JSON key as the GCP_SA_KEY secret. See this workflow's header."
             exit 1
           fi
-          # Checked here for the same reason as the one above: without it the
-          # step below writes an empty key file, the machine is created with no
-          # way in, and the job spends ten minutes on a connection timeout
-          # before failing with Permission denied.
+          # The script does now catch an empty key, when it derives the public
+          # half — before anything is created, so nothing is left behind. This
+          # is here to say which secret is missing, rather than failing later
+          # with ssh-keygen's "invalid format" and leaving someone to work out
+          # which of the two credentials it meant.
           if [ -z "$SSH_KEY" ]; then
             echo "::error::LAWRIDER_GCP_SSH_KEY is not set — the box would be created and then unreachable."
             exit 1
