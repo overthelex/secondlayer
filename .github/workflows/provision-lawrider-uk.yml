@@ -99,9 +99,13 @@ jobs:
           VM_MACHINE: ${{ inputs.machine_type }}
           VM_DISK_GB: ${{ inputs.disk_gb }}
           PROVISION_SSH_KEY: /home/runner/.ssh/gcp
+          # Through the environment, never interpolated into the script body: a
+          # dispatch input is attacker-controlled text as far as the runner is
+          # concerned, and this job holds a credential that can create machines.
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           chmod +x deployment/lawrider-gcp/provision-uk-box.sh
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             deployment/lawrider-gcp/provision-uk-box.sh --dry-run
           else
             deployment/lawrider-gcp/provision-uk-box.sh
@@ -109,7 +113,9 @@ jobs:
 
       - name: Show the box
         if: ${{ !inputs.dry_run }}
+        env:
+          ZONE: ${{ inputs.zone }}
         run: |
           gcloud compute instances describe lawrider-uk \
-            --zone="${{ inputs.zone }}" --project=secondlayer-gpu \
+            --zone="$ZONE" --project=secondlayer-gpu \
             --format='table(name,status,machineType.basename(),networkInterfaces[0].accessConfigs[0].natIP)'

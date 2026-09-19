@@ -59,8 +59,16 @@ POPULATE = """
 INSERT INTO uk_provision_text_hash (leg_id, valid_from, ord, text_hash)
 SELECT leg_id, valid_from, ord, sha256(convert_to(text, 'UTF8'))
   FROM uk_legislation_provisions
- ON CONFLICT (leg_id, valid_from, ord) DO NOTHING
+ ON CONFLICT (leg_id, valid_from, ord) DO UPDATE
+    SET text_hash = EXCLUDED.text_hash
+  WHERE uk_provision_text_hash.text_hash IS DISTINCT FROM EXCLUDED.text_hash
 """
+# DO UPDATE, not DO NOTHING. The map is content-addressed, so a row whose text
+# changed in a weekly refresh and whose hash did not is a row that now points at
+# the wrong content — and the export would write the new text under the old
+# hash, which is the one failure this design is supposed to make impossible.
+# The WHERE keeps it cheap: unchanged provisions, which is nearly all of them,
+# are not rewritten.
 
 # DISTINCT ON collapses every provision that shares a wording to one row, which
 # is the whole point — 1,775,894 rows become 1,300,637 texts. The join is what
@@ -113,7 +121,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--populate-map", action="store_true",
                     help="fill uk_provision_text_hash from uk_legislation_provisions "
-                         "and exit. Insert-only and idempotent; it does NOT add a "
+                         "and exit. Idempotent, and re-hashes any provision whose "
+                         "text changed in a refresh; it does NOT add a "
                          "column to the provisions table, whose 705 MB GIN index a "
                          "full-table rewrite would thrash.")
     ap.add_argument("--out", default="/data/uk/uk_provision_texts.jsonl",
@@ -132,6 +141,17 @@ def main():
 
     if not DB_URL:
         sys.exit("DATABASE_URL is required")
+
+    # A zero chunk size emits nothing and a negative overlap silently drops
+    # characters from the middle of every long provision — both produce a file
+    # that looks like a successful export and is not one. Overlap must also stay
+    # under the chunk, or the window never advances.
+    if args.chunk_chars <= 0:
+        sys.exit("--chunk-chars must be positive")
+    if not 0 <= args.chunk_overlap < args.chunk_chars:
+        sys.exit("--chunk-overlap must be between 0 and --chunk-chars")
+    if args.min_chars < 0:
+        sys.exit("--min-chars cannot be negative")
 
     conn = psycopg2.connect(DB_URL)
     conn.autocommit = False

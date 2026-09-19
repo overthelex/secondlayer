@@ -90,7 +90,7 @@ else
     --image-family=ubuntu-2404-lts --image-project=ubuntu-os-cloud \
     --boot-disk-size="${DISK_GB}GB" --boot-disk-type=pd-balanced \
     --address="$IP" --network-tier=PREMIUM \
-    --scopes=devstorage.read_write,logging.write,monitoring.write,trace \
+    --scopes=logging.write,monitoring.write,trace \
     --labels=product=lawrider-uk,jurisdiction=uk \
     ${SSH_META[@]+"${SSH_META[@]}"}
 fi
@@ -110,8 +110,18 @@ SETUP='
     curl -fsSL https://get.docker.com | sudo sh
     sudo usermod -aG docker "$USER"
   fi
-  sudo mkdir -p /data/pg /data/redis /data/uk /home/ubuntu/lawrider/site
-  sudo chown -R "$USER":"$USER" /data /home/ubuntu/lawrider
+  # Create and take ownership only of what is not there yet. The recursive
+  # chown this replaces would, on a re-run against a live box, hand postgres
+  # and redis data directories to the login user — the databases run as their
+  # own uids inside the containers and would stop being able to write to their
+  # own files. A script advertised as safe to re-run has to actually be safe on
+  # the second run, which is the one where there is something to lose.
+  for d in /data/pg /data/redis /data/uk /home/ubuntu/lawrider/site; do
+    if [ ! -d "$d" ]; then
+      sudo mkdir -p "$d"
+      sudo chown "$USER":"$USER" "$d"
+    fi
+  done
   # python for the refresh and export scripts (psycopg2, no build toolchain)
   if [ ! -x /home/ubuntu/uk-venv/bin/python3 ]; then
     sudo apt-get update -qq && sudo apt-get install -y -qq python3-venv >/dev/null

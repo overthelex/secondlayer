@@ -79,6 +79,22 @@ jobs:
           echo "uk_ tables on the target: $n"
           [ "$n" -ge 14 ] || { echo "::error::target has $n uk_ tables, expected at least 14 — run deploy-lawrider-uk.yml first"; exit 1; }
 
+      - name: The source must be still
+        run: |
+          # The manifest and the dump are two reads of the source, and a refresh
+          # running between them moves the corpus underneath both: rows arrive
+          # after they were counted, verification fails on numbers that were
+          # right when taken, and the run looks like a corruption it is not.
+          #
+          # The bracket is not decoration — pgrep -f matches its own command
+          # line, so the unbracketed pattern finds this check and reports a
+          # refresh that is not running.
+          if $SRC "pgrep -f '[r]un-uk-refresh' >/dev/null"; then
+            echo "::error::a UK refresh is running on the source — wait for it to finish, then re-run"
+            exit 1
+          fi
+          echo "no refresh running on the source"
+
       - name: Take the source manifest
         run: |
           # Counted per table on the source, and compared on the target after the
@@ -101,15 +117,25 @@ jobs:
                  --     what the bulk archives contain.
                  -- Neither is British law or a UK judgment. Say so out loud if
                  -- you want them: this is the moment they stop existing.
-                 and tablename !~ '_repair_backup_|^uk_bulk_probe$'
+                 --
+                 --   uk_judgment_access, uk_judgment_access_log
+                 --     Not corpus either: who on THAT box may read Find Case Law
+                 --     judgments. Both reference users(id), and users is not
+                 --     copied — so a data-only load of the two grants currently
+                 --     on the source would fail on a foreign key, and if it
+                 --     somehow did not, it would name user ids that mean
+                 --     someone else on the target. Access is granted on the box
+                 --     it applies to.
+                 and tablename !~ '_repair_backup_|^uk_bulk_probe$|^uk_judgment_access(_log)?$'
             ) s\"" > manifest.txt
           n=$(tr ',' '\n' < manifest.txt | grep -c ':' || true)
           echo "tables in the manifest: $n"
           tr ',' '\n' < manifest.txt | sed 's/^/  /'
-          # 14 is what the source has and what the target's schema check demands;
-          # fewer means the source lost tables or the query matched less than it
-          # should, and either way this is not a run to carry on with.
-          [ "$n" -ge 14 ] || { echo "::error::manifest has $n tables, expected at least 14 — the source query failed or the source is not the box you think it is"; exit 1; }
+          # 12 is the corpus: the source carries 16 uk_ tables, of which two are
+          # working residue and two are the access grants excluded above. Fewer
+          # than 12 means the source lost tables or the query matched less than
+          # it should, and neither is a run to carry on with.
+          [ "$n" -ge 12 ] || { echo "::error::manifest has $n tables, expected at least 12 — the source query failed or the source is not the box you think it is"; exit 1; }
           echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
 
       - name: Copy
@@ -123,12 +149,20 @@ jobs:
           # tables in dependency order, which matters: uk_provision_version
           # references uk_provision_text.
           tables=$(tr ',' '\n' < manifest.txt | cut -d: -f1 | sed 's/^/-t /' | tr '\n' ' ')
+          list=$(tr ',' '\n' < manifest.txt | cut -d: -f1 | tr '\n' ',' | sed 's/,$//')
           echo "dumping: $(echo "$tables" | wc -w) table flags"
-          $DST "docker exec $PG psql -U secondlayer -d $DB -c \"
-            truncate $(tr ',' '\n' < manifest.txt | cut -d: -f1 | tr '\n' ',' | sed 's/,$//') cascade\""
-          $SRC "docker exec $PG pg_dump -U secondlayer -d $DB --data-only --no-owner $tables" \
+
+          # The truncate travels at the head of the same stream as the data, and
+          # psql runs the whole thing as one transaction (-1). Two commands over
+          # two ssh connections is the arrangement where a network blip between
+          # them empties the target and leaves it that way: the job reports
+          # failure, which is honest, but the box is now worse than before it
+          # started. One transaction means a failure anywhere rolls the truncate
+          # back with it and the old corpus is still there to retry against.
+          { echo "TRUNCATE $list CASCADE;"; \
+            $SRC "docker exec $PG pg_dump -U secondlayer -d $DB --data-only --no-owner $tables"; } \
             | gzip -1 \
-            | $DST "gunzip | docker exec -i $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -q"
+            | $DST "gunzip | docker exec -i $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -1 -q"
           echo "load finished"
 
       - name: Verify against the manifest

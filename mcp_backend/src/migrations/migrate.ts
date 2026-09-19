@@ -51,16 +51,24 @@ async function runMigrations() {
         .split('\n')
         .map(l => l.replace(/#.*$/, '').trim())
         .filter(Boolean);
-      const matches = (f: string) => patterns.some(p =>
-        p.includes('*')
-          ? new RegExp('^' + p.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(f)
-          : p === f);
+      const rx = (p: string) =>
+        new RegExp('^' + p.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
+      const matches1 = (p: string) => (f: string) => (p.includes('*') ? rx(p).test(f) : p === f);
+      const matches = (f: string) => patterns.some(p => matches1(p)(f));
       const before = files.length;
       files = files.filter(matches);
       logger.info(`MIGRATION_SET=${setName}: ${files.length} of ${before} migrations selected`);
-      const unmatched = patterns.filter(p => !p.includes('*') && !files.includes(p));
+      // Wildcards are checked too. A pattern that matches nothing used to be
+      // ignored here, so a set written entirely in wildcards — or one whose
+      // files were renamed — selected zero migrations and the runner reported
+      // success on a database it had not built.
+      const unmatched = patterns.filter(p => (p.includes('*') ? !files.some(matches1(p)) : !files.includes(p)));
       if (unmatched.length) {
-        logger.error(`MIGRATION_SET=${setName} names migrations that do not exist: ${unmatched.join(', ')}`);
+        logger.error(`MIGRATION_SET=${setName} names migrations that match no file: ${unmatched.join(', ')}`);
+        process.exit(1);
+      }
+      if (!files.length) {
+        logger.error(`MIGRATION_SET=${setName} selected no migrations at all`);
         process.exit(1);
       }
     }
