@@ -32,7 +32,14 @@ Measured against the register on 2026-08-31, before loading anything:
 ⚠ The bulk does not supersede the crawl everywhere. nisro, uksro, gbla, ukmo and
 aosp are essentially absent from these two collections (1 of 8,792 nisro, 0 of
 307 uksro, 0 of 273 gbla), so the pre-1948 secondary and local material stays
-text-less. best-collection has not been checked yet and may hold some of it.
+text-less.
+
+best-collection HAS now been checked, on 2026-09-19, and it does not rescue them:
+of the 21,972 acts that had no version row at all it carries 167, none of them
+nisr or nisro. Its larger nisr and ssi holdings are the same items the other two
+collections already supply. All four collections are exhausted for that residue —
+what is left has no machine-readable text at source, only scanned PDFs, and is
+recorded as such rather than retried. See LEXAI-2052.
 
 Identity comes from IdURI inside each file, never from the filename: the archive
 names regnal items like `aep-Hen3c23-52-23-revised-data.xml`, which no sane rule
@@ -166,6 +173,51 @@ VALUES %s
 ON CONFLICT (leg_id, valid_from) DO NOTHING
 """
 
+# Put the register's version counters back in step with the versions table.
+#
+# This is NOT the thing the warning above forbids. That forbids deriving these
+# from bulk member metadata, which is an incomplete source and once zeroed
+# unapplied_effects on 33,434 acts. This derives them from
+# uk_legislation_versions — the table that IS the authority on versions — and
+# touches only the three fields that table can answer for. unapplied_effects
+# stays out: nothing local can compute it.
+#
+# Why it is needed: this loader writes version rows and deliberately does not
+# maintain the counters per act, because recomputing them inside the load would
+# be a full-table churn on every run. The cost of that choice is that the
+# counters drift, and on 2026-09-19 they had drifted badly — wrong for 194,781
+# of 238,926 acts, 194,100 of them claiming zero while having rows. The column
+# is served to callers through registry-catalog, so it is not an internal
+# detail, and 03_harvest_texts.py used to key a destructive insert off it.
+#
+# Only rows that actually differ are written, and none of the three columns is
+# indexed (the indexes are id, leg_type+year, title, title trigram, status), so
+# this stays HOT and leaves the GIN index alone.
+RECONCILE = """
+UPDATE uk_legislation l
+   SET version_count = s.n,
+       first_version = s.lo,
+       last_version  = s.hi,
+       updated_at    = now()
+  FROM (SELECT leg_id, count(*) n, min(valid_from) lo, max(valid_from) hi
+          FROM uk_legislation_versions GROUP BY leg_id) s
+ WHERE s.leg_id = l.id
+   AND (l.version_count IS DISTINCT FROM s.n
+     OR l.first_version IS DISTINCT FROM s.lo
+     OR l.last_version  IS DISTINCT FROM s.hi)
+"""
+
+# And acts whose versions have all gone away, or that never had any: the counter
+# should say zero rather than keep a number from a crawl that no longer holds.
+RECONCILE_EMPTY = """
+UPDATE uk_legislation l
+   SET version_count = 0, first_version = NULL, last_version = NULL,
+       updated_at = now()
+ WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions v WHERE v.leg_id = l.id)
+   AND (l.version_count <> 0 OR l.first_version IS NOT NULL
+        OR l.last_version IS NOT NULL)
+"""
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -193,12 +245,39 @@ def main():
                          "anything published since the last harvest — get a row "
                          "at all. Existing rows are only filled where they are "
                          "empty; version_count and unapplied_effects are never "
-                         "touched.")
+                         "touched by the upsert — see --reconcile-counters for "
+                         "how the first three are put right afterwards.")
+    ap.add_argument("--reconcile-counters", action="store_true",
+                    help="after loading, recompute version_count, first_version "
+                         "and last_version from uk_legislation_versions for the "
+                         "rows where they disagree. Not derived from the bulk "
+                         "metadata — derived from our own versions table, which "
+                         "is what those three fields describe. unapplied_effects "
+                         "is untouched: nothing local can compute it.")
+    ap.add_argument("--reconcile-only", action="store_true",
+                    help="do only that, read no archive. --zip is still required "
+                         "by argparse; pass any path, it is not opened.")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     if not DB_URL and not args.dry_run:
         sys.exit("DATABASE_URL is required")
+
+    if args.reconcile_only:
+        if args.dry_run:
+            # The main load path honours --dry-run; this branch used to ignore it
+            # and write anyway, which is the worst possible reading of the flag.
+            print("dry run: would reconcile version_count, first_version and "
+                  "last_version from uk_legislation_versions; nothing written")
+            return
+        conn = psycopg2.connect(DB_URL)
+        with conn, conn.cursor() as cur:
+            cur.execute(RECONCILE);       n1 = cur.rowcount
+            cur.execute(RECONCILE_EMPTY); n2 = cur.rowcount
+        print(f"counters reconciled: {n1} acts from their versions, "
+              f"{n2} reset to zero", flush=True)
+        conn.close()
+        return
 
     conn = cur = None
     valid_from = {}
@@ -346,6 +425,16 @@ def main():
         flush()
 
     flush()
+
+    # After the load, not during it: the counters describe the finished state,
+    # and recomputing them per act mid-run is the churn this loader avoids.
+    if args.reconcile_counters and conn is not None and not args.dry_run:
+        with conn, conn.cursor() as c2:
+            c2.execute(RECONCILE);       n1 = c2.rowcount
+            c2.execute(RECONCILE_EMPTY); n2 = c2.rowcount
+        print(f"\ncounters reconciled: {n1} acts from their versions, "
+              f"{n2} reset to zero", flush=True)
+
     print("\n=== summary", flush=True)
     for k in ("files", "parsed", "provisions", "empty", "skipped",
               "registered", "not_in_register", "no_id", "failed"):

@@ -130,7 +130,7 @@ rc=0
 "$PYTHON" "$HERE/05_load_bulk_texts.py" \
   --zip "$DATA_DIR/revised-current-xml.zip" \
   --zip "$DATA_DIR/enacted-epublished-xml.zip" \
-  --with-register --replace || { rc=$?; log "stage 5 exited $rc"; failed=1; }
+  --with-register --replace --reconcile-counters || { rc=$?; log "stage 5 exited $rc"; failed=1; }
 
 # Point-in-time. Skips any act whose version count is unchanged, so a week where
 # nothing was revised costs one pass over the index and no writes.
