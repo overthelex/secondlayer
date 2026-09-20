@@ -138,30 +138,48 @@ jobs:
           # error still exits 0 and writes nothing, and the verify step below
           # would then loop over no tables and report success having compared
           # nothing at all.
-          $SRC "docker exec $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -Atc \"
-            select string_agg(t || ':' || n, ',' order by t) from (
-              select tablename t, (xpath('/row/c/text()',
-                     query_to_xml('select count(*) c from '||quote_ident(tablename), false, true, '')))[1]::text::bigint n
-                from pg_tables where schemaname='public' and tablename like 'uk!_%' escape '!'
-                 -- Not every uk_ table is the corpus. Left behind deliberately:
-                 --   *_repair_backup_*  a column backup from the August 2026
-                 --     metadata repair, 53,469 rows, kept on the old box while
-                 --     that repair was in doubt. It no longer is.
-                 --   uk_bulk_probe      130,026 rows of notes from working out
-                 --     what the bulk archives contain.
-                 -- Neither is British law or a UK judgment. Say so out loud if
-                 -- you want them: this is the moment they stop existing.
-                 --
-                 --   uk_judgment_access, uk_judgment_access_log
-                 --     Not corpus either: who on THAT box may read Find Case Law
-                 --     judgments. Both reference users(id), and users is not
-                 --     copied — so a data-only load of the two grants currently
-                 --     on the source would fail on a foreign key, and if it
-                 --     somehow did not, it would name user ids that mean
-                 --     someone else on the target. Access is granted on the box
-                 --     it applies to.
-                 and tablename !~ '_repair_backup_|^uk_bulk_probe$|^uk_judgment_access(_log)?$'
-            ) s\"" > manifest.txt
+          # Two sets, moved separately on purpose.
+          #
+          # corpus   — the uk_* tables. What the box exists to serve.
+          # accounts — users and everything with a foreign key to them. Not corpus, but
+          #            without it a cutover hands every existing user a box that has
+          #            never heard of them: no login, no API key, and — measured
+          #            2026-09-20 — 155 people holding a zero balance where they had
+          #            $106,531.92 between them, plus 82 rows of E2EE key material
+          #            without which their encrypted content cannot be read.
+          #
+          # ⚠ accounts is derived from the FK graph, never a hand-written list. A list
+          # goes stale the first time somebody adds a table, and the failure is silent:
+          # rows left behind, not an error.
+          if [ "${{ inputs.what }}" = "accounts" ]; then
+            FLOOR=30
+            Q="select string_agg(t || ':' || n, ',' order by t) from (
+                 with fk as (
+                   select distinct tc.table_name
+                     from information_schema.table_constraints tc
+                     join information_schema.constraint_column_usage ccu
+                       on ccu.constraint_name = tc.constraint_name
+                    where tc.constraint_type = 'FOREIGN KEY'
+                      and ccu.table_name in ('users','api_keys','organizations')),
+                 s as (select table_name from fk union select 'users' union select 'organizations')
+                 select s.table_name t,
+                        (xpath('/row/c/text()', query_to_xml('select count(*) c from '||quote_ident(s.table_name), false, true, '')))[1]::text::bigint n
+                   from s where to_regclass(s.table_name) is not null
+               ) x where n > 0"
+          else
+            FLOOR=12
+            # Not every uk_ table is the corpus. Left behind deliberately: the August
+            # 2026 *_repair_backup_* column backup, uk_bulk_probe's 130,026 rows of
+            # working notes, and the two judgment-access tables — those are per-box
+            # grants keyed on users(id), and access is granted on the box it applies to.
+            Q="select string_agg(t || ':' || n, ',' order by t) from (
+                 select tablename t, (xpath('/row/c/text()',
+                        query_to_xml('select count(*) c from '||quote_ident(tablename), false, true, '')))[1]::text::bigint n
+                   from pg_tables where schemaname='public' and tablename like 'uk!_%' escape '!'
+                    and tablename !~ '_repair_backup_|^uk_bulk_probe$|^uk_judgment_access(_log)?$'
+               ) s"
+          fi
+          $SRC "docker exec $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -Atc \"$Q\"" > manifest.txt
           n=$(tr ',' '\n' < manifest.txt | grep -c ':' || true)
           echo "tables in the manifest: $n"
           tr ',' '\n' < manifest.txt | sed 's/^/  /'
@@ -169,7 +187,7 @@ jobs:
           # working residue and two are the access grants excluded above. Fewer
           # than 12 means the source lost tables or the query matched less than
           # it should, and neither is a run to carry on with.
-          [ "$n" -ge 12 ] || { echo "::error::manifest has $n tables, expected at least 12 — the source query failed or the source is not the box you think it is"; exit 1; }
+          [ "$n" -ge "$FLOOR" ] || { echo "::error::manifest has $n tables, expected at least $FLOOR for '${{ inputs.what }}' — the source query failed or the source is not the box you think it is"; exit 1; }
           echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
 
       - name: The target must not be ahead of the source
