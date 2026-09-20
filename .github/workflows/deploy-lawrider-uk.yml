@@ -144,7 +144,7 @@ jobs:
           # The edge must answer for both names. --resolve pins the address, so this
           # works before lawrider.uk has DNS at all and keeps testing the origin rather
           # than Cloudflare once it does. -k because a Cloudflare Origin CA
-          # certificate is signed by an authority no general trust store
+          # certificate is signed by an authority no general trust store ships
           # carries — it is meant to be verified by Cloudflare and nobody else,
           # so curl cannot validate it however correct it is. Since 2026-09-19
           # this box carries its own, for lawrider.uk and *.lawrider.uk, with
