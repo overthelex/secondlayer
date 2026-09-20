@@ -23,13 +23,27 @@
 -- The code no longer does this — when a parse yields no provisions the count is
 -- taken from the table instead of asserted as zero — so this repairs history.
 -- Idempotent, and a no-op where the counts already agree.
+-- All three columns, not just the count. char_len and text_hash describe the
+-- same rows and drift for the same reason; a predicate testing only the count
+-- would leave a version whose text changed without changing how many there are.
+--
+-- char_len reproduces len("\n".join(texts)) exactly — the characters plus one
+-- separator between each adjacent pair — because that is what the harvester has
+-- always written and the column is compared across runs.
 UPDATE uk_legislation_versions v
    SET provision_count = a.n,
-       char_len        = a.chars
-  FROM (SELECT leg_id, valid_from, count(*) n, coalesce(sum(n_chars), 0) chars
+       char_len        = a.chars,
+       text_hash       = a.hash
+  FROM (SELECT leg_id, valid_from,
+               count(*) AS n,
+               coalesce(sum(n_chars), 0) + greatest(count(*) - 1, 0) AS chars,
+               encode(sha256(convert_to(
+                 coalesce(string_agg(text, E'\n' ORDER BY ord), ''), 'UTF8')), 'hex') AS hash
           FROM uk_legislation_provisions
          GROUP BY leg_id, valid_from) a
  WHERE a.leg_id = v.leg_id
    AND a.valid_from = v.valid_from
    AND v.provision_count IS NOT NULL
-   AND v.provision_count <> a.n;
+   AND (v.provision_count IS DISTINCT FROM a.n
+     OR v.char_len        IS DISTINCT FROM a.chars
+     OR v.text_hash       IS DISTINCT FROM a.hash);
