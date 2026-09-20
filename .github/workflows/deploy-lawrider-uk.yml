@@ -143,12 +143,15 @@ jobs:
           }
           # The edge must answer for both names. --resolve pins the address, so this
           # works before lawrider.uk has DNS at all and keeps testing the origin rather
-          # than Cloudflare once it does. -k because a Cloudflare Origin CA
-          # certificate is signed by an authority no general trust store ships
-          # carries — it is meant to be verified by Cloudflare and nobody else,
-          # so curl cannot validate it however correct it is. Since 2026-09-19
-          # this box carries its own, for lawrider.uk and *.lawrider.uk, with
-          # the private half generated on the box and never copied off.
+          # than Cloudflare once it does. -k because the origin presents a
+          # Cloudflare Origin CA certificate, and no general trust store ships
+          # that root. It CAN be verified — Cloudflare publishes it — but only
+          # by fetching and pinning it here, which is a dependency a health
+          # check does not need: what this step is asking is whether the edge
+          # answers, not whether TLS chains to a public root it never will.
+          # Since 2026-09-19 the box carries its own certificate, for
+          # lawrider.uk and *.lawrider.uk, with the private half generated on
+          # the box and never copied off.
           # Assert 200 rather than trusting `curl -f`, which treats a 301 as success:
           # a stale edge still holding the lawrider.ch config answers the new names
           # from its catch-all redirect, and -f would call that a healthy deploy.

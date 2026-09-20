@@ -35,7 +35,7 @@ on:
         type: boolean
         default: true
       force_overwrite:
-        description: 'Proceed even if the target holds MORE rows than the source (destroys them)'
+        description: 'Proceed even though the target already holds data — Copy truncates it, so those rows are destroyed'
         type: boolean
         default: false
 
@@ -215,9 +215,16 @@ jobs:
             echo "::error::the target already holds data and Copy truncates:$populated"
           fi
           if [ -n "$ahead" ] || [ -n "$populated" ]; then
-            echo "If replacing it is genuinely what you want, dispatch with force_overwrite=true."
-            [ "${{ inputs.force_overwrite }}" = "true" ] || exit 1
-            echo "force_overwrite set — continuing, and the rows above will be lost"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              # A dry run copies nothing, so there is nothing to protect against
+              # — and refusing here would disable the one mode that exists to
+              # inspect a populated target before touching it.
+              echo "dry run — reporting only; a real run would need force_overwrite=true"
+            else
+              echo "If replacing it is genuinely what you want, dispatch with force_overwrite=true."
+              [ "${{ inputs.force_overwrite }}" = "true" ] || exit 1
+              echo "force_overwrite set — continuing, and the rows above will be lost"
+            fi
           else
             echo "target corpus tables are empty — nothing to lose"
           fi
