@@ -34,6 +34,10 @@ on:
         description: 'Take the manifest and compare, copy nothing'
         type: boolean
         default: true
+      force_overwrite:
+        description: 'Proceed even though the target already holds data — Copy truncates it, so those rows are destroyed'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -92,12 +96,19 @@ jobs:
           echo "uk_ tables on the target: $n"
           [ "$n" -ge 14 ] || { echo "::error::target has $n uk_ tables, expected at least 14 — run deploy-lawrider-uk.yml first"; exit 1; }
 
-      - name: The source must be still
+      - name: Both boxes must be still
         run: |
           # The manifest and the dump are two reads of the source, and a refresh
           # running between them moves the corpus underneath both: rows arrive
           # after they were counted, verification fails on numbers that were
           # right when taken, and the run looks like a corruption it is not.
+          #
+          # The TARGET matters just as much, for a worse reason. The guard below
+          # counts its rows and Copy then truncates; a refresh starting in
+          # between writes rows that were never counted and are destroyed a
+          # moment later. Checking here does not close that window — nothing
+          # short of a lock would — but it turns the common case, a Monday cron
+          # overlapping a dispatch, from silent into refused.
           #
           # The bracket is not decoration — pgrep -f matches its own command
           # line, so the unbracketed pattern finds this check and reports a
@@ -106,14 +117,17 @@ jobs:
           # it cannot reach the box at all. Collapsing those into one `if` reads
           # an unreachable source as a quiet one, which is the wrong direction
           # to be wrong in when the next step starts moving data.
-          set +e
-          $SRC "pgrep -f '[r]un-uk-refresh' >/dev/null"; rc=$?
-          set -e
-          case "$rc" in
-            0) echo "::error::a UK refresh is running on the source — wait for it to finish, then re-run"; exit 1 ;;
-            1) echo "no refresh running on the source" ;;
-            *) echo "::error::could not ask the source whether a refresh is running (ssh/pgrep exit $rc)"; exit 1 ;;
-          esac
+          for side in source target; do
+            [ "$side" = source ] && cmd="$SRC" || cmd="$DST"
+            set +e
+            $cmd "pgrep -f '[r]un-uk-refresh' >/dev/null"; rc=$?
+            set -e
+            case "$rc" in
+              0) echo "::error::a UK refresh is running on the $side box — wait for it to finish, then re-run"; exit 1 ;;
+              1) echo "  $side: no refresh running" ;;
+              *) echo "::error::could not ask the $side box whether a refresh is running (ssh/pgrep exit $rc)"; exit 1 ;;
+            esac
+          done
 
       - name: Take the source manifest
         run: |
@@ -157,6 +171,63 @@ jobs:
           # it should, and neither is a run to carry on with.
           [ "$n" -ge 12 ] || { echo "::error::manifest has $n tables, expected at least 12 — the source query failed or the source is not the box you think it is"; exit 1; }
           echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
+
+      - name: The target must not be ahead of the source
+        run: |
+          # This workflow moves a corpus onto a NEW box. Once that box starts
+          # doing its own work it pulls ahead, and running this again replaces
+          # the newer data with the older — silently, because a truncate-and-load
+          # reports success either way.
+          #
+          # Real numbers from 2026-09-20, the day after the move: London held
+          # 354,777 version rows against Zurich's 332,807, and 1,776,909
+          # provisions against 1,775,894. A re-run would have destroyed 21,970
+          # base versions and the text of roughly 2,000 acts, and looked clean.
+          # Two questions, not one.
+          #
+          # First: is the target populated at all? Copy TRUNCATES, so any populated
+          # target loses what it has — not only one that is ahead. The original guard
+          # asked only about being ahead, which let a target holding fewer rows be
+          # wiped without anyone saying so out loud.
+          #
+          # Second: is it ahead? That is the case where the loss is certain to matter,
+          # so it is reported separately with the tables and counts named.
+          #
+          # ON_ERROR_STOP on every count: without it a failed query returns an empty
+          # string, `[ "" -gt N ]` is not a comparison, and the guard waves it through.
+          populated=""; ahead=""
+          for pair in $(tr ',' ' ' < manifest.txt); do
+            t=${pair%%:*}; src=${pair##*:}
+            tgt=$($DST "docker exec $PG psql -U secondlayer -d $DB -v ON_ERROR_STOP=1 -Atc 'select count(*) from $t'")
+            case "$tgt" in
+              ''|*[!0-9]*) echo "::error::could not count $t on the target (got '$tgt')"; exit 1 ;;
+            esac
+            # `if`, not `[ ... ] && ...`. GitHub runs these with `bash -e`, and an
+            # AND-list whose test is false returns 1 — so an empty table, which is
+            # the ordinary case on a fresh box, would fail the step.
+            if [ "$tgt" -gt 0 ]; then populated="$populated $t($tgt)"; fi
+            if [ "$tgt" -gt "$src" ]; then ahead="$ahead $t(target $tgt > source $src)"; fi
+          done
+
+          if [ -n "$ahead" ]; then
+            echo "::error::the target is AHEAD of the source; copying would destroy newer data:$ahead"
+          elif [ -n "$populated" ]; then
+            echo "::error::the target already holds data and Copy truncates:$populated"
+          fi
+          if [ -n "$ahead" ] || [ -n "$populated" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              # A dry run copies nothing, so there is nothing to protect against
+              # — and refusing here would disable the one mode that exists to
+              # inspect a populated target before touching it.
+              echo "dry run — reporting only; a real run would need force_overwrite=true"
+            else
+              echo "If replacing it is genuinely what you want, dispatch with force_overwrite=true."
+              [ "${{ inputs.force_overwrite }}" = "true" ] || exit 1
+              echo "force_overwrite set — continuing, and the rows above will be lost"
+            fi
+          else
+            echo "target corpus tables are empty — nothing to lose"
+          fi
 
       - name: Copy
         if: ${{ !inputs.dry_run }}
