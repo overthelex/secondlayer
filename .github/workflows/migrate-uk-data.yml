@@ -34,6 +34,10 @@ on:
         description: 'Take the manifest and compare, copy nothing'
         type: boolean
         default: true
+      force_overwrite:
+        description: 'Proceed even if the target holds MORE rows than the source (destroys them)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -157,6 +161,34 @@ jobs:
           # it should, and neither is a run to carry on with.
           [ "$n" -ge 12 ] || { echo "::error::manifest has $n tables, expected at least 12 — the source query failed or the source is not the box you think it is"; exit 1; }
           echo "MANIFEST=$(cat manifest.txt)" >> "$GITHUB_ENV"
+
+      - name: The target must not be ahead of the source
+        run: |
+          # This workflow moves a corpus onto a NEW box. Once that box starts
+          # doing its own work it pulls ahead, and running this again replaces
+          # the newer data with the older — silently, because a truncate-and-load
+          # reports success either way.
+          #
+          # Real numbers from 2026-09-20, the day after the move: London held
+          # 354,777 version rows against Zurich's 332,807, and 1,776,909
+          # provisions against 1,775,894. A re-run would have destroyed 21,970
+          # base versions and the text of roughly 2,000 acts, and looked clean.
+          ahead=""
+          for pair in $(tr ',' ' ' < manifest.txt); do
+            t=${pair%%:*}; src=${pair##*:}
+            tgt=$($DST "docker exec $PG psql -U secondlayer -d $DB -Atc 'select count(*) from $t'")
+            if [ "$tgt" -gt "$src" ]; then
+              ahead="$ahead $t(target $tgt > source $src)"
+            fi
+          done
+          if [ -n "$ahead" ]; then
+            echo "::error::the target is AHEAD of the source and this would overwrite newer data:$ahead"
+            echo "If replacing it is genuinely what you want, dispatch with force_overwrite=true."
+            [ "${{ inputs.force_overwrite }}" = "true" ] || exit 1
+            echo "force_overwrite set — continuing, and the newer rows above will be lost"
+          else
+            echo "target is not ahead of the source on any table"
+          fi
 
       - name: Copy
         if: ${{ !inputs.dry_run }}
