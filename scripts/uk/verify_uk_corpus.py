@@ -109,15 +109,20 @@ INVARIANTS = [
     (
         "the content map names each provision by its own text",
         """SELECT count(*) FROM uk_provision_text_hash h
-            JOIN uk_legislation_provisions p
+            FULL OUTER JOIN uk_legislation_provisions p
               ON p.leg_id = h.leg_id AND p.valid_from = h.valid_from AND p.ord = h.ord
-           WHERE h.text_hash <> sha256(convert_to(p.text, 'UTF8'))""",
-        "a row here says 'this provision's text hashes to X' and it does not. The "
-        "export writes one vector per hash, so a stale entry stores new text under "
-        "an old identity — a search hit that resolves to the wrong provision or to "
-        "none. It drifts whenever a refresh rewrites text without re-running "
-        "--populate-map, which is why stage 7 exists; this is the check that stage "
-        "7 actually ran",
+           WHERE h.leg_id IS NULL
+              OR p.leg_id IS NULL
+              OR h.text_hash <> sha256(convert_to(p.text, 'UTF8'))""",
+        "the map and the provisions have come apart, in any of three ways: a row "
+        "whose hash does not match the text it names, a map row for a provision "
+        "that no longer exists, or a provision with no map row at all. "
+        "⚠ FULL OUTER JOIN deliberately — an inner join sees only the first kind, "
+        "and stage 5 runs with --replace, which is exactly what creates the other "
+        "two. The export writes one vector per hash, so a wrong entry stores text "
+        "under another provision's identity and an orphan adds a vector nothing "
+        "can resolve. It drifts whenever text is rewritten without re-running "
+        "--populate-map: this is the check that stage 7 ran",
     ),
     (
         "every act in the register can reach its text",
