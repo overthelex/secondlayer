@@ -432,9 +432,36 @@ ON CONFLICT (leg_id, valid_from, ord) DO UPDATE SET
 """
 
 MARK_VER = """
-UPDATE uk_legislation_versions SET provision_count = %s, char_len = %s,
+UPDATE uk_legislation_versions v
+   SET provision_count = %s, char_len = %s,
        text_hash = %s, http_status = %s, fetched_at = now()
  WHERE leg_id = %s AND valid_from = %s
+"""
+
+# ⚠ Used instead of MARK_VER when a fetch came back with no provisions.
+#
+# This stage is not the only writer of uk_legislation_provisions —
+# 05_load_bulk_texts.py fills the same key from the bulk archives — so "my parse
+# found nothing" is not the same statement as "this act has nothing". The bare
+# URI often serves a thinner representation than the archive: ukpga/Vict/47-48/54
+# answers 200 with NumberOfProvisions=3 while the archive yields 51, and writing
+# 0 over that told the register an act with 51 provisions had none.
+#
+# Found on 2026-09-20 on 25 versions, seven of them claiming zero against 51, 43
+# and 39 actual. The text was never lost — INS_PROV upserts — but the column
+# lied, and a column that lies is worse than one that is missing.
+#
+# So the count is taken from the table rather than from this run's parse. When
+# the parse did produce rows the two agree by construction; when it did not,
+# whatever the bulk left standing is the truth.
+MARK_VER_EMPTY = """
+UPDATE uk_legislation_versions v
+   SET provision_count = a.n, char_len = a.chars,
+       text_hash = %s, http_status = %s, fetched_at = now()
+  FROM (SELECT count(*) n, coalesce(sum(n_chars), 0) chars
+          FROM uk_legislation_provisions
+         WHERE leg_id = %s AND valid_from = %s) a
+ WHERE v.leg_id = %s AND v.valid_from = %s
 """
 
 # ⚠⚠ A refusal is not a verdict about the act.
@@ -658,20 +685,17 @@ def main():
                     if len(batch) >= 2000:
                         execute_values(cur, INS_PROV, batch, page_size=1000)
                         batch.clear()
-                    cur.execute(MARK_VER, (len(rows), len(full),
-                                           hashlib.sha256(full.encode()).hexdigest(),
-                                           # 200, not 900. The fetch WAS a 200 —
-                                           # this act simply has no provisions,
-                                           # which is a fact about the act. Using
-                                           # 900 here overloaded the code that
-                                           # fetch() returns for an empty body,
-                                           # i.e. a refusal, so the two became
-                                           # indistinguishable in the column.
-                                           # They stayed distinguishable only by
-                                           # accident: the success path writes a
-                                           # text_hash and the refusal path does
-                                           # not. See migration 220.
-                                           200, leg_id, valid_from))
+                    if rows:
+                        cur.execute(MARK_VER, (len(rows), len(full),
+                                               hashlib.sha256(full.encode()).hexdigest(),
+                                               200, leg_id, valid_from))
+                    else:
+                        # No provisions from this parse. Do not assert the act has none —
+                        # the bulk loader writes the same key and may have left text
+                        # standing. See MARK_VER_EMPTY.
+                        cur.execute(MARK_VER_EMPTY,
+                                    (hashlib.sha256(full.encode()).hexdigest(), 200,
+                                     leg_id, valid_from, leg_id, valid_from))
                 if done % 1000 == 0:
                     el = time.time() - t0
                     print(f"  {done}/{len(work)} ok={stats['ok']} "
