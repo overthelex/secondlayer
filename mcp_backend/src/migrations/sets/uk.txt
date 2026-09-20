@@ -1,6 +1,6 @@
 # Migration set: lawrider.uk — British law and UK court decisions, nothing else.
 #
-# 134 of the 222 migrations. What is here: the service schema the backend boots on
+# 132 of the 220 migrations. What is here: the service schema the backend boots on
 # (users, api_keys, billing, cost tracking, documents, oauth, consultations) and
 # uk_* — the register, provision text, point-in-time intervals, amendments,
 # judgments and the Find Case Law access gate. 14 uk_ tables out of 129 total.
@@ -69,7 +69,7 @@
 # Verified 2026-09-19: all 134 then in the set apply clean to an empty database,
 # and the backend boots against the result. Two were removed after that run —
 # 152 and 159, each a standalone CREATE TABLE nothing else refers to — so the
-# 134 here are a subset of a verified-clean set, not a re-verified one. Say so
+# 132 here are a subset of a verified-clean set, not a re-verified one. Say so
 # rather than quietly restating the old number against a new list.
 # The original run: the backend boots
 # against the result — /health/ready 200, five uk_* tools advertised, the
@@ -210,5 +210,3 @@
 217_uk_point_in_time.sql
 218_uk_corpus_check_run.sql
 219_uk_provision_embedding.sql
-220_uk_clear_refusal_verdicts.sql
-221_uk_refusal_verdicts_correction.sql
