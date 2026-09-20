@@ -87,9 +87,13 @@ DELETE FROM uk_provision_text_hash h
 """
 # The upsert above never removes anything, and stage 5 runs with --replace: an
 # act whose revision shed a provision, or renumbered one, leaves a map row
-# naming a provision that no longer exists. Harmless to a lookup — nothing joins
-# to it — but it is one more vector in the export than there are provisions, and
-# a row that claims an identity for text nobody holds.
+# naming a provision that no longer exists.
+#
+# It does not reach the export — SELECT_TEXTS joins the map to the provisions,
+# so a row with nothing behind it produces no vector. What it does is make the
+# map stop being a description of the provisions: the counts diverge, so
+# comparing them tells you nothing, and the next person reading a row has to
+# find out the hard way that it names text nobody holds.
 
 # DO UPDATE, not DO NOTHING. The map is content-addressed, so a row whose text
 # changed in a weekly refresh and whose hash did not is a row that now points at
