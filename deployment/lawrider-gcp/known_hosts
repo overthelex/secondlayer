@@ -1,0 +1,29 @@
+# SSH host keys for the lawrider.uk box (lawrider-uk, europe-west2-a).
+#
+# Checked into the repository on purpose. These are PUBLIC keys, so there is
+# nothing here to keep secret — and putting them in version control buys the one
+# property a secret does not: changing them takes a pull request that somebody
+# reads. A secret can be rewritten silently by anyone with write access, which
+# is exactly the actor this file exists to stop.
+#
+# Before this, every workflow ran `ssh-keyscan` and trusted whatever answered,
+# on every run. That is trust-on-first-use with the "first" removed: not a
+# weaker check than pinning, but no check at all, in jobs that hold a key which
+# can write to production.
+#
+# Captured 2026-09-20 from three independent sources that agreed byte for byte:
+#   - /etc/ssh/ssh_host_*_key.pub read off the box over an already-authenticated
+#     session, which is the strongest attestation available
+#   - ssh-keyscan from the network
+#   - the known_hosts entry established when the box was first provisioned
+#
+#   ED25519  SHA256:CEhHqmzA95UMcb+XiniNG4CPC+qfIwrWXIwLkftleVI
+#   RSA      SHA256:0LcjCrq9cgowE0qY/1Uq4zwDo+2KyXEaJ8krX6Bw43M
+#   ECDSA    SHA256:wBLjBqao5HoZyN/PHwd912gkNDZ2e37lKRKDfGQe3hQ
+#
+# ⚠ Rebuilding the box generates new keys and every job that uses this file will
+# refuse to connect until it is updated — deliberately. provision-lawrider-uk.yml
+# prints the new keys at the end for exactly that.
+8.228.38.154 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILukdd/l6OjAuVlA/IwnyTBehtnWsJcGyDTSo1ep9Su5
+8.228.38.154 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCXI2pWeh6SGWjBaRMVlEdtFvlOxrDRIKzj3Tn1gqUBC8xLTROrs+Njs2Ez0AbLCMY0RXGBu/4QnNGTWaf0Qj3DX0w8C01YBu176YQVc+f0pQrBontZfqSU9Mxow/Eb3csi4k7pleNUyNPBX83bq1ekOAfO65dxaqmIbswDM1dpjxfekcxwFz489i7aSIK1A++cSxlMIKr7ov2CCIXMFLC+bB2FrpauaYht4+ifEZNUkfv50LqbMahxhjHqdJvF23VFOPb0NI6JLwB8jQRt3VR6YfcRp4i3ttjBi9kujXGqnmwgB18BVmA5JlyezP3B4p7ejmL8s9H3vt+ILLT5Z6wRlPgI30nRgBmgrpXz33iWdtflgFhvBRe4eGMtx5FiXkEjOPFyz9MN/0gp5eXJ4evtElgnD0/3Q55+WykS9glB9sfh3ejNj105Gg/qq6MGbmaaAYJraKvyzTrr/rddle/9IW+N5x1KxkO1RolGOjVwiAoUbkpkkcwxMY45sICoJh8=
+8.228.38.154 ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBP7Z8mEUuovtVCt4Tf+GmNepKlopL5maAbRAvI9nQhZfU+RiopXMhaCIQ3ep/vY+ey32hdtPKdBnUZzbGPBbPmo=

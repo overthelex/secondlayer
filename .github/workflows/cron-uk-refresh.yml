@@ -83,13 +83,15 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
           chmod 600 ~/.ssh/gcp_deploy
-          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
+          # Pinned — see deployment/lawrider-gcp/known_hosts for why scanning
+          # is not a weaker check but no check at all.
+          cp deployment/lawrider-gcp/known_hosts ~/.ssh/known_hosts_uk
+          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_uk -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
 
       - name: Ship this checkout's scripts to the box
         run: |
           $SSH_CMD "mkdir -p ${STAGE_DIR}"
-          scp -i ~/.ssh/gcp_deploy -q scripts/uk/*.py scripts/uk/run-uk-refresh.sh \
+          scp -i ~/.ssh/gcp_deploy -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts_uk -q scripts/uk/*.py scripts/uk/run-uk-refresh.sh \
             "${GCP_USER}@${GCP_HOST}:${STAGE_DIR}/"
           $SSH_CMD "chmod +x ${STAGE_DIR}/run-uk-refresh.sh"
           # Credentials and the DSN are provisioned on the box, in 0600 files outside

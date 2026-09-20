@@ -197,6 +197,33 @@ else
   $DRY gcloud compute ssh "$NAME" --zone="$ZONE" --project="$PROJECT" --command="$SETUP"
 fi
 
+# The host keys of the machine that was just created. Every other workflow
+# checks against deployment/lawrider-gcp/known_hosts and will refuse to connect
+# until this lands there — which is the point: a rebuilt box gets a new identity
+# and somebody should have to say so in a pull request.
+#
+# accept-new above is the one place trust-on-first-use is honest: the machine is
+# seconds old and there is nothing yet to compare it against.
+if [ -z "$DRY" ]; then
+  say "host keys — put these in deployment/lawrider-gcp/known_hosts"
+  # An array rather than ${VAR:+-i "$VAR"}: the idiom happens to work here, but
+  # it relies on word splitting to separate the flag from its argument and that
+  # is a poor thing to rely on. `|| true` because this is a convenience readout
+  # at the very end — the box is built and working, and failing the whole job
+  # over a printout would be absurd. Under `set -e` an unguarded command
+  # substitution would do exactly that.
+  KEYOPT=()
+  [ -n "${PROVISION_SSH_KEY:-}" ] && KEYOPT=(-i "$PROVISION_SSH_KEY")
+  for t in ed25519 rsa ecdsa; do
+    k=$(ssh ${KEYOPT[@]+"${KEYOPT[@]}"} -o StrictHostKeyChecking=accept-new \
+          -o ConnectTimeout=10 "${SSH_USER_NAME}@${IP}" \
+          "cat /etc/ssh/ssh_host_${t}_key.pub" 2>/dev/null | awk '{print $1, $2}') || true
+    [ -n "${k:-}" ] && echo "    ${IP} ${k}"
+  done
+  echo "    (if the three lines above are missing, read them off the box with"
+  echo "     'cat /etc/ssh/ssh_host_*_key.pub' — every other job needs them)"
+fi
+
 cat <<EOF
 
 Next, by hand because they are secrets and DNS:
@@ -214,6 +241,9 @@ Next, by hand because they are secrets and DNS:
      box's name is a 526 on every request.
   5. Repository secret LAWRIDER_GCP_HOST -> $IP, which is what points every
      workflow at the new machine.
+  6. deployment/lawrider-gcp/known_hosts <- the host keys printed above. Every
+     other UK workflow verifies against that file and will refuse to connect
+     until it matches, which is deliberate: a new machine is a new identity.
 
 Then: run deploy-lawrider-uk.yml, then migrate-uk-data.yml.
 EOF
