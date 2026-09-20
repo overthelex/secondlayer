@@ -74,8 +74,21 @@ describe('migrations are not repairs', () => {
     expect(existsSync(REPAIRS)).toBe(true);
     const files = readdirSync(REPAIRS).filter((f) => f.endsWith('.sql'));
     expect(files.length).toBeGreaterThan(0);
-    const withTx = files.filter((f) =>
-      /^\s*(begin|commit|rollback)\s*;/im.test(readFileSync(join(REPAIRS, f), 'utf-8')));
+    // ⚠ The same pattern as run-repair.yml, deliberately. They had drifted: the
+    // workflow refused `COMMIT WORK;` at run time while this test — which is the
+    // gate a pull request actually passes through — matched only the bare
+    // keyword, so such a file would have merged and only failed later, in front
+    // of production data.
+    //
+    // Keyword plus word boundary, anchored at a statement start rather than a
+    // line start, because `UPDATE t SET x=1; COMMIT WORK;` is one line.
+    const TX = /(^|;)[ \t]*(begin|start\s+transaction|commit|end|rollback|savepoint)\b/im;
+    const withTx = files.filter((f) => {
+      const sql = readFileSync(join(REPAIRS, f), 'utf-8')
+        .replace(/--[^\n]*/g, '')          // a COMMIT in prose is not a COMMIT
+        .replace(/'(?:[^']|'')*'/g, "''");  // nor is one inside a string literal
+      return TX.test(sql);
+    });
     expect(withTx).toEqual([]);
   });
 
