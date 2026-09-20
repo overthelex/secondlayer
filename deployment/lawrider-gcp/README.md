@@ -66,8 +66,16 @@ nameserver pair differs from every other zone in the estate. A duplicate zone
 briefly created in the icloud account was deleted; do not recreate it, it can
 never activate.
 
-`lawrider.uk`, `www` and `mcp` are proxied A records to the VM's static IP
-(34.65.12.234). SSL mode is **Full** and can now be Full (strict): the origin
+⚠ Two boxes exist while the move is in progress, and the addresses are easy to
+mix up. `34.65.12.234` is the ORIGINAL box in europe-west6 (Zurich), which still
+serves lawrider.uk today. `8.228.38.154` is the London box in europe-west2,
+built 2026-09-19, which holds the corpus and is where every workflow now points
+— `LAWRIDER_GCP_HOST`, and the host keys pinned in `known_hosts` here. DNS has
+NOT been cut over: doing so before the account tables move would drop 199 users
+and 27 API keys. See LEXAI-2059.
+
+`lawrider.uk`, `www` and `mcp` are proxied A records to the Zurich VM's static
+IP (34.65.12.234). SSL mode is **Full** and can now be Full (strict): the origin
 presents a Cloudflare Origin CA certificate for `lawrider.uk` + `*.lawrider.uk`,
 issued 2026-09-19 and valid to 2041-09-15, in `/home/ubuntu/certs-lawrider.uk`.
 The private key was generated on the box and has never left it.

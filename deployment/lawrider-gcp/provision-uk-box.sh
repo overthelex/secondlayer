@@ -206,11 +206,22 @@ fi
 # seconds old and there is nothing yet to compare it against.
 if [ -z "$DRY" ]; then
   say "host keys — put these in deployment/lawrider-gcp/known_hosts"
+  # An array rather than ${VAR:+-i "$VAR"}: the idiom happens to work here, but
+  # it relies on word splitting to separate the flag from its argument and that
+  # is a poor thing to rely on. `|| true` because this is a convenience readout
+  # at the very end — the box is built and working, and failing the whole job
+  # over a printout would be absurd. Under `set -e` an unguarded command
+  # substitution would do exactly that.
+  KEYOPT=()
+  [ -n "${PROVISION_SSH_KEY:-}" ] && KEYOPT=(-i "$PROVISION_SSH_KEY")
   for t in ed25519 rsa ecdsa; do
-    k=$(ssh ${PROVISION_SSH_KEY:+-i "$PROVISION_SSH_KEY"} -o StrictHostKeyChecking=accept-new \
-          "${SSH_USER_NAME}@${IP}" "cat /etc/ssh/ssh_host_${t}_key.pub" 2>/dev/null | awk '{print $1, $2}')
-    [ -n "$k" ] && echo "    ${IP} ${k}"
+    k=$(ssh ${KEYOPT[@]+"${KEYOPT[@]}"} -o StrictHostKeyChecking=accept-new \
+          -o ConnectTimeout=10 "${SSH_USER_NAME}@${IP}" \
+          "cat /etc/ssh/ssh_host_${t}_key.pub" 2>/dev/null | awk '{print $1, $2}') || true
+    [ -n "${k:-}" ] && echo "    ${IP} ${k}"
   done
+  echo "    (if the three lines above are missing, read them off the box with"
+  echo "     'cat /etc/ssh/ssh_host_*_key.pub' — every other job needs them)"
 fi
 
 cat <<EOF

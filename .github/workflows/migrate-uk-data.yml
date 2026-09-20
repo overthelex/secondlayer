@@ -55,6 +55,12 @@ jobs:
       TARGET_HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
       SOURCE_HOST: ${{ inputs.source_host }}
     steps:
+      # Needed for deployment/lawrider-gcp/known_hosts. This job never checked
+      # out the repository before, because it only ever shelled out over SSH —
+      # pinning the target's host key gave it a file dependency and the cp would
+      # have failed on a bare runner.
+      - uses: actions/checkout@v4
+
       - name: Set up SSH to both boxes
         run: |
           for v in TARGET_HOST SOURCE_HOST; do
