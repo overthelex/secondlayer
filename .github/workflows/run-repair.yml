@@ -97,14 +97,11 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp
           chmod 600 ~/.ssh/gcp
-          # ⚠ Trust-on-first-use, every run: whatever key the host presents is
-          # accepted. This job holds a credential that can write to production,
-          # so that is a real weakness, not a formality — but it is the same
-          # pattern every other lawrider workflow uses, and pinning it here
-          # alone would leave the others open while reading as solved. Pin it in
-          # one change across all of them, from a secret, or not at all.
-          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          echo "SSH=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ubuntu@$HOST" >> "$GITHUB_ENV"
+          # Pinned. See deployment/lawrider-gcp/known_hosts — of every job in
+          # this repository, one that pipes SQL into production is the last that
+          # should accept whatever key answers.
+          cp deployment/lawrider-gcp/known_hosts ~/.ssh/known_hosts_uk
+          echo "SSH=ssh -i $HOME/.ssh/gcp -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_uk -o ServerAliveInterval=30 ubuntu@$HOST" >> "$GITHUB_ENV"
 
       - name: Run it
         env:

@@ -66,10 +66,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp
           chmod 600 ~/.ssh/gcp
-          ssh-keyscan -H "$TARGET_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # The TARGET is our box and its key is pinned in the repository.
+          cp deployment/lawrider-gcp/known_hosts ~/.ssh/known_hosts_uk
+          # The SOURCE is a dispatch input — any address someone types — so there
+          # is nothing to pin it against and this stays trust-on-first-use. It is
+          # the tolerable half: the source is only ever read from (pg_dump), so a
+          # wrong host yields a bad copy that the manifest comparison then
+          # rejects, rather than a write to somewhere it should not go.
           ssh-keyscan -H "$SOURCE_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           echo "SRC=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ${GCP_USER}@${SOURCE_HOST}" >> "$GITHUB_ENV"
-          echo "DST=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ${GCP_USER}@${TARGET_HOST}" >> "$GITHUB_ENV"
+          echo "DST=ssh -i $HOME/.ssh/gcp -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_uk -o ServerAliveInterval=30 ${GCP_USER}@${TARGET_HOST}" >> "$GITHUB_ENV"
 
       - name: The target must already have the schema
         run: |

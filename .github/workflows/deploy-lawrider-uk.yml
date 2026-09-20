@@ -71,8 +71,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp_deploy
           chmod 600 ~/.ssh/gcp_deploy
-          ssh-keyscan -H "$GCP_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
+          # Pinned, not scanned. `ssh-keyscan` trusts whatever answers, every
+          # run — trust-on-first-use with the "first" removed, in a job holding a
+          # key that can write to production. The file is in the repository
+          # because these are public keys and version control is the only place
+          # where changing them takes a review.
+          cp deployment/lawrider-gcp/known_hosts ~/.ssh/known_hosts_uk
+          echo "SSH_CMD=ssh -i $HOME/.ssh/gcp_deploy -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_uk -o ServerAliveInterval=30 ${GCP_USER}@${GCP_HOST}" >> "$GITHUB_ENV"
 
       - name: Overlay core sources
         env:
@@ -103,7 +108,7 @@ jobs:
           rsync -az --delete \
             --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
             --exclude 'deployment/.env.prod' \
-            -e "ssh -i $HOME/.ssh/gcp_deploy" \
+            -e "ssh -i $HOME/.ssh/gcp_deploy -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts_uk" \
             ./ "${GCP_USER}@${GCP_HOST}:${REMOTE_REPO}/"
           $SSH_CMD "test -s ${REMOTE_REPO}/mcp_backend/src/services/chat-execution-loop.ts" \
             || { echo "::error::overlay missing on box after sync"; exit 1; }
