@@ -78,6 +78,23 @@ SELECT leg_id, valid_from, ord, sha256(convert_to(text, 'UTF8'))
     SET text_hash = EXCLUDED.text_hash
   WHERE uk_provision_text_hash.text_hash IS DISTINCT FROM EXCLUDED.text_hash
 """
+PRUNE = """
+DELETE FROM uk_provision_text_hash h
+ WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_provisions p
+                    WHERE p.leg_id = h.leg_id
+                      AND p.valid_from = h.valid_from
+                      AND p.ord = h.ord)
+"""
+# The upsert above never removes anything, and stage 5 runs with --replace: an
+# act whose revision shed a provision, or renumbered one, leaves a map row
+# naming a provision that no longer exists.
+#
+# It does not reach the export — SELECT_TEXTS joins the map to the provisions,
+# so a row with nothing behind it produces no vector. What it does is make the
+# map stop being a description of the provisions: the counts diverge, so
+# comparing them tells you nothing, and the next person reading a row has to
+# find out the hard way that it names text nobody holds.
+
 # DO UPDATE, not DO NOTHING. The map is content-addressed, so a row whose text
 # changed in a weekly refresh and whose hash did not is a row that now points at
 # the wrong content — and the export would write the new text under the old
@@ -175,6 +192,8 @@ def main():
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM uk_provision_text_hash")
             before = cur.fetchone()[0]
+            cur.execute(PRUNE)
+            pruned = cur.rowcount
             cur.execute(POPULATE)
             # rowcount is inserts plus updates; the difference in the row count
             # is inserts alone. Reporting only the latter as "new" would show a
@@ -186,8 +205,9 @@ def main():
                         "FROM uk_provision_text_hash")
             rows, distinct = cur.fetchone()
         inserted = rows - before
-        print(f"map rows {before} -> {rows} ({inserted} inserted, "
-              f"{max(touched - inserted, 0)} re-hashed), distinct texts {distinct}")
+        print(f"map rows {before} -> {rows} ({inserted + pruned} inserted, "
+              f"{max(touched - inserted - pruned, 0)} re-hashed, {pruned} pruned), "
+              f"distinct texts {distinct}")
         return
 
     out = sys.stdout if args.out == "-" else open(args.out, "w")

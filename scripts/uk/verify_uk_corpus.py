@@ -107,6 +107,24 @@ INVARIANTS = [
         "because the loader plans from the checkpoint",
     ),
     (
+        "the content map names each provision by its own text",
+        """SELECT count(*) FROM uk_provision_text_hash h
+            FULL OUTER JOIN uk_legislation_provisions p
+              ON p.leg_id = h.leg_id AND p.valid_from = h.valid_from AND p.ord = h.ord
+           WHERE h.leg_id IS NULL
+              OR p.leg_id IS NULL
+              OR h.text_hash <> sha256(convert_to(p.text, 'UTF8'))""",
+        "the map and the provisions have come apart, in any of three ways: a row "
+        "whose hash does not match the text it names, a map row for a provision "
+        "that no longer exists, or a provision with no map row at all. "
+        "⚠ FULL OUTER JOIN deliberately — an inner join sees only the first kind, "
+        "and stage 5 runs with --replace, which is exactly what creates the other "
+        "two. The export writes one vector per hash, so a wrong entry stores text "
+        "under another provision's identity and an orphan adds a vector nothing "
+        "can resolve. It drifts whenever text is rewritten without re-running "
+        "--populate-map: this is the check that stage 7 ran",
+    ),
+    (
         "every act in the register can reach its text",
         """SELECT count(*) FROM uk_legislation l
             WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions v

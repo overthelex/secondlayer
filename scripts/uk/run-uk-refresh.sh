@@ -139,6 +139,23 @@ log "--- stage 6: point-in-time"
   --zip "$DATA_DIR/revised-all-versions-xml.zip" \
   --workers "$WORKERS" || { rc=$?; log "stage 6 exited $rc"; failed=1; }
 
+# Re-hash the content map. Stage 5 runs with --replace, so a revised act's text
+# is rewritten in place — and uk_provision_text_hash, which names each provision
+# by the sha256 of its text, still holds the hash of the wording that was there
+# last week.
+#
+# ⚠ Nothing used to do this, so the map drifted every single refresh, silently.
+# Measured 2026-09-20: 768 rows stale after one crawl, and six more after a
+# forty-act test an hour later. The cost only lands later, at embedding time — a
+# vector stored under a hash that no longer names its text is a search hit that
+# resolves to the wrong provision, or to none.
+#
+# Cheap when nothing moved: the statement only writes rows whose hash actually
+# differs.
+log "--- stage 7: re-hash the content map"
+"$PYTHON" "$HERE/08_export_provision_texts.py" --populate-map \
+  || { rc=$?; log "stage 7 exited $rc"; failed=1; }
+
 # ⚠ Exit non-zero when a stage failed. The first version logged the failure and
 # still returned 0, so the scheduled job went green over a refresh that imported
 # nothing — the exact shape of silent staleness this whole thing exists to catch.
