@@ -76,8 +76,16 @@ import psycopg2
 # grants higher limits, which is what the letter in UKENT-15 is for. Until then
 # run narrow and slow, and treat a 902 as "stop, you are over budget".
 #
-# ⚠ If you do reach for impersonation: do NOT pass impersonate="chrome" on
-# curl_cffi 0.16, that profile maps to a blocked fingerprint and returns 437.
+# ⚠ UPDATE 2026-09-20: impersonation is now REQUIRED, and the note below about
+# 437 is stale. curl_cffi's DEFAULT fingerprint gets a genuine 404 from the
+# origin — Apache, no cf-ray — for a URL that urllib fetches with 200. Every
+# versioned profile tried (chrome124, chrome131, safari17_0, firefox133,
+# edge101) answers 200. A run without a profile fails every fetch while looking
+# like the acts do not exist. See IMPERSONATE below and REFUSAL_VERDICTS.
+#
+# The older advice, kept because the failure mode it describes is real: do NOT
+# pass the bare impersonate="chrome" on curl_cffi 0.16, that alias mapped to a
+# blocked fingerprint and returned 437.
 # Source binding survives the switch — Session(interface=<ip>) replaces the
 # HTTPAdapter, verified 200 from three of the fleet's addresses.
 # Optional on purpose. Stages 5 and 6 import this module only for
@@ -109,6 +117,8 @@ UA = os.environ.get(
     "contact mcvovkes@gmail.com)",
 )
 DB_URL = os.environ.get("DATABASE_URL")
+# Empty string disables impersonation, for testing what the bare client gets.
+IMPERSONATE = os.environ.get("UK_IMPERSONATE", "chrome124")
 RAW_DIR = os.environ.get("UK_TEXT_RAW_DIR", "/home/ubuntu/opendata/uk/legislation/full")
 
 L = "{http://www.legislation.gov.uk/namespaces/legislation}"
@@ -405,6 +415,24 @@ UPDATE uk_legislation_versions SET provision_count = %s, char_len = %s,
  WHERE leg_id = %s AND valid_from = %s
 """
 
+# ⚠⚠ A refusal is not a verdict about the act.
+#
+# 900 (empty body), 901 (200 that is not the XML asked for) and 902 (over budget)
+# all mean the same thing: the transport was turned away and we learned nothing
+# about this act. 599 means we gave up retrying. None of them is evidence that
+# the act has no text.
+#
+# Writing provision_count = 0 for those is what this set exists to prevent,
+# because the worklist keys on provision_count IS NULL — so a refusal recorded
+# as zero removes the act from every future run permanently. On 2026-09-19 the
+# corpus carried 100,361 version rows in exactly that state, accumulated over
+# earlier runs, each one claiming an act has no text when what actually happened
+# is that legislation.gov.uk declined to answer. They were reverted to NULL.
+#
+# Genuine answers from the source — a real 404, a real 410 — DO belong in
+# provision_count = 0: those are facts about the act.
+REFUSAL_VERDICTS = {599, 900, 901, 902}
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -482,7 +510,28 @@ def main():
         if not hasattr(local, "s"):
             idx = next(ip_counter)
             ip = source_ips[idx % len(source_ips)] if source_ips else None
-            s = requests.Session(interface=ip) if ip else requests.Session()
+            # ⚠ An impersonation profile is REQUIRED, not an optimisation.
+            #
+            # Measured 2026-09-20 on one act, same box, same minute:
+            #   no profile   -> 404, a 12 KB HTML error page from Apache
+            #   chrome124    -> 200, 2,199 bytes
+            #   chrome131 / safari17_0 / firefox133 / edge101 -> 200
+            #
+            # The origin serves a genuine 404 to curl_cffi's default fingerprint
+            # for a URL it serves happily to urllib. A run without a profile
+            # therefore fails every fetch while looking like the act does not
+            # exist — which is how 100,361 version rows came to claim their act
+            # has no text (see REFUSAL_VERDICTS and migration 220).
+            #
+            # The header's warning that impersonate="chrome" returns 437 is
+            # stale: the bare alias is gone from curl_cffi 0.16, and the
+            # versioned profiles above all answer 200 today. The User-Agent
+            # stays honest — it names the project and a contact address — and
+            # the rate limiter is unchanged.
+            kw = {"impersonate": IMPERSONATE} if IMPERSONATE else {}
+            if ip:
+                kw["interface"] = ip
+            s = requests.Session(**kw)
             s.headers["User-Agent"] = UA
             local.s = s
             local.lim = limiters[idx % len(limiters)]
@@ -517,17 +566,49 @@ def main():
         for i in range(0, len(seq), n):
             yield seq[i:i + n]
 
+    # Stop when the source has clearly stopped answering. Without this the run
+    # keeps going at full rate learning nothing: on 2026-09-19 it spent an hour
+    # and 11,000 requests after the last successful fetch, and every one of them
+    # would have written a verdict. The refusal is not rate-tunable once
+    # triggered, so slowing down is not the answer either — the answer is to
+    # stop and come back later.
+    refused = 0
+    consecutive_refusals = 0
+    stopped_early = False
+    give_up_after = int(os.environ.get("UK_REFUSAL_LIMIT", "300"))
+
     with ThreadPoolExecutor(max_workers=args.threads) as pool:
         for block in chunks(work, args.chunk):
+            if stopped_early:
+                break
             for leg_id, valid_from, rows, verdict, nbytes in pool.map(one, block):
                 done += 1
                 stats["bytes"] += nbytes
                 if rows is None:
                     stats["failed"] += 1
                     verdicts[verdict] = verdicts.get(verdict, 0) + 1
+                    # A refusal leaves provision_count NULL so the act stays in
+                    # the worklist. Only a genuine answer from the source is
+                    # allowed to record zero provisions. See REFUSAL_VERDICTS.
+                    pc = None if verdict in REFUSAL_VERDICTS else 0
+                    cl = None if pc is None else 0
                     with lock:
-                        cur.execute(MARK_VER, (0, 0, None, verdict, leg_id, valid_from))
+                        cur.execute(MARK_VER, (pc, cl, None, verdict, leg_id, valid_from))
+                    if verdict in REFUSAL_VERDICTS:
+                        refused += 1
+                        consecutive_refusals += 1
+                        if consecutive_refusals >= give_up_after:
+                            print(f"\n!!! {consecutive_refusals} refusals in a row "
+                                  f"(last verdict {verdict}) — the source has stopped "
+                                  f"answering this transport. Stopping: every further "
+                                  f"request would learn nothing and spend budget. "
+                                  f"Nothing has been recorded as text-less; the "
+                                  f"outstanding acts stay in the worklist.",
+                                  flush=True)
+                            stopped_early = True
+                            break
                     continue
+                consecutive_refusals = 0
                 if not rows:
                     stats["empty"] += 1
                 stats["ok"] += 1
@@ -545,7 +626,18 @@ def main():
                         batch.clear()
                     cur.execute(MARK_VER, (len(rows), len(full),
                                            hashlib.sha256(full.encode()).hexdigest(),
-                                           200 if rows else 900, leg_id, valid_from))
+                                           # 200, not 900. The fetch WAS a 200 —
+                                           # this act simply has no provisions,
+                                           # which is a fact about the act. Using
+                                           # 900 here overloaded the code that
+                                           # fetch() returns for an empty body,
+                                           # i.e. a refusal, so the two became
+                                           # indistinguishable in the column.
+                                           # They stayed distinguishable only by
+                                           # accident: the success path writes a
+                                           # text_hash and the refusal path does
+                                           # not. See migration 220.
+                                           200, leg_id, valid_from))
                 if done % 1000 == 0:
                     el = time.time() - t0
                     print(f"  {done}/{len(work)} ok={stats['ok']} "
@@ -559,6 +651,10 @@ def main():
     print("\n=== summary ===")
     for k, v in stats.items():
         print(f"  {k:11s} {v if k != 'bytes' else f'{v / 1e9:.1f} GB'}")
+    if stopped_early:
+        print(f"\n!!! run stopped early after {refused} refusals; "
+              f"{len(work) - done} acts were not attempted and remain in the "
+              f"worklist. Re-run when the source is answering again.", flush=True)
     if verdicts:
         print("  failure verdicts:")
         for k, v in sorted(verdicts.items(), key=lambda x: -x[1]):
