@@ -177,7 +177,24 @@ def detect_source_ips():
 
 
 def fetch(session, limiter, url, tries=4):
-    """(text, verdict). 900 = empty, 901 = 200 but not the XML we asked for."""
+    """(text, verdict).
+
+    Verdicts, in full:
+
+      200        the XML arrived and looks like CLML
+      404, 410   the source answered: not here / withdrawn
+      903        the body arrived and does not parse
+      900        HTTP 200 with an empty body
+      901        HTTP 200 that is not the XML we asked for
+      902        an empty 202 — the request budget is spent
+      599        gave up after retries
+
+    The split that matters is not success against failure. It is whether the
+    SOURCE told us something. 200, 404, 410 and 903 are answers and belong in
+    the record; 900, 901, 902 and 599 are refusals and must never be written as
+    a verdict about the act, because the worklist keys on provision_count and a
+    refusal recorded as zero removes the act from every future run.
+    """
     for attempt in range(tries):
         limiter.wait()
         try:
@@ -210,8 +227,13 @@ def fetch(session, limiter, url, tries=4):
         if r.status_code in (403, 429, 503):
             time.sleep(int(r.headers.get("Retry-After") or 30 * (attempt + 1)))
             continue
-        if r.status_code == 404:
-            return None, 404
+        # 404 and 410 are the source answering. 410 especially: it means the
+        # document was withdrawn, which is as final an answer as there is.
+        # Without it here the loop falls through to the retry path and ends at
+        # 599 — a refusal verdict — so a withdrawn act would be retried on every
+        # run, forever, against a URL that will never come back.
+        if r.status_code in (404, 410):
+            return None, r.status_code
         time.sleep(2 * (attempt + 1))
     return None, 599
 
@@ -552,7 +574,13 @@ def main():
         try:
             rows = parse_provisions(body, leg_id)
         except ET.ParseError:
-            return leg_id, valid_from, None, 902, len(body)
+            # 903, not 902. 902 means the transport was refused and we learned
+            # nothing; this is the opposite — the source answered, we have the
+            # bytes, and they do not parse. That is a fact about the document
+            # and must be recorded, or the act is retried forever against a body
+            # that will never parse. The same overloading in 900 is what made
+            # 100,361 rows claim an act has no text; see REFUSAL_VERDICTS.
+            return leg_id, valid_from, None, 903, len(body)
         return leg_id, valid_from, rows, 200, len(body)
 
     batch = []
@@ -594,6 +622,12 @@ def main():
                     cl = None if pc is None else 0
                     with lock:
                         cur.execute(MARK_VER, (pc, cl, None, verdict, leg_id, valid_from))
+                    if verdict not in REFUSAL_VERDICTS:
+                        # A real answer — 404, 410, an unparseable body — means
+                        # the source is talking to us. Without this reset, a run
+                        # threading its way through genuine 404s would count
+                        # them as an unbroken refusal streak and stop itself.
+                        consecutive_refusals = 0
                     if verdict in REFUSAL_VERDICTS:
                         refused += 1
                         consecutive_refusals += 1

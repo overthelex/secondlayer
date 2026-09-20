@@ -1,0 +1,138 @@
+##############################################################################
+# Run one repair against one database, on purpose, while someone is watching.
+#
+# A repair is not a migration. A migration says what a deployment IS, and every
+# deployment needs it. A repair fixes damage that happened to a particular
+# database at a particular time — and a deployment that never had that damage
+# must not run it.
+#
+# Putting repairs in the migration stream breaks that: the fix for one box's
+# incident ships automatically to every box, during a deploy, unwatched. On
+# 2026-09-19 a repair aimed at the UK corpus ran against legal.org.ua that way.
+# It matched nothing, by luck; its predicate was wrong and could have matched.
+# And once recorded in schema_migrations it could never be corrected in place,
+# which cost a second migration to undo the first.
+#
+# So: repairs live in mcp_backend/src/repairs/, they are never applied by a
+# deploy, and they run from here — named repair, named target, dry run first.
+#
+# ⚠ Dry run is the default and it means it: the statements execute inside a
+# transaction that is rolled back, so you see the real row counts without
+# keeping any of it. That is the only honest way to know what a repair would do
+# to live data, because the predicate is the part that is usually wrong.
+#
+# Repairs must be idempotent and must not contain their own BEGIN/COMMIT — this
+# job supplies the transaction, and a COMMIT inside the file would defeat the
+# dry run. Checked below rather than trusted.
+##############################################################################
+name: 'Run a repair'
+
+on:
+  workflow_dispatch:
+    inputs:
+      repair:
+        description: 'Filename in mcp_backend/src/repairs/'
+        required: true
+        type: string
+      target:
+        description: 'Which database'
+        required: true
+        type: choice
+        options:
+          - lawrider-uk
+      dry_run:
+        description: 'Execute and roll back, reporting what it WOULD change'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: run-repair-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find the repair and check its shape
+        env:
+          # ⚠ Through the environment, NEVER interpolated into the script body.
+          # `${{ inputs.repair }}` inside `run:` is substituted by GitHub before
+          # bash sees a single character, so a guard written in bash runs far too
+          # late to help: the metacharacters have already been executed, in a job
+          # that goes on to hold an SSH key to production.
+          REPAIR: ${{ inputs.repair }}
+        run: |
+          # Refuse anything that is not a bare filename. The input is typed by a
+          # human into a dispatch form, which is exactly the kind of field that
+          # eventually receives "../migrations/001_initial_schema.sql".
+          case "$REPAIR" in
+            ''|*/*|.*|*' '*) echo "::error::repair must be a bare filename in mcp_backend/src/repairs/"; exit 1 ;;
+          esac
+          F="mcp_backend/src/repairs/$REPAIR"
+          [ -f "$F" ] || { echo "::error::no such repair: $F"; ls mcp_backend/src/repairs/; exit 1; }
+          # P1: COMMIT WORK and BEGIN TRANSACTION are valid postgres and slipped
+          # past a pattern anchored on the bare keyword plus semicolon. A COMMIT
+          # anywhere in the file defeats the dry run, which is the one guarantee
+          # this job makes, so the check matches the keyword and whatever follows.
+          if grep -qiE '(^|;)[[:space:]]*(BEGIN|START[[:space:]]+TRANSACTION|COMMIT|END|ROLLBACK|SAVEPOINT)\b' "$F"; then
+            echo "::error::$F contains transaction control — the dry run could not roll it back"
+            grep -inE '(^|;)[[:space:]]*(BEGIN|START[[:space:]]+TRANSACTION|COMMIT|END|ROLLBACK|SAVEPOINT)\b' "$F"
+            exit 1
+          fi
+          echo "REPAIR_FILE=$F" >> "$GITHUB_ENV"
+          echo "=== $F"
+          sed 's/^/  /' "$F"
+
+      - name: Set up SSH
+        env:
+          HOST: ${{ secrets.LAWRIDER_GCP_HOST }}
+        run: |
+          [ -n "$HOST" ] || { echo "::error::LAWRIDER_GCP_HOST is not set"; exit 1; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp
+          chmod 600 ~/.ssh/gcp
+          # ⚠ Trust-on-first-use, every run: whatever key the host presents is
+          # accepted. This job holds a credential that can write to production,
+          # so that is a real weakness, not a formality — but it is the same
+          # pattern every other lawrider workflow uses, and pinning it here
+          # alone would leave the others open while reading as solved. Pin it in
+          # one change across all of them, from a secret, or not at all.
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "SSH=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ubuntu@$HOST" >> "$GITHUB_ENV"
+
+      - name: Run it
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # pipefail, because the psql exit status is on the left of a pipe into
+          # tee. Without it a repair that died halfway through returns tee's
+          # success and the job goes green over a half-applied change.
+          set -o pipefail
+          F="$REPAIR_FILE"
+          END=$([ "$DRY_RUN" = "true" ] && echo ROLLBACK || echo COMMIT)
+          echo "transaction will end with: $END"
+
+          # The transaction is supplied here, not by the file, so the same bytes
+          # run in both modes and a dry run cannot accidentally keep anything.
+          # ON_ERROR_STOP because a repair that fails halfway through and reports
+          # success is worse than one that does not run.
+          {
+            echo "BEGIN;"
+            cat "$F"
+            echo "$END;"
+          } | $SSH "docker exec -i pg-lawrider psql -U secondlayer -d secondlayer_prod \
+                      -v ON_ERROR_STOP=1 --echo-errors" 2>&1 | tee out.txt
+
+          # psql prints "UPDATE n" per statement; surface them as the answer
+          # rather than making someone read the log.
+          echo "=== rows touched per statement"
+          grep -E '^(UPDATE|DELETE|INSERT) [0-9]+' out.txt | sed 's/^/  /' || echo "  none"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "=== dry run — the transaction was rolled back, nothing was kept"
+          fi
