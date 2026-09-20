@@ -26,7 +26,11 @@ const REPAIRS = join(MIGRATIONS, '..', 'repairs');
 // Everything at or below this number predates the rule. They are not being
 // rewritten — several are seed data that new deployments genuinely need, and
 // the rest have long since run everywhere. The line is drawn, not backdated.
-const GRANDFATHERED_BELOW = 222;
+// ⚠ 220, not 222. Removing 220 and 221 from the tree left the highest migration
+// at 219, so a threshold of 222 made this test pass over an empty set — and left
+// the two slots the incident actually used wide open. The line sits immediately
+// above the last existing migration.
+const GRANDFATHERED_BELOW = 220;
 
 // Tables that hold harvested law. An UPDATE against one of these is repairing
 // a corpus, which is a thing that happened to a database rather than a thing a

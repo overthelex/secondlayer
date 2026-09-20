@@ -60,19 +60,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Find the repair and check its shape
+        env:
+          # ⚠ Through the environment, NEVER interpolated into the script body.
+          # `${{ inputs.repair }}` inside `run:` is substituted by GitHub before
+          # bash sees a single character, so a guard written in bash runs far too
+          # late to help: the metacharacters have already been executed, in a job
+          # that goes on to hold an SSH key to production.
+          REPAIR: ${{ inputs.repair }}
         run: |
-          F="mcp_backend/src/repairs/${{ inputs.repair }}"
-          # Refuse a path that climbs out of the repairs directory. The input is
-          # typed by a human into a dispatch form, which is exactly the kind of
-          # field that eventually receives "../migrations/001_initial_schema.sql".
-          case "${{ inputs.repair }}" in
-            */*|..*) echo "::error::repair must be a bare filename in mcp_backend/src/repairs/"; exit 1 ;;
+          # Refuse anything that is not a bare filename. The input is typed by a
+          # human into a dispatch form, which is exactly the kind of field that
+          # eventually receives "../migrations/001_initial_schema.sql".
+          case "$REPAIR" in
+            ''|*/*|.*|*' '*) echo "::error::repair must be a bare filename in mcp_backend/src/repairs/"; exit 1 ;;
           esac
+          F="mcp_backend/src/repairs/$REPAIR"
           [ -f "$F" ] || { echo "::error::no such repair: $F"; ls mcp_backend/src/repairs/; exit 1; }
-          if grep -qiE '^\s*(BEGIN|COMMIT|ROLLBACK)\s*;' "$F"; then
-            echo "::error::$F contains its own transaction control — the dry run cannot roll it back"
+          # P1: COMMIT WORK and BEGIN TRANSACTION are valid postgres and slipped
+          # past a pattern anchored on the bare keyword plus semicolon. A COMMIT
+          # anywhere in the file defeats the dry run, which is the one guarantee
+          # this job makes, so the check matches the keyword and whatever follows.
+          if grep -qiE '(^|;)[[:space:]]*(BEGIN|START[[:space:]]+TRANSACTION|COMMIT|END|ROLLBACK|SAVEPOINT)\b' "$F"; then
+            echo "::error::$F contains transaction control — the dry run could not roll it back"
+            grep -inE '(^|;)[[:space:]]*(BEGIN|START[[:space:]]+TRANSACTION|COMMIT|END|ROLLBACK|SAVEPOINT)\b' "$F"
             exit 1
           fi
+          echo "REPAIR_FILE=$F" >> "$GITHUB_ENV"
           echo "=== $F"
           sed 's/^/  /' "$F"
 
@@ -84,13 +97,25 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.LAWRIDER_GCP_SSH_KEY }}" > ~/.ssh/gcp
           chmod 600 ~/.ssh/gcp
+          # ⚠ Trust-on-first-use, every run: whatever key the host presents is
+          # accepted. This job holds a credential that can write to production,
+          # so that is a real weakness, not a formality — but it is the same
+          # pattern every other lawrider workflow uses, and pinning it here
+          # alone would leave the others open while reading as solved. Pin it in
+          # one change across all of them, from a secret, or not at all.
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           echo "SSH=ssh -i $HOME/.ssh/gcp -o ServerAliveInterval=30 ubuntu@$HOST" >> "$GITHUB_ENV"
 
       - name: Run it
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          F="mcp_backend/src/repairs/${{ inputs.repair }}"
-          END=$([ "${{ inputs.dry_run }}" = "true" ] && echo ROLLBACK || echo COMMIT)
+          # pipefail, because the psql exit status is on the left of a pipe into
+          # tee. Without it a repair that died halfway through returns tee's
+          # success and the job goes green over a half-applied change.
+          set -o pipefail
+          F="$REPAIR_FILE"
+          END=$([ "$DRY_RUN" = "true" ] && echo ROLLBACK || echo COMMIT)
           echo "transaction will end with: $END"
 
           # The transaction is supplied here, not by the file, so the same bytes
@@ -108,6 +133,6 @@ jobs:
           # rather than making someone read the log.
           echo "=== rows touched per statement"
           grep -E '^(UPDATE|DELETE|INSERT) [0-9]+' out.txt | sed 's/^/  /' || echo "  none"
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             echo "=== dry run — the transaction was rolled back, nothing was kept"
           fi

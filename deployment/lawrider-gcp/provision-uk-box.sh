@@ -10,7 +10,7 @@
 # See the workflow header for the service account and the three roles.
 #
 # Everything after this is a pipeline: deploy-lawrider-uk.yml builds the image on
-# the box and runs the migrations (MIGRATION_SET=uk, 133 of 221 — the schema is
+# the box and runs the migrations (MIGRATION_SET=uk, 132 of 220 — the schema is
 # built here, not copied), and migrate-uk-data.yml moves the ~7 GB of uk_* rows
 # and verifies them table by table.
 #

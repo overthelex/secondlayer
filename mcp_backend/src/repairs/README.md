@@ -41,5 +41,5 @@ that is usually wrong; nothing else tells you that before it is too late.
 Seed and reference data — tool pricing, sync sources — even though those are
 `INSERT`/`UPDATE` statements. A deployment without them is not a working
 deployment, so they describe what it *is*. The test in
-`migrations/__tests__/migrations-are-not-repairs.test.ts` draws the line at
+`../migrations/__tests__/migrations-are-not-repairs.test.ts` draws the line at
 corpus tables rather than at DML.
