@@ -2,7 +2,7 @@
 # Move the UK corpus from one box to another, and prove it arrived.
 #
 # The schema is NOT copied. The target builds its own from
-# mcp_backend/src/migrations/sets/uk.txt (MIGRATION_SET=uk, 134 of 220
+# mcp_backend/src/migrations/sets/uk.txt (MIGRATION_SET=uk, 133 of 221
 # migrations) when deploy-lawrider-uk.yml runs — so this workflow moves rows and
 # nothing else. Run the deploy first; this refuses to start if the tables are
 # not there.

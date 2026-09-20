@@ -177,7 +177,14 @@ def detect_source_ips():
 
 
 def fetch(session, limiter, url, tries=4):
-    """(text, verdict). 900 = empty, 901 = 200 but not the XML we asked for."""
+    """(text, verdict).
+
+    900 = empty body, 901 = a 200 that is not the XML we asked for, 902 = an
+    empty 202 (over budget), 903 = the body arrived and does not parse, 599 =
+    gave up retrying. The first three and 599 are refusals — the source told us
+    nothing — and must never be written as a verdict about the act. 903 is a
+    verdict: we have the bytes and they are broken.
+    """
     for attempt in range(tries):
         limiter.wait()
         try:
@@ -552,7 +559,13 @@ def main():
         try:
             rows = parse_provisions(body, leg_id)
         except ET.ParseError:
-            return leg_id, valid_from, None, 902, len(body)
+            # 903, not 902. 902 means the transport was refused and we learned
+            # nothing; this is the opposite — the source answered, we have the
+            # bytes, and they do not parse. That is a fact about the document
+            # and must be recorded, or the act is retried forever against a body
+            # that will never parse. The same overloading in 900 is what made
+            # 100,361 rows claim an act has no text; see REFUSAL_VERDICTS.
+            return leg_id, valid_from, None, 903, len(body)
         return leg_id, valid_from, rows, 200, len(body)
 
     batch = []
@@ -594,6 +607,12 @@ def main():
                     cl = None if pc is None else 0
                     with lock:
                         cur.execute(MARK_VER, (pc, cl, None, verdict, leg_id, valid_from))
+                    if verdict not in REFUSAL_VERDICTS:
+                        # A real answer — 404, 410, an unparseable body — means
+                        # the source is talking to us. Without this reset, a run
+                        # threading its way through genuine 404s would count
+                        # them as an unbroken refusal streak and stop itself.
+                        consecutive_refusals = 0
                     if verdict in REFUSAL_VERDICTS:
                         refused += 1
                         consecutive_refusals += 1
