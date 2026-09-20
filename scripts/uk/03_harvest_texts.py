@@ -33,7 +33,6 @@ Usage:
 import argparse
 import gzip
 import itertools
-import hashlib
 import os
 import re
 import sys
@@ -431,7 +430,7 @@ ON CONFLICT (leg_id, valid_from, ord) DO UPDATE SET
     n_chars         = EXCLUDED.n_chars
 """
 
-MARK_VER = """
+MARK_VER = r"""
 UPDATE uk_legislation_versions v
    SET provision_count = a.n,
        char_len        = a.chars,
@@ -694,7 +693,6 @@ def main():
                     stats["empty"] += 1
                 stats["ok"] += 1
                 stats["provisions"] += len(rows)
-                full = "\n".join(r["text"] for r in rows)
                 with lock:
                     for r in rows:
                         batch.append((leg_id, valid_from, r["ord"],
@@ -702,11 +700,24 @@ def main():
                                       r["provision_uri"], r["part"], r["chapter"],
                                       r["schedule_no"], r["title"], r["text"],
                                       r["n_chars"]))
-                    if len(batch) >= 2000:
+                    # ⚠⚠ Flush BEFORE marking the version, always, not at a 2,000
+                    # row threshold.
+                    #
+                    # MARK_VER derives its numbers from uk_legislation_provisions,
+                    # and on a first crawl this item's rows are still sitting in
+                    # `batch`. Marking first would read an empty table and record
+                    # provision_count = 0 for every act the crawl had just
+                    # fetched — the exact lie this change set out to remove,
+                    # applied to the whole corpus instead of 25 rows.
+                    #
+                    # The threshold bought batching on a path that is network
+                    # bound at four items a second. One execute_values per item
+                    # costs nothing measurable and buys an invariant: when the
+                    # version row is written, the rows it describes are already
+                    # there.
+                    if batch:
                         execute_values(cur, INS_PROV, batch, page_size=1000)
                         batch.clear()
-                    # One call for both cases: the statement reads the table, so an empty
-                    # parse cannot assert zero over rows the bulk loader left standing.
                     cur.execute(MARK_VER, (200, leg_id, valid_from, leg_id, valid_from))
                 if done % 1000 == 0:
                     el = time.time() - t0
