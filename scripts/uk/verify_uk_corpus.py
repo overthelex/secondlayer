@@ -107,6 +107,19 @@ INVARIANTS = [
         "because the loader plans from the checkpoint",
     ),
     (
+        "the content map names each provision by its own text",
+        """SELECT count(*) FROM uk_provision_text_hash h
+            JOIN uk_legislation_provisions p
+              ON p.leg_id = h.leg_id AND p.valid_from = h.valid_from AND p.ord = h.ord
+           WHERE h.text_hash <> sha256(convert_to(p.text, 'UTF8'))""",
+        "a row here says 'this provision's text hashes to X' and it does not. The "
+        "export writes one vector per hash, so a stale entry stores new text under "
+        "an old identity — a search hit that resolves to the wrong provision or to "
+        "none. It drifts whenever a refresh rewrites text without re-running "
+        "--populate-map, which is why stage 7 exists; this is the check that stage "
+        "7 actually ran",
+    ),
+    (
         "every act in the register can reach its text",
         """SELECT count(*) FROM uk_legislation l
             WHERE NOT EXISTS (SELECT 1 FROM uk_legislation_versions v
