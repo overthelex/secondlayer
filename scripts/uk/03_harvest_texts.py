@@ -33,7 +33,6 @@ Usage:
 import argparse
 import gzip
 import itertools
-import hashlib
 import os
 import re
 import sys
@@ -431,11 +430,51 @@ ON CONFLICT (leg_id, valid_from, ord) DO UPDATE SET
     n_chars         = EXCLUDED.n_chars
 """
 
-MARK_VER = """
-UPDATE uk_legislation_versions SET provision_count = %s, char_len = %s,
-       text_hash = %s, http_status = %s, fetched_at = now()
+MARK_VER = r"""
+UPDATE uk_legislation_versions v
+   SET provision_count = a.n,
+       char_len        = a.chars,
+       text_hash       = a.hash,
+       http_status     = %s,
+       fetched_at      = now()
+  FROM (SELECT count(*) AS n,
+               -- len("\n".join(texts)): the characters plus one separator
+               -- between each adjacent pair. Matching the old python exactly
+               -- matters, because this column is compared across runs.
+               coalesce(sum(n_chars), 0) + greatest(count(*) - 1, 0) AS chars,
+               encode(sha256(convert_to(
+                 coalesce(string_agg(text, E'\n' ORDER BY ord), ''), 'UTF8')), 'hex') AS hash
+          FROM uk_legislation_provisions
+         WHERE leg_id = %s AND valid_from = %s) a
+ WHERE v.leg_id = %s AND v.valid_from = %s
+"""
+
+MARK_REFUSAL = """
+UPDATE uk_legislation_versions
+   SET http_status = %s, fetched_at = now()
  WHERE leg_id = %s AND valid_from = %s
 """
+
+# A refusal records WHAT HAPPENED and touches nothing else. provision_count stays
+# NULL so the act remains in the worklist — see REFUSAL_VERDICTS. It must not use
+# MARK_VER: that statement derives the counts from the table, which would quietly
+# resolve an act we were refused on, using rows some other stage left behind.
+
+# ⚠ All three derived from the table, never from this run's parse.
+#
+# Stage 3 is not the only writer of uk_legislation_provisions — 05_load_bulk_texts.py
+# fills the same key from the bulk archives — so "my parse produced N" is not the
+# same statement as "this act has N". The bare URI often serves a thinner
+# representation: ukpga/Vict/47-48/54 answers 200 with NumberOfProvisions=3 while
+# the archive yields 51.
+#
+# Writing the parse's own numbers put 25 version rows out of step with the rows
+# they describe on 2026-09-20. Seven claimed zero against 51, 43 and 39 actual —
+# and the other EIGHTEEN claimed a non-zero number that was still too low, which
+# is why guarding only the empty case was not enough. Deriving all three from the
+# table makes the column true by construction in every case: where the parse did
+# produce every row, the two agree anyway.
+
 
 # ⚠⚠ A refusal is not a verdict about the act.
 #
@@ -618,10 +657,17 @@ def main():
                     # A refusal leaves provision_count NULL so the act stays in
                     # the worklist. Only a genuine answer from the source is
                     # allowed to record zero provisions. See REFUSAL_VERDICTS.
-                    pc = None if verdict in REFUSAL_VERDICTS else 0
-                    cl = None if pc is None else 0
                     with lock:
-                        cur.execute(MARK_VER, (pc, cl, None, verdict, leg_id, valid_from))
+                        if verdict in REFUSAL_VERDICTS:
+                            # Nothing was learned; leave the counts alone.
+                            cur.execute(MARK_REFUSAL, (verdict, leg_id, valid_from))
+                        else:
+                            # A real answer — 404, 410, an unparseable body. The
+                            # counts come from the table, because a 404 at the
+                            # bare URI says nothing about text the archives
+                            # already supplied for this act.
+                            cur.execute(MARK_VER, (verdict, leg_id, valid_from,
+                                                   leg_id, valid_from))
                     if verdict not in REFUSAL_VERDICTS:
                         # A real answer — 404, 410, an unparseable body — means
                         # the source is talking to us. Without this reset, a run
@@ -647,7 +693,6 @@ def main():
                     stats["empty"] += 1
                 stats["ok"] += 1
                 stats["provisions"] += len(rows)
-                full = "\n".join(r["text"] for r in rows)
                 with lock:
                     for r in rows:
                         batch.append((leg_id, valid_from, r["ord"],
@@ -655,23 +700,25 @@ def main():
                                       r["provision_uri"], r["part"], r["chapter"],
                                       r["schedule_no"], r["title"], r["text"],
                                       r["n_chars"]))
-                    if len(batch) >= 2000:
+                    # ⚠⚠ Flush BEFORE marking the version, always, not at a 2,000
+                    # row threshold.
+                    #
+                    # MARK_VER derives its numbers from uk_legislation_provisions,
+                    # and on a first crawl this item's rows are still sitting in
+                    # `batch`. Marking first would read an empty table and record
+                    # provision_count = 0 for every act the crawl had just
+                    # fetched — the exact lie this change set out to remove,
+                    # applied to the whole corpus instead of 25 rows.
+                    #
+                    # The threshold bought batching on a path that is network
+                    # bound at four items a second. One execute_values per item
+                    # costs nothing measurable and buys an invariant: when the
+                    # version row is written, the rows it describes are already
+                    # there.
+                    if batch:
                         execute_values(cur, INS_PROV, batch, page_size=1000)
                         batch.clear()
-                    cur.execute(MARK_VER, (len(rows), len(full),
-                                           hashlib.sha256(full.encode()).hexdigest(),
-                                           # 200, not 900. The fetch WAS a 200 —
-                                           # this act simply has no provisions,
-                                           # which is a fact about the act. Using
-                                           # 900 here overloaded the code that
-                                           # fetch() returns for an empty body,
-                                           # i.e. a refusal, so the two became
-                                           # indistinguishable in the column.
-                                           # They stayed distinguishable only by
-                                           # accident: the success path writes a
-                                           # text_hash and the refusal path does
-                                           # not. See migration 220.
-                                           200, leg_id, valid_from))
+                    cur.execute(MARK_VER, (200, leg_id, valid_from, leg_id, valid_from))
                 if done % 1000 == 0:
                     el = time.time() - t0
                     print(f"  {done}/{len(work)} ok={stats['ok']} "
