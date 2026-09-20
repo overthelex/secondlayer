@@ -95,8 +95,13 @@ jobs:
 
       - name: Sync tree to GCP box
         run: |
+          # __pycache__ is excluded because rsync --delete cannot remove a
+          # directory root created on the box: running the uk scripts there
+          # under sudo leaves root-owned bytecode, and the next deploy dies with
+          # "cannot delete non-empty directory". Two deploys failed that way on
+          # 2026-09-20 before anyone looked at why.
           rsync -az --delete \
-            --exclude '.git' --exclude 'node_modules' \
+            --exclude '.git' --exclude 'node_modules' --exclude '__pycache__' \
             --exclude 'deployment/.env.prod' \
             -e "ssh -i $HOME/.ssh/gcp_deploy" \
             ./ "${GCP_USER}@${GCP_HOST}:${REMOTE_REPO}/"

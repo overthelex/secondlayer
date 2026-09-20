@@ -20,25 +20,16 @@
 --                                             the status to the 200 it actually
 --                                             was
 --
--- The code no longer writes 900 on the success path, and a refusal no longer
--- records a provision count, so this repairs history only. Idempotent.
---
--- 903 is deliberately NOT in the refusal list: it means the body arrived and
--- does not parse, which is a fact about the document. An act whose XML is
--- broken has to be recorded, or it is retried forever against bytes that will
--- never parse.
+-- The code no longer writes 900 on the success path and no longer records a
+-- verdict for a refusal, so this repairs history only. Idempotent.
 
 -- 1. Refusals: back to unresolved so the worklist picks them up again.
---
--- provision_count and char_len only. http_status and fetched_at stay, because
--- they are the record of what happened and the worklist does not read them —
--- it keys on provision_count IS NULL. This matches what the code now writes for
--- a refusal, so history and future runs describe the same state the same way.
 UPDATE uk_legislation_versions
-   SET provision_count = NULL, char_len = NULL
+   SET provision_count = NULL, char_len = NULL, http_status = NULL,
+       fetched_at = NULL
  WHERE http_status IN (599, 900, 901, 902)
    AND text_hash IS NULL
-   AND provision_count IS NOT NULL;
+   AND COALESCE(provision_count, 0) = 0;
 
 -- 2. Real verdicts wearing a refusal's code: say what actually happened.
 UPDATE uk_legislation_versions
