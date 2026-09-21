@@ -10,26 +10,26 @@
  * could never be corrected in place, which cost a second migration to undo the
  * first.
  *
- * Repairs now live in mcp_backend/src/repairs/ and run from
- * .github/workflows/run-repair.yml: named repair, named target, dry run first.
- *
- * This test is what keeps that true. A rule about where files go survives
- * exactly until the first time someone needs to fix production quickly.
+ * ⚠ The repairs themselves, and the workflow that runs them, moved to
+ * overthelex/lawrider-uk on 2026-09-22 along with the rest of the UK pipeline.
+ * The assertions about that directory moved with them. What stays here is the
+ * half that guards THIS repository: a migration must not repair a corpus.
  */
 
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 const MIGRATIONS = join(__dirname, '..');
-const REPAIRS = join(MIGRATIONS, '..', 'repairs');
 
+// ⚠ 220, and the exact number matters. The last existing migration is 219, so
+// this is the first slot a new one can take. It was 222 once, which made the
+// test pass over an empty set — and left open precisely the two slots the
+// incident had used. A threshold above the highest migration is not a lax
+// guard, it is no guard.
+//
 // Everything at or below this number predates the rule. They are not being
 // rewritten — several are seed data that new deployments genuinely need, and
 // the rest have long since run everywhere. The line is drawn, not backdated.
-// ⚠ 220, not 222. Removing 220 and 221 from the tree left the highest migration
-// at 219, so a threshold of 222 made this test pass over an empty set — and left
-// the two slots the incident actually used wide open. The line sits immediately
-// above the last existing migration.
 const GRANDFATHERED_BELOW = 220;
 
 // Tables that hold harvested law. An UPDATE against one of these is repairing
@@ -65,38 +65,5 @@ describe('migrations are not repairs', () => {
       }
     }
     expect(offenders).toEqual([]);
-  });
-
-  it('repairs live in their own directory and carry no transaction control', () => {
-    // The runner supplies BEGIN/COMMIT so that the same bytes can be rolled
-    // back for a dry run. A COMMIT inside the file would keep the changes
-    // anyway, which is the one thing a dry run must not do.
-    expect(existsSync(REPAIRS)).toBe(true);
-    const files = readdirSync(REPAIRS).filter((f) => f.endsWith('.sql'));
-    expect(files.length).toBeGreaterThan(0);
-    // ⚠ The same pattern as run-repair.yml, deliberately. They had drifted: the
-    // workflow refused `COMMIT WORK;` at run time while this test — which is the
-    // gate a pull request actually passes through — matched only the bare
-    // keyword, so such a file would have merged and only failed later, in front
-    // of production data.
-    //
-    // Keyword plus word boundary, anchored at a statement start rather than a
-    // line start, because `UPDATE t SET x=1; COMMIT WORK;` is one line.
-    const TX = /(^|;)[ \t]*(begin|start\s+transaction|commit|end|rollback|savepoint)\b/im;
-    const withTx = files.filter((f) => {
-      const sql = readFileSync(join(REPAIRS, f), 'utf-8')
-        .replace(/--[^\n]*/g, '')          // a COMMIT in prose is not a COMMIT
-        .replace(/'(?:[^']|'')*'/g, "''");  // nor is one inside a string literal
-      return TX.test(sql);
-    });
-    expect(withTx).toEqual([]);
-  });
-
-  it('no repair is also listed as a migration', () => {
-    // The same fix in both places would run unwatched during a deploy, which is
-    // the arrangement this whole split exists to end.
-    const repairs = new Set(readdirSync(REPAIRS).filter((f) => f.endsWith('.sql')));
-    const dupes = readdirSync(MIGRATIONS).filter((f) => repairs.has(f));
-    expect(dupes).toEqual([]);
   });
 });
