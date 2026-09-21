@@ -21,6 +21,12 @@ import { join } from 'path';
 
 const MIGRATIONS = join(__dirname, '..');
 
+// ⚠ 220, and the exact number matters. The last existing migration is 219, so
+// this is the first slot a new one can take. It was 222 once, which made the
+// test pass over an empty set — and left open precisely the two slots the
+// incident had used. A threshold above the highest migration is not a lax
+// guard, it is no guard.
+//
 // Everything at or below this number predates the rule. They are not being
 // rewritten — several are seed data that new deployments genuinely need, and
 // the rest have long since run everywhere. The line is drawn, not backdated.

@@ -1,10 +1,11 @@
 > ⚠ **The UK pipeline lives in `overthelex/lawrider-uk` since 2026-09-22.**
 >
 > What is still here is what builds and serves the application: `docker-compose.yml`
-> (which builds the backend image with `context: ../..` plus the proprietary
-> `secondlayer-core` overlay), `nginx/edge.conf`, `known_hosts`, and
-> `deploy-lawrider-uk.yml`. Provisioning, the corpus scripts, the repairs and the
-> other four workflows moved, because none of them needs this tree.
+> (which builds the backend image with `context: ../..`, i.e. from the monorepo
+> root), `nginx/edge.conf`, `known_hosts`, and `deploy-lawrider-uk.yml` — which is
+> what clones `secondlayer-core` and overlays the proprietary sources into the
+> tree *before* that build runs. Provisioning, the corpus scripts, the repairs
+> and the other four workflows moved, because none of them needs this tree.
 >
 > The rule: building the corpus belongs there, serving it belongs here.
 
@@ -48,7 +49,7 @@ this directory, `mcp_backend/`, `packages/shared/` or the backend Dockerfile.
   before the domain has DNS), and the advertised tool list must be `uk_*` and
   nothing else
 - the weekly data refresh is a separate pipeline:
-  `.github/workflows/cron-uk-refresh.yml`
+  `cron-uk-refresh.yml` (now in **overthelex/lawrider-uk**)
 
 The one-off AWS restore job is gone: `/data/pgdump` was deleted from the box on
 2026-09-03 after the data was verified, and the AWS instance was terminated the
