@@ -1,3 +1,13 @@
+> ⚠ **The UK pipeline lives in `overthelex/lawrider-uk` since 2026-09-22.**
+>
+> What is still here is what builds and serves the application: `docker-compose.yml`
+> (which builds the backend image with `context: ../..` plus the proprietary
+> `secondlayer-core` overlay), `nginx/edge.conf`, `known_hosts`, and
+> `deploy-lawrider-uk.yml`. Provisioning, the corpus scripts, the repairs and the
+> other four workflows moved, because none of them needs this tree.
+>
+> The rule: building the corpus belongs there, serving it belongs here.
+
 # lawrider.uk on GCP
 
 Standalone stack for **lawrider.uk**, the British product, on the
