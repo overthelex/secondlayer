@@ -48,9 +48,23 @@ Bundesverwaltungsgericht and Bundesgericht/BGE judgments in competition
 matters. This mirrors Schrepel & Jenny's pairing of Commission decisions with
 Union Court judgments.
 
+**Cantonal law is not part of the object, cantonal judgments are part of the
+record.** Measured on 2026-09-22, not assumed: of 26,296 cantonal acts in
+`ch_cantonal_registry`, exactly two carry "Kartell" in their title, and both
+are implementing ordinances to the FEDERAL cartel act of 1962 (BS, GR). There
+is no substantive cantonal competition legislation — the competence is
+federal (Art. 96 BV), so no proposition of the notice can rest on cantonal
+law. Civil enforcement of Art. 5 KG, however, runs through the cantonal
+courts, and our corpus holds 130+ of their judgments citing the
+Kartellgesetz (ZH 48, VD 29, SG 17, BE 11, LU 8, BS 6, GR 6, AG 5); RPW
+reprints a selection in its part C. For a vertical-restraints instrument
+that is real practice, so they enter the record as a **second, labelled
+evidence tier** (see 4.3). Schrepel & Jenny have no equivalent tier: the EU
+has no comparable civil layer applying the same provision.
+
 **Out of scope for v1.** The SME notice (KMU-Bekanntmachung) and the motor
-vehicle notice; cantonal civil practice (RPW parts C1/C2); merger control.
-Each is a follow-up that the same pipeline can run.
+vehicle notice; merger control. Each is a follow-up that the same pipeline
+can run.
 
 ## 3. Data
 
@@ -61,8 +75,9 @@ Each is a follow-up that the same pipeline can run.
 | WEKO decisions 1995–2025 | **1,537 loaded** (`spider = CH_WEKO_RPW`) | cut from the RPW journal, PR #2451/#2452 |
 | WEKO files from entscheidsuche | 117 (`spider = CH_WEKO`) | 62 RPW documents point at one via `metadata_json.rpw.same_as` |
 | BVGer / BGer / BGE | in `ch_court_decisions` | competition matters selected by statute references and full text; 51 of them name the vertical notice or vertical agreements outright |
+| Cantonal civil judgments citing the KG | 130+ in `ch_court_decisions` | second evidence tier; ZH 48, VD 29, SG 17, BE 11, LU 8, BS 6, GR 6, AG 5 |
 | Swiss scholarly commentary | 1,564 rows (`ch_commentary`) | used to build the retrieval-recall check, not as evidence |
-| Kartellgesetz, all editions | `ch_act_version` | point-in-time text for the statutory-anchor control |
+| Kartellgesetz, point in time | 10 German versions with text, 2001-01-01 … 2023-07-01 (`ch_act` 9447) | covers both decisive states: before the revision, and from 2004-04-01 (direct sanctions, Art. 5 para. 4) |
 
 ### 3.2 What has to be acquired
 
@@ -77,12 +92,37 @@ Each is a follow-up that the same pipeline can run.
    330/2010 and Regulation 2022/720. Check the existing EUR-Lex slice first;
    fetch what is missing.
 
-### 3.3 Corpus completeness, stated in the paper
+### 3.3 The statute, version by version
+
+The audit runs against a statute that changed under it, so every proposition
+carries the KG version in force on the date of the instrument version that
+introduced it.
+
+- **The 2003 revision (in force 1 April 2004) is the dividing line.** It
+  introduced direct sanctions and Art. 5 para. 4 — the presumption for resale
+  price maintenance and absolute territorial protection, which is exactly what
+  a vertical-restraints notice is about. **A decision issued before 1 April
+  2004 cannot support a proposition that rests on Art. 5 para. 4**: the
+  provision did not exist. The label for such a pairing is *absent*, and the
+  proposition is measured against the record that came after it.
+- **Fedlex consolidations begin in 2001.** The KG entered into force on
+  1 July 1996; our point-in-time text starts at the 2001-01-01 version. The
+  2002 instrument is covered, the 1996-2000 state of the statute is not, and
+  the paper says so rather than implying full coverage.
+- **Query by `act_id`, never by `sr_number`.** `sr_number = '251'` also
+  matches a cantonal code of criminal procedure in the same table; the KG is
+  `act_id = 9447`. The sanctions ordinance (SVKG, SR 251.5, 3 versions) and
+  the merger-control ordinance (SR 251.4, 2 versions) are separate acts.
+
+### 3.4 Corpus completeness, stated in the paper
 
 Every "absent from the record" claim is relative to a record whose limits the
 paper states: RPW 1998/1 is not machine-readable (its body carries no item
-headings); before 2009 the only source is RPW; cantonal civil practice is
-excluded; merger decisions are in the record but not the object of the audit.
+headings); before 2009 the only WEKO source is RPW; cantonal civil judgments
+enter as tier 2 and are whatever the cantons publish, which is not a complete
+census of civil competition litigation; merger decisions are in the record but
+not the object of the audit; the statutory text is point-in-time only from
+2001 (3.3).
 
 ## 4. Method
 
@@ -107,6 +147,16 @@ annotator is a passage, not a whole decision.
 - **fragment** — the record holds part of it, or states it in passing, or cites
   it without applying it;
 - **absent** — no support in the record.
+
+Each label carries the **tier** its evidence came from: WEKO's own decisions
+and the federal courts reviewing them (tier 1), or cantonal civil judgments
+applying the same provision (tier 2). Results are reported per tier and
+combined; a proposition supported only in tier 2 is a different finding from
+one the agency's own record holds, and the paper must not blur the two.
+
+Each label also carries the **statutory regime** it was judged under, so that
+support found under a different regime than the proposition rests on is
+visible rather than silently counted (see 3.3).
 
 ### 4.4 The two measurements that answer the question
 
@@ -159,7 +209,11 @@ the text is.
 7. **No look-ahead.** Enforced in the query, not by instruction to the judge.
 8. **Provenance threshold calibrated.** Overlap is measured on unrelated text
    pairs first, to establish what overlap level is noise.
-9. **Every figure in the paper is recomputed from the published artifacts at
+9. **Regime control.** A sample of propositions that rest on Art. 5 para. 4 is
+   checked against pre-2004 decisions: the pipeline must return *absent* for
+   them. If it returns support, the retrieval is matching topic rather than
+   rule.
+10. **Every figure in the paper is recomputed from the published artifacts at
    the end**, never carried over from intermediate notes.
 
 ## 6. Paper structure
@@ -168,9 +222,9 @@ the text is.
 2. Why Switzerland: the status of a Bekanntmachung, and the three possible
    sources of a proposition in a small jurisdiction.
 3. Data and method, with the coverage tables.
-4. Results: the map of propositions by label; codification against
-   announcement over time; provenance of wording; whether the instrument cites
-   its own record.
+4. Results: the map of propositions by label and evidence tier; codification
+   against announcement over time, with the 2004 statutory break marked;
+   provenance of wording; whether the instrument cites its own record.
 5. Two or three contested provisions read closely.
 6. Implications: legitimacy; what an agency should publish alongside a notice;
    and the audit as a repeatable instrument — the script re-runs on each new
@@ -192,7 +246,9 @@ the text is.
 | Retrieval misses support that exists | Control 1 gates the run; recall reported in the paper |
 | Judge agrees with whatever it is shown | Controls 4 and 5; gold set; two models |
 | The notice cites nothing, so the citation test is empty | It becomes a finding, reported as one paragraph, not a section |
-| Corpus gaps read as absence of practice | Section 3.3 is stated in the paper, not in a footnote |
+| Corpus gaps read as absence of practice | Section 3.4 is stated in the paper, not in a footnote |
+| Support counted across a statutory break | Section 3.3: the regime is part of the label, and control 9 tests it |
+| Cantonal civil support read as agency practice | The tier is part of every label and every table |
 | Result is "everything is grounded" | Publishable as a negative result; see section 1 |
 | Scope creep to the other notices | v1 is vertical restraints only; the rest are follow-ups |
 
@@ -200,7 +256,8 @@ the text is.
 
 1. Extend the RPW cut to chapter-level items; load part D1; extract every
    version of the notice and the Erläuterungen.
-2. Acquire the EU texts.
+2. Acquire the EU texts. Pin the KG versions by `act_id`, and record which
+   version was in force for each instrument version.
 3. Build the proposition table with cross-version alignment.
 4. Build retrieval; run control 1; fix until recall is acceptable.
 5. Hand-annotate the gold set; freeze the protocol.
