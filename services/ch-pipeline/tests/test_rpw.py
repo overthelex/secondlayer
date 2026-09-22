@@ -89,6 +89,41 @@ def test_a_header_of_another_issue_is_not_this_issues_page():
     assert rpw.pages_of([page(12, "x")], rpw.Issue(2023, 2, ""))[0].number is None
 
 
+def test_the_section_name_comes_from_the_issue_not_from_the_table():
+    """B 2.8 is "Diverses" in SECTION_NAMES and "BGBM" in the 2016 issues."""
+    pages = rpw.pages_of([
+        page(565,
+             "B 2.         8.     BGBM",
+             "                    LMI",
+             "",
+             "B 2.8        1.     Recommandation à l'attention du Grand Conseil",
+             "",
+             BODY),
+    ], ISSUE)
+    doc, = rpw.split(pages)
+    assert rpw.SECTION_NAMES[("B2", "8")] == "Diverses"      # the fallback says otherwise
+    assert doc.section_label == "BGBM" and doc.section_name == "BGBM"
+
+
+def test_the_issues_own_heading_is_read_in_the_ordinary_case(docs):
+    assert docs[0].section_label == "Unternehmenszusammenschlüsse"
+
+
+def test_without_a_section_heading_the_table_answers():
+    pages = rpw.pages_of([page(375, "B 2.3       1.       Kein Abschnittstitel hier", "", BODY)], ISSUE)
+    doc, = rpw.split(pages)
+    assert doc.section_label is None
+    assert doc.section_name == "Unternehmenszusammenschlüsse"      # from SECTION_NAMES
+
+
+def test_a_case_name_is_not_read_as_a_section_name():
+    pages = rpw.pages_of([page(218,
+                               "B 2.3       3.       General Electric Company",
+                               "", BODY)], ISSUE)
+    doc, = rpw.split(pages)
+    assert doc.section_label is None
+
+
 def test_split_cuts_at_every_heading_and_keeps_only_b1_b2(docs):
     assert [(d.chapter, d.section, d.item) for d in docs] == [("B2", "3", 1), ("B2", "3", 2)]
     tx, post = docs
@@ -201,3 +236,27 @@ def test_a_number_the_journal_printed_twice_gets_its_page_in_the_id():
     ], ISSUE)
     ids = [rpw.doc_id(ISSUE, d) for d in rpw.split(pages)]
     assert ids == ["RPW_2024-2_B2.3.3", "RPW_2024-2_B2.3.3_S256"]
+
+
+def test_a_misprinted_section_name_that_belongs_to_another_section_is_refused():
+    """RPW 2017/3 prints "B2 8. Unternehmenszusammenschlüsse" over its BGBM
+    section, and section 3 of the same issue carries that name for real."""
+    pages = rpw.pages_of([
+        page(500, "B2          3.       Unternehmenszusammenschlüsse", "",
+             "B 2.3       1.       Amcor/SIDEL/JV", "", BODY),
+        page(560, "B2          8.       Unternehmenszusammenschlüsse", "",
+             "B 2.8       1.       Recommandation au canton de Genève", "", BODY),
+    ], ISSUE)
+    merger, recommendation = rpw.split(pages)
+    assert merger.section_name == "Unternehmenszusammenschlüsse"
+    assert recommendation.section_label is None
+    assert recommendation.section_name == "Diverses"        # the fallback, not the misprint
+
+
+def test_the_journals_spelling_slips_are_recorded_under_one_name():
+    assert rpw.canonical_section("Stehlungnahmen") == "Stellungnahmen"
+    assert rpw.canonical_section("Stellungsnahmen") == "Stellungnahmen"
+    assert rpw.canonical_section("Vorabklärung") == "Vorabklärungen"
+    assert rpw.canonical_section("BGBM") == "BGBM"
+    # a name the journal really does use for something else is left alone
+    assert rpw.canonical_section("Bekanntmachungen") == "Bekanntmachungen"

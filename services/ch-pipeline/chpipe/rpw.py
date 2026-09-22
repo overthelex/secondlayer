@@ -36,6 +36,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from datetime import date
 
+import difflib
+
 from .portals.common import parse_date, safe_doc_id
 
 SPIDER = "CH_WEKO_RPW"
@@ -57,9 +59,12 @@ CHAPTER_NAMES = {
     "B2": "Wettbewerbskommission",
 }
 
-# The section numbers of chapters B1 and B2 as the systematics page lists
-# them (2008/1 and 2024/2 agree). A heading's own label is preferred when
-# the body gives one; this is the fallback and the stable key.
+# The section numbers of chapters B1 and B2 as the systematics page listed
+# them in 2008/1 and 2024/2. ONLY A FALLBACK: the journal renumbered its
+# sections over the years -- B 2.8 is "Diverses" in this table and "BGBM" in
+# the 2016 issues -- so the label the issue itself prints above its items
+# wins (see _SECTION and Document.section_name). Reading it from here alone
+# mislabelled 59 rows.
 SECTION_NAMES = {
     ("B1", "1"): "Vorabklärungen",
     ("B1", "2"): "Empfehlungen",
@@ -77,6 +82,22 @@ SECTION_NAMES = {
     ("B2", "9"): "BGBM",
 }
 
+# The section names the journal uses, for spelling only: RPW prints
+# "Stehlungnahmen", "Stellungsnahmen" and "Vorabklärung" for sections whose
+# name is settled. A printed name close to one of these is recorded as that
+# one; a name that is close to none of them is kept exactly as printed.
+CANONICAL_SECTIONS = (
+    "Vorabklärungen", "Empfehlungen", "Stellungnahmen", "Beratungen", "BGBM",
+    "Untersuchungen", "Unternehmenszusammenschlüsse", "Vorsorgliche Massnahmen",
+    "Sanktionen", "Andere Entscheide", "Gutachten", "Diverses",
+)
+
+
+def canonical_section(label: str) -> str:
+    match = difflib.get_close_matches(label, CANONICAL_SECTIONS, n=1, cutoff=0.85)
+    return match[0] if match else label
+
+
 # "rpw_2001-3.pdf", "RPW 2018-4.pdf", "rpw_2021_4.pdf", "rpw_dpc_2024_2.pdf",
 # "RPW 2025_4a.pdf", "DPC 2024-1.pdf", "RPW 2020-3b.pdf"
 _ISSUE_FILE = re.compile(r"(?:rpw|dpc)[^0-9]*((?:19|20)\d\d)[-_ ]([1-6])([a-e])?\.pdf$", re.I)
@@ -90,10 +111,16 @@ _HEADER_NUM_FIRST = re.compile(r"^\s*([0-9]+|[IVXLC]+)\s+(?:RPW\s*/\s*DPC\s+)?((
 # A document's opening heading: part letter, chapter digit, ".", section
 # number, then the item number. Title after a run of spaces.
 _ITEM = re.compile(r"^\s*([A-E])\s?(\d)\s?\.\s?(\d{1,2})\s{2,}(\d{1,3})\.\s+(\S.*?)\s*$")
+# The section heading the issue prints above its items: "B2   3.
+# Unternehmenszusammenschlüsse", "B 2.   8.   BGBM". Chapter, then the
+# section number as its own item number, then the section's German name --
+# never a case name, so a trailing page number or a lower-case start rules
+# it out.
+_SECTION = re.compile(r"^\s*([A-E])\s?(\d)\.?\s{2,}(\d{1,2})\.\s{2,}([A-ZÄÖÜ][^\d]{2,60}?)\s*$")
 # Anything that closes the previous document: a chapter or section heading
 # of any part, with or without an item number ("B2   3.   Untersuchungen",
 # "B 3   1.   Urteil ...", "C1   1.", "D 2   Bibliographie", "E2   1.").
-_BOUNDARY = re.compile(r"^\s*[A-E]\s?\d(?:\s?\.\s?\d{1,2})?\s{2,}(?:\d{1,3}\.\s+)?[A-ZÄÖÜÀ-Ý0-9«\"„(]")
+_BOUNDARY = re.compile(r"^\s*[A-E]\s?\d(?:\s?\.\s?\d{1,2})?\.?\s{2,}(?:\d{1,3}\.\s+)?[A-ZÄÖÜÀ-Ý0-9«\"„(]")
 # Two-column pages: the right column starts after a wide gap. A heading
 # line is full width, but a wrapped title continuation can share its line
 # with the other column's text.
@@ -200,10 +227,15 @@ class Document:
     # twice in one issue (2010/3, 2016/1 and 2018/3 each do): the journal page
     # tells the two apart, and without it the second row overwrote the first.
     id_suffix: str = ""
+    # The section name as THIS issue prints it above the items, when it does.
+    section_label: str | None = None
 
     @property
     def section_name(self) -> str | None:
-        return SECTION_NAMES.get((self.chapter, self.section))
+        """What the journal calls this section. The issue's own heading first,
+        because the numbering moved over the years; SECTION_NAMES only when
+        the issue prints no heading above the item."""
+        return self.section_label or SECTION_NAMES.get((self.chapter, self.section))
 
 
 def _heading_title(lines: list[str], at: int) -> str:
@@ -249,10 +281,26 @@ def split(pages: list[Page], chapters: tuple[str, ...] = DEFAULT_CHAPTERS) -> li
                if p.number is None or p.arabic is not None]
     # Every heading line on the content pages, in reading order.
     marks: list[tuple[int, int, re.Match | None]] = []     # (page pos, line pos, item match)
+    labels: dict[tuple[str, str], str] = {}               # (chapter, section) -> the issue's own name
     for pi, page in enumerate(content):
         for li, line in enumerate(page.lines):
-            if _BOUNDARY.match(line):
-                marks.append((pi, li, _ITEM.match(line)))
+            if not _BOUNDARY.match(line):
+                continue
+            item = _ITEM.match(line)
+            if item is None:
+                sec = _SECTION.match(line)
+                if sec:
+                    key = (f"{sec.group(1)}{sec.group(2)}", sec.group(3))
+                    name = canonical_section(re.sub(r"\s+", " ", sec.group(4)).strip())
+                    # One name per section within an issue: RPW 2017/3 prints
+                    # "B2 8. Unternehmenszusammenschlüsse" over its BGBM
+                    # section, which is also the name of its section 3. A name
+                    # already bound to another section is a misprint, not a
+                    # second section, and the fallback table answers instead.
+                    taken = {v: k for k, v in labels.items()}
+                    if key not in labels and taken.get(name, key) == key:
+                        labels[key] = name
+            marks.append((pi, li, item))
     docs: list[Document] = []
     for k, (pi, li, m) in enumerate(marks):
         if not m:
@@ -275,6 +323,7 @@ def split(pages: list[Page], chapters: tuple[str, ...] = DEFAULT_CHAPTERS) -> li
             title=_heading_title(content[pi].lines, li),
             start_page=content[pi], text=text,
             journal_pages=(_journal_page(content, pi), _journal_page(content, last)),
+            section_label=labels.get((chapter, m.group(3))),
         ))
     seen: dict[tuple, int] = {}
     for d in docs:

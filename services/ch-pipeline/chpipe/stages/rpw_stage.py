@@ -108,6 +108,9 @@ ON CONFLICT (ecli) DO UPDATE SET
     stage_updated_at = now(), updated_at = now()
 WHERE ch_court_decisions.full_text IS DISTINCT FROM EXCLUDED.full_text
    OR ch_court_decisions.pdf_sha256 IS DISTINCT FROM EXCLUDED.pdf_sha256
+   -- The section name is read from the issue now, so a re-cut has to be able
+   -- to correct a label without the text having changed.
+   OR ch_court_decisions.decision_type IS DISTINCT FROM EXCLUDED.decision_type
 RETURNING (xmax = 0) AS inserted,
           (SELECT full_text FROM ch_court_decisions o WHERE o.ecli = %(ecli)s) IS DISTINCT FROM %(full_text)s AS text_changed
 """
