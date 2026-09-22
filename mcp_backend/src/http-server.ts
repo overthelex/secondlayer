@@ -133,13 +133,30 @@ class HTTPMCPServer {
       });
     }, { timezone: 'Europe/Kyiv' });
 
-    // Cron: reconcile pending Monobank payments every 30 minutes
-    cron.schedule('*/30 * * * *', () => {
-      logger.info('[Cron] Running Monobank payment reconciliation');
-      this.billing.monobankService.reconcilePendingPayments().catch(err => {
-        logger.error('[Cron] Monobank reconciliation failed', { error: (err as Error).message });
-      });
-    }, { timezone: 'Europe/Kyiv' });
+    // Cron: reconcile pending Monobank payments every 30 minutes.
+    //
+    // Only where Monobank is configured. Monobank is the Ukrainian acquirer for
+    // legal.org.ua; lawrider.uk and lawrider.ch take no payments through it and
+    // have no MONOBANK_API_KEY, so on those boxes this woke up twice an hour to
+    // query a payments table that is empty by construction. Harmless until it
+    // was not: on 2026-09-22 it was the job that surfaced a broken database
+    // credential on the London box, in a log line about Ukrainian billing.
+    //
+    // Keyed on the configuration rather than on a new flag, so a box that does
+    // not take Monobank payments is correct without anyone remembering to set
+    // anything. RUN_SCHEDULER=false is the wrong instrument here: it would also
+    // stop session cleanup, the soft-delete purge and OAuth cleanup, which every
+    // deployment needs — the first of them for GDPR Art.5(1)(c).
+    if (process.env.MONOBANK_API_KEY) {
+      cron.schedule('*/30 * * * *', () => {
+        logger.info('[Cron] Running Monobank payment reconciliation');
+        this.billing.monobankService.reconcilePendingPayments().catch(err => {
+          logger.error('[Cron] Monobank reconciliation failed', { error: (err as Error).message });
+        });
+      }, { timezone: 'Europe/Kyiv' });
+    } else {
+      logger.info('[Cron] MONOBANK_API_KEY not set — Monobank reconciliation not scheduled on this deployment');
+    }
 
     // Cron: flag stuck consultations + alert on failed payouts daily at 08:00 Kyiv time
     cron.schedule('0 8 * * *', () => {
