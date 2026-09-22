@@ -81,13 +81,26 @@ can run.
 
 ### 3.2 What has to be acquired
 
-1. **Every version of the notice and the Erläuterungen.**
-   - Current and some superseded versions: PDFs on weko.admin.ch.
-   - Versions as published, with their entry-into-force dates: RPW part D1.
-     The RPW cut does not produce them yet — D1 items are numbered at chapter
-     level (`D1   1.   Bekanntmachung über ...`) while `chpipe/rpw.py` requires
-     a section number (`B 2.3   1.`). Extending the cut to chapter-level items
-     is the first implementation task.
+1. **Every version of the notice and the Erläuterungen — done 2026-09-23.**
+   Two sources, and neither alone is complete:
+   - weko.admin.ch publishes 5 of them (Bekanntmachung 2010-06-28, its Stand
+     2017-05-22, Erläuterungen Stand 2019-04-09, and the 2022-12-12 pair).
+     **The agency's own site does not publish its older versions.**
+   - RPW carries 8, including the three the site lacks: the first
+     Bekanntmachung (RPW 2002/2 p. 404), the Erläuterungen of 2004/3 p. 964
+     and the Bekanntmachung of 2007/4 p. 675.
+   Where both have a version, the content is the same (word overlap 0.91-0.93);
+   what differs is the reading order. **The journal prints two columns, and
+   pdftotext -layout interleaves them line by line**, so an RPW text reads
+   "II. Bestimmte Arten von vertikalen Wettbewerbsabre-   V. Der Gesetzgeber
+   hat ...". The site PDFs are single column and read straight.
+   **Working text per version:** the site PDF where there is one; for 2002,
+   2004 and 2007 the RPW text with its columns reconstructed (the splitter in
+   `chpipe/rpw.reading_order`, today used only for date detection). A
+   proposition cut from interleaved text would be two half-sentences.
+   Artifacts: `/data/ch-corpus/weko-bek/` (PDFs, extracted text, `versions.json`
+   with sha256); the RPW versions are rows in `ch_court_decisions`
+   (`metadata_json->'rpw'->>'chapter' = 'D1'`).
 2. **EU comparison texts.** Vertical Guidelines 2010 and 2022, Regulation
    330/2010 and Regulation 2022/720. Check the existing EUR-Lex slice first;
    fetch what is missing.
