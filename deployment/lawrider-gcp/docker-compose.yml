@@ -20,7 +20,7 @@
 # Host paths:
 #   /data/pg                      postgres data
 #   /data/redis                   redis data
-#   /data/uk                      bulk archives + refresh state (see scripts/uk)
+#   /data/uk                      bulk archives + refresh state (see overthelex/lawrider-uk)
 #   /data/qdrant                  CH vectors, kept but no longer served here
 #   /home/ubuntu/lawrider/site    static site
 #   /home/ubuntu/certs-lawrider.uk  Cloudflare Origin CA cert for lawrider.uk +

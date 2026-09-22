@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_uk_pv_label
 -- No FTS index over uk_provision_text here on purpose. A GIN maintained during
 -- a multi-million-row bulk insert costs more than building it once at the end,
 -- and it belongs in its own migration run with CONCURRENTLY once the load has
--- settled. See scripts/uk/06_load_point_in_time.py.
+-- settled. See pipeline/06_load_point_in_time.py in overthelex/lawrider-uk.
 
 -- Per-act checkpoint, so a 9-hour load resumes instead of restarting. Also the
 -- honest record of what was actually covered: an act absent from this table was
