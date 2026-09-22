@@ -115,11 +115,15 @@ RETURNING (xmax = 0) AS inserted,
           (SELECT full_text FROM ch_court_decisions o WHERE o.ecli = %(ecli)s) IS DISTINCT FROM %(full_text)s AS text_changed
 """
 
+# Scoped to the chapters this run cut: a run over B1/B2 must not treat the
+# D1 notices (cut by a run of its own) as rows its cut no longer produces.
 _ISSUE_ROWS = ("SELECT ecli, doc_id FROM ch_court_decisions "
-               "WHERE spider = %s AND metadata_json->'rpw'->>'issue_key' = %s")
+               "WHERE spider = %s AND metadata_json->'rpw'->>'issue_key' = %s "
+               "AND metadata_json->'rpw'->>'chapter' = ANY(%s)")
 
 _LOADED_SHAS = ("SELECT DISTINCT pdf_sha256 FROM ch_court_decisions "
-                "WHERE spider = %s AND pdf_sha256 IS NOT NULL")
+                "WHERE spider = %s AND pdf_sha256 IS NOT NULL "
+                "AND metadata_json->'rpw'->>'chapter' = ANY(%s)")
 _ENTSCHEIDSUCHE_WEKO = ("SELECT ecli, docket_number, abstract, decision_date "
                         "FROM ch_court_decisions WHERE spider = 'CH_WEKO'")
 
@@ -237,7 +241,8 @@ def row_for(issue: rpw.Issue, url: str, sha: str, doc: rpw.Document, same_as: di
     }
 
 
-def write_issue(conn, issue, url, sha, docs, same_as, report: RpwReport) -> None:
+def write_issue(conn, issue, url, sha, docs, same_as, report: RpwReport,
+                chapters: tuple[str, ...] = rpw.DEFAULT_CHAPTERS) -> None:
     """One issue, one transaction: its rows, the deletion of the rows its cut
     no longer produces, and their citation-queue bookkeeping. The sha256 is
     the resume marker, so it must never be committed for part of an issue."""
@@ -261,7 +266,8 @@ def write_issue(conn, issue, url, sha, docs, same_as, report: RpwReport) -> None
                 # New text: its citation edges (if any) are stale -- the same
                 # re-queue db.complete(-> 'extracted') does for every other spider.
                 db.enqueue_for_citations(conn, [row["ecli"]])
-        stale = [r["ecli"] for r in conn.execute(_ISSUE_ROWS, (rpw.SPIDER, issue.key)).fetchall()
+        stale = [r["ecli"] for r in conn.execute(
+                     _ISSUE_ROWS, (rpw.SPIDER, issue.key, list(chapters))).fetchall()
                  if r["ecli"] not in written]
         if stale:
             db.delete_citations(conn, stale)
@@ -287,7 +293,8 @@ async def _run_async(settings: Settings, years, chapters, force: bool, transport
     issues_dir.mkdir(parents=True, exist_ok=True)
     conn = db.connect(settings)
     try:
-        loaded = {r["pdf_sha256"] for r in conn.execute(_LOADED_SHAS, (rpw.SPIDER,)).fetchall()}
+        loaded = {r["pdf_sha256"] for r in conn.execute(
+            _LOADED_SHAS, (rpw.SPIDER, list(chapters))).fetchall()}
         same_as = same_as_index(conn.execute(_ENTSCHEIDSUCHE_WEKO).fetchall())
         async with Fetcher(concurrency=1, timeout=DOWNLOAD_TIMEOUT, transport=transport) as fetcher:
             issues = list_issues(await fetcher.text(INDEX_URL))
@@ -303,6 +310,9 @@ async def _run_async(settings: Settings, years, chapters, force: bool, transport
                         await _download(fetcher, url, path)
                         report.issues_downloaded += 1
                     sha = hashlib.sha256(path.read_bytes()).hexdigest()
+                    # The skip marker is per chapter set: an issue loaded from
+                    # a B1/B2 run has its sha on those rows, and a D1 run must
+                    # still read it.
                     if sha in loaded and not force:
                         report.issues_skipped += 1
                         continue
@@ -318,7 +328,7 @@ async def _run_async(settings: Settings, years, chapters, force: bool, transport
                     report.issues_failed += 1
                     continue
                 try:
-                    write_issue(conn, issue, url, sha, docs, same_as, report)
+                    write_issue(conn, issue, url, sha, docs, same_as, report, chapters)
                 except (psycopg.DataError, psycopg.IntegrityError) as exc:
                     # A value the table refuses: this issue's transaction is
                     # rolled back whole and the walk goes on. A lost

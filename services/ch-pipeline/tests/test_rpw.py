@@ -144,9 +144,47 @@ def test_front_matter_and_index_are_never_documents():
     assert only_front == []
 
 
-def test_chapters_filter():
-    docs = rpw.split(rpw.pages_of(PAGES, ISSUE), chapters=("B3",))
-    assert docs == []        # B3 headings have no section number: never an item
+def test_a_chapter_without_sections_is_cut_when_it_is_asked_for():
+    """B3 numbers its judgments at chapter level ("B3   1.   Urteil ..."),
+    so the same line that is a section heading in B2 is a document here."""
+    doc, = rpw.split(rpw.pages_of(PAGES, ISSUE), chapters=("B3",))
+    assert (doc.chapter, doc.section, doc.item) == ("B3", "", 1)
+    assert doc.title.startswith("Urteil vom 12. Dezember 2023 in Sachen Siegenia")
+    assert rpw.doc_id(ISSUE, doc) == "RPW_2024-2_B3.1"
+    assert doc.section_name == "Bundesverwaltungsgericht"        # the chapter's own name
+    assert "Post CH AG" not in doc.text
+
+
+def test_the_notices_of_part_d1():
+    """What the audit needs: every version of a Bekanntmachung as published."""
+    pages = rpw.pages_of([
+        page(608,
+             "D1          Erlasse, Bekanntmachungen",
+             "",
+             "D1          1.       Bekanntmachung über die wettbewerbsrechtliche Behandlung",
+             "                     vertikaler Abreden (Vertikalbekanntmachung, VertBek)",
+             "",
+             BODY),
+        page(616,
+             "D1          2.       Communication concernant l'appréciation des accords verticaux",
+             "",
+             BODY),
+    ], ISSUE)
+    de, fr = rpw.split(pages, chapters=("D1",))
+    assert de.title.startswith("Bekanntmachung über die wettbewerbsrechtliche Behandlung vertikaler Abreden")
+    assert (de.chapter, de.section, de.item) == ("D1", "", 1)
+    assert de.section_name == "Erlasse, Bekanntmachungen"
+    assert de.journal_pages == (608, 608) and fr.journal_pages[0] == 616
+    assert rpw.doc_id(ISSUE, de) == "RPW_2024-2_D1.1"
+    assert rpw.citation(ISSUE, de) == "RPW 2024/2, S. 608"
+
+
+def test_a_sectioned_chapter_still_reads_its_section_headings_as_headings():
+    """The same shape, the other reading: B2 numbers its items with a
+    section, so "B2   3.   Unternehmenszusammenschlüsse" is not a document."""
+    docs = rpw.split(rpw.pages_of(PAGES, ISSUE), chapters=("B2",))
+    assert [(d.chapter, d.section, d.item) for d in docs] == [("B2", "3", 1), ("B2", "3", 2)]
+    assert all(d.title != "Unternehmenszusammenschlüsse" for d in docs)
 
 
 def test_wrapped_titles_join_and_hyphen_breaks_close():

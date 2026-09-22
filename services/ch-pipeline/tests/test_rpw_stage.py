@@ -201,3 +201,17 @@ def test_text_below_the_threshold_is_written_failed_and_never_queued(settings, c
     assert r["stage"] == "failed" and r["last_error"].startswith("rpw: text quality")
     assert not conn.execute("SELECT 1 FROM ch_citation_state WHERE ecli = %s", (r["ecli"],)).fetchall()
     assert load_stage.run(settings, spider="CH_WEKO_RPW").loaded == 2
+
+
+def test_a_run_over_one_chapter_set_leaves_the_others_rows_alone(settings, conn):
+    """The D1 notices are cut by a run of their own; a B1/B2 run must not
+    delete them as rows its own cut no longer produces."""
+    site = Weko()
+    _run(settings, site)
+    conn.execute("INSERT INTO ch_court_decisions (ecli, spider, doc_id, pdf_sha256, stage, full_text, "
+                 "metadata_json) VALUES ('ECLI:CH:CH_WEKO_RPW:RPW_2024-2_D1.1', 'CH_WEKO_RPW', "
+                 "'RPW_2024-2_D1.1', 'other-sha', 'loaded', 'x', "
+                 """'{"rpw": {"issue_key": "2024-2", "chapter": "D1"}}')""")
+    report = _run(settings, site, force=True)
+    assert report.deleted == 0
+    assert conn.execute("SELECT 1 FROM ch_court_decisions WHERE doc_id = 'RPW_2024-2_D1.1'").fetchall()
