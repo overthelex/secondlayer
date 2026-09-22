@@ -77,7 +77,7 @@ can run.
 | BVGer / BGer / BGE | in `ch_court_decisions` | competition matters selected by statute references and full text; 51 of them name the vertical notice or vertical agreements outright |
 | Cantonal civil judgments citing the KG | 130+ in `ch_court_decisions` | second evidence tier; ZH 48, VD 29, SG 17, BE 11, LU 8, BS 6, GR 6, AG 5 |
 | Swiss scholarly commentary | 1,564 rows (`ch_commentary`) | used to build the retrieval-recall check, not as evidence |
-| Kartellgesetz, point in time | 10 of Fedlex's 12 German editions, 2001-01-01 … 2023-07-01 (`ch_act` 9447) | holds both decisive states (before the revision, and from 2004-04-01: direct sanctions, Art. 5 para. 4); the two 1996 editions are missing and must be fetched, see 3.3 |
+| Kartellgesetz, point in time | 10 of Fedlex's 12 German editions, 2001-01-01 … 2023-07-01 (`ch_act` 9447) | holds both decisive states (before the revision, and from 2004-04-01: direct sanctions, Art. 5 para. 4) and the edition the 2002 instrument was written under; the two 1996 editions carry no text at Fedlex at all, see 3.3 |
 
 ### 3.2 What has to be acquired
 
@@ -105,15 +105,20 @@ introduced it.
   2004 cannot support a proposition that rests on Art. 5 para. 4**: the
   provision did not exist. The label for such a pairing is *absent*, and the
   proposition is measured against the record that came after it.
-- **Three early editions are missing from OUR harvest, not from Fedlex.**
-  Checked against the Fedlex SPARQL endpoint on 2026-09-22: Fedlex publishes
-  12 consolidations of the KG, the earliest 1996-02-01 and 1996-06-17, and 3
-  of the merger-control ordinance (VKU, SR 251.4) from 1996-07-01.
-  `ch_act_version` holds 10 and 2, both starting later — so **KG 1996-02-01,
-  KG 1996-06-17 and VKU 1996-07-01 have to be fetched** before the audit runs.
-  The sanctions ordinance (SVKG, SR 251.5) is complete at 3 of 3. This matters
-  because the 2002 instrument was written under the 1996 statute, which is
-  exactly the text we are missing; do not describe it as a limit of the source.
+- **The 1996 editions have no text anywhere, and the audit does not need
+  them.** Checked twice on 2026-09-23: the Fedlex SPARQL endpoint lists 12
+  editions of the KG, but the two 1996 ones (1996-02-01, 1996-06-17) and the
+  1996-07-01 edition of the merger ordinance carry no manifestation at all —
+  no XML, no PDF, no file. A second public Swiss corpus returns the same:
+  "Fedlex has an edition of SR 251 dated 1996-06-17 ... but no
+  machine-readable text (formats present: none)". Our own tables hold nothing
+  earlier either, and our Bundesblatt slice starts after 1997. So this is not
+  a harvest gap to close; it is a limit of the source.
+  It does not block the audit: the 1996-06-17 edition ran to 2000-12-31 and
+  the 2001-01-01 edition to 2004-03-31, so **the 2002 instrument was written
+  under the 2001-01-01 edition, which we hold in full**. Only decisions from
+  1997-2000 sit under a statute we cannot quote; the paper says so and uses
+  the 2001 edition as the nearest reference for that window.
 - **Query by `act_id`, never by `sr_number`.** `sr_number = '251'` also
   matches a cantonal code of criminal procedure in the same table; the KG is
   `act_id = 9447`. The sanctions ordinance (SVKG, SR 251.5, 3 versions) and
@@ -126,9 +131,9 @@ paper states: RPW 1998/1 is not machine-readable (its body carries no item
 headings); before 2009 the only WEKO source is RPW; cantonal civil judgments
 enter as tier 2 and are whatever the cantons publish, which is not a complete
 census of civil competition litigation; merger decisions are in the record but
-not the object of the audit; the statutory text is point-in-time from 1996
-once the three missing editions are fetched, and the paper reports the
-version count it actually used (3.3).
+not the object of the audit; the statutory text is point-in-time from
+2001-01-01, because Fedlex publishes no text for the editions before it
+(3.3), and the paper reports the version count it actually used.
 
 ## 4. Method
 
@@ -262,9 +267,10 @@ the text is.
 
 1. Extend the RPW cut to chapter-level items; load part D1; extract every
    version of the notice and the Erläuterungen.
-2. Fetch the three missing editions (KG 1996-02-01, KG 1996-06-17, VKU
-   1996-07-01) and re-check each act's version count against Fedlex SPARQL —
-   per act, not as a global assumption.
+2. Statute editions: verified 2026-09-23, nothing to fetch — the 1996
+   editions have no machine-readable text at the source (3.3). Re-check each
+   act's version count against Fedlex SPARQL per act, not as a global
+   assumption, for the acts the audit does quote.
 3. Acquire the EU texts. Pin the KG versions by `act_id`, and record which
    version was in force for each instrument version.
 4. Build the proposition table with cross-version alignment.
