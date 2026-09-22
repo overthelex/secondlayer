@@ -63,6 +63,10 @@ _LETTER = re.compile(r"^\s{0,12}([a-h])\)\s+(\S.*)$")
 # a citation opener, not a sentence.
 _FOOTNOTE = re.compile(r"^\s{0,8}\d{1,3}\s+(SR\b|Vgl\.|Siehe|ABl\.|RPW\b|BBl\b|Verordnung\b|Mitteilung\b|Bekanntmachung der Kommission\b|\[)")
 _PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3})\s*$")
+# The Erläuterungen have no articles: they run as flat numbered paragraphs
+# ("1.  Nachfolgende Erläuterungen dienen als Auslegehilfe ..."), the
+# Randziffern the practice cites them by.
+_MARGIN_NUMBER = re.compile(r"^\s{0,6}(\d{1,3})\.\s+(\S.*)$")
 
 
 def dehyphenate(text: str) -> str:
@@ -109,22 +113,30 @@ class Proposition:
         return f"{self.unit}({self.sub})" if self.sub else self.unit
 
 
-def _clean(lines: list[str]) -> str:
+def _clean(lines: list[str], keep_notes: bool = False) -> str:
     keep = [ln for ln in lines
-            if ln.strip() and not _PAGE_FOOT.match(ln) and not _FOOTNOTE.match(ln)]
+            if ln.strip() and not _PAGE_FOOT.match(ln)
+            and (keep_notes or not _FOOTNOTE.match(ln))]
     return re.sub(r"\s+", " ", " ".join(keep)).strip()
 
 
-def parse(text: str, version: str) -> list[Proposition]:
+def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition]:
     """The propositions of one version, in document order.
 
     The preamble is what stands before the first unit heading. That boundary
     decides how a numbered paragraph reads: "(1)" before it opens a recital,
     "(1)" after it opens a subparagraph of a rule.
+
+    `keep_notes` keeps the footnotes with the proposition they hang under.
+    The audit's own text should not carry them, but the citations live there
+    -- the Erläuterungen name the decisions in footnotes, not in the body --
+    so the gold set is built with them in.
     """
     text = dehyphenate(text)
     lines = text.splitlines()
     first_unit = next((i for i, ln in enumerate(lines) if _UNIT.match(ln)), len(lines))
+    if first_unit == len(lines) and sum(1 for ln in lines if _MARGIN_NUMBER.match(ln)) >= 5:
+        return _parse_margin_numbers(lines, version, keep_notes)
     out: list[Proposition] = []
     buf: list[str] = []
     cur: Proposition | None = None
@@ -133,7 +145,7 @@ def parse(text: str, version: str) -> list[Proposition]:
     def flush():
         nonlocal buf, cur
         if cur is not None:
-            cur.text = _clean(buf)
+            cur.text = _clean(buf, keep_notes)
             if cur.text:
                 cur.order = len(out)
                 out.append(cur)
@@ -196,6 +208,36 @@ def parse(text: str, version: str) -> list[Proposition]:
             and not (p.part == "operative" and not p.sub and p.unit in with_subs)
             and not (p.part == "operative" and p.sub and not p.sub[-1].isalpha()
                      and (p.unit, p.sub) in lettered)]
+
+
+def _parse_margin_numbers(lines: list[str], version: str, keep_notes: bool) -> list[Proposition]:
+    """A document numbered straight through, one proposition per paragraph.
+
+    The numbers are the Randziffern the courts and the agency cite the
+    Erläuterungen by ("Erl. Rz. 12"), so they are the natural unit here, and
+    the audit can hold a citation against the paragraph it points at."""
+    out: list[Proposition] = []
+    cur: Proposition | None = None
+    buf: list[str] = []
+    for line in lines:
+        m = _MARGIN_NUMBER.match(line)
+        if m and not _FOOTNOTE.match(line):
+            if cur is not None:
+                cur.text = _clean(buf, keep_notes)
+                if cur.text:
+                    cur.order = len(out)
+                    out.append(cur)
+            cur = Proposition(version, "note", m.group(1), "", "", "")
+            buf = [m.group(2)]
+            continue
+        if cur is not None:
+            buf.append(line)
+    if cur is not None:
+        cur.text = _clean(buf, keep_notes)
+        if cur.text:
+            cur.order = len(out)
+            out.append(cur)
+    return out
 
 
 def read_text(path: pathlib.Path, journal: bool) -> str:
