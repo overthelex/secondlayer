@@ -13,7 +13,7 @@
 -- accounts for 260,194 of those rows on its own. Embedded per row it would take
 -- 15% of the budget and 15% of the index and come back as the nearest neighbour
 -- to every short query. Keyed by content it is one vector, and the filter in
--- scripts/uk/08_export_provision_texts.py drops it.
+-- pipeline/08_export_provision_texts.py in overthelex/lawrider-uk drops it.
 --
 -- Why a map table and not a text_hash column on uk_legislation_provisions:
 -- that table carries a 705 MB GIN index over its full text, and adding a column

@@ -1,6 +1,6 @@
 -- 218: history of UK corpus verification runs.
 --
--- The weekly refresh (scripts/uk/run-uk-refresh.sh) can fail in two ways. It can
+-- The weekly refresh (pipeline/run-uk-refresh.sh in overthelex/lawrider-uk) can fail in two ways. It can
 -- error, which is loud, or it can succeed against a source that moved under it,
 -- which is silent — and silence is the failure this project has already had.
 -- `cron-edrsr-sync.yml` carries the note in its own header: the workflow pointed
