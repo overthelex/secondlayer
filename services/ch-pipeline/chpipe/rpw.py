@@ -99,9 +99,12 @@ _BOUNDARY = re.compile(r"^\s*[A-E]\s?\d(?:\s?\.\s?\d{1,2})?\s{2,}(?:\d{1,3}\.\s+
 # with the other column's text.
 _COLUMN_GAP = re.compile(r"\s{4,}")
 
+# Nouns that name the document itself. Not "Schreiben", "Bericht" or
+# "Eingabe": those open the recital ("Mit Schreiben vom 3. März 2024 meldete
+# ...") and date a letter, not the decision.
 _DATE_CUE = re.compile(
     r"(?:Verfügung|Entscheid|Beschluss|Stellungnahme|Gutachten|Empfehlung|Schlussbericht|"
-    r"Bericht|Schreiben|Beratung|Zwischenverfügung|"
+    r"Zwischenverfügung|"
     r"[Dd]écision|[Pp]réavis|[Aa]vis|[Rr]ecommandation|[Rr]apport final|[Dd]écision incidente|"
     r"[Dd]ecisione|[Pp]arere|[Rr]accomandazione|[Rr]apporto finale)"
     r"[^.\n]{0,60}?\b(?:vom|du|del|dell['’])\s+")
@@ -299,6 +302,11 @@ def decision_date(text: str, window: int = 4000) -> date | None:
     guessing from the issue)."""
     head = re.sub(r"\s+", " ", reading_order(text[:window]))
     for m in _DATE_CUE.finditer(head):
+        # "Mit Verfügung vom ...", "par décision du ...": a recital citing an
+        # earlier act of the authority, not this document's own date.
+        before = head[max(0, m.start() - 8): m.start()].strip().lower()
+        if before.endswith(("mit", "durch", "par", "avec", "con", "gemäss", "selon", "secondo")):
+            continue
         d = parse_date(head[m.end(): m.end() + 40])
         if d and 1990 <= d.year <= 2100:
             return d

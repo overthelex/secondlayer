@@ -13,8 +13,8 @@ from chpipe import rpw
 from chpipe.config import Settings
 from chpipe.stages import load_stage, rpw_stage
 
-from conftest import apply_migration_200
-from test_rpw import INDEX_HTML, PAGES
+from conftest import apply_migration_199, apply_migration_200
+from test_rpw import BODY, INDEX_HTML, PAGES, page
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -46,6 +46,9 @@ def conn(settings):
         """)
         c.execute(MIGRATION_196.read_text())
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
+        c.execute("DROP TABLE IF EXISTS ch_case_citations")
+        c.execute("DROP TABLE IF EXISTS ch_legislation_citations")
+        apply_migration_199(c)      # the edge tables a stale row's citations are deleted from
         apply_migration_200(c)
         c.execute("INSERT INTO ch_court_decisions (ecli, spider, doc_id, docket_number, decision_date, stage) "
                   "VALUES ('ECLI:CH:CH_WEKO:CH_WBK_001_Post', 'CH_WEKO', 'CH_WBK_001_Post', "
@@ -123,10 +126,11 @@ def test_a_second_run_skips_the_issue_and_touches_nothing(settings, conn):
     assert {k: r["updated_at"] for k, r in _rows(conn).items()} == before
 
 
-def test_force_recut_rewrites_nothing_whose_text_is_unchanged(settings, conn):
+def test_force_downloads_again_and_rewrites_nothing_whose_text_is_unchanged(settings, conn):
     site = Weko()
     _run(settings, site)
     report = _run(settings, site, force=True)
+    assert report.issues_downloaded == 1          # force picks up a file WEKO replaced
     assert (report.documents, report.unchanged, report.inserted, report.updated) == (2, 2, 0, 0)
 
 
@@ -144,3 +148,56 @@ def test_a_page_that_is_not_a_pdf_fails_the_issue(settings, conn):
     report = _run(settings, site)
     assert (report.issues_failed, report.documents) == (1, 0)
     assert not (settings.raw_dir / rpw.SPIDER / "issues" / "RPW_2024-2.pdf").exists()
+
+
+def _without_post(pages):
+    """The 2024/2 pages with the Post CH AG heading gone: the cut a parser
+    change could produce."""
+    return [p.replace("B 2.3         2.       Post CH AG/Quickmail Holding AG", "Post CH AG/Quickmail Holding AG")
+            for p in pages]
+
+
+def test_a_recut_deletes_the_rows_it_no_longer_produces(settings, conn, monkeypatch):
+    site = Weko()
+    _run(settings, site)
+    conn.execute("INSERT INTO ch_case_citations (from_ecli, to_raw, cite_kind) "
+                 "VALUES ('ECLI:CH:CH_WEKO_RPW:RPW_2024-2_B2.3.2', 'BGE 147 II 72', 'bge')")
+    monkeypatch.setattr(rpw_stage, "pdf_pages", lambda path: _without_post(PAGES))
+    report = _run(settings, site, force=True)
+    assert (report.documents, report.deleted) == (1, 1)
+    assert set(_rows(conn)) == {"RPW_2024-2_B2.3.1"}
+    gone = "ECLI:CH:CH_WEKO_RPW:RPW_2024-2_B2.3.2"
+    assert not conn.execute("SELECT 1 FROM ch_citation_state WHERE ecli = %s", (gone,)).fetchall()
+    assert not conn.execute("SELECT 1 FROM ch_case_citations WHERE from_ecli = %s", (gone,)).fetchall()
+
+
+def test_a_failed_write_rolls_the_whole_issue_back_and_the_next_run_redoes_it(settings, conn, monkeypatch):
+    site = Weko()
+    real = rpw_stage.row_for
+    calls = {"n": 0}
+
+    def flaky(*a, **kw):
+        calls["n"] += 1
+        row = real(*a, **kw)
+        if calls["n"] == 2:
+            row["decision_date"] = "2024-13-45"        # the DATE column refuses it: DataError
+        return row
+
+    monkeypatch.setattr(rpw_stage, "row_for", flaky)
+    report = _run(settings, site)
+    assert report.issues_failed == 1
+    assert _rows(conn) == {}                            # no prefix of the issue survived
+    monkeypatch.setattr(rpw_stage, "row_for", real)
+    report = _run(settings, site)
+    assert (report.issues_skipped, report.inserted) == (0, 2)
+
+
+def test_text_below_the_threshold_is_written_failed_and_never_queued(settings, conn, monkeypatch):
+    stub = page(378, "B 2.3       3.       Weitere Zusammenschlüsse", "", "Keine.")
+    monkeypatch.setattr(rpw_stage, "pdf_pages", lambda path: PAGES[:5] + [stub] + PAGES[5:])
+    report = _run(settings, Weko())
+    assert (report.documents, report.below_threshold) == (3, 1)
+    r = _rows(conn)["RPW_2024-2_B2.3.3"]
+    assert r["stage"] == "failed" and r["last_error"].startswith("rpw: text quality")
+    assert not conn.execute("SELECT 1 FROM ch_citation_state WHERE ecli = %s", (r["ecli"],)).fetchall()
+    assert load_stage.run(settings, spider="CH_WEKO_RPW").loaded == 2

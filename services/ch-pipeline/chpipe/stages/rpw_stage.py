@@ -8,14 +8,19 @@ What this stage does, per issue listed on the RPW page of weko.admin.ch:
      a re-cut after a parser fix must not cost a re-download of ~170 files
      from a federal office's server);
   2. skips it when its rows already carry this file's sha256 (resume: an
-     interrupted walk restarts where it stopped, and a nightly re-run does
-     nothing unless WEKO replaced a file);
+     interrupted walk restarts where it stopped). An issue is written in ONE
+     transaction, so a sha in the table means the whole issue landed, never
+     a prefix of it;
   3. pdftotext -layout, the flags text_extract.from_pdf uses for every other
      Swiss PDF, split into pages on the form feeds;
   4. cuts the chapters B1/B2 into documents and writes each one with its
      text already in place, at stage 'extracted' (or 'failed' when the text
      is under the quality threshold -- a slice of a page range has no scan
-     of its own to OCR).
+     of its own to OCR);
+  5. deletes, in the same transaction, the rows of this issue that the cut
+     no longer produces (a parser or chapter change on a forced re-cut), with
+     their citation edges and queue rows -- a document the journal does not
+     contain must not stay searchable.
 
 It skips fetch and extract because there is no per-document file to fetch.
 From 'extracted' on, the rows are the pipeline's like any other:
@@ -26,12 +31,16 @@ From 'extracted' on, the rows are the pipeline's like any other:
     ./run-stage.sh citations CH_WEKO_RPW
 
 Environment: CHPIPE_RPW_YEARS (a year or a range, default all),
-CHPIPE_RPW_CHAPTERS (default B1,B2), CHPIPE_RPW_FORCE=1 (re-cut issues
-whose sha256 is already loaded -- for a parser change).
+CHPIPE_RPW_CHAPTERS (default B1,B2), CHPIPE_RPW_FORCE=1 (download every
+selected issue again and re-cut it even when its sha256 is loaded -- for a
+parser change, or to pick up a file WEKO replaced: without it a downloaded
+issue is never fetched a second time).
 
-An upsert rewrites a row only when its text changed (a different issue file
-or a different cut), so a re-run does not churn ch_court_decisions' 7.6 GB
-full-text GIN for nothing.
+An upsert rewrites a row only when its text or its source file changed, so a
+re-run does not churn ch_court_decisions' 7.6 GB full-text GIN for nothing.
+A new file with byte-identical text for a document rewrites that row (its
+pdf_sha256 and pdf_url must follow the file) but does not re-queue it for
+citations.
 """
 from __future__ import annotations
 
@@ -44,6 +53,8 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+
+import psycopg
 
 from .. import db, rpw, text_extract, text_quality, throttle
 from ..config import Settings
@@ -69,6 +80,7 @@ class RpwReport:
     updated: int = 0
     unchanged: int = 0
     below_threshold: int = 0         # written as 'failed'
+    deleted: int = 0                 # rows of a re-cut issue its new cut no longer produces
     same_as_entscheidsuche: int = 0
     by_issue: dict[str, int] = field(default_factory=dict)
 
@@ -96,8 +108,12 @@ ON CONFLICT (ecli) DO UPDATE SET
     stage_updated_at = now(), updated_at = now()
 WHERE ch_court_decisions.full_text IS DISTINCT FROM EXCLUDED.full_text
    OR ch_court_decisions.pdf_sha256 IS DISTINCT FROM EXCLUDED.pdf_sha256
-RETURNING (xmax = 0) AS inserted
+RETURNING (xmax = 0) AS inserted,
+          (SELECT full_text FROM ch_court_decisions o WHERE o.ecli = %(ecli)s) IS DISTINCT FROM %(full_text)s AS text_changed
 """
+
+_ISSUE_ROWS = ("SELECT ecli, doc_id FROM ch_court_decisions "
+               "WHERE spider = %s AND metadata_json->'rpw'->>'issue_key' = %s")
 
 _LOADED_SHAS = ("SELECT DISTINCT pdf_sha256 FROM ch_court_decisions "
                 "WHERE spider = %s AND pdf_sha256 IS NOT NULL")
@@ -219,23 +235,37 @@ def row_for(issue: rpw.Issue, url: str, sha: str, doc: rpw.Document, same_as: di
 
 
 def write_issue(conn, issue, url, sha, docs, same_as, report: RpwReport) -> None:
-    for doc in docs:
-        row = row_for(issue, url, sha, doc, same_as)
-        res = conn.execute(_UPSERT, row).fetchone()
-        report.documents += 1
-        if row["stage"] == "failed":
-            report.below_threshold += 1
-        if "same_as" in json.loads(row["metadata"])["rpw"]:
-            report.same_as_entscheidsuche += 1
-        if res is None:
-            report.unchanged += 1
-            continue
-        report.inserted += int(bool(res["inserted"]))
-        report.updated += int(not res["inserted"])
-        if row["stage"] == "extracted":
-            # New text: its citation edges (if any) are stale -- the same
-            # re-queue db.complete(-> 'extracted') does for every other spider.
-            db.enqueue_for_citations(conn, [row["ecli"]])
+    """One issue, one transaction: its rows, the deletion of the rows its cut
+    no longer produces, and their citation-queue bookkeeping. The sha256 is
+    the resume marker, so it must never be committed for part of an issue."""
+    with conn.transaction():
+        written: set[str] = set()
+        for doc in docs:
+            row = row_for(issue, url, sha, doc, same_as)
+            written.add(row["ecli"])
+            res = conn.execute(_UPSERT, row).fetchone()
+            report.documents += 1
+            if row["stage"] == "failed":
+                report.below_threshold += 1
+            if "same_as" in json.loads(row["metadata"])["rpw"]:
+                report.same_as_entscheidsuche += 1
+            if res is None:
+                report.unchanged += 1
+                continue
+            report.inserted += int(bool(res["inserted"]))
+            report.updated += int(not res["inserted"])
+            if row["stage"] == "extracted" and (res["inserted"] or res["text_changed"]):
+                # New text: its citation edges (if any) are stale -- the same
+                # re-queue db.complete(-> 'extracted') does for every other spider.
+                db.enqueue_for_citations(conn, [row["ecli"]])
+        stale = [r["ecli"] for r in conn.execute(_ISSUE_ROWS, (rpw.SPIDER, issue.key)).fetchall()
+                 if r["ecli"] not in written]
+        if stale:
+            db.delete_citations(conn, stale)
+            conn.execute("DELETE FROM ch_citation_state WHERE ecli = ANY(%s)", (stale,))
+            conn.execute("DELETE FROM ch_court_decisions WHERE ecli = ANY(%s)", (stale,))
+            report.deleted += len(stale)
+            log.info("%s: deleted %d rows the new cut no longer produces", issue.key, len(stale))
 
 
 async def _download(fetcher: Fetcher, url: str, path) -> None:
@@ -266,7 +296,7 @@ async def _run_async(settings: Settings, years, chapters, force: bool, transport
             for issue, url in issues:
                 path = issues_dir / f"RPW_{issue.key}.pdf"
                 try:
-                    if not path.exists():
+                    if force or not path.exists():
                         await _download(fetcher, url, path)
                         report.issues_downloaded += 1
                     sha = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -284,7 +314,16 @@ async def _run_async(settings: Settings, years, chapters, force: bool, transport
                     log.error("%s: no running header on any page -- not an RPW issue layout", issue.key)
                     report.issues_failed += 1
                     continue
-                write_issue(conn, issue, url, sha, docs, same_as, report)
+                try:
+                    write_issue(conn, issue, url, sha, docs, same_as, report)
+                except (psycopg.DataError, psycopg.IntegrityError) as exc:
+                    # A value the table refuses: this issue's transaction is
+                    # rolled back whole and the walk goes on. A lost
+                    # connection or a missing column is no issue's fault and
+                    # propagates, as in portals_discover_stage.
+                    log.error("%s: write failed, issue rolled back: %s", issue.key, exc)
+                    report.issues_failed += 1
+                    continue
                 report.by_issue[issue.key] = len(docs)
                 log.info("%s: %d documents (%d pages)", issue.key, len(docs), len(pages))
     finally:
@@ -308,10 +347,10 @@ def main() -> RpwReport:
                  chapters=chapters,
                  force=os.environ.get("CHPIPE_RPW_FORCE") == "1")
     log.info("rpw issues listed=%d downloaded=%d skipped=%d failed=%d documents=%d "
-             "inserted=%d updated=%d unchanged=%d below_threshold=%d same_as=%d",
+             "inserted=%d updated=%d unchanged=%d deleted=%d below_threshold=%d same_as=%d",
              result.issues_listed, result.issues_downloaded, result.issues_skipped,
              result.issues_failed, result.documents, result.inserted, result.updated,
-             result.unchanged, result.below_threshold, result.same_as_entscheidsuche)
+             result.unchanged, result.deleted, result.below_threshold, result.same_as_entscheidsuche)
     return result
 
 

@@ -134,6 +134,10 @@ def test_decision_date_reads_across_the_column_break(docs):
     assert rpw.decision_date("Décision du 12 décembre 2022 de la Commission " + BODY) == date(2022, 12, 12)
     assert rpw.decision_date("Parere del 3 agosto 2021 " + BODY) == date(2021, 8, 3)
     assert rpw.decision_date("Einleitende Bemerkungen " + BODY) is None
+    # a recital's letter or an earlier act is not this document's date
+    assert rpw.decision_date("A. Sachverhalt 1. Mit Schreiben vom 3. März 2024 meldete X. " + BODY) is None
+    assert rpw.decision_date("Mit Verfügung vom 1. Mai 2019 eröffnete das Sekretariat. "
+                             "Verfügung vom 7. Juni 2021 " + BODY) == date(2021, 6, 7)
 
 
 def test_ids_and_citation(docs):

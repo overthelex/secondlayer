@@ -146,7 +146,8 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
                       tells you how much of the raw snapshot dict this gate
                       cannot currently place against a spider.
     """
-    # The portal spiders (chpipe/portals) are not on entscheidsuche, so they
+    # The portal spiders (chpipe/portals) and the RPW journal cut (rpw_stage)
+    # -- together OFF_LISTING_SPIDERS -- are not on entscheidsuche, so they
     # are no part of the comparison against its snapshot on either side.
     # `spider` is NOT NULL (migration 134), so the predicate drops nothing
     # else: this is still count(*) over every entscheidsuche row.
