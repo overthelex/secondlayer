@@ -57,6 +57,13 @@ DEFAULT_CHAPTERS = ("B1", "B2")
 CHAPTER_NAMES = {
     "B1": "Sekretariat der Wettbewerbskommission",
     "B2": "Wettbewerbskommission",
+    "B3": "Bundesverwaltungsgericht",
+    "B4": "Bundesgericht",
+    "B5": "Bundesrat",
+    "B7": "Kantonale Gerichte",
+    "C1": "Kantonale Gerichte",
+    "C2": "Bundesgericht",
+    "D1": "Erlasse, Bekanntmachungen",
 }
 
 # The section numbers of chapters B1 and B2 as the systematics page listed
@@ -117,6 +124,15 @@ _ITEM = re.compile(r"^\s*([A-E])\s?(\d)\s?\.\s?(\d{1,2})\s{2,}(\d{1,3})\.\s+(\S.
 # never a case name, so a trailing page number or a lower-case start rules
 # it out.
 _SECTION = re.compile(r"^\s*([A-E])\s?(\d)\.?\s{2,}(\d{1,2})\.\s{2,}([A-ZÄÖÜ][^\d]{2,60}?)\s*$")
+# The same shape carries the DOCUMENTS of a chapter that has no sections:
+# "D1   1.   Bekanntmachung über die wettbewerbsrechtliche Behandlung ...",
+# "B3   1.   Urteil vom 12. Dezember 2023 ...". Which reading applies is
+# decided per issue in split(): a chapter that numbers its items with a
+# section ("B 2.3   1.") is sectioned, and there the same line is a section
+# heading; a chapter that never does is not, and there it is a document.
+_CHAPTER_ITEM = re.compile(r"^\s*([A-E])\s?(\d)\.?\s{2,}(\d{1,3})\.\s+(\S.*?)\s*$")
+# "D1    Erlasse, Bekanntmachungen" -- the chapter's own name, no number.
+_CHAPTER = re.compile(r"^\s*([A-E])\s?(\d)\s{2,}([A-ZÄÖÜ][^\d]{3,60}?)\s*$")
 # Anything that closes the previous document: a chapter or section heading
 # of any part, with or without an item number ("B2   3.   Untersuchungen",
 # "B 3   1.   Urteil ...", "C1   1.", "D 2   Bibliographie", "E2   1.").
@@ -216,7 +232,7 @@ def pages_of(text_pages: list[str], issue: Issue | None = None) -> list[Page]:
 @dataclass
 class Document:
     chapter: str                # "B2"
-    section: str                # "3"
+    section: str                # "3", or "" in a chapter that has no sections (D1)
     item: int                   # 1
     title: str
     start_page: Page
@@ -232,9 +248,12 @@ class Document:
 
     @property
     def section_name(self) -> str | None:
-        """What the journal calls this section. The issue's own heading first,
-        because the numbering moved over the years; SECTION_NAMES only when
-        the issue prints no heading above the item."""
+        """What the journal calls the part of itself this document sits in.
+        The issue's own heading first, because the numbering moved over the
+        years; the tables only when the issue prints no heading. For a
+        chapter without sections (D1) that is the chapter's own name."""
+        if not self.section:
+            return self.section_label or CHAPTER_NAMES.get(self.chapter)
         return self.section_label or SECTION_NAMES.get((self.chapter, self.section))
 
 
@@ -243,7 +262,12 @@ def _heading_title(lines: list[str], at: int) -> str:
     long title wraps onto (up to two, stopping at a blank line or at the
     next heading), each cut at the column gap."""
     m = _ITEM.match(lines[at])
-    parts = [_COLUMN_GAP.split(m.group(5).strip())[0]] if m else []
+    if m:
+        first = m.group(5)
+    else:
+        flat = _CHAPTER_ITEM.match(lines[at])      # a chapter without sections: D1, B3
+        first = flat.group(4) if flat else None
+    parts = [_COLUMN_GAP.split(first.strip())[0]] if first else []
     for nxt in lines[at + 1: at + 3]:
         s = nxt.strip()
         if not s or _BOUNDARY.match(nxt):
@@ -279,30 +303,54 @@ def split(pages: list[Page], chapters: tuple[str, ...] = DEFAULT_CHAPTERS) -> li
         return []
     content = [p for p in pages[arabic[0]: arabic[-1] + 1]
                if p.number is None or p.arabic is not None]
-    # Every heading line on the content pages, in reading order.
-    marks: list[tuple[int, int, re.Match | None]] = []     # (page pos, line pos, item match)
-    labels: dict[tuple[str, str], str] = {}               # (chapter, section) -> the issue's own name
+    # Every heading line on the content pages, in reading order. Which
+    # chapters number their items with a section is read off the issue
+    # itself, because that is what decides how "D1   1.   ..." reads.
+    raw: list[tuple[int, int, str]] = []
+    sectioned: set[str] = set()
     for pi, page in enumerate(content):
         for li, line in enumerate(page.lines):
             if not _BOUNDARY.match(line):
                 continue
+            raw.append((pi, li, line))
             item = _ITEM.match(line)
-            if item is None:
-                sec = _SECTION.match(line)
-                if sec:
-                    key = (f"{sec.group(1)}{sec.group(2)}", sec.group(3))
-                    name = canonical_section(re.sub(r"\s+", " ", sec.group(4)).strip())
-                    # One name per section within an issue: RPW 2017/3 prints
-                    # "B2 8. Unternehmenszusammenschlüsse" over its BGBM
-                    # section, which is also the name of its section 3. A name
-                    # already bound to another section is a misprint, not a
-                    # second section, and the fallback table answers instead.
-                    taken = {v: k for k, v in labels.items()}
-                    if key not in labels and taken.get(name, key) == key:
-                        labels[key] = name
-            marks.append((pi, li, item))
+            if item:
+                sectioned.add(f"{item.group(1)}{item.group(2)}")
+
+    marks: list[tuple[int, int, re.Match | None, str]] = []   # + the section number, "" at chapter level
+    labels: dict[tuple[str, str], str] = {}                   # (chapter, section) -> the issue's own name
+    chapter_labels: dict[str, str] = {}
+    for pi, li, line in raw:
+        item = _ITEM.match(line)
+        if item:
+            marks.append((pi, li, item, item.group(3)))
+            continue
+        flat = _CHAPTER_ITEM.match(line)
+        chapter = f"{flat.group(1)}{flat.group(2)}" if flat else None
+        if flat and chapter not in sectioned:
+            # A chapter with no sections in this issue: this is a document.
+            marks.append((pi, li, flat, ""))
+            continue
+        sec = _SECTION.match(line)
+        if sec:
+            key = (f"{sec.group(1)}{sec.group(2)}", sec.group(3))
+            name = canonical_section(re.sub(r"\s+", " ", sec.group(4)).strip())
+            # One name per section within an issue: RPW 2017/3 prints
+            # "B2 8. Unternehmenszusammenschlüsse" over its BGBM
+            # section, which is also the name of its section 3. A name
+            # already bound to another section is a misprint, not a
+            # second section, and the fallback table answers instead.
+            taken = {v: k for k, v in labels.items()}
+            if key not in labels and taken.get(name, key) == key:
+                labels[key] = name
+        else:
+            chap = _CHAPTER.match(line)
+            if chap:
+                chapter_labels.setdefault(f"{chap.group(1)}{chap.group(2)}",
+                                          re.sub(r"\s+", " ", chap.group(3)).strip())
+        marks.append((pi, li, None, ""))
     docs: list[Document] = []
-    for k, (pi, li, m) in enumerate(marks):
+    for k, (pi, li, m, section) in enumerate(marks):
         if not m:
             continue
         chapter = f"{m.group(1)}{m.group(2)}"
@@ -318,12 +366,14 @@ def split(pages: list[Page], chapters: tuple[str, ...] = DEFAULT_CHAPTERS) -> li
         text = "\n".join(c for c in chunks if c.strip())
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
         last = end_pi if (end_li is None or end_li > 0 or end_pi == pi) else end_pi - 1
+        item_no = int(m.group(4)) if section else int(m.group(3))
         docs.append(Document(
-            chapter=chapter, section=m.group(3), item=int(m.group(4)),
+            chapter=chapter, section=section, item=item_no,
             title=_heading_title(content[pi].lines, li),
             start_page=content[pi], text=text,
             journal_pages=(_journal_page(content, pi), _journal_page(content, last)),
-            section_label=labels.get((chapter, m.group(3))),
+            section_label=(labels.get((chapter, section)) if section
+                           else chapter_labels.get(chapter)),
         ))
     seen: dict[tuple, int] = {}
     for d in docs:
@@ -394,7 +444,8 @@ def doc_id(issue: Issue, doc: Document) -> str:
     """RPW_2024-2_B2.3.1 -> safe: `RPW_2024-2_B2.3.1`. The systematics
     position is unique within an issue; the issue key keeps 2020-3a and
     2020-3b apart."""
-    return safe_doc_id(f"RPW_{issue.key}_{doc.chapter}.{doc.section}.{doc.item}{doc.id_suffix}")
+    place = f"{doc.chapter}.{doc.section}.{doc.item}" if doc.section else f"{doc.chapter}.{doc.item}"
+    return safe_doc_id(f"RPW_{issue.key}_{place}{doc.id_suffix}")
 
 
 def citation(issue: Issue, doc: Document) -> str:
