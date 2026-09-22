@@ -125,11 +125,29 @@ class Issue:
         return f"{self.year}-{self.number}{self.part}"
 
 
+# The link text on the RPW page: "RPW 2019-3a", "DPC 2024-1". Seven issues
+# have file names that say nothing (rpw.pdf is 2019/3a, rpw20193.pdf 2019/3b,
+# rpw_2013-1.1.pdf ...), and the per-issue indexes ("Index 2008-1") and an
+# annual report ("Jahresbericht 1999") sit in the same list.
+_ISSUE_LABEL = re.compile(r"^\s*(?:RPW|DPC)\s+((?:19|20)\d\d)[-/ ]([1-6])([a-e])?\b", re.I)
+
+
 def issue_of(filename: str) -> Issue | None:
     m = _ISSUE_FILE.search(filename)
     if not m:
         return None
     return Issue(int(m.group(1)), int(m.group(2)), (m.group(3) or "").lower())
+
+
+def issue_of_link(text: str | None, filename: str) -> Issue | None:
+    """The issue a link on the RPW page is: its text when that names one
+    (authoritative), else its file name. None for an index or a report."""
+    m = _ISSUE_LABEL.match(text or "")
+    if m:
+        return Issue(int(m.group(1)), int(m.group(2)), (m.group(3) or "").lower())
+    if re.match(r"^\s*(?:index|jahresbericht|verzeichnis)", text or "", re.I):
+        return None
+    return issue_of(filename)
 
 
 @dataclass
@@ -178,6 +196,10 @@ class Document:
     text: str
     journal_pages: tuple[int | None, int | None] = (None, None)
     extra: dict = field(default_factory=dict)
+    # Set by split() when the journal printed the same systematics number
+    # twice in one issue (2010/3, 2016/1 and 2018/3 each do): the journal page
+    # tells the two apart, and without it the second row overwrote the first.
+    id_suffix: str = ""
 
     @property
     def section_name(self) -> str | None:
@@ -254,6 +276,12 @@ def split(pages: list[Page], chapters: tuple[str, ...] = DEFAULT_CHAPTERS) -> li
             start_page=content[pi], text=text,
             journal_pages=(_journal_page(content, pi), _journal_page(content, last)),
         ))
+    seen: dict[tuple, int] = {}
+    for d in docs:
+        key = (d.chapter, d.section, d.item)
+        seen[key] = seen.get(key, 0) + 1
+        if seen[key] > 1:            # the first keeps the plain id: rows already loaded stay put
+            d.id_suffix = f"_S{d.journal_pages[0] if d.journal_pages[0] is not None else d.start_page.index}"
     return docs
 
 
@@ -317,7 +345,7 @@ def doc_id(issue: Issue, doc: Document) -> str:
     """RPW_2024-2_B2.3.1 -> safe: `RPW_2024-2_B2.3.1`. The systematics
     position is unique within an issue; the issue key keeps 2020-3a and
     2020-3b apart."""
-    return safe_doc_id(f"RPW_{issue.key}_{doc.chapter}.{doc.section}.{doc.item}")
+    return safe_doc_id(f"RPW_{issue.key}_{doc.chapter}.{doc.section}.{doc.item}{doc.id_suffix}")
 
 
 def citation(issue: Issue, doc: Document) -> str:

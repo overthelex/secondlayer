@@ -172,3 +172,32 @@ def test_list_issues_drops_the_indexes_and_sorts_oldest_first():
     issues = rpw_stage.list_issues(INDEX_HTML)
     assert [i.key for i, _ in issues] == ["1999-1", "2024-2"]
     assert issues[1][1] == "https://www.weko.admin.ch/dam/de/sd-web/AAAA/rpw_dpc_2024_2.pdf"
+
+
+def test_the_link_text_names_the_issue_when_the_file_name_does_not():
+    assert rpw.issue_of_link("RPW 2019-3a PDF 14.00 MB 6. August 2025", "rpw.pdf") == rpw.Issue(2019, 3, "a")
+    assert rpw.issue_of_link("RPW 2019-3b PDF 4.11 MB", "rpw20193.pdf") == rpw.Issue(2019, 3, "b")
+    assert rpw.issue_of_link("RPW 2013-1 PDF 1.36 MB", "rpw_2013-1.1.pdf") == rpw.Issue(2013, 1, "")
+    assert rpw.issue_of_link("DPC 2024-1 PDF", "DPC 2024-1.pdf") == rpw.Issue(2024, 1, "")
+    # the per-issue indexes and the annual report are not issues
+    assert rpw.issue_of_link("Index 2008-1 PDF 99.52 kB", "index.50.pdf") is None
+    assert rpw.issue_of_link("Index 2004-4 PDF", "index_2004-4.pdf") is None
+    assert rpw.issue_of_link("Jahresbericht 1999 PDF", "1999.pdf") is None
+    # no text: the file name decides
+    assert rpw.issue_of_link("", "rpw_2001-3.pdf") == rpw.Issue(2001, 3, "")
+
+
+def test_list_issues_reads_odd_file_names_off_their_link_text():
+    html = ('<a href="/dam/de/sd-web/X/rpw.pdf">RPW 2019-3a</a>'
+            '<a href="/dam/de/sd-web/Y/index.50.pdf">Index 2008-1</a>'
+            '<a href="/dam/de/sd-web/Z/rpw_2006-4.1.pdf">RPW 2006-4</a>')
+    assert [i.key for i, _ in rpw_stage.list_issues(html)] == ["2006-4", "2019-3a"]
+
+
+def test_a_number_the_journal_printed_twice_gets_its_page_in_the_id():
+    pages = rpw.pages_of([
+        page(218, "B 2.3       3.       General Electric Company/ALSTOM Energy", "", BODY),
+        page(256, "B 2.3       3.       Astorg/Goldman Sachs/HRA Pharma", "", BODY),
+    ], ISSUE)
+    ids = [rpw.doc_id(ISSUE, d) for d in rpw.split(pages)]
+    assert ids == ["RPW_2024-2_B2.3.3", "RPW_2024-2_B2.3.3_S256"]

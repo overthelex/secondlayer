@@ -140,11 +140,11 @@ def list_issues(page_html: str, base: str = INDEX_URL) -> list[tuple[rpw.Issue, 
     """Every issue PDF the RPW page links, once, oldest first. The indexes
     ("Chronologisches/Systematisches Verzeichnis") are not issues."""
     seen: dict[rpw.Issue, str] = {}
-    for href, _text in links(page_html, base, r"\.pdf"):
+    for href, text in links(page_html, base, r"\.pdf"):
         name = filename_of(href)
-        if re.search(r"verzeichnis|index", name, re.I):
+        if re.search(r"verzeichnis", name, re.I):
             continue
-        issue = rpw.issue_of(name)
+        issue = rpw.issue_of_link(text, name)
         if issue and issue not in seen:
             seen[issue] = href
     return sorted(seen.items(), key=lambda kv: (kv[0].year, kv[0].number, kv[0].part))
