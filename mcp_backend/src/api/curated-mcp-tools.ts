@@ -72,6 +72,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'uk_get_provision',
   'uk_get_provision_history',
   'uk_get_act_as_at',
+  // UK — семантичний шар над статутною книгою (Qdrant uk_provisions_bge)
+  'uk_semantic_search',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',

@@ -9,9 +9,10 @@
 # the UK refresh. What is left here is the British product, so this file stopped
 # describing the Swiss one.
 #
-# The ch_* tables and /data/qdrant are still on disk, deliberately: the data is
-# cheap to keep and expensive to rebuild, and it is the fastest rollback if the
-# cthulhu move has to be undone. Nothing here starts a container against it.
+# The ch_* tables are still on disk, deliberately: cheap to keep, expensive to
+# rebuild, and the fastest rollback if the cthulhu move has to be undone. The
+# Swiss VECTORS are not — /data/qdrant did not exist on this box on 2026-09-22,
+# whatever the earlier note claimed, and that directory now holds the UK index.
 #
 # Deployed by .github/workflows/deploy-lawrider-uk.yml.
 # Env file lives on the box at /home/ubuntu/SecondLayer/deployment/.env.prod
@@ -21,7 +22,9 @@
 #   /data/pg                      postgres data
 #   /data/redis                   redis data
 #   /data/uk                      bulk archives + refresh state (see overthelex/lawrider-uk)
-#   /data/qdrant                  CH vectors, kept but no longer served here
+#   /data/qdrant                  uk_provisions_bge, 6.7G (the CH collection this
+#                                 line used to name was not on the box)
+#   /data/tei-cache               bge-m3 ONNX weights, ~2.2G
 #   /home/ubuntu/lawrider/site    static site
 #   /home/ubuntu/certs-lawrider.uk  Cloudflare Origin CA cert for lawrider.uk +
 #     *.lawrider.uk, issued 2026-09-19, valid to 2041-09-15. fullchain.pem +
@@ -167,10 +170,13 @@ services:
       # all until it is — see services/uk-judgment-access.ts and LEXAI-2056.
       MCP_TOOLSET: "uk"
 
-      # No QDRANT_URL / BGE_M3_URL on purpose: the only vector-backed tool this
-      # image knows is ch_semantic_search, the toolset gate no longer admits it,
-      # and an endpoint pointing at a container that is not running would turn a
-      # clean "tool not available" into a connection error.
+      # Vector search over the statute book (uk_semantic_search). These were
+      # deliberately absent while the only vector-backed tool in the image was
+      # ch_semantic_search, which this box no longer serves; there is now a UK
+      # one, and the two containers below answer it.
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant-uk:6333}
+      BGE_M3_URL: ${BGE_M3_URL:-http://tei-bge-uk:80}
+      UK_BGE_COLLECTION: ${UK_BGE_COLLECTION:-uk_provisions_bge}
 
       # Identity of this deployment
       PUBLIC_URL: https://lawrider.uk
@@ -210,12 +216,72 @@ services:
           memory: 6G
     networks: [lawrider]
 
-  # ⚠ qdrant and tei-bge-m3 used to live here. They served ch_semantic_search,
-  # which is a Swiss tool and now answers from cthulhu, so keeping them running
-  # cost 14G + 10G of memory limits and three CPUs for a corpus nobody queried
-  # on this box. The containers are gone; /data/qdrant is NOT — the 22.3M-point
-  # ch_corpus_bge_cls collection stays on disk as the cheap rollback. Restoring
-  # them is git history plus `compose up`, and needs no re-embedding.
+  # ⚠ Correction to the note that stood here: it said /data/qdrant still held the
+  # 22.3M-point ch_corpus_bge_cls collection as a cheap rollback. It did not. The
+  # directory was absent from this box on 2026-09-22 — measured, `du -sh /data/*`
+  # listed only pg, redis and uk — so the Swiss vectors went with the move and a
+  # rollback plan resting on them would have failed at the moment it was needed.
+  #
+  # These two are back because the UK corpus now has its own vectors: 1,326,013
+  # bge-m3 points over 1,237,129 distinct provision wordings, embedded on
+  # SageMaker (scripts/legislation/sagemaker/launch_fleet.py --corpus
+  # uk-provisions). Both are sized for a box that also runs Postgres with 8G of
+  # shared buffers, which is why they are a fraction of what the Swiss pair took.
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: qdrant-uk
+    restart: unless-stopped
+    # Vectors live on disk; int8 quantization keeps ~1.4G of them in RAM, and
+    # rescoring reads the originals only for the shortlist.
+    mem_limit: 4g
+    ports:
+      # 6334 is not optional. Loading over REST means a 25 MB JSON body per
+      # 2,000 points: the first attempt landed nothing in five minutes with
+      # Qdrant idle at 0.2% CPU. Over gRPC the same 1.33M points took ~20.
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - /data/qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [lawrider]
+
+  tei:
+    # ⚠ cpu-1.5 cannot fetch the model at all ("relative URL without a base").
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.7
+    container_name: tei-bge-uk
+    restart: unless-stopped
+    # ⚠ --pooling cls, matching what the SageMaker entry script used to build the
+    # index. A mean-pooled query against a CLS index raises no error and simply
+    # returns worse neighbours, which is the hardest kind of bug to notice.
+    #
+    # The token window is deliberately small: this serves single queries, and at
+    # the default 8192 the container crash-looped through warmup on this box.
+    command: >-
+      --model-id BAAI/bge-m3 --pooling cls
+      --max-batch-tokens 2048 --max-client-batch-size 4
+      --max-concurrent-requests 8 --auto-truncate
+    mem_limit: 4g
+    volumes:
+      - /data/tei-cache:/data
+    # Worth having because the failure it catches is silent: if the model does not
+    # come down, TEI answers connection refused, BgeM3Client does not retry that
+    # (only 429 and 503), and the deploy reports success while the tool errors.
+    #
+    # ⚠ Deliberately NOT a `depends_on: condition: service_healthy` on app. Tying the
+    # app's start to this would take the other five UK tools down whenever the
+    # embedder is unwell, which trades a broken tool for a broken deployment.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks: [lawrider]
 
   site:
     image: nginx:1.27-alpine
