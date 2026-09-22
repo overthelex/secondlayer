@@ -30,11 +30,20 @@ This box used to be lawrider.ch. On 2026-09-18 the Swiss product moved to
 cthulhu (`deployment/lawrider-cthulhu`, `deploy-lawrider-cthulhu.yml`) — stack,
 crons and Cloudflare tunnel. The GCP crontab now holds only the UK refresh.
 
-The `ch_*` tables and `/data/qdrant` (22.3M-point `ch_corpus_bge_cls`) are still
-on disk on purpose: cheap to keep, expensive to rebuild, and the fastest
-rollback if the move has to be undone. Nothing starts a container against them —
-`qdrant` and `tei-bge-m3` were removed from the compose file, which is where
-their 14G and 10G memory limits went.
+The `ch_*` tables are still on disk on purpose: cheap to keep, expensive to
+rebuild, and the fastest rollback if the move has to be undone.
+
+⚠ The Swiss VECTORS are not, whatever this paragraph used to claim. On
+2026-09-22 `/data/qdrant` did not exist on the box — `du -sh /data/*` listed
+`pg`, `redis` and `uk` and nothing else — so a rollback resting on
+`ch_corpus_bge_cls` would have failed at the moment it was needed. Re-embedding
+is the actual Swiss rollback path, and on cthulhu the collection is live anyway.
+
+`qdrant` and `tei` are back in the compose file, serving the UK index that now
+occupies `/data/qdrant`: 1,326,013 bge-m3 points over 1,237,129 distinct
+provision wordings, behind `uk_semantic_search`. They are sized for a box that
+also runs Postgres with 8G of shared buffers — 4G each, against the 14G and 10G
+the Swiss pair held.
 
 ## Pipeline
 

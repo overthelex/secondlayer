@@ -134,6 +134,38 @@ describe('uk_semantic_search', () => {
     expect(out.results[0].truncated).toBe(true);
   });
 
+  it('reports a failed backend as an error rather than an empty result', async () => {
+    mockSearch.mockRejectedValue(new Error('connect ECONNREFUSED'));
+    const { tools } = toolsWith([]);
+    const out: any = await tools.executeTool('uk_semantic_search', { query: 'consultation' });
+    expect(out.isError).toBe(true);
+    expect(out.content[0].text).toMatch(/Semantic search failed/);
+  });
+
+  it('clamps limit instead of passing a negative through to Qdrant', async () => {
+    mockSearch.mockResolvedValue([hit('aa', 0.8)]);
+    const { tools } = toolsWith([row('aa', 'uksi/2007/783')]);
+    // -3 is truthy, so `Number(limit) || 10` keeps it: Qdrant would be called with a
+    // negative limit and slice(0, -3) would drop the best results.
+    await tools.executeTool('uk_semantic_search', { query: 'x', limit: -3 });
+    expect(mockSearch.mock.calls[0][1].limit).toBeGreaterThan(0);
+
+    mockSearch.mockClear();
+    await tools.executeTool('uk_semantic_search', { query: 'x', limit: 999 });
+    expect(mockSearch.mock.calls[0][1].limit).toBeLessThanOrEqual(25 * 6);
+  });
+
+  it('casts a wider net when leg_type narrows in SQL after retrieval', async () => {
+    mockSearch.mockResolvedValue([hit('aa', 0.8)]);
+    const { tools } = toolsWith([row('aa', 'ukpga/2006/46')]);
+    await tools.executeTool('uk_semantic_search', { query: 'x', limit: 10 });
+    const plain = mockSearch.mock.calls[0][1].limit;
+
+    mockSearch.mockClear();
+    await tools.executeTool('uk_semantic_search', { query: 'x', limit: 10, leg_type: 'ukpga' });
+    expect(mockSearch.mock.calls[0][1].limit).toBeGreaterThan(plain);
+  });
+
   it('ignores tools that are not its own', async () => {
     const { tools } = toolsWith([]);
     expect(await tools.executeTool('uk_get_provision', { leg_id: 'x' })).toBeNull();

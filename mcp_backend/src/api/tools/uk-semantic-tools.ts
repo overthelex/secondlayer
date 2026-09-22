@@ -38,6 +38,9 @@ const COLLECTION = process.env.UK_BGE_COLLECTION || 'uk_provisions_bge';
  */
 const OVERFETCH = 6;
 
+/** With leg_type set the narrowing happens in SQL, after this cut — see the call site. */
+const OVERFETCH_TYPED = 30;
+
 export class UkSemanticTools extends BaseToolHandler {
   private _bge: BgeM3Client | null = null;
   private _qdrant: QdrantClient | null = null;
@@ -104,14 +107,21 @@ Identical wording shared between instruments is one entry, so a result may repor
     if (legType && !/^[a-z]{2,6}$/.test(legType)) {
       return this.wrapResponse("leg_type must be a short code such as ukpga, uksi, asp or eur.");
     }
-    const lim = Math.min(Number(args.limit) || 10, 25);
+    // Math.min(Number(limit) || 10, 25) alone lets a negative through: -3 is truthy,
+    // Qdrant rejects limit -18, and slice(0, -3) would drop the BEST results. Clamp.
+    const lim = Math.min(Math.max(Math.trunc(Number(args.limit) || 10), 1), 25);
 
     try {
       const vector = await this.bge.generateEmbedding(String(query));
 
+      // leg_type cannot be a Qdrant filter: the payload carries only text_hash and
+      // chunk_ord, and which act holds a wording is known solely in Postgres. So the type
+      // narrows AFTER retrieval, and a rare type would otherwise come back empty with
+      // matching provisions sitting just below the cut. A wider net is the honest
+      // mitigation, not a guarantee — hence what the empty response tells the caller.
       const hits = await this.qdrant.search(COLLECTION, {
         vector,
-        limit: lim * OVERFETCH,
+        limit: lim * (legType ? OVERFETCH_TYPED : OVERFETCH),
         with_payload: true,
       });
 
@@ -151,13 +161,20 @@ Identical wording shared between instruments is one entry, so a result may repor
             JOIN uk_legislation l ON l.id = p.leg_id
            WHERE TRUE ${typeClause}
            ORDER BY m.text_hash, p.leg_id, p.valid_from DESC
+        ), carriers AS (
+          -- Counted before DISTINCT ON, which keeps one row per act: an act using the same
+          -- wording in two sections would otherwise report one carrier instead of two.
+          SELECT m.text_hash, COUNT(*) AS carriers
+            FROM hit JOIN uk_provision_text_hash m ON m.text_hash = hit.text_hash
+           GROUP BY m.text_hash
         )
-        SELECT encode(text_hash, 'hex') AS text_hash, leg_id, ord, valid_from,
-               provision_label, provision_type, provision_title, act_title, leg_type, year,
-               n_chars, left(text, 600) AS snippet,
-               COUNT(*) OVER (PARTITION BY text_hash) - 1 AS also_in
-          FROM resolved
-         ORDER BY leg_id`;
+        SELECT encode(r.text_hash, 'hex') AS text_hash, r.leg_id, r.ord, r.valid_from,
+               r.provision_label, r.provision_type, r.provision_title, r.act_title,
+               r.leg_type, r.year, r.n_chars, left(r.text, 600) AS snippet,
+               c.carriers - 1 AS also_in
+          FROM resolved r
+          JOIN carriers c ON c.text_hash = r.text_hash
+         ORDER BY r.leg_id`;
 
       const rows = (await this.db.query(sql, values)).rows;
 
@@ -184,7 +201,7 @@ Identical wording shared between instruments is one entry, so a result may repor
             text: r.snippet,
             truncated: r.n_chars > 600,
             ...(Number(r.also_in) > 0
-              ? { also_in: Number(r.also_in), also_in_note: 'the same wording appears in other instruments' }
+              ? { also_in: Number(r.also_in), also_in_note: 'other provisions carry this exact wording' }
               : {}),
           };
         });

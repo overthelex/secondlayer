@@ -268,6 +268,19 @@ services:
     mem_limit: 4g
     volumes:
       - /data/tei-cache:/data
+    # Worth having because the failure it catches is silent: if the model does not
+    # come down, TEI answers connection refused, BgeM3Client does not retry that
+    # (only 429 and 503), and the deploy reports success while the tool errors.
+    #
+    # ⚠ Deliberately NOT a `depends_on: condition: service_healthy` on app. Tying the
+    # app's start to this would take the other five UK tools down whenever the
+    # embedder is unwell, which trades a broken tool for a broken deployment.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
     networks: [lawrider]
 
   site:
