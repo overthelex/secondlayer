@@ -27,4 +27,11 @@ PORTALS = {m.SPIDER: m for m in (
 
 PORTAL_SPIDERS: frozenset[str] = frozenset(PORTALS)
 
-__all__ = ["PORTALS", "PORTAL_SPIDERS"]
+# Every spider whose rows do not come from an entscheidsuche listing: the
+# portals, plus the RPW journal cut (chpipe/rpw.py, rpw_stage -- a string
+# here, not an import, so this package does not import the one that uses
+# its helpers). delta and reports consult this, not PORTAL_SPIDERS, which
+# stays the list run-portals.sh walks.
+OFF_LISTING_SPIDERS: frozenset[str] = PORTAL_SPIDERS | {"CH_WEKO_RPW"}
+
+__all__ = ["PORTALS", "PORTAL_SPIDERS", "OFF_LISTING_SPIDERS"]

@@ -403,7 +403,7 @@ def test_run_stage_accepts_every_stage_this_package_has():
                 "lexwork-pdf-requeue", "pdf-text",
                 "zh-acts", "zh-fetch", "zh-parse", "zh-amend",
                     "commentary", "materials-discover", "materials-text", "portals-discover",
-                    "echr-import"}
+                    "echr-import", "rpw"}
     assert _accepted_stage_names() == expected
 
 

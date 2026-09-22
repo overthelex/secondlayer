@@ -16,6 +16,8 @@
 #   materials:    ./run-stage.sh materials-discover|materials-text   (no argument; materials-text reads CHPIPE_LIMIT)
 #   echr:         CHPIPE_ECHR_FILE=/data/echr/echr_ch_subset.ndjson.gz ./run-stage.sh echr-import
 #   portals:      ./run-stage.sh portals-discover [spider]   (regulators / MKG, not on entscheidsuche; CHPIPE_SPIDER family)
+#   rpw:          ./run-stage.sh rpw   (WEKO decisions cut from the RPW journal issues; CHPIPE_RPW_YEARS=2024|1997-2005,
+#                 CHPIPE_RPW_FORCE=1 to re-cut; then load/citations CH_WEKO_RPW -- chpipe/stages/rpw_stage.py)
 #
 # The optional second argument means different things to each family, so it is
 # dispatched explicitly rather than exported to all of them at once: for the decisions
@@ -104,7 +106,7 @@ case "$STAGE" in
       exit 2
     fi
     ;;
-  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend|commentary|materials-discover|materials-text|echr-import)
+  acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|project-legacy|as-bbl|basic-act|aliases|citations-resolve|decision-index|zefix|shab-detail|zh-acts|zh-fetch|zh-parse|zh-amend|commentary|materials-discover|materials-text|echr-import|rpw)
     if [ -n "$POS" ]; then
       echo "$STAGE takes no second argument (got '$ARG')" >&2
       exit 2
