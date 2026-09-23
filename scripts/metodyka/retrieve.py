@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS ua_metodyka_audit_corpus (
     doc_ref       text,
     decision_date date,
     body          text NOT NULL,
-    tsv           tsvector
+    tsv           tsvector,
+    body_hash     text,
+    canonical     boolean NOT NULL DEFAULT true
 )
 """
 CORPUS_INDEX = ("CREATE INDEX IF NOT EXISTS idx_ua_metodyka_corpus_fts "
@@ -139,7 +141,7 @@ WITH q AS (SELECT to_tsquery('simple', %(query)s) AS tsq)
 SELECT doc_id, corpus, doc_ref, decision_date,
        ts_rank_cd(tsv, q.tsq) AS rank
   FROM ua_metodyka_audit_corpus, q
- WHERE tsv @@ q.tsq
+ WHERE tsv @@ q.tsq AND canonical
  ORDER BY rank DESC
  LIMIT %(k)s
 """
@@ -150,9 +152,11 @@ SELECT doc_id, corpus, doc_ref, decision_date,
 # longer than what is asked for.
 PASSAGE_SEARCH = """
 WITH q AS (SELECT to_tsquery('simple', %(query)s) AS tsq)
-SELECT doc_id, corpus, ord, body, ts_rank_cd(tsv, q.tsq) AS rank
-  FROM ua_metodyka_audit_passages, q
- WHERE tsv @@ q.tsq
+SELECT p.doc_id, p.corpus, p.ord, p.body, ts_rank_cd(p.tsv, q.tsq) AS rank
+  FROM ua_metodyka_audit_passages p, q
+ WHERE p.tsv @@ q.tsq
+   AND EXISTS (SELECT 1 FROM ua_metodyka_audit_corpus c
+                WHERE c.doc_id = p.doc_id AND c.canonical)
  ORDER BY rank DESC
  LIMIT %(k)s
 """
@@ -222,7 +226,14 @@ def dense_index():
     return vectors, data["doc_id"], data["ord"]
 
 
-def search_dense(index, text: str, k: int, cache: dict) -> list[dict]:
+def canonical_ids(conn) -> set[str]:
+    with conn.cursor() as cur:
+        cur.execute("SELECT doc_id FROM ua_metodyka_audit_corpus WHERE canonical")
+        return {r[0] for r in cur.fetchall()}
+
+
+def search_dense(index, text: str, k: int, cache: dict,
+                 keep: set[str] | None = None) -> list[dict]:
     """Cosine over every passage in the corpus, then one row per decision.
 
     Dense over the whole corpus rather than a re-rank of a keyword pool: in
@@ -236,7 +247,7 @@ def search_dense(index, text: str, k: int, cache: dict) -> list[dict]:
     best: dict[str, dict] = {}
     for i in order:
         doc_id = str(doc_ids[i])
-        if doc_id in best:
+        if doc_id in best or (keep is not None and doc_id not in keep):
             continue
         best[doc_id] = {"doc_id": doc_id, "ord": int(ords[i]), "rank": float(scores[i])}
         if len(best) >= k:
@@ -269,13 +280,73 @@ def build(conn) -> None:
         """, (ids,))
         court = cur.rowcount
         cur.execute(CORPUS_INDEX)
+        # 634 agency decisions are published in more than one archive: the
+        # monthly one and the "зі змінами" one carry the same text under
+        # different names. Left in, they would let one decision answer a
+        # proposition several times over and count as several supports.
+        cur.execute("""
+            UPDATE ua_metodyka_audit_corpus
+               SET body_hash = md5(regexp_replace(lower(body), '[^а-яіїєґa-z0-9]+', ' ', 'g'))
+        """)
+        cur.execute("""
+            UPDATE ua_metodyka_audit_corpus c
+               SET canonical = false
+              FROM (SELECT body_hash, min(doc_id) AS keep
+                      FROM ua_metodyka_audit_corpus GROUP BY body_hash
+                    HAVING count(*) > 1) d
+             WHERE c.body_hash = d.body_hash AND c.doc_id <> d.keep
+        """)
+        duplicates = cur.rowcount
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ua_metodyka_corpus_canonical "
+                    "ON ua_metodyka_audit_corpus (doc_id) WHERE canonical")
     conn.commit()
-    print(f"corpus: {amcu} agency decisions, {court} court decisions")
+    print(f"corpus: {amcu} agency decisions, {court} court decisions, "
+          f"{duplicates} duplicates marked")
+
+
+# What the sources actually put in the text, counted over the 8,980 documents
+# before deciding to strip any of it: a byte order mark opens 4,221 of them
+# (every document LibreOffice wrote), 5,821 use non-breaking spaces, 2,788
+# carry runs of blank lines, 468 have the underscore rules of a form, and a
+# handful use soft hyphens, zero-width spaces and dot leaders. None of it is
+# content, and all of it costs tokens inside a 1,200-character passage.
+_INVISIBLE = str.maketrans({"\ufeff": "", "\u200b": "", "\u00ad": "",
+                            "\u00a0": " ", "\u2007": " ", "\u202f": " "})
+
+
+def clean_text(text: str) -> str:
+    text = text.translate(_INVISIBLE)
+    # A word split across a line break by the typesetter is one word.
+    text = re.sub(r"([а-яіїєґa-z])-\n([а-яіїєґa-z])", r"\1\2", text)
+    # The rules of a form, whatever character was used to draw them. The first
+    # pass only knew about underscores and dot leaders, and left a passage that
+    # was 200 tildes and a judge's name.
+    # `\w` counts the underscore as a word character, so the generic rule has
+    # to name it: the first version of this line silently stopped collapsing
+    # the underscore rules it was written for.
+    text = re.sub(r"([^\w\s]|_)\1{3,}", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
+# A passage of numbers is not a passage about anything. Bid-rigging decisions
+# carry appendices of IP addresses and timestamps, correlation columns, and
+# the PDF metadata of every tender file ("Microsoft Excel 2010", "PDF-1.5"),
+# and these came back as candidates for propositions they say nothing about.
+# Measured over the corpus: below 0.45 the passages are numeric columns and
+# file listings, above it they are prose, so the cut is where the two stop
+# overlapping rather than at a round number.
+MIN_ALPHA = 0.45
+_CYRILLIC = re.compile(r"[А-Яа-яІіЇїЄєҐґ]")
+
+
+def is_prose(chunk: str) -> bool:
+    return len(_CYRILLIC.findall(chunk)) / max(len(chunk), 1) >= MIN_ALPHA
 
 
 def passages_of(text: str, size: int = PASSAGE_CHARS,
                 overlap: int = PASSAGE_OVERLAP) -> list[str]:
-    text = re.sub(r"[ \t]+", " ", text)
+    text = clean_text(text)
     out, start = [], 0
     while start < len(text):
         end = min(start + size, len(text))
@@ -284,7 +355,7 @@ def passages_of(text: str, size: int = PASSAGE_CHARS,
             if window > start:
                 end = window
         chunk = text[start:end].strip()
-        if len(chunk) > 80:
+        if len(chunk) > 80 and is_prose(chunk):
             out.append(chunk)
         if end >= len(text):
             break
@@ -301,7 +372,8 @@ def build_passages(conn, batch: int = 200) -> None:
     # writes below need a cursor of their own anyway.
     read = conn.cursor(name="corpus_scan")
     read.itersize = batch
-    read.execute("SELECT doc_id, corpus, body FROM ua_metodyka_audit_corpus")
+    read.execute("SELECT doc_id, corpus, body FROM ua_metodyka_audit_corpus "
+                 "WHERE canonical")
     with conn.cursor() as cur:
         rows, total = read.fetchmany(batch), 0
         while rows:
@@ -327,14 +399,29 @@ def build_passages(conn, batch: int = 200) -> None:
     print(f"{total} passages")
 
 
-def gold_pairs(path: str) -> list[dict]:
-    """One pair per (proposition, document that cites it by number)."""
+def gold_pairs(path: str, conn=None) -> list[dict]:
+    """One pair per (proposition, document that cites it by number).
+
+    A decision published twice is one decision: pairs are collapsed onto the
+    copy the corpus kept, or dropped when neither copy is in the corpus."""
     import metodyka
     props = {p.number: p for p in metodyka.load("db")}
+    same: dict[str, str] = {}
+    if conn is not None:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.doc_id, k.keep FROM ua_metodyka_audit_corpus c
+                  JOIN (SELECT body_hash, min(doc_id) AS keep
+                          FROM ua_metodyka_audit_corpus GROUP BY body_hash) k
+                    ON k.body_hash = c.body_hash
+                 WHERE c.doc_id <> k.keep
+            """)
+            same = dict(cur.fetchall())
     pairs = []
     for line in open(path, encoding="utf-8"):
         row = json.loads(line)
         doc_id = f"{row['corpus']}:{row['doc_id']}"
+        doc_id = same.get(doc_id, doc_id)
         for cite in row["cites"]:
             if cite["kind"] == "punkt" and cite["number"] in props:
                 pairs.append({"number": cite["number"], "doc_id": doc_id,
@@ -356,6 +443,7 @@ def control(conn, pairs: list[dict], k: int, mode: str) -> dict:
         by_prop.setdefault(p["number"], set()).add(p["doc_id"])
     cache: dict[str, set] = {}
     index = dense_index() if mode == "dense" else None
+    keep = canonical_ids(conn) if mode == "dense" else None
     embed_cache: dict = {}
     text_of = {p["number"]: p["text"] for p in pairs}
     hit_pairs = 0
@@ -364,7 +452,7 @@ def control(conn, pairs: list[dict], k: int, mode: str) -> dict:
     for number, wanted in by_prop.items():
         if number not in cache:
             if mode == "dense":
-                got = search_dense(index, text_of[number], k, embed_cache)
+                got = search_dense(index, text_of[number], k, embed_cache, keep)
             elif mode == "passages":
                 got = search_passages(conn, text_of[number], k)
             else:
@@ -408,7 +496,7 @@ def main() -> None:
         for r in search_passages(conn, prop.text, args.k)[:8]:
             print(f"  {r['doc_id']:<14} {r['rank']:.4f}  {r['body'][:150]}")
     else:
-        pairs = gold_pairs(args.goldset)
+        pairs = gold_pairs(args.goldset, conn)
         mode = "dense" if args.dense else "passages" if args.passages else "documents"
         print(json.dumps(control(conn, pairs, args.k, mode),
                          ensure_ascii=False, indent=1))
