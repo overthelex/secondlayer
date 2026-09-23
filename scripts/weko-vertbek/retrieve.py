@@ -17,15 +17,31 @@ paper describes anyway.
     python3 retrieve.py build   --dsn ...          # the working corpus
     python3 retrieve.py control --dsn ... --k 20   # recall@k on the gold set
 
-STATE, measured 2026-09-23 on the 29 cited pairs: recall@5 0.14, @10 0.14,
-@20 0.21, @50 0.31. **The gate is not passed**, and nothing may be labelled on
-this retrieval. Two variants were tried and are recorded in the code: length
-normalisation and an AND over the strongest terms each made it worse (0.10 at
-50). What this says is that whole-decision keyword search is the wrong unit:
-a decision states a rule in one Erwägung, inside a hundred pages about a
-market. The next step is the one the design calls for -- passages rather than
-documents, and a bge-m3 re-rank over them (tei-bge-m3-lawrider is running on
-the box) -- not more tuning of this query.
+STATE, measured 2026-09-23 on the 29 cited pairs.
+
+    whole decisions, keyword        recall@5 0.14  @20 0.21  @50 0.31
+    passages, keyword               recall@5 0.00  @20 0.17  @50 0.35
+    passages, keyword + bge-m3      recall@5 0.03  @20 0.17  @50 0.31
+
+**The gate is not passed**, and nothing may be labelled on this retrieval.
+
+The re-rank cannot fix it, and the diagnostic says why: the candidate pool
+caps the answer. The cited decision is inside the top 200 passages the
+keyword stage returns for only 14 of 29 propositions (0.48), inside the top
+1,000 for 17 (0.59) and inside the top 5,000 for 21 (0.72). So the ceiling at
+the depth we re-rank is 0.48, and for 8 of 29 pairs the keyword query does
+not reach the decision at any depth.
+
+Not a data problem: every cited decision is in the working corpus, with full
+text at quality 0.94-0.99 and its passages built. It is the query. A
+proposition states a rule in the instrument's vocabulary; the decision states
+it in its own, inside a hundred pages about a market, and an OR over the
+proposition's longest words does not bridge that.
+
+Next, in order: embed all 274,112 passages once (bge-m3 on a GPU box -- the
+CH corpus went the same way for $25) and retrieve densely over the lot
+instead of re-ranking a keyword pool; keep the keyword stage only as a union,
+not as the gate. Re-measure this control before anything is labelled.
 """
 from __future__ import annotations
 
@@ -142,14 +158,142 @@ def control(conn, gold: list[dict], k: int) -> dict:
             "misses": misses}
 
 
+PASSAGES = """
+CREATE TABLE IF NOT EXISTS ch_weko_audit_passages (
+    ecli text NOT NULL,
+    ord  int  NOT NULL,
+    text text NOT NULL,
+    tsv  tsvector,
+    PRIMARY KEY (ecli, ord)
+)
+"""
+PASSAGE_INDEX = ("CREATE INDEX IF NOT EXISTS idx_weko_audit_passages_fts "
+                 "ON ch_weko_audit_passages USING gin (tsv)")
+
+PASSAGE_CHARS = 1200
+PASSAGE_OVERLAP = 200
+
+
+def passages_of(text: str, size: int = PASSAGE_CHARS, overlap: int = PASSAGE_OVERLAP) -> list[str]:
+    """A decision cut into overlapping windows on paragraph boundaries.
+
+    The unit matters more than the tuning: a decision states the rule a
+    proposition is about in one or two Erwägungen, and the rest of its
+    hundred pages is the market it was decided in. Whole-decision search
+    ranked that noise (recall@50 0.31); the passage is what the annotator
+    reads anyway."""
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text or "") if p.strip()]
+    out: list[str] = []
+    buf = ""
+    for para in paragraphs:
+        while len(para) > size:                    # a paragraph longer than a window
+            out.append(para[:size])
+            para = para[size - overlap:]
+        if len(buf) + len(para) + 1 > size:
+            if buf:
+                out.append(buf)
+            buf = (buf[-overlap:] + " " + para).strip() if buf else para
+        else:
+            buf = f"{buf} {para}".strip()
+    if buf:
+        out.append(buf)
+    return [p for p in out if len(p) > 120]
+
+
+def build_passages(conn, batch: int = 200) -> int:
+    conn.execute("SET statement_timeout = 0")
+    conn.execute(PASSAGES)
+    done = {r["ecli"] for r in conn.execute(
+        "SELECT DISTINCT ecli FROM ch_weko_audit_passages").fetchall()}
+    rows = conn.execute("SELECT ecli, full_text FROM ch_weko_audit_corpus "
+                        "WHERE coalesce(rpw_chapter, '') <> 'D1'").fetchall()
+    total = 0
+    with conn.cursor() as cur:
+        for r in rows:
+            if r["ecli"] in done:
+                continue
+            chunks = passages_of(r["full_text"])
+            cur.executemany(
+                "INSERT INTO ch_weko_audit_passages (ecli, ord, text, tsv) "
+                "VALUES (%s, %s, %s, to_tsvector('german', %s)) ON CONFLICT DO NOTHING",
+                [(r["ecli"], i, c, c) for i, c in enumerate(chunks)])
+            total += len(chunks)
+    conn.execute(PASSAGE_INDEX)
+    conn.execute("ANALYZE ch_weko_audit_passages")
+    return total
+
+
+PASSAGE_SEARCH = """
+WITH q AS (SELECT to_tsquery('german', %(query)s) AS tsq)
+SELECT p.ecli, p.ord, p.text, c.spider, c.docket_number, c.decision_date,
+       ts_rank_cd(p.tsv, q.tsq) AS rank
+  FROM ch_weko_audit_passages p
+  JOIN ch_weko_audit_corpus c USING (ecli), q
+ WHERE p.tsv @@ q.tsq
+   AND (%(before)s::date IS NULL OR c.decision_date IS NULL OR c.decision_date <= %(before)s::date)
+ ORDER BY rank DESC
+ LIMIT %(n)s
+"""
+
+
+def embed(texts: list[str], url: str, cache: dict) -> list[list[float]]:
+    """bge-m3 through the TEI service on the box, batched at its own limit
+    (max_client_batch_size 16) and cached per text for the run."""
+    import json as _json
+    import urllib.request
+    missing = [t for t in texts if t not in cache]
+    for i in range(0, len(missing), 16):
+        chunk = [t[:3000] for t in missing[i:i + 16]]
+        req = urllib.request.Request(
+            f"{url}/embed", data=_json.dumps({"inputs": chunk}).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            for text, vec in zip(missing[i:i + 16], _json.loads(resp.read())):
+                cache[text] = vec
+    return [cache[t] for t in texts]
+
+
+def cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = sum(x * x for x in a) ** 0.5
+    nb = sum(y * y for y in b) ** 0.5
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def search_passages(conn, text: str, k: int, url: str | None, cache: dict,
+                    candidates: int = 200, before: str | None = None) -> list[dict]:
+    """Keyword search over passages, then -- when an embedding service is
+    given -- a bge-m3 re-rank of what it found. The document's score is its
+    best passage."""
+    words = terms(text)
+    if not words:
+        return []
+    rows = [dict(r) for r in conn.execute(
+        PASSAGE_SEARCH, {"query": " | ".join(words), "n": candidates, "before": before}).fetchall()]
+    if url and rows:
+        vectors = embed([text] + [r["text"] for r in rows], url, cache)
+        query_vec, passage_vecs = vectors[0], vectors[1:]
+        for r, v in zip(rows, passage_vecs):
+            r["rank"] = cosine(query_vec, v)
+        rows.sort(key=lambda r: -r["rank"])
+    best: dict[str, dict] = {}
+    for r in rows:
+        if r["ecli"] not in best:
+            best[r["ecli"]] = r
+    return list(best.values())[:k]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("command", choices=["build", "control", "search"])
+    ap.add_argument("command", choices=["build", "passages", "control", "control2", "search"])
     ap.add_argument("--dsn", required=True)
     ap.add_argument("--gold", type=pathlib.Path,
                     default=pathlib.Path("/data/ch-corpus/weko-bek/goldset.json"))
     ap.add_argument("--k", type=int, default=20)
     ap.add_argument("--text", help="for `search`: the proposition text")
+    ap.add_argument("--tei", default="http://172.30.0.2:80",
+                    help="the bge-m3 service; empty string turns the re-rank off")
+    ap.add_argument("--candidates", type=int, default=200)
     args = ap.parse_args()
 
     import psycopg
@@ -169,7 +313,30 @@ def main() -> int:
                 print(f"  {r['rank']:7.4f} {r['spider']:12} {str(r['decision_date'] or ''):10} "
                       f"{(r['docket_number'] or '')[:60]}")
             return 0
+        if args.command == "passages":
+            print(f"passages written: {build_passages(conn)}")
+            n = conn.execute("SELECT count(*) AS n, count(DISTINCT ecli) AS d "
+                             "FROM ch_weko_audit_passages").fetchone()
+            print(f"table now: {n['n']} passages over {n['d']} decisions")
+            return 0
         gold = json.loads(args.gold.read_text(encoding="utf-8"))
+        if args.command == "control2":
+            cache: dict = {}
+            for k in (5, 10, 20, 50):
+                hits, misses = 0, []
+                for g in gold:
+                    wanted = {r["ecli"] for r in g["resolved"]}
+                    got = search_passages(conn, g["proposition"], k, args.tei or None,
+                                          cache, args.candidates)
+                    if wanted & {r["ecli"] for r in got}:
+                        hits += 1
+                    else:
+                        misses.append((g["version"], g["pid"], g["ref"]))
+                print(f"recall@{k:<3} {round(hits / len(gold), 3)} over {len(gold)} cited pairs"
+                      + (f"   (rerank: {'bge-m3' if args.tei else 'off'})" if k == 5 else ""))
+            for m in misses:
+                print(f"    miss {m[0]} {m[1]:6} {m[2]}")
+            return 0
         for k in (5, 10, args.k, 50):
             res = control(conn, gold, k)
             print(f"recall@{k:<3} {res['recall']} over {res['pairs']} cited pairs")
