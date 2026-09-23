@@ -59,9 +59,15 @@ MENTION = re.compile(r"[Мм]етодик(?:а|и|у|ою|ці|ам|ах|о́ю)
 # The title, allowing the register's own wording and the courts' shortenings.
 TITLE = re.compile(r"\s*(?:визначення\s+)?монопольного\s*\(?\s*домінуючого\s*\)?\s*становища"
                    r"|\s*визначення\s+монопольного\s+становища", re.I)
-# A competing instrument: the word followed by a genitive that is not ours.
+# A competing instrument: the word followed by the genitive that opens a
+# title of its own. Listing the verbs seen in a first pass was not enough --
+# "Методики формування тарифів", "Методики ідентифікації потенційно
+# небезпечних об'єктів" and "Методики визначення обсягу" all slipped through
+# and lent their пункти to this instrument. Ukrainian titles put a verbal
+# noun there, and those end predictably.
 COMPETING = re.compile(r"[Мм]етодик\w*\s+(?!визначення\s+монопольного)"
-                       r"(?:розрахунку|обчислення|проведення|оцінки|визначення\s+(?!монопольного))")
+                       r"(?!визначення\s+товарного)"
+                       r"[а-яіїєґ']+(?:ння|ції|нню|цій|ку|нку)\b")
 ANCHORS = ("49-р", "317/6605", "z0317-02")
 
 _MARKER = r"(?:під\s?пункт\w*|пункт\w*|п\.\s?п\.|пп\.|п\.|розділ\w*|р\.)"
@@ -120,7 +126,9 @@ def ours(text: str) -> list[tuple[int, int]]:
 
 
 def normalise(raw: str) -> str:
-    return raw.replace(" ", "").replace("З", "3").replace("з", "3").strip(".")
+    """Whitespace, not just spaces: the register wraps lines inside a number,
+    and "10.1\n.5" was being read as a пункт the instrument does not have."""
+    return re.sub(r"\s+", "", raw).replace("З", "3").replace("з", "3").strip(".")
 
 
 def pinpoints(text: str, span: tuple[int, int]) -> list[tuple[str, str]]:
