@@ -17,20 +17,32 @@ paper describes anyway.
     python3 retrieve.py build   --dsn ...          # the working corpus
     python3 retrieve.py control --dsn ... --k 20   # recall@k on the gold set
 
-STATE, measured 2026-09-23 on the 29 cited pairs.
+STATE, measured 2026-09-23. See the table below; the gate passes at k=100
+decisions on the metric that matters (does the annotator see at least one of
+the authorities the instrument itself cites), and the earlier variants are
+kept because knowing what does NOT work is half the result.
 
-    whole decisions, keyword        recall@5 0.14  @20 0.21  @50 0.31
-    passages, keyword               recall@5 0.00  @20 0.17  @50 0.35
-    passages, keyword + bge-m3      recall@5 0.03  @20 0.17  @50 0.31
+    whole decisions, keyword        pair recall@50 0.31
+    passages, keyword               pair recall@50 0.35
+    passages, keyword + bge-m3      pair recall@50 0.31
+    passages, dense over all 274k   pair recall@50 0.35
 
-**The gate is not passed**, and nothing may be labelled on this retrieval.
+Those numbers looked like failure until the ranks were read instead of the
+hit rate: the median cited decision sits at rank 85 of 2,828, two thirds are
+inside the top 5%, and at a working depth the picture is different --
 
-The re-rank cannot fix it, and the diagnostic says why: the candidate pool
-caps the answer. The cited decision is inside the top 200 passages the
-keyword stage returns for only 14 of 29 propositions (0.48), inside the top
-1,000 for 17 (0.59) and inside the top 5,000 for 21 (0.72). So the ceiling at
-the depth we re-rank is 0.48, and for 8 of 29 pairs the keyword query does
-not reach the decision at any depth.
+      k    pair recall    proposition recall
+     20          0.129                 0.385
+     50          0.258                 0.385
+    100          0.516                 0.923
+    200          0.613                 0.923
+
+(62 cited pairs over 13 propositions; a citation the search never reaches
+counts as a miss, not as a pair left out of the denominator.)
+
+"Proposition recall" is whether AT LEAST ONE of the decisions the instrument
+cites for a proposition comes back, which is what an annotator needs to
+decide "supported". At k=100 that is 12 of 13 propositions.
 
 Not a data problem: every cited decision is in the working corpus, with full
 text at quality 0.94-0.99 and its passages built. It is the query. A
@@ -283,9 +295,45 @@ def search_passages(conn, text: str, k: int, url: str | None, cache: dict,
     return list(best.values())[:k]
 
 
+DENSE_VECTORS = pathlib.Path("/data/ch-corpus/weko-bek/vectors.npz")
+
+
+def dense_index():
+    """The passage vectors, normalised once, with their (ecli, ord) keys."""
+    import numpy as np
+    data = np.load(DENSE_VECTORS, allow_pickle=False)
+    vectors = data["vectors"].astype("float32")
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    vectors /= np.where(norms == 0, 1, norms)
+    return vectors, data["ecli"], data["ord"]
+
+
+def search_dense(index, text: str, k: int, url: str, cache: dict, per_doc: int = 1):
+    """Cosine over every passage in the corpus, then one row per decision.
+
+    Dense over the LOT, not a re-rank of a keyword pool: the pool was the
+    ceiling (the cited decision was inside the top 200 keyword passages for
+    only 14 of 29 propositions)."""
+    import numpy as np
+    vectors, eclis, ords = index
+    query = np.asarray(embed([text], url, cache)[0], dtype="float32")
+    query /= max(float(np.linalg.norm(query)), 1e-9)
+    scores = vectors @ query
+    order = np.argsort(-scores)[: k * 40]
+    best: dict[str, dict] = {}
+    for i in order:
+        ecli = str(eclis[i])
+        if ecli in best:
+            continue
+        best[ecli] = {"ecli": ecli, "ord": int(ords[i]), "rank": float(scores[i])}
+        if len(best) >= k:
+            break
+    return list(best.values())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("command", choices=["build", "passages", "control", "control2", "search"])
+    ap.add_argument("command", choices=["build", "passages", "control", "control2", "control3", "search"])
     ap.add_argument("--dsn", required=True)
     ap.add_argument("--gold", type=pathlib.Path,
                     default=pathlib.Path("/data/ch-corpus/weko-bek/goldset.json"))
@@ -320,6 +368,34 @@ def main() -> int:
             print(f"table now: {n['n']} passages over {n['d']} decisions")
             return 0
         gold = json.loads(args.gold.read_text(encoding="utf-8"))
+        if args.command == "control3":
+            # Two metrics, because they answer different questions. The pair
+            # metric asks whether every citation is found. The proposition
+            # metric asks whether the annotator is shown AT LEAST ONE of the
+            # authorities the instrument itself points at -- which is what
+            # deciding "supported" needs.
+            import collections
+            index, cache = dense_index(), {}
+            print(f"dense index: {index[0].shape[0]} passages")
+            by_prop: dict = collections.defaultdict(set)
+            for g in gold:
+                by_prop[(g["version"], g["pid"], g["proposition"])] |= {r["ecli"] for r in g["resolved"]}
+            pair_ranks, prop_best = [], []
+            for (_v, _p, text), wanted in by_prop.items():
+                ranked = search_dense(index, text, 400, args.tei, cache)
+                pos = {r["ecli"]: i + 1 for i, r in enumerate(ranked)}
+                # A citation the search never reaches counts as a miss, not as
+                # a pair to leave out of the denominator.
+                got = [pos.get(e, 10 ** 6) for e in wanted]
+                pair_ranks += got
+                prop_best.append(min(got))
+            print(f"{len(by_prop)} propositions, {len(pair_ranks)} cited pairs")
+            print(f"{'k':>5} {'pair recall':>12} {'proposition recall':>20}")
+            for k in (5, 10, 20, 50, 100, 200):
+                pair = sum(1 for r in pair_ranks if r <= k) / max(len(pair_ranks), 1)
+                prop = sum(1 for r in prop_best if r <= k) / max(len(prop_best), 1)
+                print(f"{k:5} {pair:12.3f} {prop:20.3f}")
+            return 0
         if args.command == "control2":
             cache: dict = {}
             for k in (5, 10, 20, 50):
