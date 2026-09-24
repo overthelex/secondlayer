@@ -128,16 +128,45 @@ A proposition nobody cites by number is not thereby a dead letter: the rule
 may be applied in substance, in a decision's own words. Calling a proposition
 unsupported requires a search of the whole record that comes back empty.
 
-The corpus is cut into 191,593 passages of 1,200 characters. Keyword
-retrieval over them reaches proposition recall 0.710 at k=100 on the 3,673
-citation pairs, which is short of a gate, so the passages are embedded with
-bge-m3 (CLS pooling) on a single L4 and searched by cosine over the whole
-corpus rather than as a re-rank of a keyword pool. See
-[`scripts/metodyka/retrieve.py`](../../../scripts/metodyka/retrieve.py) and
-[`run_gpu.sh`](../../../scripts/metodyka/run_gpu.sh).
+The corpus is cut into 191,593 passages of 1,200 characters, embedded with
+bge-m3 (CLS pooling) on a single L4 in 26 minutes, and searched by cosine over
+the whole corpus rather than as a re-rank of a keyword pool. Proposition
+recall on the 3,673 citation pairs:
 
-*Pending: the dense gate measurement, the labelling of every proposition as
-supported or not, and the comparison with what `z1043-26` changed.*
+| retrieval | k=50 | k=100 | k=200 |
+|---|---|---|---|
+| keyword over passages | | 0.710 | |
+| dense | 0.790 | 0.839 | |
+| the two together | 0.839 | 0.871 | 0.887 |
+
+The two miss different propositions, which is why the pool the judge sees is
+the union of both.
+
+One idea was tried and dropped. Five of the 66 items are a single short
+phrase ("Визначення товарних меж ринку."), and prefixing such a query with
+its розділ heading looked like the obvious repair. It made things worse:
+dense recall at k=100 fell from 0.839 to 0.790. The heading is the
+instrument's own boilerplate, and it pulls the query towards every passage
+that quotes the Методика instead of towards the decisions that apply the
+item.
+
+The gate is better stated by what it leaves out than by its number. At k=200
+the eight propositions retrieval cannot reach are cited 20 times in total out
+of 3,699 citations, half a percent of the record, and every one of those
+citations is a court's rather than the agency's. They are the
+thinnest-evidenced items in the instrument: five of them are cited once or
+twice in twenty four years.
+
+See [`scripts/metodyka/retrieve.py`](../../../scripts/metodyka/retrieve.py),
+[`run_gpu.sh`](../../../scripts/metodyka/run_gpu.sh) and
+[`packet.py`](../../../scripts/metodyka/packet.py), which assembles the 66
+propositions with the eight passages each that the reader and the judge both
+see. Two of the eight places are reserved for what only the keyword search
+found, because at that size the dense ranking fills the pool on its own and
+the propositions dense cannot reach would see nothing.
+
+*Pending: the reading of the packet, the judge run against it, and the
+comparison with what `z1043-26` changed.*
 
 ## What the corpus had to be cleaned of
 

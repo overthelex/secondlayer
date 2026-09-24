@@ -25,6 +25,34 @@ import metodyka
 import retrieve
 
 
+def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
+    """The candidate pool the judge and the reader see.
+
+    Dense and keyword retrieval miss different propositions, so the pool is
+    the union of both: measured over the citation pairs, proposition recall at
+    k=200 is 0.887 for the union against 0.839 for dense alone. Dense leads,
+    because it ranks better where both find the document.
+    """
+    # Two of the places are reserved for what only the keyword search found.
+    # Filling the pool with the dense ranking alone would have made the union
+    # pointless at this size: at k=8 the dense list fills it on its own, and
+    # the propositions dense cannot reach would see nothing.
+    reserved = 2 if k > 4 else 0
+    dense = retrieve.search_dense(index, text, k - reserved, cache, keep)
+    merged = [dict(h, source="dense") for h in dense]
+    if reserved:
+        seen = {h["doc_id"] for h in dense}
+        for row in retrieve.search_passages(conn, text, k * 4):
+            if row["doc_id"] in seen or row["doc_id"] not in keep:
+                continue
+            seen.add(row["doc_id"])
+            merged.append({"doc_id": row["doc_id"], "ord": row["ord"],
+                           "rank": float(row["rank"]), "source": "keyword"})
+            if len(merged) >= k:
+                break
+    return merged
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -44,10 +72,11 @@ def main() -> None:
 
     conn = psycopg2.connect(retrieve.dsn())
     index = retrieve.dense_index()
+    keep = retrieve.canonical_ids(conn)
     cache: dict = {}
     out = []
     for prop in props:
-        hits = retrieve.search_dense(index, prop.text, args.k, cache)
+        hits = pool(conn, index, prop.text, args.k, cache, keep)
         ids = [h["doc_id"] for h in hits]
         bodies, meta = passage_bodies(conn, hits)
         out.append({
@@ -58,7 +87,7 @@ def main() -> None:
             "cited_by": len(cited[prop.number]),
             "passages": [
                 {"doc_id": h["doc_id"], "ord": h["ord"],
-                 "score": round(h["rank"], 4),
+                 "score": round(h["rank"], 4), "found_by": h.get("source", "dense"),
                  "corpus": meta.get(h["doc_id"], {}).get("corpus"),
                  "doc_ref": meta.get(h["doc_id"], {}).get("doc_ref"),
                  "date": str(meta.get(h["doc_id"], {}).get("decision_date") or ""),
