@@ -165,6 +165,55 @@ see. Two of the eight places are reserved for what only the keyword search
 found, because at that size the dense ranking fills the pool on its own and
 the propositions dense cannot reach would see nothing.
 
+## The instrument quoted back at itself
+
+A first packet was built and then measured before anyone read it, and the
+measurement stopped it being read. Of its 526 passages, **192 (36.5%)**
+reproduced 60% or more of their proposition word for word, and another 83 fell
+between 40 and 60%. For **27 of the 66 propositions**, at least six of the eight
+passages were the rule recited rather than applied.
+
+A decision that reproduces пункт 6.1 is not evidence that пункт 6.1 was applied.
+The Swiss study kept this out by excluding the notice's own text from the
+corpus; here the quoting happens inside the decisions, so it cannot be excluded
+at the document level. Reading that packet would have meant labelling
+quotations, and everything would have come out supported.
+
+The fix is in the selection and in the protocol. Each candidate now carries the
+share of its proposition it reproduces verbatim (longest common substring over
+the normalised texts), the pool is deepened from 8 to 120 candidates, and the
+eight are taken application first, partial second, recitation last. The reading
+protocol gains a fourth label, `лише переказує`, so that recitation is recorded
+as recitation wherever it still appears.
+
+| | before | after |
+|---|---|---|
+| passages reproducing ≥60% of the proposition | 192 (36.5%) | 33 (6.2%) |
+| 40-60% | 83 | 5 |
+| under 20%, the candidates for application | 167 (31.7%) | 369 (69.9%) |
+| propositions where ≥6 of 8 are recitation | 27 | 4 |
+| propositions with no recitation at all | 9 | 58 |
+
+What remains is not residue to be cleaned. Seven propositions have **no**
+non-recitation passage anywhere in a 120-candidate pool: 2.1.2, 2.1.3, 2.1.4,
+2.1.8, 2.1.9, 4.2 and 4.2.4. Almost all are the bare stage names of розділ 2.1
+("Визначення товарних меж ринку.", "Розрахунок часток суб'єктів господарювання
+на ринку."). They have no content that can be applied on its own: they are a
+table of contents inside the instrument, and the record can only repeat them.
+That is a result about the drafting, and the packet marks those propositions so
+the reader is told rather than left to infer it.
+
+## What retrieval actually searches
+
+The court half of the corpus is selected by whether a decision names the
+Методика, and 2,136 of its 2,151 documents are therefore already in the
+citation index. On that half retrieval re-ranks known ground; what it adds is
+finding a proposition applied in a decision that cited a different one.
+
+The agency half is the opposite: 6,186 decisions, of which only 156 cite the
+instrument. 6,030 decisions are ground the citation index has never seen, and
+that is where a claim of the form "the record does not support this" is earned.
+
 *Pending: the reading of the packet, the judge run against it, and the
 comparison with what `z1043-26` changed.*
 
