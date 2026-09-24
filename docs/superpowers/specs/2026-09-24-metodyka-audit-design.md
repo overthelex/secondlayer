@@ -208,7 +208,10 @@ Code, by stage:
 Data: [`data/metodyka/`](../../../data/metodyka), with a
 [README](../../../data/metodyka/README.md) recording provenance down to the
 CKAN package and the resource id encoded in each archive name, and
-`checksums.txt` for each file. The corpus itself is not in the repository;
+`checksums.txt` for each file. The same files are published on the Hub as
+[`overthelex/ua-metodyka-audit`](https://huggingface.co/datasets/overthelex/ua-metodyka-audit),
+where the three tables load with `load_dataset` and `raw/` carries the
+byte-identical originals. The corpus itself is not in the repository;
 `corpus-manifest.csv` names all 8,980 documents by their identifiers in the
 source registers with the hash of each normalised text, so a rebuild is
 checked document by document.

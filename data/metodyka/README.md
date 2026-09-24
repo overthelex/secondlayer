@@ -66,6 +66,19 @@ rather than by a row count.
 
 SHA-256 and byte length of each file above.
 
+## On the Hub
+
+The same files are published as
+[`overthelex/ua-metodyka-audit`](https://huggingface.co/datasets/overthelex/ua-metodyka-audit):
+
+    props  = load_dataset("overthelex/ua-metodyka-audit", "propositions", split="train")
+    cites  = load_dataset("overthelex/ua-metodyka-audit", "citations",    split="train")
+    corpus = load_dataset("overthelex/ua-metodyka-audit", "corpus",       split="train")
+
+There the three tables are also stored as parquet under `data/`, because a
+repository that mixes CSV with JSON makes `load_dataset` read one with the
+other's reader. `raw/` on the Hub holds exactly the files in this directory.
+
 ## Where the material comes from
 
 Both corpora are read from their issuing bodies, not from an intermediary.
