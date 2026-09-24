@@ -442,21 +442,35 @@ def control(conn, pairs: list[dict], k: int, mode: str) -> dict:
     for p in pairs:
         by_prop.setdefault(p["number"], set()).add(p["doc_id"])
     cache: dict[str, set] = {}
-    index = dense_index() if mode == "dense" else None
-    keep = canonical_ids(conn) if mode == "dense" else None
+    index = dense_index() if mode in ("dense", "hybrid") else None
+    keep = canonical_ids(conn) if mode in ("dense", "hybrid") else None
     embed_cache: dict = {}
     text_of = {p["number"]: p["text"] for p in pairs}
+    # Prefixing a short proposition with its розділ heading was tried, on the
+    # theory that "Визначення товарних меж ринку." says too little on its own.
+    # It made things worse, measurably: proposition recall at k=100 fell from
+    # 0.839 to 0.790. The heading is the instrument's own boilerplate, and it
+    # pulls the query towards every other passage that quotes the instrument
+    # instead of towards the decisions that apply this item.
+    query_text = text_of
     hit_pairs = 0
     hit_props = 0
     misses = []
     for number, wanted in by_prop.items():
         if number not in cache:
             if mode == "dense":
-                got = search_dense(index, text_of[number], k, embed_cache, keep)
+                got = search_dense(index, query_text[number], k, embed_cache, keep)
+            elif mode == "hybrid":
+                # The two retrievals miss different propositions: keyword loses
+                # the ones whose vocabulary the record paraphrases, dense loses
+                # the short procedural items whose text is too generic to point
+                # anywhere. The pool the judge sees is the union.
+                got = (search_dense(index, query_text[number], k, embed_cache, keep)
+                       + search_passages(conn, query_text[number], k))
             elif mode == "passages":
-                got = search_passages(conn, text_of[number], k)
+                got = search_passages(conn, query_text[number], k)
             else:
-                got = search(conn, text_of[number], k)
+                got = search(conn, query_text[number], k)
             cache[number] = {r["doc_id"] for r in got}
         found = wanted & cache[number]
         hit_pairs += len(found)
@@ -482,6 +496,7 @@ def main() -> None:
     ap.add_argument("--number")
     ap.add_argument("--passages", action="store_true")
     ap.add_argument("--dense", action="store_true")
+    ap.add_argument("--hybrid", action="store_true")
     args = ap.parse_args()
     conn = psycopg2.connect(dsn())
     if args.command == "build":
@@ -497,7 +512,8 @@ def main() -> None:
             print(f"  {r['doc_id']:<14} {r['rank']:.4f}  {r['body'][:150]}")
     else:
         pairs = gold_pairs(args.goldset, conn)
-        mode = "dense" if args.dense else "passages" if args.passages else "documents"
+        mode = ("hybrid" if args.hybrid else "dense" if args.dense
+                else "passages" if args.passages else "documents")
         print(json.dumps(control(conn, pairs, args.k, mode),
                          ensure_ascii=False, indent=1))
 
