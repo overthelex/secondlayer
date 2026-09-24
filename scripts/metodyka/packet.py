@@ -16,7 +16,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
+import re
 
 import psycopg2
 import psycopg2.extras
@@ -25,32 +27,70 @@ import metodyka
 import retrieve
 
 
-def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
-    """The candidate pool the judge and the reader see.
+DEEP = 60
+RECITAL = 0.40
+FRESH = 0.25
 
-    Dense and keyword retrieval miss different propositions, so the pool is
-    the union of both: measured over the citation pairs, proposition recall at
-    k=200 is 0.887 for the union against 0.839 for dense alone. Dense leads,
-    because it ranks better where both find the document.
+
+def _norm(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().replace("\u2019", "'")).strip()
+
+
+def recital_share(proposition: str, passage: str) -> float:
+    """How much of the proposition the passage reproduces word for word.
+
+    A decision that recites пункт 6.1 is not evidence that пункт 6.1 was
+    applied: it is the rule restated. Measured over a first packet built
+    without this test, 36.5% of its passages carried 60% or more of their
+    proposition verbatim, and for 27 of the 66 propositions at least six of
+    the eight passages were recitation. A reader given those would be
+    labelling quotations.
     """
-    # Two of the places are reserved for what only the keyword search found.
-    # Filling the pool with the dense ranking alone would have made the union
-    # pointless at this size: at k=8 the dense list fills it on its own, and
-    # the propositions dense cannot reach would see nothing.
-    reserved = 2 if k > 4 else 0
-    dense = retrieve.search_dense(index, text, k - reserved, cache, keep)
+    a, b = _norm(proposition), _norm(passage)
+    match = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    return match.find_longest_match(0, len(a), 0, len(b)).size / max(len(a), 1)
+
+
+def candidates(conn, index, text: str, cache: dict, keep: set) -> list[dict]:
+    """Dense and keyword together, deep enough to choose from.
+
+    The two miss different propositions: proposition recall at k=200 is 0.887
+    for the union against 0.839 for dense alone."""
+    dense = retrieve.search_dense(index, text, DEEP, cache, keep)
     merged = [dict(h, source="dense") for h in dense]
-    if reserved:
-        seen = {h["doc_id"] for h in dense}
-        for row in retrieve.search_passages(conn, text, k * 4):
-            if row["doc_id"] in seen or row["doc_id"] not in keep:
-                continue
-            seen.add(row["doc_id"])
-            merged.append({"doc_id": row["doc_id"], "ord": row["ord"],
-                           "rank": float(row["rank"]), "source": "keyword"})
-            if len(merged) >= k:
-                break
+    seen = {h["doc_id"] for h in dense}
+    for row in retrieve.search_passages(conn, text, DEEP * 3):
+        if row["doc_id"] in seen or row["doc_id"] not in keep:
+            continue
+        seen.add(row["doc_id"])
+        merged.append({"doc_id": row["doc_id"], "ord": row["ord"],
+                       "rank": float(row["rank"]), "source": "keyword"})
+        if len(merged) >= DEEP * 2:
+            break
     return merged
+
+
+def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
+    """The k passages the reader and the judge see, recitation last.
+
+    Where the record holds passages that apply the rule rather than repeat it,
+    those come first. Seven propositions have nothing else anywhere in the
+    pool -- 2.1.2, 2.1.3, 2.1.4, 2.1.8, 2.1.9, 4.2 and 4.2.4, almost all of
+    them the bare stage names of розділ 2.1 -- and for those the recitation is
+    shown, marked as such, because it is what the record has.
+    """
+    rows = candidates(conn, index, text, cache, keep)
+    bodies = passage_bodies_only(conn, rows)
+    for row in rows:
+        body = bodies.get((row["doc_id"], row["ord"]), "")
+        row["recital_share"] = round(recital_share(text, body), 3)
+        row["recital"] = row["recital_share"] >= RECITAL
+    fresh = [r for r in rows if r["recital_share"] < FRESH]
+    partial = [r for r in rows if FRESH <= r["recital_share"] < RECITAL]
+    recital = [r for r in rows if r["recital_share"] >= RECITAL]
+    chosen = (fresh + partial + recital)[:k]
+    chosen.sort(key=lambda r: -r["rank"])
+    return chosen
 
 
 def main() -> None:
@@ -85,9 +125,11 @@ def main() -> None:
             "rozdil_title": prop.rozdil_title,
             "text": prop.text,
             "cited_by": len(cited[prop.number]),
+            "recital_only": all(h["recital"] for h in hits) if hits else None,
             "passages": [
                 {"doc_id": h["doc_id"], "ord": h["ord"],
                  "score": round(h["rank"], 4), "found_by": h.get("source", "dense"),
+                 "recital": h["recital"], "recital_share": h["recital_share"],
                  "corpus": meta.get(h["doc_id"], {}).get("corpus"),
                  "doc_ref": meta.get(h["doc_id"], {}).get("doc_ref"),
                  "date": str(meta.get(h["doc_id"], {}).get("decision_date") or ""),
@@ -96,11 +138,22 @@ def main() -> None:
                 for h in hits],
         })
         print(f"  {prop.number:<9} {len(hits)} passages, "
-              f"{sum(1 for h in hits if h['doc_id'] in cited[prop.number])} of them cite it")
+              f"{sum(1 for h in hits if not h['recital'])} apply rather than recite, "
+              f"{sum(1 for h in hits if h['doc_id'] in cited[prop.number])} cite it")
     with open(args.out, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, indent=1)
     total = sum(len(p["passages"]) for p in out)
     print(f"{len(out)} propositions, {total} passages -> {args.out}")
+
+
+def passage_bodies_only(conn, hits: list[dict]) -> dict:
+    if not hits:
+        return {}
+    keys = [(h["doc_id"], h["ord"]) for h in hits]
+    with conn.cursor() as cur:
+        cur.execute("SELECT doc_id, ord, body FROM ua_metodyka_audit_passages "
+                    "WHERE (doc_id, ord) IN %s", (tuple(keys),))
+        return {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
 
 def passage_bodies(conn, hits: list[dict]) -> tuple[dict, dict]:
