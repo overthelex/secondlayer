@@ -70,14 +70,40 @@ def candidates(conn, index, text: str, cache: dict, keep: set) -> list[dict]:
     return merged
 
 
-def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
-    """The k passages the reader and the judge see, recitation last.
+AGENCY_SLOTS = 3
+TWIN = 0.80
 
-    Where the record holds passages that apply the rule rather than repeat it,
-    those come first. Seven propositions have nothing else anywhere in the
-    pool -- 2.1.2, 2.1.3, 2.1.4, 2.1.8, 2.1.9, 4.2 and 4.2.4, almost all of
-    them the bare stage names of розділ 2.1 -- and for those the recitation is
-    shown, marked as such, because it is what the record has.
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[А-Яа-яІіЇїЄєҐґA-Za-z']+", text.lower())
+
+
+def twins(a: list[str], b: list[str]) -> bool:
+    """Near-identical prose, on words rather than characters.
+
+    difflib's quick_ratio is an upper bound from a character multiset, and on
+    Ukrainian legal prose it calls almost any two passages alike -- a first
+    version of this test used it and duly reported duplicates in all 66
+    propositions. Word-level ratio with autojunk off is the measure."""
+    return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() > TWIN
+
+
+def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
+    """The k passages the reader and the judge see.
+
+    Three things decide the choice, each of them measured on a packet built
+    without it:
+
+    * Recitation last. A decision reproducing пункт 6.1 is not evidence that
+      6.1 was applied, and 36.5% of a first packet was recitation.
+    * No twins. Agency and court decisions are formulaic, and 55 of the 66
+      propositions had near-identical passages among their eight -- one
+      judgement made eight times, and support that is one paragraph repeated.
+    * The agency gets slots. Retrieval left the packet 89% court, because
+      courts restate the instrument's language while the agency applies the
+      method without naming it. The paper's claim is about the agency, so the
+      reading has to see agency decisions where the record holds any: only
+      2.1.2 and 2.1.10 have none anywhere in the pool.
     """
     rows = candidates(conn, index, text, cache, keep)
     bodies = passage_bodies_only(conn, rows)
@@ -85,10 +111,25 @@ def pool(conn, index, text: str, k: int, cache: dict, keep: set) -> list[dict]:
         body = bodies.get((row["doc_id"], row["ord"]), "")
         row["recital_share"] = round(recital_share(text, body), 3)
         row["recital"] = row["recital_share"] >= RECITAL
-    fresh = [r for r in rows if r["recital_share"] < FRESH]
-    partial = [r for r in rows if FRESH <= r["recital_share"] < RECITAL]
-    recital = [r for r in rows if r["recital_share"] >= RECITAL]
-    chosen = (fresh + partial + recital)[:k]
+        row["_words"] = _words(body)
+    ordered = ([r for r in rows if r["recital_share"] < FRESH]
+               + [r for r in rows if FRESH <= r["recital_share"] < RECITAL]
+               + [r for r in rows if r["recital_share"] >= RECITAL])
+
+    chosen: list[dict] = []
+
+    def take(pool_rows, limit):
+        for row in pool_rows:
+            if len(chosen) >= limit:
+                return
+            if any(twins(row["_words"], c["_words"]) for c in chosen):
+                continue
+            chosen.append(row)
+
+    take([r for r in ordered if r["doc_id"].startswith("amcu:")], min(AGENCY_SLOTS, k))
+    take(ordered, k)
+    for row in chosen:
+        row.pop("_words", None)
     chosen.sort(key=lambda r: -r["rank"])
     return chosen
 
