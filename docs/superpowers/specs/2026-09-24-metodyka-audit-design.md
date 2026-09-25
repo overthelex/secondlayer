@@ -214,8 +214,78 @@ The agency half is the opposite: 6,186 decisions, of which only 156 cite the
 instrument. 6,030 decisions are ground the citation index has never seen, and
 that is where a claim of the form "the record does not support this" is earned.
 
-*Pending: the reading of the packet, the judge run against it, and the
-comparison with what `z1043-26` changed.*
+## Three judges, and what their disagreement is made of
+
+The labelling protocol is in [`protocol.md`](../../../scripts/metodyka/protocol.md)
+and both the reader and the judges get it verbatim. Three families were run over
+all 528 passages through Bedrock: Claude Sonnet 4.6, DeepSeek R1 and Mistral
+Large.
+
+Mistral was dropped after reading its reasons. It matches on topic rather than
+on use: it called a passage that reproduces пункт 2.1 word for word
+"застосовує" because the passage "lists the actions described in пункт 2.1",
+which is the same text recognising itself. Its 39.5% application rate against
+the other two at 12.5% is that error, not a stricter reading by the others.
+
+The remaining two disagreed on the boundary between applying a rule and
+restating it, and reading the split cases showed both sides erring. The strict
+pair missed a conclusion when it was one clause inside a paragraph: a court
+reproduced the definition of a barrier to entry and added "Отже, дане
+твердження стосується тільки для нових суб'єктів господарювання", which is a
+consequence drawn from the rule, and both called it recitation.
+
+The protocol now names that case, lists the Ukrainian markers a short
+conclusion hides behind, and adds the rule for definitional propositions: a
+definition is applied when the defined term decides something, not when it is
+repeated. It also says what is *not* enough, because the Mistral failure is the
+opposite error: sharing a subject with the proposition, or listing the steps in
+the court's own words, is not application.
+
+Rerun on the sharpened protocol, the measurable controls all improved:
+
+| | before | after |
+|---|---|---|
+| agreement, Sonnet against DeepSeek | 69.9% | **74.4%** |
+| "застосовує" on verbatim recitation | 12.3% | **8.8%** |
+| citation control (cites / does not) | 3.8× | 3.8× |
+
+The overall application rate fell rather than rose (12.3% to 10.8%), because
+the two additions pull in opposite directions and the restrictive one is
+stronger. Whether the threshold now sits in the right place is not something
+these numbers can settle, and no further prompt tuning was done: without an
+external reference, tuning fits the author's intuition.
+
+## What the reading has to decide
+
+Of the 135 passages the two judges split on, 93 are "лише переказує" against
+"не про це" and change nothing: neither is application. The 40 that matter are
+those where one judge sees application and the other does not.
+
+They matter more than their number suggests. Bounding the disputed cases both
+ways:
+
+| disputed counted as | propositions with no application, of 66 |
+|---|---|
+| application | **5** |
+| not application | **44** |
+
+Only five hold under either reading (10.1.4, 3.1, 5.3, 7.1, 7.2). The other 39
+turn on single disputed passages, because one application is enough to take a
+proposition out of the dead-letter set.
+
+That also answers whether the agreed passages alone would do. They would not:
+dropping the disputed cases produces exactly the pessimistic set, 44, so
+"use only what the judges agree on" is not a neutral choice but a silent
+decision to read every disputed case as non-application.
+
+The reading packet is therefore 79 passages, built by
+[`decisive.py`](../../../scripts/metodyka/decisive.py): the 40 where application
+is in dispute, and 39 drawn at random from the agreed ones in the proportions of
+their labels. The control is what catches two judges agreeing and both being
+wrong, as they were on embedded conclusions. Which passage is which is not shown.
+
+*Pending: the reading, the agreement measurement against it, and the comparison
+with what `z1043-26` changed.*
 
 ## What the corpus had to be cleaned of
 
