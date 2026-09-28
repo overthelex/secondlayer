@@ -110,6 +110,16 @@ describe('uk_search_judgments', () => {
     expect(db.calls[0].params).toEqual(['%100\\%\\_x%']);
   });
 
+  it('never serves a hidden placeholder, on the text path or the citation path', async () => {
+    const db = mockDb([]);
+    const tools = new UkJudgmentTools(db);
+    await tools.executeTool('uk_search_judgments', { query: 'x' });
+    await tools.executeTool('uk_search_judgments', { citation: '[2016] EWHC 3256 (Fam)' });
+    for (const c of db.calls.filter((c) => /WITH page AS/.test(c.sql))) {
+      expect(c.sql).toMatch(/NOT EXISTS \(SELECT 1 FROM uk_court_decision_hidden h WHERE h\.id = d\.id\)/);
+    }
+  });
+
   it('has no judge filter (licence principle 2)', () => {
     const def = new UkJudgmentTools(mockDb([])).getToolDefinitions()[0];
     expect(Object.keys((def.inputSchema as any).properties)).not.toContain('judge');

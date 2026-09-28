@@ -213,3 +213,4 @@
 219_uk_provision_embedding.sql
 220_uk_legislation_ocr.sql
 221_uk_court_decision_fts.sql
+222_uk_court_decision_hidden.sql

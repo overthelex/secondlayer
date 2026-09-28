@@ -837,6 +837,8 @@ Coverage gaps worth knowing before relying on a nil result: no Court of Appeal (
 
 Licence: Find Case Law judgments are published under the Open Justice Licence. Rows carry the licence they arrived under.`,
     table: 'uk_court_decisions',
+    // Placeholders for withdrawn/moved judgments and empty rows (migration 222).
+    baseWhere: 'NOT EXISTS (SELECT 1 FROM uk_court_decision_hidden h WHERE h.id = uk_court_decisions.id)',
     selectColumns: 'id, neutral_citation, case_number, court_code, court_name, decision_date::text AS decision_date, judge, parties, licence, source_url, full_text',
     outerColumns: "t.id, t.neutral_citation, t.case_number, t.court_code, t.court_name, t.decision_date, t.judge, t.parties, t.licence, t.source_url, left(t.full_text || '', 400) AS snippet",
     orderBy: 'uk_court_decisions.decision_date DESC NULLS LAST',

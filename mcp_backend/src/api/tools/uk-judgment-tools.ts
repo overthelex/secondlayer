@@ -113,7 +113,9 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
     }
 
     const values: any[] = [];
-    const where: string[] = [];
+    // Placeholders and empty rows the 28.09 audit found (migration 222): kept in the
+    // holding, never served.
+    const where: string[] = ['NOT EXISTS (SELECT 1 FROM uk_court_decision_hidden h WHERE h.id = d.id)'];
     const push = (v: any) => { values.push(v); return `$${values.length}`; };
 
     // One parameter for the query text, shared by the match, the rank and the
