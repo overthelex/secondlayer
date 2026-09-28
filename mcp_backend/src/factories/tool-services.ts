@@ -35,6 +35,7 @@ import { ChCourtTools } from '../api/tools/ch-court-tools.js';
 import { ChLegislationTools } from '../api/tools/ch-legislation-tools.js';
 import { UkLegislationTools } from '../api/tools/uk-legislation-tools.js';
 import { UkSemanticTools } from '../api/tools/uk-semantic-tools.js';
+import { UkJudgmentTools } from '../api/tools/uk-judgment-tools.js';
 import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
 import { ChCommentaryTools } from '../api/tools/ch-commentary-tools.js';
 import { ChEchrTools } from '../api/tools/ch-echr-tools.js';
@@ -199,6 +200,9 @@ export function createToolServices(
   // Semantic layer over the statute book (Qdrant uk_provisions_bge). Legislation only:
   // the judgments stay behind the Find Case Law gate and are not in the collection.
   toolRegistry.registerHandler(new UkSemanticTools(coreServices.db));
+  // UK judgments (Find Case Law). Gated per user by services/uk-judgment-access.ts
+  // at the transport, under the TNA transactional licence CAS-349914-B9P5B8.
+  toolRegistry.registerHandler(new UkJudgmentTools(coreServices.db));
   // Case-citation graph + precedent status over ch_case_citations / ch_decision_index
   toolRegistry.registerHandler(new ChCitationTools(coreServices.db));
   // Deterministic grounding self-check for external MCP agents (LEXAI-2036)

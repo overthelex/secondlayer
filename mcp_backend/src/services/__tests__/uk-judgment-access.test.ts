@@ -15,6 +15,10 @@ import {
   isFreeMailDomain,
   emailDomain,
   LICENCE_GATED_REGISTRIES,
+  LICENCE_GATED_TOOLS,
+  judgmentFiltersOf,
+  hasJudgmentAccessMark,
+  runWithJudgmentAccess,
 } from '../uk-judgment-access.js';
 
 const dbReturning = (rows: any[]) => ({
@@ -46,6 +50,37 @@ describe('which calls are gated', () => {
 
   it('the gated set is explicit, so adding a registry is a deliberate act', () => {
     expect([...LICENCE_GATED_REGISTRIES]).toEqual(['uk_court_decisions']);
+  });
+
+  it('gates the dedicated judgment tool whatever its arguments', () => {
+    expect(gatedRegistryOf('uk_search_judgments', { query: 'x' })).toBe('uk_court_decisions');
+    expect(gatedRegistryOf('uk_search_judgments', null)).toBe('uk_court_decisions');
+    expect([...LICENCE_GATED_TOOLS.keys()]).toEqual(['uk_search_judgments']);
+  });
+
+  it('does NOT gate the legislation tools', () => {
+    for (const t of ['uk_search_legislation', 'uk_get_act', 'uk_get_provision',
+                     'uk_get_provision_history', 'uk_get_act_as_at', 'uk_semantic_search']) {
+      expect(gatedRegistryOf(t, {})).toBeNull();
+    }
+  });
+
+  it('logs nested registry filters and flat tool arguments alike', () => {
+    expect(judgmentFiltersOf({ registry: 'uk_court_decisions', filters: { query: 'a' } }))
+      .toEqual({ query: 'a' });
+    expect(judgmentFiltersOf({ query: 'a', court: 'uksc' })).toEqual({ query: 'a', court: 'uksc' });
+    expect(judgmentFiltersOf(undefined)).toBeNull();
+  });
+});
+
+describe('the access mark', () => {
+  it('is absent unless a transport granted it on this async context', async () => {
+    expect(hasJudgmentAccessMark()).toBe(false);
+    await runWithJudgmentAccess(async () => {
+      await Promise.resolve();
+      expect(hasJudgmentAccessMark()).toBe(true);
+    });
+    expect(hasJudgmentAccessMark()).toBe(false);
   });
 });
 

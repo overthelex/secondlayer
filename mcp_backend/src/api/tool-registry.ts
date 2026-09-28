@@ -12,6 +12,7 @@ import { ToolRoute, ServiceType } from '../types/gateway.js';
 import { logger } from '../utils/logger.js';
 import { BaseToolHandler, ToolResult, ToolDefinition as BaseToolDefinition, StreamEventCallback } from './base-tool-handler.js';
 import { RemoteServiceClient } from '../services/remote-service-client.js';
+import { gatedRegistryOf, hasJudgmentAccessMark } from '../services/uk-judgment-access.js';
 
 export interface ToolDefinition {
   name: string;
@@ -104,6 +105,15 @@ export class ToolRegistry {
    * Returns null if no handler or route is registered for the tool.
    */
   async executeTool(name: string, args: any): Promise<ToolResult | null> {
+    // Find Case Law licence: only a transport that ran checkJudgmentAccess may
+    // reach the judgments. See services/uk-judgment-access.ts.
+    if (gatedRegistryOf(name, args) && !hasJudgmentAccessMark()) {
+      logger.warn('Gated UK judgment call without an access check — refused', { tool: name });
+      return {
+        content: [{ type: 'text', text: 'Доступ до судових рішень Великої Британії через цей канал не надається.' }],
+        isError: true,
+      };
+    }
     // 1. Try local handler
     const handler = this.handlerMap.get(name);
     if (handler) {

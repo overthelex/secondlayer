@@ -65,8 +65,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   // Швейцарія (CH) — семантичний пошук по всьому корпусу (Qdrant ch_corpus_bge_cls; LEXAI-2004)
   'ch_semantic_search',
   // Велика Британія (UK) — статутне право: реєстр, чинний текст, point-in-time і поправки
-  // (LEXAI-2057). OGL v3.0, тому без обмежень. ⚠ Судових рішень тут НЕМАЄ і не буде до
-  // рішення за ліцензією Find Case Law — див. services/uk-judgment-access.ts, LEXAI-2056.
+  // (LEXAI-2057). OGL v3.0, тому без обмежень.
   'uk_search_legislation',
   'uk_get_act',
   'uk_get_provision',
@@ -74,6 +73,9 @@ export const V2_TOOL_NAMES = new Set<string>([
   'uk_get_act_as_at',
   // UK — семантичний шар над статутною книгою (Qdrant uk_provisions_bge)
   'uk_semantic_search',
+  // UK — судові рішення Find Case Law. Ліцензія TNA (CAS-349914-B9P5B8); доступ лише
+  // підтвердженим юристам і дослідникам — гейт у services/uk-judgment-access.ts.
+  'uk_search_judgments',
   // Court decisions — ЄДРСР (9)
   'search_court_decisions',
   'get_court_decision',
