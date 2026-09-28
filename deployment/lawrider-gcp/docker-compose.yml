@@ -318,7 +318,7 @@ services:
       - --reverse-proxy=true
       - --redirect-url=https://lawrider.uk/oauth2/callback
       - --whitelist-domain=lawrider.uk
-      # X-Auth-Request-Email on /oauth2/auth: the edge hands it to teamarea-api
+      # X-Auth-Request-User on /oauth2/auth: the edge hands it to teamarea-api
       # as the only statement of who is signed in.
       - --set-xauthrequest=true
     environment:
