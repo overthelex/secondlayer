@@ -124,3 +124,13 @@ oauth2-proxy re-reads the file on change. Page content lives in
 (never copy pages onto the box by hand: its `rsync --delete` wipes them).
 `/oauth2/start` and `/oauth2/callback` are 404 at the edge: the Google provider
 flags are placeholders and the htpasswd form is the only way in.
+
+### Profiles: /teamarea/profile/
+
+Each signed-in person can view and edit their own profile (name, title, phone,
+LinkedIn, bio). The page calls `/teamarea/api/me` (GET, PUT JSON), which the
+edge gates with the same `auth_request` and forwards to `lawrider-teamarea-api`
+(`teamarea-api/server.ts`, run directly by node:24, no dependencies) with
+`X-Team-Email` taken from oauth2-proxy's `X-Auth-Request-Email`
+(`--set-xauthrequest`). Profiles are one JSON file on the named volume
+`teamarea_data`. Every team page also shows who is signed in from the same call.
