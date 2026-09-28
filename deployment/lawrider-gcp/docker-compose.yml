@@ -291,8 +291,8 @@ services:
       - /home/ubuntu/lawrider/site:/usr/share/nginx/html:ro
     networks: [lawrider]
 
-  # Password-protected team pages under lawrider.uk/sell. The edge asks this
-  # service (auth_request) before serving /sell; it renders the branded sign-in
+  # Password-protected team pages under lawrider.uk/teamarea. The edge asks this
+  # service (auth_request) before serving /teamarea; it renders the branded sign-in
   # page from ./sell-auth/templates and checks credentials against a bcrypt
   # htpasswd file kept ON THE BOX, outside git and outside the served site dir:
   # /home/ubuntu/lawrider/htpasswd/sell. The Google provider flags are inert
