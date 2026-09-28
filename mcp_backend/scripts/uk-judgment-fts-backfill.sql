@@ -18,10 +18,7 @@ DECLARE
 BEGIN
     LOOP
         INSERT INTO uk_court_decision_fts (id, fts)
-        SELECT d.id,
-               to_tsvector('english',
-                   COALESCE(d.parties, '') || ' ' || COALESCE(d.abstract, '') || ' ' ||
-                   COALESCE(d.full_text, ''))
+        SELECT d.id, uk_court_decision_tsv(d.parties, d.abstract, d.full_text)
           FROM uk_court_decisions d
          WHERE NOT EXISTS (SELECT 1 FROM uk_court_decision_fts f WHERE f.id = d.id)
          ORDER BY d.id

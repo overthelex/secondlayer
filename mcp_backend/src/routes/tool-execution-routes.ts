@@ -425,6 +425,17 @@ export function createToolExecutionRoutes(deps: {
       }
       const args = req.body.arguments || req.body;
 
+      // Find Case Law licence gate, as on the non-streaming route.
+      const streamGated = gatedRegistryOf(toolName, args);
+      if (streamGated) {
+        const decision = await checkJudgmentAccess(deps.db, req.user?.id);
+        if (!decision.allowed) {
+          return res.status(403).json({ success: false, error: 'Forbidden', message: decision.message });
+        }
+        await logJudgmentAccess(deps.db, req.user?.id, streamGated, judgmentFiltersOf(args));
+        markJudgmentAccessGranted();
+      }
+
       logger.info('Streaming tool call request', {
         requestId: streamRequestId,
         tool: toolName,

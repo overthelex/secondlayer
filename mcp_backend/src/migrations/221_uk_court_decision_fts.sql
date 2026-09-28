@@ -25,15 +25,20 @@ CREATE TABLE IF NOT EXISTS uk_court_decision_fts (
 CREATE INDEX IF NOT EXISTS idx_uk_court_decision_fts
     ON uk_court_decision_fts USING gin (fts);
 
--- Same expression as idx_uk_court_fts, so the two can never disagree about what a
--- judgment contains.
+-- The one definition of what a judgment's search text is, shared by the trigger
+-- and the backfill. It reproduces the expression of idx_uk_court_fts (migration
+-- 155); the test in migrations/__tests__ holds the two together.
+CREATE OR REPLACE FUNCTION uk_court_decision_tsv(parties TEXT, abstract TEXT, full_text TEXT)
+RETURNS tsvector LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+    SELECT to_tsvector('english'::regconfig,
+           COALESCE(parties, '') || ' ' || COALESCE(abstract, '') || ' ' || COALESCE(full_text, ''))
+$$;
+
 CREATE OR REPLACE FUNCTION uk_court_decision_fts_sync() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO uk_court_decision_fts (id, fts)
-    VALUES (NEW.id, to_tsvector('english',
-            COALESCE(NEW.parties, '') || ' ' || COALESCE(NEW.abstract, '') || ' ' ||
-            COALESCE(NEW.full_text, '')))
+    VALUES (NEW.id, uk_court_decision_tsv(NEW.parties, NEW.abstract, NEW.full_text))
     ON CONFLICT (id) DO UPDATE SET fts = EXCLUDED.fts;
     RETURN NULL;
 END

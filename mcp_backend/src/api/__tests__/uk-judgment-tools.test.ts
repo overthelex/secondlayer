@@ -95,6 +95,9 @@ describe('uk_search_judgments', () => {
     });
     const { sql, params } = db.calls.find((c) => /WITH page AS/.test(c.sql))!;
     expect(sql).not.toMatch(/uk_court_decision_fts|websearch_to_tsquery/);
+    // No rank without a query, so the order falls through to newest first.
+    expect(sql).toMatch(/NULL::real AS rank/);
+    expect(sql).toMatch(/ORDER BY rank DESC NULLS LAST, d\.decision_date DESC/);
     expect(params).toEqual(['%[2021] UKSC 20%', 'uksc']);
     // Every $n in the statement has a value, or Postgres rejects it outright.
     const used = new Set((sql.match(/\$\d+/g) || []).map((p) => Number(p.slice(1))));
@@ -120,6 +123,60 @@ describe('uk_search_judgments', () => {
     })).error).toBe('bad_date');
   });
 
+  it('rejects a date that has the right shape but does not exist', async () => {
+    const tools = new UkJudgmentTools(mockDb([]));
+    expect(parse(await tools.executeTool('uk_search_judgments', {
+      query: 'x', date_to: '2024-02-31',
+    })).error).toBe('bad_date');
+  });
+
+  it('turns fractional pagination into integers', async () => {
+    const db = mockDb([]);
+    await new UkJudgmentTools(db).executeTool('uk_search_judgments', { query: 'x', limit: 5.7, offset: 2.5 });
+    expect(db.calls[0].sql).toMatch(/LIMIT 5 OFFSET 2/);
+  });
+
+  it('keeps the real total when the offset runs past the last match', async () => {
+    const db = mockDb([
+      { match: /SELECT count\(\*\) AS n FROM uk_court_decisions d/, rows: [{ n: 37 }] },
+      { match: /uk_court_decision_fts\) AS n/, rows: [{ n: 0 }] },
+    ]);
+    const out = parse(await new UkJudgmentTools(db).executeTool('uk_search_judgments', {
+      query: 'x', offset: 40,
+    }));
+    expect(out.results).toEqual([]);
+    expect(out.total_count).toBe(37);
+  });
+
+  it('warns when index completeness cannot be checked, rather than implying it is complete', async () => {
+    const db = {
+      query: jest.fn(async (sql: string) => {
+        if (/uk_court_decision_fts\) AS n/.test(sql)) throw new Error('boom');
+        return { rows: [HIT] };
+      }),
+    };
+    const out = parse(await new UkJudgmentTools(db).executeTool('uk_search_judgments', { query: 'x' }));
+    expect(out.results).toHaveLength(1);
+    expect(out.index_incomplete).toMatch(/Не вдалося перевірити/);
+  });
+
+  it('says what the extract is: highlighted matches with a query, the opening without one', async () => {
+    const db = mockDb([{ match: /WITH page AS/, rows: [HIT] }]);
+    const tools = new UkJudgmentTools(db);
+    expect(parse(await tools.executeTool('uk_search_judgments', { query: 'x' })).extract_note)
+      .toMatch(/навколо збігів/);
+    expect(parse(await tools.executeTool('uk_search_judgments', { citation: '[2024]' })).extract_note)
+      .toMatch(/перші 400 символів/);
+  });
+
+  it('bounds the extract in the database, not in the caller', async () => {
+    const db = mockDb([]);
+    await new UkJudgmentTools(db).executeTool('uk_search_judgments', { query: 'x' });
+    await new UkJudgmentTools(db).executeTool('uk_search_judgments', { parties: 'x' });
+    expect(db.calls[0].sql).toMatch(/MaxFragments=3,MaxWords=35/);
+    expect(db.calls[db.calls.length - 1].sql).toMatch(/left\(COALESCE\(d\.full_text, ''\), 400\)/);
+  });
+
   it('caps limit at 20', async () => {
     const db = mockDb([]);
     await new UkJudgmentTools(db).executeTool('uk_search_judgments', { query: 'x', limit: 500 });
@@ -139,6 +196,11 @@ describe('ToolRegistry licence backstop', () => {
     const out: any = await registryWith(db).executeTool('uk_search_judgments', { query: 'x' });
     expect(out.isError).toBe(true);
     expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('refuses the streaming dispatch too', async () => {
+    const out: any = await registryWith(mockDb([])).executeToolStream('uk_search_judgments', { query: 'x' }, () => {});
+    expect(out.isError).toBe(true);
   });
 
   it('serves them once the transport has granted access on this request', async () => {

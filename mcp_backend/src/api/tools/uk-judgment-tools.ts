@@ -21,6 +21,7 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { isValidIsoDate } from './ch-date-utils.js';
 
 const ATTRIBUTION =
   'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.';
@@ -30,10 +31,10 @@ const COVERAGE =
   'Немає Court of Appeal (Criminal Division) і King’s Bench Division; Administrative Court обривається у квітні 2016; ' +
   'немає Шотландії та Північної Ірландії. Відсутність результату НЕ означає, що такого рішення не існує.';
 
-const EXTRACT_NOTE =
-  'extract — дослівні уривки з тексту рішення, виділені пошуком; повний текст — за посиланням source_url.';
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const EXTRACT_NOTE_QUERY =
+  'extract — дослівні уривки з тексту рішення навколо збігів із query (виділені «»); повний текст — за посиланням source_url.';
+const EXTRACT_NOTE_OPENING =
+  'extract — перші 400 символів тексту рішення (запит без query, тож збігів для виділення немає); повний текст — за посиланням source_url.';
 
 // Delimiters for ts_headline. Plain text rather than <b>, since MCP clients render
 // the payload as JSON, not HTML.
@@ -61,7 +62,7 @@ export class UkJudgmentTools extends BaseToolHandler {
 query — англійською, синтаксис як у пошуковику: "точна фраза", OR, -виключення. Результати впорядковані за релевантністю (sort='date' — за датою).
 citation — нейтральне посилання, напр. '[2021] UKSC 20' (можна без query).
 court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm, ewhc/fam, ewhc/tcc, ewfc, ewcop, eat, ukftt/tc, ukftt/grc, ukut/iac, ukut/lc тощо.
-Кожен результат: нейтральне посилання, сторони, суд, дата, дослівні уривки з виділеними збігами і посилання на повний текст на caselaw.nationalarchives.gov.uk. Повний текст рішення інструмент не віддає.
+Кожен результат: нейтральне посилання, сторони, суд, дата, дослівний уривок (з query — фрагменти навколо збігів; без query — початок рішення) і посилання на повний текст на caselaw.nationalarchives.gov.uk. Повний текст рішення інструмент не віддає.
 Доступ — лише для підтверджених юристів і дослідників (умова ліцензії TNA).`,
         inputSchema: {
           type: 'object',
@@ -94,8 +95,9 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
     const citation = typeof a.citation === 'string' ? a.citation.trim() : '';
     const court = typeof a.court === 'string' ? a.court.trim().toLowerCase() : '';
     const parties = typeof a.parties === 'string' ? a.parties.trim() : '';
-    const limit = Math.min(Math.max(Number(a.limit) || 10, 1), 20);
-    const offset = Math.max(Number(a.offset) || 0, 0);
+    // Integers only: both are interpolated into LIMIT/OFFSET, which reject 2.5.
+    const limit = Math.min(Math.max(Math.floor(Number(a.limit)) || 10, 1), 20);
+    const offset = Math.max(Math.floor(Number(a.offset)) || 0, 0);
 
     if (!query && !citation && !parties) {
       return this.wrapResponse({
@@ -105,8 +107,8 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       });
     }
     for (const k of ['date_from', 'date_to']) {
-      if (a[k] !== undefined && a[k] !== null && a[k] !== '' && !ISO_DATE.test(String(a[k]))) {
-        return this.wrapResponse({ error: 'bad_date', message: `${k} має бути у форматі YYYY-MM-DD.` });
+      if (a[k] !== undefined && a[k] !== null && a[k] !== '' && !isValidIsoDate(String(a[k]))) {
+        return this.wrapResponse({ error: 'bad_date', message: `${k} має бути реальною датою у форматі YYYY-MM-DD.` });
       }
     }
 
@@ -157,7 +159,10 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       ]);
 
       const extra: Record<string, unknown> = { coverage: COVERAGE };
-      if (unindexed > 0) {
+      if (unindexed === null) {
+        extra.index_incomplete =
+          'Не вдалося перевірити повноту текстового індексу — результати query можуть бути неповними.';
+      } else if (unindexed > 0) {
         // Honest rather than silently partial: the backfill has not finished, so a
         // text query cannot see these judgments yet.
         extra.index_incomplete =
@@ -165,22 +170,35 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       }
 
       if (!rows.length) {
+        // An empty page is not an empty result: past the last match the window
+        // count has no row to ride on, so count the matches on their own.
+        const total = offset > 0
+          ? Number((await this.db.query(
+              `SELECT count(*) AS n FROM uk_court_decisions d
+                 ${query ? 'JOIN uk_court_decision_fts f ON f.id = d.id' : ''}
+                WHERE ${where.join(' AND ')}`, values)).rows[0]?.n) || 0
+          : 0;
         return this.wrapResponse({
-          results: [], total_count: 0, ...extra,
-          note: 'Нічого не знайдено. Спробуйте ширший запит, інший суд або період.',
+          results: [], total_count: total, has_more: false, limit, offset, ...extra,
+          note: total > 0
+            ? `Зсув ${offset} за межами результатів: усього збігів ${total}.`
+            : 'Нічого не знайдено. Спробуйте ширший запит, інший суд або період.',
         });
       }
       const result = this.wrapSearchResults(rows, limit, offset, ATTRIBUTION);
       const body = JSON.parse(result.content[0].text as string);
-      return this.wrapResponse({ ...body, ...extra, extract_note: EXTRACT_NOTE });
+      return this.wrapResponse({
+        ...body, ...extra, extract_note: query ? EXTRACT_NOTE_QUERY : EXTRACT_NOTE_OPENING,
+      });
     } catch (err: any) {
       logger.error('[uk_search_judgments] failed', { error: err?.message });
       return this.wrapResponse({ error: 'query_failed', message: 'Пошук судових рішень Великої Британії не виконано.' });
     }
   }
 
-  /** Judgments with no stored vector yet. Both counts are index-only scans on 54K rows. */
-  private async unindexedCount(): Promise<number> {
+  /** Judgments with no stored vector yet, or null when that cannot be told.
+   *  Both counts are index-only scans on 54K rows. */
+  private async unindexedCount(): Promise<number | null> {
     try {
       const r = await this.db.query(
         `SELECT (SELECT count(*) FROM uk_court_decisions) - (SELECT count(*) FROM uk_court_decision_fts) AS n`
@@ -188,7 +206,7 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       return Math.max(Number(r.rows[0]?.n) || 0, 0);
     } catch (err: any) {
       logger.warn('[uk_search_judgments] index completeness check failed', { error: err?.message });
-      return 0;
+      return null;
     }
   }
 }

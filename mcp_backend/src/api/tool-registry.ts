@@ -62,6 +62,19 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
 };
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
 
+/**
+ * Find Case Law licence backstop: only a transport that ran checkJudgmentAccess may
+ * reach the judgments. See services/uk-judgment-access.ts.
+ */
+function refuseUngatedJudgmentCall(name: string, args: any): ToolResult | null {
+  if (!gatedRegistryOf(name, args) || hasJudgmentAccessMark()) return null;
+  logger.warn('Gated UK judgment call without an access check — refused', { tool: name });
+  return {
+    content: [{ type: 'text', text: 'Доступ до судових рішень Великої Британії через цей канал не надається.' }],
+    isError: true,
+  };
+}
+
 export class ToolRegistry {
   private routes: Map<string, ToolRoute>;
   private handlers: BaseToolHandler[] = [];
@@ -105,15 +118,8 @@ export class ToolRegistry {
    * Returns null if no handler or route is registered for the tool.
    */
   async executeTool(name: string, args: any): Promise<ToolResult | null> {
-    // Find Case Law licence: only a transport that ran checkJudgmentAccess may
-    // reach the judgments. See services/uk-judgment-access.ts.
-    if (gatedRegistryOf(name, args) && !hasJudgmentAccessMark()) {
-      logger.warn('Gated UK judgment call without an access check — refused', { tool: name });
-      return {
-        content: [{ type: 'text', text: 'Доступ до судових рішень Великої Британії через цей канал не надається.' }],
-        isError: true,
-      };
-    }
+    const refused = refuseUngatedJudgmentCall(name, args);
+    if (refused) return refused;
     // 1. Try local handler
     const handler = this.handlerMap.get(name);
     if (handler) {
@@ -163,6 +169,8 @@ export class ToolRegistry {
    * Execute a streaming tool by name. Returns null if not supported.
    */
   async executeToolStream(name: string, args: any, callback: StreamEventCallback): Promise<ToolResult | null> {
+    const refused = refuseUngatedJudgmentCall(name, args);
+    if (refused) return refused;
     const handler = this.handlerMap.get(name);
     if (!handler || !handler.executeToolStream) return null;
     return await handler.executeToolStream(name, args, callback);
