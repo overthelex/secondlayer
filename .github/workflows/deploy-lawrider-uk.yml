@@ -118,7 +118,7 @@ jobs:
           $SSH_CMD "test -s ${REMOTE_REPO}/deployment/.env.prod" \
             || { echo "::error::deployment/.env.prod missing on the box — provision it first"; exit 1; }
           $SSH_CMD "cd ${REMOTE_REPO}/deployment/lawrider-gcp && \
-            docker compose --env-file ../.env.prod build migrate && \
+            docker compose --env-file ../.env.prod build migrate teamarea-api && \
             docker compose --env-file ../.env.prod up -d --remove-orphans"
           # ⚠ nginx/edge.conf is a BIND MOUNT, so changing it changes nothing compose
           # can see: same image, same service definition, no recreate, and the box

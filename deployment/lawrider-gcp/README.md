@@ -130,8 +130,17 @@ flags are placeholders and the htpasswd form is the only way in.
 Each signed-in person can view and edit their own profile (name, title, phone,
 LinkedIn, bio). The page calls `/teamarea/api/me` (GET, PUT JSON), which the
 edge gates with the same `auth_request` and forwards to `lawrider-teamarea-api`
-(`teamarea-api/server.ts`, run directly by node:24, no dependencies) with
+(`teamarea-api/`: node:24 runs `server.ts` directly, no npm dependencies;
+the image adds apache2-utils for `htpasswd`, and the deploy builds it) with
 `X-Team-Email` taken from oauth2-proxy's `X-Auth-Request-User` (htpasswd sessions
 leave the email field empty; the login is the email)
 (`--set-xauthrequest`). Profiles are one JSON file on the named volume
-`teamarea_data`. Every team page also shows who is signed in from the same call.
+`teamarea_profiles`. Every team page also shows who is signed in from the same call.
+
+People change their own password on the profile page (`POST /teamarea/api/password`
+with the current and new password, 12–128 characters). teamarea-api mounts the
+htpasswd directory read-write, checks the current password with `htpasswd -v`,
+hashes the new one with bcrypt cost 12 and replaces that one line via tmp +
+rename; oauth2-proxy picks the file up on change. Five wrong current passwords
+lock changes for that person for 15 minutes. Sessions already open stay valid
+until their cookie expires (7 days).
