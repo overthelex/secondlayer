@@ -143,6 +143,11 @@ jsdelivr only when the browser cannot read HEIC), frames it in a circle with
 zoom and pan, and uploads a 512×512 JPEG; the API checks it is a JPEG under
 2 MB and keeps one per person in `teamarea_profiles/photos/`.
 
+P&L: `GET/PUT /teamarea/api/pnl` holds one shared document of P&L assumptions
+for `/teamarea/pnl/` (flat object of numbers, short strings and booleans,
+≤64 KB). Any team member can save; each save records who and when, and the
+previous 30 versions are kept in `teamarea_profiles/pnl.json`.
+
 People change their own password on the profile page (`POST /teamarea/api/password`
 with the current and new password, 12–128 characters). teamarea-api mounts the
 htpasswd directory read-write, checks the current password with `htpasswd -v`,

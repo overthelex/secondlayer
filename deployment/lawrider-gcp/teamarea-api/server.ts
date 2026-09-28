@@ -27,6 +27,10 @@ const FILE = `${DATA_DIR}/profiles.json`;
 const PORT = Number(process.env.PORT ?? 8080);
 const PHOTO_DIR = `${DATA_DIR}/photos`;
 const PHOTO_MAX = 2 * 1024 * 1024;
+// Shared P&L assumptions: one document for the whole team, last 30 versions kept.
+const PNL_FILE = `${DATA_DIR}/pnl.json`;
+const PNL_MAX = 64 * 1024;
+const PNL_HISTORY = 30;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
@@ -163,12 +167,66 @@ async function changePassword(user: string, current: string, next: string): Prom
 createServer(async (req, res) => {
   const path = (req.url ?? '').split('?')[0];
   if (path === '/healthz') return send(res, 200, { ok: true });
-  if (path !== '/teamarea/api/me' && path !== '/teamarea/api/password' && path !== '/teamarea/api/photo') {
+  if (
+    path !== '/teamarea/api/me' &&
+    path !== '/teamarea/api/password' &&
+    path !== '/teamarea/api/photo' &&
+    path !== '/teamarea/api/pnl'
+  ) {
     return send(res, 404, { error: 'not found' });
   }
 
   const email = String(req.headers['x-team-email'] ?? '').trim().toLowerCase();
   if (!email) return send(res, 401, { error: 'not signed in' });
+
+  if (path === '/teamarea/api/pnl') {
+    type Version = { assumptions: Record<string, unknown>; updated_by: string; updated_at: string };
+    let doc: { current: Version | null; history: Version[] };
+    try {
+      doc = JSON.parse(readFileSync(PNL_FILE, 'utf8'));
+    } catch {
+      doc = { current: null, history: [] };
+    }
+    if (req.method === 'GET') {
+      return send(res, 200, {
+        current: doc.current,
+        history: doc.history.map((v) => ({ updated_by: v.updated_by, updated_at: v.updated_at })),
+      });
+    }
+    if (req.method === 'PUT') {
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+        return send(res, 415, { error: 'expected application/json' });
+      }
+      let input: { assumptions?: unknown };
+      try {
+        input = JSON.parse((await readRaw(req, PNL_MAX)).toString('utf8'));
+      } catch {
+        return send(res, 400, { error: 'bad JSON or too large' });
+      }
+      const a = input?.assumptions;
+      if (!a || typeof a !== 'object' || Array.isArray(a)) return send(res, 400, { error: 'assumptions must be an object' });
+      // Numbers and short strings only: this is a table of assumptions, not a store.
+      for (const [k, v] of Object.entries(a as Record<string, unknown>)) {
+        if (k.length > 64) return send(res, 400, { error: 'key too long' });
+        if (!(typeof v === 'number' && Number.isFinite(v)) && !(typeof v === 'string' && v.length <= 200) && typeof v !== 'boolean') {
+          return send(res, 400, { error: `bad value for ${k}` });
+        }
+      }
+      const version: Version = { assumptions: a as Record<string, unknown>, updated_by: email, updated_at: new Date().toISOString() };
+      if (doc.current) doc.history = [doc.current, ...doc.history].slice(0, PNL_HISTORY);
+      doc.current = version;
+      try {
+        writeFileSync(`${PNL_FILE}.tmp`, JSON.stringify(doc));
+        renameSync(`${PNL_FILE}.tmp`, PNL_FILE);
+      } catch (e) {
+        console.error('pnl save failed', e);
+        return send(res, 500, { error: 'Could not save.' });
+      }
+      return send(res, 200, { current: version });
+    }
+    res.setHeader('Allow', 'GET, PUT');
+    return send(res, 405, { error: 'method not allowed' });
+  }
 
   if (path === '/teamarea/api/photo') {
     const file = photoPath(email);
