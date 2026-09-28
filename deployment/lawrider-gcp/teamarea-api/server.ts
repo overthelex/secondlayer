@@ -13,6 +13,14 @@
 // browser does the HEIC decoding, circle framing and zoom); this only checks
 // it is a JPEG of sane size and keeps one per person.
 //
+// Access and activity: the edge's auth_request for every team page and API
+// call comes here (/authz). This asks oauth2-proxy whether the session cookie
+// is valid, then checks the page against the access rules, so hiding a page
+// from someone is enforced here, not only in the menu. Admins (ADMIN_EMAILS)
+// always see everything and edit the rules; everyone sees every page unless
+// an admin hides it; the activity page is admin-only unless granted. Pages
+// report views, visible time and scroll depth to /track.
+//
 // Password change rewrites the oauth2-proxy htpasswd file (mounted read-write
 // here, read-only in sell-auth). Apache's htpasswd from the image does the
 // bcrypt work: -v checks the current password against the file, -n hashes the
@@ -32,6 +40,22 @@ const PNL_FILE = `${DATA_DIR}/pnl.json`;
 const PNL_MAX = 64 * 1024;
 const PNL_HISTORY = 30;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
+const AUTH_URL = process.env.AUTH_URL ?? 'http://lawrider-sell-auth:4180/oauth2/auth';
+const ADMINS = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+const ACCESS_FILE = `${DATA_DIR}/access.json`;
+const ACTIVITY_FILE = `${DATA_DIR}/activity.jsonl`;
+const ACTIVITY_MAX_BYTES = 20 * 1024 * 1024;
+// Pages the access rules know about, in menu order, with who sees them when
+// no rule says otherwise. Profile is always visible (it is where people
+// change their password) and is not listed. A page missing from this list is
+// visible to everyone.
+const PAGES: { slug: string; label: string; default: boolean }[] = [
+  { slug: 'sales', label: 'Sales', default: true },
+  { slug: 'pitch', label: 'Pitch', default: true },
+  { slug: 'pitch3', label: 'Pitch3', default: true },
+  { slug: 'pnl', label: 'P&L', default: true },
+  { slug: 'admin', label: 'Activity', default: false },
+];
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
 // Wrong current passwords per person before a 15-minute pause.
@@ -112,7 +136,7 @@ function saveProfile(res: ServerResponse, email: string, profile: Profile): void
     console.error('profile save failed', e);
     return send(res, 500, { error: 'Could not save your profile.' });
   }
-  send(res, 200, { email, profile });
+  send(res, 200, { email, profile, admin: isAdmin(email), pages: visiblePages(email) });
 }
 
 function htpasswd(args: string[], stdin: string): Promise<{ code: number; out: string }> {
@@ -164,14 +188,198 @@ async function changePassword(user: string, current: string, next: string): Prom
   return [200, 'Password changed.'];
 }
 
+// ---- access rules
+type Grants = Record<string, Record<string, boolean>>;
+
+function loadGrants(): Grants {
+  try {
+    return JSON.parse(readFileSync(ACCESS_FILE, 'utf8')).grants ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function isAdmin(email: string): boolean {
+  return ADMINS.includes(email);
+}
+
+function canSee(email: string, slug: string, grants: Grants = loadGrants()): boolean {
+  if (isAdmin(email) || slug === '' || slug === 'profile' || slug === 'api') return true;
+  const page = PAGES.find((p) => p.slug === slug);
+  if (!page) return true;
+  return grants[email]?.[slug] ?? page.default;
+}
+
+function visiblePages(email: string): string[] {
+  const grants = loadGrants();
+  return PAGES.filter((p) => canSee(email, p.slug, grants)).map((p) => p.slug);
+}
+
+function teamUsers(): string[] {
+  try {
+    return readFileSync(HTPASSWD, 'utf8')
+      .split('\n')
+      .map((l) => l.split(':')[0].trim().toLowerCase())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// /teamarea/<slug>/... -> slug ('' for /teamarea or /teamarea/)
+function slugOf(uri: string): string {
+  const m = /^\/teamarea(?:\/([^/?#]*))?/.exec(uri);
+  return m && m[1] ? decodeURIComponent(m[1]).toLowerCase() : '';
+}
+
+// ---- activity log: one JSON object per line
+type Event = { t: number; u: string; p: string; k: string; v: string; a: number; s: number; d: string; c: string };
+
+function device(ua: string): string {
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : 'Other';
+  const br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Other';
+  return `${os} · ${br}`;
+}
+
+function appendEvent(e: Event): void {
+  try {
+    writeFileSync(ACTIVITY_FILE, JSON.stringify(e) + '\n', { flag: 'a' });
+    // Keep the log bounded: past the cap, drop the older half.
+    const size = readFileSync(ACTIVITY_FILE).length;
+    if (size > ACTIVITY_MAX_BYTES) {
+      const lines = readFileSync(ACTIVITY_FILE, 'utf8').split('\n').filter(Boolean);
+      writeFileSync(`${ACTIVITY_FILE}.tmp`, lines.slice(Math.floor(lines.length / 2)).join('\n') + '\n');
+      renameSync(`${ACTIVITY_FILE}.tmp`, ACTIVITY_FILE);
+    }
+  } catch (err) {
+    console.error('activity write failed', err);
+  }
+}
+
+const SESSION_GAP_MS = 30 * 60 * 1000;
+
+function activity(days: number) {
+  const since = Date.now() - days * 86_400_000;
+  let events: Event[] = [];
+  try {
+    events = readFileSync(ACTIVITY_FILE, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        try {
+          return JSON.parse(l) as Event;
+        } catch {
+          return null;
+        }
+      })
+      .filter((e): e is Event => !!e && e.t >= since);
+  } catch {
+    events = [];
+  }
+  events.sort((x, y) => x.t - y.t);
+  const byUser = new Map<string, Event[]>();
+  for (const e of events) {
+    if (!byUser.has(e.u)) byUser.set(e.u, []);
+    byUser.get(e.u)!.push(e);
+  }
+  const users = [...new Set([...teamUsers(), ...byUser.keys()])].map((u) => {
+    const list = byUser.get(u) ?? [];
+    const sessions: {
+      start: number; end: number; active_s: number; device: string; country: string;
+      pages: { page: string; views: number; active_s: number; scroll: number }[];
+    }[] = [];
+    let cur: Event[] = [];
+    const flush = () => {
+      if (!cur.length) return;
+      // One page view = one v id; its visible time and scroll are the maximum reported.
+      const views = new Map<string, { page: string; a: number; s: number }>();
+      for (const e of cur) {
+        const v = views.get(e.v) ?? { page: e.p, a: 0, s: 0 };
+        v.a = Math.max(v.a, e.a);
+        v.s = Math.max(v.s, e.s);
+        views.set(e.v, v);
+      }
+      const pages = new Map<string, { page: string; views: number; active_s: number; scroll: number }>();
+      for (const v of views.values()) {
+        const p = pages.get(v.page) ?? { page: v.page, views: 0, active_s: 0, scroll: 0 };
+        p.views += 1;
+        p.active_s += Math.round(v.a / 1000);
+        p.scroll = Math.max(p.scroll, v.s);
+        pages.set(v.page, p);
+      }
+      const ps = [...pages.values()].sort((a, b) => b.active_s - a.active_s);
+      sessions.push({
+        start: cur[0].t,
+        end: cur[cur.length - 1].t,
+        active_s: ps.reduce((n, p) => n + p.active_s, 0),
+        device: cur[0].d,
+        country: cur[0].c,
+        pages: ps,
+      });
+      cur = [];
+    };
+    for (const e of list) {
+      if (cur.length && e.t - cur[cur.length - 1].t > SESSION_GAP_MS) flush();
+      cur.push(e);
+    }
+    flush();
+    sessions.reverse();
+    return {
+      email: u,
+      admin: isAdmin(u),
+      last_seen: list.length ? list[list.length - 1].t : null,
+      sessions_count: sessions.length,
+      active_s: sessions.reduce((n, x) => n + x.active_s, 0),
+      sessions: sessions.slice(0, 50),
+    };
+  });
+  return { days, users };
+}
+
+async function checkSession(cookie: string): Promise<string | null> {
+  const r = await fetch(AUTH_URL, {
+    headers: { cookie, 'x-forwarded-proto': 'https', 'x-forwarded-host': 'lawrider.uk' },
+    redirect: 'manual',
+  });
+  if (r.status !== 202 && r.status !== 200) return null;
+  return (r.headers.get('x-auth-request-user') ?? '').trim().toLowerCase() || null;
+}
+
 createServer(async (req, res) => {
   const path = (req.url ?? '').split('?')[0];
   if (path === '/healthz') return send(res, 200, { ok: true });
+
+  // auth_request from the edge: 202 + who, 401 not signed in, 403 hidden page.
+  if (path === '/authz') {
+    let user: string | null = null;
+    try {
+      user = await checkSession(String(req.headers.cookie ?? ''));
+    } catch (e) {
+      console.error('session check failed', e);
+      res.writeHead(500);
+      return res.end();
+    }
+    if (!user) {
+      res.writeHead(401);
+      return res.end();
+    }
+    const slug = slugOf(String(req.headers['x-original-uri'] ?? ''));
+    if (!canSee(user, slug)) {
+      res.writeHead(403, { 'X-Auth-Request-User': user });
+      return res.end();
+    }
+    res.writeHead(202, { 'X-Auth-Request-User': user });
+    return res.end();
+  }
+
   if (
     path !== '/teamarea/api/me' &&
     path !== '/teamarea/api/password' &&
     path !== '/teamarea/api/photo' &&
-    path !== '/teamarea/api/pnl'
+    path !== '/teamarea/api/pnl' &&
+    path !== '/teamarea/api/track' &&
+    path !== '/teamarea/api/admin/activity' &&
+    path !== '/teamarea/api/admin/access'
   ) {
     return send(res, 404, { error: 'not found' });
   }
@@ -179,7 +387,87 @@ createServer(async (req, res) => {
   const email = String(req.headers['x-team-email'] ?? '').trim().toLowerCase();
   if (!email) return send(res, 401, { error: 'not signed in' });
 
+  if (path === '/teamarea/api/track') {
+    if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+    let b: Record<string, unknown>;
+    try {
+      b = JSON.parse(await readBody(req));
+    } catch {
+      return send(res, 400, { error: 'bad JSON' });
+    }
+    const page = String(b.page ?? '');
+    const kind = String(b.kind ?? '');
+    const view = String(b.view ?? '');
+    if (!/^[a-z0-9-]{0,32}$/.test(page) || !['view', 'beat', 'leave'].includes(kind) || !/^[a-z0-9]{8,32}$/.test(view)) {
+      return send(res, 400, { error: 'bad event' });
+    }
+    const num = (x: unknown, max: number) => Math.max(0, Math.min(max, Math.round(Number(x) || 0)));
+    appendEvent({
+      t: Date.now(),
+      u: email,
+      p: page || 'index',
+      k: kind,
+      v: view,
+      a: num(b.active_ms, 12 * 3600 * 1000),
+      s: num(b.scroll, 100),
+      d: device(String(req.headers['user-agent'] ?? '')),
+      c: String(req.headers['cf-ipcountry'] ?? '').slice(0, 2),
+    });
+    res.writeHead(204);
+    return res.end();
+  }
+
+  if (path === '/teamarea/api/admin/activity') {
+    if (!canSee(email, 'admin')) return send(res, 403, { error: 'not allowed' });
+    const days = Math.max(1, Math.min(365, Number(new URL(req.url ?? '', 'http://x').searchParams.get('days')) || 30));
+    return send(res, 200, activity(days));
+  }
+
+  if (path === '/teamarea/api/admin/access') {
+    if (!isAdmin(email)) return send(res, 403, { error: 'admins only' });
+    if (req.method === 'PUT') {
+      let b: { grants?: unknown };
+      try {
+        b = JSON.parse(await readBody(req));
+      } catch {
+        return send(res, 400, { error: 'bad JSON' });
+      }
+      const users = teamUsers();
+      const grants: Grants = {};
+      const input = (b.grants ?? {}) as Record<string, Record<string, unknown>>;
+      for (const u of Object.keys(input)) {
+        if (!users.includes(u) || isAdmin(u)) continue;
+        for (const p of PAGES) {
+          const v = input[u]?.[p.slug];
+          // Store only what differs from the default, so new pages and new
+          // people keep following the defaults.
+          if (typeof v === 'boolean' && v !== p.default) (grants[u] ??= {})[p.slug] = v;
+        }
+      }
+      try {
+        writeFileSync(`${ACCESS_FILE}.tmp`, JSON.stringify({ grants, updated_by: email, updated_at: new Date().toISOString() }));
+        renameSync(`${ACCESS_FILE}.tmp`, ACCESS_FILE);
+      } catch (e) {
+        console.error('access save failed', e);
+        return send(res, 500, { error: 'Could not save.' });
+      }
+      console.log(`access rules changed by ${email}`);
+    } else if (req.method !== 'GET') {
+      return send(res, 405, { error: 'method not allowed' });
+    }
+    const grants = loadGrants();
+    return send(res, 200, {
+      pages: PAGES,
+      users: teamUsers().map((u) => ({
+        email: u,
+        admin: isAdmin(u),
+        pages: Object.fromEntries(PAGES.map((p) => [p.slug, canSee(u, p.slug, grants)])),
+      })),
+    });
+  }
+
   if (path === '/teamarea/api/pnl') {
+    if (!canSee(email, 'pnl')) return send(res, 403, { error: 'not allowed' });
     type Version = { assumptions: Record<string, unknown>; updated_by: string; updated_at: string };
     let doc: { current: Version | null; history: Version[] };
     try {
@@ -312,7 +600,7 @@ createServer(async (req, res) => {
   }
 
   if (req.method === 'GET') {
-    return send(res, 200, { email, profile: load()[email] ?? {} });
+    return send(res, 200, { email, profile: load()[email] ?? {}, admin: isAdmin(email), pages: visiblePages(email) });
   }
 
   if (req.method === 'PUT') {
