@@ -9,17 +9,24 @@
 // No npm dependencies: node:24 runs this file directly (type stripping). Profiles
 // live in one JSON file on a named volume, written via tmp + rename.
 //
+// Photos arrive already cropped to a square JPEG by the profile page (the
+// browser does the HEIC decoding, circle framing and zoom); this only checks
+// it is a JPEG of sane size and keeps one per person.
+//
 // Password change rewrites the oauth2-proxy htpasswd file (mounted read-write
 // here, read-only in sell-auth). Apache's htpasswd from the image does the
 // bcrypt work: -v checks the current password against the file, -n hashes the
 // new one; passwords only ever travel on stdin.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 const FILE = `${DATA_DIR}/profiles.json`;
 const PORT = Number(process.env.PORT ?? 8080);
+const PHOTO_DIR = `${DATA_DIR}/photos`;
+const PHOTO_MAX = 2 * 1024 * 1024;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
 const PASSWORD_MIN = 12;
 const PASSWORD_MAX = 128;
@@ -38,7 +45,16 @@ const FIELDS: Record<string, number> = {
 
 type Profile = Record<string, string> & { updated_at?: string };
 
-mkdirSync(DATA_DIR, { recursive: true });
+mkdirSync(PHOTO_DIR, { recursive: true });
+
+// File name from the email, so an address never becomes a path.
+function photoPath(email: string): string {
+  return `${PHOTO_DIR}/${createHash('sha256').update(email).digest('hex').slice(0, 32)}.jpg`;
+}
+
+function isJpeg(b: Buffer): boolean {
+  return b.length > 4 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff && b[b.length - 2] === 0xff && b[b.length - 1] === 0xd9;
+}
 
 function load(): Record<string, Profile> {
   try {
@@ -59,22 +75,40 @@ function send(res: ServerResponse, code: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    if (Number(req.headers['content-length'] ?? 0) > limit) {
+      req.resume();
+      return reject(new Error('too large'));
+    }
+    // Past the limit, keep reading and drop the bytes, so the caller can still
+    // answer 413 instead of the connection just dying.
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > 16_384) {
-        reject(new Error('too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(c);
+      if (size <= limit) chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => (size > limit ? reject(new Error('too large')) : resolve(Buffer.concat(chunks))));
     req.on('error', reject);
   });
+}
+
+async function readBody(req: IncomingMessage): Promise<string> {
+  return (await readRaw(req, 16_384)).toString('utf8');
+}
+
+function saveProfile(res: ServerResponse, email: string, profile: Profile): void {
+  const all = load();
+  all[email] = profile;
+  try {
+    save(all);
+  } catch (e) {
+    // A failed write must cost one request, not the whole service.
+    console.error('profile save failed', e);
+    return send(res, 500, { error: 'Could not save your profile.' });
+  }
+  send(res, 200, { email, profile });
 }
 
 function htpasswd(args: string[], stdin: string): Promise<{ code: number; out: string }> {
@@ -129,12 +163,60 @@ async function changePassword(user: string, current: string, next: string): Prom
 createServer(async (req, res) => {
   const path = (req.url ?? '').split('?')[0];
   if (path === '/healthz') return send(res, 200, { ok: true });
-  if (path !== '/teamarea/api/me' && path !== '/teamarea/api/password') {
+  if (path !== '/teamarea/api/me' && path !== '/teamarea/api/password' && path !== '/teamarea/api/photo') {
     return send(res, 404, { error: 'not found' });
   }
 
   const email = String(req.headers['x-team-email'] ?? '').trim().toLowerCase();
   if (!email) return send(res, 401, { error: 'not signed in' });
+
+  if (path === '/teamarea/api/photo') {
+    const file = photoPath(email);
+    if (req.method === 'GET') {
+      let img: Buffer;
+      try {
+        img = readFileSync(file);
+      } catch {
+        return send(res, 404, { error: 'no photo' });
+      }
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Content-Length': img.length,
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      return res.end(img);
+    }
+    if (req.method === 'PUT') {
+      if (String(req.headers['content-type'] ?? '') !== 'image/jpeg') {
+        return send(res, 415, { error: 'expected image/jpeg' });
+      }
+      let img: Buffer;
+      try {
+        img = await readRaw(req, PHOTO_MAX);
+      } catch {
+        return send(res, 413, { error: 'The photo is larger than 2 MB.' });
+      }
+      if (!isJpeg(img)) return send(res, 400, { error: 'That is not a JPEG image.' });
+      try {
+        writeFileSync(`${file}.tmp`, img);
+        renameSync(`${file}.tmp`, file);
+      } catch (e) {
+        console.error('photo save failed', e);
+        return send(res, 500, { error: 'Could not save your photo.' });
+      }
+      const profile: Profile = { ...(load()[email] ?? {}), photo: new Date().toISOString() };
+      return saveProfile(res, email, profile);
+    }
+    if (req.method === 'DELETE') {
+      rmSync(file, { force: true });
+      const profile: Profile = { ...(load()[email] ?? {}) };
+      delete profile.photo;
+      return saveProfile(res, email, profile);
+    }
+    res.setHeader('Allow', 'GET, PUT, DELETE');
+    return send(res, 405, { error: 'method not allowed' });
+  }
 
   if (path === '/teamarea/api/password') {
     if (req.method !== 'POST') {
@@ -200,16 +282,10 @@ createServer(async (req, res) => {
       return send(res, 400, { error: 'linkedin must be a https://linkedin.com/ link' });
     }
     profile.updated_at = new Date().toISOString();
-    const all = load();
-    all[email] = profile;
-    try {
-      save(all);
-    } catch (e) {
-      // A failed write must cost one request, not the whole service.
-      console.error('profile save failed', e);
-      return send(res, 500, { error: 'Could not save your profile.' });
-    }
-    return send(res, 200, { email, profile });
+    // The photo is set through /photo; saving the form keeps it.
+    const photo = load()[email]?.photo;
+    if (photo) profile.photo = photo;
+    return saveProfile(res, email, profile);
   }
 
   res.setHeader('Allow', 'GET, PUT');

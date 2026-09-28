@@ -137,6 +137,12 @@ leave the email field empty; the login is the email)
 (`--set-xauthrequest`). Profiles are one JSON file on the named volume
 `teamarea_profiles`. Every team page also shows who is signed in from the same call.
 
+Photos: `GET/PUT/DELETE /teamarea/api/photo` (own photo only). The profile page
+decodes the picture in the browser (iPhone JPEG/HEIC; heic2any is loaded from
+jsdelivr only when the browser cannot read HEIC), frames it in a circle with
+zoom and pan, and uploads a 512×512 JPEG; the API checks it is a JPEG under
+2 MB and keeps one per person in `teamarea_profiles/photos/`.
+
 People change their own password on the profile page (`POST /teamarea/api/password`
 with the current and new password, 12–128 characters). teamarea-api mounts the
 htpasswd directory read-write, checks the current password with `htpasswd -v`,
