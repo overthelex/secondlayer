@@ -104,9 +104,9 @@ API access for the zone is a scoped token on cthulhu at
 `/home/vovkes/SecondLayer/.env.cloudflare.lawrider-uk` (0600) — DNS Write, Zone
 Read, Zone Settings Write, SSL and Certificates Write, that zone only.
 
-## Team area: lawrider.uk/sell
+## Team area: lawrider.uk/teamarea
 
-`/sell` is password-protected. The edge `auth_request`s `lawrider-sell-auth`
+`/teamarea` is password-protected (it was `/sell` until 2026-09-28; `/sell` now 301s to `/teamarea/sales/`). The edge `auth_request`s `lawrider-sell-auth`
 (oauth2-proxy v7.7.1), which renders the branded sign-in page from
 `sell-auth/templates/` and checks credentials against a **bcrypt** htpasswd file
 kept on the box, outside git and outside the served site dir:
@@ -120,6 +120,7 @@ Add or change a user (password on stdin, bcrypt cost 12):
       htpasswd -niB -C 12 user@lawrider.uk | sudo tee -a /home/ubuntu/lawrider/htpasswd/sell
 
 oauth2-proxy re-reads the file on change. Page content lives in
-`/home/ubuntu/lawrider/site/sell/` like the rest of the static site.
+`site/teamarea/` in the overthelex/lawrider-uk repository, deployed by its own CI
+(never copy pages onto the box by hand: its `rsync --delete` wipes them).
 `/oauth2/start` and `/oauth2/callback` are 404 at the edge: the Google provider
 flags are placeholders and the htpasswd form is the only way in.
