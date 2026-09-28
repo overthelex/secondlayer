@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dualAuth, AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { createBalanceCheckMiddleware } from '../middleware/balance-check.js';
 import { logger } from '../utils/logger.js';
-import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess } from '../services/uk-judgment-access.js';
+import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess, judgmentFiltersOf, markJudgmentAccessGranted } from '../services/uk-judgment-access.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { requestContext } from '../utils/openai-client.js';
 import { ToolRegistry } from '../api/tool-registry.js';
@@ -329,7 +329,8 @@ export function createToolExecutionRoutes(deps: {
               return { name: call.name, error: 'Forbidden', message: decision.message };
             }
             await logJudgmentAccess(deps.db, req.user?.id, batchGated,
-                                    (call.arguments || {}).filters);
+                                    judgmentFiltersOf(call.arguments));
+            markJudgmentAccessGranted();
           }
           const callRequestId = `batch-${uuidv4()}`;
           const callStartTime = Date.now();
@@ -424,6 +425,17 @@ export function createToolExecutionRoutes(deps: {
       }
       const args = req.body.arguments || req.body;
 
+      // Find Case Law licence gate, as on the non-streaming route.
+      const streamGated = gatedRegistryOf(toolName, args);
+      if (streamGated) {
+        const decision = await checkJudgmentAccess(deps.db, req.user?.id);
+        if (!decision.allowed) {
+          return res.status(403).json({ success: false, error: 'Forbidden', message: decision.message });
+        }
+        await logJudgmentAccess(deps.db, req.user?.id, streamGated, judgmentFiltersOf(args));
+        markJudgmentAccessGranted();
+      }
+
       logger.info('Streaming tool call request', {
         requestId: streamRequestId,
         tool: toolName,
@@ -516,7 +528,8 @@ export function createToolExecutionRoutes(deps: {
             message: decision.message,
           });
         }
-        await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, args?.filters);
+        await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, judgmentFiltersOf(args));
+        markJudgmentAccessGranted();
       }
 
       logger.info('Tool call request', {

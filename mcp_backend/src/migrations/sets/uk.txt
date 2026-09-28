@@ -212,3 +212,4 @@
 218_uk_corpus_check_run.sql
 219_uk_provision_embedding.sql
 220_uk_legislation_ocr.sql
+221_uk_court_decision_fts.sql

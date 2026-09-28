@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { mcpDiscoveryRateLimit } from '../middleware/rate-limit.js';
 import { logger } from '../utils/logger.js';
-import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess } from '../services/uk-judgment-access.js';
+import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess, judgmentFiltersOf, markJudgmentAccessGranted } from '../services/uk-judgment-access.js';
 import { sanitizeId, maskSensitive } from '../utils/sanitize-log.js';
 import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
@@ -285,7 +285,8 @@ export function createMCPSSERoutes(deps: {
             });
             return { content: [{ type: 'text', text: decision.message }], isError: true };
           }
-          await logJudgmentAccess(deps.db, userId, gatedRegistry, args?.filters);
+          await logJudgmentAccess(deps.db, userId, gatedRegistry, judgmentFiltersOf(args));
+          markJudgmentAccessGranted();
         }
 
         const result = await requestContext.run(

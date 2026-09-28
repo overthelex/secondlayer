@@ -15,6 +15,7 @@
  * invented rather than one we were given.
  */
 
+import { AsyncLocalStorage } from 'async_hooks';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -22,6 +23,21 @@ import { logger } from '../utils/logger.js';
  * only thing needed to bring it under the licence gate.
  */
 export const LICENCE_GATED_REGISTRIES = new Set<string>(['uk_court_decisions']);
+
+/**
+ * Dedicated tools that read Find Case Law records, mapped to the registry they are
+ * logged under. A tool over the judgments that is missing here is ungated, so the
+ * test suite pins this map.
+ */
+export const LICENCE_GATED_TOOLS = new Map<string, string>([
+  ['uk_search_judgments', 'uk_court_decisions'],
+]);
+
+/** What goes into the access log: search_registry nests its filters, a dedicated
+ *  tool takes them as top-level arguments. */
+export function judgmentFiltersOf(args: any): any {
+  return args?.filters ?? args ?? null;
+}
 
 /** Free-mail hosts. A signal that routes an application to review — never a refusal:
  *  a sole practitioner or a barrister on a personal address is ordinary. */
@@ -46,6 +62,8 @@ export function emailDomain(email: string | undefined | null): string | null {
  * overwhelming majority of calls.
  */
 export function gatedRegistryOf(toolName: string, args: any): string | null {
+  const direct = LICENCE_GATED_TOOLS.get(toolName);
+  if (direct) return direct;
   if (toolName !== 'search_registry') return null;
   const registry = args?.registry;
   return typeof registry === 'string' && LICENCE_GATED_REGISTRIES.has(registry)
@@ -139,4 +157,28 @@ export async function logJudgmentAccess(
   } catch (error: any) {
     logger.warn('uk judgment access log write failed', { error: error.message });
   }
+}
+
+/**
+ * Proof, carried on the async context, that THIS request passed checkJudgmentAccess.
+ *
+ * The check runs in the transports (MCP, HTTP, batch). Anything else that reaches
+ * ToolRegistry.executeTool — the legacy /sse server, the workflow executor, a tool
+ * calling another tool — never ran it, so the registry refuses a gated call unless
+ * this marker is present. Fails closed: a new path is denied until it is gated.
+ */
+const judgmentAccess = new AsyncLocalStorage<{ granted: true }>();
+
+/** Call right after an allowed checkJudgmentAccess, in the same request handler. */
+export function markJudgmentAccessGranted(): void {
+  judgmentAccess.enterWith({ granted: true });
+}
+
+export function hasJudgmentAccessMark(): boolean {
+  return judgmentAccess.getStore()?.granted === true;
+}
+
+/** Test-only: run fn as if the transport had granted access. */
+export function runWithJudgmentAccess<T>(fn: () => T): T {
+  return judgmentAccess.run({ granted: true }, fn);
 }
