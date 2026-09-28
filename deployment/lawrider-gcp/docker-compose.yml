@@ -331,18 +331,24 @@ services:
   # Profiles for lawrider.uk/teamarea/profile/. Reached only through the edge
   # after auth_request; identity is the X-Team-Email the edge sets.
   teamarea-api:
-    image: node:24-alpine
+    build: ./teamarea-api
+    image: lawrider-teamarea-api:local
     container_name: lawrider-teamarea-api
     restart: unless-stopped
-    command: ["node", "/app/server.ts"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     environment:
       DATA_DIR: /data
+      HTPASSWD_FILE: /htpasswd/sell
     volumes:
-      - ./teamarea-api/server.ts:/app/server.ts:ro
-      - teamarea_data:/data
+      # Profiles. A fresh volume (not teamarea_data): an empty named volume
+      # takes /data's node ownership from the image only on first use, and
+      # teamarea_data was first created root-owned.
+      - teamarea_profiles:/data
+      # Read-write here so people can change their own password; sell-auth
+      # mounts the same directory read-only and re-reads the file on change.
+      - /home/ubuntu/lawrider/htpasswd:/htpasswd
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
       interval: 30s
@@ -373,7 +379,7 @@ services:
 
 volumes:
   app_data:
-  teamarea_data:
+  teamarea_profiles:
 
 networks:
   lawrider:
