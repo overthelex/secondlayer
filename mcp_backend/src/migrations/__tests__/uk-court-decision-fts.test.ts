@@ -36,3 +36,17 @@ describe('UK judgment search text', () => {
     expect(backfill).not.toMatch(/to_tsvector/);
   });
 });
+
+describe('hidden UK judgments (migration 222)', () => {
+  const sql = read('222_uk_court_decision_hidden.sql');
+  const ids = [...sql.matchAll(/'(tna-https:[^']+)'/g)].map((m) => m[1]);
+
+  it('hides the 12 placeholders and 2 empty rows, and nothing else', () => {
+    expect(ids).toHaveLength(14);
+    expect(new Set(ids).size).toBe(14);
+  });
+
+  it('does not hide [2012] EWHC 3030 (Admin), a real judgment that merely says "withdrawn"', () => {
+    expect(ids).not.toContain('tna-https://caselaw.nationalarchives.gov.uk/id/ewhc/admin/2012/3030');
+  });
+});

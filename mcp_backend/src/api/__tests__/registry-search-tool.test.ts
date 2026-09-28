@@ -490,6 +490,20 @@ describe('aggregate mode (LEXAI-1820)', () => {
       expect(calls[0].params).toContain('unfair dismissal');
     });
 
+    it('judgments never include the rows hidden by migration 222', async () => {
+      db = makeDb(() => ({ rows: [{ id: 'x', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'uk_court_decisions',
+        filters: { citation: '[2016] EWHC 3256 (Fam)' },
+      });
+
+      expect(calls[0].sql).toContain(
+        'NOT EXISTS (SELECT 1 FROM uk_court_decision_hidden h WHERE h.id = uk_court_decisions.id)',
+      );
+    });
+
     it('provision FTS matches idx_uk_prov_fts, which is on the bare column', async () => {
       db = makeDb(() => ({ rows: [{ leg_id: 'ukpga/2006/46', _total_count: 1 }] }));
       tool = new RegistrySearchTool(db);
