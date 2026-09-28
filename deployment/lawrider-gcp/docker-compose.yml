@@ -291,6 +291,40 @@ services:
       - /home/ubuntu/lawrider/site:/usr/share/nginx/html:ro
     networks: [lawrider]
 
+  # Password-protected team pages under lawrider.uk/sell. The edge asks this
+  # service (auth_request) before serving /sell; it renders the branded sign-in
+  # page from ./sell-auth/templates and checks credentials against a bcrypt
+  # htpasswd file kept ON THE BOX, outside git and outside the served site dir:
+  # /home/ubuntu/lawrider/htpasswd/sell. The Google provider flags are inert
+  # placeholders (oauth2-proxy needs a provider); the edge 404s /oauth2/start so
+  # only the htpasswd form can be used.
+  sell-auth:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    container_name: lawrider-sell-auth
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=google
+      - --client-id=unused
+      - --client-secret=unused
+      - --htpasswd-file=/htpasswd/sell
+      - --display-htpasswd-form=true
+      - --email-domain=*
+      - --cookie-name=_lr_team
+      - --cookie-secure=true
+      - --cookie-expire=168h
+      - --upstream=static://202
+      - --custom-templates-dir=/templates
+      - --reverse-proxy=true
+      - --redirect-url=https://lawrider.uk/oauth2/callback
+      - --whitelist-domain=lawrider.uk
+    environment:
+      OAUTH2_PROXY_COOKIE_SECRET: ${SELL_AUTH_COOKIE_SECRET:?SELL_AUTH_COOKIE_SECRET missing from .env.prod}
+    volumes:
+      - /home/ubuntu/lawrider/htpasswd:/htpasswd:ro
+      - ./sell-auth/templates:/templates:ro
+    networks: [lawrider]
+
   edge:
     image: nginx:1.27-alpine
     container_name: lawrider-edge
@@ -303,6 +337,7 @@ services:
       - /home/ubuntu/certs-lawrider.uk:/etc/nginx/certs/lawrider.uk:ro
     depends_on:
       - site
+      - sell-auth
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1"]
       interval: 15s

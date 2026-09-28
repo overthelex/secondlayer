@@ -103,3 +103,23 @@ The private key was generated on the box and has never left it.
 API access for the zone is a scoped token on cthulhu at
 `/home/vovkes/SecondLayer/.env.cloudflare.lawrider-uk` (0600) — DNS Write, Zone
 Read, Zone Settings Write, SSL and Certificates Write, that zone only.
+
+## Team area: lawrider.uk/sell
+
+`/sell` is password-protected. The edge `auth_request`s `lawrider-sell-auth`
+(oauth2-proxy v7.7.1), which renders the branded sign-in page from
+`sell-auth/templates/` and checks credentials against a **bcrypt** htpasswd file
+kept on the box, outside git and outside the served site dir:
+`/home/ubuntu/lawrider/htpasswd/sell` (dir 755, file 644, owner ubuntu).
+The cookie secret is `SELL_AUTH_COOKIE_SECRET` in `deployment/.env.prod`
+(32 bytes); compose refuses to start `sell-auth` without it.
+
+Add or change a user (password on stdin, bcrypt cost 12):
+
+    printf '%s' "$PASSWORD" | sudo docker run --rm -i httpd:2.4-alpine \
+      htpasswd -niB -C 12 user@lawrider.uk | sudo tee -a /home/ubuntu/lawrider/htpasswd/sell
+
+oauth2-proxy re-reads the file on change. Page content lives in
+`/home/ubuntu/lawrider/site/sell/` like the rest of the static site.
+`/oauth2/start` and `/oauth2/callback` are 404 at the edge: the Google provider
+flags are placeholders and the htpasswd form is the only way in.
