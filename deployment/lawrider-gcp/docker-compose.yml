@@ -318,11 +318,36 @@ services:
       - --reverse-proxy=true
       - --redirect-url=https://lawrider.uk/oauth2/callback
       - --whitelist-domain=lawrider.uk
+      # X-Auth-Request-Email on /oauth2/auth: the edge hands it to teamarea-api
+      # as the only statement of who is signed in.
+      - --set-xauthrequest=true
     environment:
       OAUTH2_PROXY_COOKIE_SECRET: ${SELL_AUTH_COOKIE_SECRET:?SELL_AUTH_COOKIE_SECRET missing from .env.prod}
     volumes:
       - /home/ubuntu/lawrider/htpasswd:/htpasswd:ro
       - ./sell-auth/templates:/templates:ro
+    networks: [lawrider]
+
+  # Profiles for lawrider.uk/teamarea/profile/. Reached only through the edge
+  # after auth_request; identity is the X-Team-Email the edge sets.
+  teamarea-api:
+    image: node:24-alpine
+    container_name: lawrider-teamarea-api
+    restart: unless-stopped
+    command: ["node", "/app/server.ts"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./teamarea-api/server.ts:/app/server.ts:ro
+      - teamarea_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks: [lawrider]
 
   edge:
@@ -338,6 +363,7 @@ services:
     depends_on:
       - site
       - sell-auth
+      - teamarea-api
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1"]
       interval: 15s
@@ -347,6 +373,7 @@ services:
 
 volumes:
   app_data:
+  teamarea_data:
 
 networks:
   lawrider:
