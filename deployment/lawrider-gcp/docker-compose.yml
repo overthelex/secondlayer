@@ -341,6 +341,11 @@ services:
     environment:
       DATA_DIR: /data
       HTPASSWD_FILE: /htpasswd/sell
+      # The edge's auth_request for team pages comes to teamarea-api, which
+      # asks sell-auth whether the session is valid, then applies access rules.
+      AUTH_URL: http://lawrider-sell-auth:4180/oauth2/auth
+      # See everything, edit who sees which page, read the activity log.
+      ADMIN_EMAILS: vladimir@lawrider.uk
     volumes:
       # Profiles. A fresh volume (not teamarea_data): an empty named volume
       # takes /data's node ownership from the image only on first use, and

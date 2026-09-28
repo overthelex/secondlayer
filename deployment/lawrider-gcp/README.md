@@ -148,6 +148,21 @@ for `/teamarea/pnl/` (flat object of numbers, short strings and booleans,
 ≤64 KB). Any team member can save; each save records who and when, and the
 previous 30 versions are kept in `teamarea_profiles/pnl.json`.
 
+Access and activity: the edge's `auth_request` for `/teamarea` and
+`/teamarea/api/` goes to `teamarea-api` `/authz`, which validates the session
+with sell-auth (`AUTH_URL`) and applies per-page rules: 202 with
+`X-Auth-Request-User`, 401 (→ sign-in) or 403 (→ `/teamarea/`, which forwards
+to the first page the person can see). `ADMIN_EMAILS` (compose) see every
+page, edit the rules and read the activity log at `/teamarea/admin/`
+(`GET/PUT /teamarea/api/admin/access`, `GET /teamarea/api/admin/activity`).
+Everyone sees every page unless an admin hides it; the activity page is
+admin-only unless granted. Rules live in `teamarea_profiles/access.json`
+(only differences from the defaults). Pages report views, visible time and
+scroll depth to `/teamarea/api/track` (`activity.jsonl`, capped at 20 MB;
+visits 30+ minutes apart are separate sessions). A new team page must be added
+to `PAGES` in `server.ts` to appear in the access matrix; until then everyone
+sees it.
+
 People change their own password on the profile page (`POST /teamarea/api/password`
 with the current and new password, 12–128 characters). teamarea-api mounts the
 htpasswd directory read-write, checks the current password with `htpasswd -v`,
