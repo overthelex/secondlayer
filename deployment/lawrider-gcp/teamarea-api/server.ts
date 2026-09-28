@@ -1,7 +1,8 @@
 // Team-area profile API for lawrider.uk/teamarea.
 //
 // Who is asking comes only from X-Team-Email, which the edge sets from
-// oauth2-proxy's X-Auth-Request-Email after auth_request has accepted the
+// oauth2-proxy's X-Auth-Request-User (the htpasswd
+// login, which is the person's email) after auth_request has accepted the
 // session cookie; the edge overwrites whatever the browser sent. So each
 // person can read and change their own profile and nobody else's.
 //
