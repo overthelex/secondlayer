@@ -27,7 +27,8 @@
 // page's HTML. Every proposal, confirmation and rejection goes to pitch_log.jsonl,
 // which the Activity page shows.
 //
-// CRM: a shared list of companies and every email (or LinkedIn message, form,
+// CRM: a shared list of companies (clients and investors, shown on two pages)
+// and every email (or LinkedIn message, form,
 // call) sent to them, with the replies. Its job is to stop anyone writing to the
 // same firm twice by accident: logging a send to a company, or to an address,
 // that has already been contacted is refused unless the caller says it is
@@ -61,6 +62,9 @@ const PITCH_PENDING_MAX = 300;
 const CRM_FILE = `${DATA_DIR}/crm.json`;
 const CRM_STATUSES = ['new', 'sent', 'replied', 'meeting', 'pilot', 'declined', 'bounced', 'partner'];
 const CRM_CHANNELS = ['email', 'linkedin', 'form', 'call', 'meeting'];
+// Clients and investors live in one list so the address guard covers both; the
+// pages show one group each. Companies saved before groups existed are clients.
+const CRM_GROUPS = ['client', 'investor'];
 const CRM_MAX_COMPANIES = 2000;
 const CRM_MAX_ENTRIES = 20000;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
@@ -363,7 +367,7 @@ function activity(days: number) {
 
 // ---- CRM
 type CrmCompany = {
-  id: string; name: string; website?: string; segment?: string; note?: string;
+  id: string; name: string; group?: string; website?: string; segment?: string; note?: string;
   status: string; next_step?: string; created_by: string; created_at: string; updated_at: string;
 };
 type CrmEntry = {
@@ -645,10 +649,15 @@ createServer(async (req, res) => {
           if (!name) return send(res, 400, { error: 'Enter the company name.' });
           const key = crmKey(name);
           const same = doc.companies.find((c) => crmKey(c.name) === key);
-          if (same) return send(res, 409, { error: `"${same.name}" is already in the list.`, company: same.id });
+          if (same) {
+            const where = (same.group ?? 'client') === 'investor' ? 'investors' : 'clients';
+            return send(res, 409, { error: `"${same.name}" is already in the list of ${where}.`, company: same.id });
+          }
+          const group = String(b.group ?? 'client');
+          if (!CRM_GROUPS.includes(group)) return send(res, 400, { error: 'bad group' });
           if (doc.companies.length >= CRM_MAX_COMPANIES) return send(res, 429, { error: 'The company list is full.' });
           doc.companies.push({
-            id: id(), name, website: crmText(b.website, 200), segment: crmText(b.segment, 80), note: crmText(b.note, 1000),
+            id: id(), name, group, website: crmText(b.website, 200), segment: crmText(b.segment, 80), note: crmText(b.note, 1000),
             status: 'new', next_step: '', created_by: email, created_at: now, updated_at: now,
           });
           return done();
@@ -660,6 +669,10 @@ createServer(async (req, res) => {
           if (b.status !== undefined) {
             if (!CRM_STATUSES.includes(String(b.status))) return send(res, 400, { error: 'bad status' });
             c.status = String(b.status);
+          }
+          if (b.group !== undefined) {
+            if (!CRM_GROUPS.includes(String(b.group))) return send(res, 400, { error: 'bad group' });
+            c.group = String(b.group);
           }
           if (b.next_step !== undefined) c.next_step = crmText(b.next_step, 300);
           if (b.note !== undefined) c.note = crmText(b.note, 1000);
