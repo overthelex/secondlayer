@@ -32,7 +32,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
-import { matchEffect, parseTarget } from './uk-effects-match.js';
+import { classifyEffect, matchEffect, parseTarget } from './uk-effects-match.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -200,6 +200,7 @@ If no provision was in force on as_of, it returns the earliest and latest known 
         description: `Amendments, repeals, revocations, exclusions and commencements recorded against a UK act or one of its provisions, from the official legislation.gov.uk amendment register (1,213,289 effects).
 
 Requires leg_id; provision narrows it to one provision (e.g. '253', '38A', 'schedule/B1/paragraph/15'). since/until (YYYY-MM-DD) filter by the date the effect came into force.
+Each effect is classed as amendment (text changed, repealed, revoked), modification (excluded, modified, restricted), commencement, or other; 'other' (the act being applied elsewhere) is left out unless include_other=true.
 Each effect gives the affected provision as the register prints it, the effect type (e.g. 'words substituted', 'omitted', 'revoked', 'excluded', 'coming into force'), the amending instrument (id, title, its provision), the in-force date, whether the change is applied in the published text, and the extent.
 This answers what the revision history cannot: WHICH instrument made a change, and changes that leave the text untouched (an exclusion such as "s. 24-28 excluded" never produces a new version).
 With provision, the result also lists effects on the whole instrument (e.g. 'Regulations revoked') and on whole Parts (e.g. 'Pt. 2 excluded'), marked by scope, because they can apply to the provision without naming it. A Part-level effect may not cover the provision; check which Part it sits in.
@@ -213,6 +214,7 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
             since: { type: 'string', description: 'Only effects in force on or after this date (YYYY-MM-DD); effects with no in-force date are kept' },
             until: { type: 'string', description: 'Only effects in force on or before this date (YYYY-MM-DD)' },
             effect_type: { type: 'string', description: "Substring filter on the effect type, e.g. 'revoked', 'substituted', 'excluded'" },
+            include_other: { type: 'boolean', default: false, description: "Also return entries that only record the act being applied or used elsewhere ('applied', 'power to apply conferred', transfers of functions). Off by default: they change neither the text nor how it operates." },
             limit: { type: 'number', default: 50, maximum: 200, description: 'Maximum effects returned' },
             offset: { type: 'number', default: 0, description: 'Pagination offset' },
           },
@@ -517,14 +519,18 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
           ORDER BY in_force_date NULLS LAST, affected_provisions
           LIMIT 20000`, params)).rows;
 
-      const matched = rows
-        .map((r: any) => ({ r, scope: target ? matchEffect(r.affected_provisions, target) : 'provision' }))
+      const includeOther = Boolean(a.include_other);
+      const classified = rows
+        .map((r: any) => ({ r, cls: classifyEffect(r.effect_type), scope: target ? matchEffect(r.affected_provisions, target) : 'provision' }))
         .filter((x: any) => x.scope !== null);
+      const matched = classified.filter((x: any) => includeOther || x.cls !== 'other');
+      const hiddenOther = classified.length - matched.length;
 
-      const page = matched.slice(offset, offset + limit).map(({ r, scope }: any) => ({
+      const page = matched.slice(offset, offset + limit).map(({ r, scope, cls }: any) => ({
         affected_provisions: r.affected_provisions,
         ...(target ? { scope } : {}),
         effect_type: r.effect_type,
+        class: cls,
         affecting: { id: r.affecting_id, title: r.affecting_title, provisions: r.affecting_provisions },
         in_force_date: r.in_force_date,
         applied: r.applied,
@@ -534,13 +540,19 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
       }));
 
       const byScope: Record<string, number> = {};
-      for (const x of matched) byScope[x.scope as string] = (byScope[x.scope as string] || 0) + 1;
+      const byClass: Record<string, number> = {};
+      for (const x of matched) {
+        byScope[x.scope as string] = (byScope[x.scope as string] || 0) + 1;
+        byClass[x.cls as string] = (byClass[x.cls as string] || 0) + 1;
+      }
 
       return this.wrapResponse({
         leg_id: legId,
         ...(target ? { provision: target } : {}),
         total: matched.length,
         ...(target ? { by_scope: byScope } : {}),
+        by_class: byClass,
+        ...(hiddenOther ? { hidden_other: hiddenOther } : {}),
         unapplied: matched.filter((x: any) => x.r.applied === false).length,
         has_more: offset + page.length < matched.length,
         limit, offset,

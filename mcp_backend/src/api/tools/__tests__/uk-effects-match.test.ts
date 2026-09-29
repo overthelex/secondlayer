@@ -1,4 +1,4 @@
-import { matchEffect, parseTarget } from '../uk-effects-match';
+import { classifyEffect, matchEffect, parseTarget } from '../uk-effects-match';
 
 // Register strings below are real ones seen in uk_legislation_effects for the acts a
 // 2016 London office lease cites.
@@ -51,6 +51,8 @@ describe('matchEffect', () => {
     expect(matchEffect('Sch. B1 para. 150', p15)).toBeNull();
     expect(matchEffect('Sch. 4 para. 15', p15)).toBeNull();
     expect(matchEffect('Sch. B1', p15)).toBe('part');
+    // A Part of the body of the act never holds a schedule paragraph.
+    expect(matchEffect('Pt. 9 Ch. 1 heading', p15)).toBeNull();
   });
 
   it('never matches a schedule entry to a section', () => {
@@ -62,5 +64,23 @@ describe('matchEffect', () => {
     expect(matchEffect('reg. 2(1)', { kind: 'regulation', number: '2' })).toBe('provision');
     expect(matchEffect('art. 3(6)(p)-(x)', { kind: 'article', number: '3' })).toBe('provision');
     expect(matchEffect('reg. 2(1)', { kind: 'article', number: '2' })).toBeNull();
+  });
+});
+
+describe('classifyEffect', () => {
+  it('separates real changes from the act being used elsewhere', () => {
+    expect(classifyEffect('words substituted')).toBe('amendment');
+    expect(classifyEffect('revoked')).toBe('amendment');
+    expect(classifyEffect('amended (prosp.)')).toBe('amendment');
+    expect(classifyEffect('omitted')).toBe('amendment');
+    expect(classifyEffect('excluded')).toBe('modification');
+    expect(classifyEffect('restricted')).toBe('modification');
+    expect(classifyEffect('modified')).toBe('modification');
+    expect(classifyEffect('coming into force')).toBe('commencement');
+    expect(classifyEffect('applied')).toBe('other');
+    expect(classifyEffect('applied (with modifications)')).toBe('other');
+    expect(classifyEffect('applied by 2007 c. 27 s. 27A(2) (as inserted)')).toBe('other');
+    expect(classifyEffect('power to apply (with or without modifications) conferred by 2007 c. 27 s. 27A(7) (as inserted)')).toBe('other');
+    expect(classifyEffect('transfer of powers in part (W)')).toBe('other');
   });
 });

@@ -425,6 +425,24 @@ describe('uk_get_effects', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
+  it('hides entries that only record the act being applied elsewhere, unless asked', async () => {
+    const rows = [
+      { affected_provisions: 'Act', effect_type: 'applied', affecting_id: 'uksi/2018/1', affecting_title: 'The Motorcycles (Type-Approval) Regulations 2018', affecting_provisions: 'Sch. 1', in_force_date: '2018-05-20', applied: true, affected_extent: null },
+      { affected_provisions: 's. 1', effect_type: 'words substituted', affecting_id: 'ukpga/2025/4', affecting_title: 'Arbitration Act 2025', affecting_provisions: 's. 1', in_force_date: '2025-08-01', applied: true, affected_extent: null },
+    ];
+    const db = mockDb([{ match: /FROM uk_legislation_effects/, rows }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/1996/23', since: '2016-01-22' }));
+    expect(out.total).toBe(1);
+    expect(out.hidden_other).toBe(1);
+    expect(out.effects[0]).toMatchObject({ affecting: { title: 'Arbitration Act 2025' }, class: 'amendment' });
+
+    const all = parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/1996/23', since: '2016-01-22', include_other: true }));
+    expect(all.total).toBe(2);
+    expect(all.by_class).toEqual({ other: 1, amendment: 1 });
+  });
+
   it('pages the matched effects', async () => {
     const db = mockDb([{ match: /FROM uk_legislation_effects/, rows: effectsRows }]);
     const tools = new UkLegislationTools(db);

@@ -86,9 +86,10 @@ function defaultKind(legId: string): string {
 export function matchEffect(affected: string | null, target: ProvisionTarget): EffectScope | null {
   const text = (affected || '').trim();
   if (!text || WHOLE_INSTRUMENT.test(text)) return 'whole_instrument';
-  if (/^Pts?\.\s*/i.test(text)) return 'part';
-
   const sch = /^Schs?\.\s*([0-9A-Za-z]+)\b\s*(.*)$/i.exec(text);
+  // A Part of the body of the act: may contain a section, never a schedule paragraph.
+  if (/^Pts?\.\s*/i.test(text)) return target.kind === 'paragraph' || target.kind === 'schedule' ? null : 'part';
+
   if (target.kind === 'paragraph' || target.kind === 'schedule') {
     if (!sch || sch[1].toUpperCase() !== String(target.schedule ?? target.number).toUpperCase()) return null;
     if (target.kind === 'schedule') return 'provision';
@@ -104,4 +105,22 @@ export function matchEffect(affected: string | null, target: ProvisionTarget): E
   const m = prefix.exec(text);
   if (!m) return null;
   return tokenCovers(text.slice(m[0].length), target.number) ? 'provision' : null;
+}
+
+export type EffectClass = 'amendment' | 'modification' | 'commencement' | 'other';
+
+/**
+ * What an effect does to the affected law. 'other' collects entries that record the act
+ * being used by someone else ("applied", "power to apply conferred", "transfer of
+ * functions", savings): the register lists them against the act, but they change neither
+ * its text nor how it operates, and on a much-applied act they outnumber the real
+ * amendments (Arbitration Act 1996: 181 entries since 2016, most of them "applied").
+ */
+export function classifyEffect(effectType: string | null): EffectClass {
+  const t = (effectType || '').toLowerCase();
+  if (/coming into force|commence/.test(t)) return 'commencement';
+  if (/^applied|power to apply|power to .* conferred|transfer of|functions? (?:transferred|exercisable)|saving|continued|referred to|cited/.test(t)) return 'other';
+  if (/exclu|modif|restrict|disappl|suspend|extended|excepted|limited|power to amend/.test(t)) return 'modification';
+  if (/substitut|insert|omit|repeal|revok|renumber|added|amend|word|text|heading|entry|definition|cease/.test(t)) return 'amendment';
+  return 'other';
 }
