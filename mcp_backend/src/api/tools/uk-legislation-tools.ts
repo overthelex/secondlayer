@@ -44,8 +44,10 @@ const NO_TEXT_NOTE =
   'The source publishes this act only as scanned images; none of the legislation.gov.uk ' +
   'bulk collections carries its text. This is a property of the source, not a harvesting gap.';
 
-// The register holds ids like `ukpga/1990/8`, `eur/2009/1198`, `aep/Hen3/23`.
-const LEG_ID_RE = /^[a-z]{2,6}\/[A-Za-z0-9]+\/[A-Za-z0-9]+$/;
+// The register holds ids like `ukpga/1990/8`, `eur/2009/1198`, `aep/Hen3/23` and, for acts
+// before 1963, regnal-year ids with four parts such as `ukpga/Eliz2/2-3/56` (Landlord and
+// Tenant Act 1954) or `ukpga/Geo5/15-16/20` (Law of Property Act 1925).
+const LEG_ID_RE = /^[a-z]{2,6}\/[A-Za-z0-9]+(?:\/[A-Za-z0-9-]+)?\/[A-Za-z0-9]+$/;
 
 function normaliseLegId(value: unknown): string | null {
   if (value === undefined || value === null) return null;

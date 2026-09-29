@@ -139,6 +139,28 @@ describe('uk_get_provision', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
+  it('accepts a regnal-year identifier: every act before 1963 has one', async () => {
+    // Landlord and Tenant Act 1954 is ukpga/Eliz2/2-3/56: four parts and a hyphen. The old
+    // three-part pattern rejected it, so the core property statutes were unreachable.
+    const db = mockDb([{ match: /FROM uk_provision_version/, rows: [] }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_provision', {
+      leg_id: 'ukpga/Eliz2/2-3/56', provision: '38A', as_of: '2016-01-22',
+    }));
+    expect(out.error).not.toBe('bad_leg_id');
+    expect(db.query).toHaveBeenCalled();
+    expect(db.calls[0].params).toContain('ukpga/Eliz2/2-3/56/section/38A');
+  });
+
+  it('still rejects an identifier with too many parts', async () => {
+    const db = mockDb([]);
+    const tools = new UkLegislationTools(db);
+    const out = parse(await tools.executeTool('uk_get_provision', { leg_id: 'ukpga/Eliz2/2-3/56/section', provision: '1' }));
+    expect(out.error).toBe('bad_leg_id');
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('accepts a full legislation.gov.uk URL as the identifier', async () => {
     const db = mockDb([{ match: /FROM uk_legislation_provisions/, rows: [{ provision_label: '1', text: 'x', n_chars: 1 }] }]);
     const tools = new UkLegislationTools(db);
