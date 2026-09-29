@@ -27,6 +27,12 @@
 // page's HTML. Every proposal, confirmation and rejection goes to pitch_log.jsonl,
 // which the Activity page shows.
 //
+// CRM: a shared list of companies and every email (or LinkedIn message, form,
+// call) sent to them, with the replies. Its job is to stop anyone writing to the
+// same firm twice by accident: logging a send to a company, or to an address,
+// that has already been contacted is refused unless the caller says it is
+// deliberate (force), and the page shows who wrote, when and to whom.
+//
 // Password change rewrites the oauth2-proxy htpasswd file (mounted read-write
 // here, read-only in sell-auth). Apache's htpasswd from the image does the
 // bcrypt work: -v checks the current password against the file, -n hashes the
@@ -52,6 +58,11 @@ const PITCH_PAGES = ['pitch3'];
 const PITCH_LINE_RE = /^[a-z0-9-]{1,40}$/;
 const PITCH_TEXT_MAX = 600;
 const PITCH_PENDING_MAX = 300;
+const CRM_FILE = `${DATA_DIR}/crm.json`;
+const CRM_STATUSES = ['new', 'sent', 'replied', 'meeting', 'pilot', 'declined', 'bounced', 'partner'];
+const CRM_CHANNELS = ['email', 'linkedin', 'form', 'call', 'meeting'];
+const CRM_MAX_COMPANIES = 2000;
+const CRM_MAX_ENTRIES = 20000;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
 const AUTH_URL = process.env.AUTH_URL ?? 'http://lawrider-sell-auth:4180/oauth2/auth';
 const ADMINS = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -67,6 +78,7 @@ const PAGES: { slug: string; label: string; default: boolean }[] = [
   { slug: 'pitch', label: 'Pitch', default: true },
   { slug: 'pitch3', label: 'Pitch3', default: true },
   { slug: 'pnl', label: 'P&L', default: true },
+  { slug: 'crm', label: 'CRM', default: true },
   { slug: 'admin', label: 'Activity', default: false },
 ];
 const PASSWORD_MIN = 12;
@@ -349,6 +361,61 @@ function activity(days: number) {
   return { days, users };
 }
 
+// ---- CRM
+type CrmCompany = {
+  id: string; name: string; website?: string; segment?: string; note?: string;
+  status: string; next_step?: string; created_by: string; created_at: string; updated_at: string;
+};
+type CrmEntry = {
+  id: string; company: string; kind: 'sent' | 'reply' | 'note'; date: string;
+  channel?: string; to?: string; subject?: string; text?: string;
+  by: string; at: string; forced?: boolean;
+};
+type CrmDoc = { companies: CrmCompany[]; entries: CrmEntry[] };
+
+function loadCrm(): CrmDoc {
+  try {
+    const d = JSON.parse(readFileSync(CRM_FILE, 'utf8'));
+    return { companies: Array.isArray(d.companies) ? d.companies : [], entries: Array.isArray(d.entries) ? d.entries : [] };
+  } catch {
+    return { companies: [], entries: [] };
+  }
+}
+
+function saveCrm(doc: CrmDoc): void {
+  writeFileSync(`${CRM_FILE}.tmp`, JSON.stringify(doc));
+  renameSync(`${CRM_FILE}.tmp`, CRM_FILE);
+}
+
+// Short free text: whitespace collapsed, trimmed, capped.
+function crmText(x: unknown, max: number): string {
+  return typeof x === 'string' ? x.replace(/\s+/g, ' ').trim().slice(0, max) : '';
+}
+
+// "Farrer & Co LLP" and "farrer and co" are the same firm for duplicate checks.
+function crmKey(name: string): string {
+  return name.toLowerCase().replace(/&/g, ' and ').replace(/\b(ltd|limited|llp|plc|solicitors?|law|the)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Email bodies and replies keep their paragraphs: only line endings are
+// normalised and runs of blank lines squeezed.
+function crmBody(x: unknown, max: number): string {
+  return typeof x === 'string' ? x.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max) : '';
+}
+
+function crmDate(x: unknown): string | null {
+  const d = String(x ?? '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d)) ? d : null;
+}
+
+// Sends already on record for this company or this address, newest first.
+function priorSends(doc: CrmDoc, companyId: string, to: string): CrmEntry[] {
+  const addr = to.toLowerCase();
+  return doc.entries
+    .filter((e) => e.kind === 'sent' && (e.company === companyId || (addr && (e.to ?? '').toLowerCase() === addr)))
+    .sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
+}
+
 // ---- pitch proposals
 type Proposal = {
   id: string; line: string; text: string; base: string; by: string; at: string;
@@ -457,7 +524,8 @@ createServer(async (req, res) => {
     path !== '/teamarea/api/admin/activity' &&
     path !== '/teamarea/api/admin/access' &&
     path !== '/teamarea/api/admin/pitch-log' &&
-    path !== '/teamarea/api/pitch'
+    path !== '/teamarea/api/pitch' &&
+    path !== '/teamarea/api/crm'
   ) {
     return send(res, 404, { error: 'not found' });
   }
@@ -542,6 +610,127 @@ createServer(async (req, res) => {
         pages: Object.fromEntries(PAGES.map((p) => [p.slug, canSee(u, p.slug, grants)])),
       })),
     });
+  }
+
+  if (path === '/teamarea/api/crm') {
+    if (!canSee(email, 'crm')) return send(res, 403, { error: 'not allowed' });
+    if (req.method === 'GET') return send(res, 200, { admin: isAdmin(email), me: email, ...loadCrm() });
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'GET, POST');
+      return send(res, 405, { error: 'method not allowed' });
+    }
+    if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+      return send(res, 415, { error: 'expected application/json' });
+    }
+    let b: Record<string, unknown>;
+    try {
+      b = JSON.parse((await readRaw(req, 64 * 1024)).toString('utf8'));
+    } catch {
+      return send(res, 400, { error: 'bad JSON or too large' });
+    }
+    const action = String(b.action ?? '');
+    try {
+      return await serial(async () => {
+        const doc = loadCrm();
+        const now = new Date().toISOString();
+        const id = () => randomBytes(6).toString('hex');
+        const company = (cid: unknown) => doc.companies.find((c) => c.id === String(cid ?? ''));
+        const done = () => {
+          saveCrm(doc);
+          return send(res, 200, { admin: isAdmin(email), me: email, ...doc });
+        };
+
+        if (action === 'add_company') {
+          const name = crmText(b.name, 160);
+          if (!name) return send(res, 400, { error: 'Enter the company name.' });
+          const key = crmKey(name);
+          const same = doc.companies.find((c) => crmKey(c.name) === key);
+          if (same) return send(res, 409, { error: `"${same.name}" is already in the list.`, company: same.id });
+          if (doc.companies.length >= CRM_MAX_COMPANIES) return send(res, 429, { error: 'The company list is full.' });
+          doc.companies.push({
+            id: id(), name, website: crmText(b.website, 200), segment: crmText(b.segment, 80), note: crmText(b.note, 1000),
+            status: 'new', next_step: '', created_by: email, created_at: now, updated_at: now,
+          });
+          return done();
+        }
+
+        if (action === 'update_company') {
+          const c = company(b.id);
+          if (!c) return send(res, 404, { error: 'No such company.' });
+          if (b.status !== undefined) {
+            if (!CRM_STATUSES.includes(String(b.status))) return send(res, 400, { error: 'bad status' });
+            c.status = String(b.status);
+          }
+          if (b.next_step !== undefined) c.next_step = crmText(b.next_step, 300);
+          if (b.note !== undefined) c.note = crmText(b.note, 1000);
+          if (b.website !== undefined) c.website = crmText(b.website, 200);
+          if (b.segment !== undefined) c.segment = crmText(b.segment, 80);
+          c.updated_at = now;
+          return done();
+        }
+
+        if (action === 'log_sent') {
+          const c = company(b.company);
+          if (!c) return send(res, 404, { error: 'Choose a company from the list.' });
+          const channel = String(b.channel ?? 'email');
+          if (!CRM_CHANNELS.includes(channel)) return send(res, 400, { error: 'bad channel' });
+          const to = crmText(b.to, 200);
+          if (channel === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return send(res, 400, { error: 'Enter the address the email went to.' });
+          const date = crmDate(b.date) ?? now.slice(0, 10);
+          const prior = priorSends(doc, c.id, to);
+          if (prior.length && b.force !== true) {
+            // The whole point of the page: say who already wrote, and make a
+            // second send a deliberate choice.
+            return send(res, 409, { error: 'already_contacted', prior });
+          }
+          if (doc.entries.length >= CRM_MAX_ENTRIES) return send(res, 429, { error: 'The CRM log is full.' });
+          doc.entries.push({
+            id: id(), company: c.id, kind: 'sent', date, channel, to, subject: crmText(b.subject, 200),
+            text: crmBody(b.text, 8000), by: email, at: now, ...(prior.length ? { forced: true } : {}),
+          });
+          if (['new', 'bounced'].includes(c.status) || !c.status) c.status = 'sent';
+          if (b.next_step !== undefined) c.next_step = crmText(b.next_step, 300);
+          c.updated_at = now;
+          return done();
+        }
+
+        if (action === 'log_reply' || action === 'log_note') {
+          const c = company(b.company);
+          if (!c) return send(res, 404, { error: 'Choose a company from the list.' });
+          const text = crmBody(b.text, 8000);
+          if (!text) return send(res, 400, { error: action === 'log_reply' ? 'Write what they answered.' : 'Write the note.' });
+          if (doc.entries.length >= CRM_MAX_ENTRIES) return send(res, 429, { error: 'The CRM log is full.' });
+          doc.entries.push({
+            id: id(), company: c.id, kind: action === 'log_reply' ? 'reply' : 'note',
+            date: crmDate(b.date) ?? now.slice(0, 10), channel: CRM_CHANNELS.includes(String(b.channel)) ? String(b.channel) : undefined,
+            text, by: email, at: now,
+          });
+          if (b.status !== undefined) {
+            if (!CRM_STATUSES.includes(String(b.status))) return send(res, 400, { error: 'bad status' });
+            c.status = String(b.status);
+          } else if (action === 'log_reply') {
+            c.status = 'replied';
+          }
+          if (b.next_step !== undefined) c.next_step = crmText(b.next_step, 300);
+          c.updated_at = now;
+          return done();
+        }
+
+        if (action === 'delete_entry') {
+          // A wrong entry can be removed by whoever wrote it, or by an admin.
+          const i = doc.entries.findIndex((e) => e.id === String(b.id ?? ''));
+          if (i < 0) return send(res, 404, { error: 'No such entry.' });
+          if (doc.entries[i].by !== email && !isAdmin(email)) return send(res, 403, { error: 'Only the author or an admin can delete this.' });
+          doc.entries.splice(i, 1);
+          return done();
+        }
+
+        return send(res, 400, { error: 'unknown action' });
+      });
+    } catch (e) {
+      console.error('crm save failed', e);
+      return send(res, 500, { error: 'Could not save.' });
+    }
   }
 
   if (path === '/teamarea/api/admin/pitch-log') {
