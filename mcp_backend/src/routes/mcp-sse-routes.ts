@@ -26,6 +26,8 @@ import { ApiKeyService } from '../services/api-key-service.js';
 import { CostTracker } from '../services/cost-tracker.js';
 import { CreditService } from '../services/credit-service.js';
 import { BillingService } from '../services/billing-service.js';
+import { FixedPriceBilling } from '../services/fixed-price-billing.js';
+import { getFixedToolPrice, FixedToolPrice } from '../services/tool-fixed-price.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -45,6 +47,7 @@ export function createMCPSSERoutes(deps: {
   mcpSseSessions: Map<string, SSEServerTransport>;
 }): Router {
   const router = Router();
+  const fixedPriceBilling = new FixedPriceBilling(deps.db);
 
   // Helper: compute base URL from request headers
   // Use request host (not PUBLIC_URL) so mcp.legal.org.ua returns correct OAuth URLs
@@ -222,11 +225,31 @@ export function createMCPSSERoutes(deps: {
         }
 
         // Billing gate BEFORE execution.
+        //  • fixed price (v2, tool_pricing.fixed_price): a flat amount in the account currency
+        //    (GBP on lawrider.uk), checked here and charged after a successful call by
+        //    FixedPriceBilling. The usage path below is skipped for these tools.
         //  • usageBilling (v2): charge the ₴/$ balance (user_billing) by actual cost + tier
         //    markup, exactly like the chat pipeline. Pre-flight checks the same balance; the
         //    charge itself happens in costTracker.completeTrackingRecord → billingService.chargeUser.
         //  • legacy (v1): flat per-call deduction from the separate user_credits pool.
-        if (userId) {
+        let fixedPrice: FixedToolPrice | null = null;
+        let chargeFixedPrice = false;
+        if (userId && opts?.usageBilling) {
+          fixedPrice = await getFixedToolPrice(deps.db, toolName);
+        }
+        if (userId && fixedPrice) {
+          try {
+            const preflight = await fixedPriceBilling.preflight(userId, toolName, fixedPrice);
+            if (!preflight.allowed) {
+              logger.warn('[MCP] Fixed-price pre-flight refused', { userId: safeUserId, tool: toolName });
+              return { content: [{ type: 'text', text: preflight.message }], isError: true };
+            }
+            chargeFixedPrice = preflight.billingEnabled;
+          } catch (billingErr: any) {
+            logger.warn('[MCP] Fixed-price pre-flight failed, allowing call', { userId: safeUserId, tool: toolName, error: billingErr.message });
+            chargeFixedPrice = true;
+          }
+        } else if (userId) {
           if (opts?.usageBilling && deps.billingService) {
             try {
               const billing = await deps.billingService.getOrCreateUserBilling(userId);
@@ -305,6 +328,15 @@ export function createMCPSSERoutes(deps: {
 
         const executionTime = Date.now() - startTime;
         await deps.costTracker.completeTrackingRecord({ requestId, executionTimeMs: executionTime, status: 'completed' });
+
+        // Fixed price: charge only a call that produced a result, never an error.
+        if (userId && fixedPrice && chargeFixedPrice && !(result as any)?.isError) {
+          try {
+            await fixedPriceBilling.charge({ userId, requestId, toolName, price: fixedPrice });
+          } catch (chargeErr: any) {
+            logger.error('[MCP] Fixed-price charge failed', { userId: safeUserId, tool: toolName, requestId, error: chargeErr.message });
+          }
+        }
 
         // Legacy flat-credit deduction (v1 only). v2 (usageBilling) is already charged against
         // the ₴/$ balance by costTracker.completeTrackingRecord → billingService.chargeUser above.

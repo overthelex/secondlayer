@@ -4,6 +4,7 @@ import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 import { maskSensitive, sanitizeId, sanitizeClassified } from '../utils/sanitize-log.js';
 import { BillingService } from './billing-service.js';
+import { getFixedToolPrice } from './tool-fixed-price.js';
 
 export class CostTracker extends BaseCostTracker {
   private billingService?: BillingService;
@@ -179,7 +180,10 @@ export class CostTracker extends BaseCostTracker {
       this.metricsCallback(record.tool_name || 'unknown', totalCostUsd);
     }
 
-    if (this.billingService && record.user_id && status === 'completed' && totalCostUsd > 0) {
+    // Tools with a fixed price are billed by FixedPriceBilling in the MCP route, never here,
+    // or a call with any usage cost would be charged twice.
+    const fixedPrice = record.tool_name ? await getFixedToolPrice(this.db as any, record.tool_name) : null;
+    if (this.billingService && record.user_id && status === 'completed' && totalCostUsd > 0 && !fixedPrice) {
       try {
         await this.billingService.chargeUser({
           userId: record.user_id,
