@@ -55,6 +55,9 @@ describe('migration sets', () => {
       '205_uk_judgment_access.sql',    // the Find Case Law licence gate
       '217_uk_point_in_time.sql',      // intervals + uk_act_as_at
       '219_uk_provision_embedding.sql',
+      // GBP accounts + fixed per-call prices. The uk_* tools are charged only through it;
+      // left out, the price lookup fails and every call is silently free.
+      '223_gbp_billing_fixed_tool_prices.sql',
     ]) {
       expect(set).toContain(required);
     }
