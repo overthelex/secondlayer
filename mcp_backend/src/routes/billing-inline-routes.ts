@@ -82,45 +82,11 @@ export function createBillingInlineRoutes(deps: {
     }
   }) as any);
 
-  // POST /topup - Top up balance
-  router.post('/topup', (async (req: DualAuthRequest, res: Response): Promise<any> => {
-    try {
-      const userId = req.user!.id;
-      const { amount_usd, amount_uah, description, payment_provider, payment_id } = req.body;
-
-      if (!amount_usd || amount_usd <= 0) {
-        return res.status(400).json({
-          error: 'Invalid amount',
-          message: 'amount_usd must be positive',
-        });
-      }
-
-      const transaction = await deps.billingService.topUpBalance({
-        userId,
-        amountUsd: amount_usd,
-        amountUah: amount_uah || 0,
-        description: description || `Top up $${amount_usd}`,
-        paymentProvider: payment_provider,
-        paymentId: payment_id,
-      });
-
-      // Generate invoice number for the transaction
-      const invoiceNumber = deps.invoiceService.generateInvoiceNumber(transaction.id);
-      await deps.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
-
-      res.json({
-        success: true,
-        message: 'Balance topped up successfully',
-        transaction: { ...transaction, invoice_number: invoiceNumber },
-      });
-    } catch (error: any) {
-      logger.error('Failed to top up balance', { error: error.message });
-      res.status(500).json({
-        error: 'Failed to top up balance',
-        message: error.message,
-      });
-    }
-  }) as any);
+  // POST /topup was removed on purpose (29.09.2026). It credited the caller's balance with
+  // whatever amount_usd the request body carried, behind nothing but a login, so any user
+  // could mint balance. Real top-ups go through the payment providers (Monobank, NOWPayments,
+  // Binance Pay, MetaMask, B2B invoices); manual credits go through the admin
+  // POST /api/admin/users/:id/adjust-balance endpoint. Do not re-add a self-serve top-up.
 
   // GET /settings - Get billing settings
   router.get('/settings', (async (req: DualAuthRequest, res: Response) => {
