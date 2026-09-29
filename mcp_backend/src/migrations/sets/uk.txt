@@ -1,6 +1,6 @@
 # Migration set: lawrider.uk — British law and UK court decisions, nothing else.
 #
-# 134 of the 224 migrations. What is here: the service schema the backend boots on
+# 135 of the 225 migrations. What is here: the service schema the backend boots on
 # (users, api_keys, billing, cost tracking, documents, oauth, consultations) and
 # uk_* — the register, provision text, point-in-time intervals, amendments,
 # judgments and the Find Case Law access gate, and OCR text for the acts that
@@ -215,3 +215,4 @@
 221_uk_court_decision_fts.sql
 222_uk_court_decision_hidden.sql
 223_gbp_billing_fixed_tool_prices.sql
+224_uk_get_effects_price.sql

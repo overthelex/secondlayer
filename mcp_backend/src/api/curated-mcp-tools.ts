@@ -71,6 +71,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'uk_get_provision',
   'uk_get_provision_history',
   'uk_get_act_as_at',
+  // UK — реєстр поправок: хто і коли змінив, скасував або виключив норму
+  'uk_get_effects',
   // UK — семантичний шар над статутною книгою (Qdrant uk_provisions_bge)
   'uk_semantic_search',
   // UK — судові рішення Find Case Law. Ліцензія TNA (CAS-349914-B9P5B8); доступ лише

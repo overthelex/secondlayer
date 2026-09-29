@@ -32,6 +32,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
+import { matchEffect, parseTarget } from './uk-effects-match.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -193,6 +194,31 @@ If no provision was in force on as_of, it returns the earliest and latest known 
           required: ['leg_id', 'as_of'],
         },
       },
+      {
+        name: 'uk_get_effects',
+        annotations: { title: 'UK amendments: who changed an act or provision, and when', readOnlyHint: true },
+        description: `Amendments, repeals, revocations, exclusions and commencements recorded against a UK act or one of its provisions, from the official legislation.gov.uk amendment register (1,213,289 effects).
+
+Requires leg_id; provision narrows it to one provision (e.g. '253', '38A', 'schedule/B1/paragraph/15'). since/until (YYYY-MM-DD) filter by the date the effect came into force.
+Each effect gives the affected provision as the register prints it, the effect type (e.g. 'words substituted', 'omitted', 'revoked', 'excluded', 'coming into force'), the amending instrument (id, title, its provision), the in-force date, whether the change is applied in the published text, and the extent.
+This answers what the revision history cannot: WHICH instrument made a change, and changes that leave the text untouched (an exclusion such as "s. 24-28 excluded" never produces a new version).
+With provision, the result also lists effects on the whole instrument (e.g. 'Regulations revoked') and on whole Parts (e.g. 'Pt. 2 excluded'), marked by scope, because they can apply to the provision without naming it. A Part-level effect may not cover the provision; check which Part it sits in.
+⚠ in_force_date = null means not yet in force or no commencement recorded. applied = false means the change is law but not yet reflected in the published text.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            leg_id: { type: 'string', description: "Affected act identifier, e.g. 'ukpga/1986/45' or 'ukpga/Eliz2/2-3/56'" },
+            provision: { type: 'string', description: "Optional provision number or key, e.g. '253' or 'schedule/B1/paragraph/15'" },
+            provision_type: { type: 'string', description: 'section, regulation, article or rule, when a bare number is ambiguous' },
+            since: { type: 'string', description: 'Only effects in force on or after this date (YYYY-MM-DD); effects with no in-force date are kept' },
+            until: { type: 'string', description: 'Only effects in force on or before this date (YYYY-MM-DD)' },
+            effect_type: { type: 'string', description: "Substring filter on the effect type, e.g. 'revoked', 'substituted', 'excluded'" },
+            limit: { type: 'number', default: 50, maximum: 200, description: 'Maximum effects returned' },
+            offset: { type: 'number', default: 0, description: 'Pagination offset' },
+          },
+          required: ['leg_id'],
+        },
+      },
     ];
   }
 
@@ -203,6 +229,7 @@ If no provision was in force on as_of, it returns the earliest and latest known 
       case 'uk_get_provision': return this.getProvision(args);
       case 'uk_get_provision_history': return this.getProvisionHistory(args);
       case 'uk_get_act_as_at': return this.getActAsAt(args);
+      case 'uk_get_effects': return this.getEffects(args);
       default: return null;
     }
   }
@@ -451,6 +478,85 @@ If no provision was in force on as_of, it returns the earliest and latest known 
         ORDER BY (provision_uri LIKE $2) DESC, ord
         LIMIT 10`, [legId, `%${suffix}%`, label])).rows;
     return pickOne(rows, key);
+  }
+
+  // ─── uk_get_effects ────────────────────────────────────────────────
+
+  private async getEffects(args: Record<string, unknown>): Promise<ToolResult> {
+    const a = args as any;
+    const legId = normaliseLegId(a.leg_id);
+    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/1986/45'." });
+    for (const k of ['since', 'until'] as const) {
+      if (a[k] !== undefined && !ISO_DATE.test(String(a[k]))) {
+        return this.wrapResponse({ error: 'bad_date', message: `${k} must be in YYYY-MM-DD format.` });
+      }
+    }
+    const target = a.provision !== undefined && a.provision !== null && String(a.provision).trim() !== ''
+      ? parseTarget(String(a.provision), legId, a.provision_type)
+      : null;
+    if (a.provision && !target) {
+      return this.wrapResponse({ error: 'bad_provision', message: "provision must be a number such as '253' or a key such as 'schedule/B1/paragraph/15'." });
+    }
+    const limit = Math.min(Math.max(Number(a.limit) || 50, 1), 200);
+    const offset = Math.max(Number(a.offset) || 0, 0);
+
+    const where = ['affected_id = $1'];
+    const params: unknown[] = [legId];
+    if (a.since) { params.push(a.since); where.push(`(in_force_date IS NULL OR in_force_date >= $${params.length})`); }
+    if (a.until) { params.push(a.until); where.push(`in_force_date <= $${params.length}`); }
+    if (a.effect_type) { params.push(`%${String(a.effect_type)}%`); where.push(`effect_type ILIKE $${params.length}`); }
+
+    try {
+      // One act carries at most a few thousand effects, so the provision match runs here
+      // on the parsed register text (ranges, schedules) rather than as a LIKE in SQL.
+      const rows = (await this.db.query(
+        `SELECT affected_provisions, effect_type, affecting_id, affecting_title, affecting_provisions,
+                in_force_date, applied, affected_extent, commencement_authority, notes
+           FROM uk_legislation_effects
+          WHERE ${where.join(' AND ')}
+          ORDER BY in_force_date NULLS LAST, affected_provisions
+          LIMIT 20000`, params)).rows;
+
+      const matched = rows
+        .map((r: any) => ({ r, scope: target ? matchEffect(r.affected_provisions, target) : 'provision' }))
+        .filter((x: any) => x.scope !== null);
+
+      const page = matched.slice(offset, offset + limit).map(({ r, scope }: any) => ({
+        affected_provisions: r.affected_provisions,
+        ...(target ? { scope } : {}),
+        effect_type: r.effect_type,
+        affecting: { id: r.affecting_id, title: r.affecting_title, provisions: r.affecting_provisions },
+        in_force_date: r.in_force_date,
+        applied: r.applied,
+        extent: r.affected_extent,
+        ...(r.commencement_authority ? { commencement_authority: r.commencement_authority } : {}),
+        ...(r.notes ? { notes: r.notes } : {}),
+      }));
+
+      const byScope: Record<string, number> = {};
+      for (const x of matched) byScope[x.scope as string] = (byScope[x.scope as string] || 0) + 1;
+
+      return this.wrapResponse({
+        leg_id: legId,
+        ...(target ? { provision: target } : {}),
+        total: matched.length,
+        ...(target ? { by_scope: byScope } : {}),
+        unapplied: matched.filter((x: any) => x.r.applied === false).length,
+        has_more: offset + page.length < matched.length,
+        limit, offset,
+        effects: page,
+        ...(matched.length === 0
+          ? { note: target
+              ? 'No effect in the register names this provision, its schedule, its Part or the whole instrument for the given filters.'
+              : 'No effects recorded against this act for the given filters.' }
+          : {}),
+        source: `https://www.legislation.gov.uk/changes/affected/${legId}`,
+        attribution: 'Contains public sector information licensed under the Open Government Licence v3.0.',
+      });
+    } catch (err) {
+      logger.error('[uk_get_effects] failed', { err, legId });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not retrieve the amendments.' });
+    }
   }
 
   // ─── uk_get_provision_history ──────────────────────────────────────
