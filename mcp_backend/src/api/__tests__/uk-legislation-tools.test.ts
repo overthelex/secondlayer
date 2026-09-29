@@ -379,13 +379,70 @@ describe('uk_get_act_as_at', () => {
   });
 });
 
+describe('uk_get_effects', () => {
+  const effectsRows = [
+    { affected_provisions: 's. 24-28', effect_type: 'excluded', affecting_id: 'ukpga/2023/55', affecting_title: 'Levelling-up and Regeneration Act 2023', affecting_provisions: 's. 209', in_force_date: '2024-12-02', applied: true, affected_extent: 'E+W' },
+    { affected_provisions: 's. 38A(3)', effect_type: 'words substituted', affecting_id: 'x/1', affecting_title: 'An amending act', affecting_provisions: 's. 1', in_force_date: '2020-01-01', applied: true, affected_extent: 'E+W' },
+    { affected_provisions: 'Pt. 2', effect_type: 'excluded', affecting_id: 'ukpga/2014/20', affecting_title: 'Defence Reform Act 2014', affecting_provisions: 'Sch. 6', in_force_date: null, applied: false, affected_extent: 'E+W' },
+    { affected_provisions: 's. 29', effect_type: 'omitted', affecting_id: 'x/2', affecting_title: 'Another act', affecting_provisions: 's. 2', in_force_date: '2019-01-01', applied: true, affected_extent: 'E+W' },
+  ];
+
+  it('names the instrument behind an exclusion that never changed the text', async () => {
+    const db = mockDb([{ match: /FROM uk_legislation_effects/, rows: effectsRows }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/Eliz2/2-3/56', provision: '25' }));
+
+    expect(out.total).toBe(2); // s.24-28 (range) and Pt. 2 (part); not s.38A, not s.29
+    expect(out.by_scope).toEqual({ provision: 1, part: 1 });
+    expect(out.effects[0]).toMatchObject({
+      affected_provisions: 's. 24-28', scope: 'provision', effect_type: 'excluded',
+      affecting: { id: 'ukpga/2023/55', title: 'Levelling-up and Regeneration Act 2023', provisions: 's. 209' },
+    });
+    expect(out.unapplied).toBe(1);
+    expect(db.calls[0].params[0]).toBe('ukpga/Eliz2/2-3/56');
+  });
+
+  it('passes the date and type filters to SQL, keeping effects with no in-force date', async () => {
+    const db = mockDb([{ match: /FROM uk_legislation_effects/, rows: [] }]);
+    const tools = new UkLegislationTools(db);
+
+    const out = parse(await tools.executeTool('uk_get_effects', {
+      leg_id: 'uksi/2007/991', since: '2016-01-22', effect_type: 'revoked',
+    }));
+
+    expect(db.calls[0].sql).toMatch(/in_force_date IS NULL OR in_force_date >= \$2/);
+    expect(db.calls[0].params).toEqual(['uksi/2007/991', '2016-01-22', '%revoked%']);
+    expect(out.total).toBe(0);
+    expect(out.note).toMatch(/No effects recorded/);
+  });
+
+  it('rejects a bad date and a bad provision before touching the database', async () => {
+    const db = mockDb([]);
+    const tools = new UkLegislationTools(db);
+    expect(parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/1986/45', since: 'last year' })).error).toBe('bad_date');
+    expect(parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/1986/45', provision: 'the bit about IVAs' })).error).toBe('bad_provision');
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('pages the matched effects', async () => {
+    const db = mockDb([{ match: /FROM uk_legislation_effects/, rows: effectsRows }]);
+    const tools = new UkLegislationTools(db);
+    const out = parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/Eliz2/2-3/56', limit: 1, offset: 1 }));
+    expect(out.total).toBe(4);
+    expect(out.effects).toHaveLength(1);
+    expect(out.effects[0].affected_provisions).toBe('s. 38A(3)');
+    expect(out.has_more).toBe(true);
+  });
+});
+
 describe('tool surface', () => {
-  it('advertises five read-only uk_* tools and handles exactly those', () => {
+  it('advertises six read-only uk_* tools and handles exactly those', () => {
     const tools = new UkLegislationTools(mockDb([]));
     const defs = tools.getToolDefinitions();
 
     expect(defs.map((d) => d.name).sort()).toEqual([
-      'uk_get_act', 'uk_get_act_as_at', 'uk_get_provision',
+      'uk_get_act', 'uk_get_act_as_at', 'uk_get_effects', 'uk_get_provision',
       'uk_get_provision_history', 'uk_search_legislation',
     ]);
     for (const d of defs) {

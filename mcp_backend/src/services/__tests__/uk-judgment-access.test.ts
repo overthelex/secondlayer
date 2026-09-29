@@ -60,7 +60,7 @@ describe('which calls are gated', () => {
 
   it('does NOT gate the legislation tools', () => {
     for (const t of ['uk_search_legislation', 'uk_get_act', 'uk_get_provision',
-                     'uk_get_provision_history', 'uk_get_act_as_at', 'uk_semantic_search']) {
+                     'uk_get_provision_history', 'uk_get_act_as_at', 'uk_get_effects', 'uk_semantic_search']) {
       expect(gatedRegistryOf(t, {})).toBeNull();
     }
   });
