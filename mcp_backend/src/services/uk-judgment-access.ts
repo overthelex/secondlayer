@@ -80,26 +80,25 @@ export interface AccessDecision {
 const DENIED_NO_RECORD: AccessDecision = {
   allowed: false,
   message:
-    'Доступ до корпусу судових рішень Великої Британії (Find Case Law) надається ' +
-    'лише практикуючим юристам, юридичним департаментам та дослідникам. ' +
-    'Це умова ліцензії The National Archives, а не наше обмеження: сервіс не ' +
-    'пропонується широкому загалу та особам, які ведуть власну справу без адвоката. ' +
-    'Щоб отримати доступ, подайте заяву через /api/uk-judgments/access із зазначенням ' +
-    'організації та ролі. Законодавство Великої Британії доступне без цієї умови.',
+    'Access to the UK judgments corpus (Find Case Law) is available only to practising ' +
+    'lawyers, in-house legal teams and researchers. This is a condition of The National ' +
+    'Archives licence, not our own restriction: the service is not offered to the general ' +
+    'public or to litigants in person. To request access, apply via /api/uk-judgments/access ' +
+    'with your organisation and role. UK legislation is available without this condition.',
 };
 
 const DENIED_PENDING: AccessDecision = {
   allowed: false,
   message:
-    'Вашу заяву на доступ до корпусу судових рішень Великої Британії отримано і ще ' +
-    'не розглянуто. Ми повідомимо, щойно буде рішення.',
+    'We have received your request for access to the UK judgments corpus and have not ' +
+    'decided it yet. We will let you know as soon as we do.',
 };
 
 const DENIED_REFUSED: AccessDecision = {
   allowed: false,
   message:
-    'Доступ до корпусу судових рішень Великої Британії для цього облікового запису ' +
-    'закрито. Якщо це помилка, напишіть нам.',
+    'Access to the UK judgments corpus is closed for this account. If this is a mistake, ' +
+    'please contact us.',
 };
 
 /**

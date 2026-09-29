@@ -31,17 +31,18 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { datesToDays } from './uk-dates.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const AS_AT_CAVEAT =
-  'Відкритий інтервал (valid_to = null) означає «діяло станом на останню редакцію, ' +
-  'яку містить архів», а не «чинне сьогодні»: архів відстає від сайту, і акт може бути ' +
-  'скасований цілком без публікації нової редакції.';
+  'An open interval (valid_to = null) means "in force as of the latest version the archive ' +
+  'holds", not "in force today": the archive lags the live site, and an act can be ' +
+  'repealed outright without a new revised version being published.';
 
 const NO_TEXT_NOTE =
-  'Джерело публікує цей акт лише у вигляді сканів — тексту немає в жодній з bulk-колекцій ' +
-  'legislation.gov.uk. Це властивість джерела, а не прогалина харвесту.';
+  'The source publishes this act only as scanned images; none of the legislation.gov.uk ' +
+  'bulk collections carries its text. This is a property of the source, not a harvesting gap.';
 
 // The register holds ids like `ukpga/1990/8`, `eur/2009/1198`, `aep/Hen3/23`.
 const LEG_ID_RE = /^[a-z]{2,6}\/[A-Za-z0-9]+\/[A-Za-z0-9]+$/;
@@ -81,6 +82,11 @@ function pickOne(rows: any[], key: string): any {
 }
 
 export class UkLegislationTools extends BaseToolHandler {
+  /** Every reply goes through here, so DATE columns leave as calendar days (see uk-dates.ts). */
+  protected override wrapResponse(data: any): ToolResult {
+    return super.wrapResponse(datesToDays(data));
+  }
+
   constructor(private db: any) {
     super();
   }
@@ -89,98 +95,98 @@ export class UkLegislationTools extends BaseToolHandler {
     return [
       {
         name: 'uk_search_legislation',
-        annotations: { title: 'Пошук законодавства Великої Британії', readOnlyHint: true },
-        description: `Пошук актів статутного права Великої Британії за назвою або ідентифікатором.
+        annotations: { title: 'Search UK legislation', readOnlyHint: true },
+        description: `Search UK statute law by title or identifier.
 
-Корпус: 238,926 актів — парламентські акти (ukpga), підзаконні акти (uksi), шотландські (asp, ssi), північноірландські (nia, nisr), валлійські (asc, anaw, wsi), історичні (aep, apgb) та збережене право ЄС (eur, eudn, eudr).
-query — фрагмент назви або ідентифікатор виду 'ukpga/1990/8'. leg_type і year звужують пошук.
-⚠ Кожен результат містить has_text і versions: текст є у 129,897 актів, історія редакцій — у 62,866. Решта опублікована джерелом лише сканами.
-Далі: uk_get_act для метаданих і покриття, uk_get_provision для тексту норми (з as_of — на дату), uk_get_provision_history для історії змін норми.`,
+Corpus: 238,926 acts: Acts of Parliament (ukpga), statutory instruments (uksi), Scottish (asp, ssi), Northern Irish (nia, nisr), Welsh (asc, anaw, wsi), historical (aep, apgb) and retained EU law (eur, eudn, eudr).
+query is part of a title or an identifier such as 'ukpga/1990/8'. leg_type and year narrow the search.
+⚠ Every result carries has_text and versions: 129,897 acts have text and 62,866 have version history. The source publishes the rest only as scans.
+Next: uk_get_act for metadata and coverage, uk_get_provision for the text of a provision (with as_of, as at a date), uk_get_provision_history for how a provision changed.`,
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: "Фрагмент назви або ідентифікатор, напр. 'Companies Act 2006' чи 'ukpga/2006/46'" },
-            leg_type: { type: 'string', description: "Тип акта: ukpga, uksi, asp, ssi, nia, nisr, asc, anaw, wsi, eur, eudn, eudr тощо" },
-            year: { type: 'number', description: 'Рік' },
-            with_text_only: { type: 'boolean', default: false, description: 'Лише акти, для яких є текст' },
-            limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
-            offset: { type: 'number', default: 0, description: 'Зсув для пагінації' },
+            query: { type: 'string', description: "Part of a title or an identifier, e.g. 'Companies Act 2006' or 'ukpga/2006/46'" },
+            leg_type: { type: 'string', description: "Legislation type: ukpga, uksi, asp, ssi, nia, nisr, asc, anaw, wsi, eur, eudn, eudr, etc." },
+            year: { type: 'number', description: 'Year' },
+            with_text_only: { type: 'boolean', default: false, description: 'Only acts that have text' },
+            limit: { type: 'number', default: 20, maximum: 50, description: 'Maximum results' },
+            offset: { type: 'number', default: 0, description: 'Pagination offset' },
           },
           required: ['query'],
         },
       },
       {
         name: 'uk_get_act',
-        annotations: { title: 'Акт Великої Британії: метадані та покриття', readOnlyHint: true },
-        description: `Метадані акта разом із чесною довідкою про те, що саме ми про нього маємо.
+        annotations: { title: 'UK act: metadata and coverage', readOnlyHint: true },
+        description: `Metadata for an act, with a plain account of what we actually hold for it.
 
-Потрібен leg_id (напр. 'ukpga/2006/46'). Повертає назву, тип, рік, номер, статус, територію дії, дати прийняття та набуття чинності, і далі:
-coverage — скільки норм із текстом, чи є історія редакцій (point-in-time) та її межі;
-effects — кількість поправок, що стосуються акта, з яких unapplied — редакційно ще не внесені в текст. ⚠ Це головна причина, чому чинний текст може відставати від права: 32,766 актів мають щонайменше одну невнесену поправку.
-Якщо тексту немає — пояснює чому і дає посилання на джерело, а не віддає порожній результат.`,
+Requires leg_id (e.g. 'ukpga/2006/46'). Returns title, type, year, number, status, extent, enactment and commencement dates, and also:
+coverage: how many provisions have text, whether version history (point in time) exists and its date range;
+effects: the number of amendments affecting the act, and how many are unapplied (made but not yet editorially reflected in the text). ⚠ This is the main reason the current text can lag the law: 32,766 acts have at least one unapplied amendment.
+If there is no text, it says why and links to the source instead of returning an empty result.`,
         inputSchema: {
           type: 'object',
           properties: {
-            leg_id: { type: 'string', description: "Ідентифікатор акта, напр. 'ukpga/2006/46'" },
+            leg_id: { type: 'string', description: "Act identifier, e.g. 'ukpga/2006/46'" },
           },
           required: ['leg_id'],
         },
       },
       {
         name: 'uk_get_provision',
-        annotations: { title: 'Норма акта Великої Британії, за потреби на дату', readOnlyHint: true },
-        description: `Текст окремої норми (section, regulation, article, schedule) акта Великої Британії.
+        annotations: { title: 'UK provision, optionally as at a date', readOnlyHint: true },
+        description: `Text of a single provision (section, regulation, article, schedule) of a UK act.
 
-Потрібні leg_id і provision. provision приймає номер ('55', '2A'), частковий ключ ('section/55') або повний ('ukpga/1990/8/section/55').
-Без as_of повертає чинний текст із uk_legislation_provisions.
-З as_of (YYYY-MM-DD) повертає редакцію, що діяла на цю дату, з інтервалу [valid_from, valid_to). Це доступно для 62,866 актів; якщо для акта історії немає, інструмент прямо про це каже і віддає чинний текст.
+Requires leg_id and provision. provision accepts a number ('55', '2A'), a partial key ('section/55') or a full key ('ukpga/1990/8/section/55').
+Without as_of it returns the current text from uk_legislation_provisions.
+With as_of (YYYY-MM-DD) it returns the version in force on that date, from the interval [valid_from, valid_to). This is available for 62,866 acts; where an act has no history the tool says so and returns the current text.
 ⚠ ${AS_AT_CAVEAT}`,
         inputSchema: {
           type: 'object',
           properties: {
-            leg_id: { type: 'string', description: "Ідентифікатор акта, напр. 'ukpga/1990/8'" },
-            provision: { type: 'string', description: "Номер або ключ норми, напр. '55' або 'section/55'" },
-            provision_type: { type: 'string', description: "Тип норми, якщо номер неоднозначний: section, regulation, article, paragraph" },
-            as_of: { type: 'string', description: 'Дата (YYYY-MM-DD) — текст станом на цей день' },
+            leg_id: { type: 'string', description: "Act identifier, e.g. 'ukpga/1990/8'" },
+            provision: { type: 'string', description: "Provision number or key, e.g. '55' or 'section/55'" },
+            provision_type: { type: 'string', description: "Provision type when the number is ambiguous: section, regulation, article, paragraph" },
+            as_of: { type: 'string', description: 'Date (YYYY-MM-DD): the text as it stood on that day' },
           },
           required: ['leg_id', 'provision'],
         },
       },
       {
         name: 'uk_get_provision_history',
-        annotations: { title: 'Історія змін норми акта Великої Британії', readOnlyHint: true },
-        description: `Повна хронологія редакцій однієї норми: кожен інтервал, протягом якого її текст не змінювався, від найранішої редакції в архіві до поточної.
+        annotations: { title: 'UK provision revision history', readOnlyHint: true },
+        description: `Full timeline of versions of one provision: every interval during which its text did not change, from the earliest version in the archive to the current one.
 
-Потрібні leg_id і provision. Для кожного інтервалу повертає valid_from, valid_to, довжину тексту і — за include_text — сам текст.
-Це прямий спосіб відповісти «коли і як змінилася ця норма». Наприклад, section 4 Human Rights Act 1998 дає п'ять інтервалів, і 2009-10-01 у переліку — це день, коли Constitutional Reform Act 2005 замінив House of Lords на Supreme Court.
+Requires leg_id and provision. For each interval it returns valid_from, valid_to, the text length and, with include_text, the text itself.
+This is the direct way to answer "when and how did this provision change". For example, section 4 of the Human Rights Act 1998 has five intervals, and 2009-10-01 in the list is the day the Constitutional Reform Act 2005 replaced the House of Lords with the Supreme Court.
 ⚠ ${AS_AT_CAVEAT}`,
         inputSchema: {
           type: 'object',
           properties: {
-            leg_id: { type: 'string', description: "Ідентифікатор акта" },
-            provision: { type: 'string', description: 'Номер або ключ норми' },
-            provision_type: { type: 'string', description: 'Тип норми, якщо номер неоднозначний' },
-            include_text: { type: 'boolean', default: false, description: 'Повертати текст кожної редакції, а не лише дати' },
+            leg_id: { type: 'string', description: "Act identifier" },
+            provision: { type: 'string', description: 'Provision number or key' },
+            provision_type: { type: 'string', description: 'Provision type when the number is ambiguous' },
+            include_text: { type: 'boolean', default: false, description: 'Return the text of each version, not only the dates' },
           },
           required: ['leg_id', 'provision'],
         },
       },
       {
         name: 'uk_get_act_as_at',
-        annotations: { title: 'Акт Великої Британії цілком станом на дату', readOnlyHint: true },
-        description: `Весь акт у редакції, що діяла на задану дату, у порядку документа.
+        annotations: { title: 'Whole UK act as at a date', readOnlyHint: true },
+        description: `The whole act as it stood on a given date, in document order.
 
-Потрібні leg_id і as_of (YYYY-MM-DD). Доступно для 62,866 актів, які мають історію редакцій.
-offset/max_chars керують посторінковим читанням (max_chars типово 50000, максимум 200000); truncated=true, якщо текст не вміщено повністю.
-Якщо жодна норма не діяла на as_of — повертає найранішу та найпізнішу відомі дати замість порожнього результату, щоб було видно, чи дата поза межами архіву.
+Requires leg_id and as_of (YYYY-MM-DD). Available for the 62,866 acts that have version history.
+offset/max_chars page through the text (max_chars defaults to 50000, maximum 200000); truncated=true if the text did not fit.
+If no provision was in force on as_of, it returns the earliest and latest known dates instead of an empty result, so you can see whether the date falls outside the archive.
 ⚠ ${AS_AT_CAVEAT}`,
         inputSchema: {
           type: 'object',
           properties: {
-            leg_id: { type: 'string', description: "Ідентифікатор акта, напр. 'ukpga/2006/46'" },
-            as_of: { type: 'string', description: 'Дата (YYYY-MM-DD)' },
-            offset: { type: 'number', default: 0, description: 'Зсув у символах' },
-            max_chars: { type: 'number', default: 50000, maximum: 200000, description: 'Макс. символів у відповіді' },
+            leg_id: { type: 'string', description: "Act identifier, e.g. 'ukpga/2006/46'" },
+            as_of: { type: 'string', description: 'Date (YYYY-MM-DD)' },
+            offset: { type: 'number', default: 0, description: 'Offset in characters' },
+            max_chars: { type: 'number', default: 50000, maximum: 200000, description: 'Maximum characters in the response' },
           },
           required: ['leg_id', 'as_of'],
         },
@@ -207,7 +213,7 @@ offset/max_chars керують посторінковим читанням (max
     const offset = Math.max(Number((args as any).offset) || 0, 0);
 
     if (!query || !String(query).trim()) {
-      return this.wrapResponse('Вкажіть query — назву акта або його ідентифікатор.');
+      return this.wrapResponse('Provide query: an act title or identifier.');
     }
     const q = String(query).trim();
     const asId = normaliseLegId(q);
@@ -246,8 +252,8 @@ offset/max_chars керують посторінковим читанням (max
         return this.wrapResponse({
           results: [], total: 0,
           note: asId
-            ? `Акт ${asId} відсутній у реєстрі. Реєстр охоплює 238,926 актів; перевірте ідентифікатор на legislation.gov.uk.`
-            : 'Нічого не знайдено за назвою. Спробуйте коротший фрагмент або вкажіть leg_type і year.',
+            ? `Act ${asId} is not in the register. The register covers 238,926 acts; check the identifier on legislation.gov.uk.`
+            : 'Nothing found by title. Try a shorter fragment or give leg_type and year.',
         });
       }
       return this.wrapSearchResults(
@@ -262,7 +268,7 @@ offset/max_chars керують посторінковим читанням (max
       );
     } catch (err) {
       logger.error('[uk_search_legislation] failed', { err });
-      return this.wrapResponse({ error: 'query_failed', message: 'Пошук законодавства Великої Британії не виконано.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'The UK legislation search failed.' });
     }
   }
 
@@ -270,7 +276,7 @@ offset/max_chars керують посторінковим читанням (max
 
   private async getAct(args: Record<string, unknown>): Promise<ToolResult> {
     const legId = normaliseLegId((args as any).leg_id);
-    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id має виглядати як 'ukpga/2006/46'." });
+    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/2006/46'." });
 
     try {
       const act = (await this.db.query(
@@ -280,7 +286,7 @@ offset/max_chars керують посторінковим читанням (max
            FROM uk_legislation WHERE id = $1`, [legId])).rows[0];
       if (!act) {
         return this.wrapResponse({ error: 'not_found', entity: 'act', leg_id: legId,
-          message: `Акт ${legId} відсутній у реєстрі (238,926 актів).` });
+          message: `Act ${legId} is not in the register (238,926 acts).` });
       }
 
       const cov = (await this.db.query(
@@ -317,14 +323,14 @@ offset/max_chars керують посторінковим читанням (max
           applied: Number(eff.applied) || 0,
           unapplied: Number(eff.unapplied) || 0,
           note: Number(eff.unapplied) > 0
-            ? 'Невнесені поправки вже ухвалені, але редакційно ще не відображені в тексті акта, тож чинний текст може відставати від права.'
+            ? 'Unapplied amendments have been made but are not yet editorially reflected in the text, so the current text may lag the law.'
             : undefined,
         },
         attribution: 'Contains public sector information licensed under the Open Government Licence v3.0.',
       });
     } catch (err) {
       logger.error('[uk_get_act] failed', { err, legId });
-      return this.wrapResponse({ error: 'query_failed', message: 'Не вдалося отримати акт.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not retrieve the act.' });
     }
   }
 
@@ -334,9 +340,9 @@ offset/max_chars керують посторінковим читанням (max
     const legId = normaliseLegId((args as any).leg_id);
     const provision = (args as any).provision;
     const asOf = (args as any).as_of ? String((args as any).as_of) : null;
-    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id має виглядати як 'ukpga/1990/8'." });
-    if (!provision) return this.wrapResponse({ error: 'bad_provision', message: 'Вкажіть provision — номер або ключ норми.' });
-    if (asOf && !ISO_DATE.test(asOf)) return this.wrapResponse({ error: 'bad_date', message: 'as_of має бути у форматі YYYY-MM-DD.' });
+    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/1990/8'." });
+    if (!provision) return this.wrapResponse({ error: 'bad_provision', message: 'Provide provision: a provision number or key.' });
+    if (asOf && !ISO_DATE.test(asOf)) return this.wrapResponse({ error: 'bad_date', message: 'as_of must be in YYYY-MM-DD format.' });
 
     const key = buildProvisionKey(legId, String(provision), (args as any).provision_type);
     const label = String(provision).trim().split('/').pop();
@@ -370,14 +376,14 @@ offset/max_chars керують посторінковим читанням (max
           if (current === AMBIGUOUS) return this.ambiguous(legId, key, [], asOf);
           return this.wrapResponse({
             leg_id: legId, as_of: asOf, source: 'current_text_only',
-            message: 'Для цього акта історії редакцій немає (point-in-time охоплює 62,866 актів). Нижче — чинний текст.',
+            message: 'This act has no version history (point in time covers 62,866 acts). The current text follows.',
             provision: current || null,
           });
         }
         return this.wrapResponse({
           error: 'no_version_for_date', leg_id: legId, provision_key: key, as_of: asOf,
           history_from: span.from_, history_to: span.to_,
-          message: 'Норма не діяла на цю дату або дата поза межами історії, яку містить архів.',
+          message: 'The provision was not in force on this date, or the date is outside the history the archive holds.',
         });
       }
 
@@ -398,7 +404,7 @@ offset/max_chars керують посторінковим читанням (max
           error: Number(hasAny.n) ? 'provision_not_found' : 'no_text',
           leg_id: legId, provision_key: key,
           message: Number(hasAny.n)
-            ? 'Норму не знайдено. Перевірте номер або вкажіть provision_type (section / regulation / article).'
+            ? 'Provision not found. Check the number or give provision_type (section / regulation / article).'
             : NO_TEXT_NOTE,
           source_url: `https://www.legislation.gov.uk/${legId}`,
         });
@@ -409,7 +415,7 @@ offset/max_chars керують посторінковим читанням (max
       });
     } catch (err) {
       logger.error('[uk_get_provision] failed', { err, legId, key });
-      return this.wrapResponse({ error: 'query_failed', message: 'Не вдалося отримати норму.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not retrieve the provision.' });
     }
   }
 
@@ -421,7 +427,7 @@ offset/max_chars керують посторінковим читанням (max
       leg_id: legId,
       looked_for: key,
       ...(asOf ? { as_of: asOf } : {}),
-      message: 'Цей номер у межах акта має кілька норм — уточніть provision повним ключем.',
+      message: 'This number matches several provisions in the act; give provision as a full key.',
       matches: [...seen.values()].map((r) => ({
         provision_key: r.provision_key,
         provision_type: r.provision_type,
@@ -451,8 +457,8 @@ offset/max_chars керують посторінковим читанням (max
     const legId = normaliseLegId((args as any).leg_id);
     const provision = (args as any).provision;
     const includeText = Boolean((args as any).include_text);
-    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id має виглядати як 'ukpga/1998/42'." });
-    if (!provision) return this.wrapResponse({ error: 'bad_provision', message: 'Вкажіть provision — номер або ключ норми.' });
+    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/1998/42'." });
+    if (!provision) return this.wrapResponse({ error: 'bad_provision', message: 'Provide provision: a provision number or key.' });
 
     const key = buildProvisionKey(legId, String(provision), (args as any).provision_type);
     const label = String(provision).trim().split('/').pop();
@@ -472,8 +478,8 @@ offset/max_chars керують посторінковим читанням (max
           error: Number(hasHistory.n) ? 'provision_not_found' : 'no_point_in_time',
           leg_id: legId, provision_key: key,
           message: Number(hasHistory.n)
-            ? 'Норму не знайдено в історії цього акта. Перевірте номер або вкажіть provision_type.'
-            : 'Для цього акта історії редакцій немає — point-in-time охоплює 62,866 актів із 238,926.',
+            ? 'Provision not found in this act\'s history. Check the number or give provision_type.'
+            : 'This act has no version history; point in time covers 62,866 of 238,926 acts.',
         });
       }
 
@@ -501,7 +507,7 @@ offset/max_chars керують посторінковим читанням (max
       });
     } catch (err) {
       logger.error('[uk_get_provision_history] failed', { err, legId, key });
-      return this.wrapResponse({ error: 'query_failed', message: 'Не вдалося отримати історію норми.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not retrieve the provision history.' });
     }
   }
 
@@ -512,8 +518,8 @@ offset/max_chars керують посторінковим читанням (max
     const asOf = (args as any).as_of ? String((args as any).as_of) : null;
     const offset = Math.max(Number((args as any).offset) || 0, 0);
     const maxChars = Math.min(Number((args as any).max_chars) || 50000, 200000);
-    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id має виглядати як 'ukpga/2006/46'." });
-    if (!asOf || !ISO_DATE.test(asOf)) return this.wrapResponse({ error: 'bad_date', message: 'as_of обовʼязкова, формат YYYY-MM-DD.' });
+    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/2006/46'." });
+    if (!asOf || !ISO_DATE.test(asOf)) return this.wrapResponse({ error: 'bad_date', message: 'as_of is required, in YYYY-MM-DD format.' });
 
     try {
       const rows = (await this.db.query(
@@ -529,8 +535,8 @@ offset/max_chars керують посторінковим читанням (max
           leg_id: legId, as_of: asOf,
           history_from: span.from_, history_to: span.to_,
           message: Number(span.rows)
-            ? 'На цю дату жодна норма акта не діяла — дата поза межами історії, яку містить архів.'
-            : 'Для цього акта історії редакцій немає — point-in-time охоплює 62,866 актів із 238,926.',
+            ? 'No provision of the act was in force on this date; the date is outside the history the archive holds.'
+            : 'This act has no version history; point in time covers 62,866 of 238,926 acts.',
         });
       }
 
@@ -551,7 +557,7 @@ offset/max_chars керують посторінковим читанням (max
       });
     } catch (err) {
       logger.error('[uk_get_act_as_at] failed', { err, legId, asOf });
-      return this.wrapResponse({ error: 'query_failed', message: 'Не вдалося зібрати текст акта на дату.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not assemble the text of the act as at that date.' });
     }
   }
 }

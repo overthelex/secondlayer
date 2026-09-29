@@ -29,6 +29,7 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { BgeM3Client } from '../../utils/bge-m3-client.js';
 import { logger } from '../../utils/logger.js';
+import { datesToDays } from './uk-dates.js';
 
 const COLLECTION = process.env.UK_BGE_COLLECTION || 'uk_provisions_bge';
 
@@ -42,6 +43,11 @@ const OVERFETCH = 6;
 const OVERFETCH_TYPED = 30;
 
 export class UkSemanticTools extends BaseToolHandler {
+  /** Every reply goes through here, so DATE columns leave as calendar days (see uk-dates.ts). */
+  protected override wrapResponse(data: any): ToolResult {
+    return super.wrapResponse(datesToDays(data));
+  }
+
   private _bge: BgeM3Client | null = null;
   private _qdrant: QdrantClient | null = null;
 

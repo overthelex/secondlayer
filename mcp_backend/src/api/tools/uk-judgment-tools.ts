@@ -21,20 +21,21 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { datesToDays } from './uk-dates.js';
 import { isValidIsoDate } from './ch-date-utils.js';
 
 const ATTRIBUTION =
   'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.';
 
 const COVERAGE =
-  'Корпус неповний: 54,453 рішення з приблизно 95,800 на Find Case Law, завантажені до травня 2026. ' +
-  'Немає Court of Appeal (Criminal Division) і King’s Bench Division; Administrative Court обривається у квітні 2016; ' +
-  'немає Шотландії та Північної Ірландії. Відсутність результату НЕ означає, що такого рішення не існує.';
+  'The corpus is incomplete: 54,453 judgments of about 95,800 on Find Case Law, loaded up to May 2026. ' +
+  'The Court of Appeal (Criminal Division) and the King’s Bench Division are missing; the Administrative Court stops in April 2016; ' +
+  'Scotland and Northern Ireland are not covered. No result does NOT mean no such judgment exists.';
 
 const EXTRACT_NOTE_QUERY =
-  'extract — дослівні уривки з тексту рішення навколо збігів із query (виділені «»); повний текст — за посиланням source_url.';
+  'extract: verbatim passages of the judgment around the query matches (marked «»); the full text is at source_url.';
 const EXTRACT_NOTE_OPENING =
-  'extract — перші 400 символів тексту рішення (запит без query, тож збігів для виділення немає); повний текст — за посиланням source_url.';
+  'extract: the first 400 characters of the judgment (no query, so there are no matches to mark); the full text is at source_url.';
 
 // Delimiters for ts_headline. Plain text rather than <b>, since MCP clients render
 // the payload as JSON, not HTML.
@@ -45,6 +46,11 @@ function escapeLike(s: string): string {
 }
 
 export class UkJudgmentTools extends BaseToolHandler {
+  /** Every reply goes through here, so DATE columns leave as calendar days (see uk-dates.ts). */
+  protected override wrapResponse(data: any): ToolResult {
+    return super.wrapResponse(datesToDays(data));
+  }
+
   constructor(private db: any) {
     super();
   }
@@ -53,29 +59,29 @@ export class UkJudgmentTools extends BaseToolHandler {
     return [
       {
         name: 'uk_search_judgments',
-        annotations: { title: 'Пошук судових рішень Великої Британії', readOnlyHint: true },
-        description: `Повнотекстовий пошук у судових рішеннях Великої Британії з Find Case Law (The National Archives).
+        annotations: { title: 'Search UK judgments', readOnlyHint: true },
+        description: `Full-text search of UK judgments from Find Case Law (The National Archives).
 
-Корпус: 54,453 рішення 2001–2026: Supreme Court, Privy Council, Court of Appeal (Civil Division), High Court (Chancery, Administrative, Commercial, Family, TCC та ін.), Family Court, Court of Protection, трибунали (UKFTT, UKUT, EAT).
+Corpus: 54,453 judgments, 2001–2026: Supreme Court, Privy Council, Court of Appeal (Civil Division), High Court (Chancery, Administrative, Commercial, Family, TCC and others), Family Court, Court of Protection, tribunals (UKFTT, UKUT, EAT).
 ⚠ ${COVERAGE}
 
-query — англійською, синтаксис як у пошуковику: "точна фраза", OR, -виключення. Результати впорядковані за релевантністю (sort='date' — за датою).
-citation — нейтральне посилання, напр. '[2021] UKSC 20' (можна без query).
-court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm, ewhc/fam, ewhc/tcc, ewfc, ewcop, eat, ukftt/tc, ukftt/grc, ukut/iac, ukut/lc тощо.
-Кожен результат: нейтральне посилання, сторони, суд, дата, дослівний уривок (з query — фрагменти навколо збігів; без query — початок рішення) і посилання на повний текст на caselaw.nationalarchives.gov.uk. Повний текст рішення інструмент не віддає.
-Доступ — лише для підтверджених юристів і дослідників (умова ліцензії TNA).`,
+query is in English with search-engine syntax: "exact phrase", OR, -exclusion. Results are ordered by relevance (sort='date' orders by date).
+citation is a neutral citation, e.g. '[2021] UKSC 20' (query is optional then).
+court is a court code: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm, ewhc/fam, ewhc/tcc, ewfc, ewcop, eat, ukftt/tc, ukftt/grc, ukut/iac, ukut/lc, etc.
+Each result: neutral citation, parties, court, date, a verbatim extract (with query, passages around the matches; without, the start of the judgment) and a link to the full text on caselaw.nationalarchives.gov.uk. The tool does not return full judgment text.
+Access is limited to verified lawyers and researchers (a condition of the TNA licence).`,
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: "Пошуковий запит англійською, напр. 'unfair prejudice petition quasi-partnership'" },
-            citation: { type: 'string', description: "Нейтральне посилання або його частина, напр. '[2021] UKSC 20'" },
-            court: { type: 'string', description: "Код суду, напр. 'uksc', 'ewca/civ', 'ewhc/ch'" },
-            parties: { type: 'string', description: 'Фрагмент назви справи / сторін' },
-            date_from: { type: 'string', description: 'Дата рішення від (YYYY-MM-DD)' },
-            date_to: { type: 'string', description: 'Дата рішення до (YYYY-MM-DD)' },
-            sort: { type: 'string', enum: ['relevance', 'date'], default: 'relevance', description: 'Порядок: relevance (за замовчуванням, якщо є query) або date (новіші першими)' },
-            limit: { type: 'number', default: 10, maximum: 20, description: 'Макс. результатів' },
-            offset: { type: 'number', default: 0, description: 'Зсув для пагінації' },
+            query: { type: 'string', description: "Search query in English, e.g. 'unfair prejudice petition quasi-partnership'" },
+            citation: { type: 'string', description: "Neutral citation or part of one, e.g. '[2021] UKSC 20'" },
+            court: { type: 'string', description: "Court code, e.g. 'uksc', 'ewca/civ', 'ewhc/ch'" },
+            parties: { type: 'string', description: 'Part of the case name or parties' },
+            date_from: { type: 'string', description: 'Judgment date from (YYYY-MM-DD)' },
+            date_to: { type: 'string', description: 'Judgment date to (YYYY-MM-DD)' },
+            sort: { type: 'string', enum: ['relevance', 'date'], default: 'relevance', description: 'Order: relevance (default when query is given) or date (newest first)' },
+            limit: { type: 'number', default: 10, maximum: 20, description: 'Maximum results' },
+            offset: { type: 'number', default: 0, description: 'Pagination offset' },
           },
         },
       },
@@ -102,13 +108,13 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
     if (!query && !citation && !parties) {
       return this.wrapResponse({
         error: 'missing_query',
-        message: 'Вкажіть query (текстовий запит), citation (нейтральне посилання) або parties.',
+        message: 'Provide query (text search), citation (neutral citation) or parties.',
         coverage: COVERAGE,
       });
     }
     for (const k of ['date_from', 'date_to']) {
       if (a[k] !== undefined && a[k] !== null && a[k] !== '' && !isValidIsoDate(String(a[k]))) {
-        return this.wrapResponse({ error: 'bad_date', message: `${k} має бути реальною датою у форматі YYYY-MM-DD.` });
+        return this.wrapResponse({ error: 'bad_date', message: `${k} must be a real date in YYYY-MM-DD format.` });
       }
     }
 
@@ -163,12 +169,12 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       const extra: Record<string, unknown> = { coverage: COVERAGE };
       if (unindexed === null) {
         extra.index_incomplete =
-          'Не вдалося перевірити повноту текстового індексу — результати query можуть бути неповними.';
+          'Could not check that the text index is complete; query results may be incomplete.';
       } else if (unindexed > 0) {
         // Honest rather than silently partial: the backfill has not finished, so a
         // text query cannot see these judgments yet.
         extra.index_incomplete =
-          `${unindexed} рішень ще не проіндексовано для текстового пошуку — результати query можуть бути неповними.`;
+          `${unindexed} judgments are not yet indexed for text search; query results may be incomplete.`;
       }
 
       if (!rows.length) {
@@ -183,8 +189,8 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
         return this.wrapResponse({
           results: [], total_count: total, has_more: false, limit, offset, ...extra,
           note: total > 0
-            ? `Зсув ${offset} за межами результатів: усього збігів ${total}.`
-            : 'Нічого не знайдено. Спробуйте ширший запит, інший суд або період.',
+            ? `Offset ${offset} is past the end of the results: ${total} matches in total.`
+            : 'Nothing found. Try a broader query, another court or another period.',
         });
       }
       const result = this.wrapSearchResults(rows, limit, offset, ATTRIBUTION);
@@ -194,7 +200,7 @@ court — код суду: uksc, ukpc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm,
       });
     } catch (err: any) {
       logger.error('[uk_search_judgments] failed', { error: err?.message });
-      return this.wrapResponse({ error: 'query_failed', message: 'Пошук судових рішень Великої Британії не виконано.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'The UK judgments search failed.' });
     }
   }
 
