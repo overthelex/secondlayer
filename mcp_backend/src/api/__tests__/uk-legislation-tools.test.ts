@@ -58,7 +58,7 @@ describe('uk_get_provision', () => {
     expect(out.provision.valid_from).toBe('2009-10-01');
     expect(out.provision.text).toContain('Supreme Court');
     // The caveat is the whole reason a lawyer can trust the rest of the payload.
-    expect(out.as_at_caveat).toMatch(/не «чинне сьогодні»/);
+    expect(out.as_at_caveat).toMatch(/not "in force today"/);
   });
 
   it('falls back to current text, and says why, when the act has no history at all', async () => {
@@ -80,7 +80,7 @@ describe('uk_get_provision', () => {
     }));
 
     expect(out.source).toBe('current_text_only');
-    expect(out.message).toMatch(/історії редакцій немає/);
+    expect(out.message).toMatch(/has no version history/);
     expect(out.provision.text).toBe('Current text.');
     expect(out.error).toBeUndefined();
   });
@@ -113,7 +113,7 @@ describe('uk_get_provision', () => {
     }));
 
     expect(out.error).toBe('no_text');
-    expect(out.message).toMatch(/лише у вигляді сканів/);
+    expect(out.message).toMatch(/only as scanned images/);
     expect(out.source_url).toBe('https://www.legislation.gov.uk/nisro/1950/12');
   });
 
@@ -235,7 +235,7 @@ describe('uk_search_legislation', () => {
     const out = parse(await tools.executeTool('uk_search_legislation', { query: 'ukpga/2006/46' }));
     expect(db.calls[0].params[0]).toBe('ukpga/2006/46');
     expect(db.calls[0].sql).toContain('l.id = $1');
-    expect(out.note).toMatch(/відсутній у реєстрі/);
+    expect(out.note).toMatch(/is not in the register/);
   });
 
   it('counts one archived version as point-in-time data', async () => {
@@ -309,7 +309,7 @@ describe('uk_get_act', () => {
     expect(out.coverage.versions).toBe(200);
     expect(out.coverage.as_at_caveat).toBeDefined();
     expect(out.effects.unapplied).toBe(61);
-    expect(out.effects.note).toMatch(/відставати від права/);
+    expect(out.effects.note).toMatch(/may lag the law/);
   });
 
   it('explains a text-less act instead of returning empty coverage', async () => {
@@ -322,7 +322,7 @@ describe('uk_get_act', () => {
 
     const out = parse(await tools.executeTool('uk_get_act', { leg_id: 'ukppa/1900/1' }));
     expect(out.coverage.has_text).toBe(false);
-    expect(out.coverage.note).toMatch(/лише у вигляді сканів/);
+    expect(out.coverage.note).toMatch(/only as scanned images/);
     expect(out.coverage.as_at_caveat).toBeUndefined();
   });
 });

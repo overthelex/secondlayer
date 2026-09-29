@@ -57,7 +57,7 @@ describe('uk_search_judgments', () => {
     expect(out.results[0].source_url).toMatch(/^https:\/\/caselaw\.nationalarchives\.gov\.uk\//);
     expect(out.results[0]).not.toHaveProperty('full_text');
     expect(out.licence).toMatch(/Open Justice/);
-    expect(out.coverage).toMatch(/Відсутність результату НЕ означає/);
+    expect(out.coverage).toMatch(/No result does NOT mean/);
     expect(out.index_incomplete).toBeUndefined();
 
     const { sql, params } = db.calls.find((c) => /WITH page AS/.test(c.sql))!;
@@ -167,16 +167,16 @@ describe('uk_search_judgments', () => {
     };
     const out = parse(await new UkJudgmentTools(db).executeTool('uk_search_judgments', { query: 'x' }));
     expect(out.results).toHaveLength(1);
-    expect(out.index_incomplete).toMatch(/Не вдалося перевірити/);
+    expect(out.index_incomplete).toMatch(/Could not check/);
   });
 
   it('says what the extract is: highlighted matches with a query, the opening without one', async () => {
     const db = mockDb([{ match: /WITH page AS/, rows: [HIT] }]);
     const tools = new UkJudgmentTools(db);
     expect(parse(await tools.executeTool('uk_search_judgments', { query: 'x' })).extract_note)
-      .toMatch(/навколо збігів/);
+      .toMatch(/around the query matches/);
     expect(parse(await tools.executeTool('uk_search_judgments', { citation: '[2024]' })).extract_note)
-      .toMatch(/перші 400 символів/);
+      .toMatch(/first 400 characters/);
   });
 
   it('bounds the extract in the database, not in the caller', async () => {
