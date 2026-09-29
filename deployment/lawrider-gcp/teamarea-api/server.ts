@@ -21,6 +21,12 @@
 // an admin hides it; the activity page is admin-only unless granted. Pages
 // report views, visible time and scroll depth to /track.
 //
+// Pitch proposals: on /teamarea/pitch3/ anyone who can see the page proposes a
+// new version of a script line; only an admin confirms it, and the confirmed text
+// replaces the line for everyone. Lines are addressed by the data-line id in the
+// page's HTML. Every proposal, confirmation and rejection goes to pitch_log.jsonl,
+// which the Activity page shows.
+//
 // Password change rewrites the oauth2-proxy htpasswd file (mounted read-write
 // here, read-only in sell-auth). Apache's htpasswd from the image does the
 // bcrypt work: -v checks the current password against the file, -n hashes the
@@ -28,7 +34,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync, writeFileSync, renameSync, mkdirSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 const DATA_DIR = process.env.DATA_DIR ?? '/data';
 const FILE = `${DATA_DIR}/profiles.json`;
@@ -39,6 +45,13 @@ const PHOTO_MAX = 2 * 1024 * 1024;
 const PNL_FILE = `${DATA_DIR}/pnl.json`;
 const PNL_MAX = 64 * 1024;
 const PNL_HISTORY = 30;
+const PITCH_FILE = `${DATA_DIR}/pitch.json`;
+const PITCH_LOG = `${DATA_DIR}/pitch_log.jsonl`;
+// Pages whose lines can be edited, and the limits on what a proposal can be.
+const PITCH_PAGES = ['pitch3'];
+const PITCH_LINE_RE = /^[a-z0-9-]{1,40}$/;
+const PITCH_TEXT_MAX = 600;
+const PITCH_PENDING_MAX = 300;
 const HTPASSWD = process.env.HTPASSWD_FILE ?? '/htpasswd/sell';
 const AUTH_URL = process.env.AUTH_URL ?? 'http://lawrider-sell-auth:4180/oauth2/auth';
 const ADMINS = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -336,6 +349,69 @@ function activity(days: number) {
   return { days, users };
 }
 
+// ---- pitch proposals
+type Proposal = {
+  id: string; line: string; text: string; base: string; by: string; at: string;
+  status: 'pending' | 'confirmed' | 'rejected'; decided_by?: string; decided_at?: string;
+};
+type PitchLine = { text: string; proposal: string; confirmed_by: string; confirmed_at: string };
+type PitchPage = { lines: Record<string, PitchLine>; proposals: Proposal[] };
+type PitchDoc = { pages: Record<string, PitchPage> };
+
+function loadPitch(): PitchDoc {
+  try {
+    const d = JSON.parse(readFileSync(PITCH_FILE, 'utf8'));
+    return d && typeof d === 'object' && d.pages ? d : { pages: {} };
+  } catch {
+    return { pages: {} };
+  }
+}
+
+function savePitch(doc: PitchDoc): void {
+  writeFileSync(`${PITCH_FILE}.tmp`, JSON.stringify(doc));
+  renameSync(`${PITCH_FILE}.tmp`, PITCH_FILE);
+}
+
+function pitchPage(doc: PitchDoc, page: string): PitchPage {
+  return (doc.pages[page] ??= { lines: {}, proposals: [] });
+}
+
+// One line of text: whitespace collapsed, no line breaks, trimmed.
+function cleanLine(x: unknown): string | null {
+  if (typeof x !== 'string') return null;
+  const t = x.replace(/\s+/g, ' ').trim();
+  return t && t.length <= PITCH_TEXT_MAX ? t : null;
+}
+
+function logPitch(e: Record<string, unknown>): void {
+  try {
+    writeFileSync(PITCH_LOG, JSON.stringify({ t: Date.now(), ...e }) + '\n', { flag: 'a' });
+  } catch (err) {
+    console.error('pitch log write failed', err);
+  }
+}
+
+function pitchLog(days: number) {
+  const since = Date.now() - days * 86_400_000;
+  try {
+    return readFileSync(PITCH_LOG, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => {
+        try {
+          return JSON.parse(l);
+        } catch {
+          return null;
+        }
+      })
+      .filter((e) => e && e.t >= since)
+      .reverse()
+      .slice(0, 500);
+  } catch {
+    return [];
+  }
+}
+
 async function checkSession(cookie: string): Promise<string | null> {
   const r = await fetch(AUTH_URL, {
     headers: { cookie, 'x-forwarded-proto': 'https', 'x-forwarded-host': 'lawrider.uk' },
@@ -379,7 +455,9 @@ createServer(async (req, res) => {
     path !== '/teamarea/api/pnl' &&
     path !== '/teamarea/api/track' &&
     path !== '/teamarea/api/admin/activity' &&
-    path !== '/teamarea/api/admin/access'
+    path !== '/teamarea/api/admin/access' &&
+    path !== '/teamarea/api/admin/pitch-log' &&
+    path !== '/teamarea/api/pitch'
   ) {
     return send(res, 404, { error: 'not found' });
   }
@@ -464,6 +542,89 @@ createServer(async (req, res) => {
         pages: Object.fromEntries(PAGES.map((p) => [p.slug, canSee(u, p.slug, grants)])),
       })),
     });
+  }
+
+  if (path === '/teamarea/api/admin/pitch-log') {
+    if (!canSee(email, 'admin')) return send(res, 403, { error: 'not allowed' });
+    const days = Math.max(1, Math.min(365, Number(new URL(req.url ?? '', 'http://x').searchParams.get('days')) || 30));
+    return send(res, 200, { days, events: pitchLog(days) });
+  }
+
+  if (path === '/teamarea/api/pitch') {
+    const page = String(new URL(req.url ?? '', 'http://x').searchParams.get('page') ?? '');
+    if (!PITCH_PAGES.includes(page)) return send(res, 404, { error: 'unknown page' });
+    if (!canSee(email, page)) return send(res, 403, { error: 'not allowed' });
+    const view = (doc: PitchDoc) => {
+      const p = pitchPage(doc, page);
+      return {
+        admin: isAdmin(email),
+        lines: p.lines,
+        pending: p.proposals.filter((x) => x.status === 'pending'),
+      };
+    };
+    if (req.method === 'GET') return send(res, 200, view(loadPitch()));
+    if (req.method !== 'POST') {
+      res.setHeader('Allow', 'GET, POST');
+      return send(res, 405, { error: 'method not allowed' });
+    }
+    // JSON only, for the same cross-site reason as the profile PUT.
+    if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+      return send(res, 415, { error: 'expected application/json' });
+    }
+    let b: Record<string, unknown>;
+    try {
+      b = JSON.parse(await readBody(req));
+    } catch {
+      return send(res, 400, { error: 'bad JSON' });
+    }
+    const action = String(b.action ?? '');
+    try {
+      return await serial(async () => {
+        const doc = loadPitch();
+        const p = pitchPage(doc, page);
+        const now = new Date().toISOString();
+
+        if (action === 'propose') {
+          const line = String(b.line ?? '');
+          const text = cleanLine(b.text);
+          const base = cleanLine(b.base) ?? '';
+          if (!PITCH_LINE_RE.test(line)) return send(res, 400, { error: 'bad line' });
+          if (!text) return send(res, 400, { error: `Write the new version (up to ${PITCH_TEXT_MAX} characters).` });
+          const current = p.lines[line]?.text ?? base;
+          if (text === current) return send(res, 400, { error: 'That is the same as the current text.' });
+          if (p.proposals.filter((x) => x.status === 'pending').length >= PITCH_PENDING_MAX) {
+            return send(res, 429, { error: 'Too many open proposals. Ask an admin to review them first.' });
+          }
+          const prop: Proposal = { id: randomBytes(6).toString('hex'), line, text, base: current, by: email, at: now, status: 'pending' };
+          p.proposals.push(prop);
+          savePitch(doc);
+          logPitch({ u: email, page, action: 'propose', id: prop.id, line, text, old: current });
+          return send(res, 200, view(doc));
+        }
+
+        if (action === 'confirm' || action === 'reject') {
+          if (!isAdmin(email)) return send(res, 403, { error: 'Only an admin can confirm or reject a version.' });
+          const prop = p.proposals.find((x) => x.id === String(b.id ?? ''));
+          if (!prop) return send(res, 404, { error: 'No such proposal.' });
+          if (prop.status !== 'pending') return send(res, 409, { error: `This proposal was already ${prop.status}.` });
+          prop.status = action === 'confirm' ? 'confirmed' : 'rejected';
+          prop.decided_by = email;
+          prop.decided_at = now;
+          const old = p.lines[prop.line]?.text ?? prop.base;
+          if (action === 'confirm') {
+            p.lines[prop.line] = { text: prop.text, proposal: prop.id, confirmed_by: email, confirmed_at: now };
+          }
+          savePitch(doc);
+          logPitch({ u: email, page, action, id: prop.id, line: prop.line, text: prop.text, old, proposed_by: prop.by });
+          return send(res, 200, view(doc));
+        }
+
+        return send(res, 400, { error: 'unknown action' });
+      });
+    } catch (e) {
+      console.error('pitch save failed', e);
+      return send(res, 500, { error: 'Could not save.' });
+    }
   }
 
   if (path === '/teamarea/api/pnl') {
