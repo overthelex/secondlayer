@@ -34,6 +34,7 @@ import { ChVerificationTools } from '../api/tools/ch-verification-tools.js';
 import { ChCourtTools } from '../api/tools/ch-court-tools.js';
 import { ChLegislationTools } from '../api/tools/ch-legislation-tools.js';
 import { UkLegislationTools } from '../api/tools/uk-legislation-tools.js';
+import { UkDueDiligenceTools } from '../api/tools/uk-due-diligence-tools.js';
 import { UkSemanticTools } from '../api/tools/uk-semantic-tools.js';
 import { UkJudgmentTools } from '../api/tools/uk-judgment-tools.js';
 import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
@@ -197,6 +198,9 @@ export function createToolServices(
   // OGL v3.0, so ungated — unlike uk_court_decisions, which stays behind the Find
   // Case Law licence gate in services/uk-judgment-access.ts.
   toolRegistry.registerHandler(new UkLegislationTools(coreServices.db));
+  // One-call statutory due diligence over the same tables: the client sends only the
+  // citations, never the contract (LEXAI-2069). Fixed price in migration 225.
+  toolRegistry.registerHandler(new UkDueDiligenceTools(coreServices.db));
   // Semantic layer over the statute book (Qdrant uk_provisions_bge). Legislation only:
   // the judgments stay behind the Find Case Law gate and are not in the collection.
   toolRegistry.registerHandler(new UkSemanticTools(coreServices.db));

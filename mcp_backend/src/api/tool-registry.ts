@@ -46,6 +46,8 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   edrsr_get_decision_dispositive: 15_000,
   build_legal_decision: 120_000,
   search_public_spending: 120_000,
+  // Up to 60 instruments and 200 provisions, 3-4 queries per instrument.
+  uk_check_citations: 120_000,
   analyze_data: 45_000,
   osint_search_credentials: 35_000,
   osint_search_ransomware_victims: 35_000,

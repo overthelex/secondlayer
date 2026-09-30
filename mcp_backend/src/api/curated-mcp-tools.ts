@@ -73,6 +73,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'uk_get_act_as_at',
   // UK — реєстр поправок: хто і коли змінив, скасував або виключив норму
   'uk_get_effects',
+  // UK — статутний due diligence одним викликом: клієнт надсилає лише цитати, не договір (LEXAI-2069)
+  'uk_check_citations',
   // UK — семантичний шар над статутною книгою (Qdrant uk_provisions_bge)
   'uk_semantic_search',
   // UK — судові рішення Find Case Law. Ліцензія TNA (CAS-349914-B9P5B8); доступ лише

@@ -100,14 +100,20 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
         });
       }
 
-      // Render authorization form with modern design
+      // Render authorization form with modern design. OAUTH_BRAND=lawrider (mcp.lawrider.uk)
+      // shows LawRider in English and hides Google sign-in, which is registered for
+      // legal.org.ua only.
+      const lawrider = process.env.OAUTH_BRAND === 'lawrider';
+      const brand = lawrider
+        ? { title: 'LawRider MCP - Authorization', subtitle: 'LawRider (mcp.lawrider.uk) — sign in to connect', or: 'or', google: 'Sign in with Google', showGoogle: false }
+        : { title: 'SecondLayer MCP - Authorization', subtitle: 'MCP legal.org.ua — OAuth2 Authorization', or: 'або', google: 'Увійти через Google', showGoogle: true };
       const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SecondLayer MCP - Authorization</title>
+  <title>${brand.title}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -345,7 +351,7 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
   <div class="container">
     <div class="header">
       <h1>Welcome back</h1>
-      <p class="subtitle">MCP legal.org.ua — OAuth2 Authorization</p>
+      <p class="subtitle">${brand.subtitle}</p>
     </div>
 
     <div class="client-info">
@@ -385,7 +391,8 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
       </button>
     </form>
 
-    <div class="divider"><span>або</span></div>
+    ${brand.showGoogle ? '' : '<!--'}
+    <div class="divider"><span>${brand.or}</span></div>
 
     <a id="googleBtn" class="google-btn" href="#">
       <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
@@ -394,8 +401,9 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
         <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
         <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 2.58 9 2.58z" fill="#EA4335"/>
       </svg>
-      Увійти через Google
+      ${brand.google}
     </a>
+    ${brand.showGoogle ? '' : '-->'}
 
     <div class="footer">
       Secure OAuth 2.0 Authentication
@@ -413,7 +421,8 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
         code_challenge: '${escapeJsString(String(code_challenge || ''))}',
         code_challenge_method: '${escapeJsString(String(code_challenge_method || ''))}',
       });
-      document.getElementById('googleBtn').href = '/oauth/google?' + params.toString();
+      const googleBtn = document.getElementById('googleBtn');
+      if (googleBtn) googleBtn.href = '/oauth/google?' + params.toString();
     })();
 
     async function handleSubmit(event) {
