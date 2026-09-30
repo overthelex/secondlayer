@@ -101,6 +101,7 @@ describe('parseCitedProvision', () => {
     expect(nums('ss. 1-7B')).toEqual(['1', '2', '3', '4', '5', '6', '7', '7B']);
     expect(nums('ss. 24A-24D')).toEqual(['24A', '24B', '24C', '24D']);
     expect(nums('ss. 38-38B')).toEqual(['38', '38A', '38B']);
+    expect(nums('ss. 24-24')).toEqual(['24']);
   });
 
   it('a bare number in an SI is a regulation', () => {
@@ -244,6 +245,7 @@ describe('uk_check_citations: repeal, removal, commencement and coverage', () =>
         { provision_key: `${ERA}/section/10`, valid_from: '2000-01-01', valid_to: '2020-04-06', h: 'dd'.repeat(16) },
         { provision_key: `${ERA}/section/11`, valid_from: '2000-01-01', valid_to: '2019-01-01', h: 'ee'.repeat(16) },
         { provision_key: `${ERA}/section/80N`, valid_from: '2018-01-01', valid_to: null, h: 'ff'.repeat(16) },
+        { provision_key: `${ERA}/section/12`, valid_from: '2000-01-01', valid_to: '2010-01-01', h: 'ab'.repeat(16) },
       ],
     },
     { match: /FROM uk_provision_text/, rows: [{ h: 'dd'.repeat(16), text: 'text of s.10' }, { h: 'ee'.repeat(16), text: 'text of s.11' }] },
@@ -253,7 +255,7 @@ describe('uk_check_citations: repeal, removal, commencement and coverage', () =>
     const d = db();
     const out = parse(await new UkDueDiligenceTools(d).executeTool('uk_check_citations', {
       as_of: '2016-01-22', compare_to: '2026-09-30',
-      citations: [{ instrument: ERA, provisions: ['s.10', 's.11', 's.80N'] }, { instrument: 'ukpga/1970/1', provisions: ['s.3'] }],
+      citations: [{ instrument: ERA, provisions: ['s.10', 's.11', 's.12', 's.80N'] }, { instrument: 'ukpga/1970/1', provisions: ['s.3'] }],
     }));
     const era = out.instruments.find((i: any) => i.leg_id === ERA);
     const by = Object.fromEntries(era.provisions.map((p: any) => [p.provision, p]));
@@ -264,9 +266,12 @@ describe('uk_check_citations: repeal, removal, commencement and coverage', () =>
     // Gone from the text without a register entry: still revoked, never "as last seen".
     expect(by['s.11'].status).toBe('revoked_since_signing');
     expect(by['s.11'].removed_on).toBe('2019-01-01');
+    // Gone before the contract was signed: the worst finding, not "unchanged".
+    expect(by['s.12'].status).toBe('revoked_before_signing');
+    expect(by['s.12'].removed_on).toBe('2010-01-01');
     expect(by['s.80N'].status).toBe('not_in_force_at_signing');
     expect(by['s.80N'].earliest_version).toBe('2018-01-01');
-    expect(era.status).toBe('not_in_force_at_signing');   // worst of its provisions, by SEVERITY
+    expect(era.status).toBe('revoked_before_signing');   // worst of its provisions, by SEVERITY
 
     const scanned = out.instruments.find((i: any) => i.leg_id === 'ukpga/1970/1');
     expect(scanned.provisions[0].status).toBe('no_history');

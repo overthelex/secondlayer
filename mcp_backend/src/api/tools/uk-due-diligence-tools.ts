@@ -81,6 +81,7 @@ function expand(lo: string, hi: string | undefined): string[] | null {
   if (!a || !b) return /\./.test(lo + hi) || lo === hi ? [lo] : null;
   const na = Number(a[1]), nb = Number(b[1]);
   if (na === nb) {
+    if (!a[2] && !b[2]) return [a[1]];   // 'ss. 24-24'
     const from = (a[2] || 'A').charCodeAt(0), to = (b[2] || 'A').charCodeAt(0);
     if (to < from) return null;
     const out = a[2] ? [] : [a[1]];
@@ -436,6 +437,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       if (!rows.length && !hasHistory) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'no_history';
       else if (!rows.length) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'not_found';
       else if (rows[0].from > asOf) status = 'not_in_force_at_signing';
+      else if (!then && rows[rows.length - 1].to !== null && rows[rows.length - 1].to <= asOf) status = 'revoked_before_signing';
       else if (removed || repealed) status = 'revoked_since_signing';
       else if (later.length || amended) status = 'changed_since_signing';
       else if (mine.length) status = 'modified_since_signing';
@@ -449,7 +451,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
         ...(mine.length ? { effects: mine.slice(0, 10).map(show), ...(mine.length > 10 ? { more_effects: mine.length - 10 } : {}) } : {}),
         ...(parts ? { part_level_effects: parts } : {}),
         ...(status === 'not_in_force_at_signing' ? { earliest_version: rows[0].from } : {}),
-        ...(removed ? { removed_on: rows[rows.length - 1].to } : {}),
+        ...(removed || status === 'revoked_before_signing' ? { removed_on: rows[rows.length - 1].to } : {}),
         ...(status === 'not_found' ? { note: 'The act has version history but no such provision; check the number.' } : {}),
         ...(status === 'no_history' ? { note: 'No point-in-time text for this act; only the amendment register was checked, and it records nothing against this provision.' } : {}),
         _then: then?.h ?? null,
