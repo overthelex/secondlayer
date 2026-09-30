@@ -171,6 +171,11 @@ services:
       MCP_TOOLSET: "uk"
       # New billing accounts are GBP; the uk_* tools carry fixed GBP prices (migration 223).
       BILLING_DEFAULT_CURRENCY: "GBP"
+      # mcp.lawrider.uk proxies / straight to the app (no /api prefix), so the OAuth
+      # protected-resource metadata must name https://mcp.lawrider.uk/v2/mcp.
+      MCP_PUBLIC_PATH_PREFIX: ""
+      # OAuth sign-in page: LawRider, in English (default is the legal.org.ua page).
+      OAUTH_BRAND: "lawrider"
 
       # Vector search over the statute book (uk_semantic_search). These were
       # deliberately absent while the only vector-backed tool in the image was

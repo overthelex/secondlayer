@@ -772,8 +772,12 @@ export function createMCPSSERoutes(deps: {
 
   // ========================= /v2/mcp (Streamable HTTP, curated subset) =========================
   // Canonical transport. Same OAuth/session mechanics as /v1/mcp, but the wired MCP server
-  // exposes only the curated subset (see buildMcpServerV2). Publicly reached at /api/v2/mcp.
-  const MCP_V2_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource/api/v2/mcp';
+  // exposes only the curated subset (see buildMcpServerV2). Publicly reached at /api/v2/mcp on
+  // legal.org.ua (nginx strips /api) and at /v2/mcp on mcp.lawrider.uk (no prefix), so the
+  // public prefix comes from MCP_PUBLIC_PATH_PREFIX: RFC 9728 clients reject metadata whose
+  // `resource` is not the URL they connected to.
+  const mcpV2PublicPath = () => `${process.env.MCP_PUBLIC_PATH_PREFIX ?? '/api'}/v2/mcp`;
+  const MCP_V2_RESOURCE_METADATA_PATH = `/.well-known/oauth-protected-resource${mcpV2PublicPath()}`;
 
   router.post('/v2/mcp', (async (req: DualAuthRequest, res: Response) => {
     try {
@@ -852,7 +856,7 @@ export function createMCPSSERoutes(deps: {
   const mcpV2ResourceMetadata = (req: Request, res: Response) => {
     const baseUrl = getBaseUrl(req);
     res.json({
-      resource: `${baseUrl}/api/v2/mcp`,
+      resource: `${baseUrl}${mcpV2PublicPath()}`,
       authorization_servers: [baseUrl],
       scopes_supported: ['mcp'],
       bearer_methods_supported: ['header'],

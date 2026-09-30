@@ -216,3 +216,4 @@
 222_uk_court_decision_hidden.sql
 223_gbp_billing_fixed_tool_prices.sql
 224_uk_get_effects_price.sql
+225_uk_check_citations_price.sql

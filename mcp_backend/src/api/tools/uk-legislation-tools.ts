@@ -34,9 +34,9 @@ import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
 import { classifyEffect, matchEffect, parseTarget } from './uk-effects-match.js';
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-const AS_AT_CAVEAT =
+export const AS_AT_CAVEAT =
   'An open interval (valid_to = null) means "in force as of the latest version the archive ' +
   'holds", not "in force today": the archive lags the live site, and an act can be ' +
   'repealed outright without a new revised version being published.';
@@ -50,7 +50,7 @@ const NO_TEXT_NOTE =
 // Tenant Act 1954) or `ukpga/Geo5/15-16/20` (Law of Property Act 1925).
 const LEG_ID_RE = /^[a-z]{2,6}\/[A-Za-z0-9]+(?:\/[A-Za-z0-9-]+)?\/[A-Za-z0-9]+$/;
 
-function normaliseLegId(value: unknown): string | null {
+export function normaliseLegId(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   const id = String(value).trim().replace(/^https?:\/\/(?:www\.)?legislation\.gov\.uk\/(?:id\/)?/, '').replace(/\/+$/, '');
   return LEG_ID_RE.test(id) ? id : null;
@@ -61,7 +61,7 @@ function normaliseLegId(value: unknown): string | null {
  * ('ukpga/1990/8/section/55') and returns the full key. A bare number is assumed to be a
  * section, which is right for primary legislation and wrong for SIs — hence `kind`.
  */
-function buildProvisionKey(legId: string, provision: string, kind?: string): string {
+export function buildProvisionKey(legId: string, provision: string, kind?: string): string {
   const raw = String(provision).trim().replace(/^https?:\/\/(?:www\.)?legislation\.gov\.uk\//, '').replace(/\/+$/, '');
   if (raw.startsWith(legId + '/')) return raw;
   if (raw.includes('/')) return `${legId}/${raw}`;
