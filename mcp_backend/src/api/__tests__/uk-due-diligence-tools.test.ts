@@ -9,7 +9,7 @@
  */
 
 import {
-  UkDueDiligenceTools, parseCitedProvision, normTitle, MAX_INSTRUMENTS,
+  UkDueDiligenceTools, parseCitedProvision, normTitle, MAX_INSTRUMENTS, MAX_PROVISIONS,
 } from '../tools/uk-due-diligence-tools.js';
 
 jest.mock('../../utils/logger.js', () => ({
@@ -94,6 +94,13 @@ describe('parseCitedProvision', () => {
     ['253', [{ kind: 'section', number: '253' }]],
   ])('%s', (input, want) => {
     expect(parseCitedProvision(input, act)).toEqual(want);
+  });
+
+  it('lettered ranges keep the numbers between the ends', () => {
+    const nums = (x: string) => parseCitedProvision(x, act)!.map((t) => t.number);
+    expect(nums('ss. 1-7B')).toEqual(['1', '2', '3', '4', '5', '6', '7', '7B']);
+    expect(nums('ss. 24A-24D')).toEqual(['24A', '24B', '24C', '24D']);
+    expect(nums('ss. 38-38B')).toEqual(['38', '38A', '38B']);
   });
 
   it('a bare number in an SI is a regulation', () => {
@@ -212,5 +219,69 @@ describe('uk_check_citations', () => {
     const def = tools.getToolDefinitions()[0];
     expect(def.name).toBe('uk_check_citations');
     expect(def.annotations?.readOnlyHint).toBe(true);
+  });
+});
+
+describe('uk_check_citations: repeal, removal, commencement and coverage', () => {
+  const ERA = 'ukpga/1996/18';
+  const db = () => mockDb([
+    { match: /WHERE id = \$1/, rows: (p) => [{ id: p[0], title: p[0] === ERA ? 'Employment Rights Act 1996' : 'Scanned Act 1970' }] },
+    {
+      match: /FROM uk_legislation l LEFT JOIN uk_pit_load_state/,
+      rows: (p) => (p[0] === ERA
+        ? [{ title: 'Employment Rights Act 1996', versions: 30, last_version: '2025-01-01' }]
+        : [{ title: 'Scanned Act 1970', versions: 0, last_version: null }]),
+    },
+    {
+      match: /FROM uk_legislation_effects/,
+      rows: (p) => (p[0] === ERA
+        ? [{ affected_provisions: 's. 10', effect_type: 'repealed', affecting_id: 'ukpga/2020/5', affecting_title: 'Repealing Act 2020', affecting_provisions: 's. 1', in_force_date: '2020-04-06', applied: true }]
+        : []),
+    },
+    {
+      match: /FROM uk_provision_version/,
+      rows: [
+        { provision_key: `${ERA}/section/10`, valid_from: '2000-01-01', valid_to: '2020-04-06', h: 'dd'.repeat(16) },
+        { provision_key: `${ERA}/section/11`, valid_from: '2000-01-01', valid_to: '2019-01-01', h: 'ee'.repeat(16) },
+        { provision_key: `${ERA}/section/80N`, valid_from: '2018-01-01', valid_to: null, h: 'ff'.repeat(16) },
+      ],
+    },
+    { match: /FROM uk_provision_text/, rows: [{ h: 'dd'.repeat(16), text: 'text of s.10' }, { h: 'ee'.repeat(16), text: 'text of s.11' }] },
+  ]);
+
+  it('a provision repealed after signing is revoked_since_signing, with its text at signing', async () => {
+    const d = db();
+    const out = parse(await new UkDueDiligenceTools(d).executeTool('uk_check_citations', {
+      as_of: '2016-01-22', compare_to: '2026-09-30',
+      citations: [{ instrument: ERA, provisions: ['s.10', 's.11', 's.80N'] }, { instrument: 'ukpga/1970/1', provisions: ['s.3'] }],
+    }));
+    const era = out.instruments.find((i: any) => i.leg_id === ERA);
+    const by = Object.fromEntries(era.provisions.map((p: any) => [p.provision, p]));
+    expect(by['s.10'].status).toBe('revoked_since_signing');
+    expect(by['s.10'].effects[0].by.title).toBe('Repealing Act 2020');
+    expect(by['s.10'].text_at_signing).toBe('text of s.10');
+    expect(by['s.10'].text_now).toBeNull();
+    // Gone from the text without a register entry: still revoked, never "as last seen".
+    expect(by['s.11'].status).toBe('revoked_since_signing');
+    expect(by['s.11'].removed_on).toBe('2019-01-01');
+    expect(by['s.80N'].status).toBe('not_in_force_at_signing');
+    expect(by['s.80N'].earliest_version).toBe('2018-01-01');
+    expect(era.status).toBe('not_in_force_at_signing');   // worst of its provisions, by SEVERITY
+
+    const scanned = out.instruments.find((i: any) => i.leg_id === 'ukpga/1970/1');
+    expect(scanned.provisions[0].status).toBe('no_history');
+
+    // Batched: one version-history query for the act with history, none for the one without.
+    expect(d.calls.filter((c) => /FROM uk_provision_version/.test(c.sql))).toHaveLength(1);
+  });
+
+  it('refuses an empty instrument and more than the provision cap, uncharged', async () => {
+    const tools = new UkDueDiligenceTools(db());
+    const empty: any = await tools.executeTool('uk_check_citations', { as_of: '2016-01-22', citations: [{ instrument: ' ' }] });
+    expect(empty.isError).toBe(true);
+    const many = Array.from({ length: 11 }, (_, i) => ({ instrument: ERA, provisions: [`ss. ${i * 20 + 1}-${i * 20 + 20}`] }));
+    const r: any = await tools.executeTool('uk_check_citations', { as_of: '2016-01-22', citations: many });
+    expect(r.isError).toBe(true);
+    expect(parse(r).message).toContain(String(MAX_PROVISIONS));
   });
 });

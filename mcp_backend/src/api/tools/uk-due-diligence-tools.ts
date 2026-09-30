@@ -26,6 +26,7 @@ export const MAX_INSTRUMENTS = 60;
 export const MAX_PROVISIONS = 200;
 const TEXT_CAP = 1500;
 const RANGE_CAP = 20;
+const CONCURRENCY = 6;
 
 export type CitationStatus =
   | 'revoked_before_signing'
@@ -67,12 +68,30 @@ function defaultKind(legId: string): string {
   return /^(uksi|ssi|wsi|nisr)\//.test(legId) ? 'regulation' : 'section';
 }
 
+/**
+ * 'ss. 24-28' → 24..28; 'ss. 24A-24D' → 24A..24D; 'ss. 1-7B' → 1..7 and 7B (the register
+ * prints ranges like that). Inserted sections with longer suffixes (7ZA) between the ends
+ * cannot be enumerated from the citation alone. Null when the range is unreadable or too long.
+ */
 function expand(lo: string, hi: string | undefined): string[] | null {
-  if (!hi) return [lo.toUpperCase()];
-  if (!/^\d+$/.test(lo) || !/^\d+$/.test(hi)) return [lo.toUpperCase(), hi.toUpperCase()];
-  const a = Number(lo), b = Number(hi);
-  if (b < a || b - a > RANGE_CAP) return null;
-  return Array.from({ length: b - a + 1 }, (_, i) => String(a + i));
+  lo = lo.toUpperCase();
+  if (!hi) return [lo];
+  hi = hi.toUpperCase();
+  const a = /^(\d+)([A-Z]?)$/.exec(lo), b = /^(\d+)([A-Z]?)$/.exec(hi);
+  if (!a || !b) return /\./.test(lo + hi) || lo === hi ? [lo] : null;
+  const na = Number(a[1]), nb = Number(b[1]);
+  if (na === nb) {
+    const from = (a[2] || 'A').charCodeAt(0), to = (b[2] || 'A').charCodeAt(0);
+    if (to < from) return null;
+    const out = a[2] ? [] : [a[1]];
+    for (let c = from; c <= to; c++) out.push(`${na}${String.fromCharCode(c)}`);
+    return out;
+  }
+  if (nb < na || nb - na > RANGE_CAP) return null;
+  const out = Array.from({ length: nb - na + 1 }, (_, i) => String(na + i));
+  if (a[2]) out[0] = lo;          // '7B-9': 7B, 8, 9
+  if (b[2]) out.push(hi);         // '1-7B': 1..7, 7B
+  return out;
 }
 
 /**
@@ -142,9 +161,10 @@ export function label(t: ProvisionTarget): string {
 const cap = (s: string | null | undefined) =>
   s == null ? null : s.length > TEXT_CAP ? s.slice(0, TEXT_CAP) + ' …[truncated]' : s;
 
+/** Dates are read as text in SQL (::text), so this only trims; a Date would be local midnight (see uk-dates.ts). */
 const day = (d: any): string | null => {
   if (!d) return null;
-  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  if (d instanceof Date) return datesToDays(d) as unknown as string;
   return String(d).slice(0, 10);
 };
 
@@ -224,9 +244,11 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       // 1. Resolve every title to one register id; merge repeated instruments.
       const byId = new Map<string, { leg_id: string; title: string; cited_as: string[]; provisions: string[]; clauses: string[] }>();
       const unresolved: any[] = [];
+      if (list.some((c) => !String(c?.instrument ?? '').trim())) {
+        return this.refuse('bad_instrument', 'Every citation needs instrument: the title as the contract gives it, or a leg_id.');
+      }
       for (const c of list) {
-        const cited = String(c?.instrument ?? '').trim();
-        if (!cited) continue;
+        const cited = String(c.instrument).trim();
         const provs = Array.isArray(c.provisions) ? c.provisions.map((p: unknown) => String(p)) : [];
         const clause = c.clause ? String(c.clause) : null;
         const hit = await this.resolve(cited);
@@ -258,8 +280,15 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       }
 
       // 3. Check each instrument.
-      const instruments = [];
-      for (const p of plans) instruments.push(await this.checkInstrument(p, asOf, compareTo));
+      // A few instruments at a time: each is 3-4 queries, and 60 in series is slow.
+      const instruments: any[] = new Array(plans.length);
+      let next = 0;
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, plans.length) }, async () => {
+        while (next < plans.length) {
+          const i = next++;
+          instruments[i] = await this.checkInstrument(plans[i], asOf, compareTo);
+        }
+      }));
       instruments.sort((x, y) => SEVERITY.indexOf(x.status) - SEVERITY.indexOf(y.status));
 
       const summary: Record<string, number> = {};
@@ -296,7 +325,8 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
     if (want) {
       const pattern = '%' + want.split(' ').join('%') + '%';
       const rows = (await this.db.query(
-        'SELECT id, title, leg_type FROM uk_legislation WHERE title ILIKE $1 LIMIT 200', [pattern])).rows;
+        // The exact title is the shortest one containing all the words in order.
+        'SELECT id, title, leg_type FROM uk_legislation WHERE title ILIKE $1 ORDER BY length(title), id LIMIT 200', [pattern])).rows;
       const exact = rows.filter((r: any) => normTitle(r.title) === want);
       if (exact.length) {
         // The same title can exist as a UK and a Northern Ireland instrument; prefer UK-wide.
@@ -317,7 +347,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
   ) {
     const legId = p.leg_id;
     const meta = (await this.db.query(
-      `SELECT l.title, COALESCE(s.versions, 0) AS versions, s.first_version, s.last_version
+      `SELECT l.title, COALESCE(s.versions, 0) AS versions, s.first_version::text AS first_version, s.last_version::text AS last_version
          FROM uk_legislation l LEFT JOIN uk_pit_load_state s ON s.leg_id = l.id WHERE l.id = $1`, [legId])).rows[0] ?? {};
     const title: string = meta.title ?? p.title;
     const hasHistory = Number(meta.versions) > 0;
@@ -332,7 +362,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
     };
 
     const effects = (await this.db.query(
-      `SELECT affected_provisions, effect_type, affecting_id, affecting_title, affecting_provisions, in_force_date, applied
+      `SELECT affected_provisions, effect_type, affecting_id, affecting_title, affecting_provisions, in_force_date::text AS in_force_date, applied
          FROM uk_legislation_effects
         WHERE affected_id = $1 AND in_force_date IS NOT NULL AND in_force_date <= $2
         ORDER BY in_force_date LIMIT 20000`, [legId, compareTo])).rows
@@ -383,7 +413,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
     // Version history for every cited provision in one query (texts fetched only where needed).
     const keys = p.targets.flatMap((t) => candidateKeys(legId, t));
     const hist = hasHistory ? (await this.db.query(
-      `SELECT provision_key, valid_from, valid_to, encode(text_hash, 'hex') AS h
+      `SELECT provision_key, valid_from::text AS valid_from, valid_to::text AS valid_to, encode(text_hash, 'hex') AS h
          FROM uk_provision_version WHERE leg_id = $1 AND provision_key = ANY($2) ORDER BY valid_from`,
       [legId, keys])).rows.map((r: any) => ({ ...r, from: day(r.valid_from), to: day(r.valid_to) })) : [];
 
@@ -395,13 +425,19 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       const mine = since.filter((e: any) => matchEffect(e.affected_provisions, t) === 'provision');
       const parts = since.filter((e: any) => matchEffect(e.affected_provisions, t) === 'part').length;
       const later = rows.filter((r: any) => r.from > asOf && r.from <= compareTo).map((r: any) => r.from);
-      const then = at(rows, asOf), now = at(rows, compareTo) ?? rows[rows.length - 1] ?? null;
+      // Text on each date: only the interval that actually covers it. A provision whose last
+      // interval closed before compare_to is gone from the text, not "as last seen".
+      const then = at(rows, asOf), now = at(rows, compareTo);
+      const removed = Boolean(then && !now && rows.length && rows[rows.length - 1].to !== null && rows[rows.length - 1].to <= compareTo);
+      const repealed = mine.some((e: any) => /repeal|revok/i.test(e.effect_type || ''));
+      const amended = mine.some((e: any) => e.cls === 'amendment');
 
       let status: CitationStatus;
-      if (!rows.length && !hasHistory) status = mine.some((e: any) => e.cls === 'amendment') ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'no_history';
-      else if (!rows.length) status = mine.length ? (mine.some((e: any) => e.cls === 'amendment') ? 'changed_since_signing' : 'modified_since_signing') : 'not_found';
+      if (!rows.length && !hasHistory) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'no_history';
+      else if (!rows.length) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'not_found';
       else if (rows[0].from > asOf) status = 'not_in_force_at_signing';
-      else if (later.length || mine.some((e: any) => e.cls === 'amendment')) status = 'changed_since_signing';
+      else if (removed || repealed) status = 'revoked_since_signing';
+      else if (later.length || amended) status = 'changed_since_signing';
       else if (mine.length) status = 'modified_since_signing';
       else status = 'unchanged';
 
@@ -413,6 +449,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
         ...(mine.length ? { effects: mine.slice(0, 10).map(show), ...(mine.length > 10 ? { more_effects: mine.length - 10 } : {}) } : {}),
         ...(parts ? { part_level_effects: parts } : {}),
         ...(status === 'not_in_force_at_signing' ? { earliest_version: rows[0].from } : {}),
+        ...(removed ? { removed_on: rows[rows.length - 1].to } : {}),
         ...(status === 'not_found' ? { note: 'The act has version history but no such provision; check the number.' } : {}),
         ...(status === 'no_history' ? { note: 'No point-in-time text for this act; only the amendment register was checked, and it records nothing against this provision.' } : {}),
         _then: then?.h ?? null,
@@ -420,8 +457,9 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       };
     });
 
-    // Old and new text, only for provisions whose text differs between the two dates.
-    const hashes = [...new Set(provisions.filter((x) => x._then && x._now && x._then !== x._now).flatMap((x) => [x._then, x._now]))];
+    // Old and new text, only where the text differs between the two dates (or is gone).
+    const differs = (x: { _then: string | null; _now: string | null }) => Boolean(x._then && x._then !== x._now);
+    const hashes = [...new Set(provisions.filter(differs).flatMap((x) => [x._then, x._now]).filter(Boolean) as string[])];
     const texts = new Map<string, string>();
     if (hashes.length) {
       const rows = (await this.db.query(
@@ -430,8 +468,8 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       for (const r of rows) texts.set(r.h, r.text);
     }
     const out = provisions.map(({ _then, _now, ...x }) =>
-      _then && _now && _then !== _now
-        ? { ...x, text_at_signing: cap(texts.get(_then)), text_now: cap(texts.get(_now)) }
+      differs({ _then, _now })
+        ? { ...x, text_at_signing: cap(texts.get(_then!)), text_now: _now ? cap(texts.get(_now)) : null }
         : x);
 
     return {

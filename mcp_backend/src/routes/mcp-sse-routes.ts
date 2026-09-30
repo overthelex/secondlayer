@@ -670,7 +670,15 @@ export function createMCPSSERoutes(deps: {
   // (nginx rewrites /api/v1/mcp -> /v1/mcp). Claude Code `"type": "http"` connects here;
   // unlike the SSE transport it reliably attaches the OAuth bearer on every request.
 
-  const MCP_RESOURCE_METADATA_PATH = '/.well-known/oauth-protected-resource/api/v1/mcp';
+  // Public path prefix of the MCP transports: '/api' on legal.org.ua (nginx strips it),
+  // '' on mcp.lawrider.uk (proxied straight to the app). See MCP_PUBLIC_PATH_PREFIX.
+  // Only '' or '/segment[/segment]'; anything else falls back to '/api' rather than
+  // advertising a metadata URL no route serves.
+  const rawPrefix = (process.env.MCP_PUBLIC_PATH_PREFIX ?? '/api').trim().replace(/\/+$/, '');
+  const MCP_PUBLIC_PREFIX = rawPrefix === '' || /^(?:\/[A-Za-z0-9_-]+)+$/.test(rawPrefix) ? rawPrefix : '/api';
+  if (MCP_PUBLIC_PREFIX !== rawPrefix) logger.warn('[MCP] MCP_PUBLIC_PATH_PREFIX is not a path; using /api', { rawPrefix });
+
+  const MCP_RESOURCE_METADATA_PATH = `/.well-known/oauth-protected-resource${MCP_PUBLIC_PREFIX}/v1/mcp`;
 
   // POST /v1/mcp - JSON-RPC requests (initialize + tool calls). Stateful via Mcp-Session-Id.
   router.post('/v1/mcp', (async (req: DualAuthRequest, res: Response) => {
@@ -678,7 +686,7 @@ export function createMCPSSERoutes(deps: {
       // Deprecated in favour of /api/v2/mcp (curated tool subset). v1 still serves the
       // full ~112-tool surface for backward compatibility; advertise the successor to clients.
       res.setHeader('Deprecation', 'true');
-      res.setHeader('Link', '</api/v2/mcp>; rel="successor-version"');
+      res.setHeader('Link', `<${MCP_PUBLIC_PREFIX}/v2/mcp>; rel="successor-version"`);
 
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
@@ -761,7 +769,7 @@ export function createMCPSSERoutes(deps: {
   const mcpResourceMetadata = (req: Request, res: Response) => {
     const baseUrl = getBaseUrl(req);
     res.json({
-      resource: `${baseUrl}/api/v1/mcp`,
+      resource: `${baseUrl}${MCP_PUBLIC_PREFIX}/v1/mcp`,
       authorization_servers: [baseUrl],
       scopes_supported: ['mcp'],
       bearer_methods_supported: ['header'],
@@ -776,7 +784,7 @@ export function createMCPSSERoutes(deps: {
   // legal.org.ua (nginx strips /api) and at /v2/mcp on mcp.lawrider.uk (no prefix), so the
   // public prefix comes from MCP_PUBLIC_PATH_PREFIX: RFC 9728 clients reject metadata whose
   // `resource` is not the URL they connected to.
-  const mcpV2PublicPath = () => `${process.env.MCP_PUBLIC_PATH_PREFIX ?? '/api'}/v2/mcp`;
+  const mcpV2PublicPath = () => `${MCP_PUBLIC_PREFIX}/v2/mcp`;
   const MCP_V2_RESOURCE_METADATA_PATH = `/.well-known/oauth-protected-resource${mcpV2PublicPath()}`;
 
   router.post('/v2/mcp', (async (req: DualAuthRequest, res: Response) => {
@@ -864,6 +872,7 @@ export function createMCPSSERoutes(deps: {
   };
   router.get('/.well-known/oauth-protected-resource/api/v2/mcp', mcpV2ResourceMetadata);
   router.get('/.well-known/oauth-protected-resource/v2/mcp', mcpV2ResourceMetadata);
+  if (!['', '/api'].includes(MCP_PUBLIC_PREFIX)) router.get(MCP_V2_RESOURCE_METADATA_PATH, mcpV2ResourceMetadata);
 
   // ========================= /mcp discovery =========================
 
@@ -889,9 +898,9 @@ export function createMCPSSERoutes(deps: {
         sse: '/sse',
         'sse-standard': '/v1/sse',
         http: '/api/tools',
-        'streamable-http-v1': '/api/v1/mcp',
+        'streamable-http-v1': `${MCP_PUBLIC_PREFIX}/v1/mcp`,
         // Canonical: curated subset (legislation + ЄДРСР + registries), see V2_TOOL_NAMES.
-        'streamable-http-v2': '/api/v2/mcp',
+        'streamable-http-v2': mcpV2PublicPath(),
       },
       tools: tools.map(t => ({
         name: t.name,
