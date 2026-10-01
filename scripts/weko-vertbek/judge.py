@@ -13,6 +13,8 @@ that is not in the passage is recorded as such: it is the judge inventing.
 Providers:
     azure   any deployment on the Foundry resource (OpenAI-compatible);
             key from AZURE_FOUNDRY_KEY_FILE (default ~/.azure_foundry_key)
+    vertex  Vertex AI's OpenAI-compatible endpoint (Gemini as "google/<name>"),
+            token from `gcloud auth print-access-token`, project VERTEX_PROJECT
     claude  Claude Code headless (`claude -p`): the subscription token in
             CLAUDE_CODE_OAUTH_TOKEN, or the machine's own `claude` login
 
@@ -44,6 +46,10 @@ import urllib.request
 HERE = pathlib.Path(__file__).resolve().parent
 DIR = pathlib.Path("/data/ch-corpus/weko-bek")
 AZURE = "https://lexai-foundry-swc.openai.azure.com/openai/v1/chat/completions"
+# Vertex AI's OpenAI-compatible endpoint; models as "google/<name>".
+VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT", "secondlayer-gpu")
+VERTEX = (f"https://aiplatform.googleapis.com/v1/projects/{VERTEX_PROJECT}"
+          "/locations/global/endpoints/openapi/chat/completions")
 LABELS = ("applies", "partial", "contradicts", "recites", "unrelated")
 
 TASK = """You label how the Swiss record uses one proposition of the Swiss
@@ -88,14 +94,32 @@ class JudgeFailed(Exception):
     """One proposition could not be judged; recorded as an error row, the run goes on."""
 
 
-def ask_azure(model: str, system: str, user: str, key: str, tries: int = 10) -> tuple[str, dict]:
-    body = json.dumps({"model": model, "max_completion_tokens": 6000,
+_VERTEX_TOKEN = {"value": "", "at": 0.0}
+
+
+def vertex_token() -> str:
+    """An access token from gcloud, renewed before its hour runs out."""
+    if time.time() - _VERTEX_TOKEN["at"] > 1800:
+        _VERTEX_TOKEN["value"] = subprocess.run(["gcloud", "auth", "print-access-token"],
+                                                capture_output=True, text=True, check=True).stdout.strip()
+        _VERTEX_TOKEN["at"] = time.time()
+    return _VERTEX_TOKEN["value"]
+
+
+def ask_azure(model: str, system: str, user: str, key: str | None, tries: int = 10,
+              vertex: bool = False) -> tuple[str, dict]:
+    # Mistral's endpoint refuses max_completion_tokens (HTTP 422); the
+    # reasoning models need it, since max_tokens would cap their thinking.
+    limit = "max_tokens" if model.lower().startswith("mistral") or vertex else "max_completion_tokens"
+    # Gemini counts its thinking inside max_tokens
+    body = json.dumps({"model": model, limit: 16000 if vertex else 6000,
                        "messages": [{"role": "system", "content": system},
                                     {"role": "user", "content": user}]}).encode()
     last = ""
     for attempt in range(tries):
-        req = urllib.request.Request(AZURE, data=body, headers={
-            "api-key": key, "Content-Type": "application/json"})
+        headers = ({"Authorization": f"Bearer {vertex_token()}"} if vertex else {"api-key": key})
+        req = urllib.request.Request(VERTEX if vertex else AZURE, data=body,
+                                     headers={**headers, "Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=600) as r:
                 d = json.loads(r.read())
@@ -174,8 +198,8 @@ def judge_one(item: dict, args, protocol: str, key: str | None) -> dict:
     assert "=== PROTOCOL ===" in system and protocol in system
     t0 = time.time()
     try:
-        if args.provider == "azure":
-            text, usage = ask_azure(args.model, system, user, key)
+        if args.provider in ("azure", "vertex"):
+            text, usage = ask_azure(args.model, system, user, key, vertex=args.provider == "vertex")
         else:
             text, usage = ask_claude(args.model, system, user)
     except JudgeFailed as e:
@@ -184,11 +208,21 @@ def judge_one(item: dict, args, protocol: str, key: str | None) -> dict:
                 "provider": args.provider, "model": args.model, "shuffle": args.shuffle,
                 "label": None, "passages": [], "error": str(e), "usage": {},
                 "seconds": round(time.time() - t0, 1), "raw": ""}
-    try:
-        got = {int(p["n"]): p for p in parse(text)["passages"]}
-        error = None
-    except Exception as e:  # noqa: BLE001 - a malformed answer is recorded, not fatal
-        got, error = {}, f"{type(e).__name__}: {e}"
+    return answer_row(item, text, usage, args.provider, args.model, args.shuffle, order, system,
+                      time.time() - t0)
+
+
+def answer_row(item: dict, text: str, usage: dict, provider: str, model: str, shuffle,
+               order: list[int], system: str, seconds: float, error: str | None = None) -> dict:
+    """One judge answer as a row: passage labels mapped back to the packet's
+    passages, quotes checked against the passage, the proposition's label
+    derived. Shared by the realtime judges and batch.py."""
+    got = {}
+    if not error:
+        try:
+            got = {int(p["n"]): p for p in parse(text)["passages"]}
+        except Exception as e:  # noqa: BLE001 - a malformed answer is recorded, not fatal
+            error = f"{type(e).__name__}: {e}"
     passages = []
     for n, i in enumerate(order, 1):
         e = item["evidence"][i]
@@ -200,17 +234,17 @@ def judge_one(item: dict, args, protocol: str, key: str | None) -> dict:
                          "why": p.get("why", "")})
     labels = [p["label"] for p in passages]
     return {"version": item["version"], "pid": item["pid"], "kind": item["kind"],
-            "provider": args.provider, "model": args.model, "shuffle": args.shuffle,
+            "provider": provider, "model": model, "shuffle": shuffle,
             "label": None if None in labels else proposition_label(labels),
             "system_sha256": hashlib.sha256(system.encode()).hexdigest(),
             "passages": passages, "error": error, "usage": usage,
-            "seconds": round(time.time() - t0, 1), "raw": text if error else ""}
+            "seconds": round(seconds, 1), "raw": text if error else ""}
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--provider", choices=["azure", "claude"], required=True)
+    ap.add_argument("--provider", choices=["azure", "vertex", "claude"], required=True)
     ap.add_argument("--model", required=True)
     ap.add_argument("--packet", type=pathlib.Path, default=DIR / "packet.json")
     ap.add_argument("--protocol", type=pathlib.Path, default=HERE / "protocol.md")

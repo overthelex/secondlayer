@@ -100,6 +100,12 @@
   .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .tag { font: 400 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 5px; }
   .tag.late { color: var(--accent); border-color: var(--accent); }
+  .votes { margin: 0 14px 12px; padding: 8px 10px; border-left: 2px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+  .votes b { font-family: var(--mono); font-weight: 500; font-size: 11.5px; color: var(--ink); }
+  .votes q { display: block; font-family: var(--serif); color: var(--ink-3); margin: 2px 0 6px; }
+  .judged { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; }
+  .chip.check { border-color: var(--supported); color: var(--supported); }
+  .chip.disputed { border-color: var(--fragment); color: var(--fragment); }
   .use { font: 500 12px var(--sans); cursor: pointer; margin: 0 14px 12px; padding: 5px 10px; border-radius: 4px;
          border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
   .use[aria-pressed="true"] { background: var(--supported); border-color: transparent; color: #fff; }
@@ -129,7 +135,7 @@
 
 <div class="top">
   <h1>Vertikalbekanntmachung — Befundprüfung</h1>
-  <span class="sub">58 Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <span class="sub" id="sub">Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
   <div class="progress"><span id="count">0 / 58</span><span class="bar"><i id="barfill"></i></span></div>
 </div>
 
@@ -158,6 +164,8 @@
     "2022-12-12-erl": "Erläuterungen 2022",
     "control": "Weitere Sätze"
   };
+  var LONG = { supported: "gestützt", fragment: "Bruchstück", absent: "nicht belegt", recites: "nur zitiert" };
+  var PASSAGE = { applies: "wendet an", partial: "teilweise", contradicts: "widerspricht", recites: "zitiert", unrelated: "nicht darüber" };
   var state = Object.create(null);   // key -> {label, note}
   var current = 0;
   var db = null;
@@ -193,18 +201,28 @@
         (e.after_version ? '<span class="tag late">nach der Fassung</span>' : "") +
         (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "");
       var on = used.indexOf(e.ecli) >= 0;
+      var votes = "";
+      if (st.label && d.judge_passages && d.judge_passages[n]) {
+        var jv = d.judge_passages[n];
+        votes = '<div class="votes">' + Object.keys(jv).map(function (j) {
+          var v = jv[j];
+          return "<b>" + esc(j) + "</b>: " + esc(PASSAGE[v.label] || v.label) + " — " + esc(v.why) +
+            (v.quote ? "<q>" + esc(v.quote) + (v.quote_found ? "" : " [Zitat nicht im Text]") + "</q>" : "");
+        }).join("<br>") + "</div>";
+      }
       return '<details class="ev"' + (n === 0 ? " open" : "") + ">" +
         "<summary><span><span class=\"who\">" + esc(e.docket || e.ecli) + "</span><br>" +
         '<span class="src">' + esc(e.spider || "") + '</span><span class="tags">' + tags + "</span></span>" +
         '<span class="score">' + e.score.toFixed(3) + "</span></summary>" +
         '<div class="body">' + esc(e.text) + "</div>" +
         '<button class="use" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
-        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button></details>";
+        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button>" + votes + "</details>";
     }).join("");
 
     document.getElementById("main").innerHTML =
       '<div class="meta"><span class="chip">' + esc(VERSIONS[d.version] || d.version) + "</span>" +
       '<span class="chip">' + esc(d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
+      (d.status ? '<span class="chip ' + esc(d.status) + '">' + (d.status === "check" ? "Stichprobe" : "strittig") + "</span>" : "") +
       "<span>" + (current + 1) + " von " + DATA.length + "</span></div>" +
       (d.heading ? '<h2 class="heading">' + esc(d.heading) + "</h2>" : "") +
       '<p class="prop">' + esc(d.text) + "</p>" +
@@ -214,6 +232,9 @@
       }).join("") + "</div>" +
       '<textarea class="note" id="note" placeholder="Begründung, Fundstelle, Zweifel — optional">' + esc(st.note || "") + "</textarea>" +
       '<div class="saved" id="saved">' + (st.label ? "gespeichert" : "") + "</div>" +
+      (st.label && d.judges ? '<div class="judged">Richter: ' + Object.keys(d.judges).map(function (j) {
+        return esc(j) + " = " + esc(LONG[d.judges[j]] || d.judges[j] || "—");
+      }).join(" · ") + "</div>" : "") +
       '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst</span></div>' +
       ev +
       '<div class="foot"><button class="btn" id="prev">← zurück</button>' +
@@ -292,6 +313,8 @@
     e.preventDefault();
   });
 
+  document.getElementById("sub").textContent = DATA.length +
+    " Sätze zum Lesen (strittig oder Stichprobe), je acht Fundstellen; die Richter erscheinen nach Ihrer Bewertung";
   go(0); progress();
 
   if (window.claude && window.claude.use) {
