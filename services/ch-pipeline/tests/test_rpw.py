@@ -298,3 +298,50 @@ def test_the_journals_spelling_slips_are_recorded_under_one_name():
     assert rpw.canonical_section("BGBM") == "BGBM"
     # a name the journal really does use for something else is left alone
     assert rpw.canonical_section("Bekanntmachungen") == "Bekanntmachungen"
+
+
+def test_a_merger_cleared_without_examination_is_dated_by_the_notice():
+    head = ("B 2.3      15.  Johnson Controls/Swisscom\n"
+            "Vorläufige Prüfung; Art. 4 Abs. 3, Art. 10 und Art. 32 Abs. 1 KG\n"
+            "Mitteilung gemäss Artikel 16 Absatz 1 VKU vom 1. April 2009\n")
+    assert rpw.decision_date(head + BODY) == date(2009, 4, 1)
+    fr = "Communication selon l’article 16 alinéa 1 OCCE du 14 mars 2002\n"
+    assert rpw.decision_date(fr + BODY) == date(2002, 3, 14)
+
+
+def test_an_indented_heading_does_not_split_a_single_column_date():
+    # The heading block's indentation looks like a column gap; the split
+    # used to cut the date to "vom 6. Apri" and the item stayed undated.
+    text = ("B 2.2      5. Schweizerische Post – BEVO – vorzeitiger\n"
+            "              Vollzug\n"
+            "           Vorläufige Prüfung; Art. 4 Abs. 3, Art. 10 und 32 Abs. 2 KG.\n"
+            "           Examen préalable; art. 4 al. 3, art. 10 et 32 al. 2 LCart.\n"
+            "           Esame preliminare; art. 4 cpv. 3, art. 10 e 32 cpv. 2 LCart.\n"
+            "Verfügung der Wettbewerbskommission vom 6. April 1998 in Sachen\n"
+            "Zusammenschlussvorhaben Schweizerische Post – BEVO betreffend\n")
+    assert rpw.decision_date(text * 1 + BODY) == date(1998, 4, 6)
+
+
+def test_a_date_the_issue_cannot_carry_is_not_the_decisions():
+    issue = rpw.Issue(2019, 4, "")
+    quoted = "Decisione del 12 maggio 1997 sul mercato interno " + BODY
+    assert rpw.decision_date(quoted) == date(1997, 5, 12)
+    assert rpw.decision_date(quoted, issue=issue) is None
+    later = "Verfügung vom 3. Juli 2020 " + BODY   # after the issue was out
+    assert rpw.decision_date(later, issue=issue) is None
+    assert rpw.decision_date("Verfügung vom 3. März 2019 " + BODY, issue=issue) == date(2019, 3, 3)
+
+
+def test_the_issue_bounds_the_date_from_above():
+    assert rpw.date_upper_bound(rpw.Issue(2016, 1, "")) == date(2016, 9, 30)
+    assert rpw.date_upper_bound(rpw.Issue(2020, 3, "a")) == date(2021, 3, 31)
+    assert rpw.date_upper_bound(rpw.Issue(1997, 4, "")) == date(1998, 6, 30)
+    # 1997/4 prints a Schlussbericht of 7 January 1998
+    assert rpw.decision_date("Schlussbericht vom 7. Januar 1998 " + BODY,
+                             issue=rpw.Issue(1997, 4, "")) == date(1998, 1, 7)
+
+
+def test_the_day_a_statute_was_enacted_is_not_a_decision_date():
+    text = ("Mitteilung gemäss Art. 16 Abs. 1 VKU gestützt auf das Bundesgesetz vom "
+            "6. Oktober 1995 über Kartelle " + BODY)
+    assert rpw.decision_date(text) is None

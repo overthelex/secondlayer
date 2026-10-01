@@ -203,7 +203,7 @@ def match_same(index, title: str, year: int | None) -> str | None:
 
 def row_for(issue: rpw.Issue, url: str, sha: str, doc: rpw.Document, same_as: dict) -> dict:
     lang, quality = language_of(doc.text)
-    decided = rpw.decision_date(doc.text)
+    decided = rpw.decision_date(doc.text, issue=issue)
     doc_id = rpw.doc_id(issue, doc)
     same = match_same(same_as, doc.title, decided.year if decided else issue.year)
     good = quality >= text_quality.ACCEPT_THRESHOLD and len(doc.text) >= 200
@@ -213,6 +213,7 @@ def row_for(issue: rpw.Issue, url: str, sha: str, doc: rpw.Document, same_as: di
             "chapter": doc.chapter, "section": doc.section, "section_name": doc.section_name,
             "item": doc.item, "journal_pages": list(doc.journal_pages),
             "pdf_page": doc.start_page.index, "citation": rpw.citation(issue, doc),
+            "date_upper_bound": rpw.date_upper_bound(issue).isoformat(),
             **({"same_as": same} if same else {}),
         },
         "Sprache": lang,
