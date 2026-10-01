@@ -16,7 +16,9 @@
  *     `judge` filter, and results are never grouped by decision-maker;
  *   - users told where the holding is incomplete at the point of search
  *     (principle 3) — `coverage` rides on every response, including empty ones,
- *     because a nil result is exactly where a lawyer would draw the wrong inference.
+ *     because a nil result is exactly where a lawyer would draw the wrong inference;
+ *   - output labelled as machine-generated (principle 8) — `machine_generated`, on
+ *     every response, with how the selection was made and where to verify it.
  */
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
@@ -31,6 +33,14 @@ const COVERAGE =
   'The corpus is incomplete: 54,453 judgments of about 95,800 on Find Case Law, loaded up to May 2026. ' +
   'The Court of Appeal (Criminal Division) and the King’s Bench Division are missing; the Administrative Court stops in April 2016; ' +
   'Scotland and Northern Ireland are not covered. No result does NOT mean no such judgment exists.';
+
+// Principle 8 (algorithmic transparency) and the licence commitment to label output:
+// a lawyer must be able to tell, from the payload alone, that a machine chose these
+// records and passages, how, and where to check them.
+const MACHINE_GENERATED =
+  'Machine-generated search result. LawRider selected these judgments and extracts automatically, ' +
+  'by full-text search; no language model wrote, summarised or interpreted them. Check every passage ' +
+  'against the authoritative record at source_url before relying on it.';
 
 const EXTRACT_NOTE_QUERY =
   'extract: verbatim passages of the judgment around the query matches (marked «»); the full text is at source_url.';
@@ -109,6 +119,7 @@ Access is limited to verified lawyers and researchers (a condition of the TNA li
       return this.wrapResponse({
         error: 'missing_query',
         message: 'Provide query (text search), citation (neutral citation) or parties.',
+        machine_generated: MACHINE_GENERATED,
         coverage: COVERAGE,
       });
     }
@@ -166,7 +177,9 @@ Access is limited to verified lawyers and researchers (a condition of the TNA li
         query ? this.unindexedCount() : Promise.resolve(0),
       ]);
 
-      const extra: Record<string, unknown> = { coverage: COVERAGE };
+      // Every response, empty ones included: the label, the coverage limits and the
+      // licence travel together, because a nil result is read as an answer too.
+      const extra: Record<string, unknown> = { machine_generated: MACHINE_GENERATED, coverage: COVERAGE, licence: ATTRIBUTION };
       if (unindexed === null) {
         extra.index_incomplete =
           'Could not check that the text index is complete; query results may be incomplete.';

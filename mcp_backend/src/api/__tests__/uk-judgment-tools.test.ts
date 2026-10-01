@@ -58,6 +58,7 @@ describe('uk_search_judgments', () => {
     expect(out.results[0]).not.toHaveProperty('full_text');
     expect(out.licence).toMatch(/Open Justice/);
     expect(out.coverage).toMatch(/No result does NOT mean/);
+    expect(out.machine_generated).toMatch(/Machine-generated/);
     expect(out.index_incomplete).toBeUndefined();
 
     const { sql, params } = db.calls.find((c) => /WITH page AS/.test(c.sql))!;
@@ -77,6 +78,9 @@ describe('uk_search_judgments', () => {
     }));
     expect(out.total_count).toBe(0);
     expect(out.coverage).toMatch(/Court of Appeal \(Criminal Division\)/);
+    // The label and the licence ride on an empty answer as well.
+    expect(out.machine_generated).toMatch(/Machine-generated/);
+    expect(out.licence).toMatch(/Open Justice/);
   });
 
   it('says so when the vector backfill has not caught up', async () => {

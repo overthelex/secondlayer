@@ -10,7 +10,7 @@
 
 import { Router } from 'express';
 import { logger } from '../utils/logger.js';
-import { emailDomain, isFreeMailDomain } from '../services/uk-judgment-access.js';
+import { emailDomain, isFreeMailDomain, GRANT_VALIDITY_MONTHS } from '../services/uk-judgment-access.js';
 
 export function createUKJudgmentAccessRoutes(deps: {
   db: any;
@@ -24,7 +24,7 @@ export function createUKJudgmentAccessRoutes(deps: {
     if (!req.user?.is_admin) {
       res.status(403).json({
         error: 'Forbidden',
-        message: 'Потрібні права адміністратора.',
+        message: 'Administrator rights required.',
       });
       return;
     }
@@ -39,7 +39,7 @@ export function createUKJudgmentAccessRoutes(deps: {
     }
     const r = await deps.db.query(
       `SELECT status, organisation, role_stated, regulator, regulator_number,
-              attested_at, decided_at, decision_note
+              attested_at, decided_at, decision_note, expires_at
          FROM uk_judgment_access WHERE user_id = $1`,
       [req.user.id]
     );
@@ -65,15 +65,15 @@ export function createUKJudgmentAccessRoutes(deps: {
     if (!organisation || !role) {
       res.status(400).json({
         error: 'Bad Request',
-        message: 'Вкажіть організацію (organisation) та роль (role).',
+        message: 'Provide your organisation and role.',
       });
       return;
     }
     if (attest_not_litigant_in_person !== true) {
       res.status(400).json({
         error: 'Bad Request',
-        message: 'Потрібне підтвердження: сервіс не використовується для ведення ' +
-          'власної справи без адвоката. Передайте attest_not_litigant_in_person: true.',
+        message: 'Please confirm that you are not using the service to conduct your own case ' +
+          'without a lawyer: send attest_not_litigant_in_person: true.',
       });
       return;
     }
@@ -87,7 +87,10 @@ export function createUKJudgmentAccessRoutes(deps: {
           email_domain, domain_is_free_mail, attested_not_lip, attested_at, attested_ip)
        VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7, true, now(), $8)
        ON CONFLICT (user_id) DO UPDATE SET
-         status = CASE WHEN uk_judgment_access.status = 'granted' THEN 'granted'
+         -- A live grant survives re-applying; a lapsed one goes back to review, which
+         -- is how a person renews after 12 months.
+         status = CASE WHEN uk_judgment_access.status = 'granted'
+                            AND uk_judgment_access.expires_at > now() THEN 'granted'
                        ELSE 'pending' END,
          organisation = EXCLUDED.organisation,
          role_stated = EXCLUDED.role_stated,
@@ -112,8 +115,8 @@ export function createUKJudgmentAccessRoutes(deps: {
     res.json({
       status: 'pending',
       note: freeMail
-        ? 'Заяву прийнято. Оскільки вказано адресу безкоштовної пошти, вона потребує ручного розгляду.'
-        : 'Заяву прийнято.',
+        ? 'Application received. As it uses a free-mail address, it will be reviewed by hand.'
+        : 'Application received.',
     });
   });
 
@@ -138,16 +141,18 @@ export function createUKJudgmentAccessRoutes(deps: {
     if (!['granted', 'refused', 'revoked'].includes(status)) {
       res.status(400).json({
         error: 'Bad Request',
-        message: 'status має бути granted, refused або revoked.',
+        message: 'status must be granted, refused or revoked.',
       });
       return;
     }
     const r = await deps.db.query(
       `UPDATE uk_judgment_access
           SET status = $1, decision_note = $2, decided_by = $3, decided_at = now(),
+              -- A grant is good for GRANT_VALIDITY_MONTHS, then the person is verified again.
+              expires_at = CASE WHEN $1 = 'granted' THEN now() + make_interval(months => $5) ELSE NULL END,
               updated_at = now()
-        WHERE user_id = $4 RETURNING user_id, status`,
-      [status, note || null, req.user?.id || null, req.params.userId]
+        WHERE user_id = $4 RETURNING user_id, status, expires_at`,
+      [status, note || null, req.user?.id || null, req.params.userId, GRANT_VALIDITY_MONTHS]
     );
     if (!r.rows[0]) {
       res.status(404).json({ error: 'Not found' });

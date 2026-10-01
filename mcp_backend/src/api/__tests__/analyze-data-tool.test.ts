@@ -211,6 +211,18 @@ describe('AnalyzeDataTool', () => {
       expect(result?.content[0].text).toContain('users');
     });
 
+    it('blocks Find Case Law judgments: raw SQL would bypass the verified-user gate', async () => {
+      const db = makeSimpleDb(() => ({ rows: [] }));
+      tool = new AnalyzeDataTool(db);
+
+      for (const t of ['uk_court_decisions', 'uk_court_decision_fts', 'uk_judgment_access_log']) {
+        const result = await tool.executeTool('analyze_data', { sql: `SELECT * FROM ${t} LIMIT 10` });
+        expect(result?.isError).toBe(true);
+        expect(result?.content[0].text).toContain(t);
+      }
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
     it('blocks billing tables', async () => {
       const db = makeSimpleDb(() => ({ rows: [] }));
       tool = new AnalyzeDataTool(db);

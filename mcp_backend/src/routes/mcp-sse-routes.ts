@@ -306,9 +306,12 @@ export function createMCPSSERoutes(deps: {
             logger.info('[MCP] UK judgment access denied', {
               userId: safeUserId, registry: gatedRegistry,
             });
+            await logJudgmentAccess(deps.db, userId, gatedRegistry, judgmentFiltersOf(args),
+                                    { outcome: 'denied', tool: toolName, transport: 'mcp' });
             return { content: [{ type: 'text', text: decision.message }], isError: true };
           }
-          await logJudgmentAccess(deps.db, userId, gatedRegistry, judgmentFiltersOf(args));
+          await logJudgmentAccess(deps.db, userId, gatedRegistry, judgmentFiltersOf(args),
+                                  { tool: toolName, transport: 'mcp' });
           markJudgmentAccessGranted();
         }
 

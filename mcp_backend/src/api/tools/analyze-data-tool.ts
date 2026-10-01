@@ -43,7 +43,9 @@ const ALLOWED_TABLES: Set<string> = new Set([
   // UK — legislation.gov.uk (OGL v3.0) and Find Case Law
   'uk_legislation', 'uk_legislation_versions', 'uk_legislation_provisions',
   'uk_legislation_effects', 'uk_legislation_amendment_history',
-  'uk_court_decisions',
+  // uk_court_decisions is deliberately absent: Find Case Law judgments are only for
+  // verified users (uk-judgment-access.ts), and raw SQL here bypasses that gate and the
+  // hidden list. TNA licence CAS-349914-B9P5B8, principles 6-7.
 ]);
 
 const FORBIDDEN_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXECUTE|SET\s+(?!LOCAL\s+statement_timeout|TRANSACTION))\b/i;

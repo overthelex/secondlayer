@@ -19,6 +19,7 @@ import {
   judgmentFiltersOf,
   hasJudgmentAccessMark,
   runWithJudgmentAccess,
+  logJudgmentAccess,
 } from '../uk-judgment-access.js';
 
 const dbReturning = (rows: any[]) => ({
@@ -85,9 +86,16 @@ describe('the access mark', () => {
 });
 
 describe('the access decision', () => {
-  it('allows a granted account', async () => {
-    const d = await checkJudgmentAccess(dbReturning([{ status: 'granted' }]), 42);
+  it('allows a granted account whose verification is live', async () => {
+    const d = await checkJudgmentAccess(dbReturning([{ status: 'granted', live: true }]), 42);
     expect(d.allowed).toBe(true);
+  });
+
+  it.each([false, null])('denies a grant whose verification has lapsed or has no expiry (live=%s)', async (live) => {
+    // A grant written by hand without expires_at must not become permanent.
+    const d = await checkJudgmentAccess(dbReturning([{ status: 'granted', live }]), 42);
+    expect(d.allowed).toBe(false);
+    expect(d.message).toMatch(/lapsed/);
   });
 
   it.each(['pending', 'refused', 'revoked'])('denies a %s account', async (status) => {
@@ -120,9 +128,9 @@ describe('the access decision', () => {
   });
 
   it('takes a string id from JWT and a number id from the HTTP layer alike', async () => {
-    expect((await checkJudgmentAccess(dbReturning([{ status: 'granted' }]), '42')).allowed)
+    expect((await checkJudgmentAccess(dbReturning([{ status: 'granted', live: true }]), '42')).allowed)
       .toBe(true);
-    expect((await checkJudgmentAccess(dbReturning([{ status: 'granted' }]), 42)).allowed)
+    expect((await checkJudgmentAccess(dbReturning([{ status: 'granted', live: true }]), 42)).allowed)
       .toBe(true);
   });
 });
@@ -145,5 +153,23 @@ describe('email domain signal', () => {
     expect(emailDomain('A.Person@Example.COM')).toBe('example.com');
     expect(emailDomain('not-an-email')).toBeNull();
     expect(emailDomain(undefined)).toBeNull();
+  });
+});
+
+describe('the access log', () => {
+  it('records refusals with the tool and transport, not only the calls that got through', async () => {
+    const db = { query: jest.fn(async () => ({ rows: [] })) };
+    await logJudgmentAccess(db, 42, 'uk_court_decisions', { query: 'x' },
+      { outcome: 'denied', tool: 'uk_search_judgments', transport: 'mcp' });
+    const [sql, params] = (db.query as jest.Mock).mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/outcome, tool, transport/);
+    expect(params).toEqual([42, 'uk_court_decisions', JSON.stringify({ query: 'x' }), 'denied', 'uk_search_judgments', 'mcp']);
+  });
+
+  it('defaults to allowed', async () => {
+    const db = { query: jest.fn(async () => ({ rows: [] })) };
+    await logJudgmentAccess(db, 42, 'uk_court_decisions', null);
+    const params = (db.query as jest.Mock).mock.calls[0][1] as unknown[];
+    expect(params[3]).toBe('allowed');
   });
 });

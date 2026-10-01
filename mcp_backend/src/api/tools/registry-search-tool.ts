@@ -148,13 +148,20 @@ ${registryDescriptions}
         this.db.query(dataSql, values),
         this.db.query(countSql, countValues),
       ]);
-      if (dataResult.rows.length === 0) return this.wrapResponse(def.emptyMessage);
+      if (dataResult.rows.length === 0) {
+        return this.wrapResponse(def.notices
+          ? { results: [], message: def.emptyMessage, ...def.notices, ...(def.attribution ? { licence: def.attribution } : {}) }
+          : def.emptyMessage);
+      }
       const totalCount = parseInt(countResult.rows[0]?.total ?? '0', 10);
       dataResult.rows.forEach((r: any) => { r._total_count = totalCount; });
       // Licence acknowledgement travels with the results, not only in the
       // documentation: a caller that ever only sees tool output would otherwise
       // never see it.
-      return this.wrapSearchResults(dataResult.rows, lim, 0, def.attribution);
+      const result = this.wrapSearchResults(dataResult.rows, lim, 0, def.attribution);
+      if (!def.notices) return result;
+      const body = JSON.parse(result.content[0].text as string);
+      return this.wrapResponse({ ...body, ...def.notices });
     } catch (error: any) {
       logger.error(`search_registry[${registry}] error`, { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
