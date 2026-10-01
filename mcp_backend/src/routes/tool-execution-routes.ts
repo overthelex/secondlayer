@@ -326,10 +326,12 @@ export function createToolExecutionRoutes(deps: {
           if (batchGated) {
             const decision = await checkJudgmentAccess(deps.db, req.user?.id);
             if (!decision.allowed) {
+              await logJudgmentAccess(deps.db, req.user?.id, batchGated, judgmentFiltersOf(call.arguments),
+                                      { outcome: 'denied', tool: call.name, transport: 'rest-batch' });
               return { name: call.name, error: 'Forbidden', message: decision.message };
             }
-            await logJudgmentAccess(deps.db, req.user?.id, batchGated,
-                                    judgmentFiltersOf(call.arguments));
+            await logJudgmentAccess(deps.db, req.user?.id, batchGated, judgmentFiltersOf(call.arguments),
+                                    { tool: call.name, transport: 'rest-batch' });
             markJudgmentAccessGranted();
           }
           const callRequestId = `batch-${uuidv4()}`;
@@ -430,9 +432,12 @@ export function createToolExecutionRoutes(deps: {
       if (streamGated) {
         const decision = await checkJudgmentAccess(deps.db, req.user?.id);
         if (!decision.allowed) {
+          await logJudgmentAccess(deps.db, req.user?.id, streamGated, judgmentFiltersOf(args),
+                                  { outcome: 'denied', tool: toolName, transport: 'rest-stream' });
           return res.status(403).json({ success: false, error: 'Forbidden', message: decision.message });
         }
-        await logJudgmentAccess(deps.db, req.user?.id, streamGated, judgmentFiltersOf(args));
+        await logJudgmentAccess(deps.db, req.user?.id, streamGated, judgmentFiltersOf(args),
+                                { tool: toolName, transport: 'rest-stream' });
         markJudgmentAccessGranted();
       }
 
@@ -522,13 +527,16 @@ export function createToolExecutionRoutes(deps: {
           logger.info('UK judgment access denied', {
             requestId, userId: req.user?.id, registry: gatedRegistry,
           });
+          await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, judgmentFiltersOf(args),
+                                  { outcome: 'denied', tool: toolName, transport: 'rest' });
           return res.status(403).json({
             success: false,
             error: 'Forbidden',
             message: decision.message,
           });
         }
-        await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, judgmentFiltersOf(args));
+        await logJudgmentAccess(deps.db, req.user?.id, gatedRegistry, judgmentFiltersOf(args),
+                                { tool: toolName, transport: 'rest' });
         markJudgmentAccessGranted();
       }
 

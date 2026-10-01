@@ -11,6 +11,7 @@
 
 // MatchType / FieldDef are the canonical query-builder primitives, now owned by
 // @secondlayer/shared/query-ir so registry AND EDRSR share one definition.
+import { JUDGMENT_ATTRIBUTION, JUDGMENT_COVERAGE, JUDGMENT_MACHINE_GENERATED } from './uk-judgment-notices.js';
 import type { MatchType, FieldDef } from '@secondlayer/shared';
 export type { MatchType, FieldDef };
 
@@ -70,6 +71,11 @@ export interface RegistryDef {
    * in the Find Case Law application.
    */
   attribution?: string;
+  /**
+   * Notices that must ride on every response, empty ones included — for Find Case
+   * Law, the machine-generated label and the coverage limits the licence requires.
+   */
+  notices?: Record<string, string>;
 }
 
 export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
@@ -829,7 +835,7 @@ Search by the act that was changed (affected), by the act doing the changing (af
   },
 
   uk_court_decisions: {
-    attribution: 'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.',
+    attribution: JUDGMENT_ATTRIBUTION,
     title: 'UK Court Judgments (54K decisions)',
     description: `54,453 judgments from Find Case Law (The National Archives), 2001-2026, full text on 99.95% of rows. UK Supreme Court, Court of Appeal (Civil), High Court (Chancery, Administrative, Commercial, Family), Privy Council and UK tribunals.
 
@@ -837,10 +843,14 @@ Coverage gaps worth knowing before relying on a nil result: no Court of Appeal (
 
 Licence: Find Case Law judgments are published under the Open Justice Licence. Rows carry the licence they arrived under.`,
     table: 'uk_court_decisions',
+    // The label and coverage limits the licence requires, shared with uk_search_judgments.
+    notices: { machine_generated: JUDGMENT_MACHINE_GENERATED, coverage: JUDGMENT_COVERAGE },
     // Placeholders for withdrawn/moved judgments and empty rows (migration 222).
     baseWhere: 'NOT EXISTS (SELECT 1 FROM uk_court_decision_hidden h WHERE h.id = uk_court_decisions.id)',
-    selectColumns: 'id, neutral_citation, case_number, court_code, court_name, decision_date::text AS decision_date, judge, parties, licence, source_url, full_text',
-    outerColumns: "t.id, t.neutral_citation, t.case_number, t.court_code, t.court_name, t.decision_date, t.judge, t.parties, t.licence, t.source_url, left(t.full_text || '', 400) AS snippet",
+    // No judge column and no judge filter: principle 2 of the TNA licence (no outputs that
+    // profile or rank members of the judiciary). uk_search_judgments follows the same rule.
+    selectColumns: 'id, neutral_citation, case_number, court_code, court_name, decision_date::text AS decision_date, parties, licence, source_url, full_text',
+    outerColumns: "t.id, t.neutral_citation, t.case_number, t.court_code, t.court_name, t.decision_date, t.parties, t.licence, t.source_url, left(t.full_text || '', 400) AS snippet",
     orderBy: 'uk_court_decisions.decision_date DESC NULLS LAST',
     outerOrderBy: 't.decision_date DESC NULLS LAST',
     emptyMessage: 'No UK judgments found matching criteria',
@@ -860,7 +870,6 @@ Licence: Find Case Law judgments are published under the Open Justice Licence. R
       { name: 'case_number', description: 'Court case number', match: 'exact', columns: ['case_number'] },
       { name: 'court', description: 'Court code, e.g. uksc, ewca/civ, ewhc/ch, ewhc/admin, ewhc/comm, ewhc/fam, ukpc', match: 'exact', columns: ['court_code'] },
       { name: 'parties', description: 'Party names', match: 'ilike', columns: ['parties'] },
-      { name: 'judge', description: 'Judge name', match: 'ilike', columns: ['judge'] },
       { name: 'date_from', description: 'Decision date from (YYYY-MM-DD)', match: 'gte', columns: ['decision_date'] },
       { name: 'date_to', description: 'Decision date to (YYYY-MM-DD)', match: 'lte', columns: ['decision_date'] },
     ],

@@ -7,9 +7,10 @@
 # provisions of current text, 1.64M point-in-time intervals, 1.21M amendments,
 # served as uk_* tools with MCP_TOOLSET=uk.
 #
-# ⚠ The judgments in uk_court_decisions are NOT part of the product. The Find
-# Case Law licence application is undecided, no tool reaches them, and nothing
-# here changes that (LEXAI-2056).
+# ⚠ The judgments in uk_court_decisions are reachable only through
+# uk_search_judgments and search_registry, and only by verified, granted users (uk-judgment-access.ts).
+# The Find Case Law licence is approved but not yet signed; no vectors or LLM work
+# over judgments until it is (LEXAI-2056).
 #
 # Standalone pipeline, independent of the cthulhu runners:
 # - runs on GitHub-hosted runners

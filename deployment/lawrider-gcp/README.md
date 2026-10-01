@@ -20,9 +20,11 @@ The corpus: 238,926 acts, 1.78M provisions of current text, 1.64M point-in-time
 intervals across 62,866 acts, 1.21M amendments. Refreshed weekly from
 research.legislation.gov.uk, which is OGL v3.0.
 
-⚠ `uk_court_decisions` is on this box but is **not** part of the product: the
-Find Case Law licence application is undecided and no tool reaches those
-judgments (LEXAI-2056).
+⚠ `uk_court_decisions` is reachable only through `uk_search_judgments` and
+`search_registry` (registry `uk_court_decisions`), and only by
+users granted in `uk_judgment_access` (verified, 12-month expiry, every call logged).
+The Find Case Law licence was approved on 24.09.2026 and is not yet signed; until it is,
+there are no vectors or LLM work over the judgments (LEXAI-2056).
 
 ## What moved away
 

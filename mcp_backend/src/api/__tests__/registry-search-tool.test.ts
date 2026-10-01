@@ -527,6 +527,38 @@ describe('aggregate mode (LEXAI-1820)', () => {
       expect(REGISTRY_CATALOG.uk_legislation_provisions.outerColumns).not.toMatch(/(^|[\s,])t\.text([\s,]|$)/);
     });
 
+    it('labels judgment output as machine-generated and states coverage, empty results included', async () => {
+      for (const rows of [[{ id: 'x', _total_count: 1 }], []]) {
+        db = makeDb(() => ({ rows }));
+        tool = new RegistrySearchTool(db);
+        const r = await tool.executeTool('search_registry', {
+          registry: 'uk_court_decisions', filters: { query: 'unfair dismissal' },
+        });
+        const out = JSON.parse(r!.content[0].text as string);
+        expect(out.machine_generated).toMatch(/Machine-generated/);
+        expect(out.coverage).toMatch(/No result does NOT mean/);
+      }
+    });
+
+    it('labels aggregate output over judgments too', async () => {
+      db = makeDb(() => ({ rows: [{ value: 'uksc', count: '3' }] }));
+      tool = new RegistrySearchTool(db);
+      const r = await tool.executeTool('search_registry', {
+        registry: 'uk_court_decisions', filters: { court: 'uksc' }, aggregate: { group_by: 'court' },
+      });
+      const out = JSON.parse(r!.content[0].text as string);
+      expect(out.machine_generated).toMatch(/Machine-generated/);
+      expect(out.coverage).toMatch(/No result does NOT mean/);
+      expect(out.licence).toMatch(/Open Justice/);
+    });
+
+    it('offers no judge column and no judge filter (licence principle 2)', () => {
+      const def = REGISTRY_CATALOG.uk_court_decisions;
+      expect(def.selectColumns).not.toMatch(/\bjudge\b/);
+      expect(def.outerColumns).not.toMatch(/\bjudge\b/);
+      expect(def.fields.map((f) => f.name)).not.toContain('judge');
+    });
+
     it('exposes the licence on every judgment row', () => {
       // Find Case Law is Open Justice Licence, legislation.gov.uk is OGL v3.0.
       // A reader must not have to guess which one a result came under.

@@ -165,9 +165,11 @@ services:
       # cthulhu now and the Ukrainian ones from legal.org.ua; one box, one corpus, and
       # a typo in this value serves nothing rather than the wrong jurisdiction.
       #
-      # ⚠ This does NOT open up uk_court_decisions. Those judgments are under the Find
-      # Case Law licence, whose application is still undecided, and they have no tool at
-      # all until it is — see services/uk-judgment-access.ts and LEXAI-2056.
+      # ⚠ uk_court_decisions (Find Case Law) is reached only through uk_search_judgments
+      # and search_registry(registry=uk_court_decisions), and only by users granted in uk_judgment_access (verified, 12-month expiry, every
+      # call logged): services/uk-judgment-access.ts. The licence was approved on 24.09.2026
+      # and is not yet signed; until it is, no vectors or LLM work over judgments
+      # (LEXAI-2056).
       MCP_TOOLSET: "uk"
       # New billing accounts are GBP; the uk_* tools carry fixed GBP prices (migration 223).
       BILLING_DEFAULT_CURRENCY: "GBP"
