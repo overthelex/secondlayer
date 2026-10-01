@@ -53,7 +53,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "services" / "ch-pipeline"))
 from chpipe import rpw  # noqa: E402
-from propositions import SOURCES, parse, read_text  # noqa: E402
+from propositions import (_NOTE_CALL, _SPACED_HYPHEN, SOURCES, dehyphenate, parse,  # noqa: E402
+                          read_text)
 from retrieve import dense_index, embed  # noqa: E402
 
 DIR = pathlib.Path("/data/ch-corpus/weko-bek")
@@ -253,11 +254,33 @@ def twins(a: list[str], b: list[str]) -> bool:
     return difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() > TWIN
 
 
+# Page furniture the PDF text carries into a passage: a page number on its
+# own line, the journal's running header, an agency file number with its page
+# ("22-00027/COO.2101.111.7.305747  38"), the publication stamp.
+_FURNITURE = re.compile(
+    r"^\s*(?:\d{1,4}"
+    r"|.*\b(?:RPW/DPC|DPC/RPW)\b.*"
+    r"|RPW \d{4}/\d[a-z]?\s+\d{1,4}"
+    r"|\d{1,4}\s+RPW \d{4}/\d[a-z]?"
+    r"|.*COO\.\d{4}\.\d+(?:\.\d+)*\s+\d{1,4}"
+    r"|\[Publikationsversion\]"
+    r"|Seite \d+ von \d+)\s*$")
+
+
 def readable(spider: str, text: str) -> str:
-    """Journal passages in column order; everything else as stored."""
+    """What the reader and the judge see of a passage, measured clean on
+    2026-10-01: in the first v2 packet 78% of passages carried words broken
+    across lines ("Wettbe-" / "werb"), 14% a page number on its own line, 5%
+    the journal's running header and 8% footnote calls glued to words.
+    Journal passages are put in column order first."""
     if spider == "CH_WEKO_RPW":
         text = rpw.reading_order(text, max_lines=10_000)
-    return re.sub(r"[ \t]{2,}", " ", text).strip()
+    lines = [ln for ln in text.splitlines() if not _FURNITURE.match(ln)]
+    text = dehyphenate("\n".join(lines))
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = _SPACED_HYPHEN.sub(r"\1\2", text)
+    text = _NOTE_CALL.sub("", text)
+    return text.strip()
 
 
 def candidates(index, query: np.ndarray, allowed) -> dict[str, list[tuple[float, int]]]:

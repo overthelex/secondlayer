@@ -42,3 +42,17 @@ def test_controls_are_in_the_packet_and_the_regime_control_stops_before_2004():
     assert kinds.count("negative") == 4 and kinds.count("positive") == 3
     regime = [c for c in packet.CONTROLS if c["kind"] == "regime"][0]
     assert regime["before"] == date(2004, 4, 1)
+
+
+def test_page_furniture_and_broken_words_are_gone_from_a_passage():
+    raw = ("beziehungsweise zwei Jahre, wenn nur der Geschäfts-\n 46\n"
+           "wert Gegenstand der Transaktion ist.\n"
+           "RPW/DPC 2014/1\n"
+           "22-00027/COO.2101.111.7.305747                       38\n"
+           "Die Abrede gilt als Wettbewerbs- beschränkung gemäss den Vertikalleitlinien12 und\n"
+           "die Herstellungs- oder Vertriebskosten sinken.")
+    out = packet.readable("CH_WEKO", raw)
+    assert "Geschäftswert Gegenstand" in out
+    assert "RPW/DPC" not in out and "COO." not in out and "\n46\n" not in out
+    assert "Wettbewerbsbeschränkung" in out and "Vertikalleitlinien und" in out
+    assert "Herstellungs- oder Vertriebskosten" in out
