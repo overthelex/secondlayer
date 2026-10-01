@@ -16,6 +16,25 @@ import { AnalyzeDataTool } from '../tools/analyze-data-tool.js';
 
 type QueryCall = { sql: string; params?: any[] };
 
+/**
+ * What Postgres's EXPLAIN would name: every relation after FROM/JOIN, including
+ * comma lists, quoted identifiers and schema-qualified names.
+ */
+function planFor(sql: string) {
+  sql = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');   // Postgres ignores comments
+  const rels: Array<{ schema: string; name: string }> = [];
+  const re = /\b(?:FROM|JOIN)\s+((?:"?[\w]+"?(?:\."?[\w]+"?)?)(?:\s*,\s*"?[\w]+"?(?:\."?[\w]+"?)?)*)/gi;
+  let m;
+  while ((m = re.exec(sql)) !== null) {
+    for (const part of m[1].split(/\s*,\s*/)) {
+      const bits = part.replace(/"/g, '').split('.');
+      rels.push(bits.length === 2 ? { schema: bits[0], name: bits[1] } : { schema: 'public', name: bits[0] });
+    }
+  }
+  const Plans = rels.map((r) => ({ 'Node Type': 'Seq Scan', 'Relation Name': r.name, Schema: r.schema }));
+  return { rows: [{ 'QUERY PLAN': [{ Plan: { 'Node Type': 'Append', Plans } }] }] };
+}
+
 describe('AnalyzeDataTool', () => {
   let calls: QueryCall[];
   let tool: AnalyzeDataTool;
@@ -25,7 +44,7 @@ describe('AnalyzeDataTool', () => {
       const client = {
         query: jest.fn((sql: string, params?: any[]) => {
           calls.push({ sql, params });
-          return Promise.resolve(responder(sql));
+          return Promise.resolve(/^EXPLAIN/.test(sql) ? planFor(sql) : responder(sql));
         }),
         release: jest.fn(),
       };
@@ -36,7 +55,7 @@ describe('AnalyzeDataTool', () => {
   const makeSimpleDb = (responder: (sql: string) => any) => ({
     query: jest.fn((sql: string, params?: any[]) => {
       calls.push({ sql, params });
-      return Promise.resolve(responder(sql));
+      return Promise.resolve(/^EXPLAIN/.test(sql) ? planFor(sql) : responder(sql));
     }),
   });
 
@@ -219,6 +238,45 @@ describe('AnalyzeDataTool', () => {
         const result = await tool.executeTool('analyze_data', { sql: `SELECT * FROM ${t} LIMIT 10` });
         expect(result?.isError).toBe(true);
         expect(result?.content[0].text).toContain(t);
+      }
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a quoted identifier', 'SELECT * FROM "users" LIMIT 10', 'users'],
+      ['a comma join', 'SELECT * FROM edrsr_documents, users LIMIT 10', 'users'],
+      ['a quoted judgment table', 'SELECT full_text FROM "uk_court_decisions" LIMIT 10', 'uk_court_decisions'],
+      ['a system schema', 'SELECT * FROM pg_catalog.pg_authid LIMIT 10', 'pg_catalog'],
+    ])('the plan catches %s that the regex misses', async (_label, sql, table) => {
+      const db = makeSimpleDb(() => ({ rows: [{ leaked: true }] }));
+      tool = new AnalyzeDataTool(db);
+      const result = await tool.executeTool('analyze_data', { sql });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0].text).toContain(table);
+      // Only EXPLAIN ran; the query itself never did.
+      expect(calls.every((c) => /^EXPLAIN/.test(c.sql))).toBe(true);
+    });
+
+    it('refuses more than one statement', async () => {
+      const db = makeSimpleDb(() => ({ rows: [] }));
+      tool = new AnalyzeDataTool(db);
+      const result = await tool.executeTool('analyze_data', {
+        sql: 'SELECT 1 FROM edrsr_court_decisions LIMIT 1; SELECT * FROM users LIMIT 1',
+      });
+      expect(result?.isError).toBe(true);
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('refuses functions that run SQL from a string or read the server', async () => {
+      const db = makeSimpleDb(() => ({ rows: [] }));
+      tool = new AnalyzeDataTool(db);
+      for (const sql of [
+        "SELECT query_to_xml('select * from users', true, true, '') LIMIT 1",
+        "SELECT pg_read_file('/etc/passwd') LIMIT 1",
+        "SELECT current_setting('data_directory') LIMIT 1",
+      ]) {
+        const result = await tool.executeTool('analyze_data', { sql });
+        expect(result?.isError).toBe(true);
       }
       expect(db.query).not.toHaveBeenCalled();
     });

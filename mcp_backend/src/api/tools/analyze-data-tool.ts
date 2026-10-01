@@ -48,6 +48,18 @@ const ALLOWED_TABLES: Set<string> = new Set([
   // hidden list. TNA licence CAS-349914-B9P5B8, principles 6-7.
 ]);
 
+// Functions that run SQL from a string (so the plan cannot see the tables they read),
+// or that reach files, server settings or other sessions. The app role is the
+// database owner, so a READ ONLY transaction alone does not stop any of these.
+const FORBIDDEN_FUNCTIONS = /\b(?:query_to_xml\w*|table_to_xml\w*|cursor_to_xml\w*|schema_to_xml\w*|database_to_xml\w*|pg_read_file|pg_read_binary_file|pg_ls_\w+|pg_stat_file|lo_\w+|dblink\w*|current_setting|set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile|pg_sleep\w*|pg_advisory\w*|pg_notify)\s*\(/i;
+
+// Set-returning functions a plan may scan; anything else in a Function Scan is refused.
+const ALLOWED_FUNCTION_SCANS = new Set([
+  'generate_series', 'unnest', 'jsonb_array_elements', 'jsonb_array_elements_text',
+  'jsonb_each', 'jsonb_each_text', 'json_array_elements', 'json_each',
+  'regexp_split_to_table', 'string_to_table', 'regexp_matches',
+]);
+
 const FORBIDDEN_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXECUTE|SET\s+(?!LOCAL\s+statement_timeout|TRANSACTION))\b/i;
 
 export class AnalyzeDataTool extends BaseToolHandler {
@@ -111,6 +123,15 @@ export class AnalyzeDataTool extends BaseToolHandler {
         await client.query(`SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
       }
 
+      // The regex above is a fast first pass; the plan is the authority. It names every
+      // relation the query will read, however it was written: quoted ("users"),
+      // comma-joined (FROM a, users), schema-qualified, inside CTEs or subqueries.
+      const planError = await this.checkPlan(client, sql);
+      if (planError) {
+        if (shouldRelease) await client.query('ROLLBACK').catch(() => {});
+        return this.wrapError(planError);
+      }
+
       const result = await client.query(sql);
 
       if (shouldRelease) {
@@ -159,8 +180,18 @@ export class AnalyzeDataTool extends BaseToolHandler {
       return 'Дозволені тільки SELECT-запити.';
     }
 
+    if (FORBIDDEN_FUNCTIONS.test(normalized)) {
+      return 'Запит використовує заборонену функцію.';
+    }
+
     if (FORBIDDEN_KEYWORDS.test(normalized)) {
       return 'Запит містить заборонені операції (INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE).';
+    }
+
+    // One statement only: the driver runs every statement in a multi-statement string,
+    // and only the first would have been checked.
+    if (normalized.trim().replace(/;\s*$/, '').includes(';')) {
+      return 'Дозволено лише один SQL-оператор.';
     }
 
     if (!/\bLIMIT\b/i.test(normalized)) {
@@ -175,10 +206,39 @@ export class AnalyzeDataTool extends BaseToolHandler {
     const referencedTables = this.extractTableNames(normalized);
     const forbidden = referencedTables.filter(t => !ALLOWED_TABLES.has(t));
     if (forbidden.length > 0) {
-      return `Таблиці не дозволені: ${forbidden.join(', ')}. Дозволені: edrsr_*, opendata_*, judges*, vrp_*, vkks_*, nbu_banks, uk_*.`;
+      return `Таблиці не дозволені: ${forbidden.join(', ')}. Дозволені: edrsr_*, opendata_*, judges*, vrp_*, vkks_*, nbu_banks, uk_legislation*.`;
     }
 
     return null;
+  }
+
+  /** Every relation and function scan in the plan must be allowed. Fails closed. */
+  private async checkPlan(client: any, sql: string): Promise<string | null> {
+    let plan: any;
+    try {
+      const r = await client.query(`EXPLAIN (FORMAT JSON, VERBOSE) ${sql.trim().replace(/;\s*$/, '')}`);
+      const raw = r.rows?.[0]?.['QUERY PLAN'];
+      plan = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (err: any) {
+      return `Помилка SQL: ${err.message}`;
+    }
+    const root = Array.isArray(plan) ? plan[0]?.Plan : undefined;
+    if (!root) return 'Не вдалося перевірити план запиту.';
+    const bad = new Set<string>();
+    const walk = (n: any) => {
+      if (!n || typeof n !== 'object') return;
+      const rel = n['Relation Name'];
+      if (rel) {
+        const schema = n['Schema'];
+        if ((schema && schema !== 'public') || !ALLOWED_TABLES.has(String(rel))) bad.add(schema ? `${schema}.${rel}` : rel);
+      }
+      if (n['Node Type'] === 'Function Scan' && !ALLOWED_FUNCTION_SCANS.has(String(n['Function Name']))) {
+        bad.add(`${n['Function Name'] ?? 'function'}()`);
+      }
+      for (const c of n.Plans || []) walk(c);
+    };
+    walk(root);
+    return bad.size ? `Таблиці не дозволені: ${[...bad].join(', ')}.` : null;
   }
 
   private extractTableNames(sql: string): string[] {

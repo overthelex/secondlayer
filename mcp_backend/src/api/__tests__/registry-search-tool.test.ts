@@ -540,6 +540,18 @@ describe('aggregate mode (LEXAI-1820)', () => {
       }
     });
 
+    it('labels aggregate output over judgments too', async () => {
+      db = makeDb(() => ({ rows: [{ value: 'uksc', count: '3' }] }));
+      tool = new RegistrySearchTool(db);
+      const r = await tool.executeTool('search_registry', {
+        registry: 'uk_court_decisions', filters: { court: 'uksc' }, aggregate: { group_by: 'court' },
+      });
+      const out = JSON.parse(r!.content[0].text as string);
+      expect(out.machine_generated).toMatch(/Machine-generated/);
+      expect(out.coverage).toMatch(/No result does NOT mean/);
+      expect(out.licence).toMatch(/Open Justice/);
+    });
+
     it('offers no judge column and no judge filter (licence principle 2)', () => {
       const def = REGISTRY_CATALOG.uk_court_decisions;
       expect(def.selectColumns).not.toMatch(/\bjudge\b/);

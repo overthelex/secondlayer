@@ -117,7 +117,8 @@ ${registryDescriptions}
     const fullWhere = def.baseWhere ? `(${def.baseWhere}) AND (${whereClause})` : whereClause;
 
     if (aggregate) {
-      return this.executeAggregate(registry, def, aggregate, fullWhere, values, paramIndex, lim);
+      // Aggregates over judgments are output over judgments too: same notices.
+      return this.withNotices(def, await this.executeAggregate(registry, def, aggregate, fullWhere, values, paramIndex, lim));
     }
 
     const countValues = [...values];
@@ -158,14 +159,25 @@ ${registryDescriptions}
       // Licence acknowledgement travels with the results, not only in the
       // documentation: a caller that ever only sees tool output would otherwise
       // never see it.
-      const result = this.wrapSearchResults(dataResult.rows, lim, 0, def.attribution);
-      if (!def.notices) return result;
-      const body = JSON.parse(result.content[0].text as string);
-      return this.wrapResponse({ ...body, ...def.notices });
+      return this.withNotices(def, this.wrapSearchResults(dataResult.rows, lim, 0, def.attribution));
     } catch (error: any) {
       logger.error(`search_registry[${registry}] error`, { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
     }
+  }
+
+  /**
+   * Attach a registry's notices (and its licence) to any response from it, error or
+   * not: the Find Case Law terms apply to everything said about the judgments.
+   */
+  private withNotices(def: RegistryDef, result: ToolResult): ToolResult {
+    if (!def.notices) return result;
+    const text = result.content?.[0]?.text as string;
+    let body: any;
+    try { body = JSON.parse(text); } catch { body = { message: text }; }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) body = { results: body };
+    const out = this.wrapResponse({ ...body, ...def.notices, ...(def.attribution ? { licence: def.attribution } : {}) });
+    return result.isError ? { ...out, isError: true } : out;
   }
 
   /**

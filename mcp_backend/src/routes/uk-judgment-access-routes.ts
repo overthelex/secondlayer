@@ -81,7 +81,7 @@ export function createUKJudgmentAccessRoutes(deps: {
     const domain = emailDomain(req.user.email);
     const freeMail = isFreeMailDomain(req.user.email);
 
-    await deps.db.query(
+    const saved = await deps.db.query(
       `INSERT INTO uk_judgment_access
          (user_id, status, organisation, role_stated, regulator, regulator_number,
           email_domain, domain_is_free_mail, attested_not_lip, attested_at, attested_ip)
@@ -101,7 +101,8 @@ export function createUKJudgmentAccessRoutes(deps: {
          attested_not_lip = true,
          attested_at = now(),
          attested_ip = EXCLUDED.attested_ip,
-         updated_at = now()`,
+         updated_at = now()
+       RETURNING status, expires_at`,
       [req.user.id, organisation, role, regulator || null, regulator_number || null,
         domain, freeMail, req.ip || null]
     );
@@ -112,8 +113,18 @@ export function createUKJudgmentAccessRoutes(deps: {
 
     // Free mail routes to review, never to refusal: a sole practitioner or a
     // barrister on a personal address is ordinary.
+    // Report what is actually on record: re-applying while a grant is live keeps it.
+    const status = saved?.rows?.[0]?.status ?? 'pending';
+    if (status === 'granted') {
+      res.json({
+        status,
+        expires_at: saved.rows[0].expires_at,
+        note: 'Your access is already granted; your details have been updated.',
+      });
+      return;
+    }
     res.json({
-      status: 'pending',
+      status,
       note: freeMail
         ? 'Application received. As it uses a free-mail address, it will be reviewed by hand.'
         : 'Application received.',

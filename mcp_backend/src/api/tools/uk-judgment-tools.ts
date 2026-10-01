@@ -25,22 +25,10 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
 import { isValidIsoDate } from './ch-date-utils.js';
-
-const ATTRIBUTION =
-  'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.';
-
-const COVERAGE =
-  'The corpus is incomplete: 54,453 judgments of about 95,800 on Find Case Law, loaded up to May 2026. ' +
-  'The Court of Appeal (Criminal Division) and the King’s Bench Division are missing; the Administrative Court stops in April 2016; ' +
-  'Scotland and Northern Ireland are not covered. No result does NOT mean no such judgment exists.';
-
-// Principle 8 (algorithmic transparency) and the licence commitment to label output:
-// a lawyer must be able to tell, from the payload alone, that a machine chose these
-// records and passages, how, and where to check them.
-const MACHINE_GENERATED =
-  'Machine-generated search result. LawRider selected these judgments and extracts automatically, ' +
-  'by full-text search; no language model wrote, summarised or interpreted them. Check every passage ' +
-  'against the authoritative record at source_url before relying on it.';
+import {
+  JUDGMENT_ATTRIBUTION as ATTRIBUTION, JUDGMENT_COVERAGE as COVERAGE,
+  JUDGMENT_NOTICES,
+} from './uk-judgment-notices.js';
 
 const EXTRACT_NOTE_QUERY =
   'extract: verbatim passages of the judgment around the query matches (marked «»); the full text is at source_url.';
@@ -119,13 +107,12 @@ Access is limited to verified lawyers and researchers (a condition of the TNA li
       return this.wrapResponse({
         error: 'missing_query',
         message: 'Provide query (text search), citation (neutral citation) or parties.',
-        machine_generated: MACHINE_GENERATED,
-        coverage: COVERAGE,
+        ...JUDGMENT_NOTICES,
       });
     }
     for (const k of ['date_from', 'date_to']) {
       if (a[k] !== undefined && a[k] !== null && a[k] !== '' && !isValidIsoDate(String(a[k]))) {
-        return this.wrapResponse({ error: 'bad_date', message: `${k} must be a real date in YYYY-MM-DD format.` });
+        return this.wrapResponse({ error: 'bad_date', message: `${k} must be a real date in YYYY-MM-DD format.`, ...JUDGMENT_NOTICES });
       }
     }
 
@@ -179,7 +166,7 @@ Access is limited to verified lawyers and researchers (a condition of the TNA li
 
       // Every response, empty ones included: the label, the coverage limits and the
       // licence travel together, because a nil result is read as an answer too.
-      const extra: Record<string, unknown> = { machine_generated: MACHINE_GENERATED, coverage: COVERAGE, licence: ATTRIBUTION };
+      const extra: Record<string, unknown> = { ...JUDGMENT_NOTICES };
       if (unindexed === null) {
         extra.index_incomplete =
           'Could not check that the text index is complete; query results may be incomplete.';
@@ -213,7 +200,7 @@ Access is limited to verified lawyers and researchers (a condition of the TNA li
       });
     } catch (err: any) {
       logger.error('[uk_search_judgments] failed', { error: err?.message });
-      return this.wrapResponse({ error: 'query_failed', message: 'The UK judgments search failed.' });
+      return this.wrapResponse({ error: 'query_failed', message: 'The UK judgments search failed.', ...JUDGMENT_NOTICES });
     }
   }
 

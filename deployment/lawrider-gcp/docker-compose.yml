@@ -165,8 +165,8 @@ services:
       # cthulhu now and the Ukrainian ones from legal.org.ua; one box, one corpus, and
       # a typo in this value serves nothing rather than the wrong jurisdiction.
       #
-      # ⚠ uk_court_decisions (Find Case Law) is reached only through uk_search_judgments,
-      # and only by users granted in uk_judgment_access (verified, 12-month expiry, every
+      # ⚠ uk_court_decisions (Find Case Law) is reached only through uk_search_judgments
+      # and search_registry(registry=uk_court_decisions), and only by users granted in uk_judgment_access (verified, 12-month expiry, every
       # call logged): services/uk-judgment-access.ts. The licence was approved on 24.09.2026
       # and is not yet signed; until it is, no vectors or LLM work over judgments
       # (LEXAI-2056).

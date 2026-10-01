@@ -11,6 +11,7 @@
 
 // MatchType / FieldDef are the canonical query-builder primitives, now owned by
 // @secondlayer/shared/query-ir so registry AND EDRSR share one definition.
+import { JUDGMENT_ATTRIBUTION, JUDGMENT_COVERAGE, JUDGMENT_MACHINE_GENERATED } from './uk-judgment-notices.js';
 import type { MatchType, FieldDef } from '@secondlayer/shared';
 export type { MatchType, FieldDef };
 
@@ -834,7 +835,7 @@ Search by the act that was changed (affected), by the act doing the changing (af
   },
 
   uk_court_decisions: {
-    attribution: 'Contains information licensed under the Open Justice - Licence v2.0. Source: Find Case Law, The National Archives.',
+    attribution: JUDGMENT_ATTRIBUTION,
     title: 'UK Court Judgments (54K decisions)',
     description: `54,453 judgments from Find Case Law (The National Archives), 2001-2026, full text on 99.95% of rows. UK Supreme Court, Court of Appeal (Civil), High Court (Chancery, Administrative, Commercial, Family), Privy Council and UK tribunals.
 
@@ -842,10 +843,8 @@ Coverage gaps worth knowing before relying on a nil result: no Court of Appeal (
 
 Licence: Find Case Law judgments are published under the Open Justice Licence. Rows carry the licence they arrived under.`,
     table: 'uk_court_decisions',
-    notices: {
-      machine_generated: 'Machine-generated search result. Records and snippets were selected automatically by full-text search; no language model wrote, summarised or interpreted them. Check every passage against the authoritative record at source_url before relying on it.',
-      coverage: 'The corpus is incomplete: 54,453 judgments of about 95,800 on Find Case Law, loaded up to May 2026. The Court of Appeal (Criminal Division) and the King’s Bench Division are missing; the Administrative Court stops in April 2016; Scotland and Northern Ireland are not covered. No result does NOT mean no such judgment exists.',
-    },
+    // The label and coverage limits the licence requires, shared with uk_search_judgments.
+    notices: { machine_generated: JUDGMENT_MACHINE_GENERATED, coverage: JUDGMENT_COVERAGE },
     // Placeholders for withdrawn/moved judgments and empty rows (migration 222).
     baseWhere: 'NOT EXISTS (SELECT 1 FROM uk_court_decision_hidden h WHERE h.id = uk_court_decisions.id)',
     // No judge column and no judge filter: principle 2 of the TNA licence (no outputs that

@@ -8,7 +8,7 @@
 # served as uk_* tools with MCP_TOOLSET=uk.
 #
 # ⚠ The judgments in uk_court_decisions are reachable only through
-# uk_search_judgments and only by verified, granted users (uk-judgment-access.ts).
+# uk_search_judgments and search_registry, and only by verified, granted users (uk-judgment-access.ts).
 # The Find Case Law licence is approved but not yet signed; no vectors or LLM work
 # over judgments until it is (LEXAI-2056).
 #
