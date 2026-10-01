@@ -134,6 +134,20 @@ def test_force_downloads_again_and_rewrites_nothing_whose_text_is_unchanged(sett
     assert (report.documents, report.unchanged, report.inserted, report.updated) == (2, 2, 0, 0)
 
 
+def test_a_forced_recut_corrects_a_date_and_leaves_a_loaded_row_loaded(settings, conn):
+    site = Weko()
+    _run(settings, site)
+    load_stage.run(settings, spider="CH_WEKO_RPW")
+    conn.execute("UPDATE ch_court_decisions SET decision_date = NULL "
+                 "WHERE doc_id = 'RPW_2024-2_B2.3.1'")
+    report = _run(settings, site, force=True)
+    assert (report.updated, report.unchanged) == (1, 1)
+    r = _rows(conn)["RPW_2024-2_B2.3.1"]
+    assert str(r["decision_date"]) == "2024-04-25"
+    assert r["stage"] == "loaded"
+    assert r["metadata_json"]["rpw"]["date_upper_bound"] == "2024-12-31"
+
+
 def test_a_replaced_issue_file_rewrites_its_rows(settings, conn, tmp_path):
     site = Weko()
     _run(settings, site)

@@ -103,14 +103,22 @@ ON CONFLICT (ecli) DO UPDATE SET
     full_text = EXCLUDED.full_text, languages = EXCLUDED.languages,
     metadata_json = EXCLUDED.metadata_json, pdf_url = EXCLUDED.pdf_url,
     text_source = 'pdf', text_quality = EXCLUDED.text_quality,
-    pdf_sha256 = EXCLUDED.pdf_sha256, stage = EXCLUDED.stage, attempts = 0,
-    last_error = EXCLUDED.last_error, failed_stage = NULL,
+    pdf_sha256 = EXCLUDED.pdf_sha256,
+    -- Same text, same file: a re-cut that only corrects a label or a date
+    -- leaves a loaded row loaded, instead of hiding it until load runs again.
+    stage = CASE WHEN ch_court_decisions.full_text IS DISTINCT FROM EXCLUDED.full_text
+                   OR ch_court_decisions.pdf_sha256 IS DISTINCT FROM EXCLUDED.pdf_sha256
+                 THEN EXCLUDED.stage ELSE ch_court_decisions.stage END,
+    attempts = 0, last_error = EXCLUDED.last_error, failed_stage = NULL,
     stage_updated_at = now(), updated_at = now()
 WHERE ch_court_decisions.full_text IS DISTINCT FROM EXCLUDED.full_text
    OR ch_court_decisions.pdf_sha256 IS DISTINCT FROM EXCLUDED.pdf_sha256
    -- The section name is read from the issue now, so a re-cut has to be able
-   -- to correct a label without the text having changed.
+   -- to correct a label without the text having changed; the same for the
+   -- decision date and the metadata (the date reader was fixed, 2026-10-01).
    OR ch_court_decisions.decision_type IS DISTINCT FROM EXCLUDED.decision_type
+   OR ch_court_decisions.decision_date IS DISTINCT FROM EXCLUDED.decision_date
+   OR ch_court_decisions.metadata_json IS DISTINCT FROM EXCLUDED.metadata_json
 RETURNING (xmax = 0) AS inserted,
           (SELECT full_text FROM ch_court_decisions o WHERE o.ecli = %(ecli)s) IS DISTINCT FROM %(full_text)s AS text_changed
 """
