@@ -56,3 +56,33 @@ def test_page_furniture_and_broken_words_are_gone_from_a_passage():
     assert "RPW/DPC" not in out and "COO." not in out and "\n46\n" not in out
     assert "Wettbewerbsbeschränkung" in out and "Vertikalleitlinien und" in out
     assert "Herstellungs- oder Vertriebskosten" in out
+
+
+def test_a_short_journal_passage_is_read_column_by_column():
+    pad = " " * 62
+    raw = "\n".join([
+        pad + "dann wirtschaftlich sinnvoll gewesen, wenn mit dem Ver-",
+        "Kriterium der Erheblichkeit nach Art. 5 Abs. 1 KG. Vor-",
+        pad + "trieb eine Marge erwirtschaftet werden konnte.",
+        "liegend sind keine Elemente ersichtlich, welche auf eine",
+        "vertikalen Preisabreden zwischen Husqvarna und ih-          74. Der temporäre Schutz von",
+        pad + "abreden können für einen Hersteller, der ein neues Pro-",
+        "B.4.4. Rechtfertigung aus Effizienzgründen",
+        pad + "dukt auf den Markt bringen will, hilfreich sein."])
+    out = packet.readable("CH_WEKO_RPW", raw)
+    assert "neues Produkt auf den Markt" in out
+    assert "Vorliegend sind keine Elemente" in out
+
+
+def test_the_reading_window_finds_the_passage_in_reading_order_text():
+    clean = ("Vertikale Preisabreden können für einen Hersteller, der ein neues Produkt auf den Markt "
+             "bringen will, hilfreich sein, um in der Einführungsphase die Händler zu gewinnen. "
+             "B.4.4. Rechtfertigung aus Effizienzgründen 70. Wettbewerbsabreden sind gemäss Art. 5 "
+             "Abs. 2 KG durch Gründe der wirtschaftlichen Effizienz gerechtfertigt, wenn sie notwendig sind.")
+    layout = ("abreden können für einen Hersteller, der ein neues Pro-\n"
+              "B.4.4. Rechtfertigung aus Effizienzgründen\n"
+              "dukt auf den Markt bringen will, hilfreich sein, um in der\n"
+              "70. Wettbewerbsabreden sind gemäss Art. 5 Abs. 2 KG")
+    w = packet.reading_window(clean, layout)
+    assert w and "ein neues Produkt auf den Markt bringen will" in w
+    assert packet.reading_window(clean, "Ganz anderer Text über Fusionskontrolle " * 6) is None

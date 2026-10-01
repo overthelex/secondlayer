@@ -39,11 +39,13 @@ from __future__ import annotations
 import argparse
 import collections
 import difflib
+import functools
 import itertools
 import json
 import pathlib
 import random
 import re
+import subprocess
 import sys
 from datetime import date
 
@@ -161,6 +163,8 @@ SELECT a.ecli, a.spider, a.docket_number, a.rpw_chapter,
        c.metadata_json->'rpw'->>'section_name' AS section_name,
        c.metadata_json->'rpw'->>'same_as'      AS same_as,
        c.metadata_json->>'Sprache'             AS lang,
+       (c.metadata_json->'rpw'->>'pdf_page')::int        AS pdf_page,
+       c.metadata_json->'rpw'->'journal_pages'           AS journal_pages,
        left(a.full_text, 600)                  AS opening
   FROM ch_weko_audit_corpus a JOIN ch_court_decisions c USING (ecli)
 """
@@ -267,6 +271,106 @@ _FURNITURE = re.compile(
     r"|Seite \d+ von \d+)\s*$")
 
 
+ISSUES = pathlib.Path("/data/ch-corpus/raw/CH_WEKO_RPW/issues")
+
+
+@functools.lru_cache(maxsize=256)
+def journal_pages_text(issue_key: str, first: int, last: int) -> str:
+    """The decision's pages of the journal issue, in reading order.
+
+    pdftotext WITHOUT -layout follows the columns; the stored full text was
+    extracted with -layout, and a 1,200-character window of a two-column page
+    holds pieces of both columns that do not join. Even split at the column
+    edge, such a window reads "... nach Art. 5" / "bestimmte Waren ...".
+    """
+    pdf = ISSUES / f"RPW_{issue_key}.pdf"
+    if not pdf.exists():
+        return ""
+    out = subprocess.run(["pdftotext", "-f", str(first), "-l", str(last), str(pdf), "-"],
+                         capture_output=True, text=True, timeout=120).stdout
+    lines = [ln for ln in out.splitlines() if not _FURNITURE.match(ln)]
+    return dehyphenate("\n".join(lines))
+
+
+def reading_window(clean: str, passage: str) -> str | None:
+    """The stretches of the reading-order text that hold the passage.
+
+    A layout window of a two-column page holds two pieces that lie far apart
+    in reading order (the bottom of the left column, the top of the right),
+    so the passage is found as up to two dense runs of its word 4-grams.
+    Each run is shown with a few words of margin, in reading order, joined
+    by "[…]". None when the densest run holds fewer than a fifth of the
+    passage's 4-grams (at least 8).
+    """
+    tokens = [(m.group(0).lower(), m.start(), m.end()) for m in re.finditer(r"[^\W\d_]+|\d+", clean)]
+    pw = [w.lower() for w in re.findall(r"[^\W\d_]+|\d+", dehyphenate(two_columns(passage)))]
+    if len(pw) < 20 or len(tokens) < 20:
+        return None
+    grams = {tuple(pw[i:i + 4]) for i in range(len(pw) - 3)}
+    hits = [i for i in range(len(tokens) - 3)
+            if tuple(t[0] for t in tokens[i:i + 4]) in grams]
+    need = max(8, len(grams) / 5)
+
+    def densest(hs: list[int]) -> tuple[int, int, int]:
+        """(count, first, last) of the densest run: neighbours within 12 tokens."""
+        best = (0, 0, 0)
+        i = 0
+        while i < len(hs):
+            j = i
+            while j + 1 < len(hs) and hs[j + 1] - hs[j] <= 12:
+                j += 1
+            if j - i + 1 > best[0]:
+                best = (j - i + 1, hs[i], hs[j])
+            i = j + 1
+        return best
+
+    first = densest(hits)
+    if first[0] < need:
+        return None
+    runs = [first]
+    rest = [h for h in hits if not first[1] - 12 <= h <= first[2] + 12]
+    second = densest(rest)
+    if second[0] >= max(8, need / 2):
+        runs.append(second)
+    pieces = []
+    for _, lo, hi in sorted(runs, key=lambda r: r[1]):
+        a = max(0, lo - 8)
+        b = min(len(tokens) - 1, hi + 3 + 8)
+        pieces.append(clean[tokens[a][1]:tokens[b][2]])
+    return "\n[…]\n".join(pieces)
+
+
+def two_columns(text: str) -> str:
+    """A journal passage in column order: the left column, then the right.
+
+    chpipe.rpw.reading_order finds the column edge from lines where both
+    columns stand side by side, and wants five of them. A 1,200-character
+    passage often has fewer: in the first v3 packet 62 journal passages still
+    read across the columns ("ein neues Pro- B.4.4. Rechtfertigung ... dukt
+    auf den Markt"). Here the lines that carry only the right column count as
+    well -- they start at the edge after a run of indentation -- and three
+    observations are enough when they agree."""
+    lines = text.splitlines()
+    starts: collections.Counter = collections.Counter()
+    for line in lines:
+        m = re.match(r"^( {25,})\S", line)
+        if m and 30 <= len(m.group(1)) <= 95:
+            starts[len(m.group(1))] += 1
+            continue
+        for g in re.finditer(r"\S\s{3,}(?=\S)", line):
+            if 30 <= g.end() <= 95:
+                starts[g.end()] += 1
+    if not starts:
+        return text
+    edge = max(starts, key=lambda c: sum(starts[c + d] for d in range(-2, 3)))
+    if sum(starts[edge + d] for d in range(-2, 3)) < 3:
+        return text
+    split = edge - 2
+    left = [ln[:split].rstrip() for ln in lines]
+    right = [ln[split:].strip() for ln in lines]
+    return "\n".join(x for x in left if x.strip()) + "\n" + "\n".join(x for x in right if x)
+
+
 def readable(spider: str, text: str) -> str:
     """What the reader and the judge see of a passage, measured clean on
     2026-10-01: in the first v2 packet 78% of passages carried words broken
@@ -274,7 +378,7 @@ def readable(spider: str, text: str) -> str:
     the journal's running header and 8% footnote calls glued to words.
     Journal passages are put in column order first."""
     if spider == "CH_WEKO_RPW":
-        text = rpw.reading_order(text, max_lines=10_000)
+        text = two_columns(text)
     lines = [ln for ln in text.splitlines() if not _FURNITURE.match(ln)]
     text = dehyphenate("\n".join(lines))
     text = re.sub(r"[ \t]{2,}", " ", text)
@@ -368,6 +472,22 @@ def pool(conn, index, meta, family, text: str, query: np.ndarray,
     return chosen, stats
 
 
+def view(m: dict, body: str) -> tuple[str, str]:
+    """(text, how) for the reader: a journal passage from the issue in
+    reading order where it can be found there, else its stored text."""
+    if m["spider"] == "CH_WEKO_RPW" and m.get("pdf_page") and m.get("journal_pages"):
+        first = m["pdf_page"]
+        pages = m["journal_pages"]
+        last = first + (pages[-1] - pages[0] if len(pages) > 1 else 0)
+        window = reading_window(journal_pages_text(m["issue_key"], first, last), body)
+        if window:
+            window = "\n".join(ln for ln in window.splitlines() if not _FURNITURE.match(ln))
+            text = re.sub(r"[ \t]{2,}", " ", window)
+            text = _NOTE_CALL.sub("", _SPACED_HYPHEN.sub(r"\1\2", text))
+            return text.strip(), "issue_reading_order"
+    return readable(m["spider"], body), "stored"
+
+
 def evidence(r: dict, meta: dict, vdate: date | None, cited: set[str]) -> dict:
     m = meta[r["ecli"]]
     exact, bound = m["date_exact"], m["date_upper_bound"]
@@ -390,7 +510,8 @@ def evidence(r: dict, meta: dict, vdate: date | None, cited: set[str]) -> dict:
         "after_version": after,
         "recital_share": r["recital_share"], "recital": r["recital_share"] >= RECITAL,
         "cites_this": r["ecli"] in cited,
-        "text": readable(m["spider"], r["body"])[:1800],
+        "text": view(m, r["body"])[0][:1800],
+        "text_view": view(m, r["body"])[1],
     }
 
 

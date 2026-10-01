@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
+import hashlib
 import json
 import os
 import pathlib
@@ -35,6 +36,7 @@ import random
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -82,7 +84,11 @@ def prompt(protocol: str, item: dict, order: list[int]) -> tuple[str, str]:
     return TASK + "\n\n=== PROTOCOL ===\n" + protocol, "\n".join(parts)
 
 
-def ask_azure(model: str, system: str, user: str, key: str, tries: int = 5) -> tuple[str, dict]:
+class JudgeFailed(Exception):
+    """One proposition could not be judged; recorded as an error row, the run goes on."""
+
+
+def ask_azure(model: str, system: str, user: str, key: str, tries: int = 10) -> tuple[str, dict]:
     body = json.dumps({"model": model, "max_completion_tokens": 6000,
                        "messages": [{"role": "system", "content": system},
                                     {"role": "user", "content": user}]}).encode()
@@ -97,13 +103,28 @@ def ask_azure(model: str, system: str, user: str, key: str, tries: int = 5) -> t
         except urllib.error.HTTPError as e:
             last = e.read().decode("utf-8", "replace")[:300]
             if e.code in (408, 429, 500, 502, 503, 504):
-                time.sleep(10 * (attempt + 1))
+                # a 429 says how long to wait; the token-rate limit of a small
+                # deployment ended the first DeepSeek run at 17 of 58
+                wait = e.headers.get("retry-after") if e.headers else None
+                time.sleep(max(float(wait) if wait and wait.isdigit() else 0, 15 * (attempt + 1)))
                 continue
-            raise SystemExit(f"azure HTTP {e.code}: {last}")
+            raise JudgeFailed(f"azure HTTP {e.code}: {last}")
         except Exception as e:  # noqa: BLE001 - the network
             last = repr(e)
-            time.sleep(10 * (attempt + 1))
-    raise SystemExit(f"azure: out of retries: {last}")
+            time.sleep(15 * (attempt + 1))
+    raise JudgeFailed(f"azure: out of retries: {last}")
+
+
+# A bare `claude -p` is not a bare model call. Measured 2026-10-01: with only
+# --system-prompt and --tools "" each judge call still carried ~100K tokens of
+# context -- a plugin's SessionStart hook ("You have superpowers ..."), ~250
+# MCP tool definitions, skills. Without settings, MCP, skills and session
+# persistence, and from an empty directory (no CLAUDE.md, no auto-memory), what
+# remains is ~400 tokens of neutral environment lines (date, OS, model name).
+CLAUDE_CLEAN = ["--tools", "", "--setting-sources", "", "--strict-mcp-config",
+                "--disable-slash-commands", "--no-session-persistence"]
+# Allowed overhead above our own prompt before an answer counts as contaminated.
+CLAUDE_OVERHEAD_TOKENS = 1500
 
 
 def ask_claude(model: str, system: str, user: str, tries: int = 3) -> tuple[str, dict]:
@@ -111,19 +132,27 @@ def ask_claude(model: str, system: str, user: str, tries: int = 3) -> tuple[str,
     # On a machine where `claude` is logged in, its own login is used.
     last = ""
     for attempt in range(tries):
-        p = subprocess.run(
-            ["claude", "-p", "--model", model, "--output-format", "json",
-             "--system-prompt", system, "--tools", ""],
-            input=user, capture_output=True, text=True, timeout=900)
+        with tempfile.TemporaryDirectory(prefix="vbjudge-") as cwd:
+            p = subprocess.run(
+                ["claude", "-p", "--model", model, "--output-format", "json",
+                 "--system-prompt", system, *CLAUDE_CLEAN],
+                input=user, capture_output=True, text=True, timeout=900, cwd=cwd)
         if p.returncode == 0:
             d = json.loads(p.stdout)
             if not d.get("is_error"):
-                return d.get("result", ""), d.get("usage", {})
+                u = d.get("usage", {})
+                seen = (u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
+                        + u.get("cache_read_input_tokens", 0))
+                ours = int((len(system) + len(user)) / 2.5)    # German legal text: ~2.5-3 chars a token
+                if seen > ours + CLAUDE_OVERHEAD_TOKENS:
+                    raise SystemExit(f"claude: {seen} input tokens for a ~{ours}-token prompt: "
+                                     "context was injected; refusing the answer")
+                return d.get("result", ""), u
             last = d.get("result", "")[:300]
         else:
             last = (p.stderr or p.stdout)[:300]
         time.sleep(30 * (attempt + 1))
-    raise SystemExit(f"claude: out of retries: {last}")
+    raise JudgeFailed(f"claude: out of retries: {last}")
 
 
 def parse(text: str) -> dict:
@@ -142,11 +171,19 @@ def judge_one(item: dict, args, protocol: str, key: str | None) -> dict:
     if args.shuffle is not None:
         random.Random(f"{args.shuffle}:{item['version']}:{item['pid']}").shuffle(order)
     system, user = prompt(protocol, item, order)
+    assert "=== PROTOCOL ===" in system and protocol in system
     t0 = time.time()
-    if args.provider == "azure":
-        text, usage = ask_azure(args.model, system, user, key)
-    else:
-        text, usage = ask_claude(args.model, system, user)
+    try:
+        if args.provider == "azure":
+            text, usage = ask_azure(args.model, system, user, key)
+        else:
+            text, usage = ask_claude(args.model, system, user)
+    except JudgeFailed as e:
+        # no labels: written as an error row, which a rerun picks up again
+        return {"version": item["version"], "pid": item["pid"], "kind": item["kind"],
+                "provider": args.provider, "model": args.model, "shuffle": args.shuffle,
+                "label": None, "passages": [], "error": str(e), "usage": {},
+                "seconds": round(time.time() - t0, 1), "raw": ""}
     try:
         got = {int(p["n"]): p for p in parse(text)["passages"]}
         error = None
@@ -165,6 +202,7 @@ def judge_one(item: dict, args, protocol: str, key: str | None) -> dict:
     return {"version": item["version"], "pid": item["pid"], "kind": item["kind"],
             "provider": args.provider, "model": args.model, "shuffle": args.shuffle,
             "label": None if None in labels else proposition_label(labels),
+            "system_sha256": hashlib.sha256(system.encode()).hexdigest(),
             "passages": passages, "error": error, "usage": usage,
             "seconds": round(time.time() - t0, 1), "raw": text if error else ""}
 
