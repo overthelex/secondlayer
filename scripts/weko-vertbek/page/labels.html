@@ -129,6 +129,28 @@
   .btn { font: 500 13px var(--sans); cursor: pointer; padding: 8px 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
   .btn:hover { border-color: var(--ink-3); }
   .status { font-size: 12.5px; color: var(--ink-3); padding: 10px 20px; border-top: 1px solid var(--line); background: var(--surface); }
+
+  .help-btn { font: 500 12.5px var(--sans); cursor: pointer; padding: 5px 11px; border-radius: 4px;
+              border: 1px solid var(--accent); background: var(--surface); color: var(--accent); }
+  .help-btn:hover { background: var(--surface-2); }
+  .guide-back { position: fixed; inset: 0; background: rgba(10, 12, 15, .45); z-index: 40; display: none; }
+  .guide-back.open { display: block; }
+  .guide { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); z-index: 41;
+           background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto;
+           padding: 22px 26px 60px; transform: translateX(100%); transition: transform .2s; }
+  .guide.open { transform: none; }
+  @media (max-width: 860px) { .guide { padding: 18px 16px 48px; } }
+  .guide h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .guide h3 { font-size: 14px; margin: 22px 0 6px; color: var(--ink); }
+  .guide p, .guide li { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+  .guide ol, .guide ul { padding-left: 20px; margin: 6px 0; }
+  .guide code, .guide kbd { font: 12px var(--mono); background: var(--surface-2); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+  .guide .ex { border-left: 3px solid var(--line); padding: 4px 10px; margin: 8px 0; font-family: var(--serif);
+               font-size: 13.5px; color: var(--ink-2); }
+  .guide table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  .guide td, .guide th { border-bottom: 1px solid var(--line-soft); padding: 6px 8px; text-align: left; vertical-align: top; color: var(--ink-2); }
+  .guide th { color: var(--ink); font-weight: 600; }
+  .guide .close { position: sticky; top: 0; float: right; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -136,6 +158,7 @@
 <div class="top">
   <h1>Vertikalbekanntmachung — Befundprüfung</h1>
   <span class="sub" id="sub">Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <button class="help-btn" id="help">Как размечать</button>
   <div class="progress"><span id="count">0 / 58</span><span class="bar"><i id="barfill"></i></span></div>
 </div>
 
@@ -143,6 +166,105 @@
   <nav class="rail" id="rail" aria-label="Sätze"></nav>
   <main class="main" id="main"></main>
 </div>
+
+<div class="guide-back" id="guide-back"></div>
+<aside class="guide" id="guide" role="dialog" aria-label="Инструкция по разметке">
+  <button class="btn close" id="guide-close">Закрыть ✕</button>
+  <h2>Как размечать</h2>
+  <p>Протокол заморожен 01.10.2026. Те же правила получили три модели-судьи; если правило покажется
+  неполным, не дополняйте его по ходу — запишите сомнение в поле «Begründung», протокол меняется только целиком
+  и с переразметкой всего.</p>
+
+  <h3>1. Что перед вами</h3>
+  <p>Сверху — <b>положение</b> швейцарского уведомления WEKO о вертикальных соглашениях (Bekanntmachung или
+  Erläuterungen, версия указана в чипе). Ниже — <b>восемь фрагментов</b> из восьми разных решений: WEKO и её
+  секретариат, федеральные суды, кантональные суды, иногда другие ведомства. Под фрагментом подписаны суд, номер дела,
+  дата (или «≤ дата», если известна только верхняя граница по выпуску журнала), режим закона (KG 1985 / 1995 / 2003)
+  и, если решение вынесено после этой версии уведомления, красная пометка «nach der Fassung».</p>
+  <p>Вопрос к каждому фрагменту один: <b>видно ли в нём, что правило из положения использовано, чтобы что-то
+  решить?</b></p>
+
+  <h3>2. Порядок: сначала фрагменты, потом метка</h3>
+  <ol>
+    <li>Прочитайте положение целиком. Определите, какое <i>правило</i> оно формулирует (не тему, а правило).</li>
+    <li>Пройдите восемь фрагментов (раскрываются кликом). Для каждого мысленно ответьте по вопросам из п. 3.</li>
+    <li>Фрагменты, где правило <b>применено целиком или частично</b>, отметьте кнопкой <b>«stützt den Satz»</b>.</li>
+    <li>Поставьте метку положения по таблице из п. 4 (клавиши <kbd>1</kbd>–<kbd>4</kbd>).</li>
+    <li>Если сомневались или нашли противоречие — одна строка в «Begründung».</li>
+  </ol>
+
+  <h3>3. Вопросы к фрагменту — по порядку, до первого «да»</h3>
+  <ol>
+    <li><b>Фрагмент вообще про предмет этого положения?</b> Нет → <i>не про это</i>.</li>
+    <li><b>С правилом что-то делают, кроме пересказа?</b> Нет → <i>только цитирует</i>.</li>
+    <li><b>Решение идёт против правила</b> (принимает противоположное правило)? Да → <i>противоречит</i> — запишите в Begründung, это отдельная находка.</li>
+    <li><b>Использована только часть положения или соседнее правило?</b> Да → <i>частично</i>.</li>
+    <li>Иначе → <i>применяет</i>.</li>
+  </ol>
+  <table>
+    <tr><th>Фрагмент</th><th>Что это значит</th><th>«stützt»?</th></tr>
+    <tr><td><b>применяет</b></td><td>правило приложено к фактам, из него выведено следствие, по нему проверяют поведение стороны или ведомства, на нём держится мотивировка. Можно своими словами и без ссылки на уведомление.</td><td>да</td></tr>
+    <tr><td><b>частично</b></td><td>использована часть положения, или более узкое/соседнее правило, покрывающее часть.</td><td>да</td></tr>
+    <tr><td><b>противоречит</b></td><td>решение принимает правило, противоположное положению, или отказывается его применять там, где оно претендует на применение.</td><td>нет</td></tr>
+    <tr><td><b>только цитирует</b></td><td>положение пересказано, процитировано или упомянуто в перечне норм — и дальше ничего.</td><td>нет</td></tr>
+    <tr><td><b>не про это</b></td><td>другой предмет; другое правило того же уведомления; то же слово в другом правовом вопросе.</td><td>нет</td></tr>
+  </table>
+
+  <h3>4. Метка положения — выводится, а не выбирается по ощущению</h3>
+  <table>
+    <tr><th>Клавиша</th><th>Метка</th><th>Когда</th></tr>
+    <tr><td><kbd>1</kbd></td><td><b>gestützt</b> (supported)</td><td>хотя бы один фрагмент <i>применяет</i> правило</td></tr>
+    <tr><td><kbd>2</kbd></td><td><b>Bruchstück</b> (fragment)</td><td>ни один не применяет, но хотя бы один — <i>частично</i></td></tr>
+    <tr><td><kbd>4</kbd></td><td><b>nur zitiert</b> (recites)</td><td>ни применения, ни частичного; хотя бы один фрагмент <i>только цитирует</i></td></tr>
+    <tr><td><kbd>3</kbd></td><td><b>nicht belegt</b> (absent)</td><td>все фрагменты <i>не про это</i> или <i>противоречат</i></td></tr>
+  </table>
+  <p>Фрагмент, который противоречит, никогда не поддерживает положение. Повторное нажатие той же клавиши снимает
+  метку. <kbd>j</kbd>/<kbd>k</kbd> или стрелки — следующий/предыдущий.</p>
+
+  <h3>5. Где чаще всего ошибаются</h3>
+  <ul>
+    <li><b>Следствие может быть одним придаточным.</b>
+      <div class="ex">«… weshalb die Abrede als qualitativ schwerwiegend gilt»</div>
+      после пересказа правила — это <i>применяет</i>, длина не важна.</li>
+    <li><b>Совпадение темы — не применение.</b> Фрагмент про селективную дистрибуцию не поддерживает положение
+      об <i>условиях</i> селективной дистрибуции, пока эти условия не использованы.</li>
+    <li><b>Суд проверяет WEKO по правилу</b> (в т. ч. находит нарушение) — это <i>применяет</i>: правило служит мерилом.
+      <i>Противоречит</i> — только когда принято противоположное правило.</li>
+    <li><b>То же слово, другой вопрос:</b> Geschäftsgeheimnis в деле о доступе к документам (BGÖ) ≠ Know-how в
+      вертикальном соглашении → <i>не про это</i>. Ограничения конкуренции при слиянии (Nebenabreden) ≠ вертикальный
+      запрет конкуренции → <i>не про это</i>.</li>
+    <li><b>Положение повторяет абзац Art. 5 KG</b> → фрагмент, применяющий этот абзац, <i>применяет</i>.</li>
+    <li><b>Нормы, которой ещё не было.</b> Решение до 01.04.2004 не может применить Art. 5 Abs. 4 KG и прямые санкции.
+      Если оно приходит к похожему результату через другую норму → <i>частично</i>.</li>
+    <li><b>Дата и режим — для справки, не для метки.</b> Фрагмент «nach der Fassung» размечается по тому, что он делает;
+      временная ось считается потом автоматически.</li>
+  </ul>
+
+  <h3>6. Особенности текста</h3>
+  <ul>
+    <li>Фрагменты — окна ~1 200 знаков: могут начинаться и обрываться на полуслове. Судите по видимому; если видимого
+      мало, чтобы сказать, — <i>не про это</i>, а не догадка.</li>
+    <li>Фрагменты журнала RPW взяты из PDF выпуска в порядке чтения; «[…]» между двумя кусками означает пропуск
+      внутри страницы. «[…]» внутри предложения — изъятая коммерческая тайна; судите по рассуждению вокруг.</li>
+    <li>Фрагмент может быть на французском или итальянском — правило то же.</li>
+    <li>Сноски внутри фрагмента — часть текста решения; ссылка на уведомление в сноске сама по себе не применение.</li>
+  </ul>
+
+  <h3>7. Что значат чипы «strittig» и «Stichprobe»</h3>
+  <p><b>strittig</b> — судьи не сошлись (или один не ответил): ваша метка решает. <b>Stichprobe</b> — судьи
+  сошлись, но позиция выбрана случайно для слепой проверки: по этим позициям считается, насколько можно доверять
+  их большинству на остальных. Размечайте одинаково, не угадывая, «что сказали судьи».</p>
+  <p>Ответы судей (метка, причина, цитата) появляются <b>только после вашей метки</b> — чтобы они не подталкивали.
+  Если после них вы меняете мнение, меняйте метку и пишите почему в Begründung: так видно, где судьи вас переубедили.</p>
+
+  <h3>8. Когда не уверены</h3>
+  <p>Выбирайте более слабую метку: <i>частично</i> вместо <i>применяет</i>, <i>не про это</i> вместо <i>частично</i>.
+  Выдуманное применение вредит больше пропущенного. Одна строка сомнения в Begründung полезнее точной метки без неё.</p>
+
+  <h3>9. Сохранение</h3>
+  <p>Метка, отмеченные фрагменты и Begründung сохраняются сразу (статус под кнопками). Прогресс — вверху справа.
+  Можно прерываться в любой момент и возвращаться.</p>
+</aside>
 <div class="status" id="status">Bewertungen werden lokal gehalten, bis der Speicher antwortet.</div>
 
 <script id="packet" type="application/json">__PACKET__</script>
@@ -303,6 +425,7 @@
   });
   document.addEventListener("keydown", function (e) {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (document.getElementById("guide") && document.getElementById("guide").classList.contains("open")) return;
     if (e.key === "1") setLabel("supported");
     else if (e.key === "2") setLabel("fragment");
     else if (e.key === "3") setLabel("absent");
@@ -313,6 +436,21 @@
     e.preventDefault();
   });
 
+
+  function openGuide(on) {
+    document.getElementById("guide").classList.toggle("open", on);
+    document.getElementById("guide-back").classList.toggle("open", on);
+    if (!on) { try { localStorage.setItem("vb-guide-seen", "1"); } catch (e) {} }
+  }
+  document.getElementById("help").addEventListener("click", function () { openGuide(true); });
+  document.getElementById("guide-close").addEventListener("click", function () { openGuide(false); });
+  document.getElementById("guide-back").addEventListener("click", function () { openGuide(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") openGuide(false);
+  });
+  var seen = false;
+  try { seen = localStorage.getItem("vb-guide-seen") === "1"; } catch (e) {}
+  if (!seen) openGuide(true);
   document.getElementById("sub").textContent = DATA.length +
     " Sätze zum Lesen (strittig oder Stichprobe), je acht Fundstellen; die Richter erscheinen nach Ihrer Bewertung";
   go(0); progress();
