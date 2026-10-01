@@ -14,6 +14,7 @@
     --supported: #1d7a56;
     --fragment: #a06c0c;
     --absent: #6b7280;
+    --recites: #5b5bd6;
     --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
     --serif: "IBM Plex Serif", Georgia, serif;
     --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
@@ -23,14 +24,14 @@
       --ground: #101215; --surface: #181b1f; --surface-2: #1f2328;
       --line: #2c3137; --line-soft: #23272c;
       --ink: #e8eaed; --ink-2: #aab1b9; --ink-3: #7d858e;
-      --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c;
+      --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c; --recites: #9b9bf0;
     }
   }
   :root[data-theme="dark"] {
     --ground: #101215; --surface: #181b1f; --surface-2: #1f2328;
     --line: #2c3137; --line-soft: #23272c;
     --ink: #e8eaed; --ink-2: #aab1b9; --ink-3: #7d858e;
-    --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c;
+    --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c; --recites: #9b9bf0;
   }
   * { box-sizing: border-box; }
   body { background: var(--ground); color: var(--ink); font-family: var(--sans); margin: 0; }
@@ -69,6 +70,7 @@
   .dot.supported { background: var(--supported); }
   .dot.fragment { background: var(--fragment); }
   .dot.absent { background: var(--absent); }
+  .dot.recites { background: var(--recites); }
 
   .main { padding: 22px 24px 60px; max-width: 900px; }
   @media (max-width: 860px) { .main { padding: 18px 16px 48px; } }
@@ -94,6 +96,13 @@
   .lab[data-v="supported"][aria-pressed="true"] { background: var(--supported); }
   .lab[data-v="fragment"][aria-pressed="true"] { background: var(--fragment); }
   .lab[data-v="absent"][aria-pressed="true"] { background: var(--absent); }
+  .lab[data-v="recites"][aria-pressed="true"] { background: var(--recites); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tag { font: 400 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 5px; }
+  .tag.late { color: var(--accent); border-color: var(--accent); }
+  .use { font: 500 12px var(--sans); cursor: pointer; margin: 0 14px 12px; padding: 5px 10px; border-radius: 4px;
+         border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+  .use[aria-pressed="true"] { background: var(--supported); border-color: transparent; color: #fff; }
   .note { width: 100%; font: 400 13.5px var(--sans); color: var(--ink); background: var(--surface);
           border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px; margin-top: 8px; resize: vertical; min-height: 44px; }
   .saved { font-size: 12px; color: var(--ink-3); min-height: 16px; margin-top: 6px; }
@@ -120,8 +129,8 @@
 
 <div class="top">
   <h1>Vertikalbekanntmachung — Befundprüfung</h1>
-  <span class="sub">50 Sätze aus fünf Fassungen, je acht Fundstellen aus 2 828 Entscheiden</span>
-  <div class="progress"><span id="count">0 / 50</span><span class="bar"><i id="barfill"></i></span></div>
+  <span class="sub">58 Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <div class="progress"><span id="count">0 / 58</span><span class="bar"><i id="barfill"></i></span></div>
 </div>
 
 <div class="wrap">
@@ -138,13 +147,16 @@
   var LABELS = [
     { v: "supported", de: "gestützt", hint: "Eine Behörde wendet den Satz als Regel an" },
     { v: "fragment", de: "Bruchstück", hint: "Nur ein Teil, beiläufig oder zitiert ohne Anwendung" },
-    { v: "absent", de: "nicht belegt", hint: "Im Bestand nichts dazu" }
+    { v: "absent", de: "nicht belegt", hint: "Im Bestand nichts dazu" },
+    { v: "recites", de: "nur zitiert", hint: "Der Bestand wiederholt den Satz, wendet ihn aber nicht an" }
   ];
+  var SOURCE = { agency: "WEKO", merger: "WEKO Fusion", court: "Bundesgericht", cantonal: "kantonal", other: "andere Behörde" };
   var VERSIONS = {
     "2002-02-18": "Bekanntmachung 2002",
     "2010-06-28": "Bekanntmachung 2010",
     "2022-12-12": "Bekanntmachung 2022",
-    "2022-12-12-erl": "Erläuterungen 2022"
+    "2022-12-12-erl": "Erläuterungen 2022",
+    "control": "Weitere Sätze"
   };
   var state = Object.create(null);   // key -> {label, note}
   var current = 0;
@@ -172,12 +184,22 @@
 
   function renderMain() {
     var d = DATA[current], st = state[key(d)] || {};
+    var used = st.evidence || [];
     var ev = d.evidence.map(function (e, n) {
+      var when = e.date ? e.date : (e.date_upper_bound ? "≤ " + e.date_upper_bound : "ohne Datum");
+      var tags = '<span class="tag">' + esc(SOURCE[e.source] || e.source) + "</span>" +
+        '<span class="tag">' + esc(when) + "</span>" +
+        (e.regime ? '<span class="tag">' + esc((e.regime_exact ? "" : "≤ ") + e.regime) + "</span>" : "") +
+        (e.after_version ? '<span class="tag late">nach der Fassung</span>' : "") +
+        (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "");
+      var on = used.indexOf(e.ecli) >= 0;
       return '<details class="ev"' + (n === 0 ? " open" : "") + ">" +
         "<summary><span><span class=\"who\">" + esc(e.docket || e.ecli) + "</span><br>" +
-        '<span class="src">' + esc(e.spider || "") + (e.date ? " · " + esc(e.date) : "") + "</span></span>" +
+        '<span class="src">' + esc(e.spider || "") + '</span><span class="tags">' + tags + "</span></span>" +
         '<span class="score">' + e.score.toFixed(3) + "</span></summary>" +
-        '<div class="body">' + esc(e.text) + "</div></details>";
+        '<div class="body">' + esc(e.text) + "</div>" +
+        '<button class="use" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
+        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button></details>";
     }).join("");
 
     document.getElementById("main").innerHTML =
@@ -192,13 +214,20 @@
       }).join("") + "</div>" +
       '<textarea class="note" id="note" placeholder="Begründung, Fundstelle, Zweifel — optional">' + esc(st.note || "") + "</textarea>" +
       '<div class="saved" id="saved">' + (st.label ? "gespeichert" : "") + "</div>" +
-      '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen, bester Treffer je Entscheid</span></div>' +
+      '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst</span></div>' +
       ev +
       '<div class="foot"><button class="btn" id="prev">← zurück</button>' +
       '<button class="btn" id="next">weiter →</button></div>';
 
     document.querySelectorAll(".lab").forEach(function (b) {
       b.addEventListener("click", function () { setLabel(b.getAttribute("data-v")); });
+    });
+    document.querySelectorAll(".use").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var e = b.getAttribute("data-ecli"), list = (state[key(DATA[current])] || {}).evidence || [];
+        list = list.indexOf(e) >= 0 ? list.filter(function (x) { return x !== e; }) : list.concat([e]);
+        save({ evidence: list });
+      });
     });
     var note = document.getElementById("note"), t;
     note.addEventListener("input", function () {
@@ -230,14 +259,14 @@
 
   function save(patch) {
     var d = DATA[current], k = key(d);
-    var st = state[k] = Object.assign({ label: "", note: "" }, state[k], patch);
+    var st = state[k] = Object.assign({ label: "", note: "", evidence: [] }, state[k], patch);
     renderRail(); renderMain(); progress();
     var saved = document.getElementById("saved");
     if (!db) { if (saved) saved.textContent = "nur in diesem Fenster — kein Speicher"; return; }
     if (saved) saved.textContent = "speichert …";
     db.doc("labels/" + k).set({
       version: d.version, pid: d.pid, part: d.part, heading: d.heading || "",
-      label: st.label, note: st.note, updatedAt: new Date().toISOString()
+      label: st.label, note: st.note, evidence: st.evidence, updatedAt: new Date().toISOString()
     }).then(function () {
       var s = document.getElementById("saved");
       if (s) s.textContent = st.label ? "gespeichert" : "gelöscht";
@@ -256,6 +285,7 @@
     if (e.key === "1") setLabel("supported");
     else if (e.key === "2") setLabel("fragment");
     else if (e.key === "3") setLabel("absent");
+    else if (e.key === "4") setLabel("recites");
     else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
     else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
     else return;
@@ -275,11 +305,11 @@
       store.collection("labels").get().then(function (snap) {
         snap.docs.forEach(function (doc) {
           var v = doc.data() || {};
-          state[doc.id] = { label: v.label || "", note: v.note || "" };
+          state[doc.id] = { label: v.label || "", note: v.note || "", evidence: v.evidence || [] };
         });
         renderRail(); renderMain(); progress();
         document.getElementById("status").textContent =
-          "Gespeichert: " + snap.size + " Bewertungen. Tasten: 1 gestützt, 2 Bruchstück, 3 nicht belegt, j/k blättern.";
+          "Gespeichert: " + snap.size + " Bewertungen. Tasten: 1 gestützt, 2 Bruchstück, 3 nicht belegt, 4 nur zitiert, j/k blättern.";
       }).catch(function () {
         document.getElementById("status").textContent = "Speicher erreichbar, Lesen fehlgeschlagen.";
       });
