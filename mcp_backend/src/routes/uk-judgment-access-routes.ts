@@ -87,11 +87,16 @@ export function createUKJudgmentAccessRoutes(deps: {
           email_domain, domain_is_free_mail, attested_not_lip, attested_at, attested_ip)
        VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7, true, now(), $8)
        ON CONFLICT (user_id) DO UPDATE SET
-         -- A live grant survives re-applying; a lapsed one goes back to review, which
-         -- is how a person renews after 12 months.
+         -- A live grant survives re-applying only if what we verified is unchanged;
+         -- new organisation, role or regulator details go back to review, so the
+         -- record that justified the grant is never silently replaced.
          status = CASE WHEN uk_judgment_access.status = 'granted'
-                            AND uk_judgment_access.expires_at > now() THEN 'granted'
-                       ELSE 'pending' END,
+                            AND uk_judgment_access.expires_at > now()
+                            AND uk_judgment_access.organisation IS NOT DISTINCT FROM EXCLUDED.organisation
+                            AND uk_judgment_access.role_stated IS NOT DISTINCT FROM EXCLUDED.role_stated
+                            AND uk_judgment_access.regulator IS NOT DISTINCT FROM EXCLUDED.regulator
+                            AND uk_judgment_access.regulator_number IS NOT DISTINCT FROM EXCLUDED.regulator_number
+                       THEN 'granted' ELSE 'pending' END,
          organisation = EXCLUDED.organisation,
          role_stated = EXCLUDED.role_stated,
          regulator = EXCLUDED.regulator,
@@ -119,7 +124,7 @@ export function createUKJudgmentAccessRoutes(deps: {
       res.json({
         status,
         expires_at: saved.rows[0].expires_at,
-        note: 'Your access is already granted; your details have been updated.',
+        note: 'Your access is already granted and your details are unchanged.',
       });
       return;
     }

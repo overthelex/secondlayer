@@ -60,6 +60,28 @@ const ALLOWED_FUNCTION_SCANS = new Set([
   'regexp_split_to_table', 'string_to_table', 'regexp_matches',
 ]);
 
+/**
+ * True when a ';' outside string literals and quoted identifiers is followed by more
+ * SQL. 'a;b' inside a literal is data, not a statement break.
+ */
+export function hasSecondStatement(sql: string): boolean {
+  let quote: string | null = null;
+  for (let i = 0; i < sql.length; i++) {
+    const c = sql[i];
+    if (quote) {
+      if (c === quote) {
+        if (sql[i + 1] === quote) i++;      // '' or "" is an escaped quote
+        else quote = null;
+      }
+    } else if (c === "'" || c === '"') {
+      quote = c;
+    } else if (c === ';' && sql.slice(i + 1).trim() !== '') {
+      return true;
+    }
+  }
+  return false;
+}
+
 const FORBIDDEN_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXECUTE|SET\s+(?!LOCAL\s+statement_timeout|TRANSACTION))\b/i;
 
 export class AnalyzeDataTool extends BaseToolHandler {
@@ -190,7 +212,7 @@ export class AnalyzeDataTool extends BaseToolHandler {
 
     // One statement only: the driver runs every statement in a multi-statement string,
     // and only the first would have been checked.
-    if (normalized.trim().replace(/;\s*$/, '').includes(';')) {
+    if (hasSecondStatement(normalized)) {
       return 'Дозволено лише один SQL-оператор.';
     }
 

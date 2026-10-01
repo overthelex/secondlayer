@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { AnalyzeDataTool } from '../tools/analyze-data-tool.js';
+import { AnalyzeDataTool, hasSecondStatement } from '../tools/analyze-data-tool.js';
 
 type QueryCall = { sql: string; params?: any[] };
 
@@ -246,7 +246,7 @@ describe('AnalyzeDataTool', () => {
       ['a quoted identifier', 'SELECT * FROM "users" LIMIT 10', 'users'],
       ['a comma join', 'SELECT * FROM edrsr_documents, users LIMIT 10', 'users'],
       ['a quoted judgment table', 'SELECT full_text FROM "uk_court_decisions" LIMIT 10', 'uk_court_decisions'],
-      ['a system schema', 'SELECT * FROM pg_catalog.pg_authid LIMIT 10', 'pg_catalog'],
+      ['a quoted system schema', 'SELECT * FROM "pg_catalog".pg_authid LIMIT 10', 'pg_catalog'],
     ])('the plan catches %s that the regex misses', async (_label, sql, table) => {
       const db = makeSimpleDb(() => ({ rows: [{ leaked: true }] }));
       tool = new AnalyzeDataTool(db);
@@ -255,6 +255,37 @@ describe('AnalyzeDataTool', () => {
       expect(result?.content[0].text).toContain(table);
       // Only EXPLAIN ran; the query itself never did.
       expect(calls.every((c) => /^EXPLAIN/.test(c.sql))).toBe(true);
+    });
+
+    it('sees tables read by subqueries in SELECT, WHERE and LIMIT (plans nest them under Plans)', async () => {
+      // Shape verified against Postgres 15 EXPLAIN (FORMAT JSON, VERBOSE): InitPlans and
+      // SubPlans are children in Plans, with Parent Relationship / Subplan Name.
+      const db = makeSimpleDb(() => ({ rows: [{ leaked: true }] }));
+      (db.query as jest.Mock).mockImplementation((sql: any) => {
+        calls.push({ sql });
+        if (/^EXPLAIN/.test(sql)) {
+          return Promise.resolve({ rows: [{ 'QUERY PLAN': [{ Plan: {
+            'Node Type': 'Limit', Plans: [
+              { 'Node Type': 'Aggregate', 'Parent Relationship': 'InitPlan', 'Subplan Name': 'InitPlan 1',
+                Plans: [{ 'Node Type': 'Seq Scan', 'Relation Name': 'users', Schema: 'public' }] },
+              { 'Node Type': 'Seq Scan', 'Relation Name': 'edrsr_documents', Schema: 'public' },
+            ] } }] }] });
+        }
+        return Promise.resolve({ rows: [{ leaked: true }] });
+      });
+      tool = new AnalyzeDataTool(db);
+      const result = await tool.executeTool('analyze_data', {
+        sql: 'SELECT (SELECT count(*) FROM "users") FROM edrsr_documents LIMIT 1',
+      });
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0].text).toContain('users');
+      expect(calls.every((c) => /^EXPLAIN/.test(c.sql))).toBe(true);
+    });
+
+    it('a semicolon inside a string literal is data, not a second statement', async () => {
+      expect(hasSecondStatement("SELECT 'a;b' FROM edrsr_documents LIMIT 1")).toBe(false);
+      expect(hasSecondStatement("SELECT 'it''s; fine' FROM edrsr_documents LIMIT 1;")).toBe(false);
+      expect(hasSecondStatement('SELECT 1 FROM edrsr_documents LIMIT 1; SELECT 2')).toBe(true);
     });
 
     it('refuses more than one statement', async () => {
