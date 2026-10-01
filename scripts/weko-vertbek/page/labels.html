@@ -1,0 +1,322 @@
+<title>Vertikalbekanntmachung Audit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+  :root {
+    --ground: #f4f5f6;
+    --surface: #ffffff;
+    --surface-2: #eceef0;
+    --line: #d8dbdf;
+    --line-soft: #e6e8eb;
+    --ink: #16191d;
+    --ink-2: #4a5058;
+    --ink-3: #79818b;
+    --accent: #b3252b;
+    --supported: #1d7a56;
+    --fragment: #a06c0c;
+    --absent: #6b7280;
+    --recites: #5b5bd6;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+    --serif: "IBM Plex Serif", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101215; --surface: #181b1f; --surface-2: #1f2328;
+      --line: #2c3137; --line-soft: #23272c;
+      --ink: #e8eaed; --ink-2: #aab1b9; --ink-3: #7d858e;
+      --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c; --recites: #9b9bf0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101215; --surface: #181b1f; --surface-2: #1f2328;
+    --line: #2c3137; --line-soft: #23272c;
+    --ink: #e8eaed; --ink-2: #aab1b9; --ink-3: #7d858e;
+    --accent: #e4636a; --supported: #4cba8b; --fragment: #d9a340; --absent: #8c939c; --recites: #9b9bf0;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--ground); color: var(--ink); font-family: var(--sans); margin: 0; }
+  a { color: var(--accent); }
+
+  .top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--line);
+  }
+  .top h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .top .sub { color: var(--ink-3); font-size: 12.5px; }
+  .progress { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+  .bar { width: 130px; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+  .wrap { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 0; min-height: 0; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+
+  .rail {
+    border-right: 1px solid var(--line); background: var(--surface);
+    max-height: calc(100vh - 56px); overflow-y: auto; padding-block: 8px;
+  }
+  @media (max-width: 860px) { .rail { max-height: 210px; border-right: 0; border-bottom: 1px solid var(--line); } }
+  .rail-group { padding: 10px 16px 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .item {
+    width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+    display: grid; grid-template-columns: 10px 1fr; gap: 10px; align-items: baseline;
+    padding: 7px 16px; font: inherit; color: var(--ink-2); border-left: 2px solid transparent;
+  }
+  .item:hover { background: var(--surface-2); }
+  .item[aria-current="true"] { background: var(--surface-2); border-left-color: var(--accent); color: var(--ink); }
+  .item .pid { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+  .item .ttl { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); align-self: center; }
+  .dot.supported { background: var(--supported); }
+  .dot.fragment { background: var(--fragment); }
+  .dot.absent { background: var(--absent); }
+  .dot.recites { background: var(--recites); }
+
+  .main { padding: 22px 24px 60px; max-width: 900px; }
+  @media (max-width: 860px) { .main { padding: 18px 16px 48px; } }
+
+  .meta { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
+  .chip { font-family: var(--mono); font-size: 11.5px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-2); }
+  h2.heading { font-family: var(--sans); font-size: 19px; font-weight: 600; margin: 10px 0 2px; letter-spacing: -0.01em; text-wrap: balance; }
+  .prop {
+    font-family: var(--serif); font-size: 16.5px; line-height: 1.62; margin: 12px 0 0;
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    padding: 16px 18px; border-radius: 3px;
+  }
+
+  .labels { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 6px; }
+  .lab {
+    font: 500 13px var(--sans); cursor: pointer; padding: 8px 14px; border-radius: 4px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .lab kbd { font: 400 10.5px var(--mono); color: var(--ink-3); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+  .lab:hover { border-color: var(--ink-3); }
+  .lab[aria-pressed="true"] { color: #fff; border-color: transparent; }
+  .lab[data-v="supported"][aria-pressed="true"] { background: var(--supported); }
+  .lab[data-v="fragment"][aria-pressed="true"] { background: var(--fragment); }
+  .lab[data-v="absent"][aria-pressed="true"] { background: var(--absent); }
+  .lab[data-v="recites"][aria-pressed="true"] { background: var(--recites); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .tag { font: 400 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 5px; }
+  .tag.late { color: var(--accent); border-color: var(--accent); }
+  .use { font: 500 12px var(--sans); cursor: pointer; margin: 0 14px 12px; padding: 5px 10px; border-radius: 4px;
+         border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+  .use[aria-pressed="true"] { background: var(--supported); border-color: transparent; color: #fff; }
+  .note { width: 100%; font: 400 13.5px var(--sans); color: var(--ink); background: var(--surface);
+          border: 1px solid var(--line); border-radius: 4px; padding: 9px 11px; margin-top: 8px; resize: vertical; min-height: 44px; }
+  .saved { font-size: 12px; color: var(--ink-3); min-height: 16px; margin-top: 6px; }
+
+  .ev-head { display: flex; align-items: baseline; gap: 10px; margin: 26px 0 10px; }
+  .ev-head h3 { font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
+  .ev-head span { font-size: 12px; color: var(--ink-3); }
+  .ev { border: 1px solid var(--line-soft); border-radius: 4px; background: var(--surface); margin-bottom: 10px; overflow: hidden; }
+  .ev > summary { cursor: pointer; padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: baseline; list-style: none; }
+  .ev > summary::-webkit-details-marker { display: none; }
+  .ev .who { font-size: 13px; color: var(--ink); }
+  .ev .src { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .ev .score { font-family: var(--mono); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .ev .body { padding: 0 14px 14px; font-family: var(--serif); font-size: 14.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; }
+  .ev:hover { border-color: var(--line); }
+
+  .foot { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn { font: 500 13px var(--sans); cursor: pointer; padding: 8px 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+  .btn:hover { border-color: var(--ink-3); }
+  .status { font-size: 12.5px; color: var(--ink-3); padding: 10px 20px; border-top: 1px solid var(--line); background: var(--surface); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="top">
+  <h1>Vertikalbekanntmachung — Befundprüfung</h1>
+  <span class="sub">58 Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <div class="progress"><span id="count">0 / 58</span><span class="bar"><i id="barfill"></i></span></div>
+</div>
+
+<div class="wrap">
+  <nav class="rail" id="rail" aria-label="Sätze"></nav>
+  <main class="main" id="main"></main>
+</div>
+<div class="status" id="status">Bewertungen werden lokal gehalten, bis der Speicher antwortet.</div>
+
+<script id="packet" type="application/json">__PACKET__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("packet").textContent);
+  var LABELS = [
+    { v: "supported", de: "gestützt", hint: "Eine Behörde wendet den Satz als Regel an" },
+    { v: "fragment", de: "Bruchstück", hint: "Nur ein Teil, beiläufig oder zitiert ohne Anwendung" },
+    { v: "absent", de: "nicht belegt", hint: "Im Bestand nichts dazu" },
+    { v: "recites", de: "nur zitiert", hint: "Der Bestand wiederholt den Satz, wendet ihn aber nicht an" }
+  ];
+  var SOURCE = { agency: "WEKO", merger: "WEKO Fusion", court: "Bundesgericht", cantonal: "kantonal", other: "andere Behörde" };
+  var VERSIONS = {
+    "2002-02-18": "Bekanntmachung 2002",
+    "2010-06-28": "Bekanntmachung 2010",
+    "2022-12-12": "Bekanntmachung 2022",
+    "2022-12-12-erl": "Erläuterungen 2022",
+    "control": "Weitere Sätze"
+  };
+  var state = Object.create(null);   // key -> {label, note}
+  var current = 0;
+  var db = null;
+
+  function key(d) { return (d.version + "__" + d.pid).replace(/[^\w.\-~:@+]/g, "_"); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function renderRail() {
+    var html = "", seen = null;
+    DATA.forEach(function (d, i) {
+      if (d.version !== seen) {
+        seen = d.version;
+        html += '<div class="rail-group">' + esc(VERSIONS[d.version] || d.version) + "</div>";
+      }
+      var st = state[key(d)] || {};
+      html += '<button class="item" data-i="' + i + '" aria-current="' + (i === current) + '">' +
+        '<span class="dot ' + esc(st.label || "") + '"></span>' +
+        '<span><span class="pid">' + esc(d.pid) + "</span> " +
+        '<span class="ttl">' + esc(d.heading || d.text.slice(0, 44)) + "</span></span></button>";
+    });
+    document.getElementById("rail").innerHTML = html;
+  }
+
+  function renderMain() {
+    var d = DATA[current], st = state[key(d)] || {};
+    var used = st.evidence || [];
+    var ev = d.evidence.map(function (e, n) {
+      var when = e.date ? e.date : (e.date_upper_bound ? "≤ " + e.date_upper_bound : "ohne Datum");
+      var tags = '<span class="tag">' + esc(SOURCE[e.source] || e.source) + "</span>" +
+        '<span class="tag">' + esc(when) + "</span>" +
+        (e.regime ? '<span class="tag">' + esc((e.regime_exact ? "" : "≤ ") + e.regime) + "</span>" : "") +
+        (e.after_version ? '<span class="tag late">nach der Fassung</span>' : "") +
+        (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "");
+      var on = used.indexOf(e.ecli) >= 0;
+      return '<details class="ev"' + (n === 0 ? " open" : "") + ">" +
+        "<summary><span><span class=\"who\">" + esc(e.docket || e.ecli) + "</span><br>" +
+        '<span class="src">' + esc(e.spider || "") + '</span><span class="tags">' + tags + "</span></span>" +
+        '<span class="score">' + e.score.toFixed(3) + "</span></summary>" +
+        '<div class="body">' + esc(e.text) + "</div>" +
+        '<button class="use" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
+        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button></details>";
+    }).join("");
+
+    document.getElementById("main").innerHTML =
+      '<div class="meta"><span class="chip">' + esc(VERSIONS[d.version] || d.version) + "</span>" +
+      '<span class="chip">' + esc(d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
+      "<span>" + (current + 1) + " von " + DATA.length + "</span></div>" +
+      (d.heading ? '<h2 class="heading">' + esc(d.heading) + "</h2>" : "") +
+      '<p class="prop">' + esc(d.text) + "</p>" +
+      '<div class="labels">' + LABELS.map(function (l, i) {
+        return '<button class="lab" data-v="' + l.v + '" title="' + esc(l.hint) + '" aria-pressed="' +
+          (st.label === l.v) + '">' + esc(l.de) + " <kbd>" + (i + 1) + "</kbd></button>";
+      }).join("") + "</div>" +
+      '<textarea class="note" id="note" placeholder="Begründung, Fundstelle, Zweifel — optional">' + esc(st.note || "") + "</textarea>" +
+      '<div class="saved" id="saved">' + (st.label ? "gespeichert" : "") + "</div>" +
+      '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst</span></div>' +
+      ev +
+      '<div class="foot"><button class="btn" id="prev">← zurück</button>' +
+      '<button class="btn" id="next">weiter →</button></div>';
+
+    document.querySelectorAll(".lab").forEach(function (b) {
+      b.addEventListener("click", function () { setLabel(b.getAttribute("data-v")); });
+    });
+    document.querySelectorAll(".use").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var e = b.getAttribute("data-ecli"), list = (state[key(DATA[current])] || {}).evidence || [];
+        list = list.indexOf(e) >= 0 ? list.filter(function (x) { return x !== e; }) : list.concat([e]);
+        save({ evidence: list });
+      });
+    });
+    var note = document.getElementById("note"), t;
+    note.addEventListener("input", function () {
+      clearTimeout(t);
+      t = setTimeout(function () { save({ note: note.value }); }, 700);
+    });
+    document.getElementById("prev").addEventListener("click", function () { go(current - 1); });
+    document.getElementById("next").addEventListener("click", function () { go(current + 1); });
+  }
+
+  function progress() {
+    var n = DATA.filter(function (d) { return (state[key(d)] || {}).label; }).length;
+    document.getElementById("count").textContent = n + " / " + DATA.length;
+    document.getElementById("barfill").style.width = (100 * n / DATA.length) + "%";
+  }
+
+  function go(i) {
+    if (i < 0 || i >= DATA.length) return;
+    current = i;
+    renderRail(); renderMain();
+    var el = document.querySelector('.item[data-i="' + i + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+  }
+
+  function setLabel(v) {
+    var d = DATA[current], st = state[key(d)] || {};
+    save({ label: st.label === v ? "" : v });
+  }
+
+  function save(patch) {
+    var d = DATA[current], k = key(d);
+    var st = state[k] = Object.assign({ label: "", note: "", evidence: [] }, state[k], patch);
+    renderRail(); renderMain(); progress();
+    var saved = document.getElementById("saved");
+    if (!db) { if (saved) saved.textContent = "nur in diesem Fenster — kein Speicher"; return; }
+    if (saved) saved.textContent = "speichert …";
+    db.doc("labels/" + k).set({
+      version: d.version, pid: d.pid, part: d.part, heading: d.heading || "",
+      label: st.label, note: st.note, evidence: st.evidence, updatedAt: new Date().toISOString()
+    }).then(function () {
+      var s = document.getElementById("saved");
+      if (s) s.textContent = st.label ? "gespeichert" : "gelöscht";
+    }).catch(function (e) {
+      var s = document.getElementById("saved");
+      if (s) s.textContent = "nicht gespeichert (" + (e && e.code ? e.code : "Fehler") + ")";
+    });
+  }
+
+  document.getElementById("rail").addEventListener("click", function (e) {
+    var b = e.target.closest(".item");
+    if (b) go(+b.getAttribute("data-i"));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === "1") setLabel("supported");
+    else if (e.key === "2") setLabel("fragment");
+    else if (e.key === "3") setLabel("absent");
+    else if (e.key === "4") setLabel("recites");
+    else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
+    else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
+    else return;
+    e.preventDefault();
+  });
+
+  go(0); progress();
+
+  if (window.claude && window.claude.use) {
+    window.claude.use("db").then(function (store) {
+      if (!store) {
+        document.getElementById("status").textContent =
+          "Kein Speicher in dieser Ansicht — Bewertungen bleiben nur in diesem Fenster.";
+        return;
+      }
+      db = store;
+      store.collection("labels").get().then(function (snap) {
+        snap.docs.forEach(function (doc) {
+          var v = doc.data() || {};
+          state[doc.id] = { label: v.label || "", note: v.note || "", evidence: v.evidence || [] };
+        });
+        renderRail(); renderMain(); progress();
+        document.getElementById("status").textContent =
+          "Gespeichert: " + snap.size + " Bewertungen. Tasten: 1 gestützt, 2 Bruchstück, 3 nicht belegt, 4 nur zitiert, j/k blättern.";
+      }).catch(function () {
+        document.getElementById("status").textContent = "Speicher erreichbar, Lesen fehlgeschlagen.";
+      });
+    });
+  } else {
+    document.getElementById("status").textContent =
+      "Vorschau ohne Speicher — Bewertungen bleiben nur in diesem Fenster.";
+  }
+})();
+</script>

@@ -149,7 +149,12 @@ _DATE_CUE = re.compile(
     r"(?:Verfügung|Entscheid|Beschluss|Stellungnahme|Gutachten|Empfehlung|Schlussbericht|"
     r"Zwischenverfügung|"
     r"[Dd]écision|[Pp]réavis|[Aa]vis|[Rr]ecommandation|[Rr]apport final|[Dd]écision incidente|"
-    r"[Dd]ecisione|[Pp]arere|[Rr]accomandazione|[Rr]apporto finale)"
+    r"[Dd]ecisione|[Pp]arere|[Rr]accomandazione|[Rr]apporto finale|"
+    # A merger cleared in the preliminary examination has no Verfügung: the
+    # decision is the Secretariat's notice that no examination is opened,
+    # "Mitteilung nach Artikel 16 Absatz 1 VKU vom 1. April 2009".
+    r"(?:Mitteilung|[Cc]ommunication|[Cc]omunicazione)\s+(?:nach|gemäss|gemäß|selon|secondo|ai sensi)"
+    r".{0,50}?\b(?:VKU|OCCE|OPCo))"
     r"[^.\n]{0,60}?\b(?:vom|du|del|dell['’])\s+")
 
 
@@ -421,22 +426,68 @@ def reading_order(text: str, max_lines: int = 120) -> str:
     return "\n".join(left) + "\n" + "\n".join(r for r in right if r)
 
 
-def decision_date(text: str, window: int = 4000) -> date | None:
+def date_upper_bound(issue: Issue) -> date:
+    """The latest date a decision printed in `issue` can carry. The journal
+    is quarterly, so issue n covers up to month 3n, but issues come out late:
+    1997/4 prints a Schlussbericht of 7 January 1998. Six months of slack on
+    top. An upper bound only, for rows whose opening names no date: a
+    no-look-ahead filter can still place them before or after a given day,
+    conservatively."""
+    months = issue.year * 12 + 3 * issue.number + 6      # first month AFTER the bound, 0-based
+    nxt = date(months // 12, months % 12 + 1, 1)
+    return date.fromordinal(nxt.toordinal() - 1)
+
+
+# How long WEKO takes to print a decision. Beyond this an "opening date" is
+# a date the decision quotes (an act, an earlier ruling), not its own:
+# RPW 2019/4 B 2.8.6 read 1995-10-06 before this check. Real lags run long
+# (RPW 2022/1 prints a Verfügung of 2 December 2013), so the cap is loose.
+MAX_PRINT_LAG_YEARS = 15
+
+
+# The days the statutes themselves were enacted. "Bundesgesetz vom
+# 6. Oktober 1995 über Kartelle" sits a few words after many a cue, and
+# RPW 2008/4 B 2.3.3 read the cartel act's date as its own.
+ACT_DATES = {
+    date(1985, 12, 20),   # KG 1985
+    date(1995, 10, 6),    # KG and BGBM
+    date(1996, 6, 17),    # VKU
+    date(2004, 3, 12),    # SVKG
+}
+
+
+def plausible(d: date, issue: Issue | None) -> bool:
+    if not 1990 <= d.year <= 2100 or d in ACT_DATES:
+        return False
+    if issue is None:
+        return True
+    return issue.year - MAX_PRINT_LAG_YEARS <= d.year and d <= date_upper_bound(issue)
+
+
+def decision_date(text: str, window: int = 4000, issue: Issue | None = None) -> date | None:
     """The decision's own date as its opening states it: "Verfügung vom
-    23. Mai 2022", "Décision du 12 décembre 2022", "Parere del ...". The
-    first cue with a readable date after it wins; None when the opening
-    names none (the stage then leaves decision_date empty rather than
-    guessing from the issue)."""
-    head = re.sub(r"\s+", " ", reading_order(text[:window]))
-    for m in _DATE_CUE.finditer(head):
-        # "Mit Verfügung vom ...", "par décision du ...": a recital citing an
-        # earlier act of the authority, not this document's own date.
-        before = head[max(0, m.start() - 8): m.start()].strip().lower()
-        if before.endswith(("mit", "durch", "par", "avec", "con", "gemäss", "selon", "secondo")):
-            continue
-        d = parse_date(head[m.end(): m.end() + 40])
-        if d and 1990 <= d.year <= 2100:
-            return d
+    23. Mai 2022", "Décision du 12 décembre 2022", "Parere del ...",
+    "Mitteilung nach Artikel 16 Absatz 1 VKU vom ...". The first cue with a
+    readable, plausible date after it wins; None when the opening names
+    none (the stage then leaves decision_date empty rather than guessing,
+    and records the issue's upper bound in the metadata instead).
+
+    Read twice: in column order first, then as printed. The column split is
+    a guess, and an indented heading block ("B 2.2      5.  Title") makes a
+    single-column page look like two columns; the split then cuts "vom 6.
+    April 1998" to "vom 6. Apri". The printed text keeps what the split
+    broke."""
+    raw = text[:window]
+    for head in (re.sub(r"\s+", " ", reading_order(raw)), re.sub(r"\s+", " ", raw)):
+        for m in _DATE_CUE.finditer(head):
+            # "Mit Verfügung vom ...", "par décision du ...": a recital citing an
+            # earlier act of the authority, not this document's own date.
+            before = head[max(0, m.start() - 8): m.start()].strip().lower()
+            if before.endswith(("mit", "durch", "par", "avec", "con", "gemäss", "selon", "secondo")):
+                continue
+            d = parse_date(head[m.end(): m.end() + 40])
+            if d and plausible(d, issue):
+                return d
     return None
 
 

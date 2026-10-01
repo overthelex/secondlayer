@@ -122,7 +122,7 @@ SELECT ecli, spider, docket_number, decision_date,
        ts_rank_cd(tsv, q.tsq) AS rank
   FROM ch_weko_audit_corpus, q
  WHERE tsv @@ q.tsq
-   AND (%(before)s::date IS NULL OR decision_date IS NULL OR decision_date <= %(before)s::date)
+   AND (%(before)s::date IS NULL OR date_upper_bound <= %(before)s::date)
    -- The notices themselves are in the corpus (part D1 of the journal) and
    -- would answer every proposition with its own text.
    AND coalesce(rpw_chapter, '') <> 'D1'
@@ -242,7 +242,7 @@ SELECT p.ecli, p.ord, p.text, c.spider, c.docket_number, c.decision_date,
   FROM ch_weko_audit_passages p
   JOIN ch_weko_audit_corpus c USING (ecli), q
  WHERE p.tsv @@ q.tsq
-   AND (%(before)s::date IS NULL OR c.decision_date IS NULL OR c.decision_date <= %(before)s::date)
+   AND (%(before)s::date IS NULL OR c.date_upper_bound <= %(before)s::date)
  ORDER BY rank DESC
  LIMIT %(n)s
 """
