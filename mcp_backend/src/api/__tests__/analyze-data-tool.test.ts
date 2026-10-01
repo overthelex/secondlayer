@@ -257,7 +257,7 @@ describe('AnalyzeDataTool', () => {
       expect(calls.every((c) => /^EXPLAIN/.test(c.sql))).toBe(true);
     });
 
-    it('sees tables read by subqueries in SELECT, WHERE and LIMIT (plans nest them under Plans)', async () => {
+    it('sees a table read by a SELECT-list subquery (InitPlan nested under Plans)', async () => {
       // Shape verified against Postgres 15 EXPLAIN (FORMAT JSON, VERBOSE): InitPlans and
       // SubPlans are children in Plans, with Parent Relationship / Subplan Name.
       const db = makeSimpleDb(() => ({ rows: [{ leaked: true }] }));
