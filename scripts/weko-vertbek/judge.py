@@ -171,7 +171,10 @@ def ask_claude(model: str, system: str, user: str, tries: int = 3) -> tuple[str,
                 seen = (u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0)
                         + u.get("cache_read_input_tokens", 0))
                 ours = int((len(system) + len(user)) / 2.5)    # German legal text: ~2.5-3 chars a token
-                if seen > ours + CLAUDE_OVERHEAD_TOKENS:
+                # the contamination this guards against was ~100K tokens; the
+                # estimate itself is off by up to ~20% on dense text (one
+                # 9,585-token prompt was estimated at 8,021 and stopped the run)
+                if seen > 2 * ours + 5 * CLAUDE_OVERHEAD_TOKENS:
                     raise SystemExit(f"claude: {seen} input tokens for a ~{ours}-token prompt: "
                                      "context was injected; refusing the answer")
                 return d.get("result", ""), u

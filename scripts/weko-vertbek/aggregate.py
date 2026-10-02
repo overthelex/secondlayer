@@ -69,8 +69,8 @@ def main() -> int:
     gold = {}
     if args.gold:
         sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-        import packet
-        gold = {packet.gold_key(r): r["label"]
+        import packet as packet_mod
+        gold = {packet_mod.gold_key(r): r["label"]
                 for r in json.loads(args.gold.read_text())["labels"] if r.get("label")}
     # propositions the protocol was revised on: their human labels stand, and
     # they are kept out of the blind check of the revised protocol
