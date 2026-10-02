@@ -49,9 +49,12 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--packet", type=pathlib.Path, default=DIR / "packet.json")
     ap.add_argument("--judges", type=pathlib.Path, nargs="+", required=True)
+    ap.add_argument("--exclude", type=pathlib.Path,
+                    help="human labels (json export) of the development set: left out of the lists")
     ap.add_argument("--check", type=int, default=15, help="at most this many pre-labelled items checked blind")
     ap.add_argument("--check-share", type=float, default=0.25, help="share of pre-labelled items checked blind")
-    ap.add_argument("--rule", choices=["unanimous", "majority"], default="majority",
+    ap.add_argument("--anchor", default="claude-opus", help="for --rule anchor")
+    ap.add_argument("--rule", choices=["unanimous", "majority", "anchor"], default="majority",
                     help="what pre-labels an item: all judges agree, or a strict majority")
     ap.add_argument("--seed", type=int, default=1001)
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "review.json")
@@ -59,6 +62,11 @@ def main() -> int:
 
     packet = json.loads(args.packet.read_text(encoding="utf-8"))
     judges = load(args.judges)
+    # propositions the protocol was revised on: their human labels stand, and
+    # they are kept out of the blind check of the revised protocol
+    dev = set()
+    if args.exclude:
+        dev = {(r["version"], r["pid"]) for r in json.loads(args.exclude.read_text())["labels"] if r.get("label")}
     names = sorted(judges)
 
     items, unanimous = [], collections.defaultdict(list)
@@ -68,9 +76,17 @@ def main() -> int:
         labels = {n: (a["label"] if a else None) for n, a in answers.items()}
         votes = collections.Counter(v for v in labels.values() if v)
         top, top_n = votes.most_common(1)[0] if votes else (None, 0)
-        decided = (top_n == len(names) if args.rule == "unanimous"
-                   else top_n * 2 > len(names) and None not in labels.values())
+        if args.rule == "anchor":
+            # the judge closest to the human reader on the development set,
+            # confirmed by at least one other
+            a = labels.get(args.anchor)
+            decided = a is not None and sum(v == a for n, v in labels.items() if n != args.anchor) >= 1
+            top, top_n = (a, sum(v == a for v in labels.values())) if decided else (top, top_n)
+        else:
+            decided = (top_n == len(names) if args.rule == "unanimous"
+                       else top_n * 2 > len(names) and None not in labels.values())
         status = ("control" if it["kind"] != "sample"      # tests the judges, not for the human
+                  else "development" if key in dev
                   else "unanimous" if decided
                   else "disputed")
         # passage by passage, for the page and for agreement afterwards

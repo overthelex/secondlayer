@@ -237,3 +237,26 @@ def test_a_letter_on_its_own_line_and_the_journal_header_between_pages():
     assert [p.pid for p in props] == ["3(d)", "3(e)"]
     assert props[0].text == "die Querlieferungen beschränken;"
     assert props[1].text == "Beschränkungen, die den Lieferanten hindern."
+
+
+def test_a_footnote_with_its_continuation_lines_leaves_the_paragraph():
+    text = "\n".join([
+        "25.    Vertikale Abreden betreffend den Online-Handel können absoluten Gebietsschutz darstellen,",
+        "begleitet werden, im Einzelfall.58", "", "",
+        "55 Vgl. EuGH, Metro/Kommission; vgl. auch EU-Vertikalleitlinien,",
+        "Rz 148 f. Die erste Voraussetzung erfüllt die Zahnpasta Elmex rot nicht",
+        "(RPW 2010/1, 84 Rz 157, Gaba).",
+        "58 RPW 2011/3, 381 Rz 69; RPW 2014/1, 198 Rz 139, Kosmetikpro-", "", "dukte.",
+        "26.    Ein weiterer Absatz."] + ["27.  x."] * 4)
+    props = propositions.parse(text, "2022-12-12-erl")
+    assert props[0].text.endswith("im Einzelfall.")
+    assert "Elmex" not in props[0].text and "dukte" not in props[0].text
+    assert props[1].text == "Ein weiterer Absatz."
+
+
+def test_a_lettered_point_carries_its_opening():
+    text = "\n".join(["Ziffer 5", "Rechtfertigung", "(1) Insbesondere gerechtfertigt sind Abreden, die:",
+                      "e) Beschränkungen des Weiterverkaufs an Dritte."])
+    props = propositions.parse(text, "2002-02-18")
+    assert props[-1].pid.endswith("e)")
+    assert props[-1].lead.startswith("Insbesondere gerechtfertigt")

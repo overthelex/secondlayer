@@ -538,8 +538,8 @@ def main() -> int:
             cited[(g["version"], g["pid"])].add(r["ecli"])
 
     items = [{"kind": "sample", "version": p.version, "pid": p.pid, "part": p.part,
-              "heading": p.heading, "text": p.text} for p in pick()]
-    items += [{"version": "control", "part": "control", "heading": "", **c} for c in CONTROLS]
+              "heading": p.heading, "lead": p.lead, "text": p.text} for p in pick()]
+    items += [{"version": "control", "part": "control", "heading": "", "lead": "", **c} for c in CONTROLS]
 
     index = dense_index()
     cache: dict = {}

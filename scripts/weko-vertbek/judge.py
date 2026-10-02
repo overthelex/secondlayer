@@ -81,6 +81,9 @@ def prompt(protocol: str, item: dict, order: list[int]) -> tuple[str, str]:
              else f"Version {item['version'][:10]}"
              + (" (Erläuterungen)" if item["version"].endswith("erl") else " (Bekanntmachung)"))
     head = f"PROPOSITION {item['pid']} {where}\n" + (f"{item['heading']}\n" if item["heading"] else "")
+    if item.get("lead"):
+        # the opening of the sentence a lettered point continues: context, not the proposition
+        head += f"[opening of the sentence, for context only:] {item['lead']}\n[the proposition:] "
     parts = [head + item["text"], ""]
     for n, i in enumerate(order, 1):
         e = item["evidence"][i]

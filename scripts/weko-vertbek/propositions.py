@@ -156,13 +156,47 @@ class Proposition:
     heading: str
     text: str
     order: int = 0
+    # A lettered point continues the sentence its subparagraph opens ("...
+    # wenn sie Folgendes zum Gegenstand haben:" / "e) Beschränkungen ...");
+    # the opening is kept here so the reader sees a whole sentence.
+    lead: str = ""
 
     @property
     def pid(self) -> str:
         return f"{self.unit}({self.sub})" if self.sub else self.unit
 
 
-def _clean(lines: list[str], keep_notes: bool = False) -> str:
+def _drop_notes(lines: list[str], loose: bool = False) -> list[str]:
+    """Footnotes with their continuation lines. A footnote runs from its
+    number to the next blank line, and on past it when its last line broke a
+    word ("Kosmetikpro-" / "" / "dukte."). Dropping only the numbered line
+    left the rest inside the proposition: Rz 25 of the 2022 Erläuterungen
+    ended in footnotes 55 and 58. `loose` takes any "<number> <text>" line as
+    a footnote, which is right where paragraphs are numbered "25." (the
+    Erläuterungen) and wrong where subparagraphs are numbered "1 " (2022)."""
+    out: list[str] = []
+    in_note = broken = False
+    note = re.compile(r"^\s{0,8}\d{1,3}\s+\S") if loose else _FOOTNOTE
+    for line in lines:
+        if note.match(line) and not _MARGIN_NUMBER.match(line):
+            in_note, broken = True, line.rstrip().endswith("-")
+            continue
+        if in_note:
+            if _MARGIN_NUMBER.match(line):
+                in_note = False
+            elif not line.strip():
+                in_note = broken
+                continue
+            else:
+                broken = line.rstrip().endswith("-")
+                continue
+        out.append(line)
+    return out
+
+
+def _clean(lines: list[str], keep_notes: bool = False, loose_notes: bool = False) -> str:
+    if not keep_notes:
+        lines = _drop_notes(lines, loose_notes)
     keep = [ln for ln in lines
             if ln.strip() and not _PAGE_FOOT.match(ln)
             and (keep_notes or not _FOOTNOTE.match(ln))]
@@ -274,6 +308,10 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
     # neither does a subparagraph whose lettered points were: the chapeau
     # ("... wenn sie Folgendes zum Gegenstand haben:") states no rule alone.
     lettered = {(p.unit, p.sub[:-1]) for p in out if p.sub and p.sub[-1].isalpha()}
+    chapeau = {(p.unit, p.sub): p.text for p in out if p.part == "operative"}
+    for p in out:
+        if p.part == "operative" and p.sub and p.sub[-1].isalpha():
+            p.lead = chapeau.get((p.unit, p.sub[:-1]), "")
     with_subs = {p.unit for p in out if p.part == "operative" and p.sub}
     return [p for p in out
             if p.text and not _REPEALED.fullmatch(p.text)
@@ -298,7 +336,7 @@ def _parse_margin_numbers(lines: list[str], version: str, keep_notes: bool) -> l
         m = _MARGIN_NUMBER.match(line)
         if m and not _FOOTNOTE.match(line):
             if cur is not None:
-                cur.text = _clean(buf, keep_notes)
+                cur.text = _clean(buf, keep_notes, loose_notes=True)
                 if cur.text:
                     cur.order = len(out)
                     out.append(cur)
@@ -308,7 +346,7 @@ def _parse_margin_numbers(lines: list[str], version: str, keep_notes: bool) -> l
         if cur is not None:
             buf.append(line)
     if cur is not None:
-        cur.text = _clean(buf, keep_notes)
+        cur.text = _clean(buf, keep_notes, loose_notes=True)
         if cur.text:
             cur.order = len(out)
             out.append(cur)

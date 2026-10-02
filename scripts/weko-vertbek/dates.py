@@ -37,6 +37,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "services" / "ch-pipeline"))
 from chpipe import rpw  # noqa: E402
+from chpipe.portals.common import parse_date  # noqa: E402
 
 COLUMNS = [
     "ALTER TABLE ch_weko_audit_corpus ADD COLUMN IF NOT EXISTS date_exact date",
@@ -60,8 +61,28 @@ def issue_of_key(key: str | None) -> rpw.Issue | None:
     return rpw.Issue(int(m.group(1)), int(m.group(2)), m.group(3)) if m else None
 
 
+# "2C_180/2014 vom 28. Juni 2016", "arrêt 4A_123/2015 du 3 mars 2016"
+# "Urteil der I. Zivilabteilung vom 27. September 1977", "Extrait de l'arrêt
+# de la Ire Cour civile du 3 mai 1983": older heads name no docket.
+_BGE_HEAD = re.compile(r"(?:\b\d{1,2}[A-Z][_.]\d{1,4}/\d{4}|\b(?:Urteil|Entscheid|Beschluss|[Aa]rrêt|[Dd]écision"
+                       r"|[Ss]entenza)\b[^;]{0,160}?)\s+(?:vom|du|del)\s+(?=\d)")
+
+
+def bge_date(text: str):
+    """The judgment's own date from a BGE's head. entscheidsuche dates a BGE
+    on 1 January of its volume year (BGE 143 II 297, Gaba: 2017-01-01 for a
+    judgment of 28 June 2016) -- 221 of the audit's 292 BGE rows."""
+    head = re.sub(r"\s+", " ", (text or "")[:2500])
+    m = _BGE_HEAD.search(head)
+    return parse_date(head[m.end(): m.end() + 40]) if m else None
+
+
 def date_of(row: dict) -> tuple:
     """(date_exact, date_upper_bound, date_source) for one row."""
+    if row["spider"] == "CH_BGE":
+        d = bge_date(row["full_text"])
+        if d:
+            return d, d, "text"
     if row["spider"] != rpw.SPIDER:
         d = row["decision_date"]
         return (d, d, "record") if d else (None, None, "none")

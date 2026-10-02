@@ -1,0 +1,209 @@
+{
+ "exported": "2026-10-02",
+ "artifact": "https://claude.ai/artifact/FspwNTMQx7CnSvSujs4ujM",
+ "page_version": 4,
+ "labels": [
+  {
+   "evidence": [],
+   "heading": "",
+   "label": "recites",
+   "note": "Nur RPW 2025/2 gibt die Regel wieder (Art.-5-Abs.-4-Abreden grundsätzlich erheblich ohne quantitative Analyse, Bezugsbeschränkungen erwähnt), aber ohne Folgerung im Fenster. RPW 2022/1, 2012/4, 2013/2: horizontale Fälle, VertBek nur als Orientierungshilfe bzw. Ziff. 13. Electrolux, RPW 2021/4: Abredebegriff Art. 4 Abs. 1. RPW 2010/4: Selektivvertrieb. HG.2011.286: allgemeine Erheblichkeit ohne marktanteilsunabhängige Regel.",
+   "part": "preamble",
+   "pid": "2",
+   "updatedAt": "2026-10-02T13:57:57.971Z",
+   "version": "2002-02-18",
+   "_doc_version": "2002-02-18"
+  },
+  {
+   "evidence": [],
+   "heading": "",
+   "label": "absent",
+   "note": "Kein Fenster betrifft die Beschränkung des Weiterverkaufs gelieferter Bestandteile an Konkurrenzhersteller. RPW 2011/1, B-831/2011, B-3618/2013, B-3962/2013: Kopplung bzw. Missbrauch Art. 7 KG. RPW 2019/3b, 2008/2: Art. 3 KG / Informationsaustausch / Telekom. Online-Handel, RPW 2025/3: Selektivvertrieb bzw. Querlieferungen – andere Regel. Positionstext beginnt mitten im Satz.",
+   "part": "operative",
+   "pid": "5(e)",
+   "updatedAt": "2026-10-02T13:59:10.733Z",
+   "version": "2002-02-18",
+   "_doc_version": "2002-02-18"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.2",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07"
+   ],
+   "heading": "Widerlegung der Vermutung",
+   "label": "supported",
+   "note": "Anwendung: Nikon (Vermutung durch Intra- und Interbrand-Wettbewerb für alle Produktmärkte widerlegt), GEHC RPW 2016/2 (Widerlegung durch Kombination Intra/Interbrand), BMW (Intrabrand allein reicht nicht). RPW 2018/2, 2016/3, 2011/3: Regel referiert, danach Marktabgrenzung. RPW 2017/1: Regel + Überschrift «Keine Beseitigung», Begründung im Fenster ausgelassen. Leasing: horizontale Abrede, Innen-/Aussenwettbewerb.",
+   "part": "operative",
+   "pid": "11",
+   "updatedAt": "2026-10-02T14:01:36.098Z",
+   "version": "2010-06-28",
+   "_doc_version": "2010-06-28"
+  },
+  {
+   "evidence": [],
+   "heading": "Übergangsregelung",
+   "label": "absent",
+   "note": "Kein Fenster betrifft die Übergangsfrist 1.8.2010–31.7.2011 für Altverträge nach aVertBek. Treffer nur über Datums-/Vertragslaufzeit-Vokabular: Yamaha-Vertragsdaten, Bankkündigung GE, Post-Rabatte, Exportverbot/Preisvergleich, Telekom-Vertrag, Art. 7 EGZ, Swatch vorsorgliche Massnahmen, StromVG.",
+   "part": "operative",
+   "pid": "19",
+   "updatedAt": "2026-10-02T14:03:32.989Z",
+   "version": "2010-06-28",
+   "_doc_version": "2010-06-28"
+  },
+  {
+   "evidence": [],
+   "heading": "Geltungsbereich",
+   "label": "recites",
+   "note": "Nur RPW 2020/2 gibt Ziff. 8 Abs. 2 lit. b (Dienstleister auf mehreren Handelsstufen) wieder, ohne Anwendung. Pöschl (RPW 2021/4) wendet lit. a an (dualer Vertrieb Waren) – andere Regel derselben Ziffer, grenzwertig; Stöckli (RPW 2019/4) referiert nur lit. a. Übrige: Agentur, Diskriminierung Art. 7, Fusion Elektrizität, Telekom.",
+   "part": "operative",
+   "pid": "8(2b)",
+   "updatedAt": "2026-10-02T14:05:10.965Z",
+   "version": "2010-06-28",
+   "_doc_version": "2010-06-28"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "heading": "",
+   "label": "supported",
+   "note": "Anwendung: Nikon – indirekter Gebietsschutz erfasst auch Bezugsverbote ausserhalb der Schweiz, daher Argument Nikons verworfen. RPW 2016/2 (Nikon): Regel + «Vorliegend bestehen folgende Abreden», Folgerung nur fragmentarisch («… von Art. 5 Abs. 4 KG erfasst werden») – nicht gewertet. Yamaha: Prüfprogramm (Alleinbezug, Garantie) ohne Ergebnis im Fenster. RPW 2025/3 S. 677: nur referiert. Gaba, RPW 2010/1, 2018/2, 2025/3 S. 684: direkter Gebietsschutz bzw. Auswirkungen.",
+   "part": "note",
+   "pid": "12",
+   "updatedAt": "2026-10-02T14:17:46.969Z",
+   "version": "2022-12-12-erl",
+   "_doc_version": "2022-12-12-erl"
+  },
+  {
+   "evidence": [],
+   "heading": "",
+   "label": "recites",
+   "note": "Einziges Fenster zum Online-Handel als absoluter Gebietsschutz: RPW 2014/2 (Internetverkaufsverbot = Passivverkaufsverbot, mit Gebietszuweisung → Vermutung) – nur Praxis referiert. Electrolux (RPW 2011/3): Internetverbot, aber nur Abredebegriff Art. 4 Abs. 1. Gaba 2009: Erheblichkeit/Marktstellung Elmex, nicht Produkterfordernis selektiver Vertrieb. Übrige: absoluter Gebietsschutz ohne Online-Bezug bzw. 2C_1065/2014 Publikation/Geschäftsgeheimnisse. Positionstext endet mit Artefakt «dukte.».",
+   "part": "note",
+   "pid": "25",
+   "updatedAt": "2026-10-02T13:55:51.131Z",
+   "version": "2022-12-12-erl",
+   "_doc_version": "2022-12-12-erl"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-1_B2.2.1"
+   ],
+   "heading": "",
+   "label": "fragment",
+   "note": "RPW 2016/1 (Booking/HRS): Paritätsbegriff auf konkrete Klauseln angewandt – Konditionenparität (Buchungsfristen, Stornierung), Ratenparität, Verfügbarkeit; Abgrenzung eng/weit. Qualifikation der Klauseln sichtbar, aber keine Rechtsfolge daraus im Fenster → Bruchstück. Online-Buchungsplattformen 2015: MFN-Typen (across-customer, pricing relativity) nur definiert. Übrige: Art. 7 «Preise und Geschäftsbedingungen» (B-3618, B-3938, Coop), Abredebegriff/EU-GVO (B-4012, B-3962), Preisempfehlungen – anderes Wort, andere Frage.",
+   "part": "note",
+   "pid": "33",
+   "updatedAt": "2026-10-02T14:19:13.708Z",
+   "version": "2022-12-12-erl",
+   "_doc_version": "2022-12-12-erl"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19"
+   ],
+   "heading": "",
+   "label": "fragment",
+   "note": "Nur B-846/2015 (Pfizer, BVGer) arbeitet mit Höchstpreisen: vertraglich vereinbarte Höchstpreise grundsätzlich unbedenklich, kritisch nur bei Aufweichung des Preiswettbewerbs; daraus a fortiori-Folgerung für Preisempfehlungen, die wie Höchstpreise wirken → Bruchstück (Kehrseite der Regel, Druck/Anreiz-Umschlag in Fest-/Mindestpreis nicht geprüft; kein Widerspruch). Übrige: Druck/Anreiz-Formel nur für Preisempfehlungen bzw. indirekte Preisbindung (Brandschutz, Yamaha, RPW 2014/1, 2025/3, Festool), 2C_145/2018 Festpreisabrede, RPW 2023/1 Informationsaustausch horizontal.",
+   "part": "note",
+   "pid": "7",
+   "updatedAt": "2026-10-02T14:21:48.115Z",
+   "version": "2022-12-12-erl",
+   "_doc_version": "2022-12-12-erl"
+  },
+  {
+   "evidence": [],
+   "heading": "Vermutungstatbestände",
+   "label": "recites",
+   "note": "Regel zu Empfehlungsform nur referiert: RPW 2014/1 (Überschrift Preisempfehlungen, Wortlaut wiedergegeben), RPW 2025/2 und 2025/3 S. 684 (Pfizer-Formel: Befolgungsgrad, Druck, Anreize), RPW 2025/1 («können … darstellen», Einzelfall ausgelassen) – Subsumtion jeweils ausserhalb des Fensters. RPW 2025/3 S. 677, 2016/1: Gebietsschutz ohne Empfehlungsbezug. Baustoffe Bern, B-3618/2013: Begriff vertikal / Art. 4 Abs. 1.",
+   "part": "operative",
+   "pid": "12(3)",
+   "updatedAt": "2026-10-02T14:06:18.432Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [],
+   "heading": "Qualitativ schwerwiegende Wettbewerbsabreden",
+   "label": "recites",
+   "note": "Position = Art. 15 lit. b (weder Allein- noch Selektivvertrieb). RPW 2025/3 (S. 677, 684), 2025/4a, 2025/2: nur lit. c (Selektivvertrieb) referiert – andere Regel. Nikon: Vorgängerregel Ziff. 12 Abs. 2 lit. b aVertBek referiert + Begriff Passivverkauf, ohne Folgerung im Fenster. GEHC RPW 2016/2: Passivverkaufsverbot unabhängig vom Vertriebssystem, aber unter Art. 5 Abs. 4 (Vermutung), nicht qualitative Schwere – grenzwertig, als nicht einschlägig gewertet. Y.-Agentur, Online-Handel: Begriffsdefinitionen.",
+   "part": "operative",
+   "pid": "15(d)",
+   "updatedAt": "2026-10-02T14:07:31.042Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [],
+   "heading": "Unerheblichkeit von rein qualitativem Selektivvertrieb",
+   "label": "recites",
+   "note": "Drei Voraussetzungen wörtlich referiert (Online-Handel, SAV Uhren, Gaba), Prüfung jeweils nach dem Fenster (SAV: Frage nach Qualifikation der Uhrensysteme gestellt, Rz 133 abgeschnitten; Gaba: nur Überschrift «Vertriebssystem im Überblick»). B-2977/2007: Erheblichkeit bei qualitativ+quantitativer Auswahl nur als WEKO-Position wiedergegeben, Gericht prüft Effizienz. RPW 2025/4a: Netzeffekt-Ausnahme referiert. RPW 2025/2, 2025/3: Art. 15 lit. c. 2C_484/2010: Missbrauch/Verfassung, nicht die drei Voraussetzungen.",
+   "part": "operative",
+   "pid": "17",
+   "updatedAt": "2026-10-02T14:08:52.007Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [],
+   "heading": "Online-Vermittlungsdienste",
+   "label": "absent",
+   "note": "Keine Qualifikation als Online-Vermittlungsdienst i.S.d. VertBek (Anbieterin einer vertikalen Abrede). Hotelplattformen (WEKO 2015, RPW 2016/1, PUE Booking 2025): «vermitteln Transaktion» nur für Marktabgrenzung/zweiseitige Märkte – anderer Rechtsfrage. RPW 2016/4: zweiseitige Märkte Sport. Übrige: Telekom, Fusion, Publigroupe-Inseratevermittlung.",
+   "part": "operative",
+   "pid": "9",
+   "updatedAt": "2026-10-02T14:09:44.028Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [],
+   "heading": "",
+   "label": "recites",
+   "note": "",
+   "part": "preamble",
+   "pid": "III",
+   "updatedAt": "2026-10-02T14:15:01.115Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Baustoffe-und-Deponi_2024-05-21"
+   ],
+   "heading": "",
+   "label": "fragment",
+   "note": "Kein Fenster zieht für eine konkrete Abrede die Erheblichkeitsfolge. Gaba (F6) leitet lit. a her, Baustoffe Bern (F7) stellt nach widerlegter Vermutung lit. a als Obersatz auf, Subsumtion ausserhalb des Fensters → je Bruchstück, nur lit. a. lit. b/Art. 15 überall nur referiert (F1, F3, F5, F8). See-Gaster horizontal. Metadaten: F2 BVGer statt BGer; Gaba-Datum Platzhalter (Urteil 28.06.2016); F3 zitiert lit. a für lit.-b-Inhalt.",
+   "part": "preamble",
+   "pid": "IX",
+   "updatedAt": "2026-10-02T13:39:48.990Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [],
+   "heading": "",
+   "label": "recites",
+   "note": "Vertikal-GVO/Leitlinien nur in Fussnoten (AdBlue, RPW 2012/3) bzw. EU-Parallelität nur referiert (RPW 2016/2, Folgerung ausserhalb des Fensters). AMAG: Orientierung an EU-Praxis zur Marktabgrenzung, aber über KFZ-GVO, nicht VertBek – grenzwertig, als nicht einschlägig gewertet. ASCOPA KFZ-GVO-Historie; Altimum ohne Text; B-6844/B-6849 Horizontalleitlinien.",
+   "part": "preamble",
+   "pid": "VI",
+   "updatedAt": "2026-10-02T13:53:40.924Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  },
+  {
+   "evidence": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "heading": "",
+   "label": "supported",
+   "note": "Anwendung nur Nikon: Vermutung durch Intra- und Interbrand-Wettbewerb für alle Produktmärkte widerlegt. B-846/2015, B-843/2015, RPW 2018/2: Ziff. 11 aVertBek referiert (B-846 zusätzlich Rechtslage nach Ziff. 10 Abs. 2 aVertBek, historisch, kein Widerspruch). Brandschutzprodukte: Regel referiert, Prüfung in Vorabklärung ausdrücklich unterlassen. HG180172: Konkretisierung Art. 5 Abs. 4 durch VertBek (Preisempfehlungen) nur abstrakt. RPW 2020/3a, B-3096/2018: horizontale Abreden, Innen-/Aussenwettbewerb.",
+   "part": "preamble",
+   "pid": "VIII",
+   "updatedAt": "2026-10-02T14:16:29.026Z",
+   "version": "2022-12-12",
+   "_doc_version": "2022-12-12"
+  }
+ ]
+}
