@@ -38,7 +38,7 @@ def main() -> int:
     if args.review:
         # aggregate.py output: only what the human has to read; the judges'
         # answers ride along and the page reveals them after the human label
-        packet = [r for r in packet if r.get("status") in ("disputed", "check")]
+        packet = [r for r in packet if r.get("status") in ("disputed", "check", "rest")]
         packet.sort(key=lambda r: (r["status"] != "disputed", r["version"], r["pid"]))
     args.out.write_text(render(packet), encoding="utf-8")
     print(f"{len(packet)} propositions -> {args.out}")
