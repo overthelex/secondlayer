@@ -27,6 +27,7 @@ import collections
 import json
 import pathlib
 import random
+import sys
 
 DIR = pathlib.Path("/data/ch-corpus/weko-bek")
 
@@ -53,8 +54,10 @@ def main() -> int:
                     help="human labels (json export) of the development set: left out of the lists")
     ap.add_argument("--check", type=int, default=15, help="at most this many pre-labelled items checked blind")
     ap.add_argument("--check-share", type=float, default=0.25, help="share of pre-labelled items checked blind")
-    ap.add_argument("--anchor", default="claude-opus", help="for --rule anchor")
-    ap.add_argument("--rule", choices=["unanimous", "majority", "anchor"], default="majority",
+    ap.add_argument("--anchor", default="claude-opus", help="for --rule anchor / binary-check")
+    ap.add_argument("--checker", default="gemini-3.1-pro", help="for --rule binary-check")
+    ap.add_argument("--gold", type=pathlib.Path, help="gold set json: its human labels are final")
+    ap.add_argument("--rule", choices=["unanimous", "majority", "anchor", "binary-check"], default="majority",
                     help="what pre-labels an item: all judges agree, or a strict majority")
     ap.add_argument("--seed", type=int, default=1001)
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "review.json")
@@ -62,6 +65,13 @@ def main() -> int:
 
     packet = json.loads(args.packet.read_text(encoding="utf-8"))
     judges = load(args.judges)
+    # the gold set: the human label is the label (full run)
+    gold = {}
+    if args.gold:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import packet
+        gold = {packet.gold_key(r): r["label"]
+                for r in json.loads(args.gold.read_text())["labels"] if r.get("label")}
     # propositions the protocol was revised on: their human labels stand, and
     # they are kept out of the blind check of the revised protocol
     dev = set()
@@ -76,7 +86,14 @@ def main() -> int:
         labels = {n: (a["label"] if a else None) for n, a in answers.items()}
         votes = collections.Counter(v for v in labels.values() if v)
         top, top_n = votes.most_common(1)[0] if votes else (None, 0)
-        if args.rule == "anchor":
+        if args.rule == "binary-check":
+            # the full run (PAPER-188): the anchor's label stands where the
+            # checker agrees on the question the measurements turn on --
+            # supported or not; anything else goes to the human
+            a, c = labels.get(args.anchor), labels.get(args.checker)
+            decided = a is not None and c is not None and (a == "supported") == (c == "supported")
+            top, top_n = (a, 2 if a == c else 1) if decided else (top, top_n)
+        elif args.rule == "anchor":
             # the judge closest to the human reader on the development set,
             # confirmed by at least one other
             a = labels.get(args.anchor)
@@ -86,6 +103,7 @@ def main() -> int:
             decided = (top_n == len(names) if args.rule == "unanimous"
                        else top_n * 2 > len(names) and None not in labels.values())
         status = ("control" if it["kind"] != "sample"      # tests the judges, not for the human
+                  else "gold" if key in gold
                   else "development" if key in dev
                   else "unanimous" if decided
                   else "disputed")
@@ -101,7 +119,7 @@ def main() -> int:
                                     "quote_found": p["quote_found"], "why": p["why"]}
             per_passage.append(votes)
         row = {**it, "judges": labels, "judge_passages": per_passage, "status": status,
-               "prelabel": top if status == "unanimous" else None,
+               "prelabel": gold[key] if status == "gold" else top if status == "unanimous" else None,
                "agreement": f"{top_n}/{len(names)}"}
         items.append(row)
         if status == "unanimous":

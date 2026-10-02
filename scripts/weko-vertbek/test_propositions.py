@@ -260,3 +260,25 @@ def test_a_lettered_point_carries_its_opening():
     props = propositions.parse(text, "2002-02-18")
     assert props[-1].pid.endswith("e)")
     assert props[-1].lead.startswith("Insbesondere gerechtfertigt")
+
+
+def test_a_footnote_carried_over_a_blank_line_and_the_file_number_are_dropped():
+    text = "\n".join([
+        "14.    Abreden sind vorbehältlich einer Rechtfertigung unzulässig.49", "", "",
+        "41 BGer, 2C_44/2020 vom 3.3.2022 E. 9.1, Flammarion/WEKO; vgl. auch RPW 2018/2, 243 Rz 54 f.,", "",
+        "gym80.",
+        "42 Vgl. BGer 2C_43/2020, Dargaud/WEKO; BVGer,", "",
+        "B-3938/2013 vom 30.10.2019, E. 6.2 f., Dargaud/WEKO. Zu beachten sind jedoch die", "",
+        " 011-00001/COO.2101.111.3.267536",
+        "\fbesteht weiter, wenn die Abrede fortdauert.",
+        "15.    Ein weiterer Absatz."] + ["16.  x."] * 4)
+    props = propositions.parse(text, "2022-12-12-erl")
+    assert props[0].text == "Abreden sind vorbehältlich einer Rechtfertigung unzulässig. besteht weiter, wenn die Abrede fortdauert."
+    assert "gym80" not in props[0].text and "COO" not in props[0].text
+
+
+def test_a_body_line_starting_with_a_number_is_not_a_footnote():
+    text = "\n".join(["14.    Die Frist beträgt", "3 Jahre ab Abschluss des Vertrags.",
+                      "15.    Ein weiterer Absatz."] + ["16.  x."] * 4)
+    props = propositions.parse(text, "2022-12-12-erl")
+    assert props[0].text == "Die Frist beträgt 3 Jahre ab Abschluss des Vertrags."

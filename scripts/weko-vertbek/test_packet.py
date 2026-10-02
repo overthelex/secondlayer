@@ -86,3 +86,10 @@ def test_the_reading_window_finds_the_passage_in_reading_order_text():
     w = packet.reading_window(clean, layout)
     assert w and "ein neues Produkt auf den Markt bringen will" in w
     assert packet.reading_window(clean, "Ganz anderer Text über Fusionskontrolle " * 6) is None
+
+
+def test_table_of_contents_lines_are_page_furniture():
+    raw = ("C.6.2. Widerlegung der gesetzlichen Vermutung ........................ 36\n"
+           "(iii) Ergebnis .................................................... 35\n"
+           "Die Vermutung ist widerlegt.")
+    assert packet.readable("CH_WEKO", raw) == "Die Vermutung ist widerlegt."

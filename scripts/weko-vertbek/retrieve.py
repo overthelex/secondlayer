@@ -58,12 +58,15 @@ not as the gate. Re-measure this control before anything is labelled.
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import pathlib
 import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
+
+PASSAGES_TABLE = os.environ.get("WEKO_PASSAGES", "ch_weko_audit_passages")
 
 WORKING_CORPUS = """
 CREATE TABLE IF NOT EXISTS ch_weko_audit_corpus AS
@@ -239,13 +242,14 @@ PASSAGE_SEARCH = """
 WITH q AS (SELECT to_tsquery('german', %(query)s) AS tsq)
 SELECT p.ecli, p.ord, p.text, c.spider, c.docket_number, c.decision_date,
        ts_rank_cd(p.tsv, q.tsq) AS rank
-  FROM ch_weko_audit_passages p
+  FROM {PASSAGES} p
   JOIN ch_weko_audit_corpus c USING (ecli), q
  WHERE p.tsv @@ q.tsq
    AND (%(before)s::date IS NULL OR c.date_upper_bound <= %(before)s::date)
  ORDER BY rank DESC
  LIMIT %(n)s
 """
+PASSAGE_SEARCH = PASSAGE_SEARCH.replace("{PASSAGES}", PASSAGES_TABLE)
 
 
 def embed(texts: list[str], url: str, cache: dict) -> list[list[float]]:
@@ -295,7 +299,9 @@ def search_passages(conn, text: str, k: int, url: str | None, cache: dict,
     return list(best.values())[:k]
 
 
-DENSE_VECTORS = pathlib.Path("/data/ch-corpus/weko-bek/vectors.npz")
+# Version 2 of the index (journal re-cut in reading order) lives beside v1:
+# WEKO_PASSAGES=ch_weko_audit_passages_v2 WEKO_VECTORS=/data/ch-corpus/weko-bek/vectors_v2.npz
+DENSE_VECTORS = pathlib.Path(os.environ.get("WEKO_VECTORS", "/data/ch-corpus/weko-bek/vectors.npz"))
 
 
 def dense_index():

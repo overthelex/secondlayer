@@ -68,7 +68,7 @@ _LETTER = re.compile(r"^\s{0,12}([a-h])\)(?:\s+(\S.*))?\s*$")
 # shape as a 2022 subparagraph, so the two are told apart by what follows:
 # a citation opener, not a sentence.
 _FOOTNOTE = re.compile(r"^\s{0,8}\d{1,3}\s+(SR\b|Vgl\.|Siehe|ABl\.|RPW\b|BBl\b|Verordnung\b|Mitteilung\b|Bekanntmachung der Kommission\b|\[)")
-_PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3}|RPW/DPC|DPC/RPW)\s*$")
+_PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3}|RPW/DPC|DPC/RPW|\d{2,3}-\d{5}/COO\.[\d.]+)\s*$")
 # The Erläuterungen have no articles: they run as flat numbered paragraphs
 # ("1.  Nachfolgende Erläuterungen dienen als Auslegehilfe ..."), the
 # Randziffern the practice cites them by.
@@ -103,7 +103,7 @@ _REFERENCE_OPEN = re.compile(r"(?:Absatz|Abs\.|Artikel|Art\.|Ziffer|Ziff\.|Randz
 
 
 def german_only(text: str) -> str:
-    lines = text.splitlines()
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
     for i, line in enumerate(lines):
         if i > 20 and (_OTHER_VERSION.match(line) or _END.match(line)):
             return "\n".join(lines[:i])
@@ -130,7 +130,7 @@ def columns(text: str, min_hits: int = 5) -> str:
     is the character position where the right column most often starts; a
     single-column text has no such position and comes back unchanged. Same
     rule as chpipe.rpw.reading_order, applied to a whole document."""
-    lines = text.splitlines()
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
     starts: dict[int, int] = {}
     for line in lines:
         for m in re.finditer(r"\S\s{3,}(?=\S)", line):
@@ -167,30 +167,32 @@ class Proposition:
 
 
 def _drop_notes(lines: list[str], loose: bool = False) -> list[str]:
-    """Footnotes with their continuation lines. A footnote runs from its
-    number to the next blank line, and on past it when its last line broke a
-    word ("Kosmetikpro-" / "" / "dukte."). Dropping only the numbered line
-    left the rest inside the proposition: Rz 25 of the 2022 Erläuterungen
-    ended in footnotes 55 and 58. `loose` takes any "<number> <text>" line as
-    a footnote, which is right where paragraphs are numbered "25." (the
+    """Footnotes with everything that belongs to them.
+
+    Footnotes stand at the foot of the page, so from the first footnote line
+    to the page break (a form feed) everything is footnotes or page furniture:
+    continuation lines, a footnote carried over a blank line ("... Rz 54 f.,"
+    / "" / "gym80."), the agency's file number under them. Dropping only the
+    numbered lines left the rest inside the proposition -- with the case
+    citations the protocol hides from the judges (Erl. 2019 Rz 4, 2022 Rz 14,
+    25). `loose` takes any "<number> <text>" line after a blank line as a
+    footnote, which is right where paragraphs are numbered "25." (the
     Erläuterungen) and wrong where subparagraphs are numbered "1 " (2022)."""
     out: list[str] = []
-    in_note = broken = False
+    in_note = False
     note = re.compile(r"^\s{0,8}\d{1,3}\s+\S") if loose else _FOOTNOTE
+    prev_blank = True
     for line in lines:
-        if note.match(line) and not _MARGIN_NUMBER.match(line):
-            in_note, broken = True, line.rstrip().endswith("-")
-            continue
         if in_note:
-            if _MARGIN_NUMBER.match(line):
-                in_note = False
-            elif not line.strip():
-                in_note = broken
-                continue
+            if line.startswith("\f") or _MARGIN_NUMBER.match(line):
+                in_note = False              # the next page, or the next paragraph
             else:
-                broken = line.rstrip().endswith("-")
                 continue
+        if note.match(line) and not _MARGIN_NUMBER.match(line) and (prev_blank or not loose):
+            in_note = True
+            continue
         out.append(line)
+        prev_blank = not line.strip()
     return out
 
 
@@ -231,7 +233,7 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
     so the gold set is built with them in.
     """
     text = dehyphenate(german_only(text))
-    lines = text.splitlines()
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
     first_unit = next((i for i, ln in enumerate(lines) if _UNIT.match(ln)), len(lines))
     if first_unit == len(lines) and sum(1 for ln in lines if _MARGIN_NUMBER.match(ln)) >= 5:
         return _parse_margin_numbers(lines, version, keep_notes)

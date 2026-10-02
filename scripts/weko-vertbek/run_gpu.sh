@@ -17,6 +17,13 @@ NAME="${NAME:-weko-embed-$(date +%m%d-%H%M)}"
 WORK="${WORK:-/home/vovkes/weko-audit}"
 LOG=/data/ch-corpus/logs/weko-gpu.log
 VENV=/home/vovkes/weko-audit-venv/bin/python
+# Version 2 (journal re-cut in reading order, PAPER-188):
+#   TABLE=ch_weko_audit_passages_v2 SPIDER=CH_WEKO_RPW BUCKET=gs://secondlayer-ch-vectors/weko-audit-v2 \
+#   MERGE_WITH=/data/ch-corpus/weko-bek/vectors.npz WEKO_VECTORS=/data/ch-corpus/weko-bek/vectors_v2.npz run_gpu.sh
+TABLE="${TABLE:-ch_weko_audit_passages}"
+SPIDER="${SPIDER:-}"
+MERGE_WITH="${MERGE_WITH:-}"
+export WEKO_PASSAGES="$TABLE"
 DSN="postgresql://secondlayer:$(grep '^POSTGRES_PASSWORD=' /home/vovkes/lawrider/.env.lawrider | cut -d= -f2-)@127.0.0.1:5448/secondlayer_prod"
 exec >> "$LOG" 2>&1
 echo "=== $(date -Is) run_gpu start ($NAME, $ZONE)"
@@ -24,7 +31,7 @@ echo "=== $(date -Is) run_gpu start ($NAME, $ZONE)"
 gsutil -q rm "$BUCKET/DONE" "$BUCKET/FAILED" "$BUCKET/vectors.npz" 2>/dev/null || true
 
 echo "--- exporting passages"
-"$VENV" "$WORK/gpu_io.py" export --dsn "$DSN" --out /tmp/passages.jsonl.gz
+"$VENV" "$WORK/gpu_io.py" export --dsn "$DSN" --out /tmp/passages.jsonl.gz --table "$TABLE" ${SPIDER:+--spider "$SPIDER"}
 gsutil -q cp /tmp/passages.jsonl.gz "$BUCKET/passages.jsonl.gz"
 echo "    $(gsutil du -sh "$BUCKET/passages.jsonl.gz")"
 
@@ -78,7 +85,7 @@ done
 echo "--- downloading the vectors"
 gsutil -q cp "$BUCKET/vectors.npz" /tmp/vectors.npz
 gsutil -q cp "$BUCKET/embed.log" /data/ch-corpus/logs/weko-gpu-instance.log 2>/dev/null || true
-"$VENV" "$WORK/gpu_io.py" load --dsn "$DSN" --npz /tmp/vectors.npz
+"$VENV" "$WORK/gpu_io.py" load --dsn "$DSN" --npz /tmp/vectors.npz ${MERGE_WITH:+--merge-with "$MERGE_WITH"}
 
 echo "--- the instance should have deleted itself:"
 gcloud compute instances list --filter="name=$NAME" --format="value(name,status)" || true

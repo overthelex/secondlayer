@@ -8,11 +8,16 @@
 # waiting forever.
 set -euo pipefail
 
+# The bucket comes from the instance metadata that run_gpu.sh sets: a
+# startup script does not see it as an environment variable, and the v2 run
+# went to the v1 bucket (and would have embedded the v1 passages) because of it.
+MD=http://metadata.google.internal/computeMetadata/v1/instance/attributes
+BUCKET="$(curl -sf -H 'Metadata-Flavor: Google' "$MD/BUCKET" || true)"
 BUCKET="${BUCKET:-gs://secondlayer-ch-vectors/weko-audit}"
 MODEL="BAAI/bge-m3"
 LOG=/var/log/weko-embed.log
 exec > >(tee -a "$LOG") 2>&1
-echo "=== $(date -Is) start on $(hostname)"
+echo "=== $(date -Is) start on $(hostname), bucket $BUCKET"
 
 fail() { echo "FAILED: $*"; echo "$*" | gsutil cp - "$BUCKET/FAILED"; gsutil cp "$LOG" "$BUCKET/embed.log" || true; shutdown -h now; }
 trap 'fail "startup script died at line $LINENO"' ERR
@@ -33,7 +38,13 @@ gsutil cp "$BUCKET/passages.jsonl.gz" /tmp/passages.jsonl.gz || fail "no input i
 # attempt left the package in place and the import failed again.
 python3 -m pip uninstall --quiet -y torchaudio 2>&1 | tail -1 || true
 rm -rf /usr/local/lib/python3.*/dist-packages/torchaudio* || true
-python3 -m pip install --quiet --no-input "transformers>=4.40" 2>&1 | tail -2 || fail "pip install failed"
+# The image's pip dies in its resolver on this install ("assert len(weights)
+# == expected_node_count", 2026-10-02); use transformers if it is there,
+# otherwise upgrade pip first.
+if ! python3 -c "import transformers" 2>/dev/null; then
+  python3 -m pip install --quiet --no-input --upgrade pip 2>&1 | tail -2 || true
+  python3 -m pip install --quiet --no-input "transformers>=4.40,<5" 2>&1 | tail -2 || fail "pip install failed"
+fi
 # Fail in seconds rather than after the model download if the stack is broken.
 python3 -c "import torch, transformers; assert torch.cuda.is_available(); print('torch', torch.__version__, 'transformers', transformers.__version__, 'cuda ok', flush=True)" || fail "torch/transformers stack unusable"
 

@@ -42,6 +42,7 @@ import difflib
 import functools
 import itertools
 import json
+import os
 import pathlib
 import random
 import re
@@ -64,7 +65,7 @@ PLAN = [("2022-12-12", 20), ("2022-12-12-erl", 15), ("2010-06-28", 10), ("2002-0
 SEED = 23
 K = 8
 
-POOL_DECISIONS = 120      # the retrieval gate passed at k=100 decisions (PAPER-186)
+POOL_DECISIONS = int(os.environ.get("WEKO_POOL", 120))   # v1 gate: k=100; v2 (journal re-cut) needs k=200 for the same recall
 PER_DECISION = 3          # passages kept per decision to choose a non-recital one from
 CLOSE = 0.03              # a lower-ranked passage of the same decision is "as good" within this
 RECITAL = 0.40            # share of the proposition reproduced verbatim: recitation
@@ -140,6 +141,30 @@ def tier(spider: str) -> str:
 
 def version_date(version: str) -> date:
     return date.fromisoformat(version[:10])
+
+
+def every() -> list:
+    """Every proposition of every version (the full run, PAPER-188)."""
+    out = []
+    for key, (name, journal) in SOURCES.items():
+        out += [p for p in parse(read_text(DIR / name, journal), key) if len(p.text) > 40]
+    # 2002 and 2007 number their recitals 1, 2, 3 like their Ziffern, so
+    # (version, pid) would not identify a proposition; recitals become E1, E2.
+    for p in out:
+        if p.part == "preamble" and p.unit.isdigit():
+            p.unit = "E" + p.unit
+    keys = [(p.version, p.pid) for p in out]
+    assert len(keys) == len(set(keys)), "duplicate proposition keys"
+    return out
+
+
+def gold_key(row: dict) -> tuple[str, str]:
+    """The full run's key for a gold-set label (its recitals were numbered
+    without the E)."""
+    pid = row["pid"]
+    if row.get("part") == "preamble" and pid.isdigit():
+        pid = "E" + pid
+    return row["version"], pid
 
 
 def pick() -> list:
@@ -268,7 +293,9 @@ _FURNITURE = re.compile(
     r"|\d{1,4}\s+RPW \d{4}/\d[a-z]?"
     r"|.*COO\.\d{4}\.\d+(?:\.\d+)*\s+\d{1,4}"
     r"|\[Publikationsversion\]"
-    r"|Seite \d+ von \d+)\s*$")
+    r"|Seite \d+ von \d+"
+    # a table-of-contents line: "C.6.2. Widerlegung der Vermutung ........ 36"
+    r"|.*(?:\.\s?){6,}\s*\d{1,4})\s*$")
 
 
 ISSUES = pathlib.Path("/data/ch-corpus/raw/CH_WEKO_RPW/issues")
@@ -409,7 +436,7 @@ def candidates(index, query: np.ndarray, allowed) -> dict[str, list[tuple[float,
 
 def bodies(conn, keys: list[tuple[str, int]]) -> dict:
     rows = conn.execute(
-        "SELECT p.ecli, p.ord, p.text FROM ch_weko_audit_passages p "
+        f"SELECT p.ecli, p.ord, p.text FROM {os.environ.get('WEKO_PASSAGES', 'ch_weko_audit_passages')} p "
         "JOIN unnest(%s::text[], %s::int[]) AS k(ecli, ord) USING (ecli, ord)",
         ([k[0] for k in keys], [k[1] for k in keys])).fetchall()
     return {(r["ecli"], r["ord"]): r["text"] for r in rows}
@@ -522,6 +549,7 @@ def main() -> int:
     ap.add_argument("--tei", default="http://172.30.0.2:80")
     ap.add_argument("--gold", type=pathlib.Path, default=DIR / "goldset.json")
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "packet.json")
+    ap.add_argument("--all", action="store_true", help="every proposition, not the 50 of the gold set")
     args = ap.parse_args()
 
     import psycopg
@@ -537,8 +565,9 @@ def main() -> int:
         for r in g.get("resolved", []):
             cited[(g["version"], g["pid"])].add(r["ecli"])
 
+    props = every() if args.all else pick()
     items = [{"kind": "sample", "version": p.version, "pid": p.pid, "part": p.part,
-              "heading": p.heading, "lead": p.lead, "text": p.text} for p in pick()]
+              "heading": p.heading, "lead": p.lead, "text": p.text} for p in props]
     items += [{"version": "control", "part": "control", "heading": "", "lead": "", **c} for c in CONTROLS]
 
     index = dense_index()
