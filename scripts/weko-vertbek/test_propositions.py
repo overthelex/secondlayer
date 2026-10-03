@@ -282,3 +282,43 @@ def test_a_body_line_starting_with_a_number_is_not_a_footnote():
                       "15.    Ein weiterer Absatz."] + ["16.  x."] * 4)
     props = propositions.parse(text, "2022-12-12-erl")
     assert props[0].text == "Die Frist beträgt 3 Jahre ab Abschluss des Vertrags."
+
+
+def test_amendment_and_judgment_footnotes_are_not_paragraphs():
+    # 2017 Stand: footnote numbers ran into the paragraph numbers and became
+    # paragraphs 3(4) ("Urteil des BGer ...") and 10(7) ("Beschluss der ...")
+    text = """
+Ziffer 3        Passive Verkäufe
+1 Die Erledigung unaufgeforderter Bestellungen einzelner Kunden gilt als passiver Verkauf.
+
+3 Angepasst am 22.5.2017 (vgl. Erw. XIV.).
+4 Urteil des BGer 2C_180/2014 vom 28.6.2016, Gaba/WEKO.
+\f
+Ziffer 4        Weiteres
+1 Ein Wettbewerbsverbot ist zulässig.
+7 Beschluss der Wettbewerbskommission vom 29.6.2015 (BBl 2015 6048), abrufbar unter
+www.weko.ch > Dokumentation.
+"""
+    props = parse(text, "v")
+    assert pids(props) == ["3(1)", "4(1)"]
+    assert not any("Urteil" in p.text or "Beschluss" in p.text for p in props)
+
+
+def test_a_footnote_split_from_its_number_leaves_the_sentence_whole():
+    # 2010 Ziff. 12(1): "in einer Ge-" / "2" / "Abrufbar unter ..." / "3" /
+    # "Bundesblatt 2006 ..." / "5/10" / "samtbeurteilung."
+    text = """
+Ziffer 12       Erhebliche Wettbewerbsbeeinträchtigung
+1 Die Abwägung erfolgt einzelfallweise in einer Ge-
+
+
+2
+    Abrufbar unter www.weko.ch.
+3
+    Bundesblatt 2006, S. 883 ff. (abrufbar unter http://www.admin.ch/ch/d/ff/2006/883.pdf).
+                                                                                 5/10
+samtbeurteilung.
+"""
+    props = parse(text, "v")
+    assert len(props) == 1
+    assert props[0].text == "Die Abwägung erfolgt einzelfallweise in einer Gesamtbeurteilung."

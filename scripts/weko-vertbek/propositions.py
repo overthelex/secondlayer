@@ -67,7 +67,15 @@ _LETTER = re.compile(r"^\s{0,12}([a-h])\)(?:\s+(\S.*))?\s*$")
 # A footnote under the rule: "1 SR 251", "2 Vgl. RPW 2010/1, S. 1". Same
 # shape as a 2022 subparagraph, so the two are told apart by what follows:
 # a citation opener, not a sentence.
-_FOOTNOTE = re.compile(r"^\s{0,8}\d{1,3}\s+(SR\b|Vgl\.|Siehe|ABl\.|RPW\b|BBl\b|Verordnung\b|Mitteilung\b|Bekanntmachung der Kommission\b|\[)")
+# The 2017 Stand and the 2022 notice add footnotes the first versions do not
+# have: amendment markers ("3 Angepasst am 22.5.2017 (vgl. Erw. XIV.)"), the
+# judgment the amendment rests on ("4 Urteil des BGer 2C_180/2014 ..."), and
+# the decisions that adopted related notices ("7 Beschluss der
+# Wettbewerbskommission vom 29.6.2015 (BBl ...)"). Their numbers run into the
+# notice's own paragraph numbers, so they were read as paragraphs 3(4), 10(7).
+_FOOTNOTE = re.compile(r"^\s{0,8}\d{1,3}\s+(SR\b|Vgl\.|Siehe|ABl\.|RPW\b|BBl\b|Verordnung\b|Mitteilung\b|"
+                       r"Bekanntmachung der Kommission\b|Angepasst am\b|Eingefügt am\b|Urteil des\b|"
+                       r"Beschluss der Wettbewerbskommission vom\b|\[)")
 _PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3}|RPW/DPC|DPC/RPW|\d{2,3}-\d{5}/COO\.[\d.]+)\s*$")
 # The Erläuterungen have no articles: they run as flat numbered paragraphs
 # ("1.  Nachfolgende Erläuterungen dienen als Auslegehilfe ..."), the
@@ -166,6 +174,40 @@ class Proposition:
         return f"{self.unit}({self.sub})" if self.sub else self.unit
 
 
+# A footnote whose number stands on a line of its own, its text on the next
+# ("4" / "    Angepasst am 22.5.2017 (vgl. Erw. V.)." / "6/12"). pdftotext
+# splits them so in the journal issues and in the 2010 and 2022 PDFs; the
+# bare number then goes as page furniture and the text stayed inside the
+# proposition, sometimes in the middle of a sentence ("in einer Ge-
+# [Abrufbar unter www.weko.ch. Bundesblatt 2006 ...] samtbeurteilung").
+_NOTE_NUMBER = re.compile(r"^\s*\d{1,3}\s*$")
+_NOTE_BODY = re.compile(r"^\s*(Vgl\.|Siehe|Abrufbar unter|abrufbar unter|Bundesblatt \d|BBl \d|SR \d|"
+                        r"Angepasst am|Eingefügt am|Urteil des|Beschluss der Wettbewerbskommission vom|"
+                        r"Medienmitteilung|Massgebend ist der im Bundesblatt)")
+
+
+def _drop_split_notes(lines: list[str]) -> list[str]:
+    """Drop a footnote body that follows a bare footnote number, with its
+    continuation lines, up to a blank line, the next bare number or a page
+    foot. The number line itself is left to the page-furniture filter."""
+    out: list[str] = []
+    in_note = False
+    last = ""                                    # the previous non-blank line
+    for line in lines:
+        if in_note:
+            if not line.strip() or _NOTE_NUMBER.match(line) or _PAGE_FOOT.match(line) or line.startswith("\f"):
+                in_note = False
+            else:
+                continue
+        if _NOTE_BODY.match(line) and _NOTE_NUMBER.match(last):
+            in_note = True
+            continue
+        out.append(line)
+        if line.strip():
+            last = line
+    return out
+
+
 def _drop_notes(lines: list[str], loose: bool = False) -> list[str]:
     """Footnotes with everything that belongs to them.
 
@@ -178,6 +220,7 @@ def _drop_notes(lines: list[str], loose: bool = False) -> list[str]:
     25). `loose` takes any "<number> <text>" line after a blank line as a
     footnote, which is right where paragraphs are numbered "25." (the
     Erläuterungen) and wrong where subparagraphs are numbered "1 " (2022)."""
+    lines = _drop_split_notes(lines)
     out: list[str] = []
     in_note = False
     note = re.compile(r"^\s{0,8}\d{1,3}\s+\S") if loose else _FOOTNOTE
