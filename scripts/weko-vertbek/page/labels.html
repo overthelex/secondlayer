@@ -84,6 +84,7 @@
     padding: 16px 18px; border-radius: 3px;
   }
 
+  .lead-in { font-family: var(--serif); font-size: 14px; color: var(--ink-3); margin: 10px 0 -6px; font-style: italic; }
   .labels { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 6px; }
   .lab {
     font: 500 13px var(--sans); cursor: pointer; padding: 8px 14px; border-radius: 4px;
@@ -100,6 +101,13 @@
   .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .tag { font: 400 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 5px; }
   .tag.late { color: var(--accent); border-color: var(--accent); }
+  .votes { margin: 0 14px 12px; padding: 8px 10px; border-left: 2px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+  .votes b { font-family: var(--mono); font-weight: 500; font-size: 11.5px; color: var(--ink); }
+  .votes q { display: block; font-family: var(--serif); color: var(--ink-3); margin: 2px 0 6px; }
+  .judged { font-size: 12.5px; color: var(--ink-2); margin-top: 8px; }
+  .chip.check { border-color: var(--supported); color: var(--supported); }
+  .chip.disputed { border-color: var(--fragment); color: var(--fragment); }
+  .chip.rest { border-color: var(--ink-3); color: var(--ink-2); }
   .use { font: 500 12px var(--sans); cursor: pointer; margin: 0 14px 12px; padding: 5px 10px; border-radius: 4px;
          border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
   .use[aria-pressed="true"] { background: var(--supported); border-color: transparent; color: #fff; }
@@ -123,13 +131,36 @@
   .btn { font: 500 13px var(--sans); cursor: pointer; padding: 8px 13px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
   .btn:hover { border-color: var(--ink-3); }
   .status { font-size: 12.5px; color: var(--ink-3); padding: 10px 20px; border-top: 1px solid var(--line); background: var(--surface); }
+
+  .help-btn { font: 500 12.5px var(--sans); cursor: pointer; padding: 5px 11px; border-radius: 4px;
+              border: 1px solid var(--accent); background: var(--surface); color: var(--accent); }
+  .help-btn:hover { background: var(--surface-2); }
+  .guide-back { position: fixed; inset: 0; background: rgba(10, 12, 15, .45); z-index: 40; display: none; }
+  .guide-back.open { display: block; }
+  .guide { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); z-index: 41;
+           background: var(--surface); border-left: 1px solid var(--line); overflow-y: auto;
+           padding: 22px 26px 60px; transform: translateX(100%); transition: transform .2s; }
+  .guide.open { transform: none; }
+  @media (max-width: 860px) { .guide { padding: 18px 16px 48px; } }
+  .guide h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .guide h3 { font-size: 14px; margin: 22px 0 6px; color: var(--ink); }
+  .guide p, .guide li { font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+  .guide ol, .guide ul { padding-left: 20px; margin: 6px 0; }
+  .guide code, .guide kbd { font: 12px var(--mono); background: var(--surface-2); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+  .guide .ex { border-left: 3px solid var(--line); padding: 4px 10px; margin: 8px 0; font-family: var(--serif);
+               font-size: 13.5px; color: var(--ink-2); }
+  .guide table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  .guide td, .guide th { border-bottom: 1px solid var(--line-soft); padding: 6px 8px; text-align: left; vertical-align: top; color: var(--ink-2); }
+  .guide th { color: var(--ink); font-weight: 600; }
+  .guide .close { position: sticky; top: 0; float: right; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
 <div class="top">
   <h1>Vertikalbekanntmachung — Befundprüfung</h1>
-  <span class="sub">58 Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <span class="sub" id="sub">Sätze, je acht Fundstellen aus verschiedenen Entscheiden</span>
+  <button class="help-btn" id="help">Как размечать</button>
   <div class="progress"><span id="count">0 / 58</span><span class="bar"><i id="barfill"></i></span></div>
 </div>
 
@@ -137,6 +168,102 @@
   <nav class="rail" id="rail" aria-label="Sätze"></nav>
   <main class="main" id="main"></main>
 </div>
+
+<div class="guide-back" id="guide-back"></div>
+<aside class="guide" id="guide" role="dialog" aria-label="Инструкция по разметке">
+  <button class="btn close" id="guide-close">Закрыть ✕</button>
+  <h2>Как размечать — протокол v2</h2>
+  <p>Версия 2 заморожена 02.10.2026. Она написана по вашим пояснениям к первым 17 позициям: судьи читали
+  «частично» там, где вы читали «только цитирует». Те же правила получили три модели-судьи. Если правило
+  покажется неполным, не дополняйте его по ходу — запишите сомнение в «Begründung».</p>
+
+  <h3>1. Что перед вами</h3>
+  <p>Сверху — <b>положение</b> уведомления WEKO о вертикальных соглашениях (версия в чипе). У буквенного пункта
+  серым курсивом показано начало предложения — это контекст, положение — сам пункт. Ниже — <b>восемь фрагментов</b>
+  из восьми разных решений; под каждым суд, номер дела, дата («≤ дата» — только верхняя граница), режим закона и
+  красная пометка «nach der Fassung», если решение позже этой версии уведомления.</p>
+  <p>Вопрос к фрагменту: <b>видно ли в нём, что правило из положения использовано, чтобы что-то решить — и видно
+  ли это внутри самого фрагмента?</b></p>
+
+  <h3>2. Порядок работы</h3>
+  <ol>
+    <li>Прочитайте положение; определите, какое <i>правило</i> оно формулирует (и какую именно букву/абзац).</li>
+    <li>Пройдите восемь фрагментов по вопросам из п. 3.</li>
+    <li>Фрагменты, где правило <b>применено</b> или <b>частично</b>, отметьте «stützt den Satz».</li>
+    <li>Поставьте метку положения по п. 4 (клавиши <kbd>1</kbd>–<kbd>4</kbd>).</li>
+    <li>Сомнение или находку — одной строкой в «Begründung».</li>
+  </ol>
+
+  <h3>3. Вопросы к фрагменту — по порядку, до первого «да»</h3>
+  <ol>
+    <li><b>Фрагмент про <i>это</i> правило?</b> Другая буква или абзац той же статьи, другой правовой вопрос → <i>не про это</i>.
+      Соседнее правило, покрывающее часть того же предмета (максимальные цены для положения о ценовых рекомендациях), — «про это».</li>
+    <li><b>С правилом что-то делают <i>внутри фрагмента</i>, кроме пересказа?</b> Нет → <i>только цитирует</i>.</li>
+    <li><b>Решение идёт против правила?</b> Да → <i>противоречит</i> (и строка в Begründung).</li>
+    <li><b>Применено всё правило, и правовое следствие для дела видно во фрагменте?</b> Нет → <i>частично</i>.</li>
+    <li>Иначе → <i>применяет</i>.</li>
+  </ol>
+  <table>
+    <tr><th>Фрагмент</th><th>Когда</th><th>«stützt»?</th></tr>
+    <tr><td><b>применяет</b></td><td>правило приложено к делу, и <b>следствие видно во фрагменте</b>: презумпция опровергнута или нет,
+      условие является жёстким ограничением или нет, довод отклонён из-за правила. Можно без ссылки на уведомление;
+      предыдущая редакция того же правила (2007/2010 для положения 2022) — то же правило.</td><td>да</td></tr>
+    <tr><td><b>частично</b></td><td>шаг с правилом виден, но не до следствия: факты квалифицированы по правилу, а
+      следствия во фрагменте нет; решение само выводит/обосновывает правило или ставит его мерилом для своего шага,
+      а подведение — за пределами фрагмента; использована часть положения, соседнее правило или «обратная сторона»
+      правила.</td><td>да</td></tr>
+    <tr><td><b>противоречит</b></td><td>решение принимает противоположное правило или отказывается его применять там,
+      где оно претендует на применение.</td><td>нет</td></tr>
+    <tr><td><b>только цитирует</b></td><td>правило пересказано, процитировано, перечислено — и <b>во фрагменте</b>
+      с ним ничего не сделано. В том числе: правило изложено как право, применимое к делу, а подведение идёт после
+      окна («Vorliegend …», заголовок — и фрагмент кончается); суд пересказывает позицию WEKO, не принимая её;
+      правило в сноске, как «Orientierungshilfe», или фраза «практика следует ЕС»; только определения терминов.</td><td>нет</td></tr>
+    <tr><td><b>не про это</b></td><td>другое правило того же уведомления (Art. 15 lit. c ≠ lit. b; презумпция Art. 5 Abs. 4 ≠
+      качественная тяжесть Art. 15); те же слова в другом вопросе (платформы «посредничают» — для определения рынка, а не
+      квалификация как Online-Vermittlungsdienst; Geschäftsgeheimnis ≠ Know-how; горизонтальные соглашения, Art. 7,
+      слияния, процедура); совпадение только по лексике.</td><td>нет</td></tr>
+  </table>
+
+  <h3>4. Метка положения — выводится из фрагментов</h3>
+  <table>
+    <tr><th>Клавиша</th><th>Метка</th><th>Когда</th></tr>
+    <tr><td><kbd>1</kbd></td><td><b>gestützt</b></td><td>хотя бы один фрагмент <i>применяет</i></td></tr>
+    <tr><td><kbd>2</kbd></td><td><b>Bruchstück</b></td><td>ни один не применяет, хотя бы один <i>частично</i></td></tr>
+    <tr><td><kbd>4</kbd></td><td><b>nur zitiert</b></td><td>нет применения и частичного; хотя бы один <i>только цитирует</i></td></tr>
+    <tr><td><kbd>3</kbd></td><td><b>nicht belegt</b></td><td>все фрагменты <i>не про это</i> или <i>противоречат</i></td></tr>
+  </table>
+  <p>Противоречащий фрагмент никогда не поддерживает. Повторное нажатие снимает метку; <kbd>j</kbd>/<kbd>k</kbd> — листать.</p>
+
+  <h3>5. Где чаще всего ошибаются</h3>
+  <ul>
+    <li><b>Следствие может быть одним придаточным:</b> <span class="ex">«… weshalb die Abrede als qualitativ schwerwiegend gilt»</span> — <i>применяет</i>.</li>
+    <li><b>Правило объявлено — окно кончилось:</b> «Vorliegend bestehen folgende Abreden:» или заголовок, а вывод
+      обрезан — <i>только цитирует</i>. Обрывок вывода без предмета («… von Art. 5 Abs. 4 KG erfasst werden») не засчитывается.</li>
+    <li><b>Суд находит, что WEKO нарушила правило</b> — <i>применяет</i> (правило — мерило).</li>
+    <li><b>Нормы, которой ещё не было:</b> решение до 01.04.2004 не может применить Art. 5 Abs. 4 KG; похожий результат
+      через другую норму — <i>частично</i>.</li>
+    <li><b>Дата и режим — справка, не метка.</b></li>
+  </ul>
+
+  <h3>6. Особенности текста</h3>
+  <ul>
+    <li>Окна ~1 200 знаков, могут начинаться и обрываться на полуслове; фрагменты журнала — из PDF в порядке чтения,
+      «[…]» на отдельной строке — пропуск между двумя кусками страницы. «[…]» внутри предложения — изъятая коммерческая тайна.</li>
+    <li>Фрагмент может быть на французском или итальянском.</li>
+    <li>Сноски из положений Erläuterungen убраны (в них были ссылки на дела — подсказка, которой судьи видеть не должны).</li>
+  </ul>
+
+  <h3>7. Чипы «strittig» и «Stichprobe»</h3>
+  <p><b>strittig</b> — судьи не сошлись. <b>Stichprobe</b> — судьи сошлись, позиция выбрана случайно для слепой проверки
+  их большинства. Ответы судей появляются только после вашей метки. Если они вас переубедили — меняйте метку и пишите почему.</p>
+
+  <h3>8. Когда не уверены</h3>
+  <p>Более слабая метка: <i>частично</i> вместо <i>применяет</i>, <i>только цитирует</i> вместо <i>частично</i>,
+  <i>не про это</i> вместо <i>только цитирует</i>, если правило другое. Строка сомнения в Begründung.</p>
+
+  <h3>9. Сохранение</h3>
+  <p>Всё сохраняется сразу; можно прерываться и возвращаться.</p>
+</aside>
 <div class="status" id="status">Bewertungen werden lokal gehalten, bis der Speicher antwortet.</div>
 
 <script id="packet" type="application/json">__PACKET__</script>
@@ -153,16 +280,24 @@
   var SOURCE = { agency: "WEKO", merger: "WEKO Fusion", court: "Bundesgericht", cantonal: "kantonal", other: "andere Behörde" };
   var VERSIONS = {
     "2002-02-18": "Bekanntmachung 2002",
+    "2007-07-02": "Bekanntmachung 2007",
+    "2017-05-22": "Bekanntmachung 2010 (Stand 2017)",
+    "2019-04-09": "Erläuterungen (Stand 2019)",
     "2010-06-28": "Bekanntmachung 2010",
     "2022-12-12": "Bekanntmachung 2022",
     "2022-12-12-erl": "Erläuterungen 2022",
     "control": "Weitere Sätze"
   };
+  var LONG = { supported: "gestützt", fragment: "Bruchstück", absent: "nicht belegt", recites: "nur zitiert" };
+  var PASSAGE = { applies: "wendet an", partial: "teilweise", contradicts: "widerspricht", recites: "zitiert", unrelated: "nicht darüber" };
   var state = Object.create(null);   // key -> {label, note}
   var current = 0;
   var db = null;
 
-  function key(d) { return (d.version + "__" + d.pid).replace(/[^\w.\-~:@+]/g, "_"); }
+  // a proposition read against the record before its version (measurement 1)
+  // is another question than the same proposition against the whole record:
+  // its own document
+  function key(d) { return (d.version + "__" + d.pid + (d.before ? "__vor" : "")).replace(/[^\w.\-~:@+]/g, "_"); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
@@ -193,20 +328,32 @@
         (e.after_version ? '<span class="tag late">nach der Fassung</span>' : "") +
         (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "");
       var on = used.indexOf(e.ecli) >= 0;
+      var votes = "";
+      if (st.label && d.judge_passages && d.judge_passages[n]) {
+        var jv = d.judge_passages[n];
+        votes = '<div class="votes">' + Object.keys(jv).map(function (j) {
+          var v = jv[j];
+          return "<b>" + esc(j) + "</b>: " + esc(PASSAGE[v.label] || v.label) + " — " + esc(v.why) +
+            (v.quote ? "<q>" + esc(v.quote) + (v.quote_found ? "" : " [Zitat nicht im Text]") + "</q>" : "");
+        }).join("<br>") + "</div>";
+      }
       return '<details class="ev"' + (n === 0 ? " open" : "") + ">" +
         "<summary><span><span class=\"who\">" + esc(e.docket || e.ecli) + "</span><br>" +
         '<span class="src">' + esc(e.spider || "") + '</span><span class="tags">' + tags + "</span></span>" +
         '<span class="score">' + e.score.toFixed(3) + "</span></summary>" +
         '<div class="body">' + esc(e.text) + "</div>" +
         '<button class="use" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
-        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button></details>";
+        (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button>" + votes + "</details>";
     }).join("");
 
     document.getElementById("main").innerHTML =
       '<div class="meta"><span class="chip">' + esc(VERSIONS[d.version] || d.version) + "</span>" +
       '<span class="chip">' + esc(d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
+      (d.before ? '<span class="chip late">nur Entscheide vor ' + esc(d.before) + "</span>" : "") +
+      (d.status ? '<span class="chip ' + esc(d.status) + '">' + (d.status === "check" ? "Stichprobe" : d.status === "rest" ? "Rest" : "strittig") + "</span>" : "") +
       "<span>" + (current + 1) + " von " + DATA.length + "</span></div>" +
       (d.heading ? '<h2 class="heading">' + esc(d.heading) + "</h2>" : "") +
+      (d.lead ? '<p class="lead-in">' + esc(d.lead) + " …</p>" : "") +
       '<p class="prop">' + esc(d.text) + "</p>" +
       '<div class="labels">' + LABELS.map(function (l, i) {
         return '<button class="lab" data-v="' + l.v + '" title="' + esc(l.hint) + '" aria-pressed="' +
@@ -214,6 +361,9 @@
       }).join("") + "</div>" +
       '<textarea class="note" id="note" placeholder="Begründung, Fundstelle, Zweifel — optional">' + esc(st.note || "") + "</textarea>" +
       '<div class="saved" id="saved">' + (st.label ? "gespeichert" : "") + "</div>" +
+      (st.label && d.judges ? '<div class="judged">Richter: ' + Object.keys(d.judges).map(function (j) {
+        return esc(j) + " = " + esc(LONG[d.judges[j]] || d.judges[j] || "—");
+      }).join(" · ") + "</div>" : "") +
       '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst</span></div>' +
       ev +
       '<div class="foot"><button class="btn" id="prev">← zurück</button>' +
@@ -265,7 +415,7 @@
     if (!db) { if (saved) saved.textContent = "nur in diesem Fenster — kein Speicher"; return; }
     if (saved) saved.textContent = "speichert …";
     db.doc("labels/" + k).set({
-      version: d.version, pid: d.pid, part: d.part, heading: d.heading || "",
+      version: d.version, pid: d.pid, part: d.part, heading: d.heading || "", before: d.before || "",
       label: st.label, note: st.note, evidence: st.evidence, updatedAt: new Date().toISOString()
     }).then(function () {
       var s = document.getElementById("saved");
@@ -282,6 +432,7 @@
   });
   document.addEventListener("keydown", function (e) {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (document.getElementById("guide") && document.getElementById("guide").classList.contains("open")) return;
     if (e.key === "1") setLabel("supported");
     else if (e.key === "2") setLabel("fragment");
     else if (e.key === "3") setLabel("absent");
@@ -292,6 +443,23 @@
     e.preventDefault();
   });
 
+
+  function openGuide(on) {
+    document.getElementById("guide").classList.toggle("open", on);
+    document.getElementById("guide-back").classList.toggle("open", on);
+    if (!on) { try { localStorage.setItem("vb-guide-seen-v2", "1"); } catch (e) {} }
+  }
+  document.getElementById("help").addEventListener("click", function () { openGuide(true); });
+  document.getElementById("guide-close").addEventListener("click", function () { openGuide(false); });
+  document.getElementById("guide-back").addEventListener("click", function () { openGuide(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") openGuide(false);
+  });
+  var seen = false;
+  try { seen = localStorage.getItem("vb-guide-seen-v2") === "1"; } catch (e) {}
+  if (!seen) openGuide(true);
+  document.getElementById("sub").textContent = DATA.length +
+    " Sätze zum Lesen, je acht Fundstellen; die Richter erscheinen nach Ihrer Bewertung";
   go(0); progress();
 
   if (window.claude && window.claude.use) {

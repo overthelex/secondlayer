@@ -46,23 +46,29 @@ _RECITAL = re.compile(r"^\s{0,12}(?:(" + "|".join(ROMAN) + r")\.|\((\d{1,2})\)|(
 # "Ziffer 8   Geltungsbereich", "Artikel 12   Vermutungstatbestände", and --
 # 2002, where the journal sets the heading on the next line -- a bare
 # "Ziffer 1".
-# A heading is a short line that names the unit and stops: no closing period,
+# A heading is a line that names the unit and stops (up to ~90 characters:
+# "Unerhebliche Wettbewerbsbeeinträchtigung aufgrund der Marktanteile" is 66,
+# and a 58 limit merged Ziffer 13 of 2010 into Ziffer 12): no closing period,
 # no running prose. Without that, "Artikel 6 KG auch andere Grundsätze der
 # Rechtsanwendung ..." inside a recital reads as the heading of article 6 and
 # swallows the preamble.
+# Nor is a sentence that starts with a statute reference: "Artikel 5 Absatz 1
+# KG vorliegt, ist Folgendes zu beachten:" continues the previous line, and
+# reading it as article 5 cut the proposition before it in half.
 _UNIT = re.compile(r"^\s{0,12}(Ziffer|Artikel)\s+(\d{1,2})"
-                   r"(?:\s+([A-ZÄÖÜ][^.]{2,58}))?\s*$")
+                   r"(?:\s+(?!Absatz\b|Abs\.|Bst\.|lit\.|i\.\s?V\.|KG\b|BV\b|VKU\b|SVKG\b)([A-ZÄÖÜ][^.:]{2,88}))?\s*$")
 # A subparagraph opens as "(1)" until 2017 and as a bare "1" from 2022.
 _SUBPARA = re.compile(r"^\s{0,12}(?:\((\d{1,2})\)|(\d{1,2}))\s+([A-ZÄÖÜ].*)$")
 # The lettered points inside a subparagraph: "a) Festsetzung von Mindest-...".
 # They carry the rules an audit is most interested in (the hardcore list), so
 # each is a proposition of its own.
-_LETTER = re.compile(r"^\s{0,12}([a-h])\)\s+(\S.*)$")
+# 2002 sets the letter on a line of its own ("e)") and the text below it.
+_LETTER = re.compile(r"^\s{0,12}([a-h])\)(?:\s+(\S.*))?\s*$")
 # A footnote under the rule: "1 SR 251", "2 Vgl. RPW 2010/1, S. 1". Same
 # shape as a 2022 subparagraph, so the two are told apart by what follows:
 # a citation opener, not a sentence.
 _FOOTNOTE = re.compile(r"^\s{0,8}\d{1,3}\s+(SR\b|Vgl\.|Siehe|ABl\.|RPW\b|BBl\b|Verordnung\b|Mitteilung\b|Bekanntmachung der Kommission\b|\[)")
-_PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3})\s*$")
+_PAGE_FOOT = re.compile(r"^\s*(Seite|Page|\d+/\d+|\d{1,3}|RPW/DPC|DPC/RPW|\d{2,3}-\d{5}/COO\.[\d.]+)\s*$")
 # The Erläuterungen have no articles: they run as flat numbered paragraphs
 # ("1.  Nachfolgende Erläuterungen dienen als Auslegehilfe ..."), the
 # Randziffern the practice cites them by.
@@ -72,8 +78,51 @@ _MARGIN_NUMBER = re.compile(r"^\s{0,6}(\d{1,3})\.\s+(\S.*)$")
 def dehyphenate(text: str) -> str:
     """"Wettbewerbsabre-\\nden" -> "Wettbewerbsabreden". German legal PDFs
     break words across lines constantly; a proposition compared with a
-    hyphen in it matches nothing."""
-    return re.sub(r"(\w)-\n(\w)", r"\1\2", text)
+    hyphen in it matches nothing. The continuation may be indented (the 2022
+    site PDF prints "Wei-" / "  terverkauf"), and only a lower-case one is a
+    broken word: "EU-" / "Kommission" keeps its hyphen."""
+    return re.sub(r"([^\W\d_])-\n[ \t]*([a-zäöüß])", r"\1\2", text)
+
+
+# The journal prints the notice in German, then French, then Italian, and
+# the cut of one item can run into the next language's version: the 2002 and
+# 2007 texts carried the whole French version after the last German Ziffer,
+# where it read as subparagraphs of that Ziffer.
+_OTHER_VERSION = re.compile(
+    r"^\s*(?:Communication (?:concernant|sur|relative)|Comunicazione (?:riguardante|sulla|relativa)"
+    r"|Communication on)\b")
+
+
+# Where the instrument ends: the signature ("Der Präsident: ...") and the
+# annexes (the 2017 and 2022 "Anhang 1: Prüfschema") are not propositions.
+_END = re.compile(r"^\s*(?:Anhang\s+\d+\s*:|(?:.*\s)?(?:Der Präsident|Die Präsidentin)\s*:"
+                  r"|(?:Bern,\s*)?\d{1,2}\.\s+[A-ZÄÖÜ][a-zäöü]+\s+\d{4}(?:\s{3,}\S.*)?\s*$)")
+# A line ending in a statute reference continues on the next line: "gemäss
+# Artikel 5 Absatz" / "3 KG beurteilt ..." is not subparagraph 3.
+_REFERENCE_OPEN = re.compile(r"(?:Absatz|Abs\.|Artikel|Art\.|Ziffer|Ziff\.|Randziffer|Rz\.|Bst\.|Buchstabe)\s*$")
+
+
+def german_only(text: str) -> str:
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
+    for i, line in enumerate(lines):
+        if i > 20 and (_OTHER_VERSION.match(line) or _END.match(line)):
+            return "\n".join(lines[:i])
+    return text
+
+
+# What is left of a footnote in the body: the call number after the
+# sentence ("... zu beziehen.39") or glued to a word ("Vertikalleitlinien2").
+_NOTE_CALL = re.compile(r"(?<=[.;:,)])\d{1,3}(?=\s|$)|(?<=[a-zäöüß]{4})\d{1,3}(?=[\s,.;:)]|$)")
+# A heading line: short, no sentence end. "B. Regeln", "Grundsatz",
+# "Sachverhalte, die den Tatbestand von Artikel 5 Absatz 4 KG nicht erfüllen".
+# A repealed point is printed as "[…]" with its footnote call.
+_REPEALED = re.compile(r"\[(?:…|\.\.\.)\]\s*\d{0,3}")
+_SECTION_LETTER = re.compile(r"^\s*[A-H]\.(?:\s+\S.{0,60})?\s*$")
+_SENTENCE_END = re.compile(r"[.;:!?][\"»”)]*\d{0,3}\s*$")
+# A hyphen before a conjunction is German, not a line break:
+# "Herstellungs- oder Vertriebskosten".
+_SPACED_HYPHEN = re.compile(
+    r"([a-zäöüß])- (?!(?:und|oder|bzw|sowie|resp|als|noch|bis|beziehungsweise)\b)([a-zäöüß])")
 
 
 def columns(text: str, min_hits: int = 5) -> str:
@@ -81,7 +130,7 @@ def columns(text: str, min_hits: int = 5) -> str:
     is the character position where the right column most often starts; a
     single-column text has no such position and comes back unchanged. Same
     rule as chpipe.rpw.reading_order, applied to a whole document."""
-    lines = text.splitlines()
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
     starts: dict[int, int] = {}
     for line in lines:
         for m in re.finditer(r"\S\s{3,}(?=\S)", line):
@@ -107,17 +156,68 @@ class Proposition:
     heading: str
     text: str
     order: int = 0
+    # A lettered point continues the sentence its subparagraph opens ("...
+    # wenn sie Folgendes zum Gegenstand haben:" / "e) Beschränkungen ...");
+    # the opening is kept here so the reader sees a whole sentence.
+    lead: str = ""
 
     @property
     def pid(self) -> str:
         return f"{self.unit}({self.sub})" if self.sub else self.unit
 
 
-def _clean(lines: list[str], keep_notes: bool = False) -> str:
+def _drop_notes(lines: list[str], loose: bool = False) -> list[str]:
+    """Footnotes with everything that belongs to them.
+
+    Footnotes stand at the foot of the page, so from the first footnote line
+    to the page break (a form feed) everything is footnotes or page furniture:
+    continuation lines, a footnote carried over a blank line ("... Rz 54 f.,"
+    / "" / "gym80."), the agency's file number under them. Dropping only the
+    numbered lines left the rest inside the proposition -- with the case
+    citations the protocol hides from the judges (Erl. 2019 Rz 4, 2022 Rz 14,
+    25). `loose` takes any "<number> <text>" line after a blank line as a
+    footnote, which is right where paragraphs are numbered "25." (the
+    Erläuterungen) and wrong where subparagraphs are numbered "1 " (2022)."""
+    out: list[str] = []
+    in_note = False
+    note = re.compile(r"^\s{0,8}\d{1,3}\s+\S") if loose else _FOOTNOTE
+    prev_blank = True
+    for line in lines:
+        if in_note:
+            if line.startswith("\f") or _MARGIN_NUMBER.match(line):
+                in_note = False              # the next page, or the next paragraph
+            else:
+                continue
+        if note.match(line) and not _MARGIN_NUMBER.match(line) and (prev_blank or not loose):
+            in_note = True
+            continue
+        out.append(line)
+        prev_blank = not line.strip()
+    return out
+
+
+def _clean(lines: list[str], keep_notes: bool = False, loose_notes: bool = False) -> str:
+    if not keep_notes:
+        lines = _drop_notes(lines, loose_notes)
     keep = [ln for ln in lines
             if ln.strip() and not _PAGE_FOOT.match(ln)
             and (keep_notes or not _FOOTNOTE.match(ln))]
-    return re.sub(r"\s+", " ", " ".join(keep)).strip()
+    # Headings of the next section are printed after the last sentence of
+    # this one ("... zugelassen sind." / "B." / "Regeln"): drop short lines
+    # without a sentence end, starting upper-case, that follow the last sentence
+    # end ("oder" closing a lettered rule is kept).
+    last = max((i for i, ln in enumerate(keep)
+                if _SENTENCE_END.search(ln) and not _SECTION_LETTER.match(ln)), default=None)
+    tail = keep[last + 1:] if last is not None else []
+    if tail and len(tail) <= 3 and all(len(ln.strip()) < 100 and re.match(r"\s*[A-ZÄÖÜ]", ln)
+                                       for ln in tail):
+        keep = keep[:last + 1]
+    text = re.sub(r"\s+", " ", " ".join(keep)).strip()
+    text = text.replace("?? ", "").replace("??", "")      # 2002's bullet glyph
+    text = _SPACED_HYPHEN.sub(r"\1\2", text)
+    if not keep_notes:
+        text = _NOTE_CALL.sub("", text)
+    return text
 
 
 def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition]:
@@ -132,8 +232,8 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
     -- the Erläuterungen name the decisions in footnotes, not in the body --
     so the gold set is built with them in.
     """
-    text = dehyphenate(text)
-    lines = text.splitlines()
+    text = dehyphenate(german_only(text))
+    lines = text.split("\n")    # not splitlines(): a form feed (page break) must stay at the start of its line
     first_unit = next((i for i, ln in enumerate(lines) if _UNIT.match(ln)), len(lines))
     if first_unit == len(lines) and sum(1 for ln in lines if _MARGIN_NUMBER.match(ln)) >= 5:
         return _parse_margin_numbers(lines, version, keep_notes)
@@ -167,6 +267,12 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
                 buf.append(line)
             continue
         m = _UNIT.match(line)
+        if m and i > 0 and len(lines[i - 1].strip()) > 50 \
+                and re.search(r"[a-zäöüß,]\s*$", lines[i - 1]):
+            # directly under a line of prose broken off mid-sentence ("... die
+            # nicht unter" / "Artikel 12 ... fallen"): a continuation, not a
+            # heading. Short lines ("A. Begriffe") are headings themselves.
+            m = None
         if m:
             flush()
             unit_heading = (m.group(3) or "").strip()
@@ -179,6 +285,8 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
             unit_heading = cur.heading = line.strip()
             continue
         m = _SUBPARA.match(line)
+        if m and buf and _REFERENCE_OPEN.search(buf[-1]):
+            m = None
         if m and cur is not None and cur.part == "operative" and not _FOOTNOTE.match(line):
             unit, sub = cur.unit, (m.group(1) or m.group(2))
             flush()
@@ -193,7 +301,7 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
             flush()
             cur = Proposition(version, "operative", unit, f"{sub}{m.group(1)}" if sub else m.group(1),
                               unit_heading, "")
-            buf = [m.group(2)]
+            buf = [m.group(2)] if m.group(2) else []
             continue
         if cur is not None:
             buf.append(line)
@@ -202,9 +310,16 @@ def parse(text: str, version: str, keep_notes: bool = False) -> list[Proposition
     # neither does a subparagraph whose lettered points were: the chapeau
     # ("... wenn sie Folgendes zum Gegenstand haben:") states no rule alone.
     lettered = {(p.unit, p.sub[:-1]) for p in out if p.sub and p.sub[-1].isalpha()}
+    chapeau = {(p.unit, p.sub): p.text for p in out if p.part == "operative"}
+    for p in out:
+        if p.part == "operative" and p.sub and p.sub[-1].isalpha():
+            p.lead = chapeau.get((p.unit, p.sub[:-1]), "")
     with_subs = {p.unit for p in out if p.part == "operative" and p.sub}
     return [p for p in out
-            if p.text
+            if p.text and not _REPEALED.fullmatch(p.text)
+            # a subparagraph that is only a heading ("Rein qualitativer
+            # Selektivvertrieb") states no rule
+            and not (len(p.text) < 80 and not re.search(r"[.;:,]", p.text))
             and not (p.part == "operative" and not p.sub and p.unit in with_subs)
             and not (p.part == "operative" and p.sub and not p.sub[-1].isalpha()
                      and (p.unit, p.sub) in lettered)]
@@ -223,7 +338,7 @@ def _parse_margin_numbers(lines: list[str], version: str, keep_notes: bool) -> l
         m = _MARGIN_NUMBER.match(line)
         if m and not _FOOTNOTE.match(line):
             if cur is not None:
-                cur.text = _clean(buf, keep_notes)
+                cur.text = _clean(buf, keep_notes, loose_notes=True)
                 if cur.text:
                     cur.order = len(out)
                     out.append(cur)
@@ -233,7 +348,7 @@ def _parse_margin_numbers(lines: list[str], version: str, keep_notes: bool) -> l
         if cur is not None:
             buf.append(line)
     if cur is not None:
-        cur.text = _clean(buf, keep_notes)
+        cur.text = _clean(buf, keep_notes, loose_notes=True)
         if cur.text:
             cur.order = len(out)
             out.append(cur)

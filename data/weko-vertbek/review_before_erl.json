@@ -1,0 +1,1262 @@
+[
+ {
+  "kind": "sample",
+  "version": "2019-04-09",
+  "pid": "1",
+  "part": "note",
+  "heading": "",
+  "lead": "",
+  "text": "Nachfolgende Erläuterungen dienen als Auslegehilfe für die Regeln der Vertikalbekanntmachung (VertBek). Fokussiert werden praxisrelevante Fragestellungen, für die eine gefestigte Praxis der Wettbewerbsbehörden besteht. Die Erläuterungen enthalten somit nicht zu jeder Regel der Vertikalbekanntmachung Ausführungen und auch keine zusätzlichen Wettbewerbsregeln. Die Wettbewerbskommission (WEKO) behält sich vor, die Erläuterungen bei Bedarf anzupassen.",
+  "before": "2017-06-12",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 107
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B1.1.1",
+    "ord": 9,
+    "score": 0.734,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2011/3, S. 364",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "",
+    "date_upper_bound": "2012-03-31",
+    "date_source": "issue",
+    "regime": "KG 2003",
+    "regime_exact": false,
+    "after_version": false,
+    "recital_share": 0.053,
+    "recital": false,
+    "cites_this": false,
+    "text": "Praxis der Wettbewerbsbehörden wurde der Befolgungsgrad auch als\n\n\nBekanntmachung der Wettbewerbskommission über die wettbewerbsrechtliche Behandlung vertikaler Abreden (Vertikalbekanntmachung, VertBek) vom 28. Juni 2010. Die neue Vertikalbekanntmachung\nsuggeriert im Gegensatz zu ihrer Vorgängerin keine per-se Erheblichkeit von Preisbindungen zweiter Hand mehr; vgl. zum ganzen ANDREA\nGRABER, Die neue Vertikalbekanntmachung 2010 der WEKO, Jusletter\nvom 23. August 2010, Rz 13 (zit. GRABER, VertBek 2010). Dieser\nUmstand führt dazu, dass die neue Vertikalbekanntmachung im Resultat zu einer differenzierteren Anwendung des Art. 5 Abs. 4 KG führen\nkann. Aus diesem Grund gelangt die neue Vertikalbekanntmachung –\nobwohl sie erst nach Eröffnung der gegenwärtigen Vorabklärung in\nKraft trat – analog zum Grundsatz der lex mitior vorliegend zur Anwendung.\nVgl. ROGER ZÄCH, Die sanktionsbedrohten Verhaltensweisen nach\nArt. 49a Abs. 1 KG, insbesondere der neue Vermutungstatbestand für\nVertikalabreden, in: Stoffel/Zäch, Kartellgesetzrevision 2003, 2004, 27\n(zit. ZÄCH, Art. 49a Abs. 1 KG).\nBekanntmachung über die wettbewerbsrechtliche Behandlung vertikaler Abreden, Beschluss der Wettbewerbskommission vom 2. Juli\n2007, BBl 2007, 7597 ff.\nRPW 2010/4, 660 Rz 144 ff., Hors-Liste Medikamente.\nwww.festool.ch.\n\n\n2011/3",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-2_B2.2.1",
+    "ord": 226,
+    "score": 0.73,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2013/2, S. 142",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2012-12-10",
+    "date_upper_bound": "2012-12-10",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.053,
+    "recital": false,
+    "cites_this": false,
+    "text": "die Auswirkungen der Gesamtabrede in genügendem Mass einzuschränken:\n\n\nBekanntmachung der Wettbewerbskommission vom 28. Juni 2010\nüber die wettbewerbsrechtliche Behandlung vertikaler Abreden (Vertikalbekanntmachung; VertBek), Ziffer 12.1. Auch wenn die Vertikalbekanntmachung vorliegend – mangels Vorliegen einer vertikalen Wettbewerbsabrede gemäss Ziffer 1 VertBek – nicht direkt anwendbar ist,\nso kann sie bei horizontalen Wettbewerbsabreden immerhin als Orientierungshilfe dienen (siehe dazu auch die Verfügung vom 14. November 2011 betreffend 32-0221: Vertrieb von Tickets im Hallenstadion\nZürich, http://www.weko.admin.ch/aktuell/00162/index.html?lang=de,\nRz 175); WEKO, Verfügung vom 16. Juli 2012, Vertrieb von Musik\n(IFPI), Fn 14, Publikation voraussichtlich in RPW 2012/3.\nVerfügung vom 14. November 2011 betreffend 32-0221: Vertrieb\nvon Tickets im Hallenstadion Zürich, 56 Rz 175, http://www.weko.\nadmin.ch/aktuell/00162/index.html?lang=de.\nRPW 2010/4, 751 Rz 315 f., Baubeschläge für Fenster und Fenstertüren; WEKO, Verfügung vom 16. Juli 2012, Vertrieb von Musik (IFPI),\nRz 101, Publikation voraussichtlich in RPW 2012/3.\nVerfügung vom 28. November 2011 betreffend 22-0396: Nikon, 118\nRz 494, http://www.weko.admin.ch/aktuell/00162/index.html?lang=de.\nRPW 2005/2, 263 Rz 73, Swico/Sens.\nVgl",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3618-2013_2016-11-24",
+    "ord": 440,
+    "score": 0.71,
+    "spider": "CH_BVGer",
+    "docket": "B-3618/2013",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2016-11-24",
+    "date_upper_bound": "2016-11-24",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.062,
+    "recital": false,
+    "cites_this": false,
+    "text": "354. Die Wettbewerbskommission hat ebenfalls Regelungen zur generellen Qualifizierung der qualitativen – wie auch der quantitativen – Erheblichkeit von Wettbewerbsabreden in Form der Vertikalbekanntmachung, der\nKfz-Bekanntmachung und der KMU-Bekanntmachung in ausdrücklicher\nAnlehnung an einige EU-Gruppenfreistellungsverordnungen aufgestellt\nund ihre spätere Entscheidpraxis danach ausgerichtet, was in der Literatur\nteilweise prinzipielle Zustimmung gefunden hat (vgl. MARTENET/HEINE-\nMANN, Concurrence, 92 f.; ZÄCH, Kartellrecht, Rn. 388 f.). Dabei bestehen\nallerdings auch gewisse inhaltliche Unterschiede zu den EU-Gruppenfreistellungsverordnungen. Die Bekanntmachungen decken zudem nicht alle\nAnwendungsbereiche der Gruppenfreistellungsverordnungen ab. Überdies\nmüssen für die nicht erfassten Sachverhaltskonstellationen auch weiterhin\nsinguläre Qualifizierungen vorgenommen werden. Im Gegensatz zu den\nEU-Gruppenfreistellungsverordnungen kommt den entsprechenden Regelungen in den Bekanntmachungen der Wettbewerbskommission auch\nkeine Rechtsverbindlichkeit zu (vgl. BGE 129 II 18, Buchpreisbindung I, E.\n5.2.1; BVGer, B–506/2010 Gaba, E. 8.4.1, E. 11.1.7.; BVGer, B-581/2012,\nNikon, E.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-4_B2.2.1",
+    "ord": 56,
+    "score": 0.705,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2012/4, S. 820",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2012-07-16",
+    "date_upper_bound": "2012-07-16",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.053,
+    "recital": false,
+    "cites_this": false,
+    "text": "konnte über ein an der Abrede beteiligtes Unternehmen\nkeine parallel importierten Produkte beziehen. Es ist also\nnicht so, dass wenigstens ein Teil des Sortiments über\nParallelimporte der an der Abrede beteiligten Unternehmen hätte bezogen werden können.\n\n\nBekanntmachung der Wettbewerbskommission vom 28. Juni 2010\nüber die wettbewerbsrechtliche Behandlung vertikaler Abreden (Vertikalbekanntmachung; VertBek), Ziffer 12.1. Auch wenn die Vertikalbekanntmachung vorliegend – mangels Vorliegen einer vertikalen Wettbewerbsabrede gemäss Ziffer 1 VertBek – nicht direkt anwendbar ist,\nso kann sie bei horizontalen Wettbewerbsabreden immerhin als Orientierungshilfe dienen (vgl. dazu auch RPW 2012/1, 74, Vertrieb von\nTickets im Hallenstadion Zürich).\nRPW 2012/1, 74, Vertrieb von Tickets im Hallenstadion Zürich; RPW\n2010/4, 751 Rz 315 f., Baubeschläge für Fenster und Fenstertüren.\n\n\n2012/4\n\n106. Erschwerend kommt hinzu, dass für die Marktgegenseite",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2021-4_B2.5.1",
+    "ord": 9,
+    "score": 0.693,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2021/4, S. 926",
+    "lang": "de",
+    "section": "Andere Entscheide",
+    "tier": "1",
+    "source": "agency",
+    "date": "2015-05-27",
+    "date_upper_bound": "2015-05-27",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.051,
+    "recital": false,
+    "cites_this": false,
+    "text": "Es sei aber nicht auszuschliessen, dass diese mit\n\n\nder Einschätzung der Unternehmen nicht einverstanden\nseien oder Uneinigkeit über die geeignete Umschreibung\neines Geschäftsgeheimnisses bestehe. In diesem Fall\nversuchten die Wettbewerbsbehörden mit den Unternehmen eine gemeinsame Lösung zu finden. Könne\nkeine Einigung erzielt werden, möge es zutreffen, dass\ndie Wettbewerbsbehörden betreffend die Qualifikation\nvon Geschäftsgeheimnissen eine verfahrensleitende\nVerfügung erlassen. Ob sie hierzu verpflichtet seien,\nkönne in casu offen bleiben.\n10. Gemäss bundesverwaltungsgerichtlicher Rechtsprechung ist im Übrigen auch die Publikation einer (End)Verfügung der WEKO ein Realakt und stellt als solche\nkein Anfechtungsobjekt dar. Ebenso wenig falle auch\ndie Ankündigung einer Veröffentlichung unter den Begriff\nder Verfügung gemäss Art. 5 VwVG. Insbesondere habe\nweder die Publikation noch deren schriftliche Ankündigung eine Begründung, Änderung, Aufhebung oder\nFeststellung von Rechten oder Pflichten zum Gegenstand. Eine anfechtbare Verfügung aber ergehe, wenn\nsich die Behörde und eine Partei, die davon in ihrem\nschutzwürdigen Interesse berührt sei, über die Form\noder Art der Publikation nicht einigen können (Art. 25a\nAbs. 2 VwVG).\n11. Gestützt auf die obigen Ausführungen wird im Rahmen",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "ord": 46,
+    "score": 0.69,
+    "spider": "CH_WEKO",
+    "docket": "Hors-Liste Medikamente",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2009-11-02",
+    "date_upper_bound": "2009-11-02",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.031,
+    "recital": false,
+    "cites_this": false,
+    "text": "tzlich definiert und vorliegend\nunter dem Titel ‚Wettbewerbsabrede“ (Rz. 93 ff.) geprüft. 51. Hinsichtlich des örtlichen und zeitlichen Geltungsbereichs sind vorliegend keine Ausführungen notwendig. 52. Die sachliche Zuständigkeit der Weko zur Durchführung von Untersuchungen und zum\nErlass von Verwaltungssanktionen ist gegeben (Art. 2, 18, 27 und 53 KG). B. _Vorbehaltene Vorschriften 53. Dem KG sind Vorschriften vorbehalten, die auf einem Markt für bestimmte Waren oder\nLeistungen Wettbewerb nicht zulassen (Art. 3 Abs. 1 KG). Dies ist insbesondere für Regelungen der Fall, die eine staatliche Markt- oder Preisordnung begründen (lit. a) oder einzelne\nUnternehmen zur Erfüllung öffentlicher Aufgaben mit besonderen Rechten ausstatten (lit. b).",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "ord": 252,
+    "score": 0.69,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2012/3, S. 540",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2012-05-07",
+    "date_upper_bound": "2012-05-07",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.051,
+    "recital": false,
+    "cites_this": false,
+    "text": "N 86 und 328 f N 95.\nSynthesebericht (Fn 219), Rz 256.\nBekanntmachung über die wettbewerbsrechtliche Behandlung\nvertikaler Abreden, Beschluss der Wettbewerbskommission vom 2. Juli\n2007 (nachfolgend: aVert-Bek), RPW 2007/4, 675 ff.\n\n\n2012/3\n\neine automatische Bejahung der Erheblichkeit.\nDiese Rechtsauffassung ist mittlerweile überholt:\nErstens erliess die WEKO am 28. Juni 2010 die\nneue Vertikalbekanntmachung, welche bei der Erheblichkeitsprüfung nunmehr explizit erwähnt,\ndass qualitative wie auch quantitative Kriterien zu\nberücksichtigen sind und die Abwägung dieser\nbeiden Kriterien einzelfallweise in einer Gesamtbeurteilung zu erfolgen hat (Ziffer 12 Abs. 1 VertBek). Zudem macht Ziffer 11 deutlich, dass für eine Widerlegung der Vermutung auf eine Gesamtbetrachtung des Marktes (Intrabrand- und Interbrand-Wettbewerb auf dem relevanten Markt) abgestellt wird. Sämtliche in der Zwischenzeit erfolgten Entscheide der WEKO in Sachen Vertikalabreden beinhalteten folglich eine Einzelfallprüfung,\nin der beide Elemente (Intrabrand- und InterbrandWettbewerb) einzeln als auch in Kombination in\nErwägung gezogen wurden.\n•\n\nEs wurde festgestellt, dass BMW AG über Marktmacht",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-2_B2.2.3",
+    "ord": 64,
+    "score": 0.686,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2012/2, S. 270",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2011-12-16",
+    "date_upper_bound": "2011-12-16",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.047,
+    "recital": false,
+    "cites_this": false,
+    "text": "4, 672, 678, E. 4, Ticketcorner.\n\n\n2012/2\n\n59. Gemäss Art. 49 Abs. 1 KG sind das Sekretariat und\ndie WEKO verpflichtet, die Öffentlichkeit über Geschäfte\nzu informieren, bezüglich welchen ein grosses Informationsinteresse besteht. Dies kann beispielsweise der Fall\nsein, wenn das Sekretariat seinen Antrag den Parteien\nzur Stellungnahme zustellt. Eine solche Orientierung\nwird regelmässig durch Pressemitteilungen vorgenom\nmen. Bei der Wahrnehmung ihrer Informationspflicht\nverfügen die Wettbewerbsbehörden über einen Ermessenspielraum, wobei insbesondere darauf zu achten ist,\ndass der korrekten Darstellung des Verfahrensstandes\ndie nötige Beachtung geschenkt wird. Für allenfalls\nmissverständliche Wiedergaben von klar formulierten\nInformationen und für eine daraus möglicherweise resultierende Vorverurteilung der beteiligten Unternehmen in\nden Medien können die Wettbewerbsbehörden jedoch\nnicht verantwortlich gemacht werden. Vor diesem Hintergrund kann dem Sekretariat weder vorgehalten werden, es hätte einen Ausstandsgrund geschaffen, noch\nes hätte die Unschuldsvermutung verletzt. Die in der\nPressemitteilung und der TV-Sendung „Schweiz aktuell“\nwiedergegebenen Informationen stellen den Verfahrensstand korrekt dar. In beiden Beiträgen kommt zum Ausdruck, dass die WEKO den",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Erläuterungen:0",
+  "judges": {
+   "claude-opus": "recites",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage decides which version of the VertBek applies by analogy to lex mitior. That concerns applying the notice over time, not the Erläuterungen's status as an interpretive aid."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the application of the Vertikalbekanntmachung itself, not the Erläuterungen (Explanatory Notes)."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage uses the VertBek as an Orientierungshilfe for horizontal agreements. That is a different question from the Erläuterungen's role as an interpretive aid to the VertBek."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses Ziffer 12.1 of the Vertikalbekanntmachung, not the Erläuterungen."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The court states that the notices are not legally binding and contain only general qualifications, but nothing is decided with this in the window. Borderline: it is the nearest neighbouring rule, but it is only restated."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the legal bindingness of the Vertikalbekanntmachung, not the Erläuterungen."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Like passage 2, this treats the VertBek as an Orientierungshilfe for horizontal agreements, which is another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage refers to Ziffer 12.1 of the Vertikalbekanntmachung acting as a guide, which is a different rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with business secrets and the publication of WEKO decisions, which is procedure."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about business secrets and the publication of decisions, unrelated to the Erläuterungen."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with scope, jurisdiction and reserved provisions under Art. 3 KG."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with WEKO's jurisdiction and reserved provisions under the Cartel Act."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the change in the significance test under Ziffer 11 and 12 VertBek 2010, which is another rule of the notice."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses Ziffer 11 and 12 of the Vertikalbekanntmachung, not the Erläuterungen."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the authorities' duty to inform the public under Art. 49 KG and the presumption of innocence."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about WEKO's duty to inform the public and the presumption of innocence."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "recites",
+  "agreement": "1/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2019-04-09",
+  "pid": "10",
+  "part": "note",
+  "heading": "",
+  "lead": "",
+  "text": "Das Kriterium der Erheblichkeit ist eine Bagatellklausel. Bereits ein geringes Mass an Beeinträchtigung ist ausreichend, um als erheblich qualifiziert zu werden. Die in Art. 5 Abs. 4 KG aufgeführten besonders schädlichen Abreden, d.h. vertikale Preisabreden und absolute Gebietsschutzabreden, erfüllen grundsätzlich das Kriterium der Erheblichkeit nach Art. 5 Abs. 1 KG. Dies gilt ohne Bezug auf einen Markt und unabhängig von quantitativen Kriterien wie der Grösse des Marktanteils der an der Abrede beteiligten Unternehmen. Dabei genügt es, dass solche Abreden den Wettbewerb potenziell beeinträchtigen können. D.h., ein Nachweis tatsächlicher Auswirkungen oder der Umsetzung der Abrede ist nicht erforderlich. Erhebliche Wettbewerbsbeschränkungen gemäss Art. 5 Abs. 4 i.V.m. Abs. 1 KG sind vorbehältlich einer im Einzelfall zu prüfenden Rechtfertigung durch Gründe der wirtschaftlichen Effizienz (Art. 5 Abs. 2 KG; Ziff. 16 VertBek) unzulässig.",
+  "before": "2017-06-12",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 123
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2",
+    "ord": 40,
+    "score": 0.864,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2017/2, S. 284",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2017-05-22",
+    "date_upper_bound": "2017-05-22",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.221,
+    "recital": false,
+    "cites_this": false,
+    "text": "our-business/husqvarna>\n(6.12.2016).\n\n\n2017/2\n\nB.4.3. Erhebliche Beeinträchtigung des Wettbewerbs\n69. Das Bundesgericht hat im Urteil Gaba festgehalten,\ndass das Kriterium der Erheblichkeit eine Bagatellklausel\nist. Die in Art. 5 Abs. 4 KG aufgeführten besonders\nschädlichen Abreden, d.h. vertikale Preisabreden und absolute Gebietsschutzabreden, erfüllen grundsätzlich das\nKriterium der Erheblichkeit nach Art. 5 Abs. 1 KG. Vorliegend sind keine Elemente ersichtlich, welche auf eine\nAusnahme von der grundsätzlichen Erheblichkeit der vertikalen Preisabreden hinweisen würden. Somit stellen die\nvertikalen Preisabreden zwischen Husqvarna CH und ihren Händlern erhebliche Wettbewerbsbeschränkungen\nim Sinne von Art. 5 Abs. 4 i.V.m. Abs. 1 KG dar.\nB.4.4. Rechtfertigung aus Effizienzgründen\n70. Wettbewerbsabreden sind gemäss Art. 5 Abs. 2 KG\ndurch Gründe der wirtschaftlichen Effizienz gerechtfertigt,\nwenn sie:\na. notwendig sind, um die Herstellungs- oder Vertriebskosten zu senken, Produkte oder Produktionsverfahren zu verbessern, die Forschung oder\ndie Verbreitung von technischem oder beruflichem\nWissen zu fördern oder um Ressourcen rationeller\nzu nutzen; und\nb. den beteiligten Unternehmen in keinem Fall Möglichkeiten eröffnen, wirksamen Wettbewerb zu beseitigen.\n71. Bei Preisabreden nach Art. 5 Abs. 4 i.V.m. Abs. 1 KG\ngilt es im Einzelfall zu prüfen, ob ein\n[…]\nInterbrand-Wettbewerb\nwiderlegt werden (vgl. oben, Rz 68).\n\n•\n\nDie vertikalen Preisabreden zwischen Husqvarna\nCH und ihren Händlern stellen erhebliche Wettbewerbsbeschränkungen im Sinne von Art. 5 Abs. 4\ni.V.m. Abs. 1 KG dar (vgl. oben, Rz 69).\n\n•\n\nRechtfertigungsgründe im Sinne von Art. 5 Abs. 2\nKG sind nicht ersichtlich (vgl. oben, Rz 72 ff",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1",
+    "ord": 201,
+    "score": 0.82,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2016/3, S. 652",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2015-12-14",
+    "date_upper_bound": "2015-12-14",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.048,
+    "recital": false,
+    "cites_this": false,
+    "text": "den Wettbewerb in den relevanten Märkten erheblich beeinträchtigte im Sinne von Art. 5 Abs. 1 KG.\nB.5.3. Erhebliche Beeinträchtigung des Wettbewerbs\n236. Abreden, die den Wettbewerb auf einem Markt für\nbestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sind unzulässig (Art. 5\nAbs. 1 KG). Erweist sich die durch eine Abrede bewirkte\nBeeinträchtigung als erheblich, ist zu prüfen, ob die Abrede durch Gründe der wirtschaftlichen Effizienz im Sinne von Art. 5 Abs. 2 KG zu rechtfertigen ist.\nB.5.3.1. Erheblichkeit gemäss bundesverwaltungsgerichtlicher Rechtsprechung in Sachen\nGaba und Gebro\n237. In Bezug auf die Erheblichkeitsprüfung der Wettbewerbsbeschränkung halten die Urteile des BVGer vom\n19. Dezember 2013 in Sachen Gaba und Gebro Folgendes fest:\n„Zwar ist grundsätzlich die Erheblichkeit einer Abrede\nanhand qualitativer und quantitativer Kriterien zu bestimmen. Im vorliegenden Fall genügt allerdings bereits die qualitative Erheblichkeit, wie die nachfolgenden Ausführungen zeigen. Wenn nämlich das Kartellgesetz selbst in Art. 5 Abs. [3 und] 4 KG statuiert,\ndass solche [Abreden] vermutungsweise den Wettbewerb beseitigen, so ist a majore ad minus grundsätzlich auch deren qualitative Erheblichkeit zu bejahen, unabhängig von allfälligen quantitativen Kriterien.“94\n„Da der Schweizer Gesetzgeber […] statuiert\n[…]\nB.8.3. Den Wettbewerb erheblich beeinträchtigende\nAbrede im Sinne von Art. 5 Abs. 1 KG\n296. Abreden, die den Wettbewerb auf einem Markt für\nbestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sind unzulässig (Art. 5\nAbs. 1 KG). Erweist sich die durch eine Abrede bewirkte\nBeeinträchtigung als erhebl",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-506-2010_2013-12-19",
+    "ord": 313,
+    "score": 0.814,
+    "spider": "CH_BVGer",
+    "docket": "B-506/2010",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2013-12-19",
+    "date_upper_bound": "2013-12-19",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "eine dem\nEinzelfall angepasste und gerecht werdende Auslegung der anwendbaren\ngesetzlichen Bestimmungen zulassen (Urteil des Bundesverwaltungsgerichts B-342/2008 vom 23. Juni 2009 E. 4.1. m.w.H.). st grundsätzlich die Erheblichkeit einer Abrede anhand qualitativer und quantitativer Kriterien zu\nbestimmen. Im vorliegenden Fall genügt allerdings bereits die qualitative\nErheblichkeit, wie die nachfolgenden Ausführungen zeigen. Wenn nämlich\ndas Kartellgesetz selbst in Art. 5 Abs. 4 KG statuiert, dass solche Verbote\nvermutungsweise den Wettbewerb beseitigen, so ist a maiore ad minus Seite 102\n B-506/2010 sverbote wie das in\nZiff. 3. des Lizenzvertrages vereinbarte von ihrem Gegenstand her als\nqualitativ erheblich beurteilt werden, besteht doch immer noch die Möglichkeit der Rechtfertigung aus Gründen der wirtschaftlichen Effizienz. Damit\nwird dem Gedanken Rechnung getragen, dass selbst auf den ersten Blick\nqualitativ erhebliche Abreden im Einzelfall wettbewerbsfördernde Wirkungen haben können, welche die Wettbewerbsbeschränkung aufwiegen können.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "ord": 71,
+    "score": 0.811,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2011/3, S. 372",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2011-07-11",
+    "date_upper_bound": "2011-07-11",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.048,
+    "recital": false,
+    "cites_this": false,
+    "text": "Abs. 2 KG).\n\nD.3.\n\nUnzulässige Wettbewerbsabreden\n\n40. Abreden, die den Wettbewerb auf einem Markt für\nbestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sowie Abreden, die zur\nBeseitigung wirksamen Wettbewerbs führen, sind unzulässig (Art. 5 Abs. 1 KG).\nWettbewerbsabrede\n\n41. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder\n[…]\nabzuschotten.\n77. Im Konkreten liegen keine Indizien oder Beweismittel\nvor, welche auf Abreden nach Art. 5 Abs. 4 KG hindeuten. Die vorliegenden Abreden werden deshalb unter\nArt. 5 Abs. 1 KG analysiert.\nD.3.3.\nwerbs\n\nErhebliche Beeinträchtigung des Wettbe-\n\n78. Abreden, die den Wettbewerb auf einem Markt für\nbestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sind unzulässig (Art. 5\nAbs. 1 KG). Bei der Prüfung der Frage, ob eine erhebliche Wettbewerbsbeeinträchtigung im Sinne von Art. 5\nAbs. 1 KG vorliegt, sind sowohl qualitative als auch\nquantitative Kriterien zu berücksichtigen. Die Abwägung\ndieser beiden Kriterien erfolgt einzelfallweise in einer\nGesamtbeurteilung. Dabei kann eine qualitativ schwerwiegende Beeinträchtigung trotz quantitativ geringfügiger Auswirkungen erheblich sein. Umgekehrt kann eine\nBeeinträchtigung mit quantitativ beträchtlichen Auswirkungen den Wettbewerb erheblich beeinträchtigen, auch\nwenn sie qualitativ nicht schwerwiegend ist (Ziffer 12\nAbs. 1 VertBek). Nachfolgend werden zuerst die qualitativen und anschliessend die quantitativen Kriterien der\nErheblichkeit der vorliegenden Abreden analysiert.\n\nbis e fallen, in der Regel nicht zu",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B1.1.4",
+    "ord": 123,
+    "score": 0.81,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2014/1, S. 153",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2014-02-24",
+    "date_upper_bound": "2014-02-24",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.021,
+    "recital": false,
+    "cites_this": false,
+    "text": "Bedeutung\naufweist. In casu liegt eine horizontale Preisabrede gemäss Art. 5 Abs. 3. Bst. a KG und ein Boykott gemäss\nArt. 5 Abs. 3 Bst. b KG vor, beides „harte Kartelle“. Aus\nqualitativer Sicht scheint demnach Erheblichkeit ohne\nWeiteres gegeben.\nB.3.3.\n\nQuantitatives Element\n\n139. Horizontalen Wettbewerbsabreden kommt ein hohes Schädigungspotential für den Wettbewerb zu. Dies\ngilt grundsätzlich auch für Nachfragekartelle und sogar\nfür Einkaufsgemeinschaften, sollten sich im Einzelfall die\nregelmässig erwarteten Effizienzen nicht einstellen res128\npektive diese nicht mal beabsichtigt sein.\nDaher sind\nan die Kriterien des quantitativen Elements der Erheb\nlichkeit nicht allzu hohe Anforderungen zu stellen. Es\ngenügt entsprechend der Nachweis, dass die in Frage\nstehende Abrede Auswirkungen im relevanten Markt\nhatte.\n\n\nFür eine Zusammenfassung: JING HAO, Buyers‘ Cartels, An",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.2",
+    "ord": 79,
+    "score": 0.81,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2005/2, S. 251",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2005-03-21",
+    "date_upper_bound": "2005-03-21",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.048,
+    "recital": false,
+    "cites_this": false,
+    "text": "nicht zulassen.\n\nB.\n\n\nKeine Preisabrede\n\n45. Laut Artikel 5 Absatz 1 KG sind Abreden, die den\nWettbewerb auf einem Markt für bestimmte Waren\noder Leistungen erheblich beeinträchtigen und sich\nnicht durch Gründe der wirtschaftlichen Effizienz\nrechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen Wettbewerbs führen, unzulässig.\n46. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht\n[…]\nkann jedoch offen bleiben,\nob es sich tatsächlich um (k)eine Wettbewerbsabrede\nhandelt, denn selbst bei Vorliegen einer Wettbe-\n\n\nwerbsabrede wäre diese - wie nachfolgend gezeigt\nwird - zulässig.\nB.4.\n\nErheblichkeit der Wettbewerbsbeeinträchtigung\n\n72. Gemäss Artikel 5 Absatz 1 KG sind Abreden, die\nden Wettbewerb auf einem Markt für bestimmte\nWaren und Leistungen erheblich beeinträchtigen und\nsich nicht durch Gründe der wirtschaftlichen Effizienz\nrechtfertigen lassen, sowie Abreden, die zur Beseitigung des wirksamen Wettbewerbs führen, unzulässig.\n73. In ihrer Praxis prüfte die Wettbewerbskommission\ndie Frage der Erheblichkeit einer Wettbewerbsbeeinträchtigung anhand qualitativer und quantitativer\nKriterien (vgl. RPW 2001/4, S. 478 ff., auch RPW\n2001/2, S. 321 ff.). Unter dem Titel \"qualitative Kriterien\" wurde untersucht, wie wichtig der von der Abrede betroffene Wettbewerbsparameter für die Konkurrenzverhältnisse ist. Unter dem Titel \"quantitative\nKriterien\" werden die aktuelle und potenzielle Konkurrenz sowie in der Regel die Stellung der Marktgegenseite analysiert.\n74. Um festzustellen, ob die Abrede eine erhebliche\nWettbewerbsbeeinträchtigung bewirkt oder den\nwirksamen Wettbewerb beseitigt, ist somit vorab der\nrelevante Markt in sachlicher und räumlicher Hinsicht\nabzugrenzen.\n\nRelevanter Markt\n\n75. Der sachliche Markt umfasst alle",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2020-4a_B1.1.2",
+    "ord": 161,
+    "score": 0.806,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2020/4a, S. 1575",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2015-11-10",
+    "date_upper_bound": "2015-11-10",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.048,
+    "recital": false,
+    "cites_this": false,
+    "text": "auf die\nAnwendung des Opportunitätsprinzips, welches in Abschnitt B. diskutiert wird, kann die Frage, ob das Kriterium der Wettbewerbsbehinderung resp. -benachteiligung erfüllt ist, vorliegend aber offen gelassen werden.\nB.\n\nUnzulässige Gebietsschutzabreden\n\n138. Laut Art. 5 Abs. 1 KG sind Abreden, die den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch\nGründe der wirtschaftlichen Effizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen\nWettbewerbs führen, unzulässig. Als Wettbewerbsabre-\n\n\nden gelten rechtlich erzwingbare oder nicht erzwingbare\nVereinbarungen",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "ord": 64,
+    "score": 0.799,
+    "spider": "CH_BGer",
+    "docket": "2C_180/2014",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2016-06-28",
+    "date_upper_bound": "2016-06-28",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.031,
+    "recital": false,
+    "cites_this": false,
+    "text": "erbs ist (i.S. von Art. 96 BV und Art. 1 KG). Aus diesem Grund sind solche Abreden im Rahmen von Art. 5 Abs. 2 KG näher zu prüfen (vgl. HEINEMANN, Erheblichkeit, a.a.O. Rz. 46 ff. bzw. S. 24 f.). Es genügt somit, dass Abreden den Wettbewerb potentiell beeinträchtigen können.\nInsofern zielen die Ausführungen der Beschwerdeführerin, die zum einen auf fehlende tatsächliche Auswirkungen und zum anderen auf eine angeblich nicht erfolgte Umsetzung der Abrede rekurriert, an der Sache vorbei.\n5.5. Relevanter Markt\nZu erörtern bleibt schliesslich noch der\nrelevante Markt, müssen doch nach Art. 5 Abs. 1 KG Abreden den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen. Vor Bundesgericht sind der sachliche und zeitliche relevante Markt unbestritten. Strittig ist somit nur noch der räumliche Markt.\nEntsprechend den bisherigen Ausführungen erfüllen Abreden nach Art. 5 Abs. 3 und 4 KG das Erheblichkeitskriterium nach Art. 5 Abs. 1 KG ohne Bezug auf einen Markt. Die diesbezüglichen Ausführungen der Vorinstanz und die Rügen der Beschwerdeführerin erübrigen sich deshalb. Ist die Erheblichkeit allerdings aufgrund oder\nauch aufgrund quantitativer Elemente zu best",
+    "text_view": "stored"
+   }
+  ],
+  "track": "Erläuterungen:9",
+  "judges": {
+   "claude-opus": "supported",
+   "gemini-3.1-pro": "supported"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "applies",
+     "quote": "Vorliegend sind keine Elemente ersichtlich, welche auf eine Ausnahme von der grundsätzlichen Erheblichkeit der vertikalen Preisabreden hinweisen würden. Somit stellen die vertikalen Preisabreden zwischen Husqvarna CH und ihren Händlern erhebliche Wettbewerbsbeschränkungen im Sinne von Art. 5 Abs. 4 i.V.m. Abs. 1 KG dar.",
+     "quote_found": true,
+     "why": "WEKO states the rule that Art. 5(4) agreements are as a rule significant, applies it to Husqvarna's price agreements and finds them significant restraints."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "Die in Art. 5 Abs. 4 KG aufgeführten besonders schädlichen Abreden, d.h. vertikale Preisabreden und absolute Gebietsschutzabreden, erfüllen grundsätzlich das Kriterium der Erheblichkeit nach Art. 5 Abs. 1 KG. Vorliegend sind keine Elemente ersichtlich, welche auf eine Ausnahme von der grundsätzlichen Erheblichkeit der vertikalen Preisabreden hinweisen würden. Somit stellen die vertikalen Preisabreden zwischen Husqvarna CH und ihren Händlern erhebliche Wettbewerbsbeschränkungen im Sinne von Art. 5 Abs. 4 i.V.m. Abs. 1 KG dar.",
+     "quote_found": true,
+     "why": "Die WEKO wendet die Regel an, wonach vertikale Preisabreden grundsätzlich erheblich sind, und bejaht dies konkret für die Abreden von Husqvarna."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "WEKO only quotes the BVGer's Gaba/Gebro reasoning on significance; the window cuts off before it applies that reasoning to its own case."
+    },
+    "gemini-3.1-pro": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "Die WEKO zitiert die Rechtsprechung des Bundesverwaltungsgerichts zur Erheblichkeit harter Abreden, ohne diese im sichtbaren Textausschnitt auf den eigenen Sachverhalt anzuwenden."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "partial",
+     "quote": "Wenn nämlich das Kartellgesetz selbst in Art. 5 Abs. 4 KG statuiert, dass solche Verbote vermutungsweise den Wettbewerb beseitigen, so ist a maiore ad minus",
+     "quote_found": true,
+     "why": "The court derives the rule (a maiore ad minus) and points to the clause in Ziff. 3 of the licence agreement, but the conclusion is fragmentary; borderline, so the weaker label."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "Im vorliegenden Fall genügt allerdings bereits die qualitative Erheblichkeit, wie die nachfolgenden Ausführungen zeigen. Wenn nämlich das Kartellgesetz selbst in Art. 5 Abs. 4 KG statuiert, dass solche Verbote vermutungsweise den Wettbewerb beseitigen, so ist a maiore ad minus Seite 102\n B-506/2010 sverbote wie das in\nZiff. 3. des Lizenzvertrages vereinbarte von ihrem Gegenstand her als\nqualitativ erheblich beurteilt werden",
+     "quote_found": true,
+     "why": "Das Bundesverwaltungsgericht wendet den Grundsatz an, um das streitige Exportverbot in Ziff. 3 des Lizenzvertrags als qualitativ erheblich einzustufen."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "No Art. 5(4) agreements are found, so the general weighing of qualitative and quantitative criteria under Ziff. 12 VertBek applies, which is another rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Die Passage befasst sich mit der allgemeinen Erheblichkeitsprüfung von Abreden, die nicht unter Art. 5 Abs. 4 KG fallen (Ziff. 12 VertBek), was eine andere rechtliche Frage darstellt."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns the significance of horizontal hardcore cartels (buyer cartels), a different legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Die Passage behandelt die Erheblichkeitskriterien für horizontale Abreden nach Art. 5 Abs. 3 KG, während die Proposition spezifisch für vertikale Abreden nach Art. 5 Abs. 4 KG gilt."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "General significance test with market definition for an agreement found not to be a price agreement; not the rule for Art. 5(4) agreements."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Die Passage beschreibt die allgemeine Erheblichkeitsprüfung nach qualitativen und quantitativen Kriterien, ohne Bezug zur Sonderregel für harte vertikale Abreden."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "Only restates Art. 5(1) KG under a heading on territorial protection; the window ends before any significance assessment; borderline with unrelated."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Die Passage zitiert lediglich den allgemeinen Gesetzestext von Art. 5 Abs. 1 KG und Art. 4 Abs. 1 KG, behandelt aber nicht die Erheblichkeitsvermutung der Proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "applies",
+     "quote": "Es genügt somit, dass Abreden den Wettbewerb potentiell beeinträchtigen können. Insofern zielen die Ausführungen der Beschwerdeführerin, die zum einen auf fehlende tatsächliche Auswirkungen und zum anderen auf eine angeblich nicht erfolgte Umsetzung der Abrede rekurriert, an der Sache vorbei.",
+     "quote_found": true,
+     "why": "The Federal Supreme Court applies the rules on potential effect and on no market reference, rejecting the appellant's arguments as beside the point and as unnecessary."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "Es genügt somit, dass Abreden den Wettbewerb potentiell beeinträchtigen können. Insofern zielen die Ausführungen der Beschwerdeführerin, die zum einen auf fehlende tatsächliche Auswirkungen und zum anderen auf eine angeblich nicht erfolgte Umsetzung der Abrede rekurriert, an der Sache vorbei.\n5.5. Relevanter Markt\nZu erörtern bleibt schliesslich noch der\nrelevante Markt, müssen doch nach Art. 5 Abs. 1 KG Abreden den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen. Vor Bundesgericht sind der sachliche und zeitliche relevante Markt unbestritten. Strittig ist somit nur noch der räumliche Markt.\nEntsprechend den bisherigen Ausführungen erfüllen Abreden nach Art. 5 Abs. 3 und 4 KG das Erheblichkeitskriterium nach Art. 5 Abs. 1 KG ohne Bezug auf einen Markt. Die diesbezüglichen Ausführungen der Vorinstanz und die Rügen der Beschwerdeführerin erübrigen sich deshalb.",
+     "quote_found": true,
+     "why": "Das Bundesgericht wendet die Regel an, um Rügen betreffend fehlender tatsächlicher Auswirkungen und fehlendem Marktbezug als gegenstandslos abzuweisen."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "supported",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2019-04-09",
+  "pid": "2",
+  "part": "note",
+  "heading": "",
+  "lead": "",
+  "text": "Die Erläuterungen lehnen sich an die EU-Vertikalleitlinien an, welche gemäss Erw VII. VertBek – unter Berücksichtigung der in der Schweiz herrschenden rechtlichen und wirtschaftlichen Bedingungen – analog auch für die Schweiz gelten. Vor diesem Hintergrund und im Sinne der Rechtssicherheit wird der Wortlaut der EU-Vertikalleitlinien in den vorliegenden Erläuterungen möglichst übernommen, soweit darauf Bezug genommen wird.",
+  "before": "2017-06-12",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 67
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "ord": 32,
+    "score": 0.717,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2011/3, S. 372",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2011-07-11",
+    "date_upper_bound": "2011-07-11",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.052,
+    "recital": false,
+    "cites_this": false,
+    "text": "den\nParteien wurden auch keine solchen geltend gemacht.\n\n35. Die folgenden Erlasse bzw. Entscheide wurden bei\nder Ausarbeitung dieser Verfügung berücksichtigt: Die\nrevidierte VertBek, die jüngst revidierte Vertikal-GVO\n(siehe Fn 13 resp. Rz 59 hiernach) und die entspre\nchenden Leitlinien sowie verschiedende, in jüngerer\nVergangenheit im europäischen Raum ergangene Urteile betreffend den Ausschluss resp. die Behinderung des\nOnline-Handels (siehe Rz 19 hiervor). Die Berücksichtigung der europäischen Erlasse und Entscheide rechtfertigt sich insbesondere durch den Willen des schweizerischen Gesetzgebers, die Rechtslage im Bereich von\nWettbewerbsverstössen dem europäischen Recht an20\nzugleichen. Dies gilt insbesondere für den Bereich der\nvertikalen Wettbewerbsbeschränkungen. Diesbezüglich\ngilt es zu unterstreichen, dass der neue Art. 5 Abs. 4 KG\nder Schweiz ermöglichen sollte, im Bereich der Vertikalabsprachen eine vergleichbare Politik wie die europäi\nsche Kommission zu verfolgen. Die Absicht war, dass\nsich das schweizerische Recht nach jenem der europäi\nschen Union ausrichten sollte, was insbesondere dadurch ermöglicht wird, dass die beiden Rechtsordnun\ngen ähnliche Ziele verfolgen. Mit dieser neuen Bestimmung wollte die Schweiz darauf hinweisen, dass\nVertikalabsprachen über Wiederverkaufspreise und\nMarktabschottungen",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Abreden-im-Bereich-L_2013-12-02",
+    "ord": 380,
+    "score": 0.666,
+    "spider": "CH_WEKO",
+    "docket": "Abreden im Bereich Luftfracht",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2013-12-02",
+    "date_upper_bound": "2013-12-02",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "ttbewerbsrechtliche Sachverhalte, die sich nur auf den Handel innerhalb der\nSchweiz auswirken können, schweizerischem Recht unterliegen. Es stellt sich somit die Frage, 442 Vgl. BVGE 2010/7, E. 3.5.3. 443 Vgl. BVGE 2010/7, E. 3.5.4. 444 Vgl. BVGE 2010/7, E. 3.5.5. vorschreibt, dass sie für Strecken Schweiz–EU Artikel 8 und 9 LVA gemäss\nGemeinschaftsrecht anwenden sollen. Ob Artikel 11 Absatz 1 LVA und Artikel 11 Absatz 2\nLVA das Wort «gemäss» im identischen Sinne verwenden, ist jedoch nicht klar.\n989. Der Wortlaut von «entscheiden gemäss» lässt somit offen, ob in Bezug auf Strecken\nzwischen der Schweiz und Drittländern die zuständigen Schweizer Behörden Gemeinschaftsrecht und/oder nationales Recht anwenden sollen.\nBedeutung von «über die Zulässigkeit»\n990. Zunächst ist festzustellen, dass in sämtlichen Sprachversionen von einem «Entscheid\nüber die Zulässigkeit» die Rede ist. Anders als in Artikel 10 LVA (bez. rein innerschweizerische 445 Vgl. Englisch: «rule, in accordance with the provisions of Articles 8 and 9»; Französisch: «conformément aux articles 8 et 9, statuent»; Italienisch: «regolano, in conformità delle disposizioni degli articoli 8 e 9».",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_COMCOM:COMCOM_Anordnung_vorsorglicher_Massnahmen_zur_Sicherstellung_der_Interkonnektion.pdf",
+    "ord": 35,
+    "score": 0.665,
+    "spider": "CH_COMCOM",
+    "docket": null,
+    "lang": "de",
+    "section": null,
+    "tier": "other",
+    "source": "other",
+    "date": "2000-11-09",
+    "date_upper_bound": "2000-11-09",
+    "date_source": "record",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.066,
+    "recital": false,
+    "cites_this": false,
+    "text": "1.2.3. „Europarechtskonforme“ Auslegung\nEine \"europarechtskonforme\" Auslegung ist zwar kein eigentliches Auslegungsmittel. Insbesondere muss das Recht der Europäischen Union (EU) in der Schweiz weder tel quel übernommen werden, noch ist es direkt anwendbar (vgl. dazu Olivier Jacot-Guillarmod, Traces\nde droit communautaire dans la jurisprudence du Tribunal fédéral suisse, in: G. C. Rodriguez\nIglesias/O. Due/R. Schintgen/C. Elsen, Mélanges en hommage à Fernand Schockweiler,\nNomos, Baden-Baden 1999, S. 216 ff. ; so auch Thomas Cottier/Krista N. Schefer, The relationship between World Trade Organization law, national and regional law, in: Journal of international economic law 1/1998, S. 88 ff.). Der Gesetzgeber hat aber klar zum Ausdruck\ngebracht, dass die Liberalisierungsentwicklungen in der EU die Schweiz unter Zugzwang\ngesetzt haben und dass das neue FMG unter Berücksichtigung der schweizerischen Besonderheiten eurokompatibel sein soll (Botschaft, a.a.O.; S. 1412; zum Begriff der Kompatibilität\nmit dem europäischen Recht vgl. Bruno Spinner/Daniel Maritz, EG-Kompatibilität des\nschweizerischen Wirtschaftsrechts: Vom autonomen zum systematischen Nachvollzug, in:\nPeter Forstm",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "ord": 70,
+    "score": 0.663,
+    "spider": "CH_BGE",
+    "docket": "BGE 143 II 297",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2016-06-28",
+    "date_upper_bound": "2016-06-28",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.071,
+    "recital": false,
+    "cites_this": false,
+    "text": "mentarischen Debatte unzweifelhaft, dass die schweizerische Regelung in Bezug auf Art. 5 Abs. 4 KG eine gleiche sowie auch gleich scharfe und auch nicht schärfere Regelung wie diejenige der Europäischen Union sein soll (vgl. Kommissionssprecher Schiesser im Ständerat, Büttiker, AB 2003 S 329 f., 331 bzw. 330 f.; siehe auch Baader, Schneider, Strahm, AB 2002 N 1435 f., 1438; vgl. dazu MONIQUE STURNY, Der Einfluss des EU-Rechts auf das schweizerische Kartellrecht, 2014, S. 138 ff.;\nBGE 143 II 297 S. 327\nBORER, a.a.O., N. 32 zu\nArt. 5 KG; ZÄCH, Kartellrecht, a.a.O., N. 468 ff.): eine materiell andere Regelung als diejenige der EU würde zu Rechtsunsicherheiten führen (vgl. Kommissionssprecher Schiesser im Ständerat, AB 2003 S 330). Insofern erlaubt die Parallelität der Regelungen, dass \"im Sinne der Rechtssicherheit auch darauf zurück[gegriffen werden kann], was die EU mit ihrer Verordnung an vertikalen Abreden ausgeschlossen bzw. zugelassen hat\" (Kommissionssprecher Schiesser im Ständerat, AB 2003 S 330).\nDer Gesetzgeber erklärt allerdings nicht ausdrücklich durch Verweisungen europäisches Wettbewerbsrecht in Bezug auf vertikale Wettbewerbsabreden zu schweizerischem Recht. Solches eur",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-4_B1.1.1",
+    "ord": 37,
+    "score": 0.662,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2013/4, S. 476",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2013-08-27",
+    "date_upper_bound": "2013-08-27",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.066,
+    "recital": false,
+    "cites_this": false,
+    "text": "Geschäftsherrn und weiteren (potentiellen) Geschäftsherren anbietet (siehe auch\nFn 50). Auf diesen Märkten – bspw. in Bezug auf Wettbewerbsverbote,\nBezugs- und Absatzbindungen sowie ein Verbot der Provisionsweitergabe – kommt lediglich in Einzelfällen eine Rechtfertigung auf Grund\neiner Interessenabwägung in Betracht (vgl. EMMERICH [Fn 20], Art. 81\nAbs. 1 EGV N 261, sowie EMMERICH [Fn 19], Art. 101 Abs. 1 AEUV N\n193).\nVgl. bspw. KOMM, ABl. 1972 L 272/35 Pittsburgh Corning Europe\n(PCE; PCE hatte versucht, einen normalen Vertriebsvertrag als Handelsvertretervertrag zu tarnen). Weiter betreffend ein Bündel entsprechender Vertriebsverträge vgl. EU-Vertikalleitlinien, Rz 20.\nBundesgesetz betreffend die Ergänzung des Schweizerischen Zivilgesetzbuches, Fünfter Teil: Obligationenrecht, vom 30. März 1911\n(OR; SR 220).\nAuch in der EU liegen Handelsvertreterverträge, welche gemäss den\nEU-Vertikalleitlinien für die Zwecke von Art. 101 Abs. 1 AEUV privilegiert behandelt werden, nur in bestimmten Fällen und unter strengen\nVoraussetzungen vor. Am nächsten käme einem solchen freizustellenden Handelsvertreter unter Berücksichtigung der EU-Vertikalleitlinien\nund der bisherigen (teils widersprüchlichen) Praxis in der Schweiz wohl\nein bestimmter, spezifisch gearteter Untertypus der Agentur, bei welchem a) eine entsprechende",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "ord": 18,
+    "score": 0.657,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2016/2, S. 373",
+    "lang": "de",
+    "section": "Beratungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "",
+    "date_upper_bound": "2016-12-31",
+    "date_source": "issue",
+    "regime": "KG 2003",
+    "regime_exact": false,
+    "after_version": false,
+    "recital_share": 0.042,
+    "recital": false,
+    "cites_this": false,
+    "text": "Verkäufe in diese durch gebietsfremde Vertriebspartner ausgeschlossen werden (Art. 5 Abs. 4 KG).\n28. Zu Art. 5 Abs. 4 KG gilt es anzumerken, dass es\ndem Willen des Gesetzgebers entspricht, im Bereich\nvertikaler Absprachen eine analoge Politik zu jener der\nEuropäischen Kommission zu verfolgen. Im Rahmen\n\n\n\nVgl. RPW 2012/3, 525, Rabattdifferenzierungen bei Lieferungen in\ndie Schweiz.\nRPW 2009/2 151 Rz 70, Sécateurs et cisailles, mit Hinweis auf Deiss,\nAB 2002 N 1434 ff.\nRPW 2009/2 151 Rz 70, Sécateurs et cisailles, mit Hinweis auf BÜHRER, AB 2002 1293.\nBekanntmachung der WEKO vom 28. Juni 2010 über die wettbewerbsrechtliche Behandlung vertikaler Abreden (Vertikalbekanntmachung, VertBek).\nVerordnung (EU) Nr. 330/2010 der Kommission vom 20. April 2010\nüber die Anwendung von Artikel 101 Absatz 3 des Vertrags über die\nArbeitsweise der Europäischen Union auf Gruppen von vertikalen\nVereinbarungen und abgestimmten Verhaltensweisen, ABl. L 102 vom\n23.4.2010 S. 1 (im Folgenden: Vertikal-GVO).\nMitteilung der EU-Kommission: Leitlinien für vertikale Beschränkungen, ABl. C 130 vom 19.5.2010 S.1, Rz 50 (im Folgenden: VertikalLeitlinien).\nVgl. Urteil des BVGer, RPW 2013/4, E. 8.2.2, Gaba/WEKO; Urteil\ndes BVGer, RPW 2013/4, 833 f. E. 11.1. ff., Gebro/WEKO.\n\n\n2016/2\n\n31. Dies entspricht sodann auch Ziff. 10 Abs\n[…]\n13 welche gestützt auf die verfügbaren Informati\n\nVgl. Urteil des BVGer, RPW 2013/4, 789 ff. E. 11.1. ff., Gaba/WEKO; Urteil des BVGer, RPW 2013/4, 833 f. E. 11.1. ff., Gebro/WEKO.\nVgl. RPW 2000/2, 177 Rz 50, Des",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-7633-2009_2015-09-14",
+    "ord": 348,
+    "score": 0.646,
+    "spider": "CH_BVGer",
+    "docket": "B-7633/2009",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2015-09-14",
+    "date_upper_bound": "2015-09-14",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.035,
+    "recital": false,
+    "cites_this": false,
+    "text": "für den autonomen Nachvollzug des Gemeinschaftsprivatrechts in der Schweiz, in:\nWerro/Probst [Hrsg.], Das schweizerische Privatrecht im Lichte des europäischen Gemeinschaftsrechts, 2004, 105 ff.). EU-Behörden und die Rechtsprechung zu\nder praktisch gleich lautenden Bestimmung im EU-Raum haben zusätzlich\nzur Klärung dieser Tatbestände [Anm.: des Art. 7 KG] beigetragen“) und\nvon der höchstrichterlichen Rechtsprechung ausdrücklich bestätigt (vgl.\nBGE 139 I 72, Publigroupe, E. 8.2.3; noch zurückhaltend BGE 137 II 199,\nTerminierung Mobilfunk, E. 4.3.2). 174. Dies bedeutet allerdings nicht, dass die Entscheide von EU-Kommission und EU-Gerichten in ähnlichen Fällen automatisch tel quel zu übernehmen wären. Vielmehr bedarf es hierfür stets einer – zumindest impliziten – Prüfung, ob eine Übernahme der vorhandenen Erkenntnisse nicht Seite 111\n B-7633/2009",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "ord": 57,
+    "score": 0.626,
+    "spider": "CH_BGer",
+    "docket": "2C_180/2014",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2016-06-28",
+    "date_upper_bound": "2016-06-28",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.028,
+    "recital": false,
+    "cites_this": false,
+    "text": "t: Gewisse Abreden und gewisses Verhalten sind von Gesetzes wegen unzulässig. Mit der direkten Sanktionierung nach Art. 49a KG von Verstössen gegen Abreden nach Art. 5 Abs. 3 und 4 KG und von Verhalten nach Art. 7 KG werden die verfassungsrechtlichen Vorgaben respektiert.\nIn der Sache selbst trifft die Auffassung der Beschwerdeführerin ebenfalls nicht zu. Zunächst ist festzuhalten, dass sich das schweizerische und das europäische Recht in den letzten Jahren angenähert haben (vgl. etwa ZÄCH, Kartellgesetz, a.a.O., N. 129, 347; WALTER A. STOFFEL, Systeme des schweizerischen Wettbewerbsrecht/Kartellrecht, in: Schweizerisches und europäisches Wettbewerbsrecht, Handbücher für die Anwaltspraxis, Bd. IX, 2005, S. 4 ff., 19 [Rz. 1.46]; HEINEMANN, Grundlagen, a.a.O., S. 50, 55, 57 f.; HILTY/FRÜH, Potenzial, a.a.O., S. 99). In Bezug auf vertikale Abreden verkennt die Beschwerdeführerin sodann, dass der\nWertungsgehalt der Vertikalabreden im KG mit demjenigem im europäischen Recht praktisch deckungsgleich ist, auch wenn der Regelungsmechanismus nicht derselbe ist (vgl. etwa OECD, The role of competition policy in regulatory reform, 2006, S. 12; PATRICK L. KRAUSKOPF/ANDREA GRABER, Die neue Vert",
+    "text_view": "stored"
+   }
+  ],
+  "track": "Erläuterungen:1",
+  "judges": {
+   "claude-opus": "fragment",
+   "gemini-3.1-pro": "supported"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "WEKO lists the EU guidelines among the texts it took into account and justifies this by the legislator's will to align with EU law, but no step of the case is decided with them in the passage."
+    },
+    "gemini-3.1-pro": {
+     "label": "partial",
+     "quote": "Die Berücksichtigung der europäischen Erlasse und Entscheide rechtfertigt sich insbesondere durch den Willen des schweizerischen Gesetzgebers, die Rechtslage im Bereich von Wettbewerbsverstössen dem europäischen Recht anzugleichen. Dies gilt insbesondere für den Bereich der vertikalen Wettbewerbsbeschränkungen.",
+     "quote_found": false,
+     "why": "The decision justifies the rule itself (alignment with EU law for vertical restraints) in its own reasoning without showing a specific application consequence in the passage."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "This concerns the interpretation of the air transport agreement (LVA) and which law applies to routes, not the analogous application of the EU vertical guidelines."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the application of EU law to a bilateral air transport agreement, not the vertical restraints notice."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "This is a euro-compatible interpretation of the telecommunications act (FMG) by ComCom, a different legal question from the vertical notice."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the Telecommunications Act (FMG) and its general compatibility with EU law, which is a different legal question."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The court restates from the legislative history that Swiss law parallels EU law for legal certainty, and limits it, without using the guidelines to decide anything in the window; borderline with partial, so the weaker label."
+    },
+    "gemini-3.1-pro": {
+     "label": "partial",
+     "quote": "Insofern erlaubt die Parallelität der Regelungen, dass \"im Sinne der Rechtssicherheit auch darauf zurück[gegriffen werden kann], was die EU mit ihrer Verordnung an vertikalen Abreden ausgeschlossen bzw. zugelassen hat\"",
+     "quote_found": true,
+     "why": "The supreme court derives and justifies the rule itself from legislative history, setting it up as a standard, but the actual subsumption lies outside the passage."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "Footnotes cite the EU guidelines on agency contracts as a comparison, without anything being decided in the passage."
+    },
+    "gemini-3.1-pro": {
+     "label": "partial",
+     "quote": "Am nächsten käme einem solchen freizustellenden Handelsvertreter unter Berücksichtigung der EU-Vertikalleitlinien und der bisherigen (teils widersprüchlichen) Praxis in der Schweiz wohl ein bestimmter, spezifisch gearteter Untertypus der Agentur",
+     "quote_found": true,
+     "why": "The passage qualifies facts by referring to the EU Vertical Guidelines, but no final legal consequence is reached in the window."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "This is a statement of analogous policy with the EU and footnote citations of the VertBek and the EU guidelines; nothing is done with it."
+    },
+    "gemini-3.1-pro": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The decision restates the legislative intent to pursue a policy analogous to the EU for vertical agreements, and then the text cuts off before any application."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The EU parallelism is discussed for Art. 7 KG (dominance), another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses alignment with EU law for Art. 7 KG (abuse of dominance), which is a different legal question."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "partial",
+     "quote": "In Bezug auf vertikale Abreden verkennt die Beschwerdeführerin sodann, dass der\nWertungsgehalt der Vertikalabreden im KG mit demjenigem im europäischen Recht praktisch deckungsgleich ist",
+     "quote_found": true,
+     "why": "The court rejects the appellant's argument using the neighbouring principle that Swiss and EU vertical law share the same values, not the notice's analogous application of the guidelines itself."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "In Bezug auf vertikale Abreden verkennt die Beschwerdeführerin sodann, dass der Wertungsgehalt der Vertikalabreden im KG mit demjenigem im europäischen Recht praktisch deckungsgleich ist",
+     "quote_found": true,
+     "why": "The court directly uses the equivalence between Swiss and EU law on vertical agreements to explicitly reject an argument of the appellant."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "fragment",
+  "agreement": "1/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2019-04-09",
+  "pid": "9",
+  "part": "note",
+  "heading": "",
+  "lead": "",
+  "text": "Folgende Sachverhalte erfüllen für sich allein genommen den Vermutungstatbestand von Art. 5 Abs. 4 KG nicht: • Verbote des Passivverkaufs zulasten des Anbieters: Die Verpflichtung ausländischer Anbieter gegenüber dem Schweizer Generalimporteur, bei unaufgeforderten Bestellungen von Händlern oder Endkunden aus der Schweiz diese an den Schweizer Generalimporteur zu verweisen, stellt keine absolute Gebietsschutzabrede dar. So liegt bspw. keine Abrede über absoluten Gebietsschutz vor, wenn ein ausländischer Hersteller sich gegenüber dem Schweizer Generalimporteur verpflichtet, Anfragen aus der Schweiz an ihn weiterzuleiten. • Konzerninterne Sachverhalte: Eine Wettbewerbsabrede setzt eine Vereinbarung oder aufeinander abgestimmte Verhaltensweise von mindestens zwei voneinander unabhängigen Unternehmen voraus (Art. 4 Abs. 1 KG). Bei konzerninternen Absprachen wird diese Voraussetzung nicht erfüllt. Dies bedeutet, dass konzerninterne vertikale Preisabsprachen und absolute Gebietsschutzabsprachen nicht in den Anwendungsbereich von Art. 5 Abs. 4 KG fallen, solange diese konzerninternen Absprachen keine marktabschottenden Verhaltensweisen von Händlern ausserhalb des Konzerns vorsehen. Von diesem Konzernprivileg gedeckt ist etwa der Verweis eines ausländischen Unternehmens an die gruppenzugehörige Gesellschaft in der Schweiz, wenn es unaufgeforderte Bestellanfragen von Händlern oder Endkunden aus der Schweiz erhält. • Reine internationale Preisunterschiede ohne Hinweise auf vertikale Preisabreden oder Abreden über einen absoluten Gebietsschutz fallen nicht in den Anwendungsbereich von Art. 5 Abs. 4 KG. • Beschränkungen von passiven Verkäufen an bestimmte Kundengruppen werden nicht von Art. 5 Abs. 4 KG erfasst, werden indes als qualitativ schwerwiegend betrachtet (Ziff. 12 Abs. 2 lit. b VertBek). Verbote bzw. Beschränkungen von Internetverkäufen stellen Passivverkaufsverbote an die Kundengruppe der Internetkunden dar und fallen dementsprechend nicht in den Anwendungsbereich von Art. 5 Abs. 4 KG, solange keine weiteren qualifizierenden Umstände vorliegen, die auf das Bestehen einer vertikalen Preisabrede oder eine Abrede über absoluten Gebietsschutz schliessen lassen (vgl. unten Rz 18 ff.). • Sind passive Verkäufe zulässig, aktive dagegen nicht, so handelt es sich lediglich um relativen Gebietsschutz. Solche Verkäufe in zugewiesene Gebiete sind nicht im Sinne von Art. 5 Abs. 4 KG ausgeschlossen (vgl. oben, Rz 6). Abgesehen von den in Ziff. 12 Abs. 2 Bst. b/i-iii VertBek genannten Ausnahmen werden Beschränkungen von Aktivverkäufen indes als qualitativ schwerwiegend betrachtet (Ziff. 12 Abs. 2 Bst. b bis c VertBek).",
+  "before": "2017-06-12",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 128
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "ord": 90,
+    "score": 0.804,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2014/1, S. 184",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2013-10-21",
+    "date_upper_bound": "2013-10-21",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.012,
+    "recital": false,
+    "cites_this": false,
+    "text": "serhalb des fraglichen Markts zugewiesen wurde.\n\n\nZum Ganzen KRAUSKOPF/SCHALLER (Fn 36), Art. 5 N 534 ff; RPW\n2010/1, 16 f. Rz 100 ff., Gaba (Entscheid noch nicht rechtskräftig).\nZum Ganzen BSK KG–KRAUSKOPF/SCHALLER (Fn 36), Art. 5 N 543\nff.\n\n\n2014/1\n\nB.3.2.1.3.\n\nAbreden über eine Behinderung des\nOnline-Handels\n\n139. Ob und inwiefern Behinderungen des OnlineHandels allenfalls von Art. 5 Abs. 4 KG erfasst werden\nkönnen, ist grundsätzlich anhand der konkreten\n[…]\nLieferungen\noder die Vertragskündigung bei Nichteinhaltung eines\nbestimmten Preisniveaus ausgesprochen respektive\numgesetzt werden.\n141. Internetverkäufe gelten gemäss Ziff. 3 VertBek als\npassive Verkäufe. Gemäss Ziff. 10 Abs. 1 Bst. b VertBek\nwird die Beseitigung wirksamen Wettbewerbs im Sinne\nvon Art. 5 Abs. 4 KG vermutet, wenn Gebiete zugewiesen und gleichzeitig Passivverkäufe an Händler oder\nEndkunden verboten werden. Ein Verbot von Internetverkäufen kann somit bereits ein Tatbestandselement\neiner unzulässigen Gebietsschutzabrede gemäss Art. 5\nAbs. 4 KG erfüllen. Die wettbewerbsrechtliche Problematik eines Verbots respektive einer Beschränkung des\nOnline-Handels ist insbesondere dann gegeben, wenn\ndadurch der grenzüberschreitende Warenverkehr eingeschränkt werden soll, um den Schweizer Markt abzu\nschotten.\n142. Nach der Praxis sowohl der Europäischen Kom60\nmission als auch der WEKO ist beispielsweise bei\nfolgenden Konstellationen von einer problematischen\nBeschränkung des passiven Verkaufs auszugehen und\neine Subsumtion unter Art. 5 Abs. 4 KG (absolute Gebietsschutzabrede) naheliegend:\n•\n\nEs wird vereinbart, dass der Händler verhindert,\ndass",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B1.1.1",
+    "ord": 32,
+    "score": 0.801,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2010/4, S. 640",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2010-05-31",
+    "date_upper_bound": "2010-05-31",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.008,
+    "recital": false,
+    "cites_this": false,
+    "text": "Kriterien eines rein qualitativen Selektivvertriebes bei einer\nstrikten Auslegung der VertBek-Bestimmungen nicht\nerfüllt zu sein. Die vorliegende Abrede wird deshalb unter dem Aspekt des Art. 5 Abs. 4 KG beurteilt.\nB.3.3.\n\nKeine vertikale Abrede gemäss Art. 5 Abs. 4\nKG\n\n43. Gemäss Art. 5 Abs. 4 KG wird die Beseitigung des\nwirksamen Wettbewerbs bei Abreden vermutet, wenn\ndurch Vertriebsverträge die Zuweisung von Gebieten\nbestimmt wird und dadurch Verkäufe in diese durch gebietsfremde Vertriebspartner ausgeschlossen werden\n(Verbot des Passivverkaufs an Händler oder Endkunden). Der passive Verkauf beinhaltet die Erfüllung unaufgeforderter Bestellungen einzelner Kunden (Endkun-\n\n\nden oder Händler) aus einem fremden Gebiet (vgl\n[…]\nScientific in der\nSchweiz als offizieller Vertreiber vertreiben zu können.\n46. In diesem Zusammenhang ist auch zentral darauf\nhinzuweisen, dass FS-Produkte in der Schweiz billiger\nsind als im benachbarten Ausland (abgesehen von Ita12\nlien) . Die mangelnden Angaben betreffend Versuche,\nFS-Produkte parallel zu importieren, könnten auch damit\nerklärt werden, dass der Anreiz für Zwischenhändler,\ndiese Produkte im Ausland einzukaufen, klein ist. Dies\nnicht nur wegen der eher tiefen schweizerischen Preise,\nsondern auch wegen der regulierungsbedingten Ausgangslage (s. Verrechnung der IV zum Einkaufspreis;\nvgl. Rz. 12).\n\n\nGemäss Aussage von […]. Sie ist auch die einzige",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Behinderung-des-Onli_2011-07-11",
+    "ord": 81,
+    "score": 0.79,
+    "spider": "CH_WEKO",
+    "docket": "Behinderung des Online-Handels",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2011-07-11",
+    "date_upper_bound": "2011-07-11",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.011,
+    "recital": false,
+    "cites_this": false,
+    "text": "schotten. Dies kann speziell bei Produkten der Fall sein, deren Preisniveau in der Schweiz\ndasjenige im europäischen Ausland deutlich übersteigt. 74. Vor diesem Hintergrund und in Anlehnung an die Handhabung der Europäischen\nKommission werden nachstehend beispielhaft einige Konstellationen aufgezählt, bei deren\nVorliegen von einer problematischen Beschränkung des passiven Verkaufs auszugehen ist\nund welche die Subsumtion unter Art. 5 Abs. 4 KG (absolute Gebietsschutzabrede) nahe legen. Anhaltspunkte für das Vorliegen einer unzulässigen Wettbewerbsabrede i.S.v. Art. 5\nAbs. 4 KG können bspw. die folgenden Umstände darstellen:  Wenn vereinbart wird, dass der Wiederverkäufer verhindert, dass Kunden aus einem\n anderen (Vertrags-)Gebiet seine Website einsehen können oder, dass er auf seiner\n Website eine automatische Umleitung auf die Website des Herstellers oder anderer\n Wiederverkäufer einrichtet.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-4_B1.1.2",
+    "ord": 17,
+    "score": 0.788,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2013/4, S. 488",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "",
+    "date_upper_bound": "2014-06-30",
+    "date_source": "issue",
+    "regime": "KG 2003",
+    "regime_exact": false,
+    "after_version": false,
+    "recital_share": 0.017,
+    "recital": false,
+    "cites_this": false,
+    "text": "qualifizieren.\n\nB.\n\n\nKeine Hinweise auf unzulässige Wettbewerbsabreden über die Zuweisung von Gebieten\n\nVorbemerkung\n16. Unter den gesetzlichen Vermutungstatbestand von\nArt. 5 Abs. 4 KG fallen Abreden in Vertriebsverträgen\nüber die Zuweisung von Gebieten, sofern passive Verkäufe in diese Gebiete durch gebietsfremde Vertriebspartner ausgeschlossen werden (sog. absoluter Ge14\nbietsschutz; Ziff. 10 Abs. 1 Bst. b VertBek ).\n17. Laut Art. 5 Abs. 1 KG sind Abreden, die den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch\nGründe der wirtschaftlichen Effizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen\nWettbewerbs führen, unzulässig.\n18. Im Rahmen der Vorabklärung und bei der Frage\nnach der Nichtweitergabe von Währungsvorteilen wurden von den befragten Marktteilnehmern umfangreiche\nInformationen zu Parallelimporttätigkeiten im Schweizer\nLebensmitteldetailhandel und allfälligen Behinderungen\neingefordert. Wie bereits einleitend erwähnt (vgl. oben,\nRz 5), ergab die Vorabklärung keine genügenden Anhaltspunkte für eine Behinderung von Parallelimporten\nbzw. unzulässige Gebietsabsprachen gemäss Art. 5\nAbs. 4 i.V.m. Abs. 1 KG. Im Folgenden werden die Erkenntnisse aus dieser Marktbefragung dennoch dargelegt.\n19. Vorab sei darauf hingewiesen, dass Parallelimporte\nin der\n[…]\n3. Keine konkreten Hinweise auf Preisabreden\n39. Laut Art. 5 Abs. 1 KG sind Abreden, die den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch\nGründe der wirtschaftlichen Effizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen\nWettbewerbs führen, unzulässig.\n40. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "ord": 12,
+    "score": 0.787,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2016/2, S. 373",
+    "lang": "de",
+    "section": "Beratungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "",
+    "date_upper_bound": "2016-12-31",
+    "date_source": "issue",
+    "regime": "KG 2003",
+    "regime_exact": false,
+    "after_version": false,
+    "recital_share": 0.009,
+    "recital": false,
+    "cites_this": false,
+    "text": "unattraktiv wird und es damit auf indirektem Weg zu\neiner Behinderung von Passivverkäufen in die Schweiz\nkommt.\n30. Gemäss Rechtsprechung des Bundesverwaltungsgerichts kommt Art. 5 Abs. 4 KG auch bei einer indirekten Gebietszuweisung zur Anwendung. Im Urteil Gaba/WEKO wird diesbezüglich Folgendes ausgeführt:\nBetreffend die Frage, ob Vertikalabreden von Art. 5\nAbs. 4 KG nur erfasst werden, wenn sie ausdrücklich\nein Gebiet zuweisen und Verkäufe in dieses Gebiet\nausschliessen, ist daran zu erinnern, dass Art. 5 Abs.\n4 KG insbesondere auch die Abschottung des\nSchweizer Marktes verhindern soll (vgl. BBI 2002\n2032; AB 2002 N 1294 if., 1435). Würde vorausgesetzt, dass jede Gebietsabrede den Wettbewerb\nvermutungsweise nur beseitigt, wenn sie ausdrücklich einer Partei ein Gebiet zuweist und ausdrücklich\nVerkäufe in dieses Gebiet verbietet, wäre es nicht nur\nein Leichtes, Art. 5 Abs. 4 KG zu umgehen. Eine solche wörtliche Auslegung entspräche auch nicht dem\nSinn der Norm, und wird im Übrigen in der Literatur\nnicht vertreten (vgl. statt vieler KRAUSKOPF/SCHALLER,\nin: BSK-KG, Art. 5 Rn. 55). Vielmehr wollte der Gesetzgeber mit der Einführung des Art. 5 Abs. 4 KG\nabsolute Gebietsabreden unterbinden, unabhängig\ndavon, ob die Parteien sich die Gebiete ausdrücklich\nzuteilen oder ob die Zuteilung",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ord": 200,
+    "score": 0.786,
+    "spider": "CH_WEKO",
+    "docket": "Nikon",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2011-11-28",
+    "date_upper_bound": "2011-11-28",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.009,
+    "recital": false,
+    "cites_this": false,
+    "text": "aractère absolu n'existe pas tant que\n des ventes passives sont possibles en dehors du territoire prévu par le contrat, soit\n tant que tout commerce parallèle n'est pas impossible. “83 220. Dementsprechend greift gemäss Praxis der WEKO der Vermutungstatbestand in\nArt. 5 Abs. 4 KG, wenn Abreden in Vertriebsverträgen über die Zuweisung von Gebieten vorliegen und passive Verkäufe in diese Gebiete durch gebietsfremde Vertriebspartner ausgeschlossen werden (sog. absoluter Gebietsschutz). 82\n AB 2003 S 329 f. (Fn 79).\n AB 2003 S 331 (Fn 79); Hervorhebung durch die WEKO.\n RPW 2010/1, 73 Rz 98, Gaba. ehe oben Rz\n212). Vorliegend bestehen neben Deutschland in sechs weiteren EWR-Ländern und in\nden USA Exportverbote, die zum Ausschluss von Verkäufen in die Schweiz führen.\nHinzu kommen die vertraglichen Bezugsverbote ausserhalb des Vertragsgebiets\n(Schweiz und Liechtenstein). Sofern diese Bezugs- und Exportverbote zum Ausschluss\nvon passiven Verkäufen in die Schweiz führen, was nachfolgend im Einzelnen geprüft\nwird (Rz 226 ff.), greift damit die Vermutung der Beseitigung in Art. 5 Abs. 4 KG für jede einzelne Vertragsklausel.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-1_B2.2.1",
+    "ord": 23,
+    "score": 0.779,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2017/1, S. 96",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2016-12-19",
+    "date_upper_bound": "2016-12-19",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.014,
+    "recital": false,
+    "cites_this": false,
+    "text": "1 KG zustande.\nB.3.2.\n\nVertikale Abrede im Sinne von Art. 5 Abs. 4\nKG\n\n39. Gemäss Art. 5 Abs. 4 KG wird die Beseitigung des\nwirksamen Wettbewerbs auch vermutet bei Abreden zwischen Unternehmen verschiedener Marktstufen über Mindest- oder Festpreise sowie bei Abreden in Vertriebsverträgen über die Zuweisung von Gebieten, soweit Verkäufe in diese durch gebietsfremde Vertriebspartner ausgeschlossen werden.\nB.3.2.1. Vertikale Abrede über absoluten Gebietsschutz im Sinne von Art. 5 Abs. 4 KG\n40. Eine vertikale Gebietsabrede erfüllt den Vermutungstatbestand insbesondere dann, wenn sie ein Verbot des\nPassivverkaufs an Händler oder Endkunden zum Gegenstand hat (Ziff. 10 Abs. 1 Bst. b i.V.m. Ziff. 3 VertBek). Es\nhandelt sich in solchen Fällen um absoluten Gebietsschutz.\n41. Eflare hat Waseg in der Schweiz das exklusive Vertriebsrecht für Eflare Warnblitzleuchten eingeräumt (vgl.\nRz 3). Zudem bestand zwischen Eflare und Waseg eine\nAbrede über die Nichtbelieferung der für [ein bestimmtes\nLand] zuständigen Händlerin […] zur gezielten Verhinderung eines Parallelimports durch die schweizerische Anzeigerin respektive zur Verhinderung eines passiven Verkaufs [der ausländischen Händlerin] an die Anzeigerin.\nDamit lag eine vertikale Abrede über einen absoluten Gebietsschutz vor und es greift die gesetzliche Vermutung",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_GABA_2009-11-30",
+    "ord": 60,
+    "score": 0.778,
+    "spider": "CH_WEKO",
+    "docket": "GABA",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2009-11-30",
+    "date_upper_bound": "2009-11-30",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.017,
+    "recital": false,
+    "cites_this": false,
+    "text": "en Wettbewerbs vermutet\nbei Abreden zwischen Unternehmen verschiedener Marktstufen über die Zuweisung von\nGebieten, soweit Verkäufe in diese durch gebietsfremde Vertriebspartner ausgeschlossen\nwerden. B.3.2.1. Vorliegen einer vertikalen Abrede über die exklusive Zuweisung von Gebieten\n98. Unter den gesetzlichen Vermutungstatbestand von Art. 5 Abs. 4 KG fallen Abreden in\nVertriebsverträgen über die Zuweisung von Gebieten, sofern passive Verkäufe in diese Gebiete durch gebietsfremde Vertriebspartner ausgeschlossen werden (sog. absoluter Gebietsschutz; Ziff. 10 Abs. 1 lit. b VertBek). 99. Nicht unter den Vermutungstatbestand fällt hingegen das Verbot des aktiven Verkaufs. B.3.2.1.1. Vertikale Gebietsabrede zwischen Gaba und Gebro Situation vor dem 1. September 2006",
+    "text_view": "stored"
+   }
+  ],
+  "track": "Erläuterungen:8",
+  "judges": {
+   "claude-opus": "fragment",
+   "gemini-3.1-pro": "recites"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "It restates in general terms when an online-sales ban can fall under Art. 5(4) KG, with no case decided in the window."
+    },
+    "gemini-3.1-pro": {
+     "label": "contradicts",
+     "quote": "Ein Verbot von Internetverkäufen kann somit bereits ein Tatbestandselement einer unzulässigen Gebietsschutzabrede gemäss Art. 5 Abs. 4 KG erfüllen.",
+     "quote_found": true,
+     "why": "The passage states that an internet sales ban can fulfill the presumption of Art. 5(4) KG, which contradicts the proposition's rule that such bans do not fall under its scope."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It restates the Art. 5(4) presumption and discusses why parallel imports are lacking; none of the proposition's exclusions is invoked."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage factually explains the lack of parallel imports due to lower prices in Switzerland, which is unrelated to the legal qualification of pure international price differences."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "It lists, as general guidance, the qualifying circumstances under which online-sales restrictions suggest Art. 5(4) KG, and applies none of them."
+    },
+    "gemini-3.1-pro": {
+     "label": "contradicts",
+     "quote": "Anhaltspunkte für das Vorliegen einer unzulässigen Wettbewerbsabrede i.S.v. Art. 5 Abs. 4 KG können bspw. die folgenden Umstände darstellen:  Wenn vereinbart wird, dass der Wiederverkäufer verhindert, dass Kunden aus einem anderen (Vertrags-)Gebiet seine Website einsehen können",
+     "quote_found": true,
+     "why": "The passage lists restricting website access as an indication of an Art. 5(4) KG violation, contradicting the proposition's rule that internet sales restrictions do not fall under this provision."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "partial",
+     "quote": "ergab die Vorabklärung keine genügenden Anhaltspunkte für eine Behinderung von Parallelimporten bzw. unzulässige Gebietsabsprachen gemäss Art. 5 Abs. 4 i.V.m. Abs. 1 KG",
+     "quote_found": true,
+     "why": "In an inquiry into currency advantages not being passed on, it finds no Art. 5(4) agreement without evidence, but the price-difference rule itself is only implicit (borderline, weaker label)."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage notes that an investigation into currency advantages found no evidence of territorial agreements, which is a factual finding and does not apply the rule regarding pure price differences."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It is about indirect territorial allocation falling under Art. 5(4) KG, which is not one of the proposition's exclusions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses indirect territorial allocations, which is a different legal question from the specific exceptions listed in the proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The point that protection is not absolute while passive sales remain possible is only quoted; what the passage actually does is apply the positive presumption to export bans."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage states the general rule that excluding passive sales triggers the presumption of Art. 5(4) KG, without addressing the specific exceptions listed in the proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It applies the Art. 5(4) presumption to a non-supply agreement, the positive rule rather than any of the exclusions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage applies the basic rule that a ban on passive sales constitutes absolute territorial protection, which is a different rule from the exceptions in the proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "It states that an active-sales ban does not fall under the presumption, but does nothing with that point in the window."
+    },
+    "gemini-3.1-pro": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage restates the rule that bans on active sales do not fall under the presumption of Art. 5(4) KG, but the subsumption occurs outside the window."
+    }
+   }
+  ],
+  "status": "disputed",
+  "prelabel": null,
+  "agreement": "1/2"
+ }
+]

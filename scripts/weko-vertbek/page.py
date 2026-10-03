@@ -31,8 +31,15 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--packet", type=pathlib.Path, required=True)
     ap.add_argument("--out", type=pathlib.Path, required=True)
+    ap.add_argument("--review", action="store_true",
+                    help="the packet is aggregate.py's review.json: keep disputed and check items")
     args = ap.parse_args()
     packet = json.loads(args.packet.read_text(encoding="utf-8"))
+    if args.review:
+        # aggregate.py output: only what the human has to read; the judges'
+        # answers ride along and the page reveals them after the human label
+        packet = [r for r in packet if r.get("status") in ("disputed", "check", "rest")]
+        packet.sort(key=lambda r: (r["status"] != "disputed", r["version"], r["pid"]))
     args.out.write_text(render(packet), encoding="utf-8")
     print(f"{len(packet)} propositions -> {args.out}")
     return 0
