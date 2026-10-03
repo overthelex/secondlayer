@@ -48,7 +48,8 @@ CHAINS = {
 SUPPORTING = {"applies", "partial"}
 # The date a version was first published, where it differs from the text we
 # hold: the Erläuterungen were issued on 12 June 2017; the text in the
-# corpus is their Stand of 9 April 2019. Dating the chain by the Stand let
+# corpus is their Stand of 9 April 2018. (The version key "2019-04-09" is a
+# misnomer from the first download, kept because every artifact is keyed by it.) Dating the chain by the Stand let
 # decisions of 2017-2018 count as earlier than the text (3 of 14 codifications).
 FIRST_PUBLISHED = {"2019-04-09": date(2017, 6, 12)}
 

@@ -49,7 +49,7 @@ def main() -> int:
                         "FROM ch_weko_audit_corpus").fetchall()
     rec = [r for r in rows if r["rpw_chapter"] != "D1"]
     tier = lambda s: ("agency" if s in ("CH_WEKO", "CH_WEKO_RPW") else
-                      "federal_courts" if s in ("CH_BGE", "CH_BGer", "CH_BVGer") else
+                      "federal_courts" if s in ("CH_BGE", "CH_BGer", "CH_BVGer", "CH_BSTG") else
                       "cantonal" if re.fullmatch(r"[A-Z]{2}_.+", s) and not s.startswith("CH_") else "other")
     years = [ (r["date_exact"] or r["date_upper_bound"]).year for r in rec if (r["date_exact"] or r["date_upper_bound"])]
     F["record"] = {
@@ -66,6 +66,9 @@ def main() -> int:
                                       r["date_exact"] or r["date_upper_bound"]) for r in rec}),
         "before_kg1995_docs": sum(1 for r in rec if (r["date_exact"] or r["date_upper_bound"])
                                   and (r["date_exact"] or r["date_upper_bound"]).year < 1996),
+        "notices_excluded": conn.execute("SELECT count(*) n FROM ch_weko_audit_corpus "
+                                         "WHERE rpw_chapter = 'D1'").fetchone()["n"],
+        "rpw_date_source": dict(collections.Counter(r["date_source"] for r in rec if r["spider"] == "CH_WEKO_RPW")),
         "passages_v1": conn.execute("SELECT count(*) n FROM ch_weko_audit_passages").fetchone()["n"],
         "passages_v2": conn.execute("SELECT count(*) n FROM ch_weko_audit_passages_v2").fetchone()["n"],
     }
@@ -118,6 +121,8 @@ def main() -> int:
     lab = {(r["version"], r["pid"]): r["label"] for r in labels}
     F["full_run"] = {"items": len(rev), "status": dict(collections.Counter(r["status"] for r in rev)),
                      "disputed_reader_with_claude": sum(lab[(r["version"], r["pid"])] == r["judges"]["claude-opus"] for r in dis),
+                     "disputed_pairs": {f"{a}|{b}": n for (a, b), n in collections.Counter(
+                         (r["judges"]["claude-opus"], r["judges"]["gemini-3.1-pro"]) for r in dis).items()},
                      "disputed_reader_with_gemini": sum(lab[(r["version"], r["pid"])] == r["judges"]["gemini-3.1-pro"] for r in dis),
                      "controls": {r["pid"]: r["judges"] for r in rev if r["status"] == "control"}}
 
@@ -137,10 +142,11 @@ def main() -> int:
 
     # --- provenance and its cross with measurement 1
     prov = json.loads((DATA / "provenance.json").read_text())
-    pc = {}
+    pc, pcf = {}, {}
     for p in prov["propositions"]:
         pid = "E" + p["pid"] if p["part"] == "preamble" and p["pid"].isdigit() else p["pid"]
         pc[(p["version"], pid)] = p["class"]
+        pcf[(p["version"], pid)] = p
     F["provenance"] = {"n": len(prov["propositions"]), "null_p99": prov["method"]["null_p99"],
                        "by_version": {v: dict(collections.Counter(p["class"] for p in prov["propositions"] if p["version"] == v)) for v in ORDER}}
     cross = collections.Counter()
@@ -153,6 +159,20 @@ def main() -> int:
 
     args.out.write_text(json.dumps(F, ensure_ascii=False, indent=1, default=str))
     args.out.with_suffix(".tex").write_text(macros(F))
+    import csv
+    with open(args.out.with_name("tracks.csv"), "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["track", "first_version", "final_class", "lag_years", "decided_by", "provenance", "containment"])
+        for f in m1:
+            v = f["first_version"]
+            pr = pcf.get((v, f["versions"][v]["pid"]), {})
+            w.writerow([f["track"], v, f["final_class"], f["lag_years"] if f["lag_years"] is not None else "",
+                        f["decided_by"], pr.get("class", ""), pr.get("containment", "")])
+    with open(args.out.with_name("labels.csv"), "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["version", "pid", "label", "source"])
+        for r in labels:
+            w.writerow([r["version"], r["pid"], r["label"], r["source"]])
     print(json.dumps(F, ensure_ascii=False, indent=1, default=str)[:6000])
     return 0
 
@@ -201,7 +221,7 @@ def macros(F: dict) -> str:
         out[f"Bin{short}"] = num(F["judges_v2_test"][n]["supported_or_not"])
     names = {"2002-02-18": "\\de{Bekanntmachung} 2002", "2007-07-02": "\\de{Bekanntmachung} 2007",
              "2010-06-28": "\\de{Bekanntmachung} 2010", "2017-05-22": "\\de{Bekanntmachung} 2010, \\de{Stand} 2017",
-             "2022-12-12": "\\de{Bekanntmachung} 2022", "2019-04-09": "\\de{Erläuterungen} (2017), \\de{Stand} 2019",
+             "2022-12-12": "\\de{Bekanntmachung} 2022", "2019-04-09": "\\de{Erläuterungen} 2017, \\de{Stand} 2018",
              "2022-12-12-erl": "\\de{Erläuterungen} 2022"}
     inst = "".join(f"{names[v]} & {x['propositions']} & {x['case_citations_incl_footnotes']} \\\\\n"
                    for v, x in F["instrument"].items())
@@ -218,6 +238,12 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    rs = F["record"]["rpw_date_source"]
+    out["RPWText"], out["RPWIssue"], out["RPWSame"] = num(rs.get("text", 0)), num(rs.get("issue", 0)), num(rs.get("same_as", 0))
+    out["NNotices"] = num(F["record"]["notices_excluded"])
+    out["DisputedFragSup"] = num(F["full_run"]["disputed_pairs"].get("fragment|supported", 0))
+    out["ProvShort"] = num(F["labels"]["n"] - F["provenance"]["n"])
+    out["CrossTotal"] = num(sum(F["cross"].values()))
     early = [m["by_version"][v] for v in ("2002-02-18", "2007-07-02")]
     out["EarlyAnn"] = str(sum(x.get("announcement", 0) for x in early))
     out["EarlyCod"] = str(sum(x.get("codification", 0) for x in early))

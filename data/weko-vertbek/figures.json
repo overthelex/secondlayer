@@ -3,9 +3,9 @@
   "decisions": 2828,
   "by_tier": {
    "cantonal": 159,
-   "federal_courts": 765,
+   "federal_courts": 780,
    "agency": 1654,
-   "other": 250
+   "other": 235
   },
   "by_spider_top": {
    "CH_WEKO_RPW": 1537,
@@ -32,6 +32,12 @@
   ],
   "distinct_docket_date": 2527,
   "before_kg1995_docs": 246,
+  "notices_excluded": 55,
+  "rpw_date_source": {
+   "text": 1089,
+   "issue": 440,
+   "same_as": 8
+  },
   "passages_v1": 274112,
   "passages_v2": 252122
  },
@@ -177,6 +183,11 @@
    "control": 8
   },
   "disputed_reader_with_claude": 15,
+  "disputed_pairs": {
+   "fragment|supported": 36,
+   "recites|supported": 2,
+   "supported|fragment": 2
+  },
   "disputed_reader_with_gemini": 25,
   "controls": {
    "N1": {
