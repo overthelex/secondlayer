@@ -46,6 +46,15 @@ CHAINS = {
     "Erläuterungen": ["2019-04-09", "2022-12-12-erl"],
 }
 SUPPORTING = {"applies", "partial"}
+# The date a version was first published, where it differs from the text we
+# hold: the Erläuterungen were issued on 12 June 2017; the text in the
+# corpus is their Stand of 9 April 2019. Dating the chain by the Stand let
+# decisions of 2017-2018 count as earlier than the text (3 of 14 codifications).
+FIRST_PUBLISHED = {"2019-04-09": date(2017, 6, 12)}
+
+
+def first_date(version: str) -> date:
+    return FIRST_PUBLISHED.get(version, date.fromisoformat(version[:10]))
 
 
 def full_key(version: str, pid: str, part: str) -> tuple[str, str]:
@@ -63,7 +72,7 @@ def tracks() -> dict[tuple[str, str], dict]:
             for v, d in t.per_version.items():
                 out[full_key(v, d["pid"], t.part)] = {
                     "track": f"{chain}:{n}", "first_version": first,
-                    "first_date": date.fromisoformat(first[:10]), "status": d["status"]}
+                    "first_date": first_date(first), "status": d["status"]}
     return out
 
 
@@ -139,7 +148,8 @@ def main() -> int:
             known = [date.fromisoformat(s["date"] or s["bound"]) for s in after if s["date"] or s["bound"]]
             lag = round((min(known) - first).days / 365.25, 1) if known else None
         result[(rec["first_version"], cls)] += 1
-        rows.append({"track": tid, "first_version": rec["first_version"], "best_label": best, "class": cls,
+        rows.append({"track": tid, "first_version": rec["first_version"], "first_date": str(first),
+                     "best_label": best, "class": cls,
                      "lag_years": lag, "versions": rec["versions"],
                      "earliest_support": min((s["date"] or s["bound"] for s in rec["support"]), default=None),
                      "support": sorted(rec["support"], key=lambda s: s["date"] or s["bound"])})

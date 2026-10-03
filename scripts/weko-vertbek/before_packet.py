@@ -51,7 +51,7 @@ def main() -> int:
     for r in todo:
         v = r["first_version"]
         item = dict(full[(v, r["versions"][v]["pid"])])
-        before = date.fromisoformat(v[:10])
+        before = date.fromisoformat(r.get("first_date") or v[:10])
         q = np.asarray(embed([item["text"]], args.tei, cache)[0], dtype="float32")
         q /= max(float(np.linalg.norm(q)), 1e-9)
         chosen, stats = packet.pool(conn, index, meta, family, item["text"], q, before)

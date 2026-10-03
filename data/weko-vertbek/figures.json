@@ -1,0 +1,333 @@
+{
+ "record": {
+  "decisions": 2828,
+  "by_tier": {
+   "cantonal": 159,
+   "federal_courts": 765,
+   "agency": 1654,
+   "other": 250
+  },
+  "by_spider_top": {
+   "CH_WEKO_RPW": 1537,
+   "CH_BVGer": 301,
+   "CH_BGE": 292,
+   "CH_VB": 178,
+   "CH_BGer": 172,
+   "CH_WEKO": 117,
+   "VD_FindInfo": 29,
+   "ZH_Verwaltungsgericht": 25
+  },
+  "journal_items": 1537,
+  "entscheidsuche_weko": 117,
+  "date_sources": {
+   "record": 973,
+   "text": 1381,
+   "issue": 440,
+   "same_as": 8,
+   "none": 26
+  },
+  "years": [
+   1936,
+   2026
+  ],
+  "distinct_docket_date": 2527,
+  "before_kg1995_docs": 246,
+  "passages_v1": 274112,
+  "passages_v2": 252122
+ },
+ "recut": {
+  "decisions": 1537,
+  "reading_order": 1522,
+  "coverage_median": 0.985
+ },
+ "instrument": {
+  "2002-02-18": {
+   "propositions": 18,
+   "case_citations_incl_footnotes": 0
+  },
+  "2007-07-02": {
+   "propositions": 58,
+   "case_citations_incl_footnotes": 0
+  },
+  "2010-06-28": {
+   "propositions": 64,
+   "case_citations_incl_footnotes": 0
+  },
+  "2017-05-22": {
+   "propositions": 67,
+   "case_citations_incl_footnotes": 1
+  },
+  "2022-12-12": {
+   "propositions": 60,
+   "case_citations_incl_footnotes": 1
+  },
+  "2019-04-09": {
+   "propositions": 25,
+   "case_citations_incl_footnotes": 78
+  },
+  "2022-12-12-erl": {
+   "propositions": 36,
+   "case_citations_incl_footnotes": 79
+  }
+ },
+ "labels": {
+  "n": 328,
+  "distribution": {
+   "fragment": 95,
+   "recites": 95,
+   "supported": 88,
+   "absent": 50
+  },
+  "source": {
+   "judges": 238,
+   "human_disputed": 40,
+   "human_gold": 50
+  },
+  "by_version": {
+   "2002-02-18": {
+    "fragment": 6,
+    "recites": 5,
+    "supported": 3,
+    "absent": 4
+   },
+   "2007-07-02": {
+    "recites": 17,
+    "supported": 16,
+    "fragment": 19,
+    "absent": 6
+   },
+   "2010-06-28": {
+    "recites": 21,
+    "supported": 20,
+    "fragment": 12,
+    "absent": 11
+   },
+   "2017-05-22": {
+    "recites": 17,
+    "fragment": 17,
+    "supported": 21,
+    "absent": 12
+   },
+   "2022-12-12": {
+    "supported": 14,
+    "fragment": 17,
+    "absent": 12,
+    "recites": 17
+   },
+   "2019-04-09": {
+    "fragment": 9,
+    "recites": 9,
+    "supported": 5,
+    "absent": 2
+   },
+   "2022-12-12-erl": {
+    "absent": 3,
+    "supported": 9,
+    "fragment": 15,
+    "recites": 9
+   }
+  }
+ },
+ "gold": {
+  "n": 50,
+  "development": 17,
+  "test": 33,
+  "distribution": {
+   "recites": 18,
+   "fragment": 12,
+   "absent": 9,
+   "supported": 11
+  }
+ },
+ "judges_v2_test": {
+  "claude-opus": {
+   "agreement_kappa": [
+    0.788,
+    0.71
+   ],
+   "supported_or_not": 29
+  },
+  "gemini-3.1-pro": {
+   "agreement_kappa": [
+    0.697,
+    0.596
+   ],
+   "supported_or_not": 31
+  },
+  "deepseek-v4-pro": {
+   "agreement_kappa": [
+    0.545,
+    0.386
+   ],
+   "supported_or_not": 28
+  }
+ },
+ "rule_binary_check_test": {
+  "covered": 29,
+  "of": 33,
+  "four_way_right": 25,
+  "supported_or_not_right": 28
+ },
+ "full_run": {
+  "items": 336,
+  "status": {
+   "unanimous": 238,
+   "gold": 50,
+   "disputed": 40,
+   "control": 8
+  },
+  "disputed_reader_with_claude": 15,
+  "disputed_reader_with_gemini": 25,
+  "controls": {
+   "N1": {
+    "claude-opus": "recites",
+    "gemini-3.1-pro": "absent"
+   },
+   "N2": {
+    "claude-opus": "absent",
+    "gemini-3.1-pro": "absent"
+   },
+   "N3": {
+    "claude-opus": "absent",
+    "gemini-3.1-pro": "absent"
+   },
+   "N4": {
+    "claude-opus": "absent",
+    "gemini-3.1-pro": "absent"
+   },
+   "P1": {
+    "claude-opus": "supported",
+    "gemini-3.1-pro": "supported"
+   },
+   "P2": {
+    "claude-opus": "supported",
+    "gemini-3.1-pro": "supported"
+   },
+   "P3": {
+    "claude-opus": "absent",
+    "gemini-3.1-pro": "absent"
+   },
+   "R1": {
+    "claude-opus": "absent",
+    "gemini-3.1-pro": "absent"
+   }
+  }
+ },
+ "measure1": {
+  "tracks": 165,
+  "classes": {
+   "codification": 53,
+   "announcement": 50,
+   "ungrounded": 62
+  },
+  "decided_by": {
+   "codification|human": 5,
+   "announcement|judges": 44,
+   "announcement|human": 6,
+   "ungrounded|step1": 62,
+   "codification|judges": 11,
+   "codification|step1": 37
+  },
+  "by_version": {
+   "2002-02-18": {
+    "codification": 1,
+    "announcement": 9,
+    "ungrounded": 8,
+    "lag_median": 16.2
+   },
+   "2007-07-02": {
+    "ungrounded": 14,
+    "codification": 10,
+    "announcement": 29,
+    "lag_median": 4.4
+   },
+   "2010-06-28": {
+    "ungrounded": 9,
+    "announcement": 5,
+    "codification": 7,
+    "lag_median": 6.5
+   },
+   "2017-05-22": {
+    "ungrounded": 4,
+    "codification": 1,
+    "announcement": 2,
+    "lag_median": 2.8499999999999996
+   },
+   "2022-12-12": {
+    "announcement": 3,
+    "ungrounded": 9,
+    "codification": 9,
+    "lag_median": 1.4
+   },
+   "2019-04-09": {
+    "announcement": 1,
+    "codification": 14,
+    "ungrounded": 10,
+    "lag_median": 3.6
+   },
+   "2022-12-12-erl": {
+    "codification": 11,
+    "ungrounded": 8,
+    "announcement": 1,
+    "lag_median": 3.5
+   }
+  },
+  "lag_median": 4.7,
+  "lag_quartiles": [
+   3.575,
+   4.7,
+   11.299999999999999
+  ]
+ },
+ "provenance": {
+  "n": 320,
+  "null_p99": 0.011627906976744186,
+  "by_version": {
+   "2002-02-18": {
+    "own": 14,
+    "mixed": 4
+   },
+   "2007-07-02": {
+    "own": 34,
+    "imported": 4,
+    "mixed": 17
+   },
+   "2010-06-28": {
+    "own": 34,
+    "mixed": 16,
+    "imported": 10
+   },
+   "2017-05-22": {
+    "own": 44,
+    "mixed": 17,
+    "imported": 9
+   },
+   "2022-12-12": {
+    "own": 27,
+    "imported": 11,
+    "mixed": 18
+   },
+   "2019-04-09": {
+    "own": 12,
+    "mixed": 12,
+    "imported": 1
+   },
+   "2022-12-12-erl": {
+    "own": 12,
+    "imported": 8,
+    "mixed": 16
+   }
+  }
+ },
+ "cross": {
+  "mixed|codification": 24,
+  "mixed|announcement": 12,
+  "own|announcement": 31,
+  "own|ungrounded": 30,
+  "own|codification": 17,
+  "imported|codification": 11,
+  "mixed|ungrounded": 14,
+  "imported|announcement": 6,
+  "imported|ungrounded": 15
+ }
+}

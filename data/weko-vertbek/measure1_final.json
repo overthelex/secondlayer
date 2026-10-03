@@ -2,6 +2,7 @@
  {
   "track": "Bekanntmachung:4",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -76,11 +77,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:5",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 10.2,
@@ -128,11 +131,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:6",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 22.2,
@@ -155,11 +160,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:7",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 17.7,
@@ -182,11 +189,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:8",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -207,11 +216,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:9",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 23.9,
@@ -260,11 +271,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:10",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 16.2,
@@ -293,11 +306,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:11",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 6.5,
@@ -327,11 +342,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:12",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -346,11 +363,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:13",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 9.8,
@@ -380,11 +399,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:14",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -399,11 +420,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:15",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -418,11 +441,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:16",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 10.2,
@@ -445,11 +470,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:17",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -464,11 +491,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:0",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -507,11 +536,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:1",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -526,11 +557,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:2",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -545,11 +578,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:3",
   "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 19.6,
@@ -572,11 +607,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
  },
  {
   "track": "Bekanntmachung:39",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -591,11 +628,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:40",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 9.0,
@@ -707,11 +746,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:41",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -741,11 +782,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:42",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 9.0,
@@ -768,11 +811,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:43",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 13.6,
@@ -856,11 +901,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:44",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -909,11 +956,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:45",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.7,
@@ -936,11 +985,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:46",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -1031,11 +1082,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:47",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -1062,11 +1115,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:48",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 2.3,
@@ -1185,11 +1240,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:49",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 16.8,
@@ -1212,11 +1269,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:50",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -1246,11 +1305,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:51",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 18.7,
@@ -1273,11 +1334,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:52",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -1326,11 +1389,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:53",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.7,
@@ -1365,11 +1430,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:54",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -1396,11 +1463,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:55",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -1433,11 +1502,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:56",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.0,
@@ -1472,11 +1543,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:57",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 18.7,
@@ -1499,11 +1572,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:58",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 8.0,
@@ -1532,11 +1607,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:59",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 2.3,
@@ -1640,11 +1717,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:60",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 6.4,
@@ -1692,11 +1771,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:61",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -1800,11 +1881,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:62",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -1837,11 +1920,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:63",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.0,
@@ -1903,11 +1988,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:64",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -2025,11 +2112,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:65",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -2133,11 +2222,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:66",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -2213,11 +2304,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:67",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2250,11 +2343,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:68",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2281,11 +2376,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:69",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 6.5,
@@ -2333,11 +2430,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:70",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 9.0,
@@ -2378,11 +2477,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:29",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -2411,11 +2512,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:30",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -2484,11 +2587,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:26",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -2543,11 +2648,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:27",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2562,11 +2669,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:28",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 14.3,
@@ -2615,11 +2724,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:31",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 1.1,
@@ -2689,11 +2800,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:32",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2726,11 +2839,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:33",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 13.4,
@@ -2771,11 +2886,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:34",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 9.5,
@@ -2816,11 +2933,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:35",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2853,11 +2972,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:36",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2890,11 +3011,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:37",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.8,
@@ -2950,11 +3073,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:38",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -2969,11 +3094,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:18",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3006,11 +3133,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:19",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3043,11 +3172,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:20",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -3179,11 +3310,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:21",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 16.9,
@@ -3206,11 +3339,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:22",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.4,
@@ -3240,11 +3375,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:23",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.0,
@@ -3274,11 +3411,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:24",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 4.0,
@@ -3334,11 +3473,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:25",
   "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 2.3,
@@ -3407,11 +3548,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
  },
  {
   "track": "Bekanntmachung:81",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3426,11 +3569,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:82",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 6.5,
@@ -3479,11 +3624,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:83",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 10.6,
@@ -3539,11 +3686,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:84",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 1.4,
@@ -3641,11 +3790,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:85",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 6.0,
@@ -3680,11 +3831,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:86",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 13.9,
@@ -3713,11 +3866,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:87",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 1.4,
@@ -3760,11 +3915,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:88",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3785,11 +3942,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:89",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3816,11 +3975,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:90",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3841,11 +4002,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:91",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3866,11 +4029,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:77",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.4,
@@ -3900,11 +4065,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:78",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3925,11 +4092,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:79",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -3956,11 +4125,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:80",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -4009,11 +4180,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:75",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.6,
@@ -4083,11 +4256,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:71",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.8,
@@ -4136,11 +4311,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:72",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4161,11 +4338,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:73",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -4284,11 +4463,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2010-06-28"
  },
  {
   "track": "Bekanntmachung:74",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -4365,11 +4546,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:76",
   "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4390,11 +4573,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:96",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4409,11 +4594,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:97",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4428,11 +4615,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:98",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 0.4,
@@ -4510,11 +4699,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2017-05-22"
  },
  {
   "track": "Bekanntmachung:93",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 4.6,
@@ -4537,11 +4728,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2017-05-22"
  },
  {
   "track": "Bekanntmachung:94",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4556,11 +4749,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:95",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.1,
@@ -4583,11 +4778,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "human"
+  "decided_by": "human",
+  "step2_before": "2017-05-22"
  },
  {
   "track": "Bekanntmachung:92",
   "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4602,14 +4799,16 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:0",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "announcement?",
-  "lag_years": 1.8,
+  "lag_years": 3.6,
   "versions": {
    "2019-04-09": {
     "pid": "1",
@@ -4642,14 +4841,16 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
  },
  {
   "track": "Erläuterungen:9",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
-  "class": "codification",
-  "lag_years": null,
+  "class": "announcement?",
+  "lag_years": 0.3,
   "versions": {
    "2019-04-09": {
     "pid": "10",
@@ -4731,11 +4932,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
  },
  {
   "track": "Erläuterungen:10",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4756,11 +4959,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:11",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -4789,11 +4994,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:12",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -4850,11 +5057,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:13",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4869,11 +5078,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:14",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -4909,11 +5120,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:15",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -4934,11 +5147,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:16",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -4995,11 +5210,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:17",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5020,11 +5237,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:18",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5039,14 +5258,16 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:1",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "announcement?",
-  "lag_years": 0.6,
+  "lag_years": 2.5,
   "versions": {
    "2019-04-09": {
     "pid": "2",
@@ -5093,11 +5314,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "human"
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
  },
  {
   "track": "Erläuterungen:19",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5112,11 +5335,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:20",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5153,11 +5378,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:21",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5172,11 +5399,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:22",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5191,11 +5420,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:23",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5210,11 +5441,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:24",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5229,11 +5462,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:2",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5283,11 +5518,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:3",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5330,11 +5567,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:4",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5364,11 +5603,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:5",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5418,11 +5659,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:6",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5493,11 +5736,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:7",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5540,14 +5785,16 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:8",
   "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
   "best_label": "fragment",
-  "class": "codification",
-  "lag_years": null,
+  "class": "announcement?",
+  "lag_years": 0.5,
   "versions": {
    "2019-04-09": {
     "pid": "9",
@@ -5580,11 +5827,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "human",
+  "step2_before": "2017-06-12"
  },
  {
   "track": "Bekanntmachung:106",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.0,
@@ -5607,11 +5856,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
  },
  {
   "track": "Bekanntmachung:107",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5626,11 +5877,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:108",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "announcement?",
   "lag_years": 3.5,
@@ -5653,11 +5906,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
  },
  {
   "track": "Bekanntmachung:109",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 1.4,
@@ -5680,11 +5935,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
  },
  {
   "track": "Bekanntmachung:110",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5721,11 +5978,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:111",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5740,11 +5999,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:112",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5767,11 +6028,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:113",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5786,11 +6049,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:114",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5813,11 +6078,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:115",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5840,11 +6107,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:116",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5859,11 +6128,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:117",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5893,11 +6164,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:118",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5912,11 +6185,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:100",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -5939,11 +6214,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:119",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -5958,11 +6235,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:101",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -5992,11 +6271,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:102",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6019,11 +6300,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:103",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6046,11 +6329,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:104",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6065,11 +6350,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:105",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6084,11 +6371,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Bekanntmachung:99",
   "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6103,11 +6392,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:30",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6130,11 +6421,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:31",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6149,11 +6442,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:32",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6168,11 +6463,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:33",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "announcement?",
   "lag_years": 3.5,
@@ -6195,11 +6492,13 @@
    }
   ],
   "final_class": "announcement",
-  "decided_by": "judges"
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
  },
  {
   "track": "Erläuterungen:34",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6214,11 +6513,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:35",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -6241,11 +6542,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:36",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6268,11 +6571,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:37",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -6295,11 +6600,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:38",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6314,11 +6621,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:39",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -6341,11 +6650,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:40",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6360,11 +6671,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:41",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6387,11 +6700,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:42",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6414,11 +6729,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:43",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6433,11 +6750,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:44",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -6467,11 +6786,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:25",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6486,11 +6807,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:26",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": null,
   "class": "ungrounded",
   "lag_years": null,
@@ -6505,11 +6828,13 @@
   "earliest_support": null,
   "support": [],
   "final_class": "ungrounded",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:27",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6532,11 +6857,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:28",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "supported",
   "class": "codification",
   "lag_years": null,
@@ -6587,11 +6914,13 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  },
  {
   "track": "Erläuterungen:29",
   "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
   "best_label": "fragment",
   "class": "codification",
   "lag_years": null,
@@ -6614,6 +6943,7 @@
    }
   ],
   "final_class": "codification",
-  "decided_by": "step1"
+  "decided_by": "step1",
+  "step2_before": null
  }
 ]
