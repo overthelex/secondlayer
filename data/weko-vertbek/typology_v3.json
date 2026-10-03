@@ -1,0 +1,2613 @@
+{
+ "protocol": "scripts/weko-vertbek/typology.md",
+ "types": [
+  {
+   "version": "2002-02-18",
+   "pid": "1",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "2",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "4",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E1",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E2",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E3",
+   "type": "norm",
+   "source": "reader",
+   "claude": "scope",
+   "gemini": "norm"
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E4",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "1",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(1a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(1b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(h)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "13(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "13(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "14",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "16",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "17",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "18",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "2",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "3",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(1)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(10)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(11)",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "5(12)",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "6",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "7",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(2)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(3)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(4)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "9(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "9(2)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E1",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E2",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E3",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E4",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E5",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E6",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E7",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E8",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E9",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "1",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(1a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(1b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "11",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2h)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "13(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "13(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "14",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "17",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "18",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "19",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "2",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "20",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "3",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "4(1)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "4(2)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "5",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "6",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "7",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(2a)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(2b)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(3)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(4)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "9(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "9(2)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "I",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "II",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "III",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "IV",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "IX",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "V",
+   "type": "housekeeping",
+   "source": "reader",
+   "claude": "housekeeping",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VI",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VII",
+   "type": "housekeeping",
+   "source": "reader",
+   "claude": "housekeeping",
+   "gemini": "scope"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VIII",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "X",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XI",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XII",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XIII",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "1",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(1a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(1b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "11",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(1a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(1b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2h)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "13(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "13(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "14",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "17",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "18",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "19",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "2",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "20",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "3",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "4(1)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "4(2)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "5",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "6",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "7",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(2a)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(2b)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(3)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(4)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "9(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "9(2)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "I",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "II",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "III",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "IV",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "IX",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "V",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VI",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VII",
+   "type": "housekeeping",
+   "source": "reader",
+   "claude": "housekeeping",
+   "gemini": "scope"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VIII",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "X",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XI",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XII",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XIII",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XIV",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "1",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "10",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "11",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "12",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "13",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "14",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "15",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "16",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "17",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "18",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "19",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "2",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "20",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "21",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "22",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "23",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "24",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "25",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "3",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "4",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "5",
+   "type": "norm",
+   "source": "reader",
+   "claude": "norm",
+   "gemini": "definition"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "6",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "7",
+   "type": "norm",
+   "source": "reader",
+   "claude": "norm",
+   "gemini": "definition"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "8",
+   "type": "norm",
+   "source": "reader",
+   "claude": "norm",
+   "gemini": "definition"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "9",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "1",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(1)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(2a)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(2b)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(3)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(4)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(5)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(6)",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "11",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(1a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(1b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "13",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "14(a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "14(b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(h)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "16(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "16(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "17",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(1)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(2)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(3)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4a)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4b)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4c)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4d)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4e)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4f)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4g)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4h)",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "19",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "2",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "20",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "21",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "22",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "3",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "4",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "5(1)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "5(2)",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "6",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "7",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "8",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "9",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "I",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "II",
+   "type": "rationale",
+   "source": "judges",
+   "claude": "rationale",
+   "gemini": "rationale"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "III",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "IV",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "IX",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "V",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VI",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VII",
+   "type": "scope",
+   "source": "judges",
+   "claude": "scope",
+   "gemini": "scope"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VIII",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "X",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "1",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "10",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "11",
+   "type": "norm",
+   "source": "reader",
+   "claude": "norm",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "12",
+   "type": "norm",
+   "source": "reader",
+   "claude": "norm",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "13",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "14",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "15",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "16",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "17",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "18",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "19",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "2",
+   "type": "housekeeping",
+   "source": "judges",
+   "claude": "housekeeping",
+   "gemini": "housekeeping"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "20",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "21",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "22",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "23",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "24",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "25",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "26",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "27",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "28",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "29",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "3",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "30",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "31",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "32",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "33",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "34",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "35",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "36",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "4",
+   "type": "definition",
+   "source": "judges",
+   "claude": "definition",
+   "gemini": "definition"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "5",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "6",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "7",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "8",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "9",
+   "type": "norm",
+   "source": "judges",
+   "claude": "norm",
+   "gemini": "norm"
+  }
+ ]
+}

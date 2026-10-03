@@ -84,6 +84,8 @@ def main() -> int:
     ap.add_argument("--labels", type=pathlib.Path, default=REPO / "data/weko-vertbek/labels_full_2026-10-03.json")
     ap.add_argument("--claude", type=pathlib.Path, default=REPO / "data/weko-vertbek/judges-full/claude-opus.jsonl")
     ap.add_argument("--gemini", type=pathlib.Path, default=REPO / "data/weko-vertbek/judges-full/gemini-3.1-pro.jsonl")
+    ap.add_argument("--typology", type=pathlib.Path, default=REPO / "data/weko-vertbek/typology_v3.json",
+                    help="what each proposition does; only a norm can be codified or announced")
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "measure1_step1.json")
     args = ap.parse_args()
 
@@ -94,6 +96,7 @@ def main() -> int:
         "SELECT ecli, spider, date_exact, date_upper_bound FROM ch_weko_audit_corpus").fetchall()}
 
     labels = {(r["version"], r["pid"]): r for r in json.loads(args.labels.read_text())["labels"]}
+    types = {(r["version"], r["pid"]): r["type"] for r in json.loads(args.typology.read_text())["types"]}
     passages = {}
     for path, who in ((args.claude, "claude"), (args.gemini, "gemini")):
         for line in path.read_text().splitlines():
@@ -121,7 +124,7 @@ def main() -> int:
         rec = by_track.setdefault(t["track"], {"first_version": t["first_version"], "first_date": t["first_date"],
                                                "versions": {}, "support": []})
         rec["versions"][key[0]] = {"pid": key[1], "label": row["label"], "source": row["source"],
-                                   "status": t["status"]}
+                                   "status": t["status"], "type": types.get(key)}
         if row["label"] in ("supported", "fragment"):
             for e in supporting(key, row):
                 d = dates.get(e)
@@ -148,9 +151,12 @@ def main() -> int:
         if cls == "announcement?":
             known = [date.fromisoformat(s["date"] or s["bound"]) for s in after if s["date"] or s["bound"]]
             lag = round((min(known) - first).days / 365.25, 1) if known else None
-        result[(rec["first_version"], cls)] += 1
+        # a track is typed by the version that first stated it
+        kind = rec["versions"][rec["first_version"]]["type"]
+        if kind == "norm":
+            result[(rec["first_version"], cls)] += 1
         rows.append({"track": tid, "first_version": rec["first_version"], "first_date": str(first),
-                     "best_label": best, "class": cls,
+                     "type": kind, "best_label": best, "class": cls,
                      "lag_years": lag, "versions": rec["versions"],
                      "earliest_support": min((s["date"] or s["bound"] for s in rec["support"]), default=None),
                      "support": sorted(rec["support"], key=lambda s: s["date"] or s["bound"])})
@@ -158,11 +164,12 @@ def main() -> int:
     args.out.write_text(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
     print(f"{len(rows)} tracked propositions -> {args.out}")
     versions = [v for vs in CHAINS.values() for v in vs]
+    print("norms only:")
     print(f"{'first stated in':18} {'codification':>13} {'announcement?':>14} {'ungrounded':>11}")
     for v in versions:
         print(f"{v:18} {result[(v, 'codification')]:13} {result[(v, 'announcement?')]:14} {result[(v, 'ungrounded')]:11}")
-    tot = collections.Counter(r["class"] for r in rows)
-    print("total", dict(tot))
+    print("norms", dict(collections.Counter(r["class"] for r in rows if r["type"] == "norm")))
+    print("by type", dict(collections.Counter((r["type"], r["class"]) for r in rows)))
     return 0
 
 

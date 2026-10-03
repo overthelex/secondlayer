@@ -1,0 +1,947 @@
+[
+ {
+  "kind": "sample",
+  "version": "2007-07-02",
+  "pid": "12(b)",
+  "part": "operative",
+  "heading": "Erhebliche Wettbewerbsbeeinträchtigung",
+  "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:",
+  "text": "Direkte oder indirekte Beschränkung des geografischen Absatzgebietes oder des Kundenkreises für den Weiterverkauf. Eine erhebliche Beeinträchtigung des Wettbewerbs aufgrund des Gegenstandes liegt jedoch nicht vor bei i) Beschränkungen des aktiven Verkaufs in Gebiete oder an Kundengruppen, die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat, vorausgesetzt dass Passivverkäufe uneingeschränkt möglich sind; ii) Beschränkungen des Direktverkaufs von Grossisten an Endverbraucher; iii) Beschränkungen, die Mitgliedern eines selektiven Vertriebssystems hinsichtlich des Verkaufs an nicht zugelassene Händler auferlegt werden; iv) Beschränkungen der Möglichkeit des Käufers, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden.",
+  "before": "2007-07-02",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 87
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.4",
+    "ord": 80,
+    "score": 0.704,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2005/1, S. 146",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "",
+    "date_upper_bound": "2005-09-30",
+    "date_source": "issue",
+    "regime": "KG 2003",
+    "regime_exact": false,
+    "after_version": false,
+    "recital_share": 0.013,
+    "recital": false,
+    "cites_this": false,
+    "text": "an den Verkäufen des\nLieferanten sowie die resultierenden Konsequenzen für die Kosten und den Erlös des Lieferanten,\nwenn dieser den Händler verliert. Berücksichtigt\nwird ebenfalls die Bedeutung des Händlers beim\nVertrieb der entsprechenden Produkte.\n\niii. Überprüfung der Existenz von Absatzalternativen\ndes Lieferanten. Alternative Absatzmärkte können sowohl innerhalb des Detailhandels als auch\nauf anderen Märkten oder Absatzkanälen zu finden sein, soweit die Umstellung zumutbar ist, das\nheisst, soweit diese das Überleben des Unternehmens nicht aufgrund der Umstellungskosten gefährdet.\n(2) Notwendigkeit spezifischer Aktiva: Gebäude und Einrichtungen, gegebenenfalls Beschäftigte sowie die Forschung und Entwicklung des\nLieferanten sind (teilweise) spezialisiert auf die\nFabrikation der Güter oder Dienstleistungen des\nHändlers und können mit einem ökonomisch\nvertretbaren Kostenaufwand für die Produktion\nanderer Güter oder Dienstleistungen weder\nverwendet noch angepasst werden.\n\n\nVgl. hiezu auch \"avis n°97-A-04",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-3_B2.3.7",
+    "ord": 17,
+    "score": 0.695,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/3, S. 505",
+    "lang": "de",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "2002-08-19",
+    "date_upper_bound": "2002-08-19",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.014,
+    "recital": false,
+    "cites_this": false,
+    "text": "Mix von Vertriebskanälen, was sich aus dem funktionalen Zusammen-\n\n\nVgl. hierzu auch: London Economics, 1997: Competition in Retailing. OFT Research Paper\n13, Kapitel 2.3. sowie: accenture, 2002: KonsumGüter 2010: Handel - Macht - Marken, S. 13\nf.\n\n\n2002/3\n\n\n\nhang zwischen Beschaffungs- und Absatzmärkten (vgl. Rz. 16, 26) erklären lässt. Typischerweise nutzen die Lieferanten mehrere Vertriebskanäle, was auf deren Substituierbarkeit hindeutet.\n30. Beschaffungsseitig bilden vorliegend die Vertriebsdienstleistungen des Detailhandels, welche es den Lieferanten erlauben, mit ihren\nProdukten in ein Sortiment aufgenommen zu werden und damit letztlich an die (zumeist privaten) Konsumenten zu gelangen, den sachlich\nrelevanten Markt.\nB.2.\n\nGeografisch relevante Märkte\n\n31. Der räumliche Markt umfasst das Gebiet, in\n[…]\nVerkaufspunkt lohnt. Typischerweise bevorzugt der Endkonsument im Detailhandel einen Verkaufspunkt in der näheren Umgebung - oft sogar den nächstgelegenen. Der lokale geografische Markt weist eine in etwa kreisrunde\nForm auf mit dem entsprechenden Verkaufspunkt im Zentrum.\n34. Sowohl die Weko (Migros/Globus, RPW 1997/3, S. 364 ff.) als auch\ndie Europäische Kommission gehen bis anhin für den Detailhandel\nvon einer Begrenzung der Marktkreise anhand eines Radius von 20\nAutofahrminuten aus.\n\n\nZ.B. Rewe/Meinl EU IV/M.1221",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-129-II-18_2003",
+    "ord": 16,
+    "score": 0.691,
+    "spider": "CH_BGE",
+    "docket": "BGE 129 II 18",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2002-08-14",
+    "date_upper_bound": "2002-08-14",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.024,
+    "recital": false,
+    "cites_this": false,
+    "text": "kte oder indirekte Fixierung von Fest- oder Mindestverkaufspreisen für den Weiterverkauf der bezogenen Waren durch den Händler als erhebliche Wettbewerbsbeeinträchtigung (Ziff. 3a). Andere Vertikalabreden wertet sie (in der Regel) nicht als solche, wenn die von allen beteiligten Unternehmen gehaltenen Marktanteile auf keinem der relevanten Märkte eine Schwelle von 10% überschreiten (Ziff. 4).\n5.2. Der Preis ist für die meisten Güter ein wichtiger Wettbewerbsparameter. Das Gesetz geht davon aus, dass bei (horizontalen) Preisabsprachen vermutungsweise der Wettbewerb beseitigt ist (Art. 5 Abs. 3 lit. a KG). Umso eher ist anzunehmen, dass eine Aufhebung des Preiswettbewerbs in aller Regel (mindestens) eine erhebliche Wettbewerbsbeeinträchtigung darstellt, sofern sie Güter mit einem wesentlichen Marktanteil betrifft. Angesichts des Marktanteils der preisgebundenen Bücher von rund 90% (vgl. E. 2) ist deshalb davon auszugehen, dass der Wettbewerb hier erheblich beeinträchtigt ist (ebenso RIEDER, a.a.O., S. 162). Dies stellen die Beschwerdeführer an sich auch nicht in Frage.\n6.\n6. Nach Art. 5 Abs. 3 lit. a KG wird die Beseitigung wirksamen Wettbewerbs, welche eine Rechtfertigung aus we",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2A-327-2006_2007-02-22",
+    "ord": 27,
+    "score": 0.687,
+    "spider": "CH_BGer",
+    "docket": "2A-327/2006",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2007-02-22",
+    "date_upper_bound": "2007-02-22",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.014,
+    "recital": false,
+    "cites_this": false,
+    "text": "ch über die Möglichkeit verfügen, bereits vorhandene Konkurrenten aus dem Wettbewerb zu drängen oder zu verhindern, dass sich solche ihm gegenüber weiterhin als Konkurrenten verhalten oder dass neue Wettbewerber auftreten. Die entstandene oder verstärkte marktbeherrschende Stellung muss somit die Gefahr der Beseitigung wirksamen Wettbewerbs mit sich bringen. Ein wettbewerbsrechtliches Eingreifen bei der Zusammenschlusskontrolle setzt in diesem Sinne eine mögliche Wettbewerbsbeseitigung durch das Fusionsprojekt voraus.\n6. Besteht auf dem fraglichen Markt weder vor noch nach dem Zusammenschluss Wettbewerb und wäre vermehrter Wettbewerb auch nicht zu erwarten, fehlt es somit an der erforderlichen Wettbewerbswirkung des Fusionsvorhabens. Eine Verweigerung des Zusammenschlusses oder die Anordnung von Nebenbestimmungen sind diesfalls unzulässig. Entscheidend ist demnach, ob im massgebenden sachlichen und gegebenenfalls räumlichen Markt aktueller oder doch - aus einer dynamischen Sichtweise - wenigstens potentieller Wettbewerb besteht.\n6. Auch für die Frage, ob Wettbewerb beseitigt wird oder nicht, ist aber der massgebliche Markt zu definieren, auf dem die Wettbewerbssituation zu beurte",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1997-4_B2.2.5",
+    "ord": 16,
+    "score": 0.677,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1997/4, S. 540",
+    "lang": "de",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "1997-12-01",
+    "date_upper_bound": "1997-12-01",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.012,
+    "recital": false,
+    "cites_this": false,
+    "text": "Nachfragebedingungen bzw. Stellung der Marktgegenseite;\n• Bedeutung von Forschung und Entwicklung und\n• Ergebnis.\n24. Der Prüfung der einzelnen Märkte sind einige methodische Bemerkungen betreffend die Marktabgrenzung und den potentiellen\nWettbewerb vorauszuschicken.\n\n\n\n1997/4\n\n\n4.1. Zu den relevanten Märkten\n[…]\nvergeben werden, werden oft nach wie vor nationale Anbieter bevorzugt. Aus diesen Gründen ist es für die meisten\nvom vorliegenden Zusammenschluss betroffenen Märkte nicht opportun, Europa als räumlich relevanten Markt zu definieren. Vielmehr\ndrängt sich eine engere, nationale Abgrenzung auf.\n4.1.2. Potentieller Wettbewerb und Marktzutritte\n30. Ist ein Markt durch hohe Zutrittsschranken geprägt, die den Eintritt neuer Wettbewerber erschweren oder gar verunmöglichen, dann\nist der Handlungsspielraum eines auf dem betreffenden Markt einge-\n\n\n\n1997/4\n\n\nsessenen Unternehmens erweitert. Sind die Zutrittsschranken niedrig,\nkann",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2001-1_B1.1.1",
+    "ord": 6,
+    "score": 0.675,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2001/1, S. 59",
+    "lang": "fr",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-12-18",
+    "date_upper_bound": "2000-12-18",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.007,
+    "recital": false,
+    "cites_this": false,
+    "text": "l’exécution de tâches publiques en leur accordant des droits\nspéciaux (let. b).\n14. Dans le cas d’espèce, il n’existe aucune prescription légale\npouvant exclure les terminaux de paiement de la concurrence.\nB.1.\n\nEntreprise en position dominante\n\n15. Par entreprise dominant le marché, on entend une ou plusieurs\nentreprises qui sont à même, en matière d’offre ou de demande, de se\ncomporter de manière essentiellement indépendante par rapport aux\nautres participants au marché (art. 4 al. 2 LCart).\n16. L’établissement en position dominante suppose que l’on délimite\npréalablement le marché de référence.\nI.\n\nMarchés de référence\n\n17. Le marché des produits comprend tous les produits ou services\nque les partenaires potentiels de l’échange considèrent comme\nsubstituables en raison de leurs caractéristiques et de l’usage auquel ils\nsont destinés (art. 11 al. 3 let. a OCCE).\n18. Le marché géographique comprend le territoire sur lequel les\npartenaires potentiels de l’échange sont engagés du côté de l’offre ou\nde la demande pour les produits ou services qui composent le marché\ndes produits (art. 11 al. 3 let. b OCCE).\na.\n\nMarché des produits\n\n19. Les entreprises concernées par cette enquête préalable",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2003-4_B2.2.1",
+    "ord": 17,
+    "score": 0.674,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2003/4, S. 753",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2003-10-20",
+    "date_upper_bound": "2003-10-20",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.014,
+    "recital": false,
+    "cites_this": false,
+    "text": "Detail /Fachhandel\nGastronomie\n\n\n\na)\n\n2003/4\n\n\nFrischfleisch-Distribution\n\n28. In der Lebensmittel-Distribution ist grundsätzlich zwischen Absatz- und Beschaffungsmärkten zu unterscheiden (vgl. Migros/Globus,\nRPW 1997/3, S. 364 ff., und Coop/EPA, RPW 2002/3, S. 507, Rz. 15 ff.).\nAuf der Absatzseite treten die Grossverteiler sowie der Detail- und\nFachhandel (Metzgereien) als Anbieter von Lebensmitteln gegenüber\nden Konsumenten in Erscheinung. Auf der Beschaffungsseite treten\nGross-, Detail- und Fachhändler gegenüber den Lieferanten (Schlachthöfe und Fleischhandelsbetriebe) als Nachfrager auf, womit sie diesen\nzugleich Absatzkanäle anbieten (vgl. Migros/Globus, RPW 1997/3, Rz.\n84).\n29. Entsprechend dem Sortiments-Konzept sind im Detailhandel aufgrund der Angebotsumstellungsflexibilität Vertriebswege für ganze\nProduktgruppen oder Sortimente als relevante Märkte abzugrenzen\n(vgl. Migros/Globus, RPW 1997/3, Rz. 90 f.; Coop/Epa, RPW 2002/3, Rz.\n18 ff.). Damit stellt sich die Frage nach dem adäquaten Aggregationsgrad einzelner Produkte zu Produktgruppen. So stellt sich im vorliegenden Fall die Frage, ob ein Markt für die Distribution von Rind-,\nFrischfleisch, Frischprodukten oder Nahrungs- und Genussmitteln abgegrenzt werden muss.\n30. Für den vorliegenden Fall ist jedoch nicht in erster Linie die Substituierbarkeit",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-2_B1.1.2",
+    "ord": 24,
+    "score": 0.659,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/2, S. 246",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2002-05-16",
+    "date_upper_bound": "2002-05-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.019,
+    "recital": false,
+    "cites_this": false,
+    "text": "und Entsorgung von Elektroschrott -, substituierbar, das\nheisst austauschbar sind und somit miteinander im Wettbewerb stehen. Die Marktabgrenzung besagt jedoch noch nichts darüber, ob eine\nAbrede den Wettbewerb erheblich beeinträchtigt oder den wirksamen\nWettbewerb beseitigt. Um dies festzustellen, ist nach erfolgter Marktabgrenzung zu klären, welche Unternehmen diese Waren oder Leis1\ntungen herstellen . Falls es neben dem von der Wettbewerbsabrede\nbetroffenen Angebot konkurrierende Angebote anderer Unternehmen gibt oder es rasch solche geben könnte, und die Nachfrager auf\ndiese Angebote ausweichen oder ausweichen würden, wenn das von\nder Wettbewerbsabrede betroffene Angebot unattraktiv wäre (wegen\nzu hoher Preise oder wegen ungenügender Qualität), liegt keine erhebliche Wettbewerbsbeeinträchtigung oder eine Beseitigung des\nwirksamen Wettbewerbs vor. Denn in einem solchen Fall ist es den an\nder Wettbewerbsabrede Beteiligten nicht möglich, den Wettbewerb\nzu beschränken. Solche Beschränkungen, zum Beispiel in Form zu hoher Preise oder zu tiefer Qualität, hätten zur Folge, dass die Nachfrager auf andere Angebote ausweichen würden, so dass die an der Abrede Beteiligten gezwungen wären, entweder ihre Preise und Qualitäten auf wettbewerbliches Niveau zu bringen oder aus dem Markt auszuscheiden. Die Marktabgrenzung",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:50",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Discusses a supplier's economic dependence and alternative sales outlets, not territorial or customer resale restrictions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the dependency of a dealer and alternative sales channels, not territorial or customer restrictions in vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Defines the product and geographic markets for retail distribution, which is a different legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about defining the relevant geographic market for retail, not about territorial restrictions in vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Covers resale price fixing (Ziff. 3a) and the 10% threshold (Ziff. 4) for book price maintenance, which are other rules of the notice."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses a different hardcore restriction, namely resale price maintenance (RPM)."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns merger control and elimination of competition, not vertical territorial or customer restrictions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage pertains to merger control and the definition of the relevant geographic market."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Covers merger-control market definition and potential competition."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with geographic market definition in the context of merger control."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns dominance under Art. 4 para. 2 LCart and market definition, a different legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines the relevant geographic market for assessing a dominant position."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Defines markets for fresh-meat distribution in a concentration case, not resale territory or customer restrictions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns product market definition for retail and distribution."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Assesses significance through market definition and substitutes in general, not restrictions of resale territory or customers."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses market definition and the general assessment of whether an agreement restricts competition, without mentioning territorial or customer restrictions."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2007-07-02",
+  "pid": "E8",
+  "part": "preamble",
+  "heading": "",
+  "lead": "",
+  "text": "Ziffer 13 macht deutlich, dass in der Regel keine erhebliche Wettbewerbsbeeinträchtigung vorliegt, falls die Marktanteilsschwelle von 15% nicht überschritten wird und sich die Abrede nicht kumulativ mit anderen Abreden auf den Markt auswirkt (Bagatellfälle). Wird die Marktanteilsschwelle von 15% überschritten oder wirkt sich die Abrede kumulativ mit anderen Abreden auf den Markt aus, wird die Wettbewerbsbeeinträchtigung im Einzelfall geprüft.",
+  "before": "2007-07-02",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 90
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-3_B2.2.2",
+    "ord": 71,
+    "score": 0.778,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/3, S. 726",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2004-03-15",
+    "date_upper_bound": "2004-03-15",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.067,
+    "recital": false,
+    "cites_this": false,
+    "text": "besteht,\nist möglich, aber nicht zwingend (SVIT-Honorarrichtlinien, RPW 1998/2,\nS. 196, Rz. 44). Bei der Prüfung, ob die aus einer Abrede resultierende\nWettbewerbsbeeinträchtigung quantitativ erheblich ist, kann auf Kriterien wie Marktanteil und Umsatz der beteiligten Unternehmen abgestellt werden. Gemäss der Praxis der EU wird nach der Spürbarkeit\neiner Wettbewerbsbeschränkung gefragt, welche erst gegeben ist,\nwenn die an einer Vereinbarung beteiligten Unternehmen insgesamt\neinen Marktanteil von 5% erreichen; dieser Anteil gilt für horizontale\nVereinbarungen (vgl. EMMERICH, Kartellrecht, 8. Aufl., München 1999,\nS. 418; KOCH, in GRABITZ/HILF [Hrsg.], Kommentar zur Europäischen Union, Bd. II, 4. Ergänzungsbeitrag zur 3. Aufl., Art. 85, Rz. 101). Die 5%\nbeschreiben im Übrigen keine starre Grenze; diese kann im Einzelfall\nvielmehr nach oben oder nach unten überschritten werden (EMMERICH\nin: IMMENGA/MESTMÄCKER, EG-Wettbewerbsrecht, Kommentar, Bd. 1,\nMünchen 1997, Art. 85 Abs. 1, A. IV., Rz. 209 ff.). In der schweizerischen Rechtslehre wird die Meinung vertreten, die Wettbewerbskommission sollte ebenfalls derartige quantitative Bagatellgrenzen festsetzen (Z ÄCH, Schweizerisches Kartellrecht, Bern 1999, Rz. 283; MEIERSCHATZ, Unzulässige Wettbewerbsbeschränkungen, Art. 5-8, in: ZÄCH\n[Hrsg.], Das",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2A-298-2001_2002-08-14",
+    "ord": 15,
+    "score": 0.726,
+    "spider": "CH_BGer",
+    "docket": "2A-298/2001",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2002-08-14",
+    "date_upper_bound": "2002-08-14",
+    "date_source": "record",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.09,
+    "recital": false,
+    "cites_this": false,
+    "text": ". In Anlehnung an die Praxis in der EU wird dabei die Schwelle bei einem Marktanteil von etwa 5-10% erblickt (Stöckli, a.a.O., S. 109 f.; Zäch, a.a.O., Rz. 283; ebenso die Rekurskommission in RPW 1999 S. 503 E. 4. S. 519). In einer - für die Gerichte nicht verbindlichen - allgemeinen Bekanntmachung vom 18. Februar 2002 gemäss Art. 6 KG über die wettbewerbsrechtliche Behandlung vertikaler Abreden (BBl 2002 S. 3895 ff.) erachtet die Wettbewerbskommission u.a. vertikale Wettbewerbsabreden über die direkte oder indirekte Fixierung von Fest- oder Mindestverkaufspreisen für den Weiterverkauf der bezogenen Waren durch den Händler als erhebliche Wettbewerbsbeeinträchtigung (Ziff. 3a). Andere Vertikalabreden wertet sie (in der Regel) nicht als solche, wenn die von allen beteiligten Unternehmen gehaltenen Marktanteile auf keinem der relevanten Märkte eine Schwelle von 10% überschreiten (Ziff. 4).\n5.2. Der Preis ist für die meisten Güter ein wichtiger Wettbewerbsparameter. Das Gesetz geht davon aus, dass bei (horizontalen) Preisabsprachen vermutungsweise der Wettbewerb beseitigt ist (Art. 5 Abs. 3 lit. a KG). Umso eher ist anzunehmen, dass eine Aufhebung des Preiswettbewerbs in aller Regel",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-2_B1.1.2",
+    "ord": 24,
+    "score": 0.711,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/2, S. 246",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2002-05-16",
+    "date_upper_bound": "2002-05-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.103,
+    "recital": false,
+    "cites_this": false,
+    "text": "und Entsorgung von Elektroschrott -, substituierbar, das\nheisst austauschbar sind und somit miteinander im Wettbewerb stehen. Die Marktabgrenzung besagt jedoch noch nichts darüber, ob eine\nAbrede den Wettbewerb erheblich beeinträchtigt oder den wirksamen\nWettbewerb beseitigt. Um dies festzustellen, ist nach erfolgter Marktabgrenzung zu klären, welche Unternehmen diese Waren oder Leis1\ntungen herstellen . Falls es neben dem von der Wettbewerbsabrede\nbetroffenen Angebot konkurrierende Angebote anderer Unternehmen gibt oder es rasch solche geben könnte, und die Nachfrager auf\ndiese Angebote ausweichen oder ausweichen würden, wenn das von\nder Wettbewerbsabrede betroffene Angebot unattraktiv wäre (wegen\nzu hoher Preise oder wegen ungenügender Qualität), liegt keine erhebliche Wettbewerbsbeeinträchtigung oder eine Beseitigung des\nwirksamen Wettbewerbs vor. Denn in einem solchen Fall ist es den an\nder Wettbewerbsabrede Beteiligten nicht möglich, den Wettbewerb\nzu beschränken. Solche Beschränkungen, zum Beispiel in Form zu hoher Preise oder zu tiefer Qualität, hätten zur Folge, dass die Nachfrager auf andere Angebote ausweichen würden, so dass die an der Abrede Beteiligten gezwungen wären, entweder ihre Preise und Qualitäten auf wettbewerbliches Niveau zu bringen oder aus dem Markt auszuscheiden. Die Marktabgrenzung",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-4_B1.1.1",
+    "ord": 19,
+    "score": 0.71,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/4, S. 993",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2004-06-28",
+    "date_upper_bound": "2004-06-28",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.065,
+    "recital": false,
+    "cites_this": false,
+    "text": "Art. 5 Abs. 3 Bst. a KG). Die Vermutung der Unzulässigkeit der Abrede kann umgestossen werden, wenn sich zeigt, dass\ntrotz der Wettbewerbsabrede wirksamer Aussen- oder Innenwettbewerb bestehen bleibt.\n\n\nRPW 2003/2, S. 286.\n\n\n\n2004/4\n\n\n32. Im Bereich der Transportpreise herrscht genügend Innenwettbewerb\n[…]\nvon Artikel 5 Absatz 1 KG vorliegt.\nB. Erheblichkeit der Wettbewerbsbeeinträchtigung\n35. Die Beurteilung der Erheblichkeit einer Beeinträchtigung des\nWettbewerbs kann gestützt auf quantitative und qualitative Kriterien\nerfolgen. Grundsätzlich kann davon ausgegangen werden, dass eine\nBeeinträchtigung dann unerheblich ist, wenn sie den Wettbewerb im\nVergleich zur Situation vor der Abrede nicht in einem für die Marktteilnehmer nennenswerten Ausmass zu beeinflussen vermag. Dass Innenwettbewerb besteht, ist möglich, aber nicht zwingend.\n\n\nZÄCH R., Schweizerisches Kartellrecht, Bern 1999, Rz. 282 ff.; RPW 2000/2, S. 177; RPW\n2000/3, S. 361.\nRPW 1998/2, S. 196, Rz. 44.\n\n\n2004/4\n\n\nB.5.\n\n\nQualitative Kriterien\n\n36. Der Preis stellt einen Wettbewerbsparameter dar, der",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2003-2_B2.3.3",
+    "ord": 97,
+    "score": 0.706,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2003/2, S. 314",
+    "lang": "de",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "2002-12-11",
+    "date_upper_bound": "2002-12-11",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.049,
+    "recital": false,
+    "cites_this": false,
+    "text": "von 30% oder mehr beziehungsweise verfügen zwei oder\nmehr der beteiligten Unternehmen über einen gemeinsamen Marktanteil von 20% oder mehr, ist eine eingehende Beschreibung dieser\nMärkte hinsichtlich der Vertriebs- und Nachfragestruktur sowie der\nBedeutung der Forschung und Entwicklung notwendig. Werden diese\nMarktanteilsschwellen nicht erreicht, ist in der Regel von der Unbedenklichkeit des Zusammenschlussvorhabens auszugehen. Das Sekretariat der Wettbewerbskommission hat den Parteien im Rahmen einer\nerleichterten Meldung zugestanden, auf die Einreichung von zusätzlichen Angaben zu den Märkten, in denen die Marktanteile 20% beziehungsweise 30% nicht überschreiten, zu verzichten. Daher werden\nnachfolgend lediglich diej enigen Märkte aufgeführt, in denen diese\nMarktanteilsschwellen erreicht beziehungsweise überschritten werden.\n\n\n\nB.2.1.2.\n\n2003/2\n\n\nStellung\n[…]\noder mehr beziehungsweise verfügen zwei oder\n\n\n\n2003/2\n\n\nmehr der beteiligten Unternehmen über einen gemeinsamen Marktanteil von 20% oder mehr, ist eine eingehende Beschreibung dieser\nMärkte hinsichtlich der Vertriebs- und Nachfragestruktur sowie der\nBedeutung der Forschung und Entwicklung notwendig. Werden diese\nMarktanteilsschwellen nicht erreicht, ist in der Regel von der Unbedenklichkeit des Zusammenschlussvorhabens auszugehen. Das Sekretariat der Wettbewerbskommission hat den Parteien im Rahmen einer\nerleichterten Meldung zugestanden, auf die Einreichung von zusätzlichen Angaben zu den Märkten, in denen die Marktanteile 20% beziehungsweise 30% nicht überschreiten, zu verzichten. Daher werden\nnachfolgend lediglich diejenigen Märkte aufgeführt, in denen diese\nMarktanteilsschwellen erreicht beziehungsweise überschritten werden.\n139. Unter der Arbeitshypothese einer Marktdefinition, die dem von\nder Wettbewerbsko",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-2_B1.1.1",
+    "ord": 21,
+    "score": 0.705,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/2, S. 331",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2004-02-16",
+    "date_upper_bound": "2004-02-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.067,
+    "recital": false,
+    "cites_this": false,
+    "text": "1076>.\nRPW 2003/2, S. 286.\n\n\n\n2004/2\n\n\n30. Nach dem Gesagten ist Innenwettbewerb (d.h. Wettbewerb unter\nden an der Abrede beteiligten Unternehmen) vorhanden. Die Vermutung von Artikel 5 Absatz 3 Buchstabe a KG kann somit umgestossen\nwerden. Nunmehr ist zu prüfen, ob eine erhebliche Beeinträchtigung\ndes Wettbewerbs im Sinne von Artikel 5 Absatz 1 KG vorliegt.\n31. Die Beurteilung der Erheblichkeit einer Beeinträchtigung des\nWettbewerbs kann gestützt auf quantitative oder qualitative Kriterien\nerfolgen. Grundsätzlich kann davon ausgegangen werden, dass eine\nBeschränkung dann unerheblich ist, wenn sie den Wettbewerb im\nVergleich zur Situation vor der Abrede nicht in einem für die Marktteilnehmer nennenswerten Ausmass zu beeinflussen vermag. Insbesondere muss für die Nachfrager ein Ausweichen ohne weiteres möglich sein. Nicht an der Abrede Beteiligte sind in ihren Verhaltensweisen\nnicht in nennenswertem Ausmass eingeschränkt. Dass gleichzeitig\nnoch Innenwettbewerb besteht, ist möglich, aber nicht zwingend. Bei\nder Prüfung, ob die aus einer Abrede resultierende Wettbewerbsbeeinträchtigung quantitativ erheblich ist, kann auf Kriterien wie\nMarktanteil und Umsatz der beteiligten Unternehmen abgestellt werden.\n32. Würden die umsatzstarken Transportunternehmen wie Planzer,\nDHL, Panalpina, Danzas, Lamprecht",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2006-4_B1.1.1",
+    "ord": 30,
+    "score": 0.702,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2006/4, S. 591",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2006-09-27",
+    "date_upper_bound": "2006-09-27",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.099,
+    "recital": false,
+    "cites_this": false,
+    "text": "55. Vorliegend erfüllt der VTR-Tarif angesichts der\nvom Gesetzgeber in Artikel 5 Absatz 3 KG vorgenommenen Wertung die qualitativen Voraussetzungen für eine erhebliche Wettbewerbsbeeinträchtigung auf dem relevanten Markt.\nB.3.3.\n\nQuantitative Kriterien\n\n56. Bei der Prüfung, ob die Abrede in quantitativer\nHinsicht den Wettbewerb erheblich beeinträchtigt, ist\nder aktuelle und potenzielle Wettbewerb zwischen\nden an der Abrede beteiligten Unternehmen sowie\ndurch allfällige Kartellaussenseiter massgebend.\nB.3.3.3.\n\nAktuelle und potenzielle Konkurrenz\n\n57. Das Sekretariat hat die befragten Tankrevisionsunternehmen aufgefordert",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-3_B2.2.1",
+    "ord": 116,
+    "score": 0.683,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/3, S. 320",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-06-07",
+    "date_upper_bound": "2000-06-07",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.065,
+    "recital": false,
+    "cites_this": false,
+    "text": "Verhalten der Hersteller, einheitliche Regeln über die Rabattgewährung im Vertrieb anzuwenden, angesichts der verbindlichen Margenordnung eine Wettbewerbsbeseitigung bewirkt, die unter den\nTatbestand von Artikel 5 Absatz 3 Buchstabe a KG zu subsumieren ist.\nC.2.1.\n\nErheblichkeit der Wettbewerbsbeeinträchtigung\n\n96. Selbst wenn davon ausgegangen werden müsste, dass es sich bei\nder geprüften Abrede nicht um einen Fall von Artikel 5 Absatz 3 Buc hstabe a KG handelte oder sich die Vermutung umstossen liesse, zeigen\ndie nachfolgenden Ausführungen, dass die Abrede mindestens zu einer erheblichen Beeinträchtigung des wirksamen Wettbewerbs führt.\nDie Beurteilung der Erheblichkeit erfolgt gestützt auf quantitative sowie qualitative Kriterien (vgl. Verfügung der Wettbewerbskommission\nvom 8. Mai 2000 i.S. \"AFEC\", RPW 2000/2, S. 177, Rz. 50; ZÄCH, Schweizerisches Kartellrecht, Rz. 282 ff.).\nC.2.1.3.a\n\nQualitative Kriterien\n\n97. Bezüglich des qualitativen Elementes ist festzuhalten, dass",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:24",
+  "judges": {
+   "claude-opus": "recites",
+   "gemini-3.1-pro": "recites"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Discusses the EU 5% appreciability threshold for horizontal agreements and doctrine calling for Swiss de minimis limits, not the vertical-agreement market share threshold."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses quantitative bagatelle limits for horizontal agreements, not the vertical market share threshold rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The court restates the 2002 notice's predecessor de minimis rule (Ziff. 4, 10% threshold) as WEKO's non-binding position but does not apply it."
+    },
+    "gemini-3.1-pro": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "The court merely restates the predecessor rule of the 2002 notice (the 10% threshold) without applying it in the visible text."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns market definition and substitutability in assessing significance, with no market share threshold or Bagatellfall rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage assesses significant restriction based on substitutability and switching, unrelated to the specific market share threshold."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Assesses significance of a horizontal transport price agreement under general criteria, not the vertical de minimis threshold."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage refers to quantitative criteria generally, without mentioning the specific threshold for vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Merger control notification thresholds (20%/30%), another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses market share thresholds for merger control, which is a different legal question."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Assesses significance of a horizontal price agreement using general market share criteria, not the vertical notice's threshold."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage mentions market shares as a general criterion for significance, unrelated to the specific vertical threshold rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Quantitative assessment of a horizontal tariff (VTR) under Art. 5 para. 3 KG, not the vertical de minimis rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses quantitative criteria generally without referring to the vertical bagatelle threshold."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Assesses significance under general qualitative and quantitative criteria with no market share threshold or cumulative-effect test."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage mentions quantitative criteria generally but does not discuss the vertical market share threshold."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "recites",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2010-06-28",
+  "pid": "V",
+  "part": "preamble",
+  "heading": "",
+  "lead": "",
+  "text": "Der Gesetzgeber hat in der KG-Revision 2003 zum Ausdruck gebracht, dass er die Festsetzung von Mindest- und Festpreisen sowie gebietsabschottende Klauseln in vertikalen Vereinbarungen als potenziell besonders schädlich erachtet. Die Wettbewerbskommission hat diese Einschätzung in ihren bisherigen Entscheiden konkretisiert und bereits in der Bekanntmachung über die wettbewerbsrechtliche Behandlung vertikaler Abreden vom 2. Juli 2007 (Vertikalbekanntmachung 2007) entsprechende Kriterien zur Beurteilung vertikaler Abreden erlassen, insbesondere hinsichtlich der Widerlegung der Vermutung der Beseitigung wirksamen Wettbewerbs (Art. 5 Abs. 4 KG), der Erheblichkeit (Art. 5 Abs. 1 KG) sowie der Rechtfertigungsgründe (Art. 5 Abs. 2 KG).",
+  "before": "2010-06-28",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 103
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2A-298-2001_2002-08-14",
+    "ord": 15,
+    "score": 0.758,
+    "spider": "CH_BGer",
+    "docket": "2A-298/2001",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2002-08-14",
+    "date_upper_bound": "2002-08-14",
+    "date_source": "record",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.085,
+    "recital": false,
+    "cites_this": false,
+    "text": ". In Anlehnung an die Praxis in der EU wird dabei die Schwelle bei einem Marktanteil von etwa 5-10% erblickt (Stöckli, a.a.O., S. 109 f.; Zäch, a.a.O., Rz. 283; ebenso die Rekurskommission in RPW 1999 S. 503 E. 4. S. 519). In einer - für die Gerichte nicht verbindlichen - allgemeinen Bekanntmachung vom 18. Februar 2002 gemäss Art. 6 KG über die wettbewerbsrechtliche Behandlung vertikaler Abreden (BBl 2002 S. 3895 ff.) erachtet die Wettbewerbskommission u.a. vertikale Wettbewerbsabreden über die direkte oder indirekte Fixierung von Fest- oder Mindestverkaufspreisen für den Weiterverkauf der bezogenen Waren durch den Händler als erhebliche Wettbewerbsbeeinträchtigung (Ziff. 3a). Andere Vertikalabreden wertet sie (in der Regel) nicht als solche, wenn die von allen beteiligten Unternehmen gehaltenen Marktanteile auf keinem der relevanten Märkte eine Schwelle von 10% überschreiten (Ziff. 4).\n5.2. Der Preis ist für die meisten Güter ein wichtiger Wettbewerbsparameter. Das Gesetz geht davon aus, dass bei (horizontalen) Preisabsprachen vermutungsweise der Wettbewerb beseitigt ist (Art. 5 Abs. 3 lit. a KG). Umso eher ist anzunehmen, dass eine Aufhebung des Preiswettbewerbs in aller Regel",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2A-430-2006_2007-02-06",
+    "ord": 16,
+    "score": 0.75,
+    "spider": "CH_BGer",
+    "docket": "2A-430/2006",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2007-02-06",
+    "date_upper_bound": "2007-02-06",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.047,
+    "recital": false,
+    "cites_this": false,
+    "text": "tbewerb hier mindestens erheblich beeinträchtigt sei (BGE 129 II 18 E. 5).\n4.\nNach Art. 5 Abs. 3 lit. a KG wird die Beseitigung wirksamen Wettbewerbs - welche eine Rechtfertigung aus wettbewerblichen Gründen ausschliesst - bei Abreden über die direkte oder indirekte Festsetzung von Preisen vermutet, sofern sie zwischen Unternehmen getroffen werden, die tatsächlich oder der Möglichkeit nach miteinander im Wettbewerb stehen. Diese gesetzliche Vermutung erfasst zwar nur horizontale Wettbewerbsabreden; sie gilt indessen auf Grund der neuen Bestimmung von Art. 5 Abs. 4 KG - wie erwähnt - auch für vertikale Absprachen. Auch eine (individuelle) vertikale Preisabrede oder Preisbindung zwischen Hersteller und Händler ist daher vermutungsweise eine Beseitigung des wirksamen Wettbewerbs.\nDas Bundesgericht hat dazu erwogen, eine horizontale Vereinbarung sei weder für die Verleger noch für die Buchhändler nachgewiesen; vertragsrechtlich liege jeweils eine individuelle Absprache zwischen den einzelnen Verlagen und Buchhändlern vor. Aufgrund von Art. 4 Abs. 1 KG gälten indessen nicht nur Absprachen, sondern auch aufeinander abgestimmte Verhaltensweisen von Unternehmen als \"Abreden\" im Sinne des G",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-129-II-18_2003",
+    "ord": 18,
+    "score": 0.742,
+    "spider": "CH_BGE",
+    "docket": "BGE 129 II 18",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "2002-08-14",
+    "date_upper_bound": "2002-08-14",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.031,
+    "recital": false,
+    "cites_this": false,
+    "text": "ellgesetz, in: AJP 1996 S. 826 ff., 831; BORER, a.a.O., N. 23 zu Art. 5 KG; HOFFET, a.a.O., Rz. 71 und 114 zu Art. 5 KG; STOFFEL, a.a.O. [2000], S. 99). Vertikale Absprachen fallen zwar ebenfalls unter den Begriff der Wettbewerbsabrede im Sinne von Art. 4 Abs. 1 KG (vgl. E. 4) und damit unter die Regelung von Art. 5 KG (BBl 1995 I 553; HOFFET, a.a.O., Rz. 43 zu Art. 5 KG), doch gilt die entsprechende Vermutung für sie nicht (BBl 1995 I 517, S. 546, 566). Eine (individuelle) vertikale Preisabrede oder Preisbindung zwischen Hersteller und Händler ist vermutungsweise keine Beseitigung, sondern allenfalls eine erhebliche Beeinträchtigung des wirksamen Wettbewerbs, die mit Gründen der wirtschaftlichen Effizienz gerechtfertigt werden kann (BAUDENBACHER, a.a.O., S. 830 f.; HOFFET, a.a.O., Rz. 81 zu Art. 5 KG; ders., Sammelrevers für Musiknoten, Anmerkungen zum Entscheid der Wettbewerbskommission vom 1. September 1997, in: sic! 2/1998 S. 224 ff., 229 f.). Die Unterscheidung zwischen Vertikal- und Horizontalabreden darf indessen nicht formalistisch gehandhabt werden. Eine Vielzahl von Vertikalabreden ist einer Horizontalabsprache gleichzustellen, wenn sie auf irgendeine Weise verknüpf",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2009-2_B2.2.1",
+    "ord": 42,
+    "score": 0.736,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2009/2, S. 143",
+    "lang": "fr",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2009-05-25",
+    "date_upper_bound": "2009-05-25",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.031,
+    "recital": false,
+    "cites_this": false,
+    "text": "vente ou à répartir les marchés. La jurisprudence\n\n\nRèglement (CE) n° 2790/1999 de la Commission, du 22.12.1999,\nconcernant l'application de l'article 81, paragraphe 3, du traité à des\ncatégories d'accords verticaux et de pratiques concertées, JO 1999 L\n336/21.\nCommunication de la Commission – Lignes directrices sur les restrictions verticales, 13.10.2000, JO 2000 C 291/1.\nCf. par ex. AMSTUTZ M. / REINERT M., Vertikal Preis- und Gebietsabreden – eine kritische Analyse von Art. 5 Abs. 4 KG, in Stoffel/Zäch, p.\n70 ss; HOFFET B.F./DIETRICH M., neue Vertikalbekanntmachung der\nSchweizer Wettbewerbskommission: Strengeres Regime als in der EU\n– Bekanntmachung von geringem Wert für die Praxis, Homburger\nBulletin, Juillet 2008; MERKT B., Switzerland: New Communication on\nVertical Agreements, e-Competitions, November 2007; RASS A., Vertikalabreden sind nicht per se schädlich, Finanz und Wirtschaft, 23\nSeptembre 2006, 28; SAURER M., Zur schweizerischen Wettbewerbspolitik – Schutz des Wettbewerbs oder der Wettbewerber?, Diskussionspapier, Avenir Suisse, 2/2008; WYSS B., Nachweis von Wettbewerb\nmuss genügen: Umstrittene Regelung der Vertikalabreden – Gefahr\ndroht durch die Überregulierung, Finanz und Wirtschaft, 5 Septembre\n2007, 31. Pour un aperçu général des critiques émises à l‟encontre",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-1_B1.1.2",
+    "ord": 6,
+    "score": 0.735,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/1, S. 93",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2003-11-03",
+    "date_upper_bound": "2003-11-03",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.115,
+    "recital": false,
+    "cites_this": false,
+    "text": "Selecta), und/oder\n\nb)\n\nWettbewerbsabreden im Sinne von Artikel 3 der Bekanntmachung\nüber die wettbewerbsrechtliche Behandlung vertikaler Abreden\nvom 18. Februar 2002 zwischen den Schokoladevertreibern und\ndem Detailhandel vorliegen (vertikale Abreden).\n\n8. Horizontale Abreden: Eine vom Sekretariat bei den wichtigsten\nAnbietern von industriell hergestellter Konfiserie in der Schweiz\ndurchgeführte Umfrage (vgl. Tabelle 1, unten) hat gezeigt, dass keine\nAnhaltspunkte für horizontale Wettbewerbsabreden sowohl auf\nMarktstufe der Anbieter als auch der Detailhändler bestehen.\n9. Vertikale Abreden: Gemäss der Bekanntmachung der Wettbewerbskommission zur Beurteilung von Vertikalabreden vom 18. Februar 2002 gelten vertikale Wettbewerbsabreden (gemäss Ziff. 3 und 4\nder Bekanntmachung) als erheblich, wenn insbesondere Fest- oder\nMindestverkaufspreise fixiert werden, das Absatzgebiet oder der Kundenkreis beschränkt werden sowie der Verkauf an den Endverbraucher\neingeschränkt wird. Erhebliche Wettbewerbsbeschränkungen sind\n\n\n2004/1\n\n\n\ndann unzulässig, wenn sich diese nicht durch wirtschaftliche",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-1_B2.1.1",
+    "ord": 11,
+    "score": 0.716,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/1, S. 67",
+    "lang": "de",
+    "section": "Vorsorgliche Massnahmen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1999-03-01",
+    "date_upper_bound": "1999-03-01",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.049,
+    "recital": false,
+    "cites_this": false,
+    "text": "Konditionen dieser Gaslieferverträge liegt die Wettbe-\n\n\n\n1999/1\n\n\nwerbssituation zugrunde, wie sie zur Zeit der Vereinbarung vorherrschend war.\n22. Gemäss Art. 5 Abs. 1 KG sind Abreden unzulässig, die den Wettbewerb auf einem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen Effizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen Wettbewerbs führen.\n23. Die Beseitigung wirksamen Wettbewerbs wird unter anderem\nbei Abreden über die direkte oder indirekte Festsetzung von Preisen\nsowie bei Abreden über die Aufteilung von Märkten nach Gebieten\noder Geschäftspartnern vermutet, sofern sie zwischen Unternehmen\ngetroffen werden, die tatsächlich oder der Möglichkeit nach miteinander im Wettbewerb stehen (Art. 5 Abs. 3 KG).\n24. Aus dem Sachverhalt ergibt sich, dass die Gasanbieter bis zum 5.\nNovember 1996 einen Gebietsschutz und Preisabsprachen vereinbart\nhatten, welche überwiegend eingehalten wurden.\n25. Im Sinne von Art. 5 Abs. 3 und 1 KG war der wirksame Wettbewerb daher vermutungsweise beseitigt.\n26. Die Anbieter bestreiten in ihren Stellungnahmen (vgl. Akten Nr.\n37/43/47/51/ 57/58) diese Schlussfolgerung. Sie geben an, dass auch\nzur Zeit der Kartellvereinbarung Wettbewerb unter den Anbietern\ngeherrscht habe, und Gaslieferverträge",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "ord": 221,
+    "score": 0.716,
+    "spider": "CH_WEKO",
+    "docket": "Hors-Liste Medikamente",
+    "lang": null,
+    "section": null,
+    "tier": "1",
+    "source": "agency",
+    "date": "2009-11-02",
+    "date_upper_bound": "2009-11-02",
+    "date_source": "record",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.026,
+    "recital": false,
+    "cites_this": false,
+    "text": "(...)]°°*. Potentieller Wettbewerb besteht ihrer Meinung nach\nauch für die Apotheken: Die Marktanteile von Versandapotheken würden ständig steigen;\ndiese seien effizienter als herkömmliche Apotheken?” 232. Die Beurteilung der Erheblichkeit einer Abrede erfolgt grundsätzlich anhand von quantitativen und qualitativen Kriterien. Vertikale Abreden über Festpreise gemäss Art. 5 Abs. 4\nKG erfüllen in der Regel in qualitativer Hinsicht den Tatbestand der Erheblichkeit””®. An besagte Abreden sind im Hinblick auf die quantitative Beurteilung der Erheblichkeit tiefe Anforderungen zu stellen?°”. Diese brauchen vorliegend nicht näher definiert zu werden, denn wie\nden folgenden Ausführungen zu entnehmen ist, ist aufgrund der Auswirkungen der vorliegend zu beurteilenden Abreden auf den Markt ohne Weiteres von einer erheblichen Wettbewerbsbeschränkung auszugehen.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-1_B2.2.1",
+    "ord": 251,
+    "score": 0.691,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2010/1, S. 65",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2009-11-30",
+    "date_upper_bound": "2009-11-30",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.028,
+    "recital": false,
+    "cites_this": false,
+    "text": "über Preise, Mengen oder die Aufteilung von Märkten nach Art. 5\nAbs. 3 oder 4 KG und (2) die Unzulässigkeit dieser Abrede.\n330. Wie in den Rz. 100 ff. eingehend dargelegt wurde,\nlag zwischen Gaba und Gebro vor dem 1. September\n2006 eine vertraglich vereinbarte und faktisch umgesetzte unzulässige vertikale Gebietsabrede nach Massgabe\nvon Art. 5 Abs. 4 KG vor. Damit sind die Voraussetzungen gemäss Art. 49a Abs. 1 KG erfüllt.\n331. Die Parteien bestreiten, dass im untersuchungsrelevanten Zeitraum eine unzulässige Abrede im Sinne\nvon Art. 5 Abs. 4 KG bestand. Gaba habe keine Wettbewerbsabrede getroffen, die den wirksamen Wettbewerb beseitigt hätte. Selbst wenn eine solche Wettbewerbsabrede vorläge, könnte die Vermutung widerlegt\nwerden, womit Gaba keine Sanktion auferlegt werden\nkönne. Eine Sanktionierung nach Art. 49a KG setze eine\nWettbewerbsabrede voraus, die den wirksamen Wettbewerb tatsächlich beseitige.\n332. Zur Frage des Vorliegens einer unzulässigen Abrede sei auf die vorstehenden Erwägungen verwiesen (vgl.\nRz. 301 ff.). Bezüglich der Sanktionierbarkeit von Wettbewerbsabreden nach Art. 5 Abs. 3 KG und Art. 5 Abs. 4\nKG im Falle der Umstossung der gesetzlichen Vermutung ist zu präzisieren, dass in Übereinstimmung mit der\naktuellen Praxis der WEKO für die Sanktionierbarkeit\neiner Wettbewerbsabrede zwei Voraussetzungen erfüllt\nsein müssen: (1) Es",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:71",
+  "judges": {
+   "claude-opus": "fragment",
+   "gemini-3.1-pro": "supported"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "Under the 1995 act, the court restates the 2002 notice's view that fixed and minimum prices are significant restrictions; the window ends before anything is done with it."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage refers to Ziff. 3a of the 2002 Notice, which is a specific rule on significance rather than the general preamble."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "It restates that Art. 5 para. 4 KG extends the presumption to vertical price agreements and then reproduces earlier reasoning; no application is visible (borderline with partial, so the weaker label)."
+    },
+    "gemini-3.1-pro": {
+     "label": "partial",
+     "quote": "Diese gesetzliche Vermutung erfasst zwar nur horizontale Wettbewerbsabreden; sie gilt indessen auf Grund der neuen Bestimmung von Art. 5 Abs. 4 KG - wie erwähnt - auch für vertikale Absprachen. Auch eine (individuelle) vertikale Preisabrede oder Preisbindung zwischen Hersteller und Händler ist daher vermutungsweise eine Beseitigung des wirksamen Wettbewerbs.",
+     "quote_found": true,
+     "why": "The passage derives and sets up the statutory presumption for vertical price fixing as the legal test, but the final subsumption lies outside the window."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "contradicts",
+     "quote": "doch gilt die entsprechende Vermutung für sie nicht",
+     "quote_found": true,
+     "why": "Under the 1995 regime the court holds that vertical price fixing is presumptively not an elimination of competition, the opposite of the 2003 approach."
+    },
+    "gemini-3.1-pro": {
+     "label": "contradicts",
+     "quote": "Eine (individuelle) vertikale Preisabrede oder Preisbindung zwischen Hersteller und Händler ist vermutungsweise keine Beseitigung, sondern allenfalls eine erhebliche Beeinträchtigung des wirksamen Wettbewerbs",
+     "quote_found": true,
+     "why": "Decided under the old law, the passage holds that vertical price fixing does not carry a presumption of eliminating competition, which contradicts the current rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "Footnotes list literature criticising Art. 5 para. 4 KG and the 2007 notice; nothing is decided."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is a bibliography listing literature on vertical agreements, which is a match on vocabulary only."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "recites",
+     "quote": "",
+     "quote_found": false,
+     "why": "It restates the 2002 notice's significance rule for fixed prices and territorial limits; the subsumption lies beyond the window."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage restates Ziff. 3 and 4 of the 2002 Notice regarding significance, which is a different rule than the general explanatory preamble."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Horizontal price and territory cartel under Art. 5 para. 3 KG, which is another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the presumption for horizontal agreements under Art. 5 para. 3 KG, whereas the proposition is about vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "partial",
+     "quote": "Vertikale Abreden über Festpreise gemäss Art. 5 Abs. 4\nKG erfüllen in der Regel in qualitativer Hinsicht den Tatbestand der Erheblichkeit",
+     "quote_found": true,
+     "why": "Only the significance part is set up as the test, and the conclusion rests on market effects rather than on the rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "Vertikale Abreden über Festpreise gemäss Art. 5 Abs. 4 KG erfüllen in der Regel in qualitativer Hinsicht den Tatbestand der Erheblichkeit””®. An besagte Abreden sind im Hinblick auf die quantitative Beurteilung der Erheblichkeit tiefe Anforderungen zu stellen?°”. Diese brauchen vorliegend nicht näher definiert zu werden, denn wie den folgenden Ausführungen zu entnehmen ist, ist aufgrund der Auswirkungen der vorliegend zu beurteilenden Abreden auf den Markt ohne Weiteres von einer erheblichen Wettbewerbsbeschränkung auszugehen.",
+     "quote_found": true,
+     "why": "The passage applies Art. 5(4) KG to vertical agreements on fixed prices and concludes they constitute a significant restriction."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "partial",
+     "quote": "lag zwischen Gaba und Gebro vor dem 1. September\n2006 eine vertraglich vereinbarte und faktisch umgesetzte unzulässige vertikale Gebietsabrede nach Massgabe\nvon Art. 5 Abs. 4 KG vor. Damit sind die Voraussetzungen gemäss Art. 49a Abs. 1 KG erfüllt.",
+     "quote_found": true,
+     "why": "Only the territorial-restriction part is used, with a sanction consequence that refers back to reasoning outside the window."
+    },
+    "gemini-3.1-pro": {
+     "label": "applies",
+     "quote": "Wie in den Rz. 100 ff. eingehend dargelegt wurde, lag zwischen Gaba und Gebro vor dem 1. September 2006 eine vertraglich vereinbarte und faktisch umgesetzte unzulässige vertikale Gebietsabrede nach Massgabe von Art. 5 Abs. 4 KG vor. Damit sind die Voraussetzungen gemäss Art. 49a Abs. 1 KG erfüllt.",
+     "quote_found": true,
+     "why": "The passage applies Art. 5(4) KG to a vertical territorial agreement and draws the legal consequence that it was impermissible."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "fragment",
+  "agreement": "1/2"
+ }
+]
