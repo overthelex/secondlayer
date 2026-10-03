@@ -294,7 +294,10 @@
   var current = 0;
   var db = null;
 
-  function key(d) { return (d.version + "__" + d.pid).replace(/[^\w.\-~:@+]/g, "_"); }
+  // a proposition read against the record before its version (measurement 1)
+  // is another question than the same proposition against the whole record:
+  // its own document
+  function key(d) { return (d.version + "__" + d.pid + (d.before ? "__vor" : "")).replace(/[^\w.\-~:@+]/g, "_"); }
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
@@ -346,6 +349,7 @@
     document.getElementById("main").innerHTML =
       '<div class="meta"><span class="chip">' + esc(VERSIONS[d.version] || d.version) + "</span>" +
       '<span class="chip">' + esc(d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
+      (d.before ? '<span class="chip late">nur Entscheide vor ' + esc(d.before) + "</span>" : "") +
       (d.status ? '<span class="chip ' + esc(d.status) + '">' + (d.status === "check" ? "Stichprobe" : d.status === "rest" ? "Rest" : "strittig") + "</span>" : "") +
       "<span>" + (current + 1) + " von " + DATA.length + "</span></div>" +
       (d.heading ? '<h2 class="heading">' + esc(d.heading) + "</h2>" : "") +
@@ -411,7 +415,7 @@
     if (!db) { if (saved) saved.textContent = "nur in diesem Fenster — kein Speicher"; return; }
     if (saved) saved.textContent = "speichert …";
     db.doc("labels/" + k).set({
-      version: d.version, pid: d.pid, part: d.part, heading: d.heading || "",
+      version: d.version, pid: d.pid, part: d.part, heading: d.heading || "", before: d.before || "",
       label: st.label, note: st.note, evidence: st.evidence, updatedAt: new Date().toISOString()
     }).then(function () {
       var s = document.getElementById("saved");

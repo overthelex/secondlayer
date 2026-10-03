@@ -57,7 +57,7 @@ def main() -> int:
     ap.add_argument("--anchor", default="claude-opus", help="for --rule anchor / binary-check")
     ap.add_argument("--checker", default="gemini-3.1-pro", help="for --rule binary-check")
     ap.add_argument("--gold", type=pathlib.Path, help="gold set json: its human labels are final")
-    ap.add_argument("--rule", choices=["unanimous", "majority", "anchor", "binary-check"], default="majority",
+    ap.add_argument("--rule", choices=["unanimous", "majority", "anchor", "binary-check", "support-check"], default="majority",
                     help="what pre-labels an item: all judges agree, or a strict majority")
     ap.add_argument("--seed", type=int, default=1001)
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "review.json")
@@ -86,7 +86,14 @@ def main() -> int:
         labels = {n: (a["label"] if a else None) for n, a in answers.items()}
         votes = collections.Counter(v for v in labels.values() if v)
         top, top_n = votes.most_common(1)[0] if votes else (None, 0)
-        if args.rule == "binary-check":
+        if args.rule == "support-check":
+            # measurement 1, step 2: is there any support (supported or
+            # fragment) before the text -- the judges must agree on that
+            a, c = labels.get(args.anchor), labels.get(args.checker)
+            sup = lambda x: x in ("supported", "fragment")
+            decided = a is not None and c is not None and sup(a) == sup(c)
+            top, top_n = (a, 2 if a == c else 1) if decided else (top, top_n)
+        elif args.rule == "binary-check":
             # the full run (PAPER-188): the anchor's label stands where the
             # checker agrees on the question the measurements turn on --
             # supported or not; anything else goes to the human
