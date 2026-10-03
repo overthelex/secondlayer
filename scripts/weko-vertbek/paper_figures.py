@@ -88,7 +88,14 @@ def main() -> int:
     F["instrument"] = inst
 
     # --- labels of the full run
-    labels = json.loads((DATA / "labels_full_2026-10-03.json").read_text())["labels"]
+    # v3: after the parser fix of 2026-10-03 (PAPER-232); the first full run
+    # (labels_full_2026-10-03.json) is kept for the statistics of that run
+    labels = json.loads((DATA / "labels_full_v3.json").read_text())["labels"]
+    labels_run1 = json.loads((DATA / "labels_full_2026-10-03.json").read_text())["labels"]
+    typ = json.loads((DATA / "typology_v3.json").read_text())["types"]
+    F["typology"] = {"n": len(typ), "types": dict(collections.Counter(t["type"] for t in typ)),
+                     "agreed": sum(t["source"] == "judges" for t in typ),
+                     "by_version": {v: dict(collections.Counter(t["type"] for t in typ if t["version"] == v)) for v in ORDER}}
     F["labels"] = {
         "n": len(labels),
         "distribution": dict(collections.Counter(r["label"] for r in labels)),
@@ -118,7 +125,7 @@ def main() -> int:
     # --- disputes of the full run
     rev = json.loads((DATA / "review_full.json").read_text())
     dis = [r for r in rev if r["status"] == "disputed"]
-    lab = {(r["version"], r["pid"]): r["label"] for r in labels}
+    lab = {(r["version"], r["pid"]): r["label"] for r in labels_run1}
     F["full_run"] = {"items": len(rev), "status": dict(collections.Counter(r["status"] for r in rev)),
                      "disputed_reader_with_claude": sum(lab[(r["version"], r["pid"])] == r["judges"]["claude-opus"] for r in dis),
                      "disputed_pairs": {f"{a}|{b}": n for (a, b), n in collections.Counter(
@@ -127,7 +134,12 @@ def main() -> int:
                      "controls": {r["pid"]: r["judges"] for r in rev if r["status"] == "control"}}
 
     # --- measurement 1
-    m1 = json.loads((DATA / "measure1_final.json").read_text())
+    m1_all = json.loads((DATA / "measure1_final_v3.json").read_text())
+    # only a norm can be codified or announced (typology_v3.json)
+    m1 = [f for f in m1_all if f["type"] == "norm"]
+    F["measure1_all"] = {"tracks": len(m1_all), "norms": len(m1),
+                         "by_type": {f"{a}|{b}": n for (a, b), n in collections.Counter(
+                             (f["type"], f["final_class"]) for f in m1_all).items()}}
     tab = {}
     for v in ORDER:
         rs = [f for f in m1 if f["first_version"] == v]
@@ -141,7 +153,7 @@ def main() -> int:
                      "lag_quartiles": statistics.quantiles(lags, n=4)}
 
     # --- provenance and its cross with measurement 1
-    prov = json.loads((DATA / "provenance.json").read_text())
+    prov = json.loads((DATA / "provenance_v3.json").read_text())
     pc, pcf = {}, {}
     for p in prov["propositions"]:
         pid = "E" + p["pid"] if p["part"] == "preamble" and p["pid"].isdigit() else p["pid"]
@@ -162,11 +174,11 @@ def main() -> int:
     import csv
     with open(args.out.with_name("tracks.csv"), "w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["track", "first_version", "final_class", "lag_years", "decided_by", "provenance", "containment"])
-        for f in m1:
+        w.writerow(["track", "first_version", "type", "final_class", "lag_years", "decided_by", "provenance", "containment"])
+        for f in m1_all:
             v = f["first_version"]
             pr = pcf.get((v, f["versions"][v]["pid"]), {})
-            w.writerow([f["track"], v, f["final_class"], f["lag_years"] if f["lag_years"] is not None else "",
+            w.writerow([f["track"], v, f["type"], f["final_class"], f["lag_years"] if f["lag_years"] is not None else "",
                         f["decided_by"], pr.get("class", ""), pr.get("containment", "")])
     with open(args.out.with_name("labels.csv"), "w", newline="") as fh:
         w = csv.writer(fh)
@@ -238,6 +250,12 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    ty = F["typology"]["types"]
+    out.update({"NNorm": num(ty.get("norm", 0)), "NDefinition": num(ty.get("definition", 0)),
+                "NScope": num(ty.get("scope", 0)), "NRationale": num(ty.get("rationale", 0)),
+                "NHousekeeping": num(ty.get("housekeeping", 0)), "TypAgreed": num(F["typology"]["agreed"]),
+                "TypN": num(F["typology"]["n"]), "NTracksAll": num(F["measure1_all"]["tracks"]),
+                "NTracksNonNorm": num(F["measure1_all"]["tracks"] - F["measure1_all"]["norms"])})
     rs = F["record"]["rpw_date_source"]
     out["RPWText"], out["RPWIssue"], out["RPWSame"] = num(rs.get("text", 0)), num(rs.get("issue", 0)), num(rs.get("same_as", 0))
     out["NNotices"] = num(F["record"]["notices_excluded"])

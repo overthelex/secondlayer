@@ -1,0 +1,3760 @@
+{
+ "exported": "2026-10-03",
+ "protocol": "v2",
+ "rule": "binary-check (Claude label where Gemini agrees on supported-or-not); human labels final for gold and disputed",
+ "changes": "v3: parser fix (PAPER-232); 9 renumbered, 5 removed, 14 re-read",
+ "labels": [
+  {
+   "version": "2002-02-18",
+   "pid": "1",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "2",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(b)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-2_B1.4.2"
+   ],
+   "note": "RPW 2025/2 (Beratung) wendet die Nachfolgeregel Art. 15 lit. c (ii) VertBek 2022 an. Die Klausel lässt Querlieferungen nur innerhalb des Vertragsgebiets zu und würde damit eine qualitativ schwerwiegende Abrede darstellen. Danach wird die Erheblichkeit in der Schweiz verneint. Die Folge steht im Fenster, wenn auch konditional formuliert (Beratung). RPW 2025/3 S. 684: Ein gestuftes Selektivsystem könnte Querlieferungen einschränken, die Folge wird aber zur Frage gezogen, ob überhaupt noch Selektivvertrieb vorliegt, nicht zur qualitativen Schwere → grenzwertig, nicht gewertet. B-2977/2007: Ziff. 3 VertBek 2002 nur allgemein referiert. RPW 2012/3 (BMW): Querlieferungen als zulässiger Absatzweg erwähnt, Folge betrifft Grauimporte. Electrolux, RPW 2025/4a, Gaba, RPW 2025/3 S. 677: nur die Definition des Selektivvertriebs bzw. ein anderer Gegenstand."
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(e)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "3(f)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "4",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Bagatellschwelle nur wiedergegeben: 2A-298/2001 und Luftfracht (Zitat VertBek 2002 Ziff. 4, für Gerichte nicht verbindlich), Online-Handel und HG.2011.286 (Nachfolgeregel Ziff. 13 VertBek 2010, 15 %), RPW 2011/2 (Kumulativeffekt 5 %/30 %; «… unzulässig» ohne Subjekt, nicht gewertet). Keine Subsumtion im Fenster. B-3618/2013, RPW 2020/4a, B-807/2012: horizontale Abreden bzw. KMU-Bekanntmachung."
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2"
+   ],
+   "note": "Regel: Beschränkung aktiver Verkäufe in vorbehaltene Gebiete zulässig, sofern Passivverkäufe und Weiterverkäufe der Kunden frei bleiben. Nikon und New Holland (RPW 2019/4) arbeiten mit der Kehrseite: Passivverkäufe ausgeschlossen → Bedingung verletzt (New Holland mit Folge «Vermutung greift») → je Bruchstück. B-3962/2013: Regel samt Ausnahme nur doktrinal referiert. RPW 2016/3, B-4011/2013: nur Begriffe (Passivverkauf, «autre fournisseur agréé»). B-4012/2013: Beschränkung des Lieferanten selbst (Jovani) – andere Frage. RPW 2012/3: Herstellerforderungen a./b. nicht im Fenster, Bezug unklar. RPW 2013/4: Handelsvertreter."
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(b)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(c)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(d)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07"
+   ],
+   "note": "BMW legt die Regel unter der Überschrift «Zulässige Wettbewerbsbeschränkungen im selektiven Vertrieb» zugrunde (Erl. Ziff. 14 KFZ-Bek, VertBek Ziff. 4 Abs. 1): Grauimporte nicht zugelassener Händler können ausgeschlossen werden. Darauf gestützt heisst es, die Exportverbotsklausel «könnte daher insofern zulässig sein, als damit nur Lieferu[ngen …]». Die Folge ist konditional und abgeschnitten → Bruchstück. Nikon und RPW 2016/2 formulieren die Regel nur normativ um («darf … somit verbieten»), die Folgerung betrifft Querlieferungen (Ziff. 12 Abs. 2 lit. d, andere Regel). Gaba: Regel und Prüfprogramm angekündigt. B-2977/2007: Effizienzbegründung des Selektivvertriebs abstrakt, ohne Subsumtion. Online-Handel, RPW 2025/3, RPW 2025/4a: nur Definition."
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "5(e)",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster betrifft die Beschränkung des Weiterverkaufs gelieferter Bestandteile an Konkurrenzhersteller. RPW 2011/1, B-831/2011, B-3618/2013, B-3962/2013: Kopplung bzw. Missbrauch Art. 7 KG. RPW 2019/3b, 2008/2: Art. 3 KG / Informationsaustausch / Telekom. Online-Handel, RPW 2025/3: Selektivvertrieb bzw. Querlieferungen – andere Regel. Positionstext beginnt mitten im Satz."
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E1",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E2",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E3",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2002-02-18",
+   "pid": "E4",
+   "part": "preamble",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07"
+   ],
+   "note": "2C_147/2018 (BGer): Die Vertikalbekanntmachungen sind als Verwaltungsverordnung für das Bundesgericht nicht bindend (BGE 143 II 297). Das Gericht wendet das auf den Fall an: Eine Bezugnahme «trifft im vorliegenden Fall aber nicht zu», mit vier Gründen, darunter dass die VertBek 2002 sich nicht zu Preisempfehlungen äussert. Die Folge steht im Fenster. B-3618/2013: fehlende Rechtsverbindlichkeit nur festgestellt, ohne Folgerung. RPW 2022/1: Die Unverbindlichkeit ist ein Parteivorbringen in indirekter Rede, die WEKO antwortet zur analogen Anwendung auf horizontale Fälle → nur zitiert. Vertrieb von Musik: VertBek als Orientierungshilfe ohne vertikale Abrede, das ist eine andere Frage. Übrige: Art. 6 KG / Konkurrenzverbote bei Fusion, EU-Leitlinien, Safe Harbour."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "1",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(1a)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(1b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "10(3)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_999_BGE-147-II-72_2021",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5"
+   ],
+   "note": "RPW 2023/1 (Beratung) prüft die Preisempfehlungen der Lieferantinnen an der Druck/Anreiz-Formel (Rz 8 VertBek-Erl.). Ergebnis: Es bestehen keine Hinweise auf Druck oder Anreize, und eine Würdigung ist «ausserhalb eines konkreten Anwendungsfalls nicht möglich». Das ist die Einzelfallregel mit Folge im Fenster. BGE 147 II 72 begründet die Regel selbst: Preisempfehlungen sollen den Empfänger beeinflussen, «deshalb im Einzelfall genau zu prüfen», ob eine verschleierte Preisvorgabe vorliegt. Das Gericht setzt sie als Massstab, die Subsumtion folgt ausserhalb → Bruchstück. RPW 2011/2 und Yamaha: Prüfung von Preisempfehlungen bzw. indirekter Preisfestsetzung nur angekündigt. 2C_41/2024: allgemeines Prüfschema Art. 4/5 ohne Preisempfehlungen. RPW 2021/3, RPW 2024/4: horizontale Abreden. Online-Handel: Internetverbot."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1"
+   ],
+   "note": "Scott Bikes (RPW 2008/3) nennt das Kriterium «Zugänglichkeit bzw. Verheimlichung der Preisempfehlung» (Ziff. 11 VertBek) und wendet es auf den Sachverhalt an: Die Empfehlungen wurden ausschliesslich an Händler ausgehändigt und waren «somit öffentlich nicht zugänglich». Danach folgt die Verpflichtung, Konsumenten Zugang zur Preisliste zu geben. Eine rechtliche Folge für die Gesamtwürdigung fehlt im Fenster → Bruchstück. RPW 2010/4: allgemeine Lehre zu Empfehlungen und öffentlicher Preisbekanntgabe (horizontal), nicht dieses Kriterium. Übrige ohne Bezug: Empfehlungen des Preisüberwachers (1990), Publikation statistischer Mittelwerte, Art. 7 Diskriminierung, Selektivvertrieb, HMG-Vorteilsverbot; ASCOPA ohne Text."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2b)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2c)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1"
+   ],
+   "note": "Scott Bikes (RPW 2008/3): Die Empfehlungen wurden in der Schweiz «nicht ausdrücklich als unverbindlich deklariert». Nach der Verpflichtung, sie künftig als unverbindlich zu bezeichnen, gilt der Eindruck der Verbindlichkeit als korrigiert, folglich «keine Anhaltspunkte» für eine Preisbindung. Anwendung mit Folge. Dermalogica (RPW 2014/1): Hinweis auf Unverbindlichkeit erst ab Herbst 2012, danach Fazit «Aufgreifkriterien nach Ziff. 15 Abs. 3 VertBek erfüllt» (Nachfolgeregel). Grotrian-Steinweg (RPW 2016/3): Das Vorbringen, ein ausdrücklicher Hinweis auf Unverbindlichkeit sei unnötig gewesen, wird verworfen, weil den Händlern die Unverbindlichkeit nicht bewusst war. Die Qualifikation folgt ausserhalb → Bruchstück, grenzwertig. B-5685/2012: Ziff. 15 inkl. lit. b nur wiedergegeben. Übrige: Währungsvorteile, Gebietsschutz, Passivverkaufsverbot."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2d)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "11(2e)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07"
+   ],
+   "note": "2C_149/2018 und 2C_145/2018 (BGer, Pfizer) berechnen Befolgungsraten von 89 % (Apotheken) und 81 % (Ärzte) und stellen fest, die Befolgungsrate liegt «weit über dem … geforderten Befolgungsgrad von 50 %». Hors-Liste (WEKO 2009): Befolgungsgrade von 81,7 % und 89,3 % widerlegen das Argument der «groben Orientierungshilfe», die Empfehlungen werden als Preisvorgabe verwendet. Beides sind Anwendungen mit Folge. RPW 2023/3: Pfizer-Konzept des Befolgungsgrads nur referiert. B-846/2015: Einwand gegen die Berechnungsmethode, nur als Vorbringen der Beschwerdeführerin wiedergegeben. B-5685/2012: Lehre, dass blosse Befolgung nicht genügt. Das ist kein Widerspruch, weil die Regel die Befolgung nur als Gewichtungsumstand nennt; ohne Anwendung. Yamaha: Prüfung angekündigt, 93 % betrifft die Preisanschrift. B-844/2015: allgemeine Ambivalenz von Preisempfehlungen."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(b)",
+   "part": "operative",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "fragment"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(d)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(e)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(f)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(g)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "12(h)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "13(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "13(2)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "14",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(3)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4c)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1"
+   ],
+   "note": "Hors-Liste (RPW 2010/4) prüft das Hold-up-Problem ausdrücklich nach Ziff. 15 Abs. 4 Bst. c VertBek: Die Verkaufsstellen müssen grundsätzlich keine spezifischen Investitionen für Hors-Liste-Medikamente tätigen, «vorliegend gibt es denn auch keine …». Die Voraussetzung ist damit verneint, die Folge steht im Fenster (der Satz ist abgeschnitten, Subjekt und Verneinung sind sichtbar). B-4011/2013, B-4669/2013, B-3938/2013: Rechtfertigungsgründe inkl. Investitionsschutz nur aufgezählt. RPW 2005/2 (Sammelrevers): Hold-up-Problem nur lehrbuchartig erklärt. RPW 2005/1: spezifische Investitionen im Rahmen der Abhängigkeitsanalyse von Lieferanten, das ist eine andere Rechtsfrage. RPW 2022/1: Luftverkehrsabkommen. 94.100: Kopplung."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4e)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4f)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "15(4g)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "16",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "17",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-506-2010_2013-12-19",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07"
+   ],
+   "note": "B-506/2010 (Gaba BVGer): Die Bekanntmachung 2002 wurde «2007 resp. 2010 ersetzt», im untersuchungsrelevanten Zeitraum existierte die VertBek 02. Die Ablösung dient zur Bestimmung der massgebenden Fassung, die ausdrückliche Folge fehlt → Bruchstück. 2C_147/2018: Die Kriterien wurden immer wieder geändert, die VertBek 2002 wäre je nach Dauer des Verstosses (2004–2008) nur teilweise zu berücksichtigen. Das ist ein Argument gegen eine Bezugnahme auf die Bekanntmachungen, die Aufhebung selbst wird nur implizit herangezogen → Bruchstück, grenzwertig. B-843/2015, B-844/2015: Ablösung der aVertBek 2007 durch die VertBek 2010, das ist eine andere Aufhebungsbestimmung. RPW 2021/1: Aufhebung eines Urteils. RPW 2025/4b: Fussnoten zu aVertBek. RPW 2020/2, See-Gaster: kein Bezug. Positionstext: «20026» ist ein Fussnoten-Artefakt (2002 + Fn 6)."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "18",
+   "part": "operative",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "absent"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "2",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "3",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(10)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "4(11)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "5(12)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "6",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3"
+   ],
+   "note": "RPW 2025/3 (Beratung M.) wendet die Nachfolgeregel Art. 7 VertBek 2022 an: Wenn die Partnervertragsklausel zu einem Bezug von mehr als 80 % bei M. führt, liegt ein Wettbewerbsverbot vor. Wegen der «wie vorliegend vorgesehen» unbestimmten Dauer wäre es qualitativ schwerwiegend (Art. 15 lit. g). Das gleiche gilt für den Werkstattvertrag. Die Folge steht im Fenster, wenn auch konditional (Beratung). RPW 2008/3 (Bierlieferverträge, Fusion): Definition nach Ziff. 6 VertBek, daraus «somit … grundsätzlich als erhebliche Wettbewerbsbeschränkung einzustufen». Das ist abstrakt für die Vertragsklasse, ohne Subsumtion konkreter Verträge → Bruchstück. Nikon: Definition referiert und erläutert (Mindestabnahmepflichten erfasst), ohne Folgerung. Übrige: Einkaufskooperation, Nachfragekartell EU, Kopplung Art. 7, Marktabgrenzung."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "7",
+   "part": "operative",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "absent"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(1)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(2)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(3)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "8(4)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "9(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "9(2)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E1",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E2",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E3",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E4",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Fl-gel-und-Klaviere_2015-12-14",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13"
+   ],
+   "note": "Position = Erwägungsgrund mit Zweck und Inhalt von Art. 5 Abs. 4 KG (Preise, Gebietsabschottung, Preisempfehlungen). Jeder Fenster nutzt nur einen Teil → Bruchstück. Flügel und Klaviere: Preisteil mit Folge, «in casu keine Anhaltspunkte» für Mindest- oder Festpreise, die Abrede wird nicht von Art. 5 Abs. 4 erfasst. BMW: Exportverbot als «gebietsabschottende Klausel im Sinne von Art. 5 Abs. 4 KG» qualifiziert, Begründung und Vermutungsfolge erst danach. B-3332/2012: Zweck (Policy gegen marktabschottende Klauseln) historisch selbst hergeleitet. RPW 2016/3, HG180172, RPW 2014/2, RPW 2011/2: Vermutung, Zweck bzw. Preisempfehlungs-Kriterien nur referiert. 2C_723/2013: Tabaksteuerrecht, der kartellrechtliche Begriff der Preisfestsetzung zweiter Hand dient nur als Vergleich, andere Rechtsfrage."
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E5",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E6",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E7",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E8",
+   "part": "preamble",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "supported"
+  },
+  {
+   "version": "2007-07-02",
+   "pid": "E9",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "1",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(1a)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_disputed",
+   "claude": "recites",
+   "gemini": "supported",
+   "evidence_marked": [],
+   "note": "Nur B-5685/2012 (BVGer) betrifft die Vermutung bei Mindest- und Festpreisen. Es geht um ihre Reichweite bei indirekter Festsetzung (Ziff. 10 Abs. 2 CommVert): Mehrheitslehre und Gegenmeinung werden referiert, eine eigene Folgerung fehlt im Fenster → nur zitiert. 2C_147/2018 nennt Festpreisabreden unter Art. 5 Abs. 4 KG zu den schädlichsten, aber nur als Argument zur Notwendigkeit (Art. 5 Abs. 2). Das ist eine andere Rechtsfrage → nicht einschlägig. Kies/Beton (RPW 2020/1), Verzinkung, Badezimmer und Concessionari VW sind horizontale Preisabreden unter Konkurrenten. A-7162/2008 betrifft StromVG, 2C_723/2013 die Tabaksteuer."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(1b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "10(3)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "11",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.2",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07"
+   ],
+   "note": "Anwendung: Nikon (Vermutung durch Intra- und Interbrand-Wettbewerb für alle Produktmärkte widerlegt), GEHC RPW 2016/2 (Widerlegung durch Kombination Intra/Interbrand), BMW (Intrabrand allein reicht nicht). RPW 2018/2, 2016/3, 2011/3: Regel referiert, danach Marktabgrenzung. RPW 2017/1: Regel + Überschrift «Keine Beseitigung», Begründung im Fenster ausgelassen. Leasing: horizontale Abrede, Innen-/Aussenwettbewerb."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(1)",
+   "part": "operative",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "supported"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2a)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2b)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2d)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2e)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2f)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2g)",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster zum nachvertraglichen Wettbewerbsverbot des Abnehmers (lit. g, 1-Jahres-Grenze). HG.2011.286: nachvertragliches Konkurrenzverbot von 3 Jahren «noch an der Grenze» – aber zulasten des Auftragnehmers nach Entwicklungsauftrag, ohne VertBek-Bezug, summarisches Verfahren → nicht einschlägig (kein Widerspruch gewertet, Spannung zur 1-Jahres-Grenze notiert). Nikon: Wettbewerbsverbot während Vertragsdauer (lit. f) – andere Buchstabe. RPW 2017/4, 2018/3, 2022/3: Nebenabreden Fusion. Übrige: Co-Distribution, Submission, Marktaufteilung."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "12(2h)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "13(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "13(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2"
+   ],
+   "note": "Electrolux (RPW 2011/3): Ziff. 13 Abs. 2 angewandt – gleichartige Vertriebsnetze decken gut 50 % des Marktes ab, «Unerheblichkeits-Schwelle … in casu deutlich überschritten». RPW 2011/2: Regel nur referiert. 2A-298/2001: Bagatellschwelle 10 % (aVertBek 2002), ohne Kumulativeffekt. RPW 2011/4, 2022/2, B-3618/2013: horizontale Schwellen. RPW 2006/4, Unispital: Fusionskontrolle."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "14",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(2)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1"
+   ],
+   "note": "Die gleiche Regel wie bei Position 5 (Ziff. 11 Abs. 2 lit. a VertBek 2007), die Fenster sind weitgehend identisch, daher gleiche Wertung. Scott Bikes (RPW 2008/3) wendet das Kriterium der Zugänglichkeit an: Die Empfehlungen gingen ausschliesslich an Händler und waren «somit öffentlich nicht zugänglich». Eine rechtliche Folge für die Gesamtwürdigung fehlt im Fenster → Bruchstück. B-846/2015: Preisobergrenzen und Empfehlungen allgemein (EU-Leitlinien Rz 227 f.), nicht die Zugänglichkeit. RPW 2010/4: allgemeine Lehre zu Empfehlungen. Übrige: Preisüberwacher 1990, statistische Publikation, Art. 7, Selektivvertrieb; ASCOPA ohne Text."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1"
+   ],
+   "note": "Die gleiche Regel wie bei Position 6 (Ziff. 11 Abs. 2 lit. c VertBek 2007), die Fenster sind identisch, daher gleiche Wertung. Scott Bikes: Die Empfehlungen waren nicht als unverbindlich deklariert. Nach der Korrektur «keine Anhaltspunkte» für eine Preisbindung, also Anwendung mit Folge. Dermalogica (RPW 2014/1): Hinweis auf Unverbindlichkeit erst ab Herbst 2012, Fazit «Aufgreifkriterien nach Ziff. 15 Abs. 3 VertBek erfüllt». Grotrian-Steinweg (RPW 2016/3): Das Vorbringen, ein Hinweis auf Unverbindlichkeit sei unnötig gewesen, wird verworfen, die Qualifikation folgt ausserhalb → Bruchstück. B-5685/2012: Ziff. 15 lit. b nur wiedergegeben. Übrige: Währungsvorteile, Gebietsschutz, Passivverkaufsverbot."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "15(3d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02"
+   ],
+   "note": "Hors-Liste (WEKO 2009, Vorgängerregel Ziff. 15 Abs. 2 VertBek 2007): 30-%-Rechtfertigung «kommt vorliegend nicht zur Anwendung», da Preisabreden qualitativ erheblich und kumulativ wirken – Ausnahme angewandt, Folge im Fenster. B-463/2010: Position der Vorinstanz und Ziff. 15 Abs. 2 VertBek 07 nur wiedergegeben. RPW 2011/2: Ziff. 13 Abs. 2 und 16 Abs. 2 referiert, Folgerung ausgelassen. Übrige: Art. 5 Abs. 2 KG allgemein (B-581/2012, B-710/2014 horizontal, B-844/2015), Bezwecken, Marktabgrenzung."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(3)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [],
+   "note": "Alle Fenster geben Art. 5 Abs. 2 KG (Einzelfallprüfung, Effizienzgründe, Notwendigkeit) nur wieder; Prüfung jeweils nach dem Fenster. Vertikal: B-463/2010 (Gebro), Vertrieb von Musik, B-7756/2015 – nur zitiert. Badezimmer, Baubeschläge, B-710/2014, Mastercard: horizontale bzw. multilaterale Abreden → nicht einschlägig. 2C_81/2023: allgemeiner Massstab, Abredetyp im Fenster nicht erkennbar."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4c)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1"
+   ],
+   "note": "Die gleiche Regel wie bei Position 8 (Ziff. 15 Abs. 4 lit. c VertBek 2007), die Fenster sind identisch, daher gleiche Wertung. Hors-Liste (RPW 2010/4) prüft das Hold-up-Problem und stellt fest, dass die Verkaufsstellen keine spezifischen Investitionen tätigen müssen, «vorliegend gibt es denn auch keine …». Die Voraussetzung ist verneint, die Folge steht im Fenster. B-4011/2013, B-4669/2013, B-3938/2013: Rechtfertigungsgründe nur aufgezählt. RPW 2005/2: Hold-up-Problem lehrbuchartig erklärt. RPW 2005/1: spezifische Investitionen in der Abhängigkeitsanalyse, eine andere Frage. RPW 2022/1: Luftverkehrsabkommen. 94.100: Kopplung."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4e)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3"
+   ],
+   "note": "Sammelrevers (RPW 2005/2) erklärt die doppelte Marginalisierung und wendet sie auf den Fall an. Zur Lösung genügen Höchstpreise, Mindestpreise sind dafür «nicht erforderlich». Das Problem ist «deshalb – und auch aufgrund der relativ geringen Marktmacht – auf dem deutschsprachigen Buchhandelsmarkt nicht zentral». Der Rechtfertigungsgrund wird also mit Folge im Fenster verworfen. 2C_145/2018, 2C_147/2018, 2C_149/2018 (Pfizer): Definition und Argumente der Hersteller bzw. der Vorinstanz nur wiedergegeben, die Würdigung folgt ausserhalb. B-844/2015: Höchstpreise können doppelte Marginalisierung mildern, nur Lehre. B-846/2015: «Höchstpreise unproblematisch, wenn sie die doppelte Marginalisierung mildern» ist abstrakt, ohne Fall → grenzwertig, als nur zitiert gewertet. RPW 2008/4, RPW 2022/2: Gegenmacht bzw. Einkaufskooperation."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4f)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "16(4g)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "17",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "18",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "19",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster betrifft die Übergangsfrist 1.8.2010–31.7.2011 für Altverträge nach aVertBek. Treffer nur über Datums-/Vertragslaufzeit-Vokabular: Yamaha-Vertragsdaten, Bankkündigung GE, Post-Rabatte, Exportverbot/Preisvergleich, Telekom-Vertrag, Art. 7 EGZ, Swatch vorsorgliche Massnahmen, StromVG."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "2",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "20",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "3",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-43-2020_2021-12-21",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3"
+   ],
+   "note": "2C_43/2020: begründet die Regel selbst (Online-Verkauf grundsätzlich passiv, aktiv nur bei gezielter Ausrichtung; Lehre stützt WEKO/EU), Subsumtion ausserhalb → Bruchstück. RPW 2016/2 (Nikon): volle Definition inkl. allgemeiner Werbung, dann «Aus dieser Definition […]» als Schritt gegen das Exklusivitätsargument, Folgerung abgeschnitten («Folglich stösst») → Bruchstück, grenzwertig. RPW 2016/3, Nikon, RPW 2010/1, B-4019/2013: nur Begriff. Brandschutzprodukte: Begriff aktiver Verkauf. Online-Handel: Art. 4 Abs. 1 (einseitige Massnahme)."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "4(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "4(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "5",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "6",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3"
+   ],
+   "note": "Die gleiche Regel wie bei Position 10 (Ziff. 6 VertBek 2007), die Fenster sind fast identisch, daher gleiche Wertung. RPW 2025/3 (Beratung M.) wendet die Nachfolgeregel Art. 7 VertBek 2022 an: Ein Bezug von mehr als 80 % ist ein Wettbewerbsverbot und bei unbestimmter Dauer qualitativ schwerwiegend, also Folge im Fenster. RPW 2008/3 (Bierlieferverträge): Definition nach Ziff. 6, daraus «grundsätzlich erhebliche Wettbewerbsbeschränkung», abstrakt für die Vertragsklasse → Bruchstück. Nikon: Definition nur erläutert. B-2050/2007 (statt B-4019/2013): Art. 7 KG. Übrige: Einkaufskooperation, Nachfragekartell, Kopplung, Marktabgrenzung."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "7",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(1)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(2a)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(2b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Nur RPW 2020/2 gibt Ziff. 8 Abs. 2 lit. b (Dienstleister auf mehreren Handelsstufen) wieder, ohne Anwendung. Pöschl (RPW 2021/4) wendet lit. a an (dualer Vertrieb Waren) – andere Regel derselben Ziffer, grenzwertig; Stöckli (RPW 2019/4) referiert nur lit. a. Übrige: Agentur, Diskriminierung Art. 7, Fusion Elektrizität, Telekom."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(3)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "8(4)",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster zu Immaterialgüterrechten als Hauptgegenstand einer vertikalen Vereinbarung (Ziff. 8 Abs. 4). RPW 2015/1: Lizenzvereinbarung als Nebenabrede bei Fusion – andere Frage. Zerspanungswerkzeuge, AdBlue, Yamaha (beide): dualer Vertrieb (Ziff. 8 Abs. 2 / Art. 10 Abs. 2). RPW 2025/4a: Online-Vermittlung (Art. 10 Abs. 4). RPW 2025/2, 2025/3: Art. 15 lit. c bzw. Vertragsklauseln."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "9(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "9(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "I",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "II",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "III",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "IV",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "IX",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "V",
+   "part": "preamble",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "fragment"
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VI",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Vertikal-GVO 2790/1999 bzw. 330/2010 und Leitlinien nur in Fussnoten (AdBlue, Altimum, RPW 2012/3, 2016/1, 2013/4) bzw. Satz «analoge Politik zur EU» ohne Folgerung (RPW 2016/2) – nur zitiert. AMAG: Orientierung an EU-Praxis über KFZ-GVO zur Marktabgrenzung. ASCOPA: KFZ-GVO, Vergleich Marktentwicklung – andere Frage. Neuerungen (Nachfragemacht, Online-Vertrieb) nirgends."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VII",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "VIII",
+   "part": "preamble",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Gaba_2009-11-30",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22"
+   ],
+   "note": "Anwendung mit Folge: Nikon (Zwischenergebnis: Vermutung durch Intra- und Interbrand-Wettbewerb für sämtliche Produktmärkte widerlegt) und Gaba 2009 (Vermutung «durch die Kombination des vorhandenen Intrabrand- und Interbrand-Wettbewerbs umgestossen», danach Erheblichkeit). Brandschutzprodukte: Ein ausreichendes Mass an Interbrand- und ein gewisses Mass an Intrabrand-Wettbewerb wird festgestellt, die Umstossung der Vermutung erscheint danach nur konditional («Kann die Vermutung … umgestossen werden») → Bruchstück, grenzwertig. B-463/2010: Prüfschritt und Parteistandpunkte wiedergegeben, das Ergebnis folgt nach dem Fenster. B-843/2015, B-846/2015: Ziff. 10/11 nur referiert. RPW 2004/4 und B-3096/2018 sind horizontale Abreden."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "X",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XI",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XII",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07"
+   ],
+   "note": "2C_145/2018 (Pfizer): Die Abrede fällt unter Art. 5 Abs. 4 KG und ist nach Gaba ohnehin erheblich. Deshalb «muss nicht geprüft werden, ob die Vermutung zu recht besteht», und es kann «direkt zur Frage geschritten werden», ob sie durch Effizienzgründe gerechtfertigt ist. Das ist die Prüfreihenfolge der Position, auf den Fall angewandt. Die Folge (zulässig oder unzulässig) liegt ausserhalb → Bruchstück. BGE 143 II 297: Erheblichkeit festgestellt, danach Überschrift «Rechtfertigung» und Art. 5 Abs. 2 nur wiedergegeben. RPW 2011/2: Überschrift «Keine Rechtfertigung», im Fenster aber nur Wortlaut. B-7756/2015: Prüfung nur angekündigt. 2C_149/2018 und 2C_81/2023: allgemeines Prüfschema, der Satz zur Sanktionierbarkeit ist abgeschnitten. Luftfracht (RPW 2022/1) und RPW 2019/3b: Effizienz verneint und unzulässig, aber für horizontale Abreden → nicht einschlägig."
+  },
+  {
+   "version": "2010-06-28",
+   "pid": "XIII",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "1",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(1a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(1b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "10(3)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "11",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(1a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(1b)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2b)",
+   "part": "operative",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "recites"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2d)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2e)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2f)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2g)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "12(2h)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "13(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "13(2)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "14",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(2)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1"
+   ],
+   "note": "Dieselbe Regel wie bei Position 5 und Position 15 (VertBek 2010 Stand 2017, Ziff. 15 Abs. 3 lit. a), die Fenster sind identisch, daher gleiche Wertung. Scott Bikes (RPW 2008/3): Die Empfehlungen gingen ausschliesslich an Händler und waren «somit öffentlich nicht zugänglich», die Folge für die Gesamtwürdigung fehlt im Fenster → Bruchstück. Die übrigen Fenster betreffen nicht die Zugänglichkeit der Empfehlungen: Preisobergrenzen, allgemeine Lehre, Preisüberwacher, Statistik, Art. 7, Selektivvertrieb; ASCOPA ohne Text."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1"
+   ],
+   "note": "Gleiche Regel wie bei Position 6 und 16 (hier Ziff. 15 Abs. 3 lit. b VertBek 2010, Stand 2017). Die Fenster sind identisch, daher gleiche Wertung. Scott Bikes: In der Schweiz waren die Empfehlungen nicht als unverbindlich deklariert. Nach der Korrektur bestehen «keine Anhaltspunkte» für eine Preisbindung, die Folge steht im Fenster. Dermalogica (RPW 2014/1): Der Hinweis auf Unverbindlichkeit kam erst ab Herbst 2012. Fazit: «Aufgreifkriterien nach Ziff. 15 Abs. 3 VertBek erfüllt». Grotrian-Steinweg: Das Vorbringen, ein Hinweis sei unnötig gewesen, wird verworfen. Die Qualifikation folgt erst ausserhalb des Fensters → Bruchstück. B-5685/2012: lit. b nur wiedergegeben. Übrige: Währungsvorteile, Gebietsschutz, Passivverkaufsverbot."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3c)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "15(3d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(3)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4c)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1"
+   ],
+   "note": "Gleiche Regel wie bei Position 8 und 17 (hier Ziff. 16 Abs. 4 lit. c VertBek 2010, Stand 2017). Die Fenster sind identisch, daher gleiche Wertung. Hors-Liste (RPW 2010/4) verneint das Hold-up-Problem: Die Verkaufsstellen müssen keine spezifischen Investitionen tätigen, «vorliegend gibt es denn auch keine …». Die Folge steht im Fenster. B-4011/2013, B-4669/2013, B-3938/2013: Rechtfertigungsgründe nur aufgezählt. RPW 2005/2: Hold-up-Problem nur lehrbuchartig erklärt. RPW 2005/1: spezifische Investitionen in der Abhängigkeitsanalyse, also eine andere Frage. RPW 2022/1: Luftverkehrsabkommen. 94.100: Kopplung."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4e)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4f)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "16(4g)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "17",
+   "part": "operative",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "absent"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "18",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "19",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "2",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "20",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "3",
+   "part": "operative",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "fragment"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "4(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "4(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "5",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "note": "Nikon leitet aus dem Zweck der Querlieferungsfreiheit (systeminterne Arbitrage, Parallelimporte) ab, dass auch Bezüge bei offiziellen ausländischen Lieferanten zulässig sein müssen. Der Generalimporteur kann nicht dagegen vorgehen. Damit wird der Begriff der Querlieferung auf grenzüberschreitende Lieferungen angewandt, eigentlich im Rahmen von Ziff. 12 Abs. 2 lit. d → Bruchstück, grenzwertig. Wenn dieser Fenster der Nachbarregel zugeordnet wird, ist die Metke 4. Spannung: Nikon erfasst in Ländern mit offenem Vertrieb «alle Händler», die Definition spricht von Händlern «innerhalb eines selektiven Vertriebssystems». Das ist eine Erweiterung, kein Widerspruch. BMW (RPW 2012/3): «sog. Querlieferungen» nur als Begriff nach Erl. KFZ-Bek. → nur zitiert. B-2977/2007, B-506/2010, RPW 2025/3 und Online-Handel enthalten nur die Definition des Selektivvertriebs bzw. dessen Voraussetzungen. RPW 2018/2 und RPW 2008/1: Buchhandel bzw. horizontale Abrede."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "6",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3"
+   ],
+   "note": "Gleiche Regel wie bei Position 10 und 19 (hier Ziff. 6 VertBek 2010, Stand 2017). Die Fenster sind identisch, daher gleiche Wertung. RPW 2025/3 (Beratung M.) wendet die Nachfolgeregel Art. 7 VertBek 2022 an: Ein Bezug von mehr als 80 % ist ein Wettbewerbsverbot, bei unbestimmter Dauer qualitativ schwerwiegend. Die Folge steht im Fenster. RPW 2008/3 (Bierlieferverträge): Definition nach Ziff. 6, daraus «grundsätzlich erhebliche Wettbewerbsbeschränkung», aber nur abstrakt → Bruchstück. Nikon: Definition nur erläutert. Übrige: Einkaufskooperation, Nachfragekartell, Kopplung, Art. 7, Marktabgrenzung."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "7",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(1)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(2a)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(2b)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(3)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "8(4)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "9(1)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "supported",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07"
+   ],
+   "note": "BMW (Verfügung, Rz 123) wendet Ziff. 9 Abs. 1 VertBek ausdrücklich an. Grundsätzlich geht die speziellere KFZ-Bek vor, soweit sie sich äussert. Da sie aus 2002 stammt, enthält sie keine Auslegungshilfe zu Art. 5 Abs. 4 KG, also wird insoweit nach der VertBek geprüft. RPW 2012/3 (publizierte BMW-Fassung) zieht daraus die Folge: Die Prüfung erfolgt «gestützt auf die Vertikalbekanntmachung», die KFZ-Bek wird «erst subsidiär bei der Prüfung der Erheblichkeit beigezogen». In beiden Fenstern ist das eine Anwendung mit Folge. RPW 2025/3: Hinweis auf KFZV 2023 und Erläuterungen, ohne Vorrangfrage → nur zitiert. Yamaha: KFZ-Bek nur in einer Fussnote, geprüft wird nach VertBek. Übrige: Rechtsnatur der Bekanntmachungen, lex mitior VertBek 2010, Orientierungshilfe, dualer Vertrieb."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "9(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "I",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "II",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "III",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "IV",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "IX",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "V",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VI",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VII",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "VIII",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "X",
+   "part": "preamble",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2"
+   ],
+   "note": "Hörgeräte (RPW 2011/2) wendet den Kumulativteil an: kumulativer Abschottungseffekt, tiefere Marktanteilsschwelle von 5 % massgebend.",
+   "source": "human_disputed",
+   "label": "supported"
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XI",
+   "part": "preamble",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XII",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07"
+   ],
+   "note": "Gleiche Regel wie bei Position 21 (hier Erwägungsgrund XII VertBek 2010, Stand 2017). Die Fenster sind identisch, daher gleiche Wertung. In 2C_145/2018 ist die Art.-5-Abs.-4-Abrede ohnehin erheblich, deshalb muss die Vermutung nicht geprüft werden. Das Gericht geht «direkt» zur Effizienzrechtfertigung über. Die Prüfreihenfolge ist also auf den Fall angewandt, die Folge (unzulässig) liegt aber ausserhalb des Fensters → Bruchstück. BGE 143 II 297 und RPW 2011/2 enthalten nur Überschrift und Wortlaut zur Rechtfertigung. B-7756/2015: Prüfung angekündigt. 2C_149/2018 und 2C_81/2023: allgemeines Prüfschema. RPW 2022/1 (Luftfracht) und RPW 2019/3b: Effizienz verneint, aber horizontal → nicht einschlägig."
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XIII",
+   "part": "preamble",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2017-05-22",
+   "pid": "XIV",
+   "part": "preamble",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "1",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "10",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "11",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "12",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "13",
+   "part": "note",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3"
+   ],
+   "note": "RPW 2025/3 S. 677 (Beratung D.) wendet die Regel in der Fassung der VertBek 2022 an. Händler ausserhalb des Vertragsgebiets dürften unaufgeforderte Anfragen aus der Schweiz nicht bedienen. Das wäre ein Passivverkaufsverbot und «könnte zu einem unzulässigen und sanktionierbaren absoluten Gebietsschutz gemäss Art. 5 Abs. 4 KG führen». Die Folge steht im Fenster, wenn auch konditional. Unproblematisch bleibt die Beschränkung von Verkäufen an nicht zugelassene Händler (Art. 15 lit. c). RPW 2025/3 S. 684 (Beratung M.): gleiche Qualifikation als Passivverkaufsverbot, die Folge zum absoluten Gebietsschutz nur implizit → Bruchstück. BMW (RPW 2012/3): Die Exportverbotsklausel wäre nur zulässig, wenn sie bloss Grauexporte an nicht zugelassene Händler erfasste (b/iii). «Dies ist allerdings nicht der Fall», die Folge ist abgeschnitten → Bruchstück. AdBlue: Kundengruppen lit. b, andere Buchstabe. Nikon (beide), BMW-Verfügung, Yamaha (RPW 2023/3): Regel bzw. Begriffe nur referiert, Prüfung angekündigt."
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "14",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "15",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "16",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "17",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "18",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "19",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "2",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "20",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "21",
+   "part": "note",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "22",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "23",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "24",
+   "part": "note",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "25",
+   "part": "note",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "3",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "4",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "5",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "6",
+   "part": "note",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "7",
+   "part": "note",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1"
+   ],
+   "note": "Zwei Anwendungen mit Folge. BMW (RPW 2012/3): EWR-Partner dürfen nur im EWR verkaufen, Verkäufe in die Schweiz sind ausgeschlossen, «folglich … Gebietsabrede im Sinne von Art. 5 Abs. 4». B-3332/2012 (BVGer BMW): Zuweisung EWR/Schweiz plus Ausschluss von Verkäufen aus dem EWR in die Schweiz ergibt eine absolute Gebietsabrede, «das ist in casu der Fall». Die selektive Struktur ist unerheblich. RPW 2025/3 S. 677 (Beratung D.): Die Klausel im Schweizer Vertrag ist für sich genommen unbedenklich. Vergleichbare Klauseln im Ausland «könnten» zum absoluten Gebietsschutz führen (Passivverkaufsverbot), die Folge steht konditional im Fenster. RPW 2016/2 (Nikon): Erfasst sind auch Bezugsverbote ausserhalb der Schweiz, Nikons Argument geht «ins Leere». Das ist die Nachbarregel des indirekten Gebietsschutzes → Bruchstück. Nikon-Verfügung: gleicher Schluss, aber ohne Subjekt abgeschnitten, danach nur Prüfung angekündigt → nicht gewertet. Rimowa (RPW 2018/2), New Holland (RPW 2019/4), Yamaha (RPW 2023/3): Begriffe referiert, Prüfung angekündigt."
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "8",
+   "part": "note",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "9",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "1",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "supported",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2003-2_B1.1.2",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2"
+   ],
+   "note": "New Holland (RPW 2019/4) gibt Ziff. 1 VertBek wieder und subsumiert. Die Kooperationsvereinbarung ist eine Abrede nach Art. 4 Abs. 1. Sie wurde zwischen der Grosshändlerin Bucher LT und den Einzelhändlern geschlossen, «Unternehmen verschiedener Marktstufen». Das ist eine Anwendung mit Folge. Postfinance/UBS (RPW 2003/2) wendet die Unterscheidung horizontal/vertikal an: Die Partner stehen «sowohl in einer horizontalen als auch in einer vertikalen Beziehung». Begründet wird im Fenster nur der horizontale Teil → Bruchstück. RPW 2025/3 S. 684 stellt die Verträge als Abreden nach Art. 4 Abs. 1 fest, das vertikale Element (Marktstufen) wird aber nicht subsumiert → grenzwertig, als nur zitiert gewertet. Pöschl (RPW 2021/4) und Zerspanungswerkzeuge: Definition referiert, die Prüfung folgt nach dem Fenster. B-364/2010: Art. 4 Abs. 1 allgemein. RPW 2025/1: vertikale Preisabrede. RPW 2025/4b: horizontale Abreden."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(1)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(2a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2024-1_B1.1.1"
+   ],
+   "note": "RPW 2024/1: Anbieterseite subsumiert («wie hier die [A]» = Herstellerin/Importeurin auch nachgelagert), Abnehmerseite (kein Wettbewerber vorgelagert) und Folge «VertBek anwendbar» nicht vollständig im Fenster → Bruchstück. RPW 2025/3 (S. 677, 684), RPW 2020/2: lit. a (bzw. Ziff. 8 Abs. 2 lit. a aVertBek) nur wiedergegeben. B-8404/2010: Marktstufe für Horizontal-/Vertikalqualifikation – andere Frage. Übrige: Art. 7, Fusion, Marktabgrenzung."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(2b)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(3)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(4)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-4a_B1.4.1"
+   ],
+   "note": "RPW 2025/4a: U. betreibt Online-Marktplatz und ist zugelassene Händlerin = Wettbewerberin auf dem Verkaufsmarkt → Ausnahme Art. 10 Abs. 2 lit. a «dürfte vorliegend nicht greifen», Abs. 4 einschlägig – Anwendung mit Folge (vorsichtig formuliert, Beratung). Zerspanungswerkzeuge, Baustoffe Bern, RPW 2025/4b: dualer Vertrieb (Abs. 2/5). RPW 2025/2: Abs. 3 Informationsaustausch. Booking: Qualifikation vertikal. RPW 2025/3: Selektivvertrieb, Safe Harbour."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(5)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "10(6)",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster zu Immaterialgüterrechten als Hauptgegenstand (Art. 10 Abs. 6). Zerspanungswerkzeuge, Baustoffe Bern: dualer Vertrieb (Abs. 2/3); RPW 2025/4a: Online-Vermittlung (Abs. 4) – andere Absätze. RPW 2022/3: Nebenabreden Fusion. B-3290/2018, RPW 2025/3 S. 684: Wettbewerbsverbote. AdBlue: Abredebegriff/EU. RPW 2025/3 S. 677: Selektivvertrieb, horizontal."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "11",
+   "part": "operative",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "supported"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(1a)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(1b)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22"
+   ],
+   "note": "RPW 2025/3 S. 677 (Beratung D.): Vergleichbare Klauseln in ausländischen Verträgen würden Passivverkäufe in die Schweiz ausschliessen, das «könnte» zu einem absoluten Gebietsschutz nach Art. 5 Abs. 4 führen. Die Ausnahme für den Selektivvertrieb (Art. 15 lit. c) wird ausdrücklich vorbehalten. Das ist eine Anwendung mit Folge, wenn auch konditional. Gaba (BGE 143 II 297) legt die Tatbestandselemente selbst aus: Zuweisung, gebietsfremder Vertriebspartner, Ausschluss nur im Sinn eines absoluten Gebietsschutzes (historisch/teleologisch). Die Subsumtion liegt ausserhalb → Bruchstück. Brandschutzprodukte: Die AgV weist den «Agenten» Gebiete zu und untersagt sämtliche Aufträge in fremde Gebiete, nicht nur aktive. Die Folge kommt erst nach dem Fenster → Bruchstück. B-581/2012: Lehrmeinungen zum Erfordernis exklusiver Zuweisung, die eigene Stellungnahme des Gerichts fehlt → nur zitiert. Rimowa, New Holland, Yamaha, Nikon: Begriffe referiert, Prüfung angekündigt."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "12(3)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [],
+   "note": "Regel zu Empfehlungsform nur referiert: RPW 2014/1 (Überschrift Preisempfehlungen, Wortlaut wiedergegeben), RPW 2025/2 und 2025/3 S. 684 (Pfizer-Formel: Befolgungsgrad, Druck, Anreize), RPW 2025/1 («können … darstellen», Einzelfall ausgelassen) – Subsumtion jeweils ausserhalb des Fensters. RPW 2025/3 S. 677, 2016/1: Gebietsschutz ohne Empfehlungsbezug. Baustoffe Bern, B-3618/2013: Begriff vertikal / Art. 4 Abs. 1."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "13",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.2",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07"
+   ],
+   "note": "Anwendung mit Folge: Nikon (Vermutung durch Intra- + Interbrand für alle Produktmärkte widerlegt), GEHC RPW 2016/2 (Widerlegung durch Kombination Intra/Interbrand), BMW (Intrabrand allein reicht nicht). RPW 2018/2, 2011/3, 2016/3: Regel referiert, danach Marktabgrenzung. RPW 2017/1: Regel + Überschrift «Keine Beseitigung», Begründung ausgelassen. VPVW: horizontal, Aussen-/Innenwettbewerb."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "14(a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "14(b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Position = Art. 15 lit. b (Alleinvertriebssystem, Ausnahmen i–v). Nikon (WEKO 2011): Vorgängerregel Ziff. 12 Abs. 2 lit. b aVertBek (Ausnahme Aktivverkauf in vorbehaltene/exklusiv zugewiesene Gebiete) nur referiert, danach Begriff Passivverkauf – nur zitiert. Y.-Agentur: nur Definition Alleinvertriebssystem. RPW 2016/2 S. 442 (Nikon): EU-Ausnahme für Alleinvertrieb als Kontrast, aber zur Reichweite von Art. 5 Abs. 4 (Vermutung), nicht qualitative Schwere – grenzwertig, als nicht einschlägig gewertet. RPW 2025/2, 2025/3 (S. 677, 684), 2025/4a: Art. 15 lit. c (Selektivvertrieb). B-3975/2013: indirekter absoluter Gebietsschutz Art. 5 Abs. 4."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(c)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(d)",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Position = Art. 15 lit. b (weder Allein- noch Selektivvertrieb). RPW 2025/3 (S. 677, 684), 2025/4a, 2025/2: nur lit. c (Selektivvertrieb) referiert – andere Regel. Nikon: Vorgängerregel Ziff. 12 Abs. 2 lit. b aVertBek referiert + Begriff Passivverkauf, ohne Folgerung im Fenster. GEHC RPW 2016/2: Passivverkaufsverbot unabhängig vom Vertriebssystem, aber unter Art. 5 Abs. 4 (Vermutung), nicht qualitative Schwere – grenzwertig, als nicht einschlägig gewertet. Y.-Agentur, Online-Handel: Begriffsdefinitionen."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(e)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(f)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(g)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2"
+   ],
+   "note": "Feldschlösschen (RPW 2005/1) wendet die Vorgängerregel an (Bekanntmachung 2002, Ziff. 3 lit. f): Exklusivbezugsverträge mit Gaststätten laufen mehr als fünf Jahre und sind damit ein Wettbewerbsverbot. Gründe für eine Abweichung «sind nicht ersichtlich», also liegt eine erhebliche Beeinträchtigung vor. Das ist eine Anwendung mit Folge. Weil es um Art. 5 Abs. 1 geht, ist KG 1995 kein Hindernis. Die Ausnahme für Räumlichkeiten der Anbieterin spielt im Fenster keine Rolle. Nikon (beide Fenster): Die Drei-Jahres-Dauer erscheint nur als Vorbringen Nikons in indirekter Rede, danach folgen Definition und Ziff. 12 Abs. 2 lit. f, ohne Würdigung → nur zitiert. Yamaha (RPW 2023/3): Ziff. 12 Abs. 2 lit. f wiedergegeben, die Prüfung ist nur angekündigt. RPW 2017/1, RPW 2015/1 und RPW 2022/3: Konkurrenzverbote als Nebenabreden bei Fusionen. HG.2011.286: nachvertragliches Konkurrenzverbot (lit. h), also eine andere Buchstabe."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(h)",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster zum nachvertraglichen Wettbewerbsverbot des Abnehmers (lit. h). Nikon: Wettbewerbsverbot während der Vertragsdauer (Ziff. 12 Abs. 2 lit. f aVertBek) – andere Buchstabe. RPW 2018/4, 2022/3, 2016/3: Konkurrenzverbote als Nebenabreden bei Fusionen. RPW 2017/3, 2023/1, 2024/4: horizontale Abreden. RPW 2024/1: Informationsaustausch. Positionstext enthält zusätzlich lit. i und j (Segmentierungsfehler?)."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "16(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "16(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2"
+   ],
+   "note": "Beide Fenster wenden die Vorgängerregel Ziff. 13 Abs. 2 VertBek 2010 mit Folge an. Hörgeräte (RPW 2011/2): Bis Ende 2009 erliessen sämtliche Hersteller Preisempfehlungen. Daraus folgt ein kumulativer Abschottungseffekt gleichartiger Netze, «vorliegend die tiefere Marktanteilsschwelle von 5 % massgebend». Electrolux (RPW 2011/3): Wegen der kumulativen Auswirkungen beider Vertriebsnetze wäre die Schwelle «in casu auf 5 % herabzusetzen». Electrolux und V-Zug überschreiten sie klar. RPW 2025/4a: Art. 16 Abs. 2 nur wiedergegeben (Einzelanteil unter 5 %, Abdeckung unter 30 %), danach geht es um Selektivvertrieb. Luftfracht und 2A-298/2001: allgemeine 10-%-Schwelle der VertBek 2002, ohne Kumulativeffekt, im horizontalen Kontext. RPW 2013/1: vertikale Fusion (VKU). RPW 2020/2: Einkaufskooperation, horizontal. B-807/2012: KMU-Bekanntmachung."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "17",
+   "part": "operative",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Drei Voraussetzungen wörtlich referiert (Online-Handel, SAV Uhren, Gaba), Prüfung jeweils nach dem Fenster (SAV: Frage nach Qualifikation der Uhrensysteme gestellt, Rz 133 abgeschnitten; Gaba: nur Überschrift «Vertriebssystem im Überblick»). B-2977/2007: Erheblichkeit bei qualitativ+quantitativer Auswahl nur als WEKO-Position wiedergegeben, Gericht prüft Effizienz. RPW 2025/4a: Netzeffekt-Ausnahme referiert. RPW 2025/2, 2025/3: Art. 15 lit. c. 2C_484/2010: Missbrauch/Verfassung, nicht die drei Voraussetzungen."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(1)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(2)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(3)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4a)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4b)",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4c)",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1"
+   ],
+   "note": "Gleiche Regel wie bei Position 8, 17 und 24, hier Art. 18 Abs. 4 lit. c VertBek 2022. Die Fenster sind identisch, daher gleiche Wertung. Hors-Liste (RPW 2010/4) prüft das Hold-up-Problem nach der Vorgängerregel und verneint es: Die Verkaufsstellen müssen keine spezifischen Investitionen tätigen, «vorliegend gibt es denn auch keine …». Die Folge steht im Fenster. B-4011/2013, B-4669/2013 und B-3938/2013 zählen die Rechtfertigungsgründe nur auf. RPW 2005/2 erklärt das Hold-up-Problem lehrbuchartig. RPW 2005/1 behandelt spezifische Investitionen in der Abhängigkeitsanalyse, also eine andere Frage. RPW 2022/1: Luftverkehrsabkommen. 94.100: Kopplung."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4d)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4e)",
+   "part": "operative",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4f)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4g)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "18(4h)",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "19",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "2",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "20",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "21",
+   "part": "operative",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": "",
+   "source": "judges",
+   "label": "absent"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "22",
+   "part": "operative",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "3",
+   "part": "operative",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_AdBlue_2019-12-02",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-33-2020_2022-12-08"
+   ],
+   "note": "AdBlue: Klausel schliesst Lieferungen auf unaufgeforderte Bestellungen aus → Passivverkäufe ausgeschlossen, Ausnahme greift nicht, folglich qualitativ schwerwiegend – Anwendung mit Folge. 2C_33/2020: leitet aus der Aktiv/Passiv-Unterscheidung ab, dass bei erlaubten Passivverkäufen kein absoluter Gebietsschutz vorliegt; Subsumtion ausserhalb des Fensters → Bruchstück. Flügel/Klaviere, Nikon, B-4014/2013, BGE 143 II 297, RPW 2025/4a: nur Begriffsdefinition. RPW 2010/1 (Gaba): Klausel als Verbot passiver Verkäufe bezeichnet, aber Satzanfang abgeschnitten und Rz 90 begründet mit Vertragswortlaut, nicht mit dem Begriff – nicht gewertet."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "4",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "5(1)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07"
+   ],
+   "note": "BMW: Vertrieb als selektiv qualifiziert (Ziff. 4 Abs. 1 aVertBek / Ziff. 3 Abs. 2 KFZ-Bek), daraus Zulässigkeit des Verbots von Verkäufen an nicht zugelassene Händler und Anwendung auf die Exportverbotsklausel («könnte daher insofern zulässig sein, als …»). Die Folge ist bedingt und abgeschnitten, deshalb Bruchstück. Electrolux, Gaba, B-2977/2007, B-506/2010: Definition nur wiedergegeben (Gaba: Prüfprogramm angekündigt, B-506: nur Entstehungsgeschichte). Nikon: Definition normativ umformuliert («somit verbieten»), danach Querlieferungen (lit. d) – nur zitiert. Z2 2024 32: Definition im Sachverhalt, Verträge der Importeurin beschrieben, aber keine ausdrückliche Qualifikation – grenzwertig, als nur zitiert gewertet. RPW 2025/4a: nur Sachverhalt Selektivvertrieb/Marktplatz."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "5(2)",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "6",
+   "part": "operative",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "7",
+   "part": "operative",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "8",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Kein Fenster betrifft Know-how in einer vertikalen Vereinbarung. RPW 2019/4: Know-how-Begriff im Kontext Art. 3 BGBM (Schutzgebühren, Binnenmarkt) – andere Rechtsfrage. Übrige: Geschäftsgeheimnis bei Publikation, Akteneinsicht oder BGÖ (ESBK, B-7920/2015, VD.2015.20, B-5943/2014, A-722/2021, RPW 2010/4, RPW 2016/2) – Geschäftsgeheimnis ≠ Know-how, nur lexikalischer Treffer."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "9",
+   "part": "operative",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Keine Qualifikation als Online-Vermittlungsdienst i.S.d. VertBek (Anbieterin einer vertikalen Abrede). Hotelplattformen (WEKO 2015, RPW 2016/1, PUE Booking 2025): «vermitteln Transaktion» nur für Marktabgrenzung/zweiseitige Märkte – anderer Rechtsfrage. RPW 2016/4: zweiseitige Märkte Sport. Übrige: Telekom, Fusion, Publigroupe-Inseratevermittlung."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "I",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "B-141/2012 und B-581/2012 geben Art. 6 KG als Grundlage der Bekanntmachungen wieder (B-581: für Gerichte nicht bindend, Marktanteilsschwellen über Effizienzkriterien hinaus) – beschreibend, keine Folgerung, kein Widerspruch. Übrige: Art. 5 Abs. 2 KG ohne Bezug auf Art. 6 (RPW 2016/2, B-721/2018, Online-Buchungsplattformen, 2C_70/2024), Fusion-Nebenabreden, Publikation/Begründung."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "II",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": [],
+   "note": "Effizienzpotenzial vertikaler Koordination nur allgemein dargelegt: B-843/2015 (Koordination, doppelte Marginalisierung), Hors-Liste (Effizienzbegriff, effiziente Vertriebsform), RPW 2017/2 (Trittbrettfahrer, Markteinführung) – jeweils ohne Würdigung der konkreten Abrede im Fenster. Online-Buchungsplattformen, RPW 2003/2, 2016/1, B-5919/2017: nur Qualifikation als vertikal. RPW 2025/2: indirekter Gebietsschutz."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "III",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": ""
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "IV",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "note": "BMW (WEKO): Zweck und Inhalt von Art. 5 Abs. 4 KG wiedergegeben, Exportverbotsklausel als «gebietsabschottende Klausel im Sinne von Art. 5 Abs. 4 KG» qualifiziert. Die Begründung folgt erst danach («wie nachfolgend …»), Folge Vermutung nicht im Fenster → Bruchstück. B-3332/2012 (BVGer) leitet den Zweck selbst historisch her (Policy-Entscheid gegen marktabschottende Klauseln, Parallelimporte) → Bruchstück. Nikon folgert aus dem Abschottungszweck, dass auch Exportverbote in ausländischen Verträgen erfasst sind. Das ist ein Folgeschritt zur Reichweite, die Subsumtion des Falls liegt ausserhalb → Bruchstück. HG150188, HG180172, B-846/2015: Vermutung bzw. Ziff. 10 aVertBek nur referiert. B-844/2015: Widerlegung (Ziff. 11), andere Regel. Vernehmlassung 2022 ist kein Entscheid, sondern eine rechtspolitische Stellungnahme."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "IX",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Baustoffe-und-Deponi_2024-05-21"
+   ],
+   "note": "Kein Fenster zieht für eine konkrete Abrede die Erheblichkeitsfolge. Gaba (F6) leitet lit. a her, Baustoffe Bern (F7) stellt nach widerlegter Vermutung lit. a als Obersatz auf, Subsumtion ausserhalb des Fensters → je Bruchstück, nur lit. a. lit. b/Art. 15 überall nur referiert (F1, F3, F5, F8). See-Gaster horizontal. Metadaten: F2 BVGer statt BGer; Gaba-Datum Platzhalter (Urteil 28.06.2016); F3 zitiert lit. a für lit.-b-Inhalt."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "V",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VI",
+   "part": "preamble",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Vertikal-GVO/Leitlinien nur in Fussnoten (AdBlue, RPW 2012/3) bzw. EU-Parallelität nur referiert (RPW 2016/2, Folgerung ausserhalb des Fensters). AMAG: Orientierung an EU-Praxis zur Marktabgrenzung, aber über KFZ-GVO, nicht VertBek – grenzwertig, als nicht einschlägig gewertet. ASCOPA KFZ-GVO-Historie; Altimum ohne Text; B-6844/B-6849 Horizontalleitlinien."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VII",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "VIII",
+   "part": "preamble",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "note": "Anwendung nur Nikon: Vermutung durch Intra- und Interbrand-Wettbewerb für alle Produktmärkte widerlegt. B-846/2015, B-843/2015, RPW 2018/2: Ziff. 11 aVertBek referiert (B-846 zusätzlich Rechtslage nach Ziff. 10 Abs. 2 aVertBek, historisch, kein Widerspruch). Brandschutzprodukte: Regel referiert, Prüfung in Vorabklärung ausdrücklich unterlassen. HG180172: Konkretisierung Art. 5 Abs. 4 durch VertBek (Preisempfehlungen) nur abstrakt. RPW 2020/3a, B-3096/2018: horizontale Abreden, Innen-/Aussenwettbewerb."
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "X",
+   "part": "preamble",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "1",
+   "part": "note",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "10",
+   "part": "note",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "11",
+   "part": "note",
+   "label": "supported",
+   "source": "judges",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "12",
+   "part": "note",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "supported",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28"
+   ],
+   "note": "Anwendung: Nikon – indirekter Gebietsschutz erfasst auch Bezugsverbote ausserhalb der Schweiz, daher Argument Nikons verworfen. RPW 2016/2 (Nikon): Regel + «Vorliegend bestehen folgende Abreden», Folgerung nur fragmentarisch («… von Art. 5 Abs. 4 KG erfasst werden») – nicht gewertet. Yamaha: Prüfprogramm (Alleinbezug, Garantie) ohne Ergebnis im Fenster. RPW 2025/3 S. 677: nur referiert. Gaba, RPW 2010/1, 2018/2, 2025/3 S. 684: direkter Gebietsschutz bzw. Auswirkungen."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "13",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "14",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "15",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B1.1.1"
+   ],
+   "note": "Freedom Scientific (RPW 2010/4) qualifiziert ein (geschwärztes) Auswahlkriterium als «an sich quantitativ». Es «würde somit grundsätzlich» der Auswahl nach qualitativen Kriterien (Ziff. 8 Abs. 4 ii) nicht genügen. In Rz 42 wird das wieder geöffnet, weil die Anforderung der Qualität dienen könnte. Die endgültige Folge liegt ausserhalb des Fensters → Bruchstück. Spannung: Das Kriterium wird quantitativ genannt, obwohl es die Händlerzahl nur «indirekt» beschränkt. Nach Rz 15 ist die mittelbare Begrenzung gerade ein Merkmal qualitativer Kriterien. Weil das Kriterium geschwärzt ist (wohl eine Kapazitäts- oder Mindestanforderung) und keine Gegenregel ausdrücklich aufgestellt wird, ist das nicht als Widerspruch gewertet. Online-Handel und Gaba (RPW 2010/1): Begriff des rein qualitativen Systems und die drei Voraussetzungen nur wiedergegeben. RPW 2025/4a: Brandgating, Zulassung nach einem Bündel von Kriterien, ohne Abgrenzung qualitativ/quantitativ. Strassen- und Tiefbau AG, RPW 2022/2: quantitative Erheblichkeit, horizontal. RPW 2024/2: horizontale Nachhaltigkeitsvereinbarungen. RPW 2012/4: horizontaler Fall (Ton- und Tonbildträger)."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "16",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "17",
+   "part": "note",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1"
+   ],
+   "note": "RPW 2012/3 (BMW) misst die Exportverbotsklausel an der Vorgängerregel Ziff. 12 Abs. 2 lit. b/iii VertBek 2010. Zulässig wäre die Klausel nur, soweit sie Lieferungen an nicht zugelassene Händler (Grauexporte) erfasst. «Dies ist allerdings nicht der Fall»: Die Ausnahme greift nicht. Das ist eine Anwendung mit Folge im Fenster. Electrolux (RPW 2011/3) und die BMW-Verfügung geben die Ausnahme nur wieder bzw. zählen sie auf. Nikon: Verbot des Weiterverkaufs an nicht zugelassene Händler normativ umformuliert, danach Querlieferungen (lit. d). RPW 2025/3: Art. 15 lit. c (i)–(iii) nur aufgelistet. AdBlue: Kundengruppen (lit. b), eine andere Buchstabe. RPW 2019/2 (VW): Verknüpfung von Service und Vertrieb, Werkstattnetz. RPW 2016/2: Bezugsbeschränkungen beim Gebietsschutz. Garantiebeschränkungen kommen in keinem Fenster vor."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "18",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "19",
+   "part": "note",
+   "label": "absent",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [],
+   "note": "Keine Kombination Selektiv- + Alleinvertrieb im selben Gebiet. Nikon und RPW 2016/2 (Nikon): Kombination Alleinvertrieb + Alleinbezug nach EU-Leitlinien Rz 162 – nur referiert und andere Kombination (grenzwertig; als «про это» gewertet wäre es nur zitiert → 4). RPW 2025/3, 2025/4a: Art. 15 lit. c bzw. Netzeffekte. Online-Handel: rein qualitativer Selektivvertrieb. B-141/2012: Selektivvertrieb als Indiz Marktabgrenzung. Flügel/Klaviere: allgemeine Erheblichkeit."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "2",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-33-2020_2022-12-08",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-39-2020_2022-08-03"
+   ],
+   "note": "2C_33/2020 und 2C_39/2020 begründen selbst den Rückgriff auf EU-Vertikalrecht (Wille des Gesetzgebers, Parallelität, EU-Regeln nicht blosse Vergleichselemente), Anwendung auf den Fall ausserhalb des Fensters → Bruchstück. RPW 2020/2: analoge Anwendbarkeit referiert, EU-Leitlinien dargelegt, ohne Schritt für den Fall – nur zitiert. RPW 2013/4: Aufwand Prüfung Handelsvertreter-Regeln, Einstellung. B-786/2014, B-761/2014, Luftfracht: Luftverkehrsabkommen CH-EU. B-141/2012: horizontale Kartelle."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "20",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "21",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "22",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-463-2010_2013-12-19"
+   ],
+   "note": "Kein Fenster wendet die 30-%-Rechtfertigung auf ein Selektivvertriebssystem an. Hors-Liste und B-463/2010 (Gebro) wenden die allgemeine Safe-Harbour-Regel samt Ausnahme an (Ziff. 15 Abs. 2 VertBek 07: Ziff.-12-Abrede bzw. kumulative Wirkung → keine Rechtfertigung; BVGer: WEKO musste sich damit nicht befassen) – Nachbarregel mit Folge → Bruchstück. RPW 2025/4a: Regel im Selektivkontext nur als anwendbar referiert. RPW 2011/2: Ziff. 16 Abs. 2 referiert. Online-Handel: EU-Kumulativeffekt referiert. Scott Bikes, SAV Uhren: rein qualitativer Selektivvertrieb (andere Rz). RPW 2025/3: Art. 15 lit. c / Begriff."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "23",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "24",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "25",
+   "part": "note",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Einziges Fenster zum Online-Handel als absoluter Gebietsschutz: RPW 2014/2 (Internetverkaufsverbot = Passivverkaufsverbot, mit Gebietszuweisung → Vermutung) – nur Praxis referiert. Electrolux (RPW 2011/3): Internetverbot, aber nur Abredebegriff Art. 4 Abs. 1. Gaba 2009: Erheblichkeit/Marktstellung Elmex, nicht Produkterfordernis selektiver Vertrieb. Übrige: absoluter Gebietsschutz ohne Online-Bezug bzw. 2C_1065/2014 Publikation/Geschäftsgeheimnisse. Positionstext endet mit Artefakt «dukte.»."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "26",
+   "part": "note",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Keine der genannten qualifizierenden Umstände (Geoblocking, Umleitung, Abbruch nach Kartenadresse; Link-Pflicht nicht qualifizierend) im Fenster. RPW 2014/2: Praxis «Internetverbot = Passivverkaufsverbot, mit Gebietszuweisung → Vermutung» nur referiert (Nachbarregel, «про это»). RPW 2025/4a: Brandgating «grundsätzlich nicht» Art. 5 Abs. 4, aber ohne Bezug auf qualifizierende Umstände, Begründung ausserhalb. RPW 2025/2, 2025/3 (S. 677, 684), GEHC: indirekter Gebietsschutz offline (Prämien, Lieferstopp) – andere Rz. Online-Handel: nur Abredebegriff. B-3618/2013: horizontal/vertikal."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "27",
+   "part": "note",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2"
+   ],
+   "note": "Electrolux (RPW 2011/3): generelles Internetverkaufsverbot als Passivverkaufsbeschränkung qualifiziert, «somit … in qualitativer Hinsicht als schwerwiegend einzustufen» (Ziff. 12 Abs. 2 aVertBek) – Anwendung mit Folge. B-463/2010: Passivverkaufsverbot qualitativ erheblich, aber ohne Internetbezug. Übrige: Art. 15 lit. c (RPW 2025/2, 2025/3), Preisempfehlungen, Wettbewerbsverbote, Qualifikation vertikal (Booking)."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "28",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "absent",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2"
+   ],
+   "note": "Electrolux (RPW 2011/3) wendet die Kehrseite an: Ein generelles, undifferenziertes Internetverbot verhindert die Nutzung des Internets und ist deshalb «in qualitativer Hinsicht als schwerwiegend einzustufen». Zu Art-und-Weise- oder Kanalbeschränkungen sagt der Entscheid nichts → Bruchstück. RPW 2025/4a: Brandgating ist zulässig, weil das Selektivsystem zulässig ist und der Marktanteil unter 30 % liegt. Das ist eine andere Begründung, keine Kanalbeschränkung des Abnehmers → grenzwertig, als nicht einschlägig gewertet. RPW 2014/2: Geoblocking- und Umleitungskonstellationen aus «Online-Handel» werden nur referiert (betrifft eher Rz 26). Übrige ohne Online-Bezug: Preisempfehlungen, Kundengruppen lit. b, Erheblichkeit allgemein, Gebietsschutz-Ausnahmen, Art. 15 lit. c."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "29",
+   "part": "note",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.1"
+   ],
+   "note": "Stöckli (RPW 2019/4, einvernehmliche Regelung): Anforderung mind. einer physischen Verkaufsstelle und Qualitätsanforderungen an den Online-Verkauf ausdrücklich «zulässig» – Regel auf den Fall angewandt, Folge im Fenster. Online-Handel: nur Sachverhalt (Mindestvorgaben behindern Online-Handel). RPW 2025/4a: Sachverhalt Marktplatz, Frage nach dem Fenster. Dermalogica (RPW 2014/1): Totalverbot unter Art. 5 Abs. 4, offen gelassen – andere Regel. Übrige: Safe Harbour/Informationsaustausch, Marktabgrenzung, vorsorgliche Massnahmen."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "3",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-63-2016_2017-10-24"
+   ],
+   "note": "2C_63/2016 (BGer BMW) prüft, ob nach Art. 49a KG eine vertikale Gebietsabrede sanktioniert werden kann, deren Vermutung bereits widerlegt ist. Die Abrede beseitigt den Wettbewerb nicht. Deshalb ist zu prüfen, ob sie erheblich beeinträchtigt und nicht gerechtfertigt ist (Art. 5 Abs. 1). Damit wird die Regel als Massstab für den Prüfschritt gesetzt und auf den Fall bezogen. Die Folge (sanktionierbar) liegt ausserhalb des Fensters → Bruchstück. RPW 2025/1, Yamaha, RPW 2025/2, HG180172, RPW 2013/4 und RPW 2021/1 geben Unzulässigkeit, Vermutung und Gaba-Erheblichkeit nur wieder bzw. kündigen das Prüfprogramm an, ohne Bezug zur Sanktion. RPW 2012/2: Für horizontale Preisabreden steht die Folge im Fenster («auch gemäss Art. 5 Abs. 1 unzulässig und gemäss Art. 49a … sanktionierbar»), das betrifft aber Art. 5 Abs. 3 → nicht einschlägig, grenzwertig."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "30",
+   "part": "note",
+   "label": "absent",
+   "source": "judges",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "31",
+   "part": "note",
+   "label": "supported",
+   "source": "human_gold",
+   "claude": "absent",
+   "gemini": "absent",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2"
+   ],
+   "note": "Electrolux (RPW 2011/3): im Selektivvertrieb dürfen stationäres Fachgeschäft und Vorgaben zur Online-Präsentation verlangt werden; Folge «Kriterien betreffend den Online-Handel … kartellrechtlich zulässig» im Fenster – Anwendung (Vorgängerpraxis, gleiche Regel). RPW 2025/4a: Selektivvertrieb/Marktplatz, aber Safe Harbour und indirekte Preisbindung, nicht Online-Kriterien. HE250025: Diskriminierung im Selektivnetz. Übrige: Booking-Paritäten, Informationsaustausch, horizontale Abreden, Erheblichkeit allgemein."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "32",
+   "part": "note",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": [],
+   "note": "Nur Electrolux (RPW 2011/3) betrifft Internetbeschränkungen: Gesamtbeurteilung qual./quant. referiert und Prüfung «ob ein generelles Verbot des Online-Handels qualitativ schwerwiegend ist» angekündigt – Analyse nach dem Fenster. Übrige ohne Online-Bezug: allgemeine Erheblichkeit (AMAG, RPW 2025/2, 2025/3), Art. 15 lit. c, Abredebegriff, Wettbewerbsverbote/Effizienz, Netzeffekte Selektivvertrieb."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "33",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-1_B2.2.1"
+   ],
+   "note": "RPW 2016/1 (Booking/HRS): Paritätsbegriff auf konkrete Klauseln angewandt – Konditionenparität (Buchungsfristen, Stornierung), Ratenparität, Verfügbarkeit; Abgrenzung eng/weit. Qualifikation der Klauseln sichtbar, aber keine Rechtsfolge daraus im Fenster → Bruchstück. Online-Buchungsplattformen 2015: MFN-Typen (across-customer, pricing relativity) nur definiert. Übrige: Art. 7 «Preise und Geschäftsbedingungen» (B-3618, B-3938, Coop), Abredebegriff/EU-GVO (B-4012, B-3962), Preisempfehlungen – anderes Wort, andere Frage."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "34",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19"
+   ],
+   "note": "Online-Buchungsplattformen (WEKO 2015) qualifiziert die untersuchten Preisparitätsklauseln als «weit», weil sie praktisch alle Vertriebskanäle einschliessen, auch konkurrierende Plattformen. Enge Klauseln werden abgegrenzt, ihre Beurteilung ausdrücklich offen gelassen. Es wird nur der Definitionsteil auf den Sachverhalt angewandt, eine Folge zur qualitativen Schwere fehlt im Fenster → Bruchstück, grenzwertig. Wenn dieser Fenster nur als Definition gelesen wird, ist die Metke 4. RPW 2016/1 enthält nur Inhaltsverzeichnis-Überschriften. Übrige ohne Paritätsbezug: Preisempfehlungen, Erheblichkeit allgemein, Art. 15 lit. c, Selektivvertrieb, Netzeffekte, Gaba/Bezugsbeschränkungen."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "35",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "absent",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "36",
+   "part": "note",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2023-3_B1.1.1"
+   ],
+   "note": "Yamaha (RPW 2023/3) wendet die Vorgängerregel Ziff. 12 Abs. 2 lit. f VertBek 2010 mit Folge an. Die Pflicht, nur Originalersatzteile zu verkaufen und zu verwenden, war unbegrenzt und «dürfte» deshalb qualitativ schwerwiegend sein. Für Wettbewerbsverbote unter fünf Jahren ergeben sich «keine Hinweise auf eine erhebliche Wettbewerbsbeschränkung». Bierlieferverträge (RPW 2008/3): Wettbewerbsverbote über fünf Jahre gelten als erheblich. Nur bei höchstens fünf Jahren besteht die Möglichkeit der Rechtfertigung (Ziff. 15). Das ist abstrakt für die ganze Vertragsklasse, ohne konkrete Verträge → Bruchstück. Nikon (beide Fenster): Die Drei-Jahres-Dauer ist nur Parteivorbringen in indirekter Rede. RPW 2025/3 und RPW 2025/2: Bezugsbeschränkungen als indirekter absoluter Gebietsschutz nur referiert (Nachbarregel Rz 12). BMW (Schweiz) AG 2025: Kündigungsfrist und Vertragsdauer nach KFZV, meist Fussnoten → nicht einschlägig. RPW 2023/2: Nebenabreden bei Fusion. Die Ausnahme der stillschweigenden Verlängerung kommt in keinem Fenster vor."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "4",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "5",
+   "part": "note",
+   "label": "recites",
+   "source": "judges",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": null,
+   "note": null
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "6",
+   "part": "note",
+   "label": "recites",
+   "source": "human_gold",
+   "claude": "recites",
+   "gemini": "recites",
+   "evidence_marked": [],
+   "note": "Indirekte Mittel der Preisbindung werden nur wiedergegeben. Brandschutzprodukte zitiert Rz 6 VertBek-Erläuterungen; die Prüfung der Anhaltspunkte ist angekündigt, das Fenster endet davor. B-843/2015, B-844/2015, B-846/2015 zitieren die Beispielliste aus den EU-Leitlinien Rz 48 ohne Subsumtion. 2C_145/2018 und 2C_149/2018 betreffen die Rechtfertigung einer Festpreisabrede (Notwendigkeit), keine indirekten Mittel. RPW 2025/2 betrifft indirekten Gebietsschutz, nicht Preise. Badezimmer: horizontale indirekte Preisfestsetzung nach Art. 5 Abs. 3 lit. a."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "7",
+   "part": "note",
+   "label": "fragment",
+   "source": "human_gold",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19"
+   ],
+   "note": "Nur B-846/2015 (Pfizer, BVGer) arbeitet mit Höchstpreisen: vertraglich vereinbarte Höchstpreise grundsätzlich unbedenklich, kritisch nur bei Aufweichung des Preiswettbewerbs; daraus a fortiori-Folgerung für Preisempfehlungen, die wie Höchstpreise wirken → Bruchstück (Kehrseite der Regel, Druck/Anreiz-Umschlag in Fest-/Mindestpreis nicht geprüft; kein Widerspruch). Übrige: Druck/Anreiz-Formel nur für Preisempfehlungen bzw. indirekte Preisbindung (Brandschutz, Yamaha, RPW 2014/1, 2025/3, Festool), 2C_145/2018 Festpreisabrede, RPW 2023/1 Informationsaustausch horizontal."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "8",
+   "part": "note",
+   "label": "supported",
+   "source": "human_disputed",
+   "claude": "fragment",
+   "gemini": "supported",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021-02-04",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1"
+   ],
+   "note": "RPW 2023/1 (Beratung) prüft den Druck/Anreiz-Teil an den Fakten. Es gibt «keine Hinweise», dass die Lieferantinnen Druck ausüben oder Anreize gewähren, eine Würdigung ist ausserhalb eines konkreten Falls nicht möglich. Das ist die Regel angewandt, mit Folge im Fenster. BGE 147 II 72 und 2C_149/2018 (Pfizer) leiten den Abredeteil selbst her: Die Bezeichnung als Empfehlung ist nicht entscheidend (ausdrücklich «entgegen REINERT»), massgebend ist der Bindungswille, sonst greift die abgestimmte Verhaltensweise. Die Subsumtion liegt ausserhalb → je Bruchstück. 2C_147/2018 begründet die Einzelfallprüfung (verschleierte Preisvorgabe) und beginnt mit dem Sachverhalt zur Abstimmung, der Fenster bricht dort ab → Bruchstück. Hors-Liste (RPW 2010/4): Druck und Anreize sind nicht die einzigen Elemente, «vorliegend weisen denn auch andere Elemente auf eine abgestimmte Verhaltensweise hin». Die Fakten werden qualifiziert, der Schluss fehlt im Fenster → Bruchstück, grenzwertig. RPW 2011/2, Yamaha und RPW 2025/1 geben die Regel bzw. das Prüfprogramm nur wieder."
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "9",
+   "part": "note",
+   "label": "fragment",
+   "source": "judges",
+   "claude": "fragment",
+   "gemini": "fragment",
+   "evidence_marked": null,
+   "note": null
+  }
+ ]
+}
