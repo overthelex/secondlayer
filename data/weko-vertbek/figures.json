@@ -425,7 +425,9 @@
   "max_to_2010": 5,
   "courts": 73,
   "first_court_year": 2004,
-  "federal_peak": 2022
+  "federal_peak": 2022,
+  "partial_year": 2026,
+  "partial_year_n": 4
  },
  "fates": {
   "codification": {
