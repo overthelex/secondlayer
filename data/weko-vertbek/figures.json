@@ -664,6 +664,21 @@
   },
   "_all": 2802
  },
+ "prov_applied": {
+  "imported": {
+   "n": 46,
+   "not_applied": 26
+  },
+  "mixed": {
+   "n": 98,
+   "not_applied": 41
+  },
+  "own": {
+   "n": 168,
+   "not_applied": 67
+  }
+ },
+ "textlag_top": 24,
  "rules": {
   "published": {
    "codification": 38,
