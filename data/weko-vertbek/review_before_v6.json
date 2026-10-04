@@ -1,0 +1,1262 @@
+[
+ {
+  "kind": "sample",
+  "version": "2002-02-18",
+  "pid": "3(c)",
+  "part": "operative",
+  "heading": "",
+  "lead": "Erheblichkeit aufgrund des Gegenstands Die Wettbewerbskommission erachtet vertikale Wettbewerbsabreden grundsätzlich als erhebliche Beeinträchtigung des Wettbewerbs im Sinne von Artikel 5 Absatz 1 KG, wenn sie namentlich Folgendes zum Gegenstand haben:",
+  "text": "Beschränkungen des Verkaufs an Endverbraucher, sofern diese Beschränkungen Händlern innerhalb selektiver Vertriebsysteme auferlegt werden;",
+  "before": "2002-02-18",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 70
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-2_B2.6.1",
+    "ord": 19,
+    "score": 0.622,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/2, S. 270",
+    "lang": "de",
+    "section": "Empfehlungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-04-17",
+    "date_upper_bound": "2000-04-17",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.109,
+    "recital": false,
+    "cites_this": false,
+    "text": "ur dann Anwendung finden, wenn\ns, wie zum Beispiel die Komplexität des\nwillkürliche Anwendung des selektiven Verbeschränkungen führen, die sich nicht\nrtigen lassen. Eine allfällige Verwendung\nerien ist ohnehin BGBM-widrig.\nommission empfiehlt die Verstriktiven Anwendung des selektider Offerierenden im selektiven\n1 Bst. b des Entwurfes)\nselektiven Verfahren nach der Qualifider zur Angebotseingabe Eingeladenen\nAuftragsvergabe nicht effizient abgeuss ein wirksamer Wettbewerb gebs. 1 Bst. b des Entwurfes). Der Kurzkomsführungen.\ne im selektiven Verfahren qualifizierten\nhen können. Die Beschränkung der Anzu einer Wettbewerbsbeschränkung. In\n1998 hat die Wettbewerbskommission\nrnden Berichts begrüsst, wonach eine\nrstellt und in den Ausschreibungsun-\nDie Wettbewerbskommission bestätigt\nehlt die Ergänzung von Artikel 12 Abrfes mit einer entsprechenden Formulieallfälligen Erläuternden Bericht zu dieser\ndass eine Beschränkung der Offerierennur in Ausnahmefällen zulässig ist.\neber ortsfremde Anbieter nicht diskrimi-\nBGBM, vgl. Ziff. 6 und nachfolgend Ziff. 26\ntsprechender Hinweis ist ebenfalls in Arb des Entwurfes aufzunehmen.\nommission empfiehlt die Erz 1 Buchstabe b des Entwurfes,\ner Zahl",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_VB:CH_VB_001_94-100_1995-02-14",
+    "ord": 21,
+    "score": 0.61,
+    "spider": "CH_VB",
+    "docket": "94.100",
+    "lang": null,
+    "section": null,
+    "tier": "other",
+    "source": "other",
+    "date": "1995-02-14",
+    "date_upper_bound": "1995-02-14",
+    "date_source": "record",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.036,
+    "recital": false,
+    "cites_this": false,
+    "text": "victime d'un régime cartellaire rigide doit compter\navec des sanctions de la part du cartel si elle entend faire valoir ses droits\nen justice. C'est parfois l'existence même de son entreprise qui est 4) An. 6 LCart\n5) Art. 15 ss LCart 480\njg menacée. Le problème est aussi des plus aigus lorsqu'il s'agit d'un\n fournisseur dépendant d'une entreprise dotée d'une puissance d'achat.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-98-II-365_1972",
+    "ord": 42,
+    "score": 0.603,
+    "spider": "CH_BGE",
+    "docket": "BGE 98 II 365",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1972-11-28",
+    "date_upper_bound": "1972-11-28",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.058,
+    "recital": false,
+    "cites_this": false,
+    "text": "ltung unter Umständen für zulässig. So führt sie im Spirituosengutachten (VKK, 1971 S. 37/38) aus, dass bei problemlosen Artikeln mit dem Aufkommen des Discountsystems eine Preisbindung mit Margen, die auf die Bedürfnisse der kostenintensivsten Betriebsart abstellen, unangemessen geworden sei. Damit sagt freilich die Kartellkommission nicht, die Preisbindung habe sich nach den Verhältnissen der rationellsten Betriebe zu richten.\nOb die Preisspaltung grundsätzlich zuzulassen sei, kann offen bleiben. Jedenfalls kann sie hier nur insoweit in Frage kommen, als sie mit dem Zweck der Preisbindung - Erhaltung des dichten Verteilernetzes und damit Schutz der kostenintensiveren Betriebe - vereinbar ist. Dieses Ziel kann nur dann erreicht werden, wenn das Gefälle zwischen dem höheren und niedrigeren Preis nicht allzu gross ist. Das bedeutet nach zutreffender Auffassung des Handelsgerichts, dass in erster Linie die Kostenstruktur der Durchschnittsdetaillisten, nicht jene der Grossverteiler und Discounter massgebend ist. Die beiden (oder mehreren) Preise müssen also so gestaffelt sein, dass die Abwanderung der Kundschaft von den herkömmlichen Detailhandelsgeschäften zu den Discountern und dami",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1998-2_B2.3.4",
+    "ord": 14,
+    "score": 0.602,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1998/2, S. 336",
+    "lang": "fr",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "1998-07-06",
+    "date_upper_bound": "1998-07-06",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.029,
+    "recital": false,
+    "cites_this": false,
+    "text": "le territoire de la\nSuisse.\n\n\n\n1998/2\n\n\n15. La Commission de la concurrence recommande par conséquent\nde supprimer les clauses de réciprocité prévues dans le rapport explicatif (p. 3) et dans le projet (art. 39 al. 2 et 3).\nRecommandation : la Commission de la concurrence recommande\nde supprimer les clauses de réciprocité prévues dans le rapport explicatif (p. 3) et dans le projet (art. 39 al. 2 et 3).\n\nLes procédures applicables\n\n6.\n\nChoix entre la procédure ouverte et la procédure sélective\n\n16. Selon l’article 8 alinéa 1 du\n[…]\nmalgré tout, rester ouvertes et les restrictions à\nl’accès au marché ne doivent être introduites que si elles sont nécessaires.\n18. La procédure sélective ne devrait être utilisée que si les circonstances du cas en question l’exigent vraiment (par exemple, en raison\nde la complexité du marché public en question). L’utilisation de critères protectionnistes ou l’application arbitraire de la procédure sélective est contraire à la LMI. Ainsi, une application incontrôlée de la procédure sélective pourrait restreindre l’accès au marché sans pour autant être justifiée au sens de l’article 3 LMI. En tous cas, la procédure\nsélective ne doit pas conduire à une limitation injustifiée de la\nconcurrence.\nRecommandation : La Commission de la concurrence recommande\nl’introduction, dans le projet, du principe de l’application restrictive\nde la procédure sélective.\n6.\n\nLimitation du nombre d’offreurs dans le cadre de la procédure sélective\n\n19. Selon l’article 10 du projet, „ 1",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1997-3_B2.2.4",
+    "ord": 8,
+    "score": 0.599,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1997/3, S. 364",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1997-09-01",
+    "date_upper_bound": "1997-09-01",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.058,
+    "recital": false,
+    "cites_this": false,
+    "text": "höherwertige und/oder dauerhaftere Güter in der Regel einzeln nachgefragt. Für solche Güter sind die\nKonsumenten bereit, höhere Transaktionskosten in Kauf zu nehmen\nund sich ihr «Güterbündel» aus mehreren Geschäften zusammenzustellen (vgl. RZ 11). Aus der Sicht des Konsumenten könnte deshalb\nwohl im Sinne von Art. 11 Abs. 3 lit. a VKU für hochwertige Güter eine sachlich enge Marktdefinition vorgenommen werden.\n17. Allerdings findet man auch im Non-Food-Bereich auf Handelsstufe Unternehmen mit sehr breiten Sortimenten (im Sinne von RZ 11\nnach Teilsortimenten oder Produktegruppen gegliedert) und eine\nVielzahl von Spezialgeschäften. Das Teilsortiment eines Anbieters mit\numfassendem Sortiment steht in Konkurrenz zum vergleichbaren\nTeilsortiment anderer Vollsortimenter und zu den Spezialgeschäften\nder betroffenen Produktgruppe. Somit ist es ebenso zweckmässig wie\nzulässig, auch die Non-Food-Detailhandelsmärkte nach Produktgruppen abzugrenzen.\n18. Die Detailhändler können ihr Sortiment in einer Produktgruppe\nin der Regel rasch umstellen oder erweitern. Aus diesem Grund kann\ndie Definition der sachlich relevanten Märkte im Detailhandel auch\nauf das Konzept der Angebotssubstitution abgestützt werden. (Das\nKonzept der sogenannten «supply-side-substitutability» wird in den\n«Draft Guidelines» der",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-2_B2.2.4",
+    "ord": 24,
+    "score": 0.598,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/2, S. 212",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-06-05",
+    "date_upper_bound": "2000-06-05",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.058,
+    "recital": false,
+    "cites_this": false,
+    "text": "Sortiment an Markenartikeln im hö-\nErwägungen\nu.a. für Unternehmen des privaten und\nl- oder andere Wettbewerbsabreden\nselbstständigen Einheiten, welche im\nätigkeit als Anbieter oder als Nachfrantrade und EG Dritte Kraft sind als soln.\ntrieb von Markenartikeln\nen rechtlich erzwingbare oder nicht\ne aufeinander abgestimmte Verhalcher oder verschiedener Marktstuänkung bezwecken oder bewirken\nniert sich daher durch zwei Tatbes und gewolltes Zusammenwirken der\nnehmen und b) ein Bezwecken oder\nränkung.\ntailhandelsstufe bestehen verschie-\nDazu gehören die oben angeonen. Im Folgenden geht es darum,\nnigen Gebühren und Konditionen heren möglicherweise Abreden im Sinne\negen könnten.\ns eine Abrede getroffen wird, und die\naller Regel negativ abhängig von der\ne Institutionen (Verhaltensregeln\nNormierungs- oder Standardisieden können; vgl. auch B.S. Frey, Ökoerlag Vahlen, 1990) dazu führen, dass\nhl von Marktteilnehmern stabil sein\nUntersuchung können die zentralen\nop, Syntrade und EG Dritte Kraft als\nSinne aufgefasst werden.\nh sein, dass die Konditionen, welche\nhme des Delkredererisikos und die\nüber die zentralen Inkassostellen\ntte Kraft) den Herstellern in Rechnung\newerbsabreden im Sinne von Arti",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_001_BGE-96-I-297_1970-09-16",
+    "ord": 10,
+    "score": 0.589,
+    "spider": "CH_BGE",
+    "docket": "BGE 96 I 297",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1970-09-16",
+    "date_upper_bound": "1970-09-16",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.058,
+    "recital": false,
+    "cites_this": false,
+    "text": "Spielraum.\n4. a) Es ist unbestritten, dass die von den Brauereien der Beschwerdeführerin gegenüber verhängte Liefersperre eine Wettbewerbsbehinderung im Sinne von Art. 4 KG darstellt. Auch die Erheblichkeit der Behinderung ist zu bejahen, weil Liefersperren in der Regel eine erhebliche Wettbewerbsbehinderung darstellen, denn sie sind immer geeignet, das wirschaftliche Verhalten des Betroffenen zu beeinflussen (BGE 94 II 337 E. 3; SCHLUEP, Von der Kontrahierungspflicht der kartellähnlichen Organisation, Wirtschaft und Recht 1969, S. 207). Die Beschwerdegegner bestreiten auch nicht, dass der Beschwerdeführerin ein nicht leicht ersetzbarer Nachteil droht, der nur durch eine vorsorgliche Massnahme abgewendet werden kann. Nicht von Bedeutung ist, dass die Beschwerdeführerin bereits bestelltes Bier, über dessen Lieferung eventuell ein gültiger Vertragsschluss zustandegekommen ist, auf Grund des vertraglichen Anspruchs noch anfordern könnte. Es ist unstreitig, dass die Liefersperre sich auch auf künftige Bestellungen bezieht. In diesem Sinne ist die Verfügung des Einzelrichters, wonach die Brauereien bestelltes Bier zu liefern hätten, zu verstehen. Streitig ist einzig noch, ob die Wettbew",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-1_B2.2.3",
+    "ord": 19,
+    "score": 0.569,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/1, S. 97",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-12-03",
+    "date_upper_bound": "2001-12-03",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.058,
+    "recital": false,
+    "cites_this": false,
+    "text": "ff.\n\n\n\nB.1.2.\n\n2002/1\n\n\nBedeutung von Artikel 3 Absatz 1 KG bei der Beurteilung der Zuständigkeit\n\n29. Gemäss Artikel 3 Absatz 1 KG sind Vorschriften vorbehalten, soweit sie auf einem Markt für bestimmte Waren oder Leistungen Wettbewerb nicht zulassen, insbesondere Vorschriften:\na)\n\ndie eine staatliche Markt- oder Preisordnung begründen;\n\nb) die einzelne Unternehmen zur Erfüllung öffentlicher\n[…]\nS. 73, Hervorhebung durch die Weko\n\n\n\n2002/1\n\n\n33. Abgesehen davon, dass die Botschaft zum KG ausdr ücklich die\nBegriffe \"Anwendbarkeit\" beziehungsweise \"Anwendung\" benutzt,\nwird Sinn und Zweck von Artikel 3 Absatz 1 KG durch diese Ausführungen klar: Die Vorschrift verpflichtet die Wettbewerbsbehörden, jeweils genau abzuklären, wie weit ein wirtschaftlicher Teilbereich\ndurch eine staatliche Markt- oder Preisordnung beziehungsweise\ndurch die Gewährung besonderer Rechte der Anwendung des Kartellgesetzes tatsächlich entzogen wurde. Liegt jedoch keine wettbewerbliche Sonderstellung vor, so ist das Kartellgesetz uneingeschränkt\nund damit selbst mit Bezug auf öffentliche Aufgabenerfüllungen an20\nwendbar .\n34. Eine solche Abklärung kann klarerweise nicht bei der Prüfung der\nZuständigkeit erfolgen. Denn Vorschriften, die eine staatliche Marktoder Preisordnung begründen oder einzelne Unternehmen mit besonderen Rechten ausstatten, sind dann vorbehaltene Vorschriften im\nSinne von Artikel 3 Absatz 1 KG, wenn sie auf einem Markt für bestimmte Waren oder Leistungen Wettbewerb nicht zulassen. Ob dies\nzutrifft, lässt sich erst beurteilen, wenn geklärt ist, welcher Markt im\nkonkreten Fall massgebend ist, weshalb vorgängig die Abgrenzung\ndes relevanten Marktes vorzunehmen ist. Wie die Vorabklärung des",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:4",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns the selective procedure in public procurement under the BGBM, not end-user sales restrictions in selective distribution."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses a selective procedure in public procurement, not selective distribution systems in antitrust law."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "General remarks on cartel sanctions and dependent suppliers under the 1985 act."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns sanctions by a cartel and buyer power under the 1985 Cartel Act."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Deals with resale price maintenance and price splitting, which is a different rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage addresses resale price maintenance and price splitting, not restrictions on sales to end users in selective distribution."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Public procurement recommendations on the selective procedure; the word match on 'sélective' is vocabulary only."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses selective procedures in public procurement (LMI), not selective distribution systems."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Market definition for retail markets, a different legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage relates to market definition in the non-food retail sector."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Defines the notion of an agreement for retail purchasing centres; nothing on sales restrictions in selective distribution."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the general definition of agreements and conditions for central billing/del credere risks."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Seriousness of a supply boycott under the 1985 act, a different restriction."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses a refusal to deal (Liefersperre) by breweries under the old Cartel Act."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns reserved statutory provisions under Art. 3 para. 1 KG and jurisdiction."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about exceptions for state market and price regulations under Art. 3 para. 1 KG."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2002-02-18",
+  "pid": "5(b)",
+  "part": "operative",
+  "heading": "",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "text": "Gebiete oder Kundengruppen betreffen, die aufgrund eines Vertrages mit dem Lieferanten einem andern Händler exklusiv zugeordnet sind. Vorausgesetzt ist, dass es dem Händler belassen bleibt, unaufgeforderte Bestellungen individueller Kunden zu erfüllen, und dass die Weiterverkäufe durch die Kunden des Händlers nicht ebenfalls begrenzt werden.",
+  "before": "2002-02-18",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 71
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-94-II-329_nodate",
+    "ord": 25,
+    "score": 0.65,
+    "spider": "CH_BGE",
+    "docket": "BGE 94 II 329",
+    "lang": "fr",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1968-11-05",
+    "date_upper_bound": "1968-11-05",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.017,
+    "recital": false,
+    "cites_this": false,
+    "text": "Le fait d'inclure dans la clientèle des fabriques les \"détaillants-spécialistes\", c'est-à-dire de créer dans le commerce de détail une catégorie \"privilégiée\", définie selon des critères qui paraissent variables et qui ont en fait varié, n'est pas nécessairement un élément essentiel de l'accord conclu entre fabricants et grossistes. Sans doute, comme le relève la cour cantonale, la suppression de critères relativement sévères pour la reconnaissance de la qualité de détaillant spécialisé - que postule le recourant - perturberait l'accord en question. Mais cela ne signifie pas encore que l'organisation conventionnelle du marché de gros serait compromise. Et ce n'est pas parce que, considéré sous l'un de ses aspects, soit la concurrence entre fabricants et grossistes ou entre grossistes, cet accord a été jugé économiquement acceptable qu'il doit être considéré comme intangible. D'autres critères de partage de la distribution, fondés sur des éléments mieux en rapport avec les services rendus par les partenaires respectifs - tels par exemple une définition des ventes en gros - sont concevables également. Au surplus, il ne s'agit pas seulement de poser des critères pour définir le détail",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2001-1_B1.1.1",
+    "ord": 6,
+    "score": 0.636,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2001/1, S. 59",
+    "lang": "fr",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-12-18",
+    "date_upper_bound": "2000-12-18",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.015,
+    "recital": false,
+    "cites_this": false,
+    "text": "l’exécution de tâches publiques en leur accordant des droits\nspéciaux (let. b).\n14. Dans le cas d’espèce, il n’existe aucune prescription légale\npouvant exclure les terminaux de paiement de la concurrence.\nB.1.\n\nEntreprise en position dominante\n\n15. Par entreprise dominant le marché, on entend une ou plusieurs\nentreprises qui sont à même, en matière d’offre ou de demande, de se\ncomporter de manière essentiellement indépendante par rapport aux\nautres participants au marché (art. 4 al. 2 LCart).\n16. L’établissement en position dominante suppose que l’on délimite\npréalablement le marché de référence.\nI.\n\nMarchés de référence\n\n17. Le marché des produits comprend tous les produits ou services\nque les partenaires potentiels de l’échange considèrent comme\nsubstituables en raison de leurs caractéristiques et de l’usage auquel ils\nsont destinés (art. 11 al. 3 let. a OCCE).\n18. Le marché géographique comprend le territoire sur lequel les\npartenaires potentiels de l’échange sont engagés du côté de l’offre ou\nde la demande pour les produits ou services qui composent le marché\ndes produits (art. 11 al. 3 let. b OCCE).\na.\n\nMarché des produits\n\n19. Les entreprises concernées par cette enquête préalable",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_VB:CH_VB_001_94-100_1995-02-14",
+    "ord": 276,
+    "score": 0.627,
+    "spider": "CH_VB",
+    "docket": "94.100",
+    "lang": null,
+    "section": null,
+    "tier": "other",
+    "source": "other",
+    "date": "1995-02-14",
+    "date_upper_bound": "1995-02-14",
+    "date_source": "record",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.015,
+    "recital": false,
+    "cites_this": false,
+    "text": "stations. Le critère déterminant n'est pas\nl'identité des prestations, mais leur équivalence. Les particularités des\nproduits et du marché en question doivent donc être appréciées à leur\njuste valeur. La présente disposition s'applique à toutes les discriminations en matière\nde prix ou d'autres conditions commerciales. La notion d'autres conditions commerciales doit être comprise au sens large: sont concernées\ntoutes les conditions commerciales de fait ou contractuelles qui constituent une discrimination du partenaire commercial. Comme exemple de\ntraitement inégal, on peut citer le cas du fabricant en position dominante\nqui, régulièrement, exécute les commandes passées par un commerçant\ndans des délais de livraison différents de ceux qu'il respecte avec les\nautres. Tombe aussi sous le coup de la même disposition la pratique du 566\n<£§ fournisseur en position dominante qui livre à l'un de ses acheteurs,\n contre son gré, de la marchandise de moindre qualité alors qu'il fournit du\n premier choix à ses autres clients.",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1997-3_B2.2.4",
+    "ord": 8,
+    "score": 0.623,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1997/3, S. 364",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1997-09-01",
+    "date_upper_bound": "1997-09-01",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.029,
+    "recital": false,
+    "cites_this": false,
+    "text": "höherwertige und/oder dauerhaftere Güter in der Regel einzeln nachgefragt. Für solche Güter sind die\nKonsumenten bereit, höhere Transaktionskosten in Kauf zu nehmen\nund sich ihr «Güterbündel» aus mehreren Geschäften zusammenzustellen (vgl. RZ 11). Aus der Sicht des Konsumenten könnte deshalb\nwohl im Sinne von Art. 11 Abs. 3 lit. a VKU für hochwertige Güter eine sachlich enge Marktdefinition vorgenommen werden.\n17. Allerdings findet man auch im Non-Food-Bereich auf Handelsstufe Unternehmen mit sehr breiten Sortimenten (im Sinne von RZ 11\nnach Teilsortimenten oder Produktegruppen gegliedert) und eine\nVielzahl von Spezialgeschäften. Das Teilsortiment eines Anbieters mit\numfassendem Sortiment steht in Konkurrenz zum vergleichbaren\nTeilsortiment anderer Vollsortimenter und zu den Spezialgeschäften\nder betroffenen Produktgruppe. Somit ist es ebenso zweckmässig wie\nzulässig, auch die Non-Food-Detailhandelsmärkte nach Produktgruppen abzugrenzen.\n18. Die Detailhändler können ihr Sortiment in einer Produktgruppe\nin der Regel rasch umstellen oder erweitern. Aus diesem Grund kann\ndie Definition der sachlich relevanten Märkte im Detailhandel auch\nauf das Konzept der Angebotssubstitution abgestützt werden. (Das\nKonzept der sogenannten «supply-side-substitutability» wird in den\n«Draft Guidelines» der",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-3_B2.2.1",
+    "ord": 130,
+    "score": 0.613,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/3, S. 320",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-06-07",
+    "date_upper_bound": "2000-06-07",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.032,
+    "recital": false,
+    "cites_this": false,
+    "text": "Überlegungen, die im Zusammenhang mit dem sachlich relevanten Markt auf Herstellerstufe angestellt wurden (Kapitel\nC.2.1.1.a), gelten sinngemäss auch für die Stufe der Grossisten. Die\nMarktgegenseite der Grossisten sind die Fachhändler und SD-Ärzte.\n\n\n\n2000/3\n\n\nDeren Nachfrage wird letztlich von den Bedürfnissen des Patienten\nbestimmt. Aus Sicht des Patienten ist es möglich, dass sich einzelne\nMedikamente nicht substituieren lassen. Eine mögliche Eingrenzung\ndes sachlich relevanten Marktes auf Teilmärkte (Therapiegruppen etc.)\nist jedoch auch vorliegend nicht notwendig, weil die Auswirkungen\nder Abrede für den gesamten Markt dieselben und branchenumfassend sind.\n108. Der sachlich relevante Markt umfasst somit den Vertrieb der\ndurch die Grossisten verkauften Medikamente.\nC.2.2.1.b\n\nDer räumlich relevante Markt\n\n109. Bezüglich des räumlich relevanten Marktes gelten die\n[…]\nMarkt der Wettbewerbsabrede auf Grossistenstufe bei der\nMargenordnung angestellt wurden (Kapitel C.2.2.1.a), gelten sinngemäss auch für die Abrede über die Grossistenbedingungen. Die Marktgegenseite der Grossisten sind die Fachhändler und SD-Ärzte. Deren\nNachfrage wird letztlich von den Bedürfnissen des Patienten bestimmt.\nAus Sicht des Patienten ist es möglich, dass sich einzelne Medikamente\nnicht substituieren lassen. Eine mögliche Eingrenzung des sachlich relevanten Marktes auf Teilmärkte (Therapiegruppen etc.) ist jedoch\nvorliegend nicht notwendig, weil die Auswirkungen der Abrede für\nden gesamten Markt dieselben und branchenumfassend sind.\n177. Der sachlich relevante Markt umfasst somit den Vertrieb der\ndurch Grossisten verkauften Medikamente.\nC.4.1.\n\nDer räumlich relevante Markt\n\n178. Die regionale Ausbreitung der Sanphar-Grossisten erstreckt",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-1_B2.3.3",
+    "ord": 17,
+    "score": 0.61,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/1, S. 134",
+    "lang": "de",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "1999-03-15",
+    "date_upper_bound": "1999-03-15",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.023,
+    "recital": false,
+    "cites_this": false,
+    "text": "Hinsicht wären für eine enge Abgrenzung allenfalls überregionale Märkte für nationale Werbung zu definieren. Wie bereits bei der\nsachlichen Abgrenzung ausgeführt, braucht dieser Markt jedoch nicht\ndefinitiv abgegrenzt zu werden.\n1.\n\nb)\n\nMarkt für regionale Werbung\n\n38. Regional Werbende – z.B. Einkaufszentren oder Garagisten –\nwollen mit Inseraten die Bevölkerung einer bestimmten Region ansprechen. Sie fragen daher den Werberaum jener Medien nach, die in\ndieser Region mit möglichst hoher Reichweite verbreitet werden und\ngeringe Streuverluste aufweisen. Daraus ergibt sich, dass der Markt\nfür regional Werbende räumlich regional abzugrenzen ist.\n2.\n\nLesermärkte\n\n39. Der \"L'Express\" wird vorwiegend in den",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "ord": 30,
+    "score": 0.61,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2005/1, S. 114",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-07-17",
+    "date_upper_bound": "2000-07-17",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.026,
+    "recital": false,
+    "cites_this": false,
+    "text": "Es stellt sich die Frage, ob der Getränkeabsatz an\nGaststätten vom Getränkeabsatz an Privatpersonen\nzwecks Heimkonsum zu unterscheiden ist. Dies ist entgegen der Meinung von CCB - zu bejahen. Das\nVerhalten des Endkonsumenten im Horeka-Bereich\n\n\nzeichnet sich nämlich dadurch aus, dass neben dem\n[…]\nMarkt für Fruchtsäfte angesehen.\nDie exakte Marktabgrenzung kann jedoch offen gelassen werden, da - weil eben die Marktverhältnisse\nbei allen Marktabgrenzungen gleich sind (siehe Ziff.\n55 ff.) - auch bei einer engeren oder weiteren Marktabgrenzung keine kartellrechtlich unzulässige Wettbewerbsabrede vorliegt.\n60. Der räumliche Markt umfasst das Gebiet, in welchem die Marktgegenseite die den sachlichen Markt\numfassenden Waren oder Leistungen nachfragt oder\nanbietet (in analoger Anwendung von Art. 11 Abs. 3\nBst. b VKU).\n61. Herrschen in einem Gebiet homogene Wettbewerbsbedingungen, kann dieses Gebiet als räumlich\nrelevanter Markt aufgefasst werden, selbst wenn die\neinzelnen Marktteilnehmer auf der Marktgegenseite\ndie Güter in einem begrenzteren räumlichen Gebiet\nnachfragen\n(Zusammenschlussvorhaben\nMigrosGlobus, RPW 1997/3, S. 369, Ziff. 25 ff.).\n\n\n\n2005/1\n\n62. Vorliegend bieten sämtliche relevanten Hersteller\nvon CSD",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-1_B2.2.3",
+    "ord": 18,
+    "score": 0.587,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/1, S. 97",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-12-03",
+    "date_upper_bound": "2001-12-03",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.029,
+    "recital": false,
+    "cites_this": false,
+    "text": "B.1.2.\n\n2002/1\n\n\nBedeutung von Artikel 3 Absatz 1 KG bei der Beurteilung der Zuständigkeit\n\n29. Gemäss Artikel 3 Absatz 1 KG sind Vorschriften vorbehalten, soweit sie auf einem Markt für bestimmte Waren oder Leistungen Wettbewerb nicht zulassen, insbesondere Vorschriften:\na)\n\ndie eine staatliche Markt- oder Preisordnung begründen;\n\nb) die einzelne Unternehmen zur Erfüllung öffentlicher Aufgaben\n[…]\nWettbewerbsbehörde im verwaltungsrechtlichen Verfahren nicht mehr auf Empfehlungen beschränken, sondern\nkann unmittelbar gegenüber den Beteiligten Verfügungen erlassen .\nInfolgedessen wurde eine Vorbehaltsregelung notwendig.\n32. Bezüglich Artikel 3 Absatz 1 Buchstabe a KG hält die Botschaft\nzum KG jedoch unmissverständlich fest, dass das Kartellgesetz anwendbar ist, soweit die staatliche Markt- oder Preisordnung eines\nwirtschaftlichen Teilbereichs für wettbewerbliches Verhalten und da18\nmit für die Anwendung wettbewerbsrechtlicher Kriterien Raum lässt .\nAuch hinsichtlich Artikel 3 Absatz 1 Buchstabe b KG führt die Botschaft\naus, dass eine gewollte punktuelle Abweichung nicht dazu führt, dass\nder betreffende wirtschaftliche Teilbereich insgesamt der Anwendung\ndes Kartellgesetzes entzogen wird. Unternehmen mit besonderen\nRechten haben sich deshalb, soweit sie sich ausserhalb des Ausnahmebereichs bewegen, nach wettbewerblichen Grundsätzen im Sinne des\nKartellgesetzes zu verhalten .\n\n\nVgl. Botschaft zum KG, Sonderdruck, S. 69 f",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:10",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns retail-specialist categories in a 1968 wholesale cartel arrangement, not justifying territorial or customer restrictions tied to exclusively allocated dealers."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the criteria for defining specialist retailers and organizing the wholesale market, not exclusive territories or the protection of passive sales."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage covers reserved statutory provisions, dominance under Art. 4 para. 2 KG and market definition, which are other legal questions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the definitions of the relevant product and geographic markets, which is a different legal question."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with price and condition discrimination by a dominant firm, not vertical territorial or customer restrictions."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage addresses discrimination by a dominant firm regarding delivery conditions, not vertical agreements on territorial restrictions."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines retail product markets, including supply-side substitution, which is a market-definition question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines the relevant product market for non-food retail goods based on supply-side substitutability."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines the relevant product and geographic markets for pharmaceutical wholesaling."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about defining the relevant product and geographic markets for the wholesale distribution of medicines."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines geographic markets for regional advertising and readership."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the definition of the relevant geographic market for regional advertising."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines beverage markets; the words 'Gebiet' and 'räumlich' match on vocabulary only."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with the relevant geographic market for beverages and homogenous conditions of competition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the reservation of statutory provisions under Art. 3 para. 1 KG and jurisdiction."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the exception from the Cartel Act for state market or price regulations under Article 3(1) KG."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2002-02-18",
+  "pid": "5(c)",
+  "part": "operative",
+  "heading": "",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "text": "Grossisten in ihrer Freiheit einschränken, direkt an die Endverbraucher zu verkaufen.",
+  "before": "2002-02-18",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 50
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-94-II-329_1968",
+    "ord": 8,
+    "score": 0.615,
+    "spider": "CH_BGE",
+    "docket": "BGE 94 II 329",
+    "lang": "fr",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1968-11-05",
+    "date_upper_bound": "1968-11-05",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.106,
+    "recital": false,
+    "cites_this": false,
+    "text": ".\nAu demeurant, même si les mesures incriminées tombaient sous le coup de l'art. 4 LCart., elles bénéficieraient de l'exception statuée par l'art. 5 de la loi. Se référant à l'arrêt Alex Martin SA c. ASFC du 16 mars 1965 (RO 91 II 25), la cour cantonale constate que la répartition des ventes entre les fabricants et les grossistes, destinée à assainir les méthodes de distribution, est une mesure visant à promouvoir une structure souhaitable dans l'intérêt général.\nLa discrimination n'est pas excessive par rapport au but de la réglementation. Rentchnick se trouve dans la même situation que les 120 000 détaillants ordinaires établis en Suisse. Et le fait que la marge du grossiste s'ajoute au prix payé par le détaillant est normal.\nL'argument tiré de la livraison aux grandes centrales d'achat n'est pas concluant. Tout comme les grossistes, ces organismes assument en effet les frais de la distribution aux différents points de vente.\nQuant aux grossistes qui exploitent eux-mêmes un commerce de détail, on en dénombre 15 en Suisse, dont un seul à Genève. Pour critiquable que soit la discrimination dont ils bénéficient, leur nombre est si restreint qu'ils ne peuvent pas exercer une influenc",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-3_B2.2.1",
+    "ord": 209,
+    "score": 0.614,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/3, S. 320",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-06-07",
+    "date_upper_bound": "2000-06-07",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.129,
+    "recital": false,
+    "cites_this": false,
+    "text": "12. Mai 2000, Ordner VIII, act.\n\n\n\n2000/3\n\n\n26, S. 2, 8) vertreten die Ansicht, dass es eine Folge der durch Produkteigenschaften und Produktpreise gesteuerten Endnachfrage sei,\ndass die Grossisten letztlich alle vom Fachhandel nachgefragten Medikamente an Lager halten müssen. Diese Ansicht ist falsch, weil die\nGrossisten ohne die Grossistenbedingungen vielmehr nur einen Teil\nder Medikamente an Lager halten müssten. So könnten zum Beispiel\nDrogerien-Grossisten, Ärzte-Grossisten, Discount-Grossisten etc. auf\ndem Markt bestehen, wobei der Fachhandel seine Nachfrage dann\nüber den jeweils geeigneten Grossisten abdecken würde.\n195. Die Grossistenbedingungen der Sanphar haben keinen Rationalisierungseffekt im Sinne einer Senkung der Vertriebskosten. Durch\ndie Verpflichtung zum Vollsortiment werden im Gegenteil Vertriebskooperationen (z.B. Austausch von Teilsortimenten unter den Grossisten) ausgeschlossen oder eine Spezialisierung auf einzelne Kundensegmente verhindert und damit die Vertriebskosten wahrscheinlich\nnoch erhöht. Es ist ebenfalls nicht ersichtlich, inwiefern die Grossistenbedingungen für die Verbesserung von Produkten und Produktionsverfahren oder für die rationelle Nutzung von Ressourcen notwendig sein könnten.\n196. Im Übrigen existieren keine Gründe, die eine derartige",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_VB:CH_VB_001_-td-class--metadataC_1983-06-14",
+    "ord": 118,
+    "score": 0.611,
+    "spider": "CH_VB",
+    "docket": "<td class=\"metadataCell\">20011465</td>",
+    "lang": null,
+    "section": null,
+    "tier": "other",
+    "source": "other",
+    "date": "1983-06-14",
+    "date_upper_bound": "1983-06-14",
+    "date_source": "record",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.082,
+    "recital": false,
+    "cites_this": false,
+    "text": "que des prix d'appel sein, dass das Verteilernetz in Zukunft nicht mehr den\nque dans une faible mesure, car il n'a pas la compensation Bedürfnissen der Bevölkerung entspricht.\nsuffisante et il serait victime à long terme d'une dirr.inution Wir haben gehört, dass Tausende von selbständigen kleinede ses liquidités. D'autre part, son client à lui, ne lui pardonren Detailhandelsunternehmen aufgeben mussten. Der Vernerait pas une publicité qui ne répondrait pas en tous drängungseffekt ist nicht nur im Food-, sondern auch\npoints à ses prestations; le détaillant serait condamné par immer deutlicher auch im Non-Food-Bereich zu verspüren.\nle client. Die Marktanteile der genannten Giganten betragen zum\nUn effort doit donc être recherché en vue de garantir une Beispiel im Trockensortiment 50 bis 82 Prozent. Meines\nconcurrence fondée sur la valeur réelle des prestations Wissens gibt es in der ganzen westlichen Welt kein Land, in\nfournies. Ainsi la sauvegarde des petits commerces passe dem zwei Grossbetriebe in den einzelnen Marktsegmenten\npar le renforcement de la confiance entre les partenaires du eine derart marktbeherrschende Stel",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-3_B2.3.1",
+    "ord": 7,
+    "score": 0.593,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/3, S. 491",
+    "lang": "de",
+    "section": "Unternehmenszusammenschlüsse",
+    "tier": "1",
+    "source": "merger",
+    "date": "1999-07-05",
+    "date_upper_bound": "1999-07-05",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.129,
+    "recital": false,
+    "cites_this": false,
+    "text": "als auch die zur Valora gehörende Kiosk AG\nsind als Pressegrossisten tätig. Ein Pressegrossist nimmt die\nMittlerfunktion zwischen den Verlagen (Herstellung von Zeitungen\nund Zeitschriften) und den Verkaufsstellen ein. Der Pressegrossist\n\n\n\n1999/3\n\n\nsteht somit zwei verschiedenen Marktgegenseiten gegenüber. Dies\nkommt\n[…]\nmit dieser\nVertriebsform der Verkauf der Verlagstitel und damit dasselbe Ziel\nwie über die Presseverkaufsstellen erreicht. Allerdings werden mit\ndem Abonnementsgeschäft die regelmässigen Leser eines Titels\nabgedeckt, während der Einzelverkauf über Kioske vorwiegend\nSpontankäufer ansprechen soll. Im Bereich der Verteilung müssen im\nAbonnements- bzw. Einzelverkaufsgeschäft zudem unterschiedliche\nBetriebsstrukturen vorliegen. Während beim Abonnementsgeschäft\n\n\n\n1999/3\n\n\nviele Abnehmer mit geringer Menge (sprich einer Zeitung",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1997-3_B2.2.4",
+    "ord": 24,
+    "score": 0.587,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1997/3, S. 364",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1997-09-01",
+    "date_upper_bound": "1997-09-01",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.071,
+    "recital": false,
+    "cites_this": false,
+    "text": "hat einen Marktanteil von 20% bis 25%, Coop\neinen solchen von 15% bis 20%. Weitere wichtige Wettbewerber sind\nUsego, Denner, Volg und Pick Pay (je 0% bis 5%). Die Bedeutung von\nGlobus ist mit einem Anteil von weniger als einem Prozent gering.\n\n\n\n1997/3\n\n\n36. Bei einigen Produkten verfügt die Migros über\n[…]\nVerdrängungswettbewerb, welcher durch die konjunkturbedingt stagnierende Nachfrage noch verstärkt wird. Die regional tätigen kleineren Detailhändler und Fachgeschäfte sehen sich immer mehr der Konkurrenz\nflächendeckend agierender Grossverteiler ausgesesetzt. Das unter anderem auch dadurch induzierte «Lädelisterben» hat sich allerdings in\nden letzten Jahren verlangsamt. Auf Teilsortimente konzentrierte\nFachgeschäfte (Bäckereien, Metzgereien, Gemüseläden) überleben\ndurchaus, sofern sie ihre Kernkompetenzen bezüglich Qualität, Kundenbindung oder Fachkenntnis ausnützen.\n40. Die Grossverteiler streiten sich heute besonders um die Konsumenten im Discount-Bereich. Zu erwähnen sind etwa die Billi-Filialen\nvon Coop oder die M-Budget-Linie von Migros, die von diesen Unternehmen als Antwort auf die aggressive Preis-Strategie von Denner\naufgezogen worden sind. Solche Strategien der Grossverteiler erhö-\n\n\n\n1997/3\n\n\nhen den Wettbewerbsdruck auf die kleinen Anbieter zusätzlich",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-96-I-297_1970-09-16",
+    "ord": 18,
+    "score": 0.585,
+    "spider": "CH_BGE",
+    "docket": "BGE 96 I 297",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1970-09-16",
+    "date_upper_bound": "1970-09-16",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.094,
+    "recital": false,
+    "cites_this": false,
+    "text": "sgeschlossen, dass die übrigen Detaillisten, wenn sie, um konkurrenzfähig zu bleiben, den Verkaufspreis ebenfalls senken müssen, eine angemessene Gewinnmarge dadurch zu erreichen suchen, dass sie auf die Engrospreise drücken. Zwar mag es fraglich erscheinen, ob einem solchen Unterfangen der angestrebte Erfolg beschieden wäre, weil eine Senkung des Engrospreises zu einer weitern Herabsetzung der Verkaufspreise bei der Beschwerdeführerin führen könnte, so dass sich schliesslich die frühere Situation wiederherstellte. Allein es ist nicht abwegig, anzunehmen, dass dieser Ausweg dennoch beschritten würde. Damit, dass durch Aufgabe der Preisbindung zweiter Hand schliesslich ein Druck auf die Herstellerpreise erfolgen und dieser zu einer Leistungsverschlechterung führen könnte, rechnet auch die Kartellkomission (Veröffentlichungen 1966, S. 281). Es darf deshalb ohne Willkür davon ausgegangen werden, dass die Brauereien versuchen würden, einen Druck auf die Engrospreise mit einer Verschlechterung der Bierqualität wettzumachen. Die Beschwerdeführerin wendet ein, dass einem solchen Vorgehen die Lebensmittelgesetzgebung entgegenstehe. Allein die Lebensmittelgesetzgebung (Art. 377 ff. der Lebe",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-99-II-228_nodate",
+    "ord": 19,
+    "score": 0.58,
+    "spider": "CH_BGE",
+    "docket": "BGE 99 II 228",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1973-09-18",
+    "date_upper_bound": "1973-09-18",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.129,
+    "recital": false,
+    "cites_this": false,
+    "text": "selber nicht eingehalten hat. Das Handelsgericht stellt fest, dass vorher etwa 300 auf einer geheimen Liste aufgeführte Gastwirtschaftsbetriebe mit Zustimmung des Beklagten als Grossisten behandelt, d.h. zu niedrigeren Preisen beliefert worden seien als alle anderen Inhaber solcher Betriebe. Der Beklagte versucht diese Feststellung, die für das Bundesgericht verbindlich ist, mit Recht nicht zu widerlegen. Er wendet bloss ein, solche Vorbehalte in Abkommen seien üblich; er habe sie hier übrigens nur zugunsten von Grossbetrieben des Gastgewerbes aufnehmen lassen, die von jeher zu Grossistenkonditionen beliefert worden seien. Das hilft jedoch nicht darüber hinweg, dass die rechtsungleiche Behandlung von Angehörigen des gleichen Gewerbes den vom Beklagten angerufenen Zwecken des Abkommens nicht entsprach. Der Beklagte versucht denn auch weder diese Ungleichheit noch die vom Abkommen vorgeschriebenen Unterschiede zwischen Wirtepreisen einerseits und Detailpreisen anderseits, die bis zu 20% ausmachten, aber ebenfalls nicht einleuchten, zu rechtfertigen.\nBGE 99 II 228 S. 237\nEbensowenig überzeugt die Behauptung des Beklagten, mit dem Abkommen habe man die Bestrebungen des Bundes, die Volk",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-3_B2.2.1",
+    "ord": 30,
+    "score": 0.577,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/3, S. 403",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1999-07-05",
+    "date_upper_bound": "1999-07-05",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.094,
+    "recital": false,
+    "cites_this": false,
+    "text": "der Verlage bleiben und der\nZwischenhandel nur als Vermittler auftritt. Die Zwischenhändler\nbestellen eine gewisse Anzahl eines bestimmten Produktes, bieten\ndiese in ihren Verkaufsstellen an und können nicht verkaufte\nExemplare dem Verlag zurückgeben.\n\n\n\n1999/3\n\n\n65. Kiosk AG ist im Presseverkauf auf verschiedenen Stufen des\nvertikalen\nProzesses\ntätig.\nEinerseits\nbetreibt\nsie\neigene\nVerkaufsstellen und andererseits ist sie Grossistin im Vertrieb von\nPresseerzeugnissen an eigene Verkaufsstellen und an Dritte.\nVorliegend steht nur die Tätigkeit als Grossistin im Zentrum.\n66. Als Marktgegenseite können die Unternehmen bezeichnet\nwerden, welche an ihren Verkaufsstellen Presseerzeugnisse anbieten.\nSie sind zur Aufrechterhaltung ihrer Geschäftstätigkeit auf die\nBelieferung mit Presseerzeugnissen angewiesen.\n67. Für die Marktgegenseite sind alle Leistungen substituierbar,\nwelche es ihr erlaubt, mit Presseerzeugnissen beliefert zu werden. Als\nrelevanter Markt kann somit der Vertrieb von Presseerzeugnissen\nbezeichnet werden.\n3.1.b\n\nRäumlich relevanter Markt\n\n68. Der räumliche Markt umfasst das Gebiet, in",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:11",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The measure justified under the old LCart is the split of sales between manufacturers and wholesalers, not a restriction on wholesalers selling directly to end consumers (borderline, weaker label)."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the market position of wholesalers running retail businesses, but not an agreement restricting wholesalers from selling directly to end consumers."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage rejects efficiency justification for Sanphar's full-assortment wholesaler conditions, a different restraint from limiting wholesalers' direct sales to end consumers."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage assesses whether an obligation for wholesalers to carry a full assortment is justified by efficiency, which is a different legal question than restricting direct sales to end users."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "A parliamentary debate on small retailers and the market power of large distributors, with no link to the rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the market dominance of large retail distributors, not vertical agreements restricting wholesalers from selling to end consumers."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Market definition for press wholesaling; wholesaler vocabulary only."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage describes the intermediary function of a press wholesaler, completely unrelated to evaluating a restriction on selling to end consumers."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Market shares and competitive conditions in food retail, another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the competitive pressure from large retailers ('Grossverteiler') on smaller shops, which is unrelated to the proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "About resale price maintenance for beer and its effect on quality, not restrictions on wholesalers' sales to end consumers."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the potential impact of retail price maintenance on wholesale prices and product quality, not a restriction on wholesalers' direct sales."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns unjustified unequal treatment of restaurant owners under a price agreement; the word 'Grossisten' is the only match."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with certain gastronomy businesses being unjustifiably granted wholesale prices, which is a different issue from restricting wholesalers' sales to end users."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Relevant market definition for press distribution, another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage defines the relevant product and geographic market for a press wholesaler, which is unrelated to the justification of restricting wholesalers' customer groups."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2007-07-02",
+  "pid": "10(1a)",
+  "part": "operative",
+  "heading": "Vermutungstatbestände",
+  "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung des Wettbewerbs nach Art. 5 Abs. 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:",
+  "text": "Festsetzung von Mindest- oder Festpreisen. Als solche gelten auch in Empfehlungsform gekleidete Wettbewerbsabreden über die Einhaltung von Mindest- oder Festpreisen.",
+  "before": "2007-07-02",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 106
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2001-1_B1.1.2",
+    "ord": 8,
+    "score": 0.703,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2001/1, S. 64",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-01-16",
+    "date_upper_bound": "2001-01-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.121,
+    "recital": false,
+    "cites_this": false,
+    "text": "liegt somit nicht vor.\nB.1.3.\n\nWettbewerbsabrede\n\n15. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht\nerzwingbare Vereinbarungen sowie aufeinander abgestimmte Verhaltensweisen von Unternehmen gleicher oder verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken\n(Art. 4 Abs. 1 KG).\n16. Eine Wettbewerbsabrede definiert sich daher durch zwei Tatbestandselemente: a) ein bewusstes und gewolltes Zusammenwirken der\nan der Abrede beteiligten Unternehmen und b) die Abrede bezweckt\noder bewirkt eine Wettbewerbsbeschränkung (vgl. u.a. RPW 2000/2, S.\n219). Die JUP-Vereinbarung und die Richtlinien Konzernabschlüsse gehen auf eine gemeinsame Übereinkunft der beteiligten Unternehmen\nzurück und könnten zur Vereinheitlichung von Rabatten führen. Beide\nsind als Wettbewerbsabreden im Sinne von Artikel 4 Absatz 1 KG anzusehen.\nB. Beurteilung der JUP-Vereinbarung und Richtlinien Konzernabschlüsse als Wettbewerbsabreden\n17. Laut Artikel 5 Absatz 1 KG sind Abreden, die den Wettbewerb auf\neinem Markt für bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen Effizienz\nrechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen\nWettbewerbs führen, unzulässig.\n\n\n\n2001/1\n\n\n18. Um festzustellen, ob die",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-2_B1.1.1",
+    "ord": 8,
+    "score": 0.7,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/2, S. 331",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2004-02-16",
+    "date_upper_bound": "2004-02-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.079,
+    "recital": false,
+    "cites_this": false,
+    "text": "bezweckt mit ihren\nEmpfehlungen beziehungsweise Kalkulationshilfen, Preise oder Preisbestandteile zu regeln. Diese Empfehlungen erfolgen somit bewusst\nund gewollt und bezwecken eine Vereinheitlichung der Preise oder\nderen Bestandteile. Diese Empfehlungen werden - wie weiter unten\n\n\nBenzinmarkt Schweiz, RPW 2002/1, S. 81 f., Rz. 16 ff., vgl. auch BGE vom 14. August 2002\ni.S. Buchpreisbindung, Rz. 6.3.\n\n\n2004/2\n\n\n\nnäher ausgeführt wird - kaum einheitlich eingehalten. Sie dienen gemäss diverser Aussagen als Grundlage für die individuelle Preisgestaltung. Ob es sich tatsächlich um eine Abrede gemäss Artikel 4 Absatz 1\nKG handelt, kann letztlich offen bleiben, da wie in Randziffer 16 ff.\naufgezeigt wird, die Abrede nicht erheblich wäre.\nB.3.\n\nBeseitigung des wirksamen Wettbewerbs\n\n14. Laut Artikel 5 Absatz 1 KG sind\n[…]\ndamit der\nNachweis der Unzulässigkeit der Abrede erbracht. Wird die Vermutung umgestossen, ist weiter zu prüfen, ob eine erhebliche Beeinträchtigung des Wettbewerbs (Art. 5 Abs. 1) vorliegt, die nicht nach Artikel\n5 Absatz 2 KG gerechtfertigt werden kann.\n16. Um festzustellen, ob die Abrede beziehungweise die Kalkulationshilfen eine erhebliche Wettbewerbsbeeinträchtigung bewirken beziehungsweise den wirksamen Wettbewerb beseitigen, ist vorab der\nrelevante Markt abzugrenzen.\nB.3.\n\nRelevanter Markt\n\nB.3.3.a Sachlich relevanter Markt",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2004-4_B1.1.1",
+    "ord": 4,
+    "score": 0.695,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2004/4, S. 993",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2004-06-28",
+    "date_upper_bound": "2004-06-28",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.121,
+    "recital": false,
+    "cites_this": false,
+    "text": "wirksamen\nWettbewerbs führen, unzulässig.\nB.3.\n\nWettbewerbsabrede\n\n11. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht\nerzwingbare Vereinbarungen sowie aufeinander abgestimmte Verhaltensweisen von Unternehmen gleicher oder verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken\n(Art. 4 Abs. 1 KG).\n12. Eine Wettbewerbsabrede definiert sich daher durch zwei Tatbestandselemente: a) ein bewusstes und gewolltes Zusammenwirken der\nan der Abrede beteiligten Unternehmen und b) die Abrede bezweckt\noder bewirkt eine Wettbewerbsbeschränkung.\n13. Kalkulationshilfen sind standardisierte, in allgemeiner Form abgefasste Hinweise und rechnerische Grundlagen, welche es den Anwendern erlauben, die Kosten von Produkten oder der Erbringung von\nDienstleistungen im Hinblick auf die Preisbestimmung zu berechnen\noder zu schätzen. Die von der SVS verfassten Tariflisten erfüllen diese\nVoraussetzungen.\n14. Die Verwendung von Kalkulationshilfen, sei es mit oder ohne die\nVermittlung von Wirtschaftsverbänden und Branchenorganisationen,\nkann einer Abrede im Sinne von Artikel 4 Absatz 1 KG entsprechen.\nUnbedeutend ist, ob die Abrede über die Verwendung von Kalkulationshilfen verbindlichen oder unverbindlichen Charakter hat, weil sowohl rechtlich erzwingbare als auch nicht erzwingbare Vereinbarungen sowie das aufeinander abgestimmte Verhalten als Abreden gemäss Artikel 4 Absatz 1 KG gelten.\n15. Die Tariflisten der SVS für",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-1_B2.2.4",
+    "ord": 39,
+    "score": 0.691,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/1, S. 130",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-12-17",
+    "date_upper_bound": "2001-12-17",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.073,
+    "recital": false,
+    "cites_this": false,
+    "text": "auch Abreden unter Mitbewerbern, welche Angebotspreise in einer Submission zum Gegenstand haben (CHRIST, Nr. 374 ff.).\nNicht entscheidend ist, ob die Abrede dahin geht, identische Angebote\neinzureichen, ob nur innerhalb einer Toleranzmarge (z.B. +/-10%) of-\n\n\n\n2002/1\n\n\nferiert werden darf oder ob eine Steuerung des Zuschlags bezweckt ist\n(CHRIST, Nr. 107 ff.).\nb) Im vorliegenden Fall zeigt die Beweiswürdigung, dass die Parteien\neine Vereinbarung über den zu offerierenden Preis getroffen haben\n(Rz. 18 ff.).\nc) Es kann somit festgehalten werden, dass die getroffene Abrede\nzu einer Preisfestsetzung zwischen Unternehmen führt, die miteinander im Wettbewerb stehen (Art. 5 Abs. 3 Bst. a KG).\nb)\n\nVermutung der Beseitigung des wirksamen Wettbewerbs\n\n31. Die in Artikel 5 Absatz 3 KG",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-3_B2.2.3",
+    "ord": 27,
+    "score": 0.69,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/3, S. 454",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1999-09-06",
+    "date_upper_bound": "1999-09-06",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.115,
+    "recital": false,
+    "cites_this": false,
+    "text": "Wettbewerbsabreden gelten rechtlich erzwingbare oder\nnicht erzwingbare Vereinbarungen sowie aufeinander abgestimmte\nVerhaltensweisen von Unternehmen gleicher oder verschiedener\nMarktstufen, die eine Wettbewerbsbeschränkung bezwecken oder\nbewirken (Art. 4 Abs. 1 KG).\n\n\n\n1999/3\n\n\n40. Eine Wettbewerbsabrede definiert sich dadurch, dass die an der\nAbrede\nbeteiligten\nUnternehmen\nbewusst\nund\ngewollt\nzusammenwirken,\nund\ndass\ndie\nAbrede\neine\nWettbewerbsbeschränkung bezweckt oder bewirkt.\n41. Aus dem Sachverhalt geht hervor, dass das Sammelreverssystem\naufgrund\ndes von der Mehrzahl der Verlage und Händler entsprechend\ngeäusserten Willens zur Preisbindung (vgl. Rz. 4, 21),\nder organisatorischen Bündelung von\nPreisbindungsverträgen (vgl. Rz. 14 ff.),\n\nidentisch\n\nlautenden\n\nseiner Anwendung auf 90 % der deutschsprachigen Bücher (vgl",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2007-3_B2.2.3",
+    "ord": 31,
+    "score": 0.688,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2007/3, S. 415",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2007-06-18",
+    "date_upper_bound": "2007-06-18",
+    "date_source": "text",
+    "regime": "KG 2003",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.121,
+    "recital": false,
+    "cites_this": false,
+    "text": "bestimmte Waren oder Leistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen Effizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung wirksamen Wettbewerbs\nführen, sind unzulässig (Art. 5 Abs. 1 KG).\nB.3.\n\nWettbewerbsabrede\n\n41. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht erzwingbare Vereinbarungen\nsowie aufeinander abgestimmte Verhaltensweisen\nvon Unternehmen gleicher oder verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken (Art. 4 Abs. 1 KG).\n42. Eine Wettbewerbsabrede definiert sich daher\ndurch folgende Tatbestandselemente: a) ein bewusstes und gewolltes Zusammenwirken der an der Abrede beteiligten Unternehmen und b) die Abrede bezweckt oder bewirkt eine Wettbewerbsbeschränkung.\n43. Unter Zugrundelegung der in Rz. 41 und 42 genannten Grundsätze wird nachfolgend geprüft, ob\neine vom Kartellgesetz erfasste Wettbewerbsabrede\nvorliegt.\n44. Das Zustandekommen sowie die Durchführung\nvon Absprachen zwischen Offerenten kann in der\nRegel einzig mittels eines strikten Beweises – z.B. in\nForm von schriftlichen Vereinbarungen – erbracht\nwerden. Ungewöhnliche Angebote oder das Verhalten der Anbieter können jedoch Indizien einer Absprache liefern.\n\n\n2007/3\n\nB.3.\n\nAusgangslage\n\n45. Kenntnis von direkten Beweisen einer Abrede",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-4_B1.1.2",
+    "ord": 37,
+    "score": 0.686,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/4, S. 571",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-11-28",
+    "date_upper_bound": "2000-11-28",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.121,
+    "recital": false,
+    "cites_this": false,
+    "text": "5 KG in Frage stehen. In einer zweiten\nBefragungsrunde wurden daher Kinos und Verleiher stichprobenweise\nfür einige Filme beziehungsweise Blockbusters nach den Verleihkonditionen befragt.\n72. Als Wettbewerbsabreden gelten rechtlich erzwingbare oder nicht\nerzwingbare Vereinbarungen sowie aufeinander abgestimmte Verhaltensweisen von Unternehmen gleicher oder verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken\n(Art. 4 Abs. 1 KG). Eine Wettbewerbsabrede definiert sich durch zwei\nTatbestandselemente: a) ein bewusstes und gewolltes Zusammenwirken der an der Abrede beteiligten Unternehmen und b) die Abrede\nbezweckt oder bewirkt eine Wettbewerbsbeschränkung.\n73. Gemäss Artikel 5 Absatz 1 KG sind Abreden, die den Wettbewerb\nauf einem Markt für bestimmte Waren oder Dienstleistungen erheblich beeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung\nwirksamen Wettbewerbs führen, unzulässig.\n74. Die Beseitigung wirksamen Wettbewerbs wird nach Artikel 5 Absatz 3 Buchstabe a KG bei Abreden über die direkte oder indirekte\nFestsetzung von Preisen vermutet, sofern sie zwischen Unternehmen\ngetroffen werden, die tatsächlich oder der Möglichkeit nach miteinander im Wettbewerb stehen.\n75. Die",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2001-4_B1.1.1",
+    "ord": 5,
+    "score": 0.683,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2001/4, S. 633",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-10-03",
+    "date_upper_bound": "2001-10-03",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.109,
+    "recital": false,
+    "cites_this": false,
+    "text": "800.--\n\nCHF 30.--\n\nAb CHF 800.--\n\nCHF 50.--\n\n?? Der Kostenvoranschlag wird auch dann in Rechnung gestellt, wenn\nes zu keiner Reparatur kommt. Im Preis des Kostenvoranschlages ist\neine allfällige Entsorgung des Gerätes inbegriffen. Von dieser Regelung nicht betroffen sind Reparaturen, die sofort ausgeführt\nwerden, sowie Garantiereparaturen.\n?? Es bestehen keine Sanktionsmöglichkeiten gegen Reparaturwer kstätten und Händler, die sich nicht an die vereinheitlichten Preise\nder Kostenvoranschläge halten.\nc) Zusammenfassend kann festgehalten werden, dass die einheitliche Festsetzung des Preises für die Erstellung von Kostenvoranschlägen eine Wettbewerbsbeschränkung bezweckt und bewirkt und daher\nals Wettbewerbsabrede im Sinne von Artikel 4 Absatz 1 KG zu qualifizieren ist.\nB. Beurteilung der Wettbewerbsabrede\n6. Laut Artikel 5 Absatz 1 KG sind Abreden, die den Wettbewerb auf\neinem Markt für bestimmte Leistungen erheblich beeinträchtigen und\nsich nicht durch Gründe der wirtschaftlichen Effizienz rechtfertigen\nlassen, sowie Abreden, die zur Beseitigung wirksamen Wettbewerbs\nführen, unzulässig. Um festzustellen, ob die Abrede eine erhebliche\nbeziehungsweise beseitigende Wettbewerbsbeeinträchtigung bewirkt,\nist vorab der relevante Markt abzugrenzen.\nB.2.\na)\n\nRelevanter Markt",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:43",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Defines an agreement under Art. 4(1) KG for a rebate arrangement (JUP) and has nothing to do with vertical minimum or fixed prices."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the definition of an agreement under Art. 4(1) KG and Art. 5(1) KG, rather than the presumption for vertical price fixing under Art. 5(4) KG."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Concerns calculation aids and recommendations issued by an association under the 1995 act, leaves the Art. 4 question open and turns to market definition, so it addresses no vertical presumption."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the existence of an agreement under Art. 4(1) KG regarding price recommendations, which is a different legal question than the presumption of Art. 5(4) KG."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Qualifies an association's tariff lists (Kalkulationshilfen) as a possible Art. 4(1) agreement, which is a different legal question from the vertical presumption."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about whether horizontal calculation aids constitute an agreement under Art. 4(1) KG, not about vertical price fixing."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Bid rigging among competitors under the horizontal Art. 5(3)(a) KG presumption, not the vertical presumption on minimum or fixed prices."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage explicitly deals with horizontal price fixing (bid rigging) under Art. 5(3)(a) KG, not the presumption for vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "In the book-price system the visible step is only whether an agreement exists under Art. 4(1) KG; no presumption on resale price maintenance is stated or used (borderline, so the weaker label)."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage addresses the existence of an agreement under Art. 4(1) KG in the context of a resale price maintenance system, rather than applying the Art. 5(4) KG presumption."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Deals with the definition of an agreement and evidence of collusion between bidders, which is horizontal and procedural."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about proving horizontal agreements between bidders under Art. 4(1) KG, unrelated to vertical price fixing."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Restates Art. 4(1) and the horizontal Art. 5(3)(a) KG presumption for competitors, not the vertical rule on minimum or fixed prices."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage explicitly states the presumption for horizontal price fixing under Art. 5(3)(a) KG, which is a different rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Uniform pricing of repair estimates is qualified as an Art. 4(1) agreement and the passage moves to market definition, so the vertical presumption is not in issue."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage qualifies a horizontal agreement on prices for cost estimates as an agreement under Art. 4(1) KG, unrelated to vertical price fixing."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ }
+]

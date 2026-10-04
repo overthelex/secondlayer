@@ -37,7 +37,7 @@ from datetime import date
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from propositions import SOURCES, align, parse, read_text  # noqa: E402
+from propositions import SOURCES, align, align_global, parse, read_text  # noqa: E402
 
 DIR = pathlib.Path("/data/ch-corpus/weko-bek")
 REPO = HERE.parents[1]
@@ -62,18 +62,74 @@ def full_key(version: str, pid: str, part: str) -> tuple[str, str]:
     return version, ("E" + pid if part == "preamble" and pid.isdigit() else pid)
 
 
-def tracks() -> dict[tuple[str, str], dict]:
-    """(version, pid) -> {track, first_version, first_date, status}."""
+def tracks_from_links(path: pathlib.Path) -> dict[tuple[str, str], list[dict]]:
+    """Chains from the verified links (build_links.py), one per rule.
+
+    A chain starts at a proposition no link leads into and takes everything
+    reachable from it forward. Two rules that a later version folds into one
+    proposition keep two chains that share that proposition: taking the
+    connected component instead joined them, and a rule with no support of
+    its own (2002 Ziff. 3(c), sales to end users in a selective system) was
+    classed by the support of its neighbour (Ziff. 3(d), cross-supplies),
+    because the 2022 notice lists both in Art. 15(c). A proposition can
+    therefore belong to more than one chain."""
+    data = json.loads(path.read_text())
+    nodes: dict[tuple[str, str], str] = {}
+    for chain, versions in CHAINS.items():
+        for v in versions:
+            for p in parse(read_text(DIR / SOURCES[v][0], SOURCES[v][1]), v):
+                if len(p.text) > 40:
+                    nodes[full_key(v, p.pid, p.part)] = chain
+    forward: dict = collections.defaultdict(list)
+    has_in: set = set()
+    rel: dict[tuple[str, str], str] = {}
+    for l in data["links"]:
+        a, b = tuple(l["a"]), tuple(l["b"])
+        if a in nodes and b in nodes:
+            forward[a].append(b)
+            has_in.add(b)
+            rel[b] = l["relation"]
+    out: dict[tuple[str, str], list[dict]] = collections.defaultdict(list)
+    sources = sorted((k for k in nodes if k not in has_in), key=lambda k: (CHAINS[nodes[k]].index(k[0]), k))
+    for n, src in enumerate(sources):
+        chain = nodes[src]
+        members, stack = {src}, [src]
+        while stack:
+            for b in forward[stack.pop()]:
+                if b not in members:
+                    members.add(b)
+                    stack.append(b)
+        for k in members:
+            out[k].append({"track": f"{chain}:{n}", "first_version": src[0], "first_date": first_date(src[0]),
+                           "status": "added" if k == src else rel.get(k, "added"),
+                           "cosine": None, "merged_into": None, "members": len(members)})
+    return out
+
+
+def tracks(tei: str | None = None) -> dict[tuple[str, str], dict]:
+    """(version, pid) -> {track, first_version, first_date, status}.
+
+    With `tei`, the chains come from align_global (word ratio or bge-m3
+    cosine, global assignment): the greedy word-only align() broke chains of
+    reworded rules (PAPER-239)."""
     out = {}
     for chain, versions in CHAINS.items():
         by_version = {v: [p for p in parse(read_text(DIR / SOURCES[v][0], SOURCES[v][1]), v)
                           if len(p.text) > 40] for v in versions}
-        for n, t in enumerate(align(by_version, versions)):
+        if tei:
+            from retrieve import embed
+            texts = sorted({p.text for ps in by_version.values() for p in ps})
+            vectors = dict(zip(texts, embed(texts, tei, {})))
+            aligned = align_global(by_version, versions, vectors)
+        else:
+            aligned = align(by_version, versions)
+        for n, t in enumerate(aligned):
             first = min(t.per_version, key=versions.index)
             for v, d in t.per_version.items():
                 out[full_key(v, d["pid"], t.part)] = {
                     "track": f"{chain}:{n}", "first_version": first,
-                    "first_date": first_date(first), "status": d["status"]}
+                    "first_date": first_date(first), "status": d["status"],
+                    "cosine": d.get("cosine"), "merged_into": d.get("merged_into")}
     return out
 
 
@@ -86,6 +142,9 @@ def main() -> int:
     ap.add_argument("--gemini", type=pathlib.Path, default=REPO / "data/weko-vertbek/judges-full/gemini-3.1-pro.jsonl")
     ap.add_argument("--typology", type=pathlib.Path, default=REPO / "data/weko-vertbek/typology_v3.json",
                     help="what each proposition does; only a norm can be codified or announced")
+    ap.add_argument("--tei", default=None, help="bge-m3 endpoint: chains by align_global (default: greedy align)")
+    ap.add_argument("--links", type=pathlib.Path, default=None,
+                    help="verified links (build_links.py): chains are their connected components")
     ap.add_argument("--out", type=pathlib.Path, default=DIR / "measure1_step1.json")
     args = ap.parse_args()
 
@@ -103,7 +162,7 @@ def main() -> int:
             r = json.loads(line)
             passages.setdefault((r["version"], r["pid"]), {})[who] = r["passages"]
 
-    tr = tracks()
+    tr = tracks_from_links(args.links) if args.links else {k: [v] for k, v in tracks(args.tei).items()}
     missing = [k for k in labels if k not in tr]
     print(f"propositions {len(labels)}, tracked {len(labels) - len(missing)}, untracked {missing[:5]}")
 
@@ -118,25 +177,29 @@ def main() -> int:
     # track -> earliest supporting decision over all its versions
     by_track: dict[str, dict] = {}
     for key, row in labels.items():
-        if key not in tr:
-            continue
-        t = tr[key]
-        rec = by_track.setdefault(t["track"], {"first_version": t["first_version"], "first_date": t["first_date"],
-                                               "versions": {}, "support": []})
-        rec["versions"][key[0]] = {"pid": key[1], "label": row["label"], "source": row["source"],
-                                   "status": t["status"], "type": types.get(key)}
-        if row["label"] in ("supported", "fragment"):
-            for e in supporting(key, row):
-                d = dates.get(e)
-                if d:
-                    rec["support"].append({"ecli": e, "spider": d["spider"], "via": key[0],
-                                           "date": str(d["date_exact"] or ""),
-                                           "bound": str(d["date_upper_bound"] or "")})
+        for t in tr.get(key, []):
+            rec = by_track.setdefault(t["track"], {"first_version": t["first_version"], "first_date": t["first_date"],
+                                                   "versions": {}, "support": [], "labels": set(), "split": {}})
+            entry = {"pid": key[1], "label": row["label"], "source": row["source"],
+                     "status": t["status"], "type": types.get(key), "cosine": t.get("cosine"),
+                     "merged_into": t.get("merged_into")}
+            if key[0] in rec["versions"] and key[0] != t["first_version"]:
+                rec["split"].setdefault(key[0], []).append(entry)      # a rule split in this version
+            else:
+                rec["versions"][key[0]] = entry
+            rec["labels"].add(row["label"])
+            if row["label"] in ("supported", "fragment"):
+                for e in supporting(key, row):
+                    d = dates.get(e)
+                    if d:
+                        rec["support"].append({"ecli": e, "spider": d["spider"], "via": key[0],
+                                               "date": str(d["date_exact"] or ""),
+                                               "bound": str(d["date_upper_bound"] or "")})
 
     result = collections.Counter()
     rows = []
     for tid, rec in by_track.items():
-        labels_seen = {v["label"] for v in rec["versions"].values()}
+        labels_seen = rec["labels"]
         best = "supported" if "supported" in labels_seen else "fragment" if "fragment" in labels_seen else None
         first = rec["first_date"]
         before = [s for s in rec["support"] if s["bound"] and date.fromisoformat(s["bound"]) < first]
@@ -157,7 +220,7 @@ def main() -> int:
             result[(rec["first_version"], cls)] += 1
         rows.append({"track": tid, "first_version": rec["first_version"], "first_date": str(first),
                      "type": kind, "best_label": best, "class": cls,
-                     "lag_years": lag, "versions": rec["versions"],
+                     "lag_years": lag, "versions": rec["versions"], "split": rec["split"],
                      "earliest_support": min((s["date"] or s["bound"] for s in rec["support"]), default=None),
                      "support": sorted(rec["support"], key=lambda s: s["date"] or s["bound"])})
 

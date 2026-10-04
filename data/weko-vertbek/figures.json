@@ -281,84 +281,109 @@
   }
  },
  "measure1_all": {
-  "tracks": 160,
-  "norms": 110,
+  "tracks": 122,
+  "norms": 79,
   "by_type": {
-   "definition|codification": 7,
-   "definition|announcement": 7,
-   "norm|announcement": 31,
-   "norm|ungrounded": 37,
-   "housekeeping|ungrounded": 9,
+   "definition|codification": 5,
+   "definition|announcement": 6,
+   "norm|announcement": 29,
+   "norm|codification": 33,
+   "norm|ungrounded": 17,
+   "housekeeping|ungrounded": 7,
    "rationale|ungrounded": 3,
    "housekeeping|announcement": 4,
-   "norm|codification": 42,
-   "definition|ungrounded": 4,
-   "scope|announcement": 6,
+   "definition|ungrounded": 3,
+   "scope|announcement": 5,
    "scope|ungrounded": 6,
    "scope|codification": 1,
    "housekeeping|codification": 3
   }
  },
  "measure1": {
-  "tracks": 110,
+  "tracks": 79,
   "classes": {
-   "announcement": 31,
-   "ungrounded": 37,
-   "codification": 42
+   "announcement": 29,
+   "codification": 33,
+   "ungrounded": 17
   },
   "decided_by": {
-   "announcement|human": 5,
-   "ungrounded|step1": 37,
-   "announcement|judges": 26,
-   "codification|judges": 8,
-   "codification|human": 3,
-   "codification|step1": 31
+   "announcement|human": 4,
+   "announcement|judges": 25,
+   "codification|step1": 25,
+   "ungrounded|step1": 17,
+   "codification|judges": 5,
+   "codification|human": 3
   },
   "by_version": {
    "2002-02-18": {
-    "announcement": 7,
-    "ungrounded": 6,
-    "lag_median": 16.2
+    "announcement": 11,
+    "codification": 1,
+    "ungrounded": 1,
+    "lag_median": 9.8
    },
    "2007-07-02": {
-    "ungrounded": 6,
-    "codification": 10,
-    "announcement": 19,
+    "announcement": 17,
+    "codification": 8,
+    "ungrounded": 4,
     "lag_median": 4.4
    },
    "2010-06-28": {
-    "ungrounded": 4,
-    "announcement": 4,
-    "codification": 4,
-    "lag_median": 8.55
+    "announcement": 1,
+    "codification": 1,
+    "lag_median": 6.5
    },
    "2017-05-22": {
     "codification": 1,
     "lag_median": null
    },
    "2022-12-12": {
-    "announcement": 1,
-    "codification": 5,
-    "ungrounded": 4,
-    "lag_median": 1.4
+    "ungrounded": 2,
+    "codification": 1,
+    "lag_median": null
    },
    "2019-04-09": {
-    "codification": 13,
-    "ungrounded": 10,
+    "codification": 16,
+    "ungrounded": 7,
     "lag_median": null
    },
    "2022-12-12-erl": {
-    "ungrounded": 7,
-    "codification": 9,
+    "ungrounded": 3,
+    "codification": 5,
     "lag_median": null
    }
   },
-  "lag_median": 4.7,
+  "lag_median": 7.7,
   "lag_quartiles": [
-   4.0,
-   4.7,
-   13.6
+   4.2,
+   7.7,
+   9.8
   ]
+ },
+ "fates": {
+  "codification": {
+   "modified": 12,
+   "dropped": 2,
+   "kept": 19
+  },
+  "announcement": {
+   "modified": 20,
+   "dropped": 4,
+   "kept": 5
+  },
+  "ungrounded": {
+   "modified": 5,
+   "dropped": 3,
+   "kept": 9
+  }
+ },
+ "links": {
+  "n": 215,
+  "relations": {
+   "unverified": 34,
+   "same": 114,
+   "same-or-modified": 11,
+   "modified": 56
+  }
  },
  "provenance": {
   "n": 312,
@@ -401,14 +426,22 @@
   }
  },
  "cross": {
-  "mixed|announcement": 8,
-  "own|announcement": 21,
-  "own|ungrounded": 18,
-  "own|codification": 13,
-  "imported|codification": 5,
-  "mixed|codification": 23,
-  "imported|announcement": 2,
-  "imported|ungrounded": 9,
-  "mixed|ungrounded": 7
+  "mixed|announcement": 5,
+  "own|announcement": 24,
+  "mixed|codification": 17,
+  "own|ungrounded": 10,
+  "own|codification": 12,
+  "mixed|ungrounded": 2,
+  "imported|codification": 3,
+  "imported|ungrounded": 3
+ },
+ "eu_later": {
+  "announcement": 11,
+  "codification": 1
+ },
+ "imported_first_versions": {
+  "2019-04-09": 1,
+  "2022-12-12": 2,
+  "2022-12-12-erl": 3
  }
 }

@@ -134,7 +134,9 @@ def main() -> int:
                      "controls": {r["pid"]: r["judges"] for r in rev if r["status"] == "control"}}
 
     # --- measurement 1
-    m1_all = json.loads((DATA / "measure1_final_v3.json").read_text())
+    # v5: chains from the verified links between versions (PAPER-239, links_v4.json)
+    m1_all = json.loads((DATA / "measure1_final_v6.json").read_text())
+    links = json.loads((DATA / "links_v4.json").read_text())["links"]
     # only a norm can be codified or announced (typology_v3.json)
     m1 = [f for f in m1_all if f["type"] == "norm"]
     F["measure1_all"] = {"tracks": len(m1_all), "norms": len(m1),
@@ -152,6 +154,19 @@ def main() -> int:
                      "by_version": tab, "lag_median": statistics.median(lags),
                      "lag_quartiles": statistics.quantiles(lags, n=4)}
 
+    # --- what happens to a norm in the later versions (PAPER-239)
+    chains = [["2002-02-18", "2007-07-02", "2010-06-28", "2017-05-22", "2022-12-12"], ["2019-04-09", "2022-12-12-erl"]]
+    modified = {tuple(l["b"]) for l in links if l["relation"] == "modified"}
+
+    def fate(f):
+        chain = next(c for c in chains if f["first_version"] in c)
+        if max(f["versions"], key=chain.index) != chain[-1]:
+            return "dropped"
+        return "modified" if any((v, d["pid"]) in modified for v, d in f["versions"].items()) else "kept"
+    F["fates"] = {cls: dict(collections.Counter(fate(f) for f in m1 if f["final_class"] == cls))
+                  for cls in ("codification", "announcement", "ungrounded")}
+    F["links"] = {"n": len(links), "relations": dict(collections.Counter(l["relation"] for l in links))}
+
     # --- provenance and its cross with measurement 1
     prov = json.loads((DATA / "provenance_v3.json").read_text())
     pc, pcf = {}, {}
@@ -168,6 +183,17 @@ def main() -> int:
         if c:
             cross[f"{c}|{f['final_class']}"] += 1
     F["cross"] = dict(cross)
+    # EU wording over time: chains that start in it, and chains that take it later
+    later = collections.Counter()
+    for f in m1:
+        v0 = f["first_version"]
+        first_imp = pc.get((v0, f["versions"][v0]["pid"])) == "imported"
+        later_imp = any(pc.get((v, d["pid"])) == "imported" for v, d in f["versions"].items() if v != v0)
+        if later_imp and not first_imp:
+            later[f["final_class"]] += 1
+    F["eu_later"] = dict(later)
+    F["imported_first_versions"] = dict(collections.Counter(
+        f["first_version"] for f in m1 if pc.get((f["first_version"], f["versions"][f["first_version"]]["pid"])) == "imported"))
 
     args.out.write_text(json.dumps(F, ensure_ascii=False, indent=1, default=str))
     args.out.with_suffix(".tex").write_text(macros(F))
@@ -250,6 +276,14 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    out["EuLaterAnn"] = num(F["eu_later"].get("announcement", 0))
+    out["EuLaterAll"] = num(sum(F["eu_later"].values()))
+    out["ImportedFirstAll"] = num(sum(F["imported_first_versions"].values()))
+    out["ImportedFirstLatest"] = num(F["imported_first_versions"].get("2022-12-12", 0)
+                                     + F["imported_first_versions"].get("2022-12-12-erl", 0))
+    for cls, short in (("codification", "Cod"), ("announcement", "Ann"), ("ungrounded", "Ungr")):
+        for f, fs in (("kept", "Kept"), ("modified", "Mod"), ("dropped", "Drop")):
+            out[f"Fate{short}{fs}"] = num(F["fates"][cls].get(f, 0))
     ty = F["typology"]["types"]
     out.update({"NNorm": num(ty.get("norm", 0)), "NDefinition": num(ty.get("definition", 0)),
                 "NScope": num(ty.get("scope", 0)), "NRationale": num(ty.get("rationale", 0)),

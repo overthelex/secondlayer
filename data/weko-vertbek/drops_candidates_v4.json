@@ -1,0 +1,842 @@
+[
+ {
+  "track": "Bekanntmachung:6",
+  "class": "announcement?",
+  "from": "2010-06-28",
+  "pid": "10(1a)",
+  "text": "Festsetzung von Mindest- oder Festpreisen;",
+  "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:",
+  "next": "2017-05-22",
+  "candidates": [
+   {
+    "pid": "10(1a)",
+    "cos": 0.731,
+    "sim": 0.169,
+    "type": "norm",
+    "text": "Festsetzung von Mindest- oder Festpreisen, d.h. die Beschränkung der Möglichkeit des Abnehmers, seinen Verkaufspreis selbst festzusetzen. Dies gilt unbeschadet der Möglichkeit des Anbieters, Höchstverkaufspreise festzusetzen oder Preisempfehlungen auszusprechen, sofern sich diese nicht infolge der Ausübung von Druck oder der Gewährung von Anreizen durch eines der beteiligten Unternehmen tatsächlich wie Fest- oder Mindestverkaufspreise auswirken;",
+    "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "16(4b)",
+    "cos": 0.669,
+    "sim": 0.0,
+    "type": "norm",
+    "text": "Sicherung der Einheitlichkeit und Qualität der Vertragsprodukte;",
+    "lead": "Unternehmen können im Rahmen der in Artikel 5 Absatz 2 KG genannten Rechtfertigungsgründe namentlich Folgendes geltend machen:"
+   },
+   {
+    "pid": "15(3c)",
+    "cos": 0.588,
+    "sim": 0.077,
+    "type": "norm",
+    "text": "der Umstand, dass das Preisniveau der von den Preisempfehlungen betroffenen Produkte bei vergleichbarer Gegenleistung deutlich höher liegt als im benachbarten Ausland;",
+    "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:9",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "12(2d)",
+  "text": "Beschränkungen von Querlieferungen zwischen Händlern innerhalb eines selektiven Vertriebssystems, auch wenn diese auf unterschiedlichen Marktstufen tätig sind;",
+  "lead": "Abreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "6",
+    "cos": 0.761,
+    "sim": 0.303,
+    "type": "definition",
+    "text": "Eine Querlieferung ist die gegenseitige Belieferung von Händlerinnen gleicher oder verschiedener Marktstufen innerhalb eines selektiven Vertriebssystems.",
+    "lead": ""
+   },
+   {
+    "pid": "15(c)",
+    "cos": 0.746,
+    "sim": 0.076,
+    "type": "norm",
+    "text": "wenn die Anbieterin ein selektives Vertriebssystem betreibt: (i) die Beschränkung der Gebiete oder der Kundinnen und Kunden, in bzw. an die die Mitglieder des selektiven Vertriebssystems die Vertragswaren oder -dienstleistungen aktiv oder passiv verkaufen dürfen, mit Ausnahme 1. der Beschränkung des aktiven Verkaufs durch Mitglieder des selektiven Vertriebssystems und durch ihre Direktkundinnen in ein Gebiet oder an eine Kundengruppe, das bzw. die der Anbieterin vorbehalten ist oder von der Anbieterin höchstens fünf Alleinvertriebshändlerinnen exklusiv zugewiesen wurde; 2. der Beschränkung des aktiven oder passiven Verkaufs durch Mitglieder des selektiven Vertriebssystems und durch ihre Kundinnen an nicht zugelassene Händlerinnen in dem Gebiet, in dem das selektive Vertriebssystem betrieben wird; 3. der Beschränkung des Niederlassungsorts der Mitglieder des selektiven Vertriebssystems; 4. der Beschränkung des aktiven oder passiven Verkaufs an Endverbraucherinnen und Endverbraucher durch auf der Grosshandelsstufe tätige Mitglieder des selektiven Vertriebssystems; 5. der Beschränkung der Möglichkeit, Teile, die zur Weiterverwendung geliefert werden, aktiv oder passiv an Kundinnen zu verkaufen, die diese Teile für die Herstellung derselben Art von Waren verwenden würden, wie sie die Anbieterin herstellt; (ii) die Beschränkung von Querlieferungen zwischen Mitgliedern des selektiven Vertriebssystems, die auf derselben Handelsstufe oder unterschiedlichen Handelsstufen tätig sind; (iii) die Beschränkung des aktiven oder passiven Verkaufs an Endverbraucherinnen und Endverbraucher durch auf der Einzelhandelsstufe tätige Mitglieder des selektiven Vertriebssystems, unbeschadet Buchstabe c (i) 1. und 3.;",
+    "lead": "Vertikale Wettbewerbsabreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "5(1)",
+    "cos": 0.677,
+    "sim": 0.05,
+    "type": "definition",
+    "text": "Selektive Vertriebssysteme sind Vertriebssysteme, in denen sich die Anbieterin verpflichtet, die Vertragswaren oder -dienstleistungen unmittelbar oder mittelbar nur an Händlerinnen zu verkaufen, die anhand festgelegter Merkmale ausgewählt werden, und in denen sich diese Händlerinnen verpflichten, die betreffenden Waren oder Dienstleistungen nicht an Händlerinnen zu verkaufen, die innerhalb des von der Anbieterin für den Betrieb dieses Systems festgelegten Gebiets nicht zum Vertrieb zugelassen sind.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:13",
+  "class": "announcement?",
+  "from": "2002-02-18",
+  "pid": "5(a)",
+  "text": "Gebiete oder Kundengruppen betreffen, in Bezug auf welche sich der Lieferant vorbehält, diese selbst zu beliefern. Vorausgesetzt ist, dass es dem Händler belassen bleibt, unaufgeforderte Bestellungen individueller Kunden zu erfüllen, und dass die Weiterverkäufe durch die Kunden des Händlers nicht ebenfalls begrenzt werden.",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "12(b)",
+    "cos": 0.742,
+    "sim": 0.08,
+    "type": "norm",
+    "text": "Direkte oder indirekte Beschränkung des geografischen Absatzgebietes oder des Kundenkreises für den Weiterverkauf. Eine erhebliche Beeinträchtigung des Wettbewerbs aufgrund des Gegenstandes liegt jedoch nicht vor bei i) Beschränkungen des aktiven Verkaufs in Gebiete oder an Kundengruppen, die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat, vorausgesetzt dass Passivverkäufe uneingeschränkt möglich sind; ii) Beschränkungen des Direktverkaufs von Grossisten an Endverbraucher; iii) Beschränkungen, die Mitgliedern eines selektiven Vertriebssystems hinsichtlich des Verkaufs an nicht zugelassene Händler auferlegt werden; iv) Beschränkungen der Möglichkeit des Käufers, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden.",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "2",
+    "cos": 0.742,
+    "sim": 0.162,
+    "type": "definition",
+    "text": "Die aktive Ansprache einzelner Kunden (Endkunden oder Händler) in einem Gebiet oder einzelner Mitglieder einer Kundengruppe, das bzw. die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat.",
+    "lead": ""
+   },
+   {
+    "pid": "3",
+    "cos": 0.728,
+    "sim": 0.088,
+    "type": "definition",
+    "text": "Die Erfüllung unaufgeforderter Bestellungen einzelner Kunden (Endkunden oder Händler) aus einem Gebiet Die gegenseitige Belieferung von Händlern gleicher oder unterschiedlicher Marktstufen innerhalb eines selektiven Vertriebssystems.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:14",
+  "class": "ungrounded",
+  "from": "2002-02-18",
+  "pid": "5(b)",
+  "text": "Gebiete oder Kundengruppen betreffen, die aufgrund eines Vertrages mit dem Lieferanten einem andern Händler exklusiv zugeordnet sind. Vorausgesetzt ist, dass es dem Händler belassen bleibt, unaufgeforderte Bestellungen individueller Kunden zu erfüllen, und dass die Weiterverkäufe durch die Kunden des Händlers nicht ebenfalls begrenzt werden.",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "3",
+    "cos": 0.758,
+    "sim": 0.087,
+    "type": "definition",
+    "text": "Die Erfüllung unaufgeforderter Bestellungen einzelner Kunden (Endkunden oder Händler) aus einem Gebiet Die gegenseitige Belieferung von Händlern gleicher oder unterschiedlicher Marktstufen innerhalb eines selektiven Vertriebssystems.",
+    "lead": ""
+   },
+   {
+    "pid": "12(b)",
+    "cos": 0.75,
+    "sim": 0.093,
+    "type": "norm",
+    "text": "Direkte oder indirekte Beschränkung des geografischen Absatzgebietes oder des Kundenkreises für den Weiterverkauf. Eine erhebliche Beeinträchtigung des Wettbewerbs aufgrund des Gegenstandes liegt jedoch nicht vor bei i) Beschränkungen des aktiven Verkaufs in Gebiete oder an Kundengruppen, die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat, vorausgesetzt dass Passivverkäufe uneingeschränkt möglich sind; ii) Beschränkungen des Direktverkaufs von Grossisten an Endverbraucher; iii) Beschränkungen, die Mitgliedern eines selektiven Vertriebssystems hinsichtlich des Verkaufs an nicht zugelassene Händler auferlegt werden; iv) Beschränkungen der Möglichkeit des Käufers, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden.",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "2",
+    "cos": 0.75,
+    "sim": 0.107,
+    "type": "definition",
+    "text": "Die aktive Ansprache einzelner Kunden (Endkunden oder Händler) in einem Gebiet oder einzelner Mitglieder einer Kundengruppe, das bzw. die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:15",
+  "class": "ungrounded",
+  "from": "2002-02-18",
+  "pid": "5(c)",
+  "text": "Grossisten in ihrer Freiheit einschränken, direkt an die Endverbraucher zu verkaufen.",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "12(c)",
+    "cos": 0.593,
+    "sim": 0.118,
+    "type": "norm",
+    "text": "Beschränkungen des aktiven oder passiven Verkaufs an Endverbraucher, sofern diese Beschränkungen Händlern innerhalb selektiver Vertriebssysteme auferlegt werden, welche auf der Einzelhandelsstufe tätig sind;",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "12(b)",
+    "cos": 0.588,
+    "sim": 0.051,
+    "type": "norm",
+    "text": "Direkte oder indirekte Beschränkung des geografischen Absatzgebietes oder des Kundenkreises für den Weiterverkauf. Eine erhebliche Beeinträchtigung des Wettbewerbs aufgrund des Gegenstandes liegt jedoch nicht vor bei i) Beschränkungen des aktiven Verkaufs in Gebiete oder an Kundengruppen, die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat, vorausgesetzt dass Passivverkäufe uneingeschränkt möglich sind; ii) Beschränkungen des Direktverkaufs von Grossisten an Endverbraucher; iii) Beschränkungen, die Mitgliedern eines selektiven Vertriebssystems hinsichtlich des Verkaufs an nicht zugelassene Händler auferlegt werden; iv) Beschränkungen der Möglichkeit des Käufers, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden.",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "2",
+    "cos": 0.579,
+    "sim": 0.095,
+    "type": "definition",
+    "text": "Die aktive Ansprache einzelner Kunden (Endkunden oder Händler) in einem Gebiet oder einzelner Mitglieder einer Kundengruppe, das bzw. die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:16",
+  "class": "announcement?",
+  "from": "2002-02-18",
+  "pid": "5(d)",
+  "text": "einen innerhalb eines selektiven Vertriebssystems zugelassenen Händler in seiner Freiheit einschränken, die bezogenen Waren oder Dienstleistungen an nicht zugelassene Händler weiterzuverkaufen.",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "12(c)",
+    "cos": 0.786,
+    "sim": 0.045,
+    "type": "norm",
+    "text": "Beschränkungen des aktiven oder passiven Verkaufs an Endverbraucher, sofern diese Beschränkungen Händlern innerhalb selektiver Vertriebssysteme auferlegt werden, welche auf der Einzelhandelsstufe tätig sind;",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "12(d)",
+    "cos": 0.749,
+    "sim": 0.158,
+    "type": "norm",
+    "text": "Beschränkungen von Querlieferungen zwischen Händlern innerhalb eines selektiven Vertriebsystems, auch wenn diese auf unterschiedlichen Marktstufen tätig sind;",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "12(h)",
+    "cos": 0.729,
+    "sim": 0.056,
+    "type": "norm",
+    "text": "Einschränkungen von Mehrmarkenvertrieb in selektiven Vertriebssystemen, welche sich gezielt auf Marken bestimmter konkurrierender Lieferanten beziehen.",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:17",
+  "class": "ungrounded",
+  "from": "2002-02-18",
+  "pid": "5(e)",
+  "text": "den Händler in seiner Freiheit einschränken, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden. D1 2.",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "12(b)",
+    "cos": 0.695,
+    "sim": 0.35,
+    "type": "norm",
+    "text": "Direkte oder indirekte Beschränkung des geografischen Absatzgebietes oder des Kundenkreises für den Weiterverkauf. Eine erhebliche Beeinträchtigung des Wettbewerbs aufgrund des Gegenstandes liegt jedoch nicht vor bei i) Beschränkungen des aktiven Verkaufs in Gebiete oder an Kundengruppen, die der Lieferant sich selbst vorbehalten oder ausschliesslich einem anderen Händler zugewiesen hat, vorausgesetzt dass Passivverkäufe uneingeschränkt möglich sind; ii) Beschränkungen des Direktverkaufs von Grossisten an Endverbraucher; iii) Beschränkungen, die Mitgliedern eines selektiven Vertriebssystems hinsichtlich des Verkaufs an nicht zugelassene Händler auferlegt werden; iv) Beschränkungen der Möglichkeit des Käufers, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden.",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "12(e)",
+    "cos": 0.673,
+    "sim": 0.077,
+    "type": "norm",
+    "text": "Beschränkungen, die den Lieferanten hindern, Bestand- bzw. Ersatzteile an andere (Endverbraucher, Reparaturwerkstätten, etc.) als den an der Abrede beteiligten Händlern zu liefern;",
+    "lead": "aufgrund des Gegenstandes Vertikale Wettbewerbsabreden führen zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "4(1)",
+    "cos": 0.667,
+    "sim": 0.128,
+    "type": "definition",
+    "text": "Allgemein Vereinbarungen zwischen Lieferant und Händler, wonach i) der Lieferant die Vertragswaren oder –dienstleistungen nur an Händler verkaufen darf, die aufgrund festgelegter Merkmale ausgewählt werden (zugelassene Händler) und ii) diese Händler die betreffenden Waren oder Dienstleistungen nicht an Händler weiter verkaufen dürfen, die nicht zum Vertrieb zugelassen sind.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:2",
+  "class": "ungrounded",
+  "from": "2002-02-18",
+  "pid": "E3",
+  "text": "Aus der Aufzählung der erheblichen Abreden in Ziffer 3 kann nicht geschlossen werden, dass andere vertikale Wettbewerbsabreden grundsätzlich als nicht erheblich zu betrachten sind. Unerheblichkeit ist in der Regel vielmehr nur dann anzunehmen, wenn eine solche Abrede die in Ziffer 4 Absatz 1 der Bekanntmachung genannte Marktanteilsschwelle unterschreitet und sich nicht kumulativ mit anderen Abreden auf den Markt auswirkt. Die vorliegende Bekanntmachung sagt zudem nichts aus über die Beurteilung der Zulässigkeit eines Verhaltens unter Artikel 7 KG.",
+  "lead": "",
+  "next": "2007-07-02",
+  "candidates": [
+   {
+    "pid": "13(1)",
+    "cos": 0.758,
+    "sim": 0.149,
+    "type": "norm",
+    "text": "Vertikale Wettbewerbsabreden, welche nicht unter Ziffer 10 (3) oder Ziffer 12 fallen, führen in der Regel nicht zu einer erheblichen Beeinträchtigung des Wettbewerbs, wenn kein an einer vertikalen Wettbewerbsabrede beteiligtes Unternehmen auf einem von der Abrede betroffenen relevanten Markt einen Marktanteil von 15% überschreitet.",
+    "lead": ""
+   },
+   {
+    "pid": "8(2)",
+    "cos": 0.753,
+    "sim": 0.064,
+    "type": "scope",
+    "text": "Die Anwendung der vorliegenden Bekanntmachung schliesst nicht aus, dass ein Sachverhalt ganz oder teilweise als horizontale Wettbewerbsabrede gemäss Art. 5 Abs. 3 KG qualifiziert oder von Art. 7 KG erfasst wird. Diesfalls ist der Sachverhalt unabhängig von der vorliegenden Bekanntmachung gemäss den einschlägigen Vorschriften des Kartellgesetzes zu beurteilen.",
+    "lead": ""
+   },
+   {
+    "pid": "E8",
+    "cos": 0.739,
+    "sim": 0.309,
+    "type": "norm",
+    "text": "Ziffer 13 macht deutlich, dass in der Regel keine erhebliche Wettbewerbsbeeinträchtigung vorliegt, falls die Marktanteilsschwelle von 15% nicht überschritten wird und sich die Abrede nicht kumulativ mit anderen Abreden auf den Markt auswirkt (Bagatellfälle). Wird die Marktanteilsschwelle von 15% überschritten oder wirkt sich die Abrede kumulativ mit anderen Abreden auf den Markt aus, wird die Wettbewerbsbeeinträchtigung im Einzelfall geprüft.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:39",
+  "class": "ungrounded",
+  "from": "2007-07-02",
+  "pid": "10(1a)",
+  "text": "Festsetzung von Mindest- oder Festpreisen. Als solche gelten auch in Empfehlungsform gekleidete Wettbewerbsabreden über die Einhaltung von Mindest- oder Festpreisen.",
+  "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung des Wettbewerbs nach Art. 5 Abs. 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "10(3)",
+    "cos": 0.741,
+    "sim": 0.218,
+    "type": "norm",
+    "text": "Artikel 5 Absatz 4 KG umfasst auch in Empfehlungsform gekleidete Abreden, die auf einer Vereinbarung oder einer aufeinander abgestimmten Verhaltensweise beruhen und eine Festsetzung von Mindest- oder Festpreisen oder einen absoluten Gebietsschutz bezwecken oder bewirken.",
+    "lead": ""
+   },
+   {
+    "pid": "12(2a)",
+    "cos": 0.732,
+    "sim": 0.121,
+    "type": "norm",
+    "text": "Beschränkung der Möglichkeit des Abnehmers, seinen Verkaufspreis selbst festzusetzen; dies gilt unbeschadet der Möglichkeit des Anbieters, Höchstverkaufspreise festzusetzen oder Preisempfehlungen auszusprechen, sofern sich diese nicht infolge der Ausübung von Druck oder der Gewährung von Anreizen durch eines der beteiligten Unternehmen tatsächlich wie Fest- oder Mindestverkaufspreise auswirken;",
+    "lead": "Abreden werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "15(1)",
+    "cos": 0.7,
+    "sim": 0.118,
+    "type": "norm",
+    "text": "Bei Preisempfehlungen von Anbietern an Wiederverkäufer oder Händler ist im Einzelfall zu prüfen, ob eine unzulässige Wettbewerbsabrede im Sinne von Artikel 5 Absatz 4 i.V.m. Absatz 1 KG vorliegt.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:41",
+  "class": "announcement?",
+  "from": "2007-07-02",
+  "pid": "10(2)",
+  "text": "Die Vermutung der Beseitigung des Wettbewerbs kann nicht durch den blossen Nachweis von Wettbewerb zwischen Anbietern verschiedener Marken (Interbrand-Wettbewerb) widerlegt werden.",
+  "lead": "",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "11",
+    "cos": 0.7,
+    "sim": 0.235,
+    "type": "norm",
+    "text": "Für die Widerlegung der Vermutung der Beseitigung des wirksamen Wettbewerbs ist eine Gesamtbetrachtung des Marktes unter Berücksichtigung des Intrabrand- und Interbrand- Wettbewerbs massgebend. Ausschlaggebend ist, ob genügend Intrabrand- oder Interbrand- Wettbewerb auf dem relevanten Markt besteht oder die Kombination der beiden zu genügend wirksamem Wettbewerb führt.",
+    "lead": ""
+   },
+   {
+    "pid": "VIII",
+    "cos": 0.653,
+    "sim": 0.169,
+    "type": "norm",
+    "text": "Ziffer 10 konkretisiert die Abreden, bei welchen gemäss Artikel 5 Absatz 4 KG vermutet wird, dass sie zu einer Beseitigung des wirksamen Wettbewerbs führen. Ziffer 11 macht deutlich, dass für eine Widerlegung der Vermutung auf einer Gesamtbetrachtung des Marktes (Intrabrand- und Interbrand-Wettbewerb auf dem relevanten Markt) abgestellt wird.",
+    "lead": ""
+   },
+   {
+    "pid": "XII",
+    "cos": 0.603,
+    "sim": 0.136,
+    "type": "norm",
+    "text": "Kann die Vermutung der Beseitigung des wirksamen Wettbewerbs widerlegt werden und liegt eine den Wettbewerb erheblich beeinträchtigende Abrede vor, ist zu prüfen, ob die Abrede durch Gründe der wirtschaftlichen Effizienz gerechtfertigt werden kann. In Ziffer 16 werden die Voraussetzungen umschrieben, unter denen vertikale Wettbewerbsabreden aus Gründen der wirtschaftlichen Effizienz im Sinne von Artikel 5 Absatz 2 KG in der Regel als gerechtfertigt gelten. Sind keine Effizienzgründe ersichtlich, ist die Abrede unzulässig. Unzulässige Wettbewerbsabreden nach Artikel 5 Absatz 4 KG sind nach Artikel 49a KG sanktionsbedroht, selbst wenn die Vermutung der Beseitigung wirksamen Wettbewerbs widerlegt werden kann.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:42",
+  "class": "announcement?",
+  "from": "2007-07-02",
+  "pid": "10(3)",
+  "text": "Auch wenn die Vermutung widerlegt wird, führen die in Ziffer 10 (1) genannten vertikalen Wettbewerbsabreden zu einer erheblichen Beeinträchtigung des Wettbewerbs im Sinne von Art. 5 Abs. 1 KG.",
+  "lead": "",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "XII",
+    "cos": 0.716,
+    "sim": 0.064,
+    "type": "norm",
+    "text": "Kann die Vermutung der Beseitigung des wirksamen Wettbewerbs widerlegt werden und liegt eine den Wettbewerb erheblich beeinträchtigende Abrede vor, ist zu prüfen, ob die Abrede durch Gründe der wirtschaftlichen Effizienz gerechtfertigt werden kann. In Ziffer 16 werden die Voraussetzungen umschrieben, unter denen vertikale Wettbewerbsabreden aus Gründen der wirtschaftlichen Effizienz im Sinne von Artikel 5 Absatz 2 KG in der Regel als gerechtfertigt gelten. Sind keine Effizienzgründe ersichtlich, ist die Abrede unzulässig. Unzulässige Wettbewerbsabreden nach Artikel 5 Absatz 4 KG sind nach Artikel 49a KG sanktionsbedroht, selbst wenn die Vermutung der Beseitigung wirksamen Wettbewerbs widerlegt werden kann.",
+    "lead": ""
+   },
+   {
+    "pid": "VIII",
+    "cos": 0.699,
+    "sim": 0.154,
+    "type": "norm",
+    "text": "Ziffer 10 konkretisiert die Abreden, bei welchen gemäss Artikel 5 Absatz 4 KG vermutet wird, dass sie zu einer Beseitigung des wirksamen Wettbewerbs führen. Ziffer 11 macht deutlich, dass für eine Widerlegung der Vermutung auf einer Gesamtbetrachtung des Marktes (Intrabrand- und Interbrand-Wettbewerb auf dem relevanten Markt) abgestellt wird.",
+    "lead": ""
+   },
+   {
+    "pid": "IX",
+    "cos": 0.696,
+    "sim": 0.144,
+    "type": "norm",
+    "text": "Kann die Vermutung widerlegt werden, ist die Erheblichkeit der Abrede gemäss Ziffer 12 (1) zu prüfen. Dabei sind sowohl qualitative wie auch quantitative Kriterien zu berücksichtigen, wobei die Abwägung dieser beiden Kriterien einzelfallweise in einer Gesamtbeurteilung erfolgt. Ziffer 12 (2) zeigt auf, welche Abreden aufgrund des Gegenstands als qualitativ schwerwiegend betrachtet werden. Bei solchen Abreden genügen in quantitativer Hinsicht tiefere Anforderungen, um sie als erhebliche Wettbewerbsbeschränkung zu qualifizieren.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:43",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "15(1)",
+  "text": "Bei Preisempfehlungen von Anbietern an Wiederverkäufer oder Händler ist im Einzelfall zu prüfen, ob eine unzulässige Wettbewerbsabrede im Sinne von Artikel 5 Absatz 4 i.V.m. Absatz 1 KG vorliegt.",
+  "lead": "",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "18(1)",
+    "cos": 0.747,
+    "sim": 0.262,
+    "type": "norm",
+    "text": "Liegt eine den Wettbewerb erheblich beeinträchtigende vertikale Wettbewerbsabrede vor, ist zu prüfen, ob diese gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Sind keine Effizienzgründe ersichtlich, ist die Abrede unzulässig.",
+    "lead": ""
+   },
+   {
+    "pid": "12(3)",
+    "cos": 0.698,
+    "sim": 0.149,
+    "type": "norm",
+    "text": "Artikel 5 Absatz 4 KG umfasst auch in Empfehlungsform gekleidete vertikale Wettbewerbsabreden, die auf einer Vereinbarung oder einer aufeinander abgestimmten Verhaltensweise beruhen und eine Festsetzung von Mindest- oder Festpreisen oder einen absoluten Gebietsschutz bezwecken oder bewirken.",
+    "lead": ""
+   },
+   {
+    "pid": "18(3)",
+    "cos": 0.677,
+    "sim": 0.22,
+    "type": "norm",
+    "text": "Den Wettbewerb erheblich beeinträchtigende vertikale Wettbewerbsabreden, die von Absatz 2 nicht erfasst werden, unterliegen einer Einzelfallprüfung. Ein Rechtfertigungsgrund liegt vor, wenn eine vertikale Wettbewerbsabrede die wirtschaftliche Effizienz im Sinne von Artikel 5 Absatz 2 KG erhöht – beispielsweise durch eine effizientere Vertriebsgestaltung im Sinne einer Verbesserung der Produkte oder Produktionsverfahren oder einer Senkung der Vertriebskosten – und die Wettbewerbsbeeinträchtigung dazu notwendig ist.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:44",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "15(3a)",
+  "text": "der Umstand, dass Preisempfehlungen in nicht allgemein zugänglicher Weise abgegeben werden, sondern nur an die Wiederverkäufer oder Händler;",
+  "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "12(1a)",
+    "cos": 0.633,
+    "sim": 0.057,
+    "type": "norm",
+    "text": "Festsetzung von Mindest- oder Festpreisen, d. h. die Beschränkung der Möglichkeit der Abnehmerin, ihren Verkaufspreis selbst festzusetzen;",
+    "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "15(f)",
+    "cos": 0.633,
+    "sim": 0.092,
+    "type": "norm",
+    "text": "die zwischen einer Anbieterin von Teilen und einer Abnehmerin, die diese Teile weiterverwendet, vereinbarte Beschränkung der Möglichkeit der Anbieterin, die Teile als Ersatzteile an Endverbraucherinnen und Endverbraucher, Reparaturbetriebe, Grosshändlerinnen oder andere Dienstleisterinnen zu verkaufen, die die Abnehmerin nicht mit der Reparatur oder Wartung ihrer Waren betraut hat;",
+    "lead": "Vertikale Wettbewerbsabreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "18(4d)",
+    "cos": 0.596,
+    "sim": 0.087,
+    "type": "norm",
+    "text": "Vermeidung von ineffizient tiefen Verkaufsförderungsmassnahmen (z. B. Beratungsdienstleistungen), die resultieren können, wenn eine Herstellerin oder eine Händlerin von den Verkaufsförderungsbemühungen einer anderen Herstellerin oder Händlerin profitieren kann (Trittbrettfahrerproblem);",
+    "lead": "Unternehmen können im Rahmen der in Artikel 5 Absatz 2 KG genannten Rechtfertigungsgründe namentlich Folgendes geltend machen:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:45",
+  "class": "announcement?",
+  "from": "2007-07-02",
+  "pid": "11(2b)",
+  "text": "der Umstand, dass die Preisempfehlungen mit der Ausübung von Druck oder der Gewährung spezifischer Anreize verbunden sind;",
+  "lead": "Bei dieser Prüfung fallen insbesondere die nachstehenden Umstände ins Gewicht:",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "15(2)",
+    "cos": 0.743,
+    "sim": 0.296,
+    "type": "norm",
+    "text": "Preisempfehlungen werden dann als qualitativ schwerwiegend betrachtet, wenn sich diese infolge der Ausübung von Druck oder der Gewährung von Anreizen durch eines der beteiligten Unternehmen tatsächlich wie Fest- oder Mindestverkaufspreise auswirken (vgl. Ziffer 12 (2) lit. a).",
+    "lead": ""
+   },
+   {
+    "pid": "15(3c)",
+    "cos": 0.735,
+    "sim": 0.211,
+    "type": "norm",
+    "text": "der Umstand, dass das Preisniveau der von den Preisempfehlungen betroffenen Produkte bei vergleichbarer Gegenleistung deutlich höher liegt als im benachbarten Ausland;",
+    "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:"
+   },
+   {
+    "pid": "12(2a)",
+    "cos": 0.713,
+    "sim": 0.286,
+    "type": "norm",
+    "text": "Beschränkung der Möglichkeit des Abnehmers, seinen Verkaufspreis selbst festzusetzen; dies gilt unbeschadet der Möglichkeit des Anbieters, Höchstverkaufspreise festzusetzen oder Preisempfehlungen auszusprechen, sofern sich diese nicht infolge der Ausübung von Druck oder der Gewährung von Anreizen durch eines der beteiligten Unternehmen tatsächlich wie Fest- oder Mindestverkaufspreise auswirken;",
+    "lead": "Abreden werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:46",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "15(3b)",
+  "text": "der Umstand, dass Preisempfehlungen, die von Herstellern oder Lieferanten in Schweizerfranken auf den Produkten, Verpackungen oder in Katalogen etc. angebracht werden, nicht ausdrücklich als unverbindlich bezeichnet sind;",
+  "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "VII",
+    "cos": 0.566,
+    "sim": 0.095,
+    "type": "scope",
+    "text": "Vorliegende Bekanntmachung trägt der Fallpraxis der Gerichte und der Wettbewerbskommission sowie den Anpassungen im europäischen Recht – unter Berücksichtigung der in der Schweiz herrschenden rechtlichen und wirtschaftlichen Bedingungen – Rechnung. Damit wird sichergestellt, dass in der Schweiz im Bereich der vertikalen Abreden weiterhin möglichst die gleichen Regeln zur Anwendung kommen wie in der Europäischen Union, eine Isolierung der schweizerischen Märkte vermieden und Rechtssicherheit geschaffen wird. In diesem Sinne gelten die europäischen Regeln (vgl. Erw. VI.) analog auch für die Schweiz.",
+    "lead": ""
+   },
+   {
+    "pid": "12(3)",
+    "cos": 0.563,
+    "sim": 0.127,
+    "type": "norm",
+    "text": "Artikel 5 Absatz 4 KG umfasst auch in Empfehlungsform gekleidete vertikale Wettbewerbsabreden, die auf einer Vereinbarung oder einer aufeinander abgestimmten Verhaltensweise beruhen und eine Festsetzung von Mindest- oder Festpreisen oder einen absoluten Gebietsschutz bezwecken oder bewirken.",
+    "lead": ""
+   },
+   {
+    "pid": "15(f)",
+    "cos": 0.554,
+    "sim": 0.108,
+    "type": "norm",
+    "text": "die zwischen einer Anbieterin von Teilen und einer Abnehmerin, die diese Teile weiterverwendet, vereinbarte Beschränkung der Möglichkeit der Anbieterin, die Teile als Ersatzteile an Endverbraucherinnen und Endverbraucher, Reparaturbetriebe, Grosshändlerinnen oder andere Dienstleisterinnen zu verkaufen, die die Abnehmerin nicht mit der Reparatur oder Wartung ihrer Waren betraut hat;",
+    "lead": "Vertikale Wettbewerbsabreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:47",
+  "class": "ungrounded",
+  "from": "2017-05-22",
+  "pid": "15(3c)",
+  "text": "der Umstand, dass das Preisniveau der von den Preisempfehlungen betroffenen Produkte bei vergleichbarer Gegenleistung deutlich höher liegt als im benachbarten Ausland;",
+  "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "12(1a)",
+    "cos": 0.59,
+    "sim": 0.105,
+    "type": "norm",
+    "text": "Festsetzung von Mindest- oder Festpreisen, d. h. die Beschränkung der Möglichkeit der Abnehmerin, ihren Verkaufspreis selbst festzusetzen;",
+    "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "18(4e)",
+    "cos": 0.581,
+    "sim": 0.091,
+    "type": "norm",
+    "text": "Vermeidung eines doppelten Preisaufschlags, der sich ergeben kann, wenn sowohl die Herstellerin als auch die Händlerin über Marktmacht verfügen (Problem der doppelten Marginalisierung);",
+    "lead": "Unternehmen können im Rahmen der in Artikel 5 Absatz 2 KG genannten Rechtfertigungsgründe namentlich Folgendes geltend machen:"
+   },
+   {
+    "pid": "12(3)",
+    "cos": 0.568,
+    "sim": 0.035,
+    "type": "norm",
+    "text": "Artikel 5 Absatz 4 KG umfasst auch in Empfehlungsform gekleidete vertikale Wettbewerbsabreden, die auf einer Vereinbarung oder einer aufeinander abgestimmten Verhaltensweise beruhen und eine Festsetzung von Mindest- oder Festpreisen oder einen absoluten Gebietsschutz bezwecken oder bewirken.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:48",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "15(3d)",
+  "text": "der Umstand, dass die Preisempfehlungen tatsächlich von einem bedeutenden Teil der Wiederverkäufer oder Händler befolgt werden.",
+  "lead": "Folgende Umstände können Anlass geben, Preisempfehlungen aufzugreifen:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "18(4f)",
+    "cos": 0.587,
+    "sim": 0.095,
+    "type": "norm",
+    "text": "Erzielung von Grössenvorteilen beim Vertrieb;",
+    "lead": "Unternehmen können im Rahmen der in Artikel 5 Absatz 2 KG genannten Rechtfertigungsgründe namentlich Folgendes geltend machen:"
+   },
+   {
+    "pid": "12(1a)",
+    "cos": 0.586,
+    "sim": 0.121,
+    "type": "norm",
+    "text": "Festsetzung von Mindest- oder Festpreisen, d. h. die Beschränkung der Möglichkeit der Abnehmerin, ihren Verkaufspreis selbst festzusetzen;",
+    "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "18(4d)",
+    "cos": 0.577,
+    "sim": 0.136,
+    "type": "norm",
+    "text": "Vermeidung von ineffizient tiefen Verkaufsförderungsmassnahmen (z. B. Beratungsdienstleistungen), die resultieren können, wenn eine Herstellerin oder eine Händlerin von den Verkaufsförderungsbemühungen einer anderen Herstellerin oder Händlerin profitieren kann (Trittbrettfahrerproblem);",
+    "lead": "Unternehmen können im Rahmen der in Artikel 5 Absatz 2 KG genannten Rechtfertigungsgründe namentlich Folgendes geltend machen:"
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:50",
+  "class": "ungrounded",
+  "from": "2017-05-22",
+  "pid": "12(2h)",
+  "text": "Einschränkungen von Mehrmarkenvertrieb in selektiven Vertriebssystemen, welche sich gezielt auf Marken bestimmter konkurrierender Anbieter beziehen.",
+  "lead": "Abreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "5(1)",
+    "cos": 0.742,
+    "sim": 0.026,
+    "type": "definition",
+    "text": "Selektive Vertriebssysteme sind Vertriebssysteme, in denen sich die Anbieterin verpflichtet, die Vertragswaren oder -dienstleistungen unmittelbar oder mittelbar nur an Händlerinnen zu verkaufen, die anhand festgelegter Merkmale ausgewählt werden, und in denen sich diese Händlerinnen verpflichten, die betreffenden Waren oder Dienstleistungen nicht an Händlerinnen zu verkaufen, die innerhalb des von der Anbieterin für den Betrieb dieses Systems festgelegten Gebiets nicht zum Vertrieb zugelassen sind.",
+    "lead": ""
+   },
+   {
+    "pid": "15(c)",
+    "cos": 0.7,
+    "sim": 0.034,
+    "type": "norm",
+    "text": "wenn die Anbieterin ein selektives Vertriebssystem betreibt: (i) die Beschränkung der Gebiete oder der Kundinnen und Kunden, in bzw. an die die Mitglieder des selektiven Vertriebssystems die Vertragswaren oder -dienstleistungen aktiv oder passiv verkaufen dürfen, mit Ausnahme 1. der Beschränkung des aktiven Verkaufs durch Mitglieder des selektiven Vertriebssystems und durch ihre Direktkundinnen in ein Gebiet oder an eine Kundengruppe, das bzw. die der Anbieterin vorbehalten ist oder von der Anbieterin höchstens fünf Alleinvertriebshändlerinnen exklusiv zugewiesen wurde; 2. der Beschränkung des aktiven oder passiven Verkaufs durch Mitglieder des selektiven Vertriebssystems und durch ihre Kundinnen an nicht zugelassene Händlerinnen in dem Gebiet, in dem das selektive Vertriebssystem betrieben wird; 3. der Beschränkung des Niederlassungsorts der Mitglieder des selektiven Vertriebssystems; 4. der Beschränkung des aktiven oder passiven Verkaufs an Endverbraucherinnen und Endverbraucher durch auf der Grosshandelsstufe tätige Mitglieder des selektiven Vertriebssystems; 5. der Beschränkung der Möglichkeit, Teile, die zur Weiterverwendung geliefert werden, aktiv oder passiv an Kundinnen zu verkaufen, die diese Teile für die Herstellung derselben Art von Waren verwenden würden, wie sie die Anbieterin herstellt; (ii) die Beschränkung von Querlieferungen zwischen Mitgliedern des selektiven Vertriebssystems, die auf derselben Handelsstufe oder unterschiedlichen Handelsstufen tätig sind; (iii) die Beschränkung des aktiven oder passiven Verkaufs an Endverbraucherinnen und Endverbraucher durch auf der Einzelhandelsstufe tätige Mitglieder des selektiven Vertriebssystems, unbeschadet Buchstabe c (i) 1. und 3.;",
+    "lead": "Vertikale Wettbewerbsabreden, die nicht von Artikel 5 Absatz 4 KG erfasst werden, werden als qualitativ schwerwiegend betrachtet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "5(2)",
+    "cos": 0.699,
+    "sim": 0.048,
+    "type": "definition",
+    "text": "Rein qualitativer Selektivvertrieb ist ein Vertriebssystem, bei dem die Auswahl der Händlerinnen ausschliesslich nach objektiven qualitativen Kriterien erfolgt, die sich nach den Anforderungen des betreffenden Produkts richten.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:52",
+  "class": "announcement?",
+  "from": "2007-07-02",
+  "pid": "14",
+  "text": "Einzelfall Bei allen anderen Abreden sowie bei den in Ziffer 12 genannten Ausnahmen muss die Erheblichkeit der Wettbewerbsbeeinträchtigung im Einzelfall überprüft werden. Dies gilt namentlich für selektive Vertriebsverträge, welche die Voraussetzungen von Ziffer 8 (4) nicht erfüllen.",
+  "lead": "",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "16(3)",
+    "cos": 0.783,
+    "sim": 0.104,
+    "type": "norm",
+    "text": "Den Wettbewerb erheblich beeinträchtigende Abreden, die von Ziffer 16 (2) nicht erfasst werden, unterliegen einer Einzelfallprüfung. Ein Rechtfertigungsgrund liegt vor, wenn eine Abrede die wirtschaftliche Effizienz im Sinne von Artikel 5 Absatz 2 KG erhöht – beispielsweise durch eine effizientere Vertriebsgestaltung im Sinne einer Verbesserung der Produkte oder Produktionsverfahren oder einer Senkung der Vertriebskosten – und die Wettbewerbsbeeinträchtigung dazu notwendig ist.",
+    "lead": ""
+   },
+   {
+    "pid": "16(2)",
+    "cos": 0.714,
+    "sim": 0.091,
+    "type": "norm",
+    "text": "Abreden gelten in der Regel ohne Einzelfallprüfung als gerechtfertigt, wenn der Anteil des Anbieters an dem relevanten Markt, auf dem er die Vertragswaren oder -dienstleistungen anbietet, und der Anteil des Abnehmers an dem relevanten Markt, auf dem er die Vertragswaren und -dienstleistungen bezieht, jeweils nicht mehr als 30 % beträgt. Davon ausgenommen sind Abreden nach Ziffer 12 (2) und Abreden, die sich mit anderen kumulativ auf den Markt auswirken und den Wettbewerb erheblich beeinträchtigen.",
+    "lead": ""
+   },
+   {
+    "pid": "14",
+    "cos": 0.705,
+    "sim": 0.047,
+    "type": "norm",
+    "text": "Abreden, die einen rein qualitativen Selektivvertrieb zum Gegenstand haben, führen nicht zu einer erheblichen Wettbewerbsbeeinträchtigung, sofern kumulativ drei Voraussetzungen erfüllt sind: i) die Beschaffenheit des fraglichen Produkts muss einen selektiven Vertrieb erfordern, d.h., ein solches Vertriebssystem muss ein Erfordernis zur Wahrung der Qualität und zur Gewährleistung des richtigen Gebrauchs des betreffenden Produkts sein; ii) die Wiederverkäufer müssen aufgrund objektiver Kriterien qualitativer Art ausgewählt werden. Diese sind einheitlich festzulegen, allen potenziellen Wiederverkäufern zur Verfügung zu stellen und unterschiedslos anzuwenden; iii) die aufgestellten Kriterien dürfen nicht über das hinausgehen, was erforderlich ist.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:23",
+  "class": "announcement?",
+  "from": "2007-07-02",
+  "pid": "E7",
+  "text": "Ziffer 12 zeigt auf, welche Abreden unabhängig vom Marktanteil der Beteiligten als erhebliche Wettbewerbsbeeinträchtigung betrachtet werden. Nach Massgabe von Ziffer 14 muss die Erheblichkeit der Wettbewerbsbeeinträchtigung – mit Ausnahme von Abreden gemäss Ziffer 13 – bei allen anderen Abreden im Einzelfall überprüft werden.",
+  "lead": "",
+  "next": "2010-06-28",
+  "candidates": [
+   {
+    "pid": "IX",
+    "cos": 0.78,
+    "sim": 0.147,
+    "type": "norm",
+    "text": "Kann die Vermutung widerlegt werden, ist die Erheblichkeit der Abrede gemäss Ziffer 12 (1) zu prüfen. Dabei sind sowohl qualitative wie auch quantitative Kriterien zu berücksichtigen, wobei die Abwägung dieser beiden Kriterien einzelfallweise in einer Gesamtbeurteilung erfolgt. Ziffer 12 (2) zeigt auf, welche Abreden aufgrund des Gegenstands als qualitativ schwerwiegend betrachtet werden. Bei solchen Abreden genügen in quantitativer Hinsicht tiefere Anforderungen, um sie als erhebliche Wettbewerbsbeschränkung zu qualifizieren.",
+    "lead": ""
+   },
+   {
+    "pid": "16(3)",
+    "cos": 0.751,
+    "sim": 0.12,
+    "type": "norm",
+    "text": "Den Wettbewerb erheblich beeinträchtigende Abreden, die von Ziffer 16 (2) nicht erfasst werden, unterliegen einer Einzelfallprüfung. Ein Rechtfertigungsgrund liegt vor, wenn eine Abrede die wirtschaftliche Effizienz im Sinne von Artikel 5 Absatz 2 KG erhöht – beispielsweise durch eine effizientere Vertriebsgestaltung im Sinne einer Verbesserung der Produkte oder Produktionsverfahren oder einer Senkung der Vertriebskosten – und die Wettbewerbsbeeinträchtigung dazu notwendig ist.",
+    "lead": ""
+   },
+   {
+    "pid": "X",
+    "cos": 0.744,
+    "sim": 0.22,
+    "type": "norm",
+    "text": "Ziffer 13 macht deutlich, dass in der Regel keine erhebliche Wettbewerbsbeeinträchtigung vorliegt, falls die Marktanteilsschwelle von 15 % nicht überschritten wird und sich die Abrede nicht kumulativ mit anderen Abreden auf den Markt auswirkt (Bagatellfälle). Wird die Marktanteilsschwelle von 15 % überschritten oder wirkt sich die Abrede kumulativ mit anderen Abreden auf den Markt aus, wird die Wettbewerbsbeeinträchtigung im Einzelfall geprüft.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:25",
+  "class": "announcement?",
+  "from": "2017-05-22",
+  "pid": "XII",
+  "text": "Kann die Vermutung der Beseitigung des wirksamen Wettbewerbs widerlegt werden und liegt eine den Wettbewerb erheblich beeinträchtigende Abrede vor, ist zu prüfen, ob die Abrede durch Gründe der wirtschaftlichen Effizienz gerechtfertigt werden kann. In Ziffer 16 werden die Voraussetzungen umschrieben, unter denen vertikale Wettbewerbsabreden aus Gründen der wirtschaftlichen Effizienz im Sinne von Artikel 5 Absatz 2 KG in der Regel als gerechtfertigt gelten. Sind keine Effizienzgründe ersichtlich, ist die Abrede unzulässig. Unzulässige Wettbewerbsabreden nach Artikel 5 Absatz 4 KG sind nach Artikel 49a KG sanktionsbedroht, selbst wenn die Vermutung der Beseitigung wirksamen Wettbewerbs widerlegt werden kann.",
+  "lead": "",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "18(1)",
+    "cos": 0.9,
+    "sim": 0.397,
+    "type": "norm",
+    "text": "Liegt eine den Wettbewerb erheblich beeinträchtigende vertikale Wettbewerbsabrede vor, ist zu prüfen, ob diese gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Sind keine Effizienzgründe ersichtlich, ist die Abrede unzulässig.",
+    "lead": ""
+   },
+   {
+    "pid": "18(3)",
+    "cos": 0.798,
+    "sim": 0.218,
+    "type": "norm",
+    "text": "Den Wettbewerb erheblich beeinträchtigende vertikale Wettbewerbsabreden, die von Absatz 2 nicht erfasst werden, unterliegen einer Einzelfallprüfung. Ein Rechtfertigungsgrund liegt vor, wenn eine vertikale Wettbewerbsabrede die wirtschaftliche Effizienz im Sinne von Artikel 5 Absatz 2 KG erhöht – beispielsweise durch eine effizientere Vertriebsgestaltung im Sinne einer Verbesserung der Produkte oder Produktionsverfahren oder einer Senkung der Vertriebskosten – und die Wettbewerbsbeeinträchtigung dazu notwendig ist.",
+    "lead": ""
+   },
+   {
+    "pid": "X",
+    "cos": 0.78,
+    "sim": 0.584,
+    "type": "norm",
+    "text": "Artikel 16 VertBek macht deutlich, dass vertikale Wettbewerbsabreden, die nicht unter Artikel 12 VertBek oder Artikel 15 Buchstabe b bis f VertBek fallen, in der Regel nicht zu BGE 143 II 297, Gaba. einer erheblichen Wettbewerbsbeeinträchtigung führen, falls die Marktanteilsschwelle von 15 % nicht überschritten wird und sich die Wettbewerbsabrede nicht kumulativ mit anderen Wettbewerbsabreden auf den Markt auswirkt (Bagatellfälle). Wird die Marktanteilsschwelle von 15 % überschritten, oder wirkt sich die Wettbewerbsabrede kumulativ mit anderen Wettbewerbsabreden auf den Markt aus und wird dabei die Marktanteilsschwelle von 5 % überschritten, wird die Wettbewerbsbeeinträchtigung im Einzelfall geprüft. XI. Kann die Vermutung der Beseitigung des wirksamen Wettbewerbs widerlegt werden und liegt eine den Wettbewerb erheblich beeinträchtigende Wettbewerbsabrede vor, ist zu prüfen, ob die vertikale Wettbewerbsabrede durch Gründe der wirtschaftlichen Effizienz gerechtfertigt werden kann. In Artikel 18 VertBek werden die Voraussetzungen umschrieben, unter denen vertikale Wettbewerbsabreden aus Gründen der wirtschaftlichen Effizienz im Sinne von Artikel 5 Absatz 2 KG in der Regel als gerechtfertigt gelten. Liegen keine Effizienzgründe vor, ist die Wettbewerbsabrede unzulässig. Unzulässige Wettbewerbsabreden nach Artikel 5 Absatz 4 KG sind nach Artikel 49a KG sanktionsbedroht, selbst wenn die Vermutung der Beseitigung wirksamen Wettbewerbs widerlegt werden kann. XII. Diese Bekanntmachung bindet die Zivilgerichte, das Bundesverwaltungsgericht und das Bundesgericht nicht bei der Auslegung der kartellrechtlichen Bestimmungen.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Bekanntmachung:79",
+  "class": "ungrounded",
+  "from": "2017-05-22",
+  "pid": "15(2)",
+  "text": "Preisempfehlungen gelten grundsätzlich als erhebliche Wettbewerbsbeschränkungen, wenn sich diese infolge der Ausübung von Druck oder der Gewährung von Anreizen durch eines der beteiligten Unternehmen tatsächlich wie Fest- oder Mindestverkaufspreise auswirken (vgl. Ziffer 10 (1) lit. a).",
+  "lead": "",
+  "next": "2022-12-12",
+  "candidates": [
+   {
+    "pid": "12(3)",
+    "cos": 0.658,
+    "sim": 0.083,
+    "type": "norm",
+    "text": "Artikel 5 Absatz 4 KG umfasst auch in Empfehlungsform gekleidete vertikale Wettbewerbsabreden, die auf einer Vereinbarung oder einer aufeinander abgestimmten Verhaltensweise beruhen und eine Festsetzung von Mindest- oder Festpreisen oder einen absoluten Gebietsschutz bezwecken oder bewirken.",
+    "lead": ""
+   },
+   {
+    "pid": "12(1a)",
+    "cos": 0.648,
+    "sim": 0.075,
+    "type": "norm",
+    "text": "Festsetzung von Mindest- oder Festpreisen, d. h. die Beschränkung der Möglichkeit der Abnehmerin, ihren Verkaufspreis selbst festzusetzen;",
+    "lead": "Bei vertikalen Wettbewerbsabreden wird die Beseitigung wirksamen Wettbewerbs nach Artikel 5 Absatz 4 KG vermutet, wenn sie Folgendes zum Gegenstand haben:"
+   },
+   {
+    "pid": "1",
+    "cos": 0.631,
+    "sim": 0.123,
+    "type": "definition",
+    "text": "Vertikale Wettbewerbsabreden sind erzwingbare oder nicht erzwingbare Vereinbarungen sowie aufeinander abgestimmte Verhaltensweisen (vgl. Art. 4 Abs. 1 KG) von Unternehmen verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken und Bedingungen betreffen, zu denen die beteiligten Unternehmen bestimmte Waren oder Dienstleistungen beziehen, verkaufen oder weiterverkaufen können.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Erläuterungen:21",
+  "class": "ungrounded",
+  "from": "2019-04-09",
+  "pid": "22",
+  "text": "Abreden, die Verbote bzw. Beschränkungen von Internetverkäufen zum Gegenstand haben, gelten im Rahmen von selektiven Vertriebssystemen als qualitativ schwerwiegend, da sie passive Verkäufe durch zugelassene Einzelhändler an Endverbraucher (Ziff. 12 Abs. 2 lit. c i.V.m. Ziff. 3 VertBek) und/oder passive Verkäufe zwischen zugelassenen Händlern (Ziff. 12 Abs. 2 lit. d i.V.m. Ziff. 3 VertBek) beschränken.",
+  "lead": "",
+  "next": "2022-12-12-erl",
+  "candidates": [
+   {
+    "pid": "18",
+    "cos": 0.788,
+    "sim": 0.286,
+    "type": "norm",
+    "text": "Als qualitativ schwerwiegend gelten Beschränkungen des aktiven oder passiven Verkaufs durch zugelassene Einzelhändlerinnen an Endverbraucherinnen und Endverbraucher (Art. 15 Bst. c (iii) i.V.m. Art. 2, 3 VertBek) sowie Beschränkungen des aktiven oder passiven Verkaufs zwischen zugelassenen Händlerinnen (Art. 15 Bst. c (ii) i.V.m. Art. 2, 3 VertBek). Werden passive Verkäufe von gebietsfremden Vertriebspartnerinnen an zugelassene Händlerinnen oder Endverbraucherinnen und Endverbraucher in (gewissen Gebieten) der Schweiz ausgeschlossen, liegen grundsätzlich erhebliche absolute Gebietsschutzabreden nach Artikel 5 Absatz 4 KG vor (vgl. oben, Rz 9 ff.).",
+    "lead": ""
+   },
+   {
+    "pid": "17",
+    "cos": 0.778,
+    "sim": 0.119,
+    "type": "norm",
+    "text": "Als nicht qualitativ schwerwiegend gelten Beschränkungen des Verkaufs an nicht zugelassene Händlerinnen durch die Mitglieder eines selektiven Vertriebssystems innerhalb des von der Anbieterin für den Betrieb dieses Systems festgelegten Gebiets (Art. 15 Bst. c (i) 2. VertBek). Solche Beschränkungen dienen dem Schutz selektiver Vertriebssysteme vor dem Vertrieb durch systemfremde Händlerinnen. Folglich liegt bspw. auch dann keine qualitativ schwerwiegende Wettbewerbsabrede vor, wenn eine Herstellerin ihre Garantieleistungen auf Produkte beschränkt, die bei zugelassenen Händlerinnen bezogen wurden.",
+    "lead": ""
+   },
+   {
+    "pid": "27",
+    "cos": 0.761,
+    "sim": 0.097,
+    "type": "norm",
+    "text": "Vertikale Wettbewerbsabreden werden als qualitativ schwerwiegend erachtet, wenn sie die wirksame Nutzung des Internets zum Verkauf der Vertragswaren oder -dienstleistungen durch die Abnehmerin oder ihre Kundinnen und Kunden verhindern. Dazu gehören insbesondere Beschränkungen von Online-Verkäufen oder der Online-Werbung, die es der Abnehmerin de facto verbieten, das Internet für den Verkauf der Vertragswaren oder -dienstleistungen zu nutzen sowie Beschränkungen, welche die Nutzung eines oder mehrerer ganzen Online-Werbekanäle (z. B. Suchmaschinen oder Preisvergleichsdienste) oder die Gründung oder den Betrieb eines eigenen Online-Shops verhindern.",
+    "lead": ""
+   }
+  ]
+ },
+ {
+  "track": "Erläuterungen:23",
+  "class": "ungrounded",
+  "from": "2019-04-09",
+  "pid": "24",
+  "text": "Als nicht qualitativ schwerwiegend gelten indes Qualitätsanforderungen, welche ein Anbieter an die Verwendung des Internets zum Weiterverkauf seiner Waren stellt, um zu gewährleisten, dass das Online-Geschäft des Händlers mit dem Vertriebsmodell des Anbieters in Einklang steht. Dies hat für alle Vertriebsformen Gültigkeit, kann aber insbesondere für den selektiven Vertrieb von Bedeutung sein (vgl. hierzu jedoch Rz 23). So kann der Anbieter bspw. von seinen Händlern verlangen, dass sie über einen oder mehrere physische Verkaufspunkte verfügen, wenn sie Mitglied des Vertriebssystems werden wollen. Ein den auf der Einzelhandelsstufe tätigen Mitgliedern eines selektiven Vertriebssystems für Luxuswaren auferlegtes Verbot, bei Internetverkäufen nach aussen erkennbar Drittplattformen einzuschalten, stellt grundsätzlich weder eine Beschränkung der Kundengruppe nach Ziff. 12 Abs. 2 lit. b VertBek noch eine Beschränkung des passiven Verkaufs an Endverbraucher im Sinne von Ziff. 12 Abs. 2 lit. c VertBek dar und ist somit in der Regel nicht qualitativ schwerwiegend.",
+  "lead": "",
+  "next": "2022-12-12-erl",
+  "candidates": [
+   {
+    "pid": "28",
+    "cos": 0.841,
+    "sim": 0.117,
+    "type": "norm",
+    "text": "Als nicht qualitativ schwerwiegend gelten Beschränkungen von Online-Verkäufen in Bezug auf die Art und Weise, wie die Vertragswaren oder -dienstleistungen online verkauft werden sollen, unabhängig vom Vertriebssystem. Beschränkungen in Bezug auf die Nutzung bestimmter Online-Verkaufskanäle, z. B. von Online-Marktplätzen, oder die Vorgabe von Qualitätsstandards für Online-Verkäufe gelten ebenfalls nicht als qualitativ schwerwiegend, sofern sie nicht indirekt zum Gegenstand haben, die wirksame Nutzung des Internets zum Verkauf der Vertragswaren oder –dienstleistungen durch die Abnehmerin oder ihre Kundinnen und Kunden zu verhindern. Beschränkungen von Online-Verkäufen dienen in der Regel nicht diesem Ziel, wenn es der Abnehmerin freisteht, ihren eigenen Online-Shop zu betreiben und online zu werben.",
+    "lead": ""
+   },
+   {
+    "pid": "17",
+    "cos": 0.798,
+    "sim": 0.109,
+    "type": "norm",
+    "text": "Als nicht qualitativ schwerwiegend gelten Beschränkungen des Verkaufs an nicht zugelassene Händlerinnen durch die Mitglieder eines selektiven Vertriebssystems innerhalb des von der Anbieterin für den Betrieb dieses Systems festgelegten Gebiets (Art. 15 Bst. c (i) 2. VertBek). Solche Beschränkungen dienen dem Schutz selektiver Vertriebssysteme vor dem Vertrieb durch systemfremde Händlerinnen. Folglich liegt bspw. auch dann keine qualitativ schwerwiegende Wettbewerbsabrede vor, wenn eine Herstellerin ihre Garantieleistungen auf Produkte beschränkt, die bei zugelassenen Händlerinnen bezogen wurden.",
+    "lead": ""
+   },
+   {
+    "pid": "29",
+    "cos": 0.771,
+    "sim": 0.109,
+    "type": "norm",
+    "text": "Nachstehend sind Beispiele für Anforderungen im Zusammenhang mit Online-Verkäufen aufgeführt, die nicht als qualitativ schwerwiegend betrachtet werden:  Anforderungen, mit denen die Qualität oder ein bestimmtes Erscheinungsbild des Online-Shops einer Abnehmerin sichergestellt werden soll;  Anforderungen hinsichtlich der Darstellung der Vertragswaren oder -dienstleistungen im Online-Shop (beispielsweise die Mindestanzahl der dargestellten Artikel, die Art und Weise, in der die Marken der Anbieterin dargestellt werden);  ein mittel- oder unmittelbares Verbot der Nutzung von Online-Marktplätzen;  eine Anforderung, dass die Abnehmerin eine oder mehrere physische Verkaufsstätten oder Ausstellungsräume betreibt, beispielsweise als Voraussetzung dafür, dass sie Mitglied des selektiven Vertriebssystems der Anbieterin wird;  eine Anforderung, dass die Abnehmerin die Vertragswaren oder -dienstleistungen in einem nach Wert oder Menge, aber nicht nach dem Anteil ihres Gesamtumsatzes bestimmten absoluten Mindestumfang offline verkauft, um einen effizienten Betrieb ihrer physischen Verkaufsstätte zu gewährleisten; diese Anforderung kann für alle Abnehmerinnen identisch sein oder anhand objektiver Kriterien, wie der Grösse der Abnehmerin im Vergleich zu anderen Abnehmerinnen oder ihrer geografischen Lage, unterschiedlich festgelegt werden.",
+    "lead": ""
+   }
+  ]
+ }
+]
