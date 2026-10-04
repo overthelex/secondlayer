@@ -428,6 +428,77 @@ class Aligned:
     per_version: dict = field(default_factory=dict)      # version -> {text, status, similarity}
 
 
+def align_global(by_version: dict[str, list[Proposition]], order: list[str], vectors: dict[str, list[float]],
+                 same: float = 0.98, reworded: float = 0.55, merged: float = 0.85) -> list[Aligned]:
+    """Track each proposition across versions by a global assignment.
+
+    align() below matched greedily on word overlap with a 0.55 floor. Two
+    failures followed, found when the "dropped" rules were checked one by one
+    (PAPER-239): a rule reworded between the 2002 and the 2007 notice
+    ("Fixierung von Fest- oder Mindestverkaufspreisen" / "Festsetzung von
+    Mindest- oder Festpreisen") scores 0.48 on words and broke its chain; and a
+    track taking its best match first could take another track's twin. Here the
+    score is the larger of the word ratio and the bge-m3 cosine rescaled to the
+    same range ((cos - 0.5) / 0.5, so the 0.55 floor is a cosine of 0.775), and
+    the pairs between one version and the tracks alive before it are chosen
+    together (Hungarian assignment). A track left without a partner whose
+    proposition has a cosine of `merged` or more with one already taken is
+    marked merged into it, not dropped."""
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
+
+    def unit(t: str):
+        v = np.asarray(vectors[t], dtype="float32")
+        return v / max(float(np.linalg.norm(v)), 1e-9)
+
+    tracks: list[Aligned] = []
+    for version in order:
+        props = by_version.get(version, [])
+        alive = [t for t in tracks if t.per_version]
+        if alive and props:
+            prev = [next(t.per_version[v]["text"] for v in reversed(order) if v in t.per_version) for t in alive]
+            pv = np.stack([unit(x) for x in prev])
+            nv = np.stack([unit(p.text) for p in props])
+            cos = pv @ nv.T
+            score = np.zeros_like(cos)
+            for i, x in enumerate(prev):
+                for j, p in enumerate(props):
+                    w = similarity(x, p.text) + (0.05 if p.pid == alive[i].pid else 0.0)
+                    score[i, j] = max(w, (cos[i, j] - 0.5) / 0.5)
+            rows, cols = linear_sum_assignment(-score)
+            taken = set()
+            for i, j in zip(rows, cols):
+                if score[i, j] < reworded:
+                    continue
+                p = props[j]
+                taken.add(j)
+                alive[i].per_version[version] = {
+                    "text": p.text, "pid": p.pid, "heading": p.heading,
+                    "status": "unchanged" if score[i, j] >= same else "reworded",
+                    "similarity": round(float(min(score[i, j], 1.0)), 3), "cosine": round(float(cos[i, j]), 3)}
+            # a rule folded into a neighbour of the next version is merged, not dropped
+            for i, t in enumerate(alive):
+                if version in t.per_version or not taken:
+                    continue
+                last = max((v for v in t.per_version if v in order), key=order.index)
+                if order.index(last) != order.index(version) - 1:
+                    continue
+                j = max(taken, key=lambda j: cos[i, j])
+                if cos[i, j] >= merged:
+                    t.per_version[last]["merged_into"] = {"version": version, "pid": props[j].pid,
+                                                          "cosine": round(float(cos[i, j]), 3)}
+        else:
+            taken = set()
+        for j, p in enumerate(props):
+            if j in taken:
+                continue
+            t = Aligned(p.pid, p.part, p.heading)
+            t.per_version[version] = {"text": p.text, "pid": p.pid, "heading": p.heading,
+                                      "status": "added", "similarity": None}
+            tracks.append(t)
+    return tracks
+
+
 def align(by_version: dict[str, list[Proposition]], order: list[str],
           same: float = 0.98, reworded: float = 0.55) -> list[Aligned]:
     """Track each proposition across versions, oldest first.

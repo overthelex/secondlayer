@@ -1,0 +1,632 @@
+[
+ {
+  "kind": "sample",
+  "version": "2002-02-18",
+  "pid": "5(e)",
+  "part": "operative",
+  "heading": "",
+  "lead": "Rechtfertigung Ergibt sich aufgrund der Kriterien gemäss Ziffern 3 und 4, dass eine vertikale Wettbewerbsabrede als erhebliche Wettbewerbsbeeinträchtigung im Sinne von Artikel 5 Absatz 1 KG zu betrachten ist, ist zu prüfen, ob die Abrede gemäss Artikel 5 Absatz 2 KG gerechtfertigt ist. Ist dies nicht der Fall, so ist die vertikale Wettbewerbsabrede unzulässig. Ein Rechtfertigungsgrund kann insbesondere vorliegen, wenn eine Abrede eine effizientere Vertriebsgestaltung erlaubt und die Wettbewerbsbeeinträchtigung notwendig ist, um dieses Ziel zu erreichen. Dies kann namentlich der Fall sein bei Beschränkungen des geografischen Absatzgebiets oder des Kundenkreises für den Weiterverkauf durch den Händler, die",
+  "text": "den Händler in seiner Freiheit einschränken, Bestandteile, die ihm der Lieferant zur Einfügung in andere Produkte liefert, an Dritte weiterzuverkaufen, welche diese Bestandteile zur Herstellung von Konkurrenzprodukten verwenden. D1 2.",
+  "before": "2002-02-18",
+  "pool": {
+   "pool": 200,
+   "recital_in_pool": 0,
+   "agency_in_pool": 53
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_VB:CH_VB_001_94-100_1995-02-14",
+    "ord": 277,
+    "score": 0.661,
+    "spider": "CH_VB",
+    "docket": "94.100",
+    "lang": null,
+    "section": null,
+    "tier": "other",
+    "source": "other",
+    "date": "1995-02-14",
+    "date_upper_bound": "1995-02-14",
+    "date_source": "record",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.021,
+    "recital": false,
+    "cites_this": false,
+    "text": "<£§ fournisseur en position dominante qui livre à l'un de ses acheteurs,\n contre son gré, de la marchandise de moindre qualité alors qu'il fournit du\n premier choix à ses autres clients. n est décisif, pour répondre à la question de savoir si l'inégalité de\n traitement imputable à une entreprise dominant le marché est illicite,\n d'établir si le partenaire commercial touché par cette inégalité est désavantagé, par rapport aux tiers concurrents, de façon injuste, c'est-à-dire\n objectivement injustifiée. La comparaison des prestations doit permettre\n de tenir compte des différences en l'espèce. Des différences en matière de\n prix peuvent ainsi être justifiées objectivement par des économies\n d'échelle en matière de commercialisation, de transport et de distribution.\n L'interdiction de discrimination contient même, logiquement, le devoir de\n traiter de manière différenciée les cas dissemblabes. Fait d'imposer des prix ou d'autres conditions commerciales\n inéquitables (Art. 7, 2e al., let. c, P)",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-99-II-228_1973-09-18",
+    "ord": 14,
+    "score": 0.66,
+    "spider": "CH_BGE",
+    "docket": "BGE 99 II 228",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1973-09-18",
+    "date_upper_bound": "1973-09-18",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.043,
+    "recital": false,
+    "cites_this": false,
+    "text": "tgegen. Nach dem klaren Wortlaut von Art. 4 Abs. 1 KG genügt, dass Dritte mit kartellistischen Vorkehren in der Ausübung der Wettbewerbsfreiheit erheblich behindert werden sollen. Das setzt voraus, dass die Vorkehren zu einer solchen Behinderung taugen, heisst aber nicht, dass bei der Beurteilung der Erheblichkeit stets auch den finanziellen Auswirkungen auf die Entwicklung eines Geschäftes nachzuforschen sei, weil das Mass der zulässigen oder unzulässigen Freiheitsbeschränkung jedenfalls vom Umfange der wirtschaftlichen Einbusse abhange, wie der Beklagte einwendet (vgl. MERZ, a.a.O. S. 43).\nEbensowenig hilft dem Beklagten, dass die Klägerin einzig wegen ihrer Weigerung, sich gleich zu verhalten wie andere Wiederkäufer, in ihrer Handlungsfreiheit behindert worden ist. Die Klägerin brauchte sich die Behinderung, die erheblich und daher an sich unzulässig war, nicht gefallen zu lassen, gleichviel ob andere Wiederverkäufer sich der Massnahme beugten. An der Erheblichkeit der Behinderung ändert schliesslich auch nichts, dass der Gerichtspräsident III Bern und auf Beschwerde hin auch der Appellationshof des Kantons Bern das Gesuch der Klägerin, die Liefersperre vorsorglich aufzuheben, a",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_005_BGE-126-III-129_1999",
+    "ord": 61,
+    "score": 0.628,
+    "spider": "CH_BGE",
+    "docket": "BGE 126 III 129",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1999-12-07",
+    "date_upper_bound": "1999-12-07",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.034,
+    "recital": false,
+    "cites_this": false,
+    "text": "entschliesst.\n9. Das Patent verleiht dem Patentinhaber für die Verwertung seiner schöpferischen Leistung eine Monopolstellung. Ein allfälliger kartellrechtlich verpönter Missbrauch dieses von der Rechtsordnung eingeräumten Monopolrechts bei der erstmaligen Inverkehrsetzung patentgeschützter Waren durch den Patentinhaber kann in materieller Abgrenzung zur zulässigen Ausübung des Immaterialgüterrechts geahndet werden (vgl. Art. 3 Abs. 2 des Bundesgestezes vom 6. Oktober 1995 über Kartelle und andere Wettbewerbsbeschränkungen [KG; SR 251]; zur wettbewerbsrechtlichen Problematik ZÄCH, Schweizerisches Kartellrecht, Bern 1999, S. 129 ff.).\na) Zu den Befugnissen des Patentinhabers gehört nicht, künstlich Märkte aufzuteilen bzw. den schweizerischen Markt vom Ausland BGE 126 III 129 S. 154abzuschotten (vgl. TELLEKSON, a.a.O., S. 14). Die Herrschaft des Patentinhabers über die Einfuhr patentgeschützter Waren ergibt sich nicht aus dem Inhalt seiner Erfinderrechte, sondern allein aus der territorialen Begrenzung der schweizerischen Rechtsordnung. Die Befugnis, über die Einfuhr patentgeschützter Waren ausschliesslich zu bestimmen, bezweckt die Gewährleistung des vom schweizerischen Recht ange",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1998-2_B2.2.9",
+    "ord": 90,
+    "score": 0.614,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1998/2, S. 278",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1998-04-20",
+    "date_upper_bound": "1998-04-20",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.06,
+    "recital": false,
+    "cites_this": false,
+    "text": "will sagen, dass ein (oder meh-\n\n\n\n1998/2\n\n\nrere) Unternehmen die Produktepreise ohne Rücksicht auf Mitbewerber festlegen können, entweder weil keine Mitbewerber vorhanden\nsind oder mit deren Gleichverhalten gerechnet werden kann [...].“ (B.\nSchmidhauser in Homburger et. al., Kommentar zum schweizerischen\nKartellgesetz, Zürich 1997, Art. 4 Rz. 66).\n145. Faktoren, welche die Annahme einer kollektiven Marktbeherrschung stützen, sind im Prinzip folgende: hohe Marktkonzentration,\nähnliche und zeitlich wenig variierende Marktanteile, ähnliche Kostenstruktur, hohe Eintrittsschranken, hoher Grad an Homogenität der\nProdukte/Dienstleistungen, schwache Nachfrageelastizität, gesättigter Markt und stagnierende Nachfrage, Markttransparenz (siehe dazu\nKantzenbach “Kollektive Marktbeherrschung: Neue Industrieökonomik und Erfahrungen aus der europäischen Fusionskontrolle“, BadenBaden 1996; L. Philips, Competition policy: a game-theoretic perspective, Cambridge 1995; J. Briones, Oligopolistic dominance, is there a\ncommon approach in different jurisdictions?, in European Law Review, vol 16/1995).\n146. Gemäss Art. 10 Abs. 2 KG können Zusammenschlüsse untersagt\noder mit Bedingungen und Auflagen zugelassen werden, wenn die\nPrüfung ergibt, dass der Zusammenschluss eine marktbeherrschende\nStellung begründet oder verstärkt",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-1_B2.2.3",
+    "ord": 17,
+    "score": 0.609,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/1, S. 97",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-12-03",
+    "date_upper_bound": "2001-12-03",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.034,
+    "recital": false,
+    "cites_this": false,
+    "text": "28. Nach Auffassung von Diax schliessen vorbehaltene Vorschriften\ngemäss Artikel 3 Absatz 1 KG die sachliche Zuständigkeit der Weko aus\n(vgl. Rz. 16). Es ist somit zu prüfen, ob Artikel 3 Absatz 1 KG den Geltungsbereich des KG und damit die Zuständigkeit der Wettbewerbsbehörden oder lediglich die Anwendbarkeit des KG beschränkt.\n\n\nVgl. RPW 2001/2, S. 298, Rz. 24; GYGI, a.a.O., S. 63; KÖLZ/HÄNER, a.a.O., Rz. 227;\nMERKLI/AESCHLIMANN/HERZOG, Kommentar zum bernischen VRPG, Bern, 1997, N. 1 zu Art. 3\nAbs. 1 VRPG\nVgl. RHINOW/KOLLER/KISS , Öffentliches Prozessrecht und Justizverfassung des Bundes, Basel\n1996, Rz. 955\nVgl. KÖLZ/HÄNER , a.a.O., Rz. 227\nVgl. MERKLI/AESCHLIMANN /HERZOG, a.a.O., N. 1 zu Art. 3 Abs. 1 VRPG\nVgl. KÖLZ/HÄNER , a.a.O., Rz. 228\nVgl. RPW 2001/2, S. 298 f., Rz. 26 ff.\n\n\n\nB.1.2.\n\n2002/1\n\n\nBedeutung von Artikel 3 Absatz 1 KG bei der Beurteilung der Zuständigkeit\n\n29. Gemäss Artikel 3 Absatz 1 KG sind Vorschriften vorbehalten, soweit sie auf einem Markt für bestimmte Waren oder Leistungen Wettbewerb nicht zulassen, insbesondere Vorschriften:\na)\n\ndie eine staatliche Markt- oder Preisordnung begründen;\n\nb) die einzelne Unternehmen zur Erfüllung öffentlicher Aufgaben",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_005_BGE-124-III-321_nodate",
+    "ord": 35,
+    "score": 0.605,
+    "spider": "CH_BGE",
+    "docket": "BGE 124 III 321",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1998-07-20",
+    "date_upper_bound": "1998-07-20",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.03,
+    "recital": false,
+    "cites_this": false,
+    "text": "andhabe. Angesprochen ist vielmehr die Frage, ob die beklagtischen Parallelimporte unter dem Blickwinkel des Wettbewerbsrechts zulässig sind. Werden bestimmte Waren unter Umgehung des offiziellen Vertriebssystems parallel importiert, so ist dies nach der Rechtsprechung für sich allein selbst dann nicht wettbewerbswidrig, wenn dabei Vertragsbrüche von Vertragshändlern ausgenützt werden (BGE 122 III 469 E. 7 S. 482 f.; BGE 114 II 91 E. 4b S. 101 f., mit Hinweisen). Anders verhält es sich nur, wenn dem Parallelimporteur eine Verleitung zum Vertragsbruch (Art. 4 lit. a UWG; SR 241) nachgewiesen werden kann, wofür vorliegend jegliche Anhaltspunkte fehlen. Daneben kann sich die Unlauterkeit von Parallelimporten allenfalls auch aus anderen besonderen Umständen ergeben, die das Vorgehen des Parallelimporteurs als Verstoss gegen Treu und Glauben erscheinen lassen (BGE 114 II 91 E. 4a/dd und 4b S. 100 f.) oder sich negativ auf den Wettbewerb auswirken (BGE 122 III 469 E. 10 S. 485). Auch davon kann im vorliegenden Fall BGE 124 III 321 S. 336jedoch keine Rede sein. Insbesondere lässt sich aus dem blossen Umstand, dass die «Hotline» der Zweitklägerin möglicherweise auch von Käufern parallelimp",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_001_BGE-96-I-297_1970",
+    "ord": 10,
+    "score": 0.602,
+    "spider": "CH_BGE",
+    "docket": "BGE 96 I 297",
+    "lang": "de",
+    "section": null,
+    "tier": "1",
+    "source": "court",
+    "date": "1970-09-16",
+    "date_upper_bound": "1970-09-16",
+    "date_source": "text",
+    "regime": "KG 1985",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.038,
+    "recital": false,
+    "cites_this": false,
+    "text": "Spielraum.\n4. a) Es ist unbestritten, dass die von den Brauereien der Beschwerdeführerin gegenüber verhängte Liefersperre eine Wettbewerbsbehinderung im Sinne von Art. 4 KG darstellt. Auch die Erheblichkeit der Behinderung ist zu bejahen, weil Liefersperren in der Regel eine erhebliche Wettbewerbsbehinderung darstellen, denn sie sind immer geeignet, das wirschaftliche Verhalten des Betroffenen zu beeinflussen (BGE 94 II 337 E. 3; SCHLUEP, Von der Kontrahierungspflicht der kartellähnlichen Organisation, Wirtschaft und Recht 1969, S. 207). Die Beschwerdegegner bestreiten auch nicht, dass der Beschwerdeführerin ein nicht leicht ersetzbarer Nachteil droht, der nur durch eine vorsorgliche Massnahme abgewendet werden kann. Nicht von Bedeutung ist, dass die Beschwerdeführerin bereits bestelltes Bier, über dessen Lieferung eventuell ein gültiger Vertragsschluss zustandegekommen ist, auf Grund des vertraglichen Anspruchs noch anfordern könnte. Es ist unstreitig, dass die Liefersperre sich auch auf künftige Bestellungen bezieht. In diesem Sinne ist die Verfügung des Einzelrichters, wonach die Brauereien bestelltes Bier zu liefern hätten, zu verstehen. Streitig ist einzig noch, ob die Wettbew",
+    "text_view": "stored"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1998-2_B2.2.5",
+    "ord": 9,
+    "score": 0.592,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1998/2, S. 268",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1998-04-06",
+    "date_upper_bound": "1998-04-06",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.034,
+    "recital": false,
+    "cites_this": false,
+    "text": "beschränkt.\n19. Der Zusammenschluss führt beim momentanen Kenntnisstand\nhöchstens zu einer minimalen Marktanteilsaddition und ist nicht geeignet, die Marktstrukturen aus wettbewerblicher Sicht nachhaltig\nnegativ zu beeinflussen.\n3.2. Markteintritte,\nWettbewerb\n\nProduktneueinführungen\n\nund\n\npotentieller\n\n20. Der Frühzustellungsmarkt fällt nicht in den Monopolbereich",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:3",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Discrimination and unfair prices by a dominant firm under Art. 7 is a different legal question from justifying a component resale restriction."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses unequal treatment by a dominant firm under Article 7 KG, not the justification of vertical restrictions on component resales."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Substantial hindrance by a supply boycott under Art. 4 KG 1985 has nothing to do with components resold to competing manufacturers."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about boycotts and significant hindrances to competition under Article 4 of the old Cartel Act, not vertical agreements or component supply."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Patent exhaustion and market partitioning against imports is not the efficiency justification for restricting component resale."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns patent law, the exhaustion of intellectual property rights, and parallel imports, which is unrelated to the proposition."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Collective dominance in merger control is another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage focuses on collective dominance and merger control under Article 10 KG, not on vertical restraints or their justification."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Reserved provisions under Art. 3 para. 1 KG and WEKO's jurisdiction are procedural or scope issues unrelated to the proposition."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage examines reserved legal provisions under Article 3 KG, which is entirely unrelated to the justification of vertical agreements."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Whether parallel imports are lawful under the UWG does not concern resale restrictions on components."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with parallel imports and unfair competition (UWG), rather than the resale of components to competitors."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Supply refusal as a substantial hindrance under KG 1985 is about something else."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage addresses a refusal to supply (Liefersperre) by breweries under the old Cartel Act, not the proposition's rule on component supplies."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "Assessing market share addition in a merger is another legal question."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage relates to merger control and market shares in an early delivery market, not vertical restraints."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ },
+ {
+  "kind": "sample",
+  "version": "2002-02-18",
+  "pid": "E3",
+  "part": "preamble",
+  "heading": "",
+  "lead": "",
+  "text": "Aus der Aufzählung der erheblichen Abreden in Ziffer 3 kann nicht geschlossen werden, dass andere vertikale Wettbewerbsabreden grundsätzlich als nicht erheblich zu betrachten sind. Unerheblichkeit ist in der Regel vielmehr nur dann anzunehmen, wenn eine solche Abrede die in Ziffer 4 Absatz 1 der Bekanntmachung genannte Marktanteilsschwelle unterschreitet und sich nicht kumulativ mit anderen Abreden auf den Markt auswirkt. Die vorliegende Bekanntmachung sagt zudem nichts aus über die Beurteilung der Zulässigkeit eines Verhaltens unter Artikel 7 KG.",
+  "before": "2002-02-18",
+  "pool": {
+   "pool": 191,
+   "recital_in_pool": 0,
+   "agency_in_pool": 79
+  },
+  "evidence": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1997-4_B1.1.1",
+    "ord": 11,
+    "score": 0.733,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1997/4, S. 452",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1997-10-10",
+    "date_upper_bound": "1997-10-10",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.031,
+    "recital": false,
+    "cites_this": false,
+    "text": "aufeinander abgestimmte Verhaltensweisen von Unternehmen gleicher oder verschiedener Marktstufen, die eine Wettbewerbsbeschränkung bezwecken oder bewirken (Art. 4 Abs. 1 KG).\n\n\n\n\n1997/4\n\n\nBeurteilung der Abrede über ein koordiniertes Auftreten\ngegenüber den Herstellern nach Art. 5 KG\n\n23. Mit dem Ausgangsschreiben drohen die fünf Fachhändler\n[…]\nvgl. unten RZ 32 ff.).\nNachfolgend wird dennoch vom Bestehen einer Abrede ausgegangen.\n24. Die Abrede hat weder horizontal (d.h. unter den fünf Fachhändlern) noch vertikal (d.h. zwischen den Fachhändlern einerseits und\nden Herstellern andererseits) eine Festsetzung der Preise, eine Einschränkung der Mengen oder eine Aufteilung der Märkte bezweckt\noder bewirkt. Die Beseitigung wirksamen Wettbewerbs wird nicht\nvermutet (vgl. Art. 5 Abs. 3 KG).\n25. Da die Vermutung von Art. 5 Abs. 3 KG im vorliegenden Sachverhalt nicht greift, ist zu untersuchen, ob die Abrede eine erhebliche\nBeeinträchtigung des Wettbewerbs zur Folge hat. Dazu ist vorab der\nrelevante Markt abzugrenzen.\n2. Der relevante Markt\n\na)\n\nSachlich relevanter Markt\n\n26. Der sachliche Markt umfasst alle Waren oder",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-3_B2.2.1",
+    "ord": 116,
+    "score": 0.725,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/3, S. 320",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-06-07",
+    "date_upper_bound": "2000-06-07",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.038,
+    "recital": false,
+    "cites_this": false,
+    "text": "Verhalten der Hersteller, einheitliche Regeln über die Rabattgewährung im Vertrieb anzuwenden, angesichts der verbindlichen Margenordnung eine Wettbewerbsbeseitigung bewirkt, die unter den\nTatbestand von Artikel 5 Absatz 3 Buchstabe a KG zu subsumieren ist.\nC.2.1.\n\nErheblichkeit der Wettbewerbsbeeinträchtigung\n\n96. Selbst wenn davon ausgegangen werden müsste, dass es sich bei\nder geprüften Abrede nicht um einen Fall von Artikel 5 Absatz 3 Buc hstabe a KG handelte oder sich die Vermutung umstossen liesse, zeigen\ndie nachfolgenden Ausführungen, dass die Abrede mindestens zu einer erheblichen Beeinträchtigung des wirksamen Wettbewerbs führt.\nDie Beurteilung der Erheblichkeit erfolgt gestützt auf quantitative sowie qualitative Kriterien (vgl. Verfügung der Wettbewerbskommission\nvom 8. Mai 2000 i.S. \"AFEC\", RPW 2000/2, S. 177, Rz. 50; ZÄCH, Schweizerisches Kartellrecht, Rz. 282 ff.).\nC.2.1.3.a\n\nQualitative Kriterien\n\n97. Bezüglich des qualitativen Elementes ist festzuhalten, dass",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2000-4_B2.2.1",
+    "ord": 58,
+    "score": 0.723,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2000/4, S. 588",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-12-04",
+    "date_upper_bound": "2000-12-04",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.024,
+    "recital": false,
+    "cites_this": false,
+    "text": "nachgelagerten Markt die Folge wäre.\nDamit ist insbesondere dann zu rechnen, wenn:\n\n\na)\n\nallein oder kollektiv marktbeherrschende Unternehmen\nsolche Preisdiskriminierungen praktizieren, oder\n\nb)\n\ndie Preisdiskriminierungen horizontal koordiniert werden.\n\nDie FBB kennt noch eine vierte Kundenkategorie, diejenige der Kleinstbezüger, welche\njedoch von untergeordneter Bedeutung ist (vgl. Rz. 57).\n\n\n\n2000/4\n\n\n98. Ob es sich bei der Preisdifferenzierung nach Kundengruppen um\neine Abrede im Sinne von Artikel 4 Absatz 1 KG handelt, kann im vorliegenden Fall jedoch offen gelassen werden: Wie Kapitel B. (Rz. 194\nff.) zeigen wird, hängt die Wettbewerbswirkung dieser allfälligen Abrede in zentraler Weise von der Alleinvertriebsvereinbarung zwischen\nSchweizer Belagsanbietern und deutschen Mischwerken ab und kann\nnur im Zusammenhang mit der AVV beurteilt werden.\nB.1.\n\nVorbehaltene Vorschriften\n\n99. Dem KG sind Vorschriften vorbehalten, die auf\n[…]\nEffizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung des\nwirksamen Wettbewerbs führen, unzulässig.\n102. Um festzustellen, ob die Alleinvertriebsvereinbarung eine unzulässige Wettbewerbsbeschränkung darstellt, ist vorab der sachlich\nund räumlich relevante Markt abzugrenzen.\nB.2.\n\nRelevanter Markt\n\nB.2.1.a\n\nSachlich relevanter Markt\n\n103. Nach Artikel 11 Absatz 3 Buchstabe a",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1999-3_B2.2.3",
+    "ord": 37,
+    "score": 0.72,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1999/3, S. 454",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1999-09-06",
+    "date_upper_bound": "1999-09-06",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "KG).\n54. In den hier zu beurteilenden Märkten gibt es keine Vorschriften\n– namentlich auch urheberrechtlicher Natur –, die Wettbewerb nicht\nzulassen. Der Vorbehalt von Art. 3 Absätze 1 und 2 KG wird von den\nParteien auch nicht geltend gemacht.\n\nUnzulässigkeit der Wettbewerbsabrede über die indirekte\nFestsetzung von Preisen auf Handelsstufe mittels\nSammelrevers\n\n2. Unzulässigkeitsvermutung\n55. Laut Art. 5 Abs. 1 KG sind Abreden, die den Wettbewerb auf\neinem Markt für bestimmte Waren oder Leistungen erheblich\nbeeinträchtigen und sich nicht durch Gründe der wirtschaftlichen\nEffizienz rechtfertigen lassen, sowie Abreden, die zur Beseitigung\nwirksamen Wettbewerbs führen, unzulässig.\n56. Gemäss Art. 5 Abs. 3 Bst. a KG wird die Beseitigung wirksamen\nWettbewerbs bei Abreden über die direkte oder indirekte\nFestsetzung von Preisen vermutet, sofern sie zwischen Unternehmen\ngetroffen werden, die tatsächlich oder der Möglichkeit nach\nmiteinander im Wettbewerb stehen.\n\n\n\n1999/3\n\n\n57. Angesichts der organisatorischen Bündelung als Ausdruck des",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "ord": 26,
+    "score": 0.719,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2005/1, S. 114",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2000-07-17",
+    "date_upper_bound": "2000-07-17",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "bezweckt\noder bewirkt eine Wettbewerbsbeschränkung.\n48. Im vorliegenden Fall haben Feldschlösschen und\nCCB eine schriftliche Vereinbarung geschlossen. Der\nVertriebsvertrag regelt die Art und den Umfang der\nZusammenarbeit, legt die Aufgabenverteilung fest\n\n\n\n2005/1\n\nund sieht [...] vor. Das Tatbestandsmerkmal des bewussten und\n[…]\nGetränkehersteller bei\nFeldschlösschen in der Funktion als Getränkevertreiber, spezielle wettbewerbsbeschränkende Vertragsklauseln wie Exklusivität seien nicht vorgesehen. Der\nEinkauf bestimmter Leistungen bei Dritten ist in einem arbeitsteiligen Produktionsprozess, welcher moderne Wirtschaftssysteme kennzeichnet, alltäglich\nund es würde den Begriff der Wettbewerbsabrede\nvielleicht überstrapazieren, würde allein der Einkauf\neiner Leistung bei einem Dritten als solche qualifiziert.\n51. Im vorliegenden Fall kann jedoch die Frage offen\nbleiben, ob es sich um eine Abrede im Sinne von Artikel 4 Absatz 1 KG handelt, da diese - wie nachfolgend\ngezeigt wird - keine erhebliche Wettbewerbsbeschränkung bewirken würde.\nB.3.\n\nErheblichkeit\n\n52. Um die Frage der Erheblichkeit zu beurteilen, ist\nin einem ersten Schritt der relevante Markt abzugrenzen. In einem zweiten Schritt ist die Auswirkung\nder Abrede auf diesen Markt zu klären.\nB.3.2.\n\nDer relevante Markt\n\n53. Der sachliche Markt umfasst alle Waren oder",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2001-1_B1.1.2",
+    "ord": 20,
+    "score": 0.719,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2001/1, S. 64",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-01-16",
+    "date_upper_bound": "2001-01-16",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "Gestaltung von Preisnachlässen (1-10% aller gewährten Preisnachlässe). Aus diesen Gründen kann auch nicht von einer indirekten Festsetzung der Preise - beziehungsweise von Preisbestandteilen - im Sinne von Artikel 5 Absatz 3 Buchstabe a KG ausgegangen\nwerden.\nB.2.\n\nRichtlinien Konzernabschlüsse als Wettbewerbsabrede\n\n33. Die Richtlinien Konzernabschlüsse legen fest, unter welchen\n[…]\nim Übrigen nach objektiven Kriterien.\n35. Bei den Richtlinien Konzernabschlüsse handelt es sich nicht um\neine Preis-, Mengen- oder Gebietsabrede gemäss Artikel 5 Absatz 3\nKG. Die Beurteilung erfolgt somit mit Blick auf Artikel 5 Absatz 1 KG.\nDie Frage, ob es sich überhaupt um eine erhebliche Wettbewerbsbeeinträchtigung handelt, kann in diesem Fall offen gelassen werden, da\n- wie im Folgenden zu zeigen sein wird - sich die Abrede aus Gründen\nder wirtschaftlichen Effizienz rechtfertigen lässt.\n\n\n\n2001/1\n\n\n36. Die Wettbewerbskommission hat eine Bekanntmachung über die",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_1998-2_B1.1.2",
+    "ord": 19,
+    "score": 0.712,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 1998/2, S. 189",
+    "lang": "de",
+    "section": "Vorabklärungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "1998-05-28",
+    "date_upper_bound": "1998-05-28",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.033,
+    "recital": false,
+    "cites_this": false,
+    "text": "sowohl Innen- als auch Aussenwettbewerb.\n2.\n\nErheblichkeit\n\n44. Die Literatur ist sich nicht einig, wie die Schwelle der Erheblichkeit bei einer Wettbewerbsabrede zu definieren ist. Bis anhin konnte\nauch die Praxis noch keine klare allgemeingültige Regel entwickeln,\nab wann eine Abrede eine erhebliche Wettbewerbsbeschränkung\ndarstellt. Grundsätzlich kann davon ausgegangen werden, dass eine\nBeschränkung dann unerheblich ist, wenn sie den Wettbewerb im\nVergleich zur Situation vor der Abrede nicht in einem für die Marktteilnehmer nennenswerten Ausmass zu beeinflussen vermag. Insbesondere muss für die Nachfrager ein Ausweichen ohne weiteres möglich sein. Nicht an der Abrede Beteiligte sind in ihren Verhaltensweisen nicht in nennenswertem Ausmass eingeschränkt. Dass gleichzeitig\nnoch Innenwettbewerb besteht, ist möglich, aber nicht zwingend.\n45. Gemäss Aussagen des Vertreters des Schweizerischen Hausbesitzervereins (SHBV) sind bis dato nie irgendwelche Beschwerden von\nMitgliedern eingegangen, die sich durch die Tarife oder Empfehlungen des SVIT in irgendeiner Weise behindert gefühlt haben. Im Gegenteil scheinen die Hausbesitzer sehr zufrieden mit dem Preis / Leistungsverhältnis auf den Märkten für Immobilientreuhanddienstleistungen. Aus der Sicht des SHBV stellt eine Mitgliedsschaft im SVIT",
+    "text_view": "issue_reading_order"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2002-1_B2.2.4",
+    "ord": 39,
+    "score": 0.706,
+    "spider": "CH_WEKO_RPW",
+    "docket": "RPW 2002/1, S. 130",
+    "lang": "de",
+    "section": "Untersuchungen",
+    "tier": "1",
+    "source": "agency",
+    "date": "2001-12-17",
+    "date_upper_bound": "2001-12-17",
+    "date_source": "text",
+    "regime": "KG 1995",
+    "regime_exact": true,
+    "after_version": false,
+    "recital_share": 0.029,
+    "recital": false,
+    "cites_this": false,
+    "text": "auch Abreden unter Mitbewerbern, welche Angebotspreise in einer Submission zum Gegenstand haben (CHRIST, Nr. 374 ff.).\nNicht entscheidend ist, ob die Abrede dahin geht, identische Angebote\neinzureichen, ob nur innerhalb einer Toleranzmarge (z.B. +/-10%) of-\n\n\n\n2002/1\n\n\nferiert werden darf oder ob eine Steuerung des Zuschlags bezweckt ist\n(CHRIST, Nr. 107 ff.).\nb) Im vorliegenden Fall zeigt die Beweiswürdigung, dass die Parteien\neine Vereinbarung über den zu offerierenden Preis getroffen haben\n(Rz. 18 ff.).\nc) Es kann somit festgehalten werden, dass die getroffene Abrede\nzu einer Preisfestsetzung zwischen Unternehmen führt, die miteinander im Wettbewerb stehen (Art. 5 Abs. 3 Bst. a KG).\nb)\n\nVermutung der Beseitigung des wirksamen Wettbewerbs\n\n31. Die in Artikel 5 Absatz 3 KG",
+    "text_view": "issue_reading_order"
+   }
+  ],
+  "track": "Bekanntmachung:11",
+  "judges": {
+   "claude-opus": "absent",
+   "gemini-3.1-pro": "absent"
+  },
+  "judge_passages": [
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It examines the general significance under Art. 5 KG of a coordinated dealer approach to manufacturers, not the notice's insignificance threshold for vertical agreements."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the general assessment of significance under Article 5 of the Cartel Act, not the market share thresholds of the vertical-restraints notice."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It assesses significance by quantitative and qualitative criteria for a margin and discount scheme, not the notice's market-share and cumulative-effect test."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses general qualitative and quantitative criteria for significance under the Cartel Act, not the specific thresholds of the vertical notice."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It deals with price discrimination, reserved provisions and market definition for an exclusive distribution agreement, not this rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage is about assessing the competitive effects of an exclusive distribution agreement and price differentiation generally, not the vertical notice's insignificance rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It deals with reserved provisions and the Art. 5 para. 3 KG presumption for collective price fixing."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage restates the presumption of elimination of competition for price fixing under Article 5 paragraph 3 of the Cartel Act."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It announces a generic significance test (market definition, then effect) for a distribution contract, without the notice's threshold or cumulative-effect rule."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage deals with the general steps for assessing significance through market definition and effects, not the vertical notice's rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It leaves significance open and turns to efficiency justification, so the notice's insignificance rule is not addressed."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage leaves the general question of significance open due to economic efficiency and does not discuss the vertical notice's thresholds."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It defines insignificance by a general test of noticeable market influence and ease of switching, not by the notice's market-share threshold and cumulative effect."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage discusses the general definition and threshold of significance in the literature for a horizontal case, not the vertical notice's rule."
+    }
+   },
+   {
+    "claude-opus": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "It concerns horizontal bid-rigging and the Art. 5 para. 3 lit. a KG presumption."
+    },
+    "gemini-3.1-pro": {
+     "label": "unrelated",
+     "quote": "",
+     "quote_found": false,
+     "why": "The passage concerns the presumption of elimination of competition for horizontal bid-rigging agreements."
+    }
+   }
+  ],
+  "status": "unanimous",
+  "prelabel": "absent",
+  "agreement": "2/2"
+ }
+]
