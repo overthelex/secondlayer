@@ -16,12 +16,15 @@ are searched in date order, nearest by meaning first:
           less those already read, in date order, in batches of eight;
   next    the batches (the judges read all; the first batch with an agreed
           application, or the reader on an earlier dispute, settles a rule);
-  result  the text lag per codification.
+  result  the text lag per codification;
+  citedage  the age of the decisions the Erläuterungen cite for a sentence,
+          where the decision holds or states it (anchors_final.json).
 
     python3 textlag.py base
     python3 textlag.py plan --dsn ...
     python3 textlag.py next --dsn ... --round 1
     python3 textlag.py result
+    python3 textlag.py citedage --dsn ...
 """
 from __future__ import annotations
 
@@ -29,6 +32,7 @@ import argparse
 import collections
 import json
 import pathlib
+import statistics
 import sys
 from datetime import date
 
@@ -222,18 +226,39 @@ def cmd_result(args) -> int:
     return 0
 
 
+# publication dates of the two Erläuterungen
+ERL_PUBLISHED = {"2019-04-09": date(2017, 6, 12), "2022-12-12-erl": date(2022, 12, 12)}
+
+
+def cmd_citedage(args) -> int:
+    conn = ex.connect(args.dsn)
+    dates = {r["ecli"]: r["d"] for r in conn.execute(
+        "SELECT ecli, coalesce(date_exact, date_upper_bound) d FROM ch_weko_audit_corpus").fetchall()}
+    rows = []
+    for a in json.loads((DATA / "anchors_final.json").read_text()):
+        if a["result"] in ("holds", "states") and dates.get(a["cited_ecli"]):
+            rows.append({"version": a["version"], "pid": a["pid"], "cited_ecli": a["cited_ecli"],
+                         "decided": str(dates[a["cited_ecli"]]),
+                         "age_years": round((ERL_PUBLISHED[a["version"]] - dates[a["cited_ecli"]]).days / 365.25, 1)})
+    (DATA / "cited_age.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1))
+    for v in ERL_PUBLISHED:
+        xs = [r["age_years"] for r in rows if r["version"] == v]
+        print(v, len(xs), "median", statistics.median(xs) if xs else None)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("base")
-    for name in ("plan", "next"):
+    for name in ("plan", "next", "citedage"):
         s = sub.add_parser(name)
         s.add_argument("--dsn", required=True)
         if name == "next":
             s.add_argument("--round", type=int, required=True)
     sub.add_parser("result")
     args = ap.parse_args()
-    return {"base": cmd_base, "plan": cmd_plan, "next": cmd_next, "result": cmd_result}[args.cmd](args)
+    return {"base": cmd_base, "plan": cmd_plan, "next": cmd_next, "result": cmd_result, "citedage": cmd_citedage}[args.cmd](args)
 
 
 if __name__ == "__main__":

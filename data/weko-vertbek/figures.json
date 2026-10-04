@@ -529,5 +529,31 @@
   "other_median": 3.65,
   "logrank_own_vs_other": 0.033,
   "censored_short": 2
+ },
+ "text_lag": {
+  "n": 38,
+  "median": 7.0,
+  "quartiles": [
+   5.9,
+   7.0,
+   9.5
+  ],
+  "base_median": 5.9,
+  "moved": 15,
+  "moved_by_reader": 4,
+  "max_shift": 11.0,
+  "over_five": 33,
+  "over_ten": 9,
+  "earliest_year": 1995
+ },
+ "cited_age": {
+  "2019-04-09": {
+   "n": 19,
+   "median": 2.0
+  },
+  "2022-12-12-erl": {
+   "n": 37,
+   "median": 5.6
+  }
  }
 }
