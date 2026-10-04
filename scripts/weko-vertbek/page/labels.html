@@ -326,8 +326,10 @@
         '<span class="tag">' + esc(when) + "</span>" +
         (e.regime ? '<span class="tag">' + esc((e.regime_exact ? "" : "≤ ") + e.regime) + "</span>" : "") +
         (e.after_version ? '<span class="tag late">nach der Fassung</span>' : "") +
-        (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "");
-      var on = used.indexOf(e.ecli) >= 0;
+        (e.lang && e.lang !== "de" ? '<span class="tag">' + esc(e.lang) + "</span>" : "") +
+        (e.how ? '<span class="tag">' + (e.how === "pinpoint" ? "zitierte Stelle" : "nach Sinn") + "</span>" : "");
+      var pid = e.ecli + "|" + e.ord;
+      var on = used.indexOf(pid) >= 0 || used.indexOf(e.ecli) >= 0;   // older marks were per decision
       var votes = "";
       if (st.label && d.judge_passages && d.judge_passages[n]) {
         var jv = d.judge_passages[n];
@@ -342,13 +344,13 @@
         '<span class="src">' + esc(e.spider || "") + '</span><span class="tags">' + tags + "</span></span>" +
         '<span class="score">' + e.score.toFixed(3) + "</span></summary>" +
         '<div class="body">' + esc(e.text) + "</div>" +
-        '<button class="use" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
+        '<button class="use" data-pass="' + esc(pid) + '" data-ecli="' + esc(e.ecli) + '" aria-pressed="' + on + '">' +
         (on ? "stützt den Satz ✓" : "stützt den Satz") + "</button>" + votes + "</details>";
     }).join("");
 
     document.getElementById("main").innerHTML =
       '<div class="meta"><span class="chip">' + esc(VERSIONS[d.version] || d.version) + "</span>" +
-      '<span class="chip">' + esc(d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
+      '<span class="chip">' + esc(d.part === "anchor" ? "Zitat" : d.part === "preamble" ? "Erwägungsgrund" : d.part === "note" ? "Randziffer" : "Ziffer/Artikel") + " " + esc(d.pid) + "</span>" +
       (d.before ? '<span class="chip late">nur Entscheide vor ' + esc(d.before) + "</span>" : "") +
       (d.status ? '<span class="chip ' + esc(d.status) + '">' + (d.status === "check" ? "Stichprobe" : d.status === "rest" ? "Rest" : "strittig") + "</span>" : "") +
       "<span>" + (current + 1) + " von " + DATA.length + "</span></div>" +
@@ -364,7 +366,9 @@
       (st.label && d.judges ? '<div class="judged">Richter: ' + Object.keys(d.judges).map(function (j) {
         return esc(j) + " = " + esc(LONG[d.judges[j]] || d.judges[j] || "—");
       }).join(" · ") + "</div>" : "") +
-      '<div class="ev-head"><h3>Fundstellen</h3><span>dichte Suche über 274 112 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst</span></div>' +
+      '<div class="ev-head"><h3>Fundstellen</h3><span>' + (d.part === "anchor"
+        ? "Passagen aus dem zitierten Entscheid: die zitierte Stelle (Rz / E.), wo gefunden, und die nächsten nach Sinn"
+        : "dichte Suche über 252 122 Passagen; eine Fundstelle je Entscheid, Übersetzungen zusammengefasst") + '</span></div>' +
       ev +
       '<div class="foot"><button class="btn" id="prev">← zurück</button>' +
       '<button class="btn" id="next">weiter →</button></div>';
@@ -374,7 +378,8 @@
     });
     document.querySelectorAll(".use").forEach(function (b) {
       b.addEventListener("click", function () {
-        var e = b.getAttribute("data-ecli"), list = (state[key(DATA[current])] || {}).evidence || [];
+        var e = b.getAttribute("data-pass"), whole = b.getAttribute("data-ecli");
+        var list = ((state[key(DATA[current])] || {}).evidence || []).filter(function (x) { return x !== whole; });
         list = list.indexOf(e) >= 0 ? list.filter(function (x) { return x !== e; }) : list.concat([e]);
         save({ evidence: list });
       });
