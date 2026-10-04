@@ -135,7 +135,7 @@ def main() -> int:
 
     # --- measurement 1
     # v5: chains from the verified links between versions (PAPER-239, links_v4.json)
-    m1_all = json.loads((DATA / "measure1_final_v6.json").read_text())
+    m1_all = json.loads((DATA / "measure1_final_v7.json").read_text())
     links = json.loads((DATA / "links_v4.json").read_text())["links"]
     # only a norm can be codified or announced (typology_v3.json)
     m1 = [f for f in m1_all if f["type"] == "norm"]
@@ -153,6 +153,20 @@ def main() -> int:
                      "decided_by": {f"{a}|{b}": n for (a, b), n in collections.Counter((f["final_class"], f["decided_by"]) for f in m1).items()},
                      "by_version": tab, "lag_median": statistics.median(lags),
                      "lag_quartiles": statistics.quantiles(lags, n=4)}
+
+    # --- uptake: decisions citing the notice per year (uptake.py, PAPER-241)
+    up = json.loads((DATA / "uptake.json").read_text())["years"]
+    cite = {u["year"]: u for u in up}
+    F["uptake"] = {
+        "total": sum(u["citing"] for u in up),
+        "first_year": min(u["year"] for u in up if u["citing"]),
+        "to_2010": sum(u["citing"] for u in up if u["year"] <= 2010),
+        "since_2011": sum(u["citing"] for u in up if u["year"] >= 2011),
+        "max_to_2010": max(u["citing"] for u in up if u["year"] <= 2010),
+        "courts": sum(u["citing_by_tier"].get("federal_court", 0) + u["citing_by_tier"].get("cantonal", 0) for u in up),
+        "first_court_year": min(u["year"] for u in up if u["citing_by_tier"].get("federal_court") or u["citing_by_tier"].get("cantonal")),
+        "federal_peak": max(up, key=lambda u: u["citing_by_tier"].get("federal_court", 0))["year"],
+    }
 
     # --- what happens to a norm in the later versions (PAPER-239)
     chains = [["2002-02-18", "2007-07-02", "2010-06-28", "2017-05-22", "2022-12-12"], ["2019-04-09", "2022-12-12-erl"]]
@@ -276,6 +290,10 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    u = F["uptake"]
+    out.update({"UpTotal": num(u["total"]), "UpFirstYear": str(u["first_year"]), "UpToTen": num(u["to_2010"]),
+                "UpSinceEleven": num(u["since_2011"]), "UpMaxToTen": num(u["max_to_2010"]), "UpCourts": num(u["courts"]),
+                "UpFirstCourtYear": str(u["first_court_year"]), "UpFederalPeak": str(u["federal_peak"])})
     out["EuLaterAnn"] = num(F["eu_later"].get("announcement", 0))
     out["EuLaterAll"] = num(sum(F["eu_later"].values()))
     out["ImportedFirstAll"] = num(sum(F["imported_first_versions"].values()))

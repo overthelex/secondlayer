@@ -1,0 +1,520 @@
+{
+ "years": [
+  {
+   "year": 1996,
+   "record": 3,
+   "record_by_tier": {
+    "agency": 1,
+    "other_federal": 2
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 1997,
+   "record": 51,
+   "record_by_tier": {
+    "other_federal": 1,
+    "agency": 50
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 1998,
+   "record": 58,
+   "record_by_tier": {
+    "agency": 52,
+    "other_federal": 3,
+    "federal_court": 3
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 1999,
+   "record": 57,
+   "record_by_tier": {
+    "agency": 51,
+    "federal_court": 1,
+    "cantonal": 1,
+    "other_federal": 4
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 2000,
+   "record": 80,
+   "record_by_tier": {
+    "federal_court": 4,
+    "agency": 71,
+    "other_federal": 5
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 2001,
+   "record": 87,
+   "record_by_tier": {
+    "federal_court": 5,
+    "agency": 77,
+    "cantonal": 1,
+    "other_federal": 4
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 2002,
+   "record": 81,
+   "record_by_tier": {
+    "federal_court": 6,
+    "agency": 74,
+    "cantonal": 1
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 2003,
+   "record": 62,
+   "record_by_tier": {
+    "federal_court": 9,
+    "agency": 52,
+    "cantonal": 1
+   },
+   "citing": 5,
+   "citing_by_tier": {
+    "agency": 5
+   }
+  },
+  {
+   "year": 2004,
+   "record": 56,
+   "record_by_tier": {
+    "agency": 41,
+    "other_federal": 1,
+    "federal_court": 13,
+    "cantonal": 1
+   },
+   "citing": 2,
+   "citing_by_tier": {
+    "cantonal": 1,
+    "agency": 1
+   }
+  },
+  {
+   "year": 2005,
+   "record": 51,
+   "record_by_tier": {
+    "federal_court": 7,
+    "agency": 42,
+    "other_federal": 1,
+    "cantonal": 1
+   },
+   "citing": 1,
+   "citing_by_tier": {
+    "cantonal": 1
+   }
+  },
+  {
+   "year": 2006,
+   "record": 45,
+   "record_by_tier": {
+    "federal_court": 8,
+    "agency": 34,
+    "cantonal": 3
+   },
+   "citing": 1,
+   "citing_by_tier": {
+    "agency": 1
+   }
+  },
+  {
+   "year": 2007,
+   "record": 85,
+   "record_by_tier": {
+    "other_federal": 2,
+    "federal_court": 17,
+    "agency": 65,
+    "cantonal": 1
+   },
+   "citing": 0,
+   "citing_by_tier": {}
+  },
+  {
+   "year": 2008,
+   "record": 80,
+   "record_by_tier": {
+    "other_federal": 6,
+    "federal_court": 17,
+    "agency": 55,
+    "cantonal": 2
+   },
+   "citing": 3,
+   "citing_by_tier": {
+    "agency": 2,
+    "federal_court": 1
+   }
+  },
+  {
+   "year": 2009,
+   "record": 53,
+   "record_by_tier": {
+    "other_federal": 2,
+    "agency": 38,
+    "federal_court": 13
+   },
+   "citing": 4,
+   "citing_by_tier": {
+    "agency": 4
+   }
+  },
+  {
+   "year": 2010,
+   "record": 61,
+   "record_by_tier": {
+    "cantonal": 3,
+    "agency": 33,
+    "federal_court": 24,
+    "other_federal": 1
+   },
+   "citing": 2,
+   "citing_by_tier": {
+    "agency": 1,
+    "federal_court": 1
+   }
+  },
+  {
+   "year": 2011,
+   "record": 75,
+   "record_by_tier": {
+    "federal_court": 19,
+    "agency": 49,
+    "cantonal": 7
+   },
+   "citing": 11,
+   "citing_by_tier": {
+    "agency": 11
+   }
+  },
+  {
+   "year": 2012,
+   "record": 75,
+   "record_by_tier": {
+    "federal_court": 20,
+    "agency": 48,
+    "cantonal": 6,
+    "other_federal": 1
+   },
+   "citing": 18,
+   "citing_by_tier": {
+    "cantonal": 2,
+    "agency": 14,
+    "federal_court": 2
+   }
+  },
+  {
+   "year": 2013,
+   "record": 80,
+   "record_by_tier": {
+    "federal_court": 20,
+    "other_federal": 2,
+    "cantonal": 10,
+    "agency": 48
+   },
+   "citing": 19,
+   "citing_by_tier": {
+    "agency": 10,
+    "federal_court": 8,
+    "cantonal": 1
+   }
+  },
+  {
+   "year": 2014,
+   "record": 86,
+   "record_by_tier": {
+    "federal_court": 14,
+    "cantonal": 11,
+    "agency": 61
+   },
+   "citing": 5,
+   "citing_by_tier": {
+    "agency": 4,
+    "cantonal": 1
+   }
+  },
+  {
+   "year": 2015,
+   "record": 78,
+   "record_by_tier": {
+    "agency": 55,
+    "federal_court": 21,
+    "cantonal": 2
+   },
+   "citing": 15,
+   "citing_by_tier": {
+    "agency": 10,
+    "cantonal": 3,
+    "federal_court": 2
+   }
+  },
+  {
+   "year": 2016,
+   "record": 83,
+   "record_by_tier": {
+    "federal_court": 29,
+    "other_federal": 2,
+    "agency": 51,
+    "cantonal": 1
+   },
+   "citing": 11,
+   "citing_by_tier": {
+    "agency": 7,
+    "federal_court": 4
+   }
+  },
+  {
+   "year": 2017,
+   "record": 101,
+   "record_by_tier": {
+    "cantonal": 4,
+    "agency": 64,
+    "federal_court": 33
+   },
+   "citing": 6,
+   "citing_by_tier": {
+    "agency": 3,
+    "federal_court": 3
+   }
+  },
+  {
+   "year": 2018,
+   "record": 81,
+   "record_by_tier": {
+    "agency": 49,
+    "federal_court": 28,
+    "cantonal": 4
+   },
+   "citing": 11,
+   "citing_by_tier": {
+    "federal_court": 3,
+    "agency": 6,
+    "cantonal": 2
+   }
+  },
+  {
+   "year": 2019,
+   "record": 110,
+   "record_by_tier": {
+    "other_federal": 4,
+    "agency": 68,
+    "cantonal": 6,
+    "federal_court": 32
+   },
+   "citing": 16,
+   "citing_by_tier": {
+    "agency": 7,
+    "federal_court": 9
+   }
+  },
+  {
+   "year": 2020,
+   "record": 111,
+   "record_by_tier": {
+    "federal_court": 38,
+    "other_federal": 2,
+    "agency": 68,
+    "cantonal": 3
+   },
+   "citing": 3,
+   "citing_by_tier": {
+    "agency": 3
+   }
+  },
+  {
+   "year": 2021,
+   "record": 115,
+   "record_by_tier": {
+    "other_federal": 1,
+    "cantonal": 24,
+    "agency": 55,
+    "federal_court": 35
+   },
+   "citing": 11,
+   "citing_by_tier": {
+    "federal_court": 6,
+    "cantonal": 1,
+    "agency": 4
+   }
+  },
+  {
+   "year": 2022,
+   "record": 115,
+   "record_by_tier": {
+    "cantonal": 4,
+    "federal_court": 36,
+    "agency": 75
+   },
+   "citing": 18,
+   "citing_by_tier": {
+    "federal_court": 12,
+    "agency": 3,
+    "cantonal": 3
+   }
+  },
+  {
+   "year": 2023,
+   "record": 97,
+   "record_by_tier": {
+    "cantonal": 8,
+    "agency": 59,
+    "federal_court": 28,
+    "other_federal": 2
+   },
+   "citing": 8,
+   "citing_by_tier": {
+    "agency": 4,
+    "federal_court": 4
+   }
+  },
+  {
+   "year": 2024,
+   "record": 129,
+   "record_by_tier": {
+    "cantonal": 12,
+    "agency": 92,
+    "federal_court": 21,
+    "other_federal": 4
+   },
+   "citing": 12,
+   "citing_by_tier": {
+    "cantonal": 1,
+    "agency": 10,
+    "federal_court": 1
+   }
+  },
+  {
+   "year": 2025,
+   "record": 80,
+   "record_by_tier": {
+    "other_federal": 3,
+    "cantonal": 5,
+    "agency": 50,
+    "federal_court": 22
+   },
+   "citing": 3,
+   "citing_by_tier": {
+    "agency": 2,
+    "federal_court": 1
+   }
+  },
+  {
+   "year": 2026,
+   "record": 36,
+   "record_by_tier": {
+    "federal_court": 18,
+    "cantonal": 4,
+    "agency": 14
+   },
+   "citing": 4,
+   "citing_by_tier": {
+    "agency": 4
+   }
+  }
+ ],
+ "samples": {
+  "2021": [
+   "CH_BGer 2C_43/2020: …nsion. La COMCO s'est en revanche penchée sur la question en 2010. Sa Communication concernant l'appréciation des accords verticaux 1 (Décision de la Commission de la conc…",
+   "ZH_Obergericht HG180172: …ken oder bewirken (Art. 4 Abs. 1 KG). Art. 5 Abs. 4 KG wird durch die Vertikalbekanntmachung vom 28. Juni 2010 (Stand 22. Mai 2017; …"
+  ],
+  "2022": [
+   "CH_BGer 2C_49/2020: … juin 2010 concernant l'appréciation des accords verticaux [ci-après: CommVert], FF 2010 4625, ch. 1). Pour tomber dan…",
+   "CH_BGE BGE 148 II 321: …écision de la Commission de la concurrence du 28 juin 2010 [ci-après: CommVert], FF 2010 4625 ch. 1). En revanche, les…"
+  ],
+  "2012": [
+   "ZH_Obergericht HE120134: … führen kann. Die Praxis der Wettbewerbskommission (WEKO) wird in der Vertikalbekanntmachung erläutert (vgl. insbesondere Art. 10 ff…",
+   "SG_Gerichte HG.2011.286: …ettbewerbskommission scheint ihre Meinung geändert zu haben. In ihrer Bekanntmachung über die wettbewerbsrechtliche Behandlung vertikaler Abreden vom 18. Februar 2002 in Ziffer 3 zählte…"
+  ],
+  "2024": [
+   "ZG_Obergericht Z2 2024 32: …aufen, die nicht zum Vertrieb zugelassen sind (vgl. Art. 5 Abs. 1 der Bekanntmachung        über die wettbewerbsrechtliche Behandlung vertikaler Abreden vom 12. Dezember 2022        [BBl 2022 …",
+   "CH_WEKO_RPW RPW 2023/4, S. 769: …rden für die               Kommentar Wettbewerbsrecht II – VKU, SVKG, VertBek, PüG, BöB,                             …"
+  ],
+  "2018": [
+   "CH_BGE BGE 144 II 246: …unications concernant l'appréciation des accords verticaux (ci-après: CommVert). La version du 18 février 2002 (en vig…",
+   "CH_WEKO Service Après-Vente für Uhren: …i 2010 über die wettbewerbsrechtliche  Behandlung vertikaler Abreden, Vertikalbekanntmachung, VertBek.                              …"
+  ],
+  "2009": [
+   "CH_WEKO_RPW RPW 2009/2, S. 143: …                                          KOPF P./GRABER A., Die neue Vertikalbekanntmachung – Ein Leitfaden le marché ou à imposer …",
+   "CH_WEKO GABA: …wettbewerbsrechtliche Behandlung vertikaler Abreden vom 2. Juli 2007 [Vertikalbekanntmachung, VertBek]). Der passive Ver- kauf ist d…"
+  ],
+  "2011": [
+   "CH_WEKO_RPW RPW 2011/2, S. 230: …rmutungstatbestand von Art. 5 Abs. 4 KG nicht (vgl. auch Ziff. 10 (1) VertBek). B.6.2     Erhebliche Beeinträchtigung…",
+   "CH_WEKO_RPW RPW 2012/1, S. 74: …                                                       Rz 132 ff. der Vertikalbekanntmachung unangebracht. Zutreffend           110 …"
+  ],
+  "2013": [
+   "CH_WEKO Abreden im Bereich Luftfracht: …ettbewerbsrechtliche Behandlung vertikaler Abreden vom 28. Juni 2012 (Vertikalbekanntmachung, VertBek) gelten. Gemäss dieser führen …",
+   "CH_WEKO Livres en langue française: … re- gard de la loi sur les cartels. Ni la loi sur les cartels, ni la CommVert ne contiennent de dis- positions en la …"
+  ],
+  "2019": [
+   "CH_WEKO AdBlue: …n können (Ziff. 1 VertBek 64). 42. In Erw.-Gr. VI. und VII. nimmt die Vertikalbekanntmachung Bezug auf die Vertikal-GVO 65 und die e…",
+   "CH_WEKO_RPW RPW 2020/2, S. 626: …                                        ausführlicher als jene in der Vertikalbekanntmachung.                                       …"
+  ],
+  "2015": [
+   "CH_WEKO Badezimmer: …ch bei den team-Katalog nicht um vertikale Abreden han- delte und die Vertikalbekanntmachung folglich nicht zur Anwendung gelangen k…",
+   "CH_WEKO Flügel und Klaviere: …0 über die wettbewerbsrechtliche Behandlung vertikaler       Abreden (Vertikalbekanntmachung, VertBek).      22/2012/00263/COO.2101.…"
+  ],
+  "2017": [
+   "CH_WEKO_RPW RPW 2018/4, S. 820: …Die der zu beurteilenden Abrede – wie im Folgenden gezeigt       neue Vertikalbekanntmachung 2010 der WEKO, Jusletter vom wird – auc…",
+   "CH_WEKO_RPW RPW 2017/2, S. 284: … oder Leistungen            rechtliche Behandlung vertikaler Abreden (Vertikalbekanntmachung, Wettbewerb nicht zulassen, insbesonder…"
+  ],
+  "2016": [
+   "CH_WEKO Bauleistungen See-Gaster: …iterien würde nicht der bisherigen Praxis und den Festlegungen in der Vertikalbekanntmachung1384 entsprechen und im Übrigen zu hohe …",
+   "CH_WEKO Sport im Pay-TV: …is] absichern würden, seien gemäss gefestigter WEKO- Praxis, laut der Vertikal-Bekanntmachungen und gemäss EU-Praxis für eine Dauer v…"
+  ],
+  "2025": [
+   "CH_WEKO Interchange Fees für Debitkarten von Visa: …über die wettbewerbsrechtliche Behandlung vertika-       ler Abreden (Vertikalbekanntmachung, VertBek). 193   Erläuterungen der Wett…",
+   "CH_BGer 2C_442/2023: … der Beschwerdeführerin, sie habe vor der Publikation der revidierten Vertikalbekanntmachung vom 2. Juli 2007 am 30. Oktober 2007 (v…"
+  ],
+  "2014": [
+   "CH_WEKO Kreditkarten Domestische Interchange Fee II (KKDMIF): …werbsrecht II Kommentar,      Oesch/Weber/Zäch (Hrsg.), 2011, Ziff. 6 VertBek N 1. 80      In diesem Sinn etwa RPW 20…",
+   "CH_WEKO_RPW RPW 2013/4, S. 488: … Verkauf umfassen. Inte-          bietsschutz; Ziff. 10 Abs. 1 Bst. b VertBek ). ressanterweise führt BAKBASEL die so…"
+  ],
+  "2020": [
+   "CH_WEKO Optische Netzwerke: …rechtliche Be-       handlung vertikaler Abreden (Stand am 22.5.2017; Vertikalbekanntmachung, VertBek), BBl 2017       4543.     22-…",
+   "CH_WEKO_RPW RPW 2020/2, S. 405: …rien                                   Behandlung vertikaler Abreden (Vertikalbekanntmachung; VertBek).                             …"
+  ],
+  "2023": [
+   "CH_WEKO Zerspanungswerkzeuge: …tale Komponente. 65. Für Konstellationen des dualen Vertriebs ist die Vertikalbekanntmachung der Wettbe- werbskommission (VertBek)10…",
+   "CH_WEKO_RPW RPW 2023/1, S. 113: …nklicken,                                                            [VertBek-Erläuterungen], Rz 8 Punkt 2). Die Erfo…"
+  ],
+  "2003": [
+   "CH_WEKO_RPW RPW 2002/4, S. 558: … 30. Le 19 février 2002, la Commission de la concurrence a publié une communication concernant l'appréciation des accords verticaux (préci- té, cf. ch. 7). Celle-ci déterm…",
+   "CH_WEKO_RPW RPW 2003/2, S. 255: … durch die UBS bewirkt (Art. 5 Abs. 1 KG i.V.m. Ziff. 1 und Ziff. 3 b Bekanntmachung der Wettbewerbskommission über die wettbewerbsrechtliche Behandlung vertikaler Abreden vom 18. Febru- ar 2002 [Bekanntmachung]…"
+  ],
+  "2008": [
+   "CH_WEKO_RPW RPW 2008/3, S. 382: …                ten und den Händlern von Scott Bikes Abreden im Sinne Vertikalbekanntmachung).                                      …",
+   "CH_BVGer A-502/2007: …cialise généralement en son propre nom le produit du fournisseur (cf. communication concernant l'appréciation des accords verticaux, décision de la Commission de la concur…"
+  ],
+  "2010": [
+   "CH_WEKO_RPW RPW 2010/4, S. 640: …us der Betrachtung steht vorliegend der Ver-      34. Ziffer 4 Abs. 1 VertBek definiert selektive Vertriebs- trieb vo…",
+   "CH_BVGer B-2977/2007: …ndlung vertikaler Abreden (publiziert in: BBl 2002 3895; nachfolgend: Vertikal-Bekanntmachung) definiert. Danach liegt ein selektives…"
+  ],
+  "2026": [
+   "CH_WEKO_RPW RPW 2025/3, S. 677: …rliegt.12                                                             Vertikalbekanntmachung19 und die VertBek-Erläu- Dabei ist die …",
+   "CH_WEKO_RPW RPW 2025/3, S. 707: …nisschutz zu ergreifen. Sofern aus kartellrechtlichen        Abreden (Vertikalbekanntmachung, VertBek): Passiver Verkauf ist ein    …"
+  ],
+  "2005": [
+   "VD_Omni CR.2004.0363: …mis aux principes généraux énoncés dans une communication antérieure (Communication concernant l'appréciation des accords verticaux, décision de la Commission de la concur…"
+  ],
+  "2004": [
+   "TI_Gerichte 12.2003.112: …ni in vigore successivamente al 1° novembre 2002, ora contenute nella comunicazione riguardante la valutazione degli accordi verticali alla luce delle disposizioni in materia…",
+   "CH_WEKO_RPW RPW 2005/1, S. 114: …ckzahlung der Restschuld jederzeit kündbar sind (Erheblichkeit gemäss Vertikalbekanntmachung,      Nessun comportamento illecito da …"
+  ],
+  "2006": [
+   "CH_WEKO_RPW RPW 2006/4, S. 682: …   Bekanntmachung über die wettbewerbsrechtliche Behandlung führte EU-Bekanntmachung43 als gerechtfertigt erach-     vertikaler Abreden vom 18. Februar 2002, RPW 2002, S. 404 …"
+  ]
+ }
+}
