@@ -361,6 +361,33 @@
    9.8
   ]
  },
+ "anchors": {
+  "pairs": 116,
+  "results": {
+   "fragment": 49,
+   "states": 11,
+   "holds": 45,
+   "quotes": 5,
+   "absent": 6
+  },
+  "citations": 124,
+  "resolved": 124,
+  "footnotes": 85,
+  "pinpoint": 78,
+  "by_edition": {
+   "2019-04-09": {
+    "n": 49,
+    "full": 19
+   },
+   "2022-12-12-erl": {
+    "n": 67,
+    "full": 37
+   }
+  },
+  "court_n": 66,
+  "court_fragment": 33,
+  "by_reader": 25
+ },
  "exhaustive": {
   "rules": 47,
   "per_rule": 40,

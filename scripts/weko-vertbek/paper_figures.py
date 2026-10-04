@@ -154,6 +154,24 @@ def main() -> int:
                      "by_version": tab, "lag_median": statistics.median(lags),
                      "lag_quartiles": statistics.quantiles(lags, n=4)}
 
+    # --- the citation-anchor test (anchors.py, anchors_final.py, PAPER-233)
+    anc = json.loads((DATA / "anchors_final.json").read_text())
+    cit = json.loads((DATA / "anchors_citations.json").read_text())
+    court = lambda d: (d or "").startswith(("BGE", "B-")) or "_" in (d or "")
+    full = ("holds", "states")
+    F["anchors"] = {
+        "pairs": len(anc), "results": dict(collections.Counter(a["result"] for a in anc)),
+        "citations": len(cit), "resolved": sum(1 for c in cit if c["resolved"]),
+        "footnotes": len({(c["version"], c["footnote"]) for c in cit}),
+        "pinpoint": sum(a["pinpoint_found"] for a in anc),
+        "by_edition": {v: {"n": sum(a["version"] == v for a in anc),
+                           "full": sum(a["version"] == v and a["result"] in full for a in anc)}
+                       for v in ("2019-04-09", "2022-12-12-erl")},
+        "court_n": sum(court(a["cited"]) for a in anc),
+        "court_fragment": sum(court(a["cited"]) and a["result"] == "fragment" for a in anc),
+        "by_reader": sum(a["decided_by"].startswith("reader") for a in anc),
+    }
+
     # --- the exhaustive search (exhaustive.py, PAPER-234)
     ex = json.loads((DATA / "exhaustive_result.json").read_text())
     plan = json.loads((DIR / "exhaustive_plan.json").read_text())
@@ -316,6 +334,14 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    a = F["anchors"]; r = a["results"]
+    out.update({"AnchPairs": num(a["pairs"]), "AnchHolds": num(r.get("holds", 0)), "AnchStates": num(r.get("states", 0)),
+                "AnchFrag": num(r.get("fragment", 0)), "AnchQuotes": num(r.get("quotes", 0)), "AnchAbsent": num(r.get("absent", 0)),
+                "AnchFull": num(r.get("holds", 0) + r.get("states", 0)), "AnchNot": num(r.get("quotes", 0) + r.get("absent", 0)),
+                "AnchCitations": num(a["citations"]), "AnchResolved": num(a["resolved"]), "AnchPinpoint": num(a["pinpoint"]),
+                "AnchSeventeenN": num(a["by_edition"]["2019-04-09"]["n"]), "AnchSeventeenFull": num(a["by_edition"]["2019-04-09"]["full"]),
+                "AnchTwentyTwoN": num(a["by_edition"]["2022-12-12-erl"]["n"]), "AnchTwentyTwoFull": num(a["by_edition"]["2022-12-12-erl"]["full"]),
+                "AnchCourtN": num(a["court_n"]), "AnchCourtFrag": num(a["court_fragment"]), "AnchByReader": num(a["by_reader"])})
     e = F["exhaustive"]
     out.update({"ExhRules": num(e["rules"]), "ExhTop": num(e["per_rule"]), "ExhExtCand": num(e["ext_candidates"]),
                 "ExhExtDecisions": num(e["ext_decisions"]), "ExhAnnKept": num(e["ann_kept"]), "ExhAnnIn": num(e["ann_in"]),
