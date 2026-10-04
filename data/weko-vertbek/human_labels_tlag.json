@@ -1,0 +1,101 @@
+{
+ "source": "labels page, versions 19-20, reader decisions on text-lag search disputes",
+ "labels": [
+  {
+   "version": "2019-04-09",
+   "pid": "10",
+   "round": 1,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:06:40.283Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "17",
+   "round": 2,
+   "label": "recites",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:09:01.846Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "17",
+   "round": 3,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:25:50.238Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "19",
+   "round": 1,
+   "label": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|63"
+   ],
+   "updatedAt": "2026-10-04T17:10:17.178Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "4",
+   "round": 1,
+   "label": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2000-4_B1.1.2|39"
+   ],
+   "updatedAt": "2026-10-04T17:11:37.427Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "5",
+   "round": 3,
+   "label": "recites",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:12:51.167Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "7",
+   "round": 1,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:14:25.517Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "8",
+   "round": 2,
+   "label": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1|13"
+   ],
+   "updatedAt": "2026-10-04T17:15:43.528Z"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "35",
+   "round": 2,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:18:22.665Z"
+  },
+  {
+   "version": "2022-12-12-erl",
+   "pid": "9",
+   "round": 2,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:19:38.792Z"
+  },
+  {
+   "version": "2022-12-12",
+   "pid": "15(b)",
+   "round": 3,
+   "label": "fragment",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2013-4_B1.1.1|74"
+   ],
+   "updatedAt": "2026-10-04T17:17:08.494Z"
+  }
+ ]
+}

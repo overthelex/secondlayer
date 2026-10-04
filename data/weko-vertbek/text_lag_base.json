@@ -1,0 +1,344 @@
+[
+ {
+  "track": "Bekanntmachung:44",
+  "version": "2007-07-02",
+  "pid": "10(1b)",
+  "first_date": "2007-07-02",
+  "earliest": "2000-05-08",
+  "how": "found",
+  "lag_years": 7.1
+ },
+ {
+  "track": "Bekanntmachung:46",
+  "version": "2007-07-02",
+  "pid": "10(3)",
+  "first_date": "2007-07-02",
+  "earliest": "2002-05-16",
+  "how": "found",
+  "lag_years": 5.1
+ },
+ {
+  "track": "Bekanntmachung:52",
+  "version": "2007-07-02",
+  "pid": "11(2e)",
+  "first_date": "2007-07-02",
+  "earliest": "2001-09-03",
+  "how": "found",
+  "lag_years": 5.8
+ },
+ {
+  "track": "Bekanntmachung:62",
+  "version": "2007-07-02",
+  "pid": "15(4c)",
+  "first_date": "2007-07-02",
+  "earliest": "2000-07-17",
+  "how": "found",
+  "lag_years": 7.0
+ },
+ {
+  "track": "Bekanntmachung:63",
+  "version": "2007-07-02",
+  "pid": "15(4d)",
+  "first_date": "2007-07-02",
+  "earliest": "2002-08-14",
+  "how": "found",
+  "lag_years": 4.9
+ },
+ {
+  "track": "Bekanntmachung:64",
+  "version": "2007-07-02",
+  "pid": "15(4e)",
+  "first_date": "2007-07-02",
+  "earliest": "2005-03-21",
+  "how": "found",
+  "lag_years": 2.3
+ },
+ {
+  "track": "Bekanntmachung:65",
+  "version": "2007-07-02",
+  "pid": "15(4f)",
+  "first_date": "2007-07-02",
+  "earliest": "2005-03-21",
+  "how": "found",
+  "lag_years": 2.3
+ },
+ {
+  "track": "Bekanntmachung:88",
+  "version": "2007-07-02",
+  "pid": "E9",
+  "first_date": "2007-07-02",
+  "earliest": "1999-03-01",
+  "how": "found",
+  "lag_years": 8.3
+ },
+ {
+  "track": "Bekanntmachung:102",
+  "version": "2010-06-28",
+  "pid": "12(1)",
+  "first_date": "2010-06-28",
+  "earliest": "2002-08-14",
+  "how": "found",
+  "lag_years": 7.9
+ },
+ {
+  "track": "Bekanntmachung:111",
+  "version": "2017-05-22",
+  "pid": "12(1a)",
+  "first_date": "2017-05-22",
+  "earliest": "2013-12-19",
+  "how": "found",
+  "lag_years": 3.4
+ },
+ {
+  "track": "Erläuterungen:19",
+  "version": "2019-04-09",
+  "pid": "10",
+  "first_date": "2017-06-12",
+  "earliest": "2013-12-19",
+  "how": "found",
+  "lag_years": 3.5
+ },
+ {
+  "track": "Erläuterungen:20",
+  "version": "2019-04-09",
+  "pid": "11",
+  "first_date": "2017-06-12",
+  "earliest": "2010-04-27",
+  "how": "found",
+  "lag_years": 7.1
+ },
+ {
+  "track": "Erläuterungen:21",
+  "version": "2019-04-09",
+  "pid": "12",
+  "first_date": "2017-06-12",
+  "earliest": "2012-05-07",
+  "how": "found",
+  "lag_years": 5.1
+ },
+ {
+  "track": "Erläuterungen:22",
+  "version": "2019-04-09",
+  "pid": "13",
+  "first_date": "2017-06-12",
+  "earliest": "2012-05-07",
+  "how": "found",
+  "lag_years": 5.1
+ },
+ {
+  "track": "Erläuterungen:24",
+  "version": "2019-04-09",
+  "pid": "15",
+  "first_date": "2017-06-12",
+  "earliest": "2011-12-31",
+  "how": "found",
+  "lag_years": 5.4
+ },
+ {
+  "track": "Erläuterungen:26",
+  "version": "2019-04-09",
+  "pid": "17",
+  "first_date": "2017-06-12",
+  "earliest": "2009-11-02",
+  "how": "found",
+  "lag_years": 7.6
+ },
+ {
+  "track": "Erläuterungen:27",
+  "version": "2019-04-09",
+  "pid": "18",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:28",
+  "version": "2019-04-09",
+  "pid": "19",
+  "first_date": "2017-06-12",
+  "earliest": "2017-05-22",
+  "how": "found",
+  "lag_years": 0.1
+ },
+ {
+  "track": "Erläuterungen:30",
+  "version": "2019-04-09",
+  "pid": "20",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:31",
+  "version": "2019-04-09",
+  "pid": "21",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:32",
+  "version": "2019-04-09",
+  "pid": "22",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:33",
+  "version": "2019-04-09",
+  "pid": "23",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:34",
+  "version": "2019-04-09",
+  "pid": "24",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:36",
+  "version": "2019-04-09",
+  "pid": "3",
+  "first_date": "2017-06-12",
+  "earliest": "2015-02-23",
+  "how": "found",
+  "lag_years": 2.3
+ },
+ {
+  "track": "Erläuterungen:37",
+  "version": "2019-04-09",
+  "pid": "4",
+  "first_date": "2017-06-12",
+  "earliest": "2011-06-30",
+  "how": "found",
+  "lag_years": 6.0
+ },
+ {
+  "track": "Erläuterungen:38",
+  "version": "2019-04-09",
+  "pid": "5",
+  "first_date": "2017-06-12",
+  "earliest": "2011-07-11",
+  "how": "found",
+  "lag_years": 5.9
+ },
+ {
+  "track": "Erläuterungen:39",
+  "version": "2019-04-09",
+  "pid": "6",
+  "first_date": "2017-06-12",
+  "earliest": "2016-06-28",
+  "how": "found",
+  "lag_years": 1.0
+ },
+ {
+  "track": "Erläuterungen:40",
+  "version": "2019-04-09",
+  "pid": "7",
+  "first_date": "2017-06-12",
+  "earliest": "2011-11-28",
+  "how": "found",
+  "lag_years": 5.5
+ },
+ {
+  "track": "Erläuterungen:41",
+  "version": "2019-04-09",
+  "pid": "8",
+  "first_date": "2017-06-12",
+  "earliest": "2011-11-28",
+  "how": "found",
+  "lag_years": 5.5
+ },
+ {
+  "track": "Erläuterungen:42",
+  "version": "2019-04-09",
+  "pid": "9",
+  "first_date": "2017-06-12",
+  "earliest": "2016-12-31",
+  "how": "unmarked: latest passage read",
+  "lag_years": 0.4
+ },
+ {
+  "track": "Bekanntmachung:116",
+  "version": "2022-12-12",
+  "pid": "15(b)",
+  "first_date": "2022-12-12",
+  "earliest": "2015-12-14",
+  "how": "found",
+  "lag_years": 7.0
+ },
+ {
+  "track": "Bekanntmachung:117",
+  "version": "2022-12-12",
+  "pid": "15(e)",
+  "first_date": "2022-12-12",
+  "earliest": "2013-09-24",
+  "how": "found",
+  "lag_years": 9.2
+ },
+ {
+  "track": "Erläuterungen:94",
+  "version": "2022-12-12-erl",
+  "pid": "34",
+  "first_date": "2022-12-12",
+  "earliest": "2015-10-19",
+  "how": "found",
+  "lag_years": 7.1
+ },
+ {
+  "track": "Erläuterungen:95",
+  "version": "2022-12-12-erl",
+  "pid": "35",
+  "first_date": "2022-12-12",
+  "earliest": "2015-10-19",
+  "how": "found",
+  "lag_years": 7.1
+ },
+ {
+  "track": "Erläuterungen:96",
+  "version": "2022-12-12-erl",
+  "pid": "36",
+  "first_date": "2022-12-12",
+  "earliest": "2008-08-18",
+  "how": "found",
+  "lag_years": 14.3
+ },
+ {
+  "track": "Erläuterungen:98",
+  "version": "2022-12-12-erl",
+  "pid": "7",
+  "first_date": "2022-12-12",
+  "earliest": "2017-12-19",
+  "how": "found",
+  "lag_years": 5.0
+ },
+ {
+  "track": "Erläuterungen:99",
+  "version": "2022-12-12-erl",
+  "pid": "8",
+  "first_date": "2022-12-12",
+  "earliest": "2011-06-30",
+  "how": "found",
+  "lag_years": 11.5
+ },
+ {
+  "track": "Erläuterungen:100",
+  "version": "2022-12-12-erl",
+  "pid": "9",
+  "first_date": "2022-12-12",
+  "earliest": "2011-06-30",
+  "how": "found",
+  "lag_years": 11.5
+ }
+]

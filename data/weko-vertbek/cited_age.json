@@ -1,0 +1,394 @@
+[
+ {
+  "version": "2019-04-09",
+  "pid": "Rz4.3",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+  "decided": "2015-06-29",
+  "age_years": 2.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz4.5",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+  "decided": "2011-06-30",
+  "age_years": 6.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz5.7",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+  "decided": "2015-06-29",
+  "age_years": 2.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz6.10",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 1.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz6.13",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 1.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz9.27",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+  "decided": "2011-07-11",
+  "age_years": 5.9
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz10.30",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 1.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz18.39",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+  "decided": "2013-10-21",
+  "age_years": 3.6
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz19.41",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+  "decided": "2013-10-21",
+  "age_years": 3.6
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz19.44",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+  "decided": "2013-10-21",
+  "age_years": 3.6
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz21.47",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+  "decided": "2014-06-30",
+  "age_years": 3.0
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz4.52",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+  "decided": "2021-02-04",
+  "age_years": 1.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz4.53",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+  "decided": "2015-06-29",
+  "age_years": 7.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz6.56",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2",
+  "decided": "2017-05-22",
+  "age_years": 5.6
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz6.57",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.1",
+  "decided": "2012-08-20",
+  "age_years": 10.3
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz8.58",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+  "decided": "2021-02-04",
+  "age_years": 1.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz8.62",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+  "decided": "2021-02-04",
+  "age_years": 1.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz8.63",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+  "decided": "2021-02-04",
+  "age_years": 1.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz8.64",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+  "decided": "2021-02-04",
+  "age_years": 1.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.68",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 6.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.69",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 6.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.73",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 6.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.75",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-148-II-25_2021-12-21",
+  "decided": "2021-12-21",
+  "age_years": 1.0
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.76",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.5",
+  "decided": "2018-04-09",
+  "age_years": 4.7
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz11.80",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2021-4_B2.2.1",
+  "decided": "2021-06-28",
+  "age_years": 1.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz13.90",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.1",
+  "decided": "2017-11-27",
+  "age_years": 5.0
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.98",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 6.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.99",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": 5.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.100",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+  "decided": "2016-06-28",
+  "age_years": 6.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.101",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": 5.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.103",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": 5.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz14.105",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": 5.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz21.108",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-1_B2.2.1",
+  "decided": "2009-11-30",
+  "age_years": 13.0
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz25.110",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+  "decided": "2013-10-21",
+  "age_years": 9.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz25.111",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+  "decided": "2011-07-11",
+  "age_years": 11.4
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz25.113",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+  "decided": "2014-06-30",
+  "age_years": 8.5
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz27.115",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+  "decided": "2014-06-30",
+  "age_years": 8.5
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz6.8",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+  "decided": "2016-09-16",
+  "age_years": 0.7
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz7.16",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+  "decided": "2015-11-13",
+  "age_years": 1.6
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz8.19",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+  "decided": "2016-12-31",
+  "age_years": 0.4
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz10.32",
+  "cited_ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-63-2016_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": -0.4
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz10.34",
+  "cited_ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-63-2016_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": -0.4
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz12.35",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+  "decided": "2014-06-30",
+  "age_years": 3.0
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz21.46",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+  "decided": "2013-10-21",
+  "age_years": 3.6
+ },
+ {
+  "version": "2019-04-09",
+  "pid": "Rz24.49",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+  "decided": "2011-07-11",
+  "age_years": 5.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz5.54",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.1",
+  "decided": "2019-08-19",
+  "age_years": 3.3
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.70",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+  "decided": "2016-09-16",
+  "age_years": 6.2
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.71",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+  "decided": "2016-09-16",
+  "age_years": 6.2
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.72",
+  "cited_ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-39-2020_2022-08-03",
+  "decided": "2022-08-03",
+  "age_years": 0.4
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz10.74",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+  "decided": "2016-09-16",
+  "age_years": 6.2
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz11.79",
+  "cited_ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24",
+  "decided": "2017-10-24",
+  "age_years": 5.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz11.82",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+  "decided": "2015-11-13",
+  "age_years": 7.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz12.86",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+  "decided": "2016-12-31",
+  "age_years": 5.9
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz13.91",
+  "cited_ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03",
+  "decided": "2022-03-03",
+  "age_years": 0.8
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz13.95",
+  "cited_ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3938-2013_2019-10-30",
+  "decided": "2019-10-30",
+  "age_years": 3.1
+ },
+ {
+  "version": "2022-12-12-erl",
+  "pid": "Rz17.106",
+  "cited_ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+  "decided": "2014-06-30",
+  "age_years": 8.5
+ }
+]
