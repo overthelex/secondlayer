@@ -1,0 +1,492 @@
+{
+ "packets_checked": {
+  "same": 259,
+  "differs": 6
+ },
+ "passages_200": 2120,
+ "not_shown_at_100": 0,
+ "moves": {
+  "notice|announcement|announcement": 33,
+  "notice|codification|codification": 12,
+  "notice|ungrounded|ungrounded": 3,
+  "erl|codification|codification": 26,
+  "erl|ungrounded|ungrounded": 4,
+  "erl|announcement|announcement": 1
+ },
+ "norms": [
+  {
+   "track": "Bekanntmachung:2",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:3",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:4",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:5",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:6",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:7",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:8",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:9",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:10",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:11",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:12",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:13",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:16",
+   "version": "2002-02-18",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:43",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:44",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:45",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:46",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:47",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:48",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:49",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:50",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:51",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:52",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:53",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:54",
+   "version": "2007-07-02",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Bekanntmachung:55",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:56",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:57",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:58",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:59",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:60",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:61",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:62",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:63",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:64",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:65",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:66",
+   "version": "2007-07-02",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Bekanntmachung:72",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:84",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:86",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:87",
+   "version": "2007-07-02",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:88",
+   "version": "2007-07-02",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:101",
+   "version": "2010-06-28",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Bekanntmachung:102",
+   "version": "2010-06-28",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:111",
+   "version": "2017-05-22",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:19",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:20",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:21",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:22",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:23",
+   "version": "2019-04-09",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Erläuterungen:24",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:25",
+   "version": "2019-04-09",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Erläuterungen:26",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:27",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:28",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:30",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:31",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:32",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:33",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:34",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:35",
+   "version": "2019-04-09",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Erläuterungen:36",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:37",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:38",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:39",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:40",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:41",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:42",
+   "version": "2019-04-09",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:116",
+   "version": "2022-12-12",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:117",
+   "version": "2022-12-12",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Bekanntmachung:118",
+   "version": "2022-12-12",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Erläuterungen:92",
+   "version": "2022-12-12-erl",
+   "pool200": "ungrounded",
+   "pool100": "ungrounded"
+  },
+  {
+   "track": "Erläuterungen:94",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:95",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:96",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:97",
+   "version": "2022-12-12-erl",
+   "pool200": "announcement",
+   "pool100": "announcement"
+  },
+  {
+   "track": "Erläuterungen:98",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:99",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  },
+  {
+   "track": "Erläuterungen:100",
+   "version": "2022-12-12-erl",
+   "pool200": "codification",
+   "pool100": "codification"
+  }
+ ]
+}

@@ -75,7 +75,7 @@ def collect(dates: dict) -> dict:
         for c, g in zip(cs, gs):
             if c["ecli"] not in dates:
                 continue
-            out[k].append({"date": dates[c["ecli"]], "claude": c["label"], "gemini": g["label"],
+            out[k].append({"ecli": c["ecli"], "src": "full", "date": dates[c["ecli"]], "claude": c["label"], "gemini": g["label"],
                            "reader": (r["label"] in SUP and c["ecli"] in marks) if reader else None,
                            "item_sup": r["label"] in SUP})
         # a gold-set mark on a decision the v3 packet no longer shows (the
@@ -84,9 +84,10 @@ def collect(dates: dict) -> dict:
         shown = {c["ecli"] for c in cs}
         for e in marks - shown if reader and r["label"] in SUP else ():
             if e in dates:
-                out[k].append({"date": dates[e], "claude": None, "gemini": None, "reader": True, "item_sup": True})
+                out[k].append({"ecli": e, "src": "full", "date": dates[e], "claude": None, "gemini": None,
+                               "reader": True, "item_sup": True})
 
-    def review(items, human):
+    def review(items, human, src):
         for x, hk in items:
             k = (x["version"], x["pid"])
             h = human.get(hk) if x["status"] == "disputed" else None
@@ -100,7 +101,7 @@ def collect(dates: dict) -> dict:
                     on = h[0] in SUP and (e["ecli"] in h[1] or f"{e['ecli']}|{e['ord']}" in h[1])
                 elif unseen:
                     on = False
-                out[k].append({"date": e["date"] or e["date_upper_bound"],
+                out[k].append({"ecli": e["ecli"], "src": src, "date": e["date"] or e["date_upper_bound"],
                                "claude": (v.get("claude-opus") or {}).get("label"),
                                "gemini": (v.get("gemini-3.1-pro") or {}).get("label"),
                                "reader": on, "item_sup": x["prelabel"] in SUP})
@@ -110,13 +111,13 @@ def collect(dates: dict) -> dict:
         for r in json.loads((DATA / f).read_text())["labels"]:
             h2[(r["version"], r["pid"])] = (r["label"], r.get("evidence") or [])
     for f in STEP2:
-        review([(x, (x["version"], x["pid"])) for x in json.loads((DATA / f).read_text())], h2)
+        review([(x, (x["version"], x["pid"])) for x in json.loads((DATA / f).read_text())], h2, "step2:" + f)
     for stem, hf in (("review_exh_r", "human_labels_exh.json"), ("review_tlag_r", "human_labels_tlag.json")):
         hh = {(r["version"], r["pid"], r["round"]): (r["label"], r.get("evidence_marked") or [])
               for r in json.loads((DATA / hf).read_text())["labels"]}
         for f in sorted(DIR.glob(stem + "*.json")):
             rnd = int(f.stem.split("_r")[-1])
-            review([(x, (x["version"], x["pid"], rnd)) for x in json.loads(f.read_text())], hh)
+            review([(x, (x["version"], x["pid"], rnd)) for x in json.loads(f.read_text())], hh, stem.split("_")[1])
     return out
 
 
